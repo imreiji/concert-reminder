@@ -1,0 +1,5 @@
+# Replace with your real domain (Porkbun A record -> this server's static IP).
+# Caddy obtains and renews the Let's Encrypt certificate automatically.
+concerts.yourdomain.com {
+    reverse_proxy 127.0.0.1:8000
+}

@@ -1,0 +1,17 @@
+# secrets & local state — NEVER commit these
+.env
+*.db
+*.db-wal
+*.db-shm
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+
+# editors
+.vscode/
+.idea/

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="status">
+  <h1>Skeleton online.</h1>
+  <dl>
+    <dt>Web server</dt><dd class="ok">running</dd>
+    <dt>Discord bot</dt>
+    <dd class="{{ 'ok' if bot_enabled else 'off' }}">
+      {{ 'connected' if bot_enabled else 'disabled — no DISCORD_TOKEN (web-only dev mode)' }}
+    </dd>
+    <dt>Editors whitelisted</dt><dd>{{ editor_count }}</dd>
+  </dl>
+  <p class="next">Phase 2 adds the schema. Phase 5 replaces this page with the concert list.</p>
+</section>
+{% endblock %}

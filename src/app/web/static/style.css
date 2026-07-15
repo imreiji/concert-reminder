@@ -1,0 +1,21 @@
+/* Placeholder styling only — real design pass happens in Phase 5. */
+:root {
+  --ink: #1b1b20; --paper: #f7f6f2; --dim: #6d6d78;
+  --ok: #1a7f4e; --off: #a05a00; --line: #dedbd2;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 16px/1.6 system-ui, "Hiragino Sans", sans-serif;
+}
+header.site {
+  display: flex; align-items: baseline; gap: .75rem;
+  padding: 1.25rem 2rem; border-bottom: 1px solid var(--line);
+}
+.mark { font-weight: 700; letter-spacing: .1em; }
+.wordmark { color: var(--dim); font-size: .9rem; }
+main { max-width: 42rem; margin: 3rem auto; padding: 0 2rem; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.5rem; }
+dt { color: var(--dim); }
+.ok { color: var(--ok); } .off { color: var(--off); }
+.next { color: var(--dim); font-size: .9rem; margin-top: 2rem; }
