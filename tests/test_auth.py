@@ -5,17 +5,33 @@ OUR logic: state handling, session contents, and the authorization model.
 """
 
 import pytest
+import pytest_asyncio
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 from starlette.requests import Request
 
 from app.config import settings
+from app.db.models import Base
+from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
 
 
+@pytest_asyncio.fixture()
+async def db():
+    engine = create_async_engine(
+        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield async_sessionmaker(engine, expire_on_commit=False)
+    await engine.dispose()
+
+
 @pytest.fixture()
-def client(monkeypatch):
+def client(db, monkeypatch):
     async def fake_exchange(code: str) -> str:
         assert code == "good-code"
         return "fake-token"
@@ -31,7 +47,14 @@ def client(monkeypatch):
     monkeypatch.setattr(auth, "exchange_code", fake_exchange)
     monkeypatch.setattr(auth, "fetch_identity", fake_identity)
     monkeypatch.setattr(auth, "persist_user", fake_persist)
-    c = TestClient(create_app(), follow_redirects=False)
+    app = create_app()
+
+    async def override_session():
+        async with db() as s:
+            yield s
+
+    app.dependency_overrides[get_session] = override_session
+    c = TestClient(app, follow_redirects=False)
     c.fake_persist = fake_persist
     return c
 
@@ -68,8 +91,9 @@ def test_full_login_sets_session_and_persists_user(client):
     do_login(client)
     assert client.fake_persist.calls == [(42, "Reiji")]
     r = client.get("/")  # session cookie carries over
-    assert "Welcome, Reiji" in r.text
+    assert "Reiji" in r.text          # username in the header nav
     assert "log out" in r.text
+    assert "Concerts" in r.text         # logged-in users see the concert list
 
 
 def test_logout_clears_session(client):

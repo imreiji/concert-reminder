@@ -1,0 +1,27 @@
+<div id="days">
+  {% if concert.days %}
+  <ul class="rows">
+    {% for d in concert.days %}
+    <li>
+      <strong>{{ d.label }}</strong>
+      <span>{{ jst(d.starts_at_utc).strftime("%a %Y-%m-%d %H:%M") }} JST</span>
+      {% if user.is_editor %}
+      <form method="post" action="/days/{{ d.id }}/delete" hx-post="/days/{{ d.id }}/delete"
+            hx-target="#days" hx-swap="outerHTML">
+        <button class="x" title="delete">×</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="dim">No days yet.</p>{% endif %}
+
+  {% if user.is_editor %}
+  <form class="inline" method="post" action="/concerts/{{ concert.id }}/days"
+        hx-post="/concerts/{{ concert.id }}/days" hx-target="#days" hx-swap="outerHTML">
+    <input name="label" required maxlength="100" placeholder="Day 1">
+    <label>starts (JST) <input type="datetime-local" name="starts_at" required></label>
+    <button>add day</button>
+  </form>
+  {% endif %}
+</div>

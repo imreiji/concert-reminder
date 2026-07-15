@@ -1,26 +1,44 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="status">
-  {% if user %}
-    <h1>Welcome, {{ user.username }}.</h1>
-    <p>
-      {% if user.is_editor %}
-        You have editor access — concert management arrives in Phase 5.
-      {% else %}
-        You're signed in. Reminder settings arrive with the Phase 5 UI;
-        until then, use <code>/remindme</code> in Discord.
-      {% endif %}
-    </p>
-  {% else %}
-    <h1>Deadline tracking for concert lotteries.</h1>
-    <p>Sign in with Discord to manage your reminders.</p>
+{% if not user %}
+  <section class="hero">
+    <h1>Never say できませんでした again.</h1>
+    <p>Lottery rounds, serial-code sales, stream tickets — every concert deadline, one reminder ahead. Sign in with Discord to get started.</p>
+  </section>
+{% else %}
+  <section class="toolbar">
+    <h1>Concerts</h1>
+    <form class="inline" method="post" action="/me/timezone">
+      <label>my timezone
+        <input name="timezone" list="tzs" value="{{ timezone }}" size="18">
+        <datalist id="tzs">{% for t in timezones %}<option value="{{ t }}">{% endfor %}</datalist>
+      </label>
+      <button>save</button>
+    </form>
+  </section>
+
+  {% if user.is_editor %}
+  <details class="panel">
+    <summary>+ new concert</summary>
+    <form method="post" action="/concerts" class="stack">
+      <label>title <input name="title" required maxlength="200" placeholder="Hasunosora 5th Live"></label>
+      <label>franchise <input name="franchise" maxlength="100" placeholder="Hasunosora"></label>
+      <label>venue <input name="venue" maxlength="200" placeholder="Yokohama Arena"></label>
+      <button>create</button>
+    </form>
+  </details>
   {% endif %}
-  <dl>
-    <dt>Web server</dt><dd class="ok">running</dd>
-    <dt>Discord bot</dt>
-    <dd class="{{ 'ok' if bot_enabled else 'off' }}">
-      {{ 'connected' if bot_enabled else 'disabled (web-only dev mode)' }}
-    </dd>
-  </dl>
-</section>
+
+  {% if concerts %}
+  <ul class="concert-list">
+    {% for c in concerts %}
+    <li><a href="/concerts/{{ c.id }}"><strong>{{ c.title }}</strong>
+      {% if c.franchise %}<span class="dim">{{ c.franchise }}</span>{% endif %}
+      {% if c.venue %}<span class="dim">· {{ c.venue }}</span>{% endif %}</a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="dim">No concerts yet.{% if user.is_editor %} Create the first one above.{% endif %}</p>
+  {% endif %}
+{% endif %}
 {% endblock %}

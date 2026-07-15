@@ -1,5 +1,10 @@
-# Replace with your real domain (Porkbun A record -> this server's static IP).
-# Caddy obtains and renews the Let's Encrypt certificate automatically.
-concerts.yourdomain.com {
+# dekimasen.app - .app is HSTS-preloaded (browsers force HTTPS), Caddy's
+# automatic Let's Encrypt certificates satisfy that with zero config.
+dekimasen.app {
     reverse_proxy 127.0.0.1:8000
+}
+
+# www redirects to the apex
+www.dekimasen.app {
+    redir https://dekimasen.app{uri} permanent
 }

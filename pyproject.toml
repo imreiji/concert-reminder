@@ -15,6 +15,7 @@ dependencies = [
     "httpx>=0.28",
     "itsdangerous>=2.2",
     "tzdata>=2024.1",  # IANA tz database: Windows has none; harmless on Linux
+    "python-multipart>=0.0.18",  # FastAPI Form(...) parsing
 ]
 
 [dependency-groups]
@@ -32,7 +33,7 @@ src = ["src"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["fastapi.Depends"]  # Depends() in defaults is the FastAPI idiom
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Form"]  # defaults idiom in FastAPI
 
 [tool.ruff.lint.per-file-ignores]
 "alembic/**" = ["E402", "E501", "I001"]  # generated + sys.path bootstrap

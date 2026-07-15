@@ -1,0 +1,27 @@
+<div id="rules">
+  {% if rules %}
+  <ul class="rows">
+    {% for r in rules %}
+    <li>
+      <span>
+        {%- if r.offset_days == 0 %}same day{% else %}{{ -r.offset_days }}d before{% endif %}
+        each <strong>{{ r.anchor.value.replace("_", " ") }}</strong> → DM
+      </span>
+      <form method="post" action="/rules/{{ r.id }}/delete" hx-post="/rules/{{ r.id }}/delete"
+            hx-target="#rules" hx-swap="outerHTML">
+        <button class="x" title="remove">×</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="dim">No reminders for this concert yet.</p>{% endif %}
+
+  <form class="inline" method="post" action="/concerts/{{ concert.id }}/rules"
+        hx-post="/concerts/{{ concert.id }}/rules" hx-target="#rules" hx-swap="outerHTML">
+    <label><input type="number" name="days_before" value="3" min="0" max="60" style="width:4em"> days before</label>
+    <select name="anchor">{% for a in anchors %}
+      <option value="{{ a.value }}">{{ a.value.replace("_", " ") }}</option>
+    {% endfor %}</select>
+    <button>remind me</button>
+  </form>
+</div>

@@ -1,4 +1,6 @@
-# concert-reminder
+# dekimasen.app
+
+> できませんでした, never again.
 
 Discord bot + web UI that tracks the deadline chain around Japanese concerts —
 lottery rounds (先行抽選), eligibility item sales (シリアル対象商品), general sale,
@@ -62,7 +64,7 @@ put the token in `.env`, invite the bot to a test server with the
 ## Deployment (short version — full walkthrough in docs/)
 
 1. Ubuntu 24.04 box (Lightsail $5 / EC2 t4g.micro) with a static IP.
-2. Porkbun DNS: `A` record → that IP.
+2. Porkbun DNS for dekimasen.app: `A` record @ → that IP, `A` record www → same. (.app is HSTS-preloaded: HTTPS is mandatory and Caddy provides it automatically.)
 3. `deploy/setup.sh` on the box; edit `.env`; re-run.
 4. Update the Discord OAuth redirect to `https://your.domain/auth/callback`.
 5. Point an uptime monitor at `https://your.domain/healthz`.
@@ -78,6 +80,6 @@ Backups: `deploy/backup.sh` via cron (nightly SQLite → S3).
 - [x] Phase 2 — schema (concerts / days / windows / rules / queue) + reminder math
 - [x] Phase 3 — scheduler sends real DMs; /upcoming, /remindme, /myreminders
 - [x] Phase 4 — Discord OAuth login
-- [ ] Phase 5 — concert CRUD web UI (htmx)
+- [x] Phase 5 — concert CRUD web UI (htmx) + dekimasen.app branding
 - [ ] Phase 6 — deploy to AWS + Porkbun domain
 - [ ] Phase 7 — backups, monitoring, polish
