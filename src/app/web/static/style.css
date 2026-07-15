@@ -19,3 +19,10 @@ dl { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.5rem; }
 dt { color: var(--dim); }
 .ok { color: var(--ok); } .off { color: var(--off); }
 .next { color: var(--dim); font-size: .9rem; margin-top: 2rem; }
+
+/* Phase 4: auth header */
+nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; font-size: .9rem; }
+nav.auth a { color: var(--ink); }
+nav.auth a.login { border: 1px solid var(--line); padding: .35rem .8rem; border-radius: 6px; text-decoration: none; }
+.avatar { width: 24px; height: 24px; border-radius: 50%; }
+.badge { color: var(--ok); font-style: normal; font-size: .8em; border: 1px solid currentColor; padding: 0 .3em; border-radius: 4px; }

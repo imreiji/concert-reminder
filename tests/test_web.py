@@ -16,4 +16,5 @@ def test_index_renders():
     client = TestClient(create_app())
     r = client.get("/")
     assert r.status_code == 200
-    assert "Skeleton online" in r.text
+    assert "Deadline tracking" in r.text
+    assert "Sign in with Discord" in r.text

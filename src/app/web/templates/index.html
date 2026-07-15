@@ -1,15 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="status">
-  <h1>Skeleton online.</h1>
+  {% if user %}
+    <h1>Welcome, {{ user.username }}.</h1>
+    <p>
+      {% if user.is_editor %}
+        You have editor access — concert management arrives in Phase 5.
+      {% else %}
+        You're signed in. Reminder settings arrive with the Phase 5 UI;
+        until then, use <code>/remindme</code> in Discord.
+      {% endif %}
+    </p>
+  {% else %}
+    <h1>Deadline tracking for concert lotteries.</h1>
+    <p>Sign in with Discord to manage your reminders.</p>
+  {% endif %}
   <dl>
     <dt>Web server</dt><dd class="ok">running</dd>
     <dt>Discord bot</dt>
     <dd class="{{ 'ok' if bot_enabled else 'off' }}">
-      {{ 'connected' if bot_enabled else 'disabled — no DISCORD_TOKEN (web-only dev mode)' }}
+      {{ 'connected' if bot_enabled else 'disabled (web-only dev mode)' }}
     </dd>
-    <dt>Editors whitelisted</dt><dd>{{ editor_count }}</dd>
   </dl>
-  <p class="next">Phase 2 adds the schema. Phase 5 replaces this page with the concert list.</p>
 </section>
 {% endblock %}

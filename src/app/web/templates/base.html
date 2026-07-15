@@ -10,6 +10,15 @@
   <header class="site">
     <span class="mark">開演</span>
     <span class="wordmark">concert-reminder</span>
+    <nav class="auth">
+      {% if user %}
+        <img class="avatar" src="{{ user.avatar_url }}" alt="">
+        <span>{{ user.username }}{% if user.is_editor %} <em class="badge">editor</em>{% endif %}</span>
+        <a href="/auth/logout">log out</a>
+      {% else %}
+        <a class="login" href="/auth/login">Sign in with Discord</a>
+      {% endif %}
+    </nav>
   </header>
   <main>{% block content %}{% endblock %}</main>
 </body>
