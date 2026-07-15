@@ -75,8 +75,8 @@ Backups: `deploy/backup.sh` via cron (nightly SQLite → S3).
 ## Roadmap
 
 - [x] Phase 1 — skeleton: config, dual-process entrypoint, /ping, status page, CI
-- [ ] Phase 2 — schema (concerts / days / windows / rules / queue) + reminder math
-- [ ] Phase 3 — scheduler sends real DMs; /upcoming, /remindme
+- [x] Phase 2 — schema (concerts / days / windows / rules / queue) + reminder math
+- [x] Phase 3 — scheduler sends real DMs; /upcoming, /remindme, /myreminders
 - [ ] Phase 4 — Discord OAuth login
 - [ ] Phase 5 — concert CRUD web UI (htmx)
 - [ ] Phase 6 — deploy to AWS + Porkbun domain

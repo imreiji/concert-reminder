@@ -14,9 +14,8 @@ dependencies = [
     "pydantic-settings>=2.6",
     "httpx>=0.28",
     "itsdangerous>=2.2",
-    "tzdata>=2024.1",
+    "tzdata>=2024.1",  # IANA tz database: Windows has none; harmless on Linux
 ]
-# IANA tz database: Windows has none; harmless on Linux
 
 [dependency-groups]
 dev = [
@@ -31,6 +30,9 @@ src = ["src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/**" = ["E402", "E501", "I001"]  # generated + sys.path bootstrap
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

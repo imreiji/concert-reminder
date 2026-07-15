@@ -21,6 +21,7 @@ class ReminderBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         await self.load_extension("app.bot.cogs.ping")
+        await self.load_extension("app.bot.cogs.reminders")
         synced = await self.tree.sync()
         log.info("synced %d slash command(s)", len(synced))
 
