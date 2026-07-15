@@ -1,10 +1,20 @@
-# dekimasen.app - .app is HSTS-preloaded (browsers force HTTPS), Caddy's
-# automatic Let's Encrypt certificates satisfy that with zero config.
-dekimasen.app {
-    reverse_proxy 127.0.0.1:8000
-}
+# dekimasen.app behind Cloudflare (orange-cloud proxied).
+#
+# TLS: Cloudflare Origin CA certificate (15-year validity, no renewal).
+#   - Cloudflare dashboard -> SSL/TLS -> Origin Server -> Create Certificate
+#   - hosts: dekimasen.app, *.dekimasen.app
+#   - save cert  -> /etc/caddy/certs/origin.pem
+#   - save key   -> /etc/caddy/certs/origin.key   (chmod 600, owner caddy)
+#   - Cloudflare SSL/TLS mode MUST be "Full (strict)"
+#
+# Browsers never see this cert - they see Cloudflare's edge cert, which
+# also satisfies the .app TLD's mandatory-HTTPS (HSTS preload) rule.
 
-# www redirects to the apex
-www.dekimasen.app {
-    redir https://dekimasen.app{uri} permanent
+dekimasen.app, www.dekimasen.app {
+    tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+
+    @www host www.dekimasen.app
+    redir @www https://dekimasen.app{uri} permanent
+
+    reverse_proxy 127.0.0.1:8000
 }

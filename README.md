@@ -61,13 +61,14 @@ To run the bot locally: create an app at https://discord.com/developers,
 put the token in `.env`, invite the bot to a test server with the
 `bot` + `applications.commands` scopes, then `/ping` it.
 
-## Deployment (short version — full walkthrough in docs/)
+## Deployment (short version — full runbook: docs/deploy.md)
 
 1. Ubuntu 24.04 box (Lightsail $5 / EC2 t4g.micro) with a static IP.
-2. Porkbun DNS for dekimasen.app: `A` record @ → that IP, `A` record www → same. (.app is HSTS-preloaded: HTTPS is mandatory and Caddy provides it automatically.)
+2. Cloudflare zone for dekimasen.app (nameservers moved from Porkbun), A record
+   proxied to the box, SSL mode Full (strict), Origin cert installed for Caddy.
 3. `deploy/setup.sh` on the box; edit `.env`; re-run.
-4. Update the Discord OAuth redirect to `https://your.domain/auth/callback`.
-5. Point an uptime monitor at `https://your.domain/healthz`.
+4. Add `https://dekimasen.app/auth/callback` to the Discord OAuth redirects.
+5. Point an uptime monitor at `https://dekimasen.app/healthz`.
 
 Updating: `git pull && uv sync && uv run alembic upgrade head && sudo systemctl restart concert-reminder`
 
