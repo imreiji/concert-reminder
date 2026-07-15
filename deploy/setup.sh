@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent server bootstrap for Ubuntu 24.04 (Lightsail $5 or EC2 t4g.micro).
+# Idempotent server bootstrap for Ubuntu 24.04 (Lightsail / EC2), behind Cloudflare.
 # Run as the default 'ubuntu' user. Safe to re-run.
 set -euo pipefail
 
@@ -12,8 +12,7 @@ if ! command -v uv >/dev/null; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 
-# Caddy (reverse proxy + automatic HTTPS) — official apt repo
-# ref: https://caddyserver.com/docs/install#debian-ubuntu-raspbian
+# Caddy - official apt repo (https://caddyserver.com/docs/install#debian-ubuntu-raspbian)
 if ! command -v caddy >/dev/null; then
   sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
@@ -23,7 +22,18 @@ if ! command -v caddy >/dev/null; then
   sudo apt-get update && sudo apt-get install -y caddy
 fi
 
-# App
+# Cloudflare Origin certificate must exist before Caddy can start the site.
+sudo mkdir -p /etc/caddy/certs
+if [ ! -f /etc/caddy/certs/origin.pem ] || [ ! -f /etc/caddy/certs/origin.key ]; then
+  echo ">>> Missing Cloudflare Origin certificate."
+  echo ">>> Cloudflare dashboard -> SSL/TLS -> Origin Server -> Create Certificate"
+  echo ">>> Paste cert into /etc/caddy/certs/origin.pem and key into /etc/caddy/certs/origin.key"
+  echo ">>> then: sudo chown caddy:caddy /etc/caddy/certs/* && sudo chmod 600 /etc/caddy/certs/origin.key"
+  echo ">>> and re-run this script."
+  CERT_MISSING=1
+fi
+
+# App (private repo: needs a read-only Deploy Key - see docs/deploy.md step 2)
 if [ ! -d "$HOME/app" ]; then
   git clone git@github.com:YOURUSER/concert-reminder.git "$HOME/app"
 fi
@@ -33,17 +43,20 @@ uv sync
 if [ ! -f .env ]; then
   cp .env.example .env
   chmod 600 .env
-  echo ">>> Edit ~/app/.env with real tokens, then re-run this script."
+  echo ">>> Edit ~/app/.env with production values, then re-run this script."
   exit 0
 fi
 
-# Migrations (from Phase 2 onward)
-uv run alembic upgrade head || echo "(no migrations yet — fine in Phase 1)"
+uv run alembic upgrade head
 
-# Services
 sudo cp deploy/concert-reminder.service /etc/systemd/system/
-sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
 sudo systemctl daemon-reload
 sudo systemctl enable --now concert-reminder
-sudo systemctl reload caddy || sudo systemctl restart caddy
-echo "done. logs: journalctl -u concert-reminder -f"
+
+if [ -z "${CERT_MISSING:-}" ]; then
+  sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+  sudo systemctl reload caddy || sudo systemctl restart caddy
+  echo "done. app logs: journalctl -u concert-reminder -f"
+else
+  echo "app is running on :8000 but Caddy is NOT serving yet (cert missing, see above)."
+fi
