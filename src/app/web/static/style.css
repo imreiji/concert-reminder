@@ -128,24 +128,27 @@ button.quiet:hover { color: var(--ink); border-color: var(--ink); opacity: 1; }
 .pickrow .taglist { gap: .4rem; }
 .pickrow .taglist:empty { display: none; }
 dialog.picker {
-  border: 1px solid var(--line); border-radius: 12px; padding: 0;
-  width: min(34rem, 92vw); background: var(--paper);
-  box-shadow: 0 16px 48px rgba(27, 27, 32, .22);
+  border: none; border-radius: 16px; padding: 0;
+  width: min(30rem, 92vw); background: #fff;
+  box-shadow: 0 24px 64px rgba(27, 27, 32, .28);
 }
-dialog.picker::backdrop { background: rgba(27, 27, 32, .38); backdrop-filter: blur(1.5px); }
+dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .picker-head {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 1rem 1.25rem; border-bottom: 1px solid var(--line);
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 1.25rem 1.5rem .25rem;
 }
-.picker-head h3 { margin: 0; font-size: 1rem; }
-.picker-head .x { font-size: 1.25rem; line-height: 1; }
-.picker-body { display: flex; flex-direction: column; gap: .8rem; padding: 1rem 1.25rem; }
-.picker-body input[type=search] { width: 100%; }
-.picker-body .taglist { max-height: 45vh; overflow-y: auto; gap: .45rem; padding: .1rem; }
-.picker-actions {
-  padding: .75rem 1.25rem; border-top: 1px solid var(--line);
-  text-align: right; margin-top: 0;
+.picker-head h3 { margin: 0; font-size: 1.05rem; }
+.picker-head .x { font-size: 1.35rem; line-height: 1; color: var(--dim); padding: 0 .2rem; }
+.picker-head .x:hover { color: var(--ink); }
+.picker-body { display: flex; flex-direction: column; gap: 1rem; padding: .75rem 1.5rem 1.5rem; }
+.picker-body input[type=search] {
+  width: 100%; background: var(--paper); border: 1px solid transparent;
+  border-radius: 10px; padding: .6rem .9rem;
 }
+.picker-body input[type=search]:focus { outline: none; border-color: var(--line); background: #fff; }
+.picker-body .taglist { max-height: 44vh; overflow-y: auto; gap: .5rem; padding: .1rem; }
+.picker-body .chip { background: var(--paper); border-color: transparent; padding: .25rem .8rem; }
+.picker-body .chip:hover { border-color: var(--ink); background: #fff; }
 .chip .x { margin-left: .1rem; }
 .chip.on .x { color: var(--paper); }
 
@@ -158,3 +161,5 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .38); backdrop-filter: bl
 .chip.add:hover { border-color: var(--ink); opacity: 1; }
 .rowlabel { min-width: 5.5rem; font-size: .85rem; }
 #tags .pickrow { margin: .35rem 0; }
+
+.header-tags { margin: .2rem 0 .4rem; }

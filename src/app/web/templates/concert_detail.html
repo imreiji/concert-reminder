@@ -4,7 +4,12 @@
 <article class="concert">
   <header class="concert-head">
     <h1>{{ concert.title }}</h1>
-    <p class="dim">{{ concert.franchise or "" }}{% if concert.venue %} · {{ concert.venue }}{% endif %}</p>
+    {% if concert.tags %}
+    <p class="taglist header-tags">
+      {% for t in concert.tags %}<span class="chip kind-{{ t.kind.value }}">{{ t.name }}</span>{% endfor %}
+    </p>
+    {% endif %}
+    {% if concert.notes %}<p class="dim">{{ concert.notes }}</p>{% endif %}
   </header>
 
   {% if user.is_editor %}
@@ -12,22 +17,19 @@
     <summary>Edit concert</summary>
     <form method="post" action="/concerts/{{ concert.id }}/edit" class="stack">
       <label>Title <input name="title" value="{{ concert.title }}" required maxlength="200"></label>
-      <label>franchise <input name="franchise" value="{{ concert.franchise or '' }}" maxlength="100"></label>
-      <label>venue <input name="venue" value="{{ concert.venue or '' }}" maxlength="200"></label>
       <label>Notes <textarea name="notes" rows="3">{{ concert.notes or '' }}</textarea></label>
       <button>Save</button>
     </form>
+
+    {# The same tag controls as the New concert form: chip rows + picker popups #}
+    {% include "_tags.html" %}
+
     <form method="post" action="/concerts/{{ concert.id }}/delete"
           onsubmit="return confirm('Delete this concert and every reminder attached to it?')">
       <button class="danger">Delete concert</button>
     </form>
   </details>
   {% endif %}
-
-  <section>
-    <h2>Tags</h2>
-    {% include "_tags.html" %}
-  </section>
 
   <section>
     <h2>Concert days</h2>

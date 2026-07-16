@@ -25,6 +25,10 @@
   <main>{% block content %}{% endblock %}</main>
   <footer>Times are entered in <strong>JST</strong> and shown as JST + your local time.</footer>
 <script>
+    // shared: clicking the backdrop closes any dialog (Esc works natively)
+    document.addEventListener("click", (e) => {
+      if (e.target instanceof HTMLDialogElement && e.target.open) e.target.close();
+    });
     // shared: live-filter chips by their data-name within a container
     function filterChips(input, scope) {
       const q = input.value.trim().toLowerCase();

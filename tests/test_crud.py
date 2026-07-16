@@ -219,3 +219,22 @@ def test_delete_concert_cascades_everything(client):
             return c, w, q
 
     assert asyncio.get_event_loop().run_until_complete(counts()) == (0, 0, 0)
+
+
+def test_concert_detail_page_renders_for_logged_in_users(client):
+    """Regression: the detail page must render with full context (tags fragment
+    included) — this exact page 500'd in production because no test loaded it."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "Render Me"})
+    client.post(
+        "/concerts/1/windows",
+        data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
+    )
+    r = client.get("/concerts/1")
+    assert r.status_code == 200
+    assert "Render Me" in r.text
+    assert "Franchises" in r.text  # tags fragment rendered
+
+    login_as(client, VIEWER_ID, "viewer")
+    r = client.get("/concerts/1")
+    assert r.status_code == 200  # viewers render too (read-only chips)

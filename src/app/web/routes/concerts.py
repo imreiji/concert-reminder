@@ -155,22 +155,23 @@ async def concert_detail(
     session: AsyncSession = Depends(get_session),
 ):
     from app.db.models import Tag
-    from app.domain.types import TagKind
+    from app.web.routes.preferences import my_presets
 
     concert = await get_concert(session, concert_id)
     await session.refresh(concert, ["days", "windows", "tags"])
     rules = await user_rules(session, user.id, concert_id)
     tz = await user_tz(session, user.id)
-    from app.web.routes.preferences import my_presets
-
-    all_tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
     presets = await my_presets(session, user.id)
+    tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
+    by_kind: dict[str, list[Tag]] = {}
+    for tg in tags:
+        by_kind.setdefault(tg.kind.value, []).append(tg)
     return templates.TemplateResponse(
         request,
         "concert_detail.html",
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
          "kinds": list(WindowKind), "anchors": list(Anchor),
-         "all_tags": all_tags, "tag_kinds": list(TagKind)},
+         "by_kind": by_kind, "attached": {tg.id for tg in concert.tags}},
     )
 
 
