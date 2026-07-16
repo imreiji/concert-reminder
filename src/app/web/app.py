@@ -108,6 +108,7 @@ def create_app() -> FastAPI:
         from app.domain.types import TagKind as _TK
 
         by_kind = grouped_tags(tags)
+        tag_names = {t2.id: t2.name for t2 in tags}
         groups_data = {}
         for g in by_kind.get("group", []):
             groups_data[g.id] = {
@@ -125,6 +126,7 @@ def create_app() -> FastAPI:
                 "all_tags": tags,
                 "by_kind": by_kind,
                 "groups_json": _json.dumps(groups_data),
+                "tag_names_json": _json.dumps(tag_names),
                 "selected_tags": set(tag),
                 "sort": sort,
                 "tz": tz,

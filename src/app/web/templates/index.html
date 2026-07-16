@@ -46,22 +46,19 @@
       <summary>+ new concert</summary>
       <form method="post" action="/concerts" class="stack" id="new-concert">
         <label>title <input name="title" required maxlength="200" placeholder="Hasunosora 6th Live"></label>
-        <label>franchise
-          <select name="franchise_tag" id="nc-franchise" onchange="ncFilterGroups()">
-            <option value="0">— none —</option>
-            {% for t in by_kind.get("franchise", []) %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
-          </select></label>
-        <label>group
-          <select name="group_tag" id="nc-group" onchange="ncPopulateArtists()">
-            <option value="0">— none —</option>
-            {% for t in by_kind.get("group", []) %}<option value="{{ t.id }}" data-franchise="{{ t.parent_id or 0 }}">{{ t.name }}</option>{% endfor %}
-          </select></label>
-        <label>artists <span class="dim tiny">(pre-checked from the group — untick anyone not performing)</span></label>
-        <div id="nc-artists" class="taglist">
-          {% for t in by_kind.get("artist", []) %}
-          <label class="chip check" data-artist="{{ t.id }}"><input type="checkbox" name="artist_tags" value="{{ t.id }}"> {{ t.name }}</label>
-          {% endfor %}
-        </div>
+
+        <label>franchises</label>
+        <div class="pickrow"><span class="taglist" id="sel-franchise"></span>
+          <button type="button" class="quiet" onclick="openPicker('franchise')">+ add franchise</button></div>
+
+        <label>groups</label>
+        <div class="pickrow"><span class="taglist" id="sel-group"></span>
+          <button type="button" class="quiet" onclick="openPicker('group')">+ add group</button></div>
+
+        <label>artists <span class="dim tiny">(auto-filled from groups — × anyone not performing)</span></label>
+        <div class="pickrow"><span class="taglist" id="sel-artist"></span>
+          <button type="button" class="quiet" onclick="openPicker('artist')">+ add artist</button></div>
+
         <label>venue
           <select name="venue_tag">
             <option value="0">— none —</option>
@@ -70,25 +67,96 @@
         <button>create</button>
         <p class="dim tiny">missing a tag? create it on the <a href="/tags">tags page</a> first — concerts are tag-driven.</p>
       </form>
+
+      {% for kindname in ["franchise", "group", "artist"] %}
+      <dialog id="picker-{{ kindname }}" class="picker">
+        <h3>select {{ kindname }}s</h3>
+        <input type="search" placeholder="search…" oninput="filterChips(this, '#picker-{{ kindname }}')">
+        <div class="taglist">
+          {% for t in by_kind.get(kindname, []) %}
+          <button type="button" class="chip kind-{{ kindname }}" data-name="{{ t.name | lower }}"
+                  data-id="{{ t.id }}" onclick="togglePick('{{ kindname }}', this)">{{ t.name }}</button>
+          {% endfor %}
+        </div>
+        <div class="picker-actions"><button type="button" onclick="closePicker('{{ kindname }}')">done</button></div>
+      </dialog>
+      {% endfor %}
+
       <script>
         const NC_GROUPS = {{ groups_json | safe }};
-        function ncFilterGroups() {
-          const f = document.getElementById("nc-franchise").value;
-          const sel = document.getElementById("nc-group");
-          for (const opt of sel.options) {
-            if (!opt.value || opt.value === "0") continue;
-            opt.hidden = (f !== "0" && opt.dataset.franchise !== f);
+        const TAG_NAMES = {{ tag_names_json | safe }};
+        // selection state: sets of tag ids (strings)
+        const sel = { franchise: new Set(), group: new Set(), artist: new Set() };
+        const artistExcluded = new Set();   // auto-added artists the editor removed
+        const artistManual = new Set();     // artists added explicitly via the picker
+
+        function autoArtists() {
+          const ids = new Set();
+          for (const g of sel.group) (NC_GROUPS[g]?.members || []).forEach(m => ids.add(String(m.id)));
+          return ids;
+        }
+        function recomputeArtists() {
+          sel.artist = new Set([...autoArtists()].filter(id => !artistExcluded.has(id)));
+          artistManual.forEach(id => sel.artist.add(id));
+        }
+        function renderRow(kind) {
+          const box = document.getElementById("sel-" + kind);
+          box.innerHTML = "";
+          for (const id of sel[kind]) {
+            const chip = document.createElement("span");
+            chip.className = "chip kind-" + kind + " on";
+            chip.textContent = TAG_NAMES[id] || id;
+            const x = document.createElement("button");
+            x.type = "button"; x.className = "x"; x.textContent = "×";
+            x.onclick = () => removePick(kind, id);
+            chip.appendChild(x);
+            box.appendChild(chip);
           }
-          if (sel.selectedOptions[0]?.hidden) { sel.value = "0"; ncPopulateArtists(); }
         }
-        function ncPopulateArtists() {
-          const g = document.getElementById("nc-group").value;
-          const memberIds = new Set((NC_GROUPS[g]?.members || []).map(m => String(m.id)));
-          document.querySelectorAll("#nc-artists .chip.check").forEach(chip => {
-            const box = chip.querySelector("input");
-            box.checked = memberIds.has(chip.dataset.artist);
-          });
+        function renderAll() {
+          recomputeArtists();
+          ["franchise", "group", "artist"].forEach(renderRow);
+          syncHidden();
         }
+        function removePick(kind, id) {
+          if (kind === "artist") {
+            artistManual.delete(id);
+            if (autoArtists().has(id)) artistExcluded.add(id);  // pruned non-performer
+          } else {
+            sel[kind].delete(id);
+          }
+          renderAll();
+        }
+        function togglePick(kind, btn) {
+          const id = btn.dataset.id;
+          if (kind === "artist") {
+            if (sel.artist.has(id)) { removePick("artist", id); }
+            else { artistManual.add(id); artistExcluded.delete(id); }
+          } else {
+            sel[kind].has(id) ? sel[kind].delete(id) : sel[kind].add(id);
+          }
+          renderAll();
+          markPickerState(kind);
+        }
+        function markPickerState(kind) {
+          document.querySelectorAll("#picker-" + kind + " .chip").forEach(c =>
+            c.classList.toggle("on", sel[kind].has(c.dataset.id)));
+        }
+        function openPicker(kind) { markPickerState(kind); document.getElementById("picker-" + kind).showModal(); }
+        function closePicker(kind) { document.getElementById("picker-" + kind).close(); }
+        function syncHidden() {
+          const form = document.getElementById("new-concert");
+          form.querySelectorAll("input.sel-hidden").forEach(i => i.remove());
+          const put = (name, ids) => { for (const id of ids) {
+            const i = document.createElement("input");
+            i.type = "hidden"; i.name = name; i.value = id; i.className = "sel-hidden";
+            form.appendChild(i);
+          }};
+          put("franchise_tags", sel.franchise);
+          put("group_tags", sel.group);
+          put("artist_tags", sel.artist);
+        }
+        renderAll();
       </script>
     </details>
     {% endif %}

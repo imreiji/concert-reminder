@@ -97,51 +97,51 @@ async def create_concert(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
-    franchise_tag: int = Form(0),
-    group_tag: int = Form(0),
+    franchise_tags: list[int] = Form(default=[]),
+    group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
     venue_tag: int = Form(0),
 ):
-    """Tag-driven creation: franchise/group/venue are tag selects, artists are
-    checkboxes pre-populated from the group. The group attaches WITHOUT
-    expansion (expand=False) because the editor's artist checkboxes are the
-    authoritative performer list. The notify-and-apply pipeline fires on
-    everything attached here."""
+    """Tag-driven creation supporting collab events: MULTIPLE franchises,
+    MULTIPLE groups, explicit artist list (auto-populated client-side from
+    the selected groups, editor-pruned). Groups attach WITHOUT expansion —
+    the submitted artist list is authoritative. The notify-and-apply
+    pipeline fires on everything attached here."""
     from app.db.models import Tag
+    from app.domain.types import TagKind
 
     await ensure_user(session, user.id, user.username)
 
-    async def tag_of(tag_id: int, kind) -> Tag | None:
-        if not tag_id:
-            return None
-        tag = await session.get(Tag, tag_id)
-        if tag is None or tag.kind is not kind:
-            raise HTTPException(status_code=422, detail=f"invalid {kind.value} tag")
-        return tag
+    async def tags_of(tag_ids: list[int], kind) -> list[Tag]:
+        out = []
+        for tag_id in tag_ids:
+            if not tag_id:
+                continue
+            tag = await session.get(Tag, tag_id)
+            if tag is None or tag.kind is not kind:
+                raise HTTPException(status_code=422, detail=f"invalid {kind.value} tag")
+            out.append(tag)
+        return out
 
-    from app.domain.types import TagKind
-
-    f_tag = await tag_of(franchise_tag, TagKind.FRANCHISE)
-    g_tag = await tag_of(group_tag, TagKind.GROUP)
-    v_tag = await tag_of(venue_tag, TagKind.VENUE)
+    f_tags = await tags_of(franchise_tags, TagKind.FRANCHISE)
+    g_tags = await tags_of(group_tags, TagKind.GROUP)
+    a_tags = await tags_of(artist_tags, TagKind.ARTIST)
+    v_tags = await tags_of([venue_tag], TagKind.VENUE)
 
     concert = Concert(
         title=title.strip(),
-        franchise=f_tag.name if f_tag else None,  # denormalized display strings
-        venue=v_tag.name if v_tag else None,
+        franchise=", ".join(t.name for t in f_tags) or None,  # denormalized display
+        venue=v_tags[0].name if v_tags else None,
         created_by=user.id,
     )
     session.add(concert)
     await session.flush()
 
     newly: list[Tag] = []
-    for tag in (f_tag, g_tag, v_tag):
-        if tag is not None:
-            newly += await attach_tag(session, concert.id, tag, expand=False)
-    for artist_id in artist_tags:
-        artist = await session.get(Tag, artist_id)
-        if artist is not None and artist.kind is TagKind.ARTIST:
-            newly += await attach_tag(session, concert.id, artist)
+    for tag in [*f_tags, *g_tags, *v_tags]:
+        newly += await attach_tag(session, concert.id, tag, expand=False)
+    for artist in a_tags:
+        newly += await attach_tag(session, concert.id, artist)
     await handle_newly_tagged(session, concert, newly)
     await session.commit()
     return RedirectResponse(f"/concerts/{concert.id}", status_code=303)

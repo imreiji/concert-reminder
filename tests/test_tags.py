@@ -212,7 +212,7 @@ async def test_creation_form_respects_explicit_artist_selection(client):
 
     # create with group but ONLY Kozue checked (Kaho not performing)
     r = client.post("/concerts", data={
-        "title": "6th Live", "franchise_tag": 1, "group_tag": 2,
+        "title": "6th Live", "franchise_tags": [1], "group_tags": [2],
         "artist_tags": [3], "venue_tag": 5,
     })
     assert r.status_code == 303
@@ -227,7 +227,7 @@ async def test_creation_form_respects_explicit_artist_selection(client):
 def test_creation_rejects_wrong_kind_tags(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Kozue", "kind": "artist"})
-    r = client.post("/concerts", data={"title": "X", "franchise_tag": 1})  # artist as franchise
+    r = client.post("/concerts", data={"title": "X", "franchise_tags": [1]})  # artist as franchise
     assert r.status_code == 422
 
 
@@ -236,3 +236,26 @@ def test_group_parent_must_be_franchise(client):
     client.post("/tags", data={"name": "Kozue", "kind": "artist"})
     r = client.post("/tags", data={"name": "G", "kind": "group", "parent_id": 1})
     assert r.status_code == 422
+
+
+async def test_creation_supports_multiple_groups_and_franchises(client):
+    """Collab events: two franchises, two groups, union of artists minus prunes."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "LoveLive", "kind": "franchise"})     # 1
+    client.post("/tags", data={"name": "Idolmaster", "kind": "franchise"})   # 2
+    client.post("/tags", data={"name": "Hasunosora", "kind": "group", "parent_id": 1})  # 3
+    client.post("/tags", data={"name": "Gakumas", "kind": "group", "parent_id": 2})     # 4
+    client.post("/tags", data={"name": "Kozue", "kind": "artist"})           # 5
+    client.post("/tags", data={"name": "Saki", "kind": "artist"})            # 6
+    client.post("/tags/3/members", data={"member_tag_id": 5})
+    client.post("/tags/4/members", data={"member_tag_id": 6})
+
+    r = client.post("/concerts", data={
+        "title": "Godo Live",
+        "franchise_tags": [1, 2], "group_tags": [3, 4], "artist_tags": [5, 6],
+    })
+    assert r.status_code == 303
+    async with client.db() as s:
+        assert await tag_ids_on(s, 1) == {1, 2, 3, 4, 5, 6}
+        c = (await s.execute(select(Concert))).scalar_one()
+        assert c.franchise == "LoveLive, Idolmaster"
