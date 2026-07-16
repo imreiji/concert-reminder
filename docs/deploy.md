@@ -99,10 +99,67 @@ Then in a browser: sign in with Discord, confirm the editor badge.
   Otherwise anyone who discovers the origin IP can bypass Cloudflare.
 - SSH: restrict port 22 to your home IP; key-only auth (Lightsail default).
 - Point a free uptime monitor (UptimeRobot) at `https://dekimasen.app/healthz`.
-- Backups: `crontab -e` ->
-  `0 9 * * * /home/ubuntu/app/deploy/backup.sh`
-  (first create the S3 bucket and put its name in backup.sh; `aws configure`
-  with an IAM user that can only write to that bucket).
+- Backups: see the full section below.
+
+## 9. Backups (Phase 7)
+
+The entire application state is one file, so backup = copy one file nightly.
+
+**S3 bucket** (AWS console -> S3 -> Create bucket):
+- name: globally unique, e.g. `dekimasen-backups-<random suffix>`
+- keep Block Public Access ON (default)
+- after creating: Management tab -> Lifecycle rule -> apply to whole bucket ->
+  "Expire current versions" after **30 days**. This caps storage at ~30 copies
+  (pennies/month) with zero maintenance.
+
+**IAM user that can ONLY write backups** (IAM -> Users -> Create user, no console access
+-> attach this inline policy, then create an access key of type "Other"):
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": "s3:PutObject",
+    "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME/*"
+  }]
+}
+```
+PutObject only: if the server is ever compromised, the key can add backups but
+not read, list, or delete them.
+
+**On the server:**
+```bash
+sudo apt-get install -y awscli
+aws configure          # paste the access key id + secret; region e.g. ca-central-1; output json
+nano ~/app/deploy/backup.sh    # set BUCKET
+~/app/deploy/backup.sh         # test run -> "backup ok: <date>"
+crontab -e                     # add:
+# 0 9 * * * /home/ubuntu/app/deploy/backup.sh >> /home/ubuntu/backup.log 2>&1
+```
+
+**Restore drill (do this once now so it isn't theory):**
+```bash
+aws s3 ls s3://YOUR-BUCKET-NAME/dekimasen/        # requires ListBucket - run from
+                                                  # AWS console/CloudShell instead,
+                                                  # since the server key can't list
+# from the console, download a backup, or on a trusted machine:
+gunzip app-YYYY-MM-DD.db.gz
+sqlite3 app-YYYY-MM-DD.db "SELECT count(*) FROM concerts"
+```
+
+## 10. Monitoring (Phase 7)
+
+`/healthz` now reports the SCHEDULER's health, not just the web server's:
+```json
+{"ok": true, "bot_enabled": true, "scheduler_ok": true, "scheduler_last_tick": "..."}
+```
+`ok` flips to false if the reminder loop misses 3 ticks - catching silent
+scheduler death, the failure mode that actually loses lotteries.
+
+UptimeRobot (free): Add monitor -> type **Keyword** -> URL
+`https://dekimasen.app/healthz` -> keyword `"ok":true` -> alert when keyword
+**not exists** -> interval 5 min. This alerts on full outages AND on a dead
+scheduler behind a live website.
 
 ## Updating (every deploy after the first)
 

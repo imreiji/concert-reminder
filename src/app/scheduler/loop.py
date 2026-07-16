@@ -23,6 +23,7 @@ import discord
 from app.bot.messages import format_reminder
 from app.db.service import DueReminder, due_reminders, mark_sent
 from app.db.session import SessionMaker
+from app.scheduler import heartbeat
 
 log = logging.getLogger(__name__)
 
@@ -64,11 +65,13 @@ async def reminder_loop(bot) -> None:
     if bot is None:
         log.info("web-only mode: scheduler idle (reminders queue up, nothing sends)")
         while True:
+            heartbeat.beat()
             await asyncio.sleep(TICK_SECONDS)
 
     await bot.wait_until_ready()
     log.info("scheduler running: tick every %ss", TICK_SECONDS)
     while True:
+        heartbeat.beat()
         try:
             n = await tick(bot)
             if n:

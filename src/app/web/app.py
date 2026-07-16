@@ -14,6 +14,7 @@ from app.config import settings
 from app.db.models import Concert, User
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual, utc_to_jst
+from app.scheduler import heartbeat
 from app.web import auth
 from app.web.routes import concerts as concert_routes
 
@@ -46,7 +47,13 @@ def create_app() -> FastAPI:
 
     @app.get("/healthz")
     async def healthz() -> dict:
-        return {"ok": True, "bot_enabled": settings.bot_enabled}
+        scheduler_ok, last_tick = heartbeat.status()
+        return {
+            "ok": scheduler_ok,  # overall health follows the scheduler on purpose
+            "bot_enabled": settings.bot_enabled,
+            "scheduler_ok": scheduler_ok,
+            "scheduler_last_tick": last_tick,
+        }
 
     @app.get("/", response_class=HTMLResponse)
     async def index(

@@ -82,5 +82,5 @@ Backups: `deploy/backup.sh` via cron (nightly SQLite → S3).
 - [x] Phase 3 — scheduler sends real DMs; /upcoming, /remindme, /myreminders
 - [x] Phase 4 — Discord OAuth login
 - [x] Phase 5 — concert CRUD web UI (htmx) + dekimasen.app branding
-- [ ] Phase 6 — deploy to AWS + Porkbun domain
-- [ ] Phase 7 — backups, monitoring, polish
+- [x] Phase 6 — deployed: Cloudflare -> Caddy (origin cert) -> Lightsail
+- [x] Phase 7 — S3 backups, scheduler heartbeat in /healthz, uptime monitoring
