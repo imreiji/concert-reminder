@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import PresetItem, ReminderPreset, Tag, TagSubscription, User
-from app.db.service import apply_preset, ensure_user, group_members
+from app.db.service import apply_preset, ensure_user, group_members, set_default_preset
 from app.db.session import get_session
 from app.domain.types import Anchor
 from app.web.auth import SessionUser, require_user
@@ -143,6 +143,19 @@ async def rename_preset(
 ):
     preset = await owned_preset(session, user.id, preset_id)
     preset.name = name.strip()
+    await session.commit()
+    return RedirectResponse("/preferences", status_code=303)
+
+
+@router.post("/presets/{preset_id}/default")
+async def make_default(
+    preset_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """The default preset is what the DM 'Set my reminders' button applies."""
+    await owned_preset(session, user.id, preset_id)
+    await set_default_preset(session, user.id, preset_id)
     await session.commit()
     return RedirectResponse("/preferences", status_code=303)
 

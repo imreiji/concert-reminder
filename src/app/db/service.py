@@ -417,7 +417,9 @@ async def handle_newly_tagged(
                 tail = "no preset linked \u2014 set reminders on the site."
             session.add(Notification(
                 user_id=user_id,
-                body=(
+                concert_id=concert.id,
+                kind="new_event",
+                body=(  # plain-text fallback only; normally rendered as an embed
                     f"\U0001f195 New event: **{concert.title}** (tagged: {tag_names}) \u2014 {tail}"
                 ),
             ))
@@ -443,3 +445,148 @@ async def mark_notification_sent(session: AsyncSession, notification_id: int) ->
     if row is not None:
         row.sent_at_utc = _now()
         await session.flush()
+
+
+# ── DM button actions (Phase 12) — pure DB logic, discord-free ───────────
+
+
+async def get_default_preset(session: AsyncSession, user_id: int) -> ReminderPreset | None:
+    res = await session.execute(
+        select(ReminderPreset).where(
+            ReminderPreset.user_id == user_id, ReminderPreset.is_default.is_(True)
+        )
+    )
+    return res.scalar_one_or_none()
+
+
+async def set_default_preset(session: AsyncSession, user_id: int, preset_id: int) -> None:
+    res = await session.execute(
+        select(ReminderPreset).where(ReminderPreset.user_id == user_id)
+    )
+    for p in res.scalars():
+        p.is_default = p.id == preset_id
+    await session.flush()
+
+
+async def apply_default_preset(
+    session: AsyncSession, user_id: int, concert_id: int
+) -> tuple[str, int]:
+    """[Set my reminders] button. Returns (status, rules_created):
+    'no_default' | 'already_covered' | 'applied'."""
+    preset = await get_default_preset(session, user_id)
+    if preset is None:
+        return "no_default", 0
+    existing = await session.execute(
+        select(ReminderRule.id)
+        .where(ReminderRule.user_id == user_id, ReminderRule.concert_id == concert_id)
+        .limit(1)
+    )
+    if existing.scalar_one_or_none() is not None:
+        return "already_covered", 0
+    n = await apply_preset(session, user_id, concert_id, preset)
+    return "applied", n
+
+
+async def remove_user_rules(session: AsyncSession, user_id: int, concert_id: int) -> int:
+    """[Remove these reminders] button. Deletes the user's rules on a concert
+    (queue rows cascade). Returns how many rules were removed."""
+    res = await session.execute(
+        select(ReminderRule).where(
+            ReminderRule.user_id == user_id, ReminderRule.concert_id == concert_id
+        )
+    )
+    rules = list(res.scalars())
+    for rule in rules:
+        await session.delete(rule)
+    await session.flush()
+    return len(rules)
+
+
+async def snooze_reminder(
+    session: AsyncSession, queue_id: int, user_id: int, now: datetime | None = None
+) -> str:
+    """[Snooze 1 day] button. Re-arms a delivered reminder for +24h, capped so
+    it can never fire after the deadline it's about.
+    Returns: 'snoozed' | 'too_close' | 'not_yours' | 'gone'."""
+    from datetime import timedelta
+
+    now = now or _now()
+    row = await session.get(ReminderQueue, queue_id)
+    if row is None:
+        return "gone"
+    rule = await session.get(ReminderRule, row.rule_id)
+    if rule is None or rule.user_id != user_id:
+        return "not_yours"
+
+    new_fire = now + timedelta(hours=24)
+    anchor_at: datetime | None = None
+    if row.window_id is not None:
+        window = await session.get(Window, row.window_id)
+        if window is not None:
+            anchor_at = (
+                window.opens_at_utc if row.anchor is Anchor.OPENS else window.closes_at_utc
+            )
+    elif row.day_id is not None:
+        day = await session.get(ConcertDay, row.day_id)
+        anchor_at = day.starts_at_utc if day else None
+
+    if anchor_at is not None and anchor_at > now and new_fire >= anchor_at:
+        return "too_close"  # snoozing would sleep through the deadline itself
+
+    row.fire_at_utc = new_fire
+    row.sent_at_utc = None  # re-arm
+    await session.flush()
+    return "snoozed"
+
+
+@dataclass(frozen=True)
+class NoticeContext:
+    """Everything needed to render the new-event embed for one recipient."""
+
+    concert_id: int
+    title: str
+    tags_line: str
+    venue: str | None
+    first_deadline_label: str | None
+    first_deadline_at: datetime | None
+    user_timezone: str
+    user_has_rules: bool
+    user_has_default_preset: bool
+
+
+async def notice_context(
+    session: AsyncSession, concert_id: int, user_id: int
+) -> NoticeContext | None:
+    concert = await session.get(Concert, concert_id)
+    if concert is None:
+        return None
+    await session.refresh(concert, ["tags", "windows"])
+    now = _now()
+    upcoming = [
+        (w, w.closes_at_utc or w.opens_at_utc)
+        for w in concert.windows
+        if (w.closes_at_utc or w.opens_at_utc) and (w.closes_at_utc or w.opens_at_utc) > now
+    ]
+    upcoming.sort(key=lambda pair: pair[1])
+    first = upcoming[0] if upcoming else None
+
+    non_venue = [t.name for t in concert.tags if t.kind.value != "venue"]
+    venues = [t.name for t in concert.tags if t.kind.value == "venue"]
+    user = await session.get(User, user_id)
+    has_rules = (await session.execute(
+        select(ReminderRule.id)
+        .where(ReminderRule.user_id == user_id, ReminderRule.concert_id == concert_id)
+        .limit(1)
+    )).scalar_one_or_none() is not None
+
+    return NoticeContext(
+        concert_id=concert_id,
+        title=concert.title,
+        tags_line=" · ".join(non_venue),
+        venue=("Multiple" if len(venues) > 1 else (venues[0] if venues else concert.venue)),
+        first_deadline_label=first[0].label if first else None,
+        first_deadline_at=first[1] if first else None,
+        user_timezone=user.timezone if user else "America/Moncton",
+        user_has_rules=has_rules,
+        user_has_default_preset=await get_default_preset(session, user_id) is not None,
+    )

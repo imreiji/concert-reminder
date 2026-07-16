@@ -88,3 +88,4 @@ Backups: `deploy/backup.sh` via cron (nightly SQLite → S3).
 - [x] Phase 9 — tags (franchise/artist/venue/group), filtering & sorting, group auto-expansion
 - [x] Phase 10 — reminder presets, one-click apply, tag subscriptions with notify-and-apply
 - [x] Phase 11 — UI overhaul: sidebar filters, tiles, tag-driven creation, sentence presets, hierarchical subscriptions, favicon
+- [x] Phase 12 — interactive DM embeds: state-aware buttons, default preset, snooze, deadline list

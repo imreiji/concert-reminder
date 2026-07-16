@@ -241,6 +241,8 @@ class ReminderPreset(Base):
         BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
     )
     name: Mapped[str] = mapped_column(String(100))
+    # The preset the "Set my reminders" DM button applies. One per user.
+    is_default: Mapped[bool] = mapped_column(default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
     items: Mapped[list["PresetItem"]] = relationship(
@@ -295,7 +297,13 @@ class Notification(Base):
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
     )
-    body: Mapped[str] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text)  # plain-text fallback if embed context fails
+    # Structured payload: when concert_id is set, the scheduler renders a rich
+    # embed with buttons instead of plain text.
+    concert_id: Mapped[int | None] = mapped_column(
+        ForeignKey("concerts.id", ondelete="CASCADE")
+    )
+    kind: Mapped[str | None] = mapped_column(String(30))  # "new_event"
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
     sent_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
 

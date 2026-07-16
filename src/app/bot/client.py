@@ -20,6 +20,9 @@ class ReminderBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)  # prefix unused; slash-only
 
     async def setup_hook(self) -> None:
+        from app.bot.views import DYNAMIC_ITEMS
+
+        self.add_dynamic_items(*DYNAMIC_ITEMS)  # buttons survive restarts
         await self.load_extension("app.bot.cogs.ping")
         await self.load_extension("app.bot.cogs.reminders")
         synced = await self.tree.sync()

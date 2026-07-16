@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 
 import discord
 
-from app.bot.messages import format_reminder
+from app.bot.messages import build_new_event_message, build_reminder_message
 from app.db.service import (
     DueReminder,
     due_notifications,
@@ -38,10 +38,11 @@ SEND_GAP_SECONDS = 1.0
 
 
 async def deliver(bot, item: DueReminder) -> bool:
-    """Send one reminder DM. Returns True if the row should be marked sent."""
+    """Send one reminder DM (embed + buttons). True -> mark the row sent."""
     try:
         user = bot.get_user(item.discord_id) or await bot.fetch_user(item.discord_id)
-        await user.send(format_reminder(item))
+        embed, view = build_reminder_message(item)
+        await user.send(embed=embed, view=view)
         return True
     except discord.Forbidden:
         log.warning(
@@ -53,18 +54,27 @@ async def deliver(bot, item: DueReminder) -> bool:
         return False  # leave unsent; next tick retries
 
 
-async def deliver_text(bot, user_id: int, body: str) -> bool:
-    """Send a plain DM. Same policy as deliver(): only success or a permanent
-    failure (DMs closed) clears the row; transient errors retry next tick."""
+async def deliver_notification(bot, session, note) -> bool:
+    """Send a notice DM. Structured (concert_id set) -> rich embed with the
+    state-aware buttons; otherwise the plain-text fallback body. Same policy
+    as deliver(): only success or a permanent failure clears the row."""
+    from app.db.service import notice_context
+
     try:
-        user = bot.get_user(user_id) or await bot.fetch_user(user_id)
-        await user.send(body)
+        user = bot.get_user(note.user_id) or await bot.fetch_user(note.user_id)
+        ctx = await notice_context(session, note.concert_id, note.user_id) \
+            if note.concert_id else None
+        if ctx is not None:
+            embed, view = build_new_event_message(ctx)
+            await user.send(embed=embed, view=view)
+        else:
+            await user.send(note.body)
         return True
     except discord.Forbidden:
-        log.warning("user %s has DMs closed; dropping notification", user_id)
+        log.warning("user %s has DMs closed; dropping notification", note.user_id)
         return True
     except discord.HTTPException as e:
-        log.error("transient notification failure for user %s: %s", user_id, e)
+        log.error("transient notification failure for user %s: %s", note.user_id, e)
         return False
 
 
@@ -79,7 +89,7 @@ async def tick(bot) -> int:
                 delivered += 1
             await asyncio.sleep(SEND_GAP_SECONDS)
         for note in await due_notifications(session):
-            if await deliver_text(bot, note.user_id, note.body):
+            if await deliver_notification(bot, session, note):
                 await mark_notification_sent(session, note.id)
                 delivered += 1
             await asyncio.sleep(SEND_GAP_SECONDS)

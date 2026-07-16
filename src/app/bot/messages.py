@@ -57,3 +57,76 @@ def format_reminder(item: DueReminder) -> str:
     if item.url:
         lines.append(item.url)
     return "\n".join(lines)
+
+
+# ── Rich embeds + button views (Phase 12) ────────────────────────────────
+
+
+def build_new_event_message(ctx) -> tuple:
+    """(embed, view) for the new-event notice. ctx: service.NoticeContext."""
+    import discord
+
+    from app.bot.views import (
+        ApplyDefaultButton,
+        RemoveRemindersButton,
+        ShowDeadlinesButton,
+    )
+    from app.config import settings
+
+    embed = discord.Embed(
+        title=f"🆕 {ctx.title}",
+        description=ctx.tags_line or None,
+        color=0x4F46B8,
+    )
+    if ctx.venue:
+        embed.add_field(name="Venue", value=f"📍 {ctx.venue}", inline=True)
+    if ctx.first_deadline_at is not None:
+        embed.add_field(
+            name="First deadline",
+            value=(f"{ctx.first_deadline_label}\n"
+                   f"{fmt_dual(ctx.first_deadline_at, ctx.user_timezone)}"),
+            inline=False,
+        )
+
+    view = discord.ui.View(timeout=None)
+    view.add_item(discord.ui.Button(
+        label="Open on dekimasen.app",
+        url=f"{settings.base_url}/concerts/{ctx.concert_id}",
+    ))
+    # State-aware: auto-applied subscribers get the undo; others get the apply.
+    if ctx.user_has_rules:
+        view.add_item(RemoveRemindersButton(ctx.concert_id))
+    else:
+        view.add_item(ApplyDefaultButton(ctx.concert_id))
+    view.add_item(ShowDeadlinesButton(ctx.concert_id))
+    return embed, view
+
+
+def build_reminder_message(item: DueReminder) -> tuple:
+    """(embed, view) for a deadline reminder DM."""
+    import discord
+
+    from app.bot.views import SnoozeButton
+    from app.config import settings
+
+    subject = item.window_label or item.day_label or "event"
+    emoji = KIND_EMOJI.get(item.window_kind or "", "🗓️")
+    verb = ANCHOR_VERB[item.anchor]
+
+    embed = discord.Embed(title=f"{emoji} {item.concert_title}", color=0x1A7F4E)
+    if item.anchor_time_utc is not None:
+        rel = relative_phrase(item.anchor_time_utc, item.fire_at_utc)
+        embed.description = (
+            f"**{subject}** {verb} {rel}\n{fmt_dual(item.anchor_time_utc, item.user_timezone)}"
+        )
+    else:
+        embed.description = f"**{subject}**"
+
+    view = discord.ui.View(timeout=None)
+    if item.url:
+        view.add_item(discord.ui.Button(label="Ticket page", url=item.url))
+    view.add_item(discord.ui.Button(
+        label="Open on dekimasen.app", url=f"{settings.base_url}"
+    ))
+    view.add_item(SnoozeButton(item.queue_id))
+    return embed, view

@@ -44,6 +44,8 @@ to a tag subscription so new events set themselves up.</p>
       <input name="name" value="{{ p.name }}" maxlength="100" required>
       <button class="quiet" title="Rename">Rename</button>
     </form>
+    {% if p.is_default %}<span class="badge" title="The Discord 'Set my reminders' button applies this preset">★ Default</span>
+    {% else %}<form method="post" action="/presets/{{ p.id }}/default"><button class="quiet" title="Make this the preset the Discord button applies">☆ Make default</button></form>{% endif %}
     <form method="post" action="/presets/{{ p.id }}/delete"
           onsubmit="return confirm('Delete preset {{ p.name }}?')"><button class="x" title="delete preset">×</button></form>
   </div>
