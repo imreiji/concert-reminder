@@ -14,6 +14,7 @@
       {% if user %}
         <img class="avatar" src="{{ user.avatar_url }}" alt="">
         <span>{{ user.username }}{% if user.is_editor %} <em class="badge">editor</em>{% endif %}</span>
+        <a href="/preferences">preferences</a>
         <a href="/auth/logout">log out</a>
       {% else %}
         <a class="login" href="/auth/login">Sign in with Discord</a>

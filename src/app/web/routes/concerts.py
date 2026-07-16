@@ -65,13 +65,16 @@ async def user_tz(session: AsyncSession, user_id: int) -> str:
 
 async def render_fragment(request: Request, name: str, concert: Concert, user: SessionUser,
                           session: AsyncSession) -> HTMLResponse:
+    from app.web.routes.preferences import my_presets
+
     await session.refresh(concert, ["days", "windows"])
     rules = await user_rules(session, user.id, concert.id)
     tz = await user_tz(session, user.id)
+    presets = await my_presets(session, user.id)
     return templates.TemplateResponse(
         request,
         name,
-        {"concert": concert, "user": user, "rules": rules, "tz": tz,
+        {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
          "kinds": list(WindowKind), "anchors": list(Anchor)},
     )
 
@@ -121,11 +124,14 @@ async def concert_detail(
     await session.refresh(concert, ["days", "windows", "tags"])
     rules = await user_rules(session, user.id, concert_id)
     tz = await user_tz(session, user.id)
+    from app.web.routes.preferences import my_presets
+
     all_tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
+    presets = await my_presets(session, user.id)
     return templates.TemplateResponse(
         request,
         "concert_detail.html",
-        {"concert": concert, "user": user, "rules": rules, "tz": tz,
+        {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
          "kinds": list(WindowKind), "anchors": list(Anchor),
          "all_tags": all_tags, "tag_kinds": list(TagKind)},
     )

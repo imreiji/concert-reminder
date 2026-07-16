@@ -216,6 +216,75 @@ class ReminderRule(Base):
     user: Mapped[User] = relationship(back_populates="rules")
 
 
+class ReminderPreset(Base):
+    """A user's named reminder loadout, e.g. 'standard lottery coverage'."""
+
+    __tablename__ = "reminder_presets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+
+    items: Mapped[list["PresetItem"]] = relationship(
+        cascade="all, delete-orphan", order_by="PresetItem.id"
+    )
+
+
+class PresetItem(Base):
+    """One rule template inside a preset: '3 days before each close', etc."""
+
+    __tablename__ = "preset_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    preset_id: Mapped[int] = mapped_column(
+        ForeignKey("reminder_presets.id", ondelete="CASCADE")
+    )
+    anchor: Mapped[Anchor] = mapped_column(
+        Enum(Anchor, values_callable=lambda e: [m.value for m in e])
+    )
+    offset_days: Mapped[int] = mapped_column(default=-3)
+    offset_hours: Mapped[int] = mapped_column(default=0)
+
+
+class TagSubscription(Base):
+    """User follows a tag. When a matching event appears: preset auto-applies
+    (if linked) and a DM notice goes out (if notify). Agreed default:
+    notify-and-apply, both toggleable per subscription."""
+
+    __tablename__ = "tag_subscriptions"
+    __table_args__ = (Index("uq_tag_sub", "user_id", "tag_id", unique=True),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"))
+    preset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("reminder_presets.id", ondelete="SET NULL")
+    )
+    notify: Mapped[bool] = mapped_column(default=True, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+
+
+class Notification(Base):
+    """One-off DM outbox (new-event notices). Drained by the scheduler like
+    reminder_queue: only successful delivery marks sent, so notices survive
+    restarts and web-only mode queues them until the bot is back."""
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    sent_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
 class ReminderQueue(Base):
     """Materialized outbox. The scheduler's entire job is draining this table.
 

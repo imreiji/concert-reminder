@@ -26,10 +26,13 @@ from app.db.models import (
     Concert,
     ConcertDay,
     ConcertTag,
+    Notification,
+    ReminderPreset,
     ReminderQueue,
     ReminderRule,
     Tag,
     TagMember,
+    TagSubscription,
     User,
     Window,
 )
@@ -311,4 +314,126 @@ async def detach_tag(session: AsyncSession, concert_id: int, tag_id: int) -> Non
     row = res.scalar_one_or_none()
     if row is not None:
         await session.delete(row)
+        await session.flush()
+
+
+# ── Presets & subscriptions (Phase 10) ───────────────────────────────────
+
+
+async def apply_preset(
+    session: AsyncSession, user_id: int, concert_id: int, preset: ReminderPreset
+) -> int:
+    """Create this preset's rules on a concert (idempotent per item).
+
+    An item is skipped if the user already has an identical rule
+    (same concert, anchor, offsets) — repeated clicks are harmless.
+    Returns how many rules were actually created.
+    """
+    await session.refresh(preset, ["items"])
+    existing = await session.execute(
+        select(ReminderRule).where(
+            ReminderRule.user_id == user_id, ReminderRule.concert_id == concert_id
+        )
+    )
+    have = {(r.anchor, r.offset_days, r.offset_hours) for r in existing.scalars()}
+
+    created = 0
+    for item in preset.items:
+        key = (item.anchor, item.offset_days, item.offset_hours)
+        if key in have:
+            continue
+        rule = ReminderRule(
+            user_id=user_id,
+            concert_id=concert_id,
+            anchor=item.anchor,
+            offset_days=item.offset_days,
+            offset_hours=item.offset_hours,
+        )
+        session.add(rule)
+        await session.flush()
+        await sync_rule(session, rule)
+        have.add(key)
+        created += 1
+    return created
+
+
+async def handle_newly_tagged(
+    session: AsyncSession, concert: Concert, new_tags: list[Tag]
+) -> int:
+    """The notify-and-apply pipeline. Called when tags are attached to a concert.
+
+    For every user subscribed to any of the newly attached tags:
+      * a user who ALREADY has rules on this concert is skipped entirely
+        (they know about it; prevents double-apply when a second matching
+        tag lands later)
+      * otherwise: linked preset auto-applies, and if notify is on, a DM
+        notice is queued.
+    A user matched by several tags at once (group + members) is handled once;
+    if several matched subscriptions carry presets, the earliest-created wins.
+    Returns the number of users processed.
+    """
+    if not new_tags:
+        return 0
+    res = await session.execute(
+        select(TagSubscription)
+        .where(TagSubscription.tag_id.in_([t.id for t in new_tags]))
+        .order_by(TagSubscription.id)
+    )
+    subs_by_user: dict[int, list[TagSubscription]] = {}
+    for sub in res.scalars():
+        subs_by_user.setdefault(sub.user_id, []).append(sub)
+
+    tag_names = ", ".join(t.name for t in new_tags)
+    processed = 0
+    for user_id, subs in subs_by_user.items():
+        already = await session.execute(
+            select(ReminderRule.id)
+            .where(ReminderRule.user_id == user_id, ReminderRule.concert_id == concert.id)
+            .limit(1)
+        )
+        if already.scalar_one_or_none() is not None:
+            continue
+
+        preset = None
+        for sub in subs:  # earliest-created subscription with a preset wins
+            if sub.preset_id is not None:
+                preset = await session.get(ReminderPreset, sub.preset_id)
+                if preset is not None:
+                    break
+        n = 0
+        if preset is not None:
+            n = await apply_preset(session, user_id, concert.id, preset)
+
+        if any(s.notify for s in subs):
+            if preset is not None:
+                tail = f"your preset \u201c{preset.name}\u201d set {n} reminder(s)."
+            else:
+                tail = "no preset linked \u2014 set reminders on the site."
+            session.add(Notification(
+                user_id=user_id,
+                body=(
+                    f"\U0001f195 New event: **{concert.title}** (tagged: {tag_names}) \u2014 {tail}"
+                ),
+            ))
+        processed += 1
+    await session.flush()
+    return processed
+
+
+async def due_notifications(
+    session: AsyncSession, limit: int = 100
+) -> list[Notification]:
+    res = await session.execute(
+        select(Notification)
+        .where(Notification.sent_at_utc.is_(None))
+        .order_by(Notification.created_at)
+        .limit(limit)
+    )
+    return list(res.scalars())
+
+
+async def mark_notification_sent(session: AsyncSession, notification_id: int) -> None:
+    row = await session.get(Notification, notification_id)
+    if row is not None:
+        row.sent_at_utc = _now()
         await session.flush()

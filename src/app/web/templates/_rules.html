@@ -16,6 +16,19 @@
   </ul>
   {% else %}<p class="dim">No reminders for this concert yet.</p>{% endif %}
 
+  {% if presets %}
+  <p class="inline">
+    {% for p in presets %}
+    <form method="post" action="/concerts/{{ concert.id }}/presets/{{ p.id }}/apply"
+          hx-post="/concerts/{{ concert.id }}/presets/{{ p.id }}/apply"
+          hx-target="#rules" hx-swap="outerHTML">
+      <button>apply “{{ p.name }}”</button>
+    </form>
+    {% endfor %}
+    <a class="dim" href="/preferences">edit presets</a>
+  </p>
+  {% endif %}
+
   <form class="inline" method="post" action="/concerts/{{ concert.id }}/rules"
         hx-post="/concerts/{{ concert.id }}/rules" hx-target="#rules" hx-swap="outerHTML">
     <label><input type="number" name="days_before" value="3" min="0" max="60" style="width:4em"> days before</label>

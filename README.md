@@ -86,4 +86,4 @@ Backups: `deploy/backup.sh` via cron (nightly SQLite → S3).
 - [x] Phase 7 — S3 backups, scheduler heartbeat in /healthz, uptime monitoring
 - [x] Phase 8 — DB-backed revocable sessions; browser timezone auto-detect + local times in UI
 - [x] Phase 9 — tags (franchise/artist/venue/group), filtering & sorting, group auto-expansion
-- [ ] Phase 10 — reminder presets + tag subscriptions with auto-apply
+- [x] Phase 10 — reminder presets, one-click apply, tag subscriptions with notify-and-apply

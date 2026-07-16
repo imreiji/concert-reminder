@@ -16,7 +16,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Tag, TagMember
-from app.db.service import attach_tag, detach_tag, ensure_user, find_tag_by_name, group_members
+from app.db.service import (
+    attach_tag,
+    detach_tag,
+    ensure_user,
+    find_tag_by_name,
+    group_members,
+    handle_newly_tagged,
+)
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web.auth import SessionUser, require_editor, require_user
@@ -144,7 +151,8 @@ async def attach_concert_tag(
 ):
     from app.db.models import Concert
 
-    if await session.get(Concert, concert_id) is None:
+    concert = await session.get(Concert, concert_id)
+    if concert is None:
         raise HTTPException(status_code=404)
     tag = await find_tag_by_name(session, name)
     if tag is None:  # find-or-create; `kind` applies only on create
@@ -152,7 +160,8 @@ async def attach_concert_tag(
         tag = Tag(name=name.strip(), kind=kind, created_by=user.id)
         session.add(tag)
         await session.flush()
-    await attach_tag(session, concert_id, tag)  # groups expand here
+    added = await attach_tag(session, concert_id, tag)  # groups expand here
+    await handle_newly_tagged(session, concert, added)  # notify-and-apply
     await session.commit()
     return await render_tags_fragment(request, concert_id, user, session)
 

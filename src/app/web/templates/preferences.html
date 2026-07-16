@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}preferences — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Preferences</h1>
+
+<h2>Reminder presets</h2>
+<p class="dim">A preset is your standard loadout of reminders. Apply it to any concert with one
+click, or link it to a tag subscription so new events set themselves up.</p>
+
+{% for p in presets %}
+<div class="panel">
+  <div class="preset-head">
+    <strong>{{ p.name }}</strong>
+    <form method="post" action="/presets/{{ p.id }}/delete"
+          onsubmit="return confirm('Delete preset {{ p.name }}?')"><button class="x">×</button></form>
+  </div>
+  <ul class="rows">
+    {% for i in p.items %}
+    <li>
+      <span>{% if i.offset_days == 0 and i.offset_hours == 0 %}at the moment of
+        {% else %}{% if i.offset_days != 0 %}{{ -i.offset_days }}d {% endif %}{% if i.offset_hours != 0 %}{{ -i.offset_hours }}h {% endif %}before
+        {% endif %} each <strong>{{ i.anchor.value.replace("_", " ") }}</strong></span>
+      <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete"><button class="x">×</button></form>
+    </li>
+    {% else %}<li class="dim">no items yet</li>{% endfor %}
+  </ul>
+  <form class="inline" method="post" action="/presets/{{ p.id }}/items">
+    <input type="number" name="days_before" value="3" min="0" max="60" style="width:4em"> d
+    <input type="number" name="hours_before" value="0" min="0" max="23" style="width:4em"> h before
+    <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}">{{ a.value.replace("_"," ") }}</option>{% endfor %}</select>
+    <button>add item</button>
+  </form>
+</div>
+{% endfor %}
+
+<form class="inline" method="post" action="/presets">
+  <input name="name" required maxlength="100" placeholder="standard lottery coverage">
+  <button>new preset</button>
+</form>
+
+<h2>Tag subscriptions</h2>
+<p class="dim">Follow a tag; when an editor adds a matching event, your linked preset applies
+automatically and you get a DM (both per-subscription).</p>
+
+{% if subs %}
+<ul class="rows">
+  {% for sub, tag in subs %}
+  <li>
+    <span><span class="chip kind-{{ tag.kind.value }}">{{ tag.name }}</span>
+      {% if sub.preset_id %}→ preset #{{ sub.preset_id }}{% else %}<em class="dim">no preset</em>{% endif %}
+      {% if sub.notify %} · 🔔 DM{% endif %}</span>
+    <form method="post" action="/subscriptions/{{ sub.id }}/delete"><button class="x">×</button></form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="dim">No subscriptions yet.</p>{% endif %}
+
+{% if tags %}
+<form class="inline" method="post" action="/subscriptions">
+  <select name="tag_id">{% for t in tags %}<option value="{{ t.id }}">{{ t.name }} ({{ t.kind.value }})</option>{% endfor %}</select>
+  <select name="preset_id">
+    <option value="0">no preset</option>
+    {% for p in presets %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+  </select>
+  <label><input type="checkbox" name="notify" value="true" checked> DM me</label>
+  <button>subscribe</button>
+</form>
+{% else %}<p class="dim">No tags exist yet — editors create them on <a href="/tags">the tags page</a>.</p>{% endif %}
+{% endblock %}

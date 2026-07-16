@@ -21,7 +21,13 @@ from datetime import UTC, datetime
 import discord
 
 from app.bot.messages import format_reminder
-from app.db.service import DueReminder, due_reminders, mark_sent
+from app.db.service import (
+    DueReminder,
+    due_notifications,
+    due_reminders,
+    mark_notification_sent,
+    mark_sent,
+)
 from app.db.session import SessionMaker
 from app.scheduler import heartbeat
 
@@ -47,14 +53,34 @@ async def deliver(bot, item: DueReminder) -> bool:
         return False  # leave unsent; next tick retries
 
 
+async def deliver_text(bot, user_id: int, body: str) -> bool:
+    """Send a plain DM. Same policy as deliver(): only success or a permanent
+    failure (DMs closed) clears the row; transient errors retry next tick."""
+    try:
+        user = bot.get_user(user_id) or await bot.fetch_user(user_id)
+        await user.send(body)
+        return True
+    except discord.Forbidden:
+        log.warning("user %s has DMs closed; dropping notification", user_id)
+        return True
+    except discord.HTTPException as e:
+        log.error("transient notification failure for user %s: %s", user_id, e)
+        return False
+
+
 async def tick(bot) -> int:
-    """One scheduler pass. Returns how many reminders were delivered."""
+    """One scheduler pass. Returns how many messages were delivered."""
     now = datetime.now(UTC)
     delivered = 0
     async with SessionMaker() as session:
         for item in await due_reminders(session, now):
             if await deliver(bot, item):
                 await mark_sent(session, item.queue_id, now)
+                delivered += 1
+            await asyncio.sleep(SEND_GAP_SECONDS)
+        for note in await due_notifications(session):
+            if await deliver_text(bot, note.user_id, note.body):
+                await mark_notification_sent(session, note.id)
                 delivered += 1
             await asyncio.sleep(SEND_GAP_SECONDS)
         await session.commit()
