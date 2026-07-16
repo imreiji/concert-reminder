@@ -213,7 +213,7 @@ async def test_creation_form_respects_explicit_artist_selection(client):
     # create with group but ONLY Kozue checked (Kaho not performing)
     r = client.post("/concerts", data={
         "title": "6th Live", "franchise_tags": [1], "group_tags": [2],
-        "artist_tags": [3], "venue_tag": 5,
+        "artist_tags": [3], "venue_tags": [5],
     })
     assert r.status_code == 303
 
@@ -259,3 +259,27 @@ async def test_creation_supports_multiple_groups_and_franchises(client):
         assert await tag_ids_on(s, 1) == {1, 2, 3, 4, 5, 6}
         c = (await s.execute(select(Concert))).scalar_one()
         assert c.franchise == "LoveLive, Idolmaster"
+
+async def test_multiple_venues_attach_and_join(client):
+    """Tour legs: two venues on one event; display string joins, tiles say Multiple."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})   # 1
+    client.post("/tags", data={"name": "K-Arena", "kind": "venue"})          # 2
+    r = client.post("/concerts", data={"title": "Tour", "venue_tags": [1, 2]})
+    assert r.status_code == 303
+    async with client.db() as s:
+        assert await tag_ids_on(s, 1) == {1, 2}
+        c = (await s.execute(select(Concert))).scalar_one()
+        assert c.venue == "Yokohama Arena, K-Arena"
+    assert "Multiple" in client.get("/").text  # tile shows Multiple, not the join
+
+
+def test_attach_by_id_endpoint_expands_groups(client):
+    """Detail-page picker path: attaching a group by id expands members."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "group"})  # 1
+    client.post("/tags", data={"name": "Kozue", "kind": "artist"})      # 2
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    client.post("/concerts", data={"title": "6th"})
+    r = client.post("/concerts/1/tags/1/attach")
+    assert r.status_code == 200 and "Kozue" in r.text

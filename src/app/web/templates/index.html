@@ -49,26 +49,24 @@
 
         <label>franchises</label>
         <div class="pickrow"><span class="taglist" id="sel-franchise"></span>
-          <button type="button" class="quiet" onclick="openPicker('franchise')">+ add franchise</button></div>
+          <button type="button" class="chip add" onclick="openPicker('franchise')">+ add franchise</button></div>
 
         <label>groups</label>
         <div class="pickrow"><span class="taglist" id="sel-group"></span>
-          <button type="button" class="quiet" onclick="openPicker('group')">+ add group</button></div>
+          <button type="button" class="chip add" onclick="openPicker('group')">+ add group</button></div>
 
         <label>artists <span class="dim tiny">(auto-filled from groups — × anyone not performing)</span></label>
         <div class="pickrow"><span class="taglist" id="sel-artist"></span>
-          <button type="button" class="quiet" onclick="openPicker('artist')">+ add artist</button></div>
+          <button type="button" class="chip add" onclick="openPicker('artist')">+ add artist</button></div>
 
-        <label>venue
-          <select name="venue_tag">
-            <option value="0">— none —</option>
-            {% for t in by_kind.get("venue", []) %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
-          </select></label>
+        <label>venues</label>
+        <div class="pickrow"><span class="taglist" id="sel-venue"></span>
+          <button type="button" class="chip add" onclick="openPicker('venue')">+ add venue</button></div>
         <button>create</button>
         <p class="dim tiny">missing a tag? create it on the <a href="/tags">tags page</a> first — concerts are tag-driven.</p>
       </form>
 
-      {% for kindname in ["franchise", "group", "artist"] %}
+      {% for kindname in ["franchise", "group", "artist", "venue"] %}
       <dialog id="picker-{{ kindname }}" class="picker">
         <h3>select {{ kindname }}s</h3>
         <input type="search" placeholder="search…" oninput="filterChips(this, '#picker-{{ kindname }}')">
@@ -86,7 +84,7 @@
         const NC_GROUPS = {{ groups_json | safe }};
         const TAG_NAMES = {{ tag_names_json | safe }};
         // selection state: sets of tag ids (strings)
-        const sel = { franchise: new Set(), group: new Set(), artist: new Set() };
+        const sel = { franchise: new Set(), group: new Set(), artist: new Set(), venue: new Set() };
         const artistExcluded = new Set();   // auto-added artists the editor removed
         const artistManual = new Set();     // artists added explicitly via the picker
 
@@ -115,7 +113,7 @@
         }
         function renderAll() {
           recomputeArtists();
-          ["franchise", "group", "artist"].forEach(renderRow);
+          ["franchise", "group", "artist", "venue"].forEach(renderRow);
           syncHidden();
         }
         function removePick(kind, id) {
@@ -155,6 +153,7 @@
           put("franchise_tags", sel.franchise);
           put("group_tags", sel.group);
           put("artist_tags", sel.artist);
+          put("venue_tags", sel.venue);
         }
         renderAll();
       </script>
@@ -178,7 +177,8 @@
           {% elif ca %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>
           {% endif %}
         </span>
-        {% if cv or c.venue %}<span class="dim">📍 {{ (cv | map(attribute="name") | join(", ")) or c.venue }}</span>{% endif %}
+        {% if cv | length > 1 %}<span class="dim">📍 Multiple</span>
+        {% elif cv or c.venue %}<span class="dim">📍 {{ (cv | map(attribute="name") | join(", ")) or c.venue }}</span>{% endif %}
         {% if c.days %}<span class="when dim">{{ jst(c.days[0].starts_at_utc).strftime("%Y-%m-%d") }} JST</span>{% endif %}
       </a>
       {% endfor %}

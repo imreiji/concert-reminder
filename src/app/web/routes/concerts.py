@@ -100,7 +100,7 @@ async def create_concert(
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
-    venue_tag: int = Form(0),
+    venue_tags: list[int] = Form(default=[]),
 ):
     """Tag-driven creation supporting collab events: MULTIPLE franchises,
     MULTIPLE groups, explicit artist list (auto-populated client-side from
@@ -126,12 +126,12 @@ async def create_concert(
     f_tags = await tags_of(franchise_tags, TagKind.FRANCHISE)
     g_tags = await tags_of(group_tags, TagKind.GROUP)
     a_tags = await tags_of(artist_tags, TagKind.ARTIST)
-    v_tags = await tags_of([venue_tag], TagKind.VENUE)
+    v_tags = await tags_of(venue_tags, TagKind.VENUE)
 
     concert = Concert(
         title=title.strip(),
         franchise=", ".join(t.name for t in f_tags) or None,  # denormalized display
-        venue=v_tags[0].name if v_tags else None,
+        venue=", ".join(t.name for t in v_tags) or None,
         created_by=user.id,
     )
     session.add(concert)

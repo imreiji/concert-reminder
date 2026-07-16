@@ -137,3 +137,12 @@ dialog.picker .taglist { max-height: 50vh; overflow-y: auto; }
 .picker-actions { margin-top: 1rem; text-align: right; }
 .chip .x { margin-left: .1rem; }
 .chip.on .x { color: var(--paper); }
+
+/* add-buttons share the chip silhouette */
+.chip.add {
+  border-style: dashed; background: transparent; color: var(--dim);
+  cursor: pointer; font-size: .82rem; border-radius: 999px; padding: .1rem .6rem;
+}
+.chip.add:hover { color: var(--ink); border-color: var(--ink); opacity: 1; }
+.rowlabel { min-width: 5.5rem; font-size: .85rem; }
+#tags .pickrow { margin: .35rem 0; }

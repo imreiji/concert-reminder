@@ -1,26 +1,49 @@
 <div id="tags">
-  <p class="taglist">
-    {% for t in concert.tags %}
-      <span class="chip kind-{{ t.kind.value }}">{{ t.name }}
+  {% macro kindrow(kindname, label) %}
+  {% set ktags = concert.tags | selectattr("kind.value", "equalto", kindname) | list %}
+  <div class="pickrow">
+    <span class="rowlabel dim">{{ label }}</span>
+    <span class="taglist">
+      {% for t in ktags %}
+      <span class="chip kind-{{ kindname }} on">{{ t.name }}
         {% if user.is_editor %}
         <form class="chip-x" method="post" action="/concerts/{{ concert.id }}/tags/{{ t.id }}/delete"
               hx-post="/concerts/{{ concert.id }}/tags/{{ t.id }}/delete"
               hx-target="#tags" hx-swap="outerHTML"><button class="x">×</button></form>
         {% endif %}
       </span>
-    {% else %}<span class="dim">No tags yet.</span>{% endfor %}
-  </p>
+      {% endfor %}
+    </span>
+    {% if user.is_editor %}
+    <button type="button" class="chip add" onclick="document.getElementById('dlg-{{ kindname }}').showModal()">+ add {{ kindname }}</button>
+    {% endif %}
+  </div>
+  {% if user.is_editor %}
+  <dialog id="dlg-{{ kindname }}" class="picker">
+    <h3>add {{ label }}</h3>
+    <input type="search" placeholder="search…" oninput="filterChips(this, '#dlg-{{ kindname }}')">
+    <div class="taglist">
+      {% for t in by_kind.get(kindname, []) %}
+        {% if t.id not in attached %}
+        <form class="chipform" method="post" action="/concerts/{{ concert.id }}/tags/{{ t.id }}/attach"
+              hx-post="/concerts/{{ concert.id }}/tags/{{ t.id }}/attach"
+              hx-target="#tags" hx-swap="outerHTML">
+          <button class="chip kind-{{ kindname }}" data-name="{{ t.name | lower }}">{{ t.name }}</button>
+        </form>
+        {% endif %}
+      {% else %}<span class="dim">no {{ kindname }} tags exist yet — create them on <a href="/tags">the tags page</a></span>{% endfor %}
+    </div>
+    <div class="picker-actions"><button type="button" onclick="document.getElementById('dlg-{{ kindname }}').close()">done</button></div>
+  </dialog>
+  {% endif %}
+  {% endmacro %}
+
+  {{ kindrow("franchise", "franchises") }}
+  {{ kindrow("group", "groups") }}
+  {{ kindrow("artist", "artists") }}
+  {{ kindrow("venue", "venues") }}
 
   {% if user.is_editor %}
-  <form class="inline" method="post" action="/concerts/{{ concert.id }}/tags"
-        hx-post="/concerts/{{ concert.id }}/tags" hx-target="#tags" hx-swap="outerHTML">
-    <input name="name" list="all-tags" required maxlength="100" placeholder="tag name">
-    <datalist id="all-tags">{% for t in all_tags %}<option value="{{ t.name }}">{{ t.kind.value }}</option>{% endfor %}</datalist>
-    <select name="kind" title="kind (used only if the tag is new)">
-      {% for k in tag_kinds %}<option value="{{ k.value }}" {% if k.value == "artist" %}selected{% endif %}>{{ k.value }}</option>{% endfor %}
-    </select>
-    <button>tag</button>
-  </form>
-  <p class="dim tiny">adding a <strong>group</strong> tag also adds all its member artists — remove any who aren't performing</p>
+  <p class="dim tiny">adding a <strong>group</strong> here also adds all its member artists — × anyone not performing</p>
   {% endif %}
 </div>

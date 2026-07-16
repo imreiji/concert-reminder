@@ -142,11 +142,16 @@ async def render_tags_fragment(
 
     concert = await session.get(Concert, concert_id)
     await session.refresh(concert, ["tags"])
+    tags = await all_tags(session)
+    by_kind: dict[str, list[Tag]] = {}
+    for t in tags:
+        by_kind.setdefault(t.kind.value, []).append(t)
+    attached = {t.id for t in concert.tags}
     return templates.TemplateResponse(
         request,
         "_tags.html",
         {"concert": concert, "user": user, "tag_kinds": list(TagKind),
-         "all_tags": await all_tags(session)},
+         "by_kind": by_kind, "attached": attached},
     )
 
 
@@ -172,6 +177,28 @@ async def attach_concert_tag(
         await session.flush()
     added = await attach_tag(session, concert_id, tag)  # groups expand here
     await handle_newly_tagged(session, concert, added)  # notify-and-apply
+    await session.commit()
+    return await render_tags_fragment(request, concert_id, user, session)
+
+
+@router.post("/concerts/{concert_id}/tags/{tag_id}/attach", response_class=HTMLResponse)
+async def attach_concert_tag_by_id(
+    request: Request,
+    concert_id: int,
+    tag_id: int,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+):
+    """Picker path: attach an existing tag by id. Groups expand here (the
+    agreed post-creation semantics) — prune members after if needed."""
+    from app.db.models import Concert
+
+    concert = await session.get(Concert, concert_id)
+    tag = await session.get(Tag, tag_id)
+    if concert is None or tag is None:
+        raise HTTPException(status_code=404)
+    added = await attach_tag(session, concert_id, tag)
+    await handle_newly_tagged(session, concert, added)
     await session.commit()
     return await render_tags_fragment(request, concert_id, user, session)
 
