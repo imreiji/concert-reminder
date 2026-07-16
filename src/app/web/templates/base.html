@@ -15,15 +15,15 @@
       {% if user %}
         <img class="avatar" src="{{ user.avatar_url }}" alt="">
         <span>{{ user.username }}{% if user.is_editor %} <em class="badge">editor</em>{% endif %}</span>
-        <a href="/preferences">preferences</a>
-        <a href="/auth/logout">log out</a>
+        <a href="/preferences">Preferences</a>
+        <a href="/auth/logout">Log out</a>
       {% else %}
         <a class="login" href="/auth/login">Sign in with Discord</a>
       {% endif %}
     </nav>
   </header>
   <main>{% block content %}{% endblock %}</main>
-  <footer>times are entered in <strong>JST</strong> and shown as JST + your local time</footer>
+  <footer>Times are entered in <strong>JST</strong> and shown as JST + your local time.</footer>
 <script>
     // shared: live-filter chips by their data-name within a container
     function filterChips(input, scope) {

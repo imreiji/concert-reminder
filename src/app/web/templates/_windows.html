@@ -14,23 +14,23 @@
       </div>
       {% if user.is_editor %}
       <details class="edit-window">
-        <summary>edit</summary>
+        <summary>Edit</summary>
         <form class="stack" method="post" action="/windows/{{ w.id }}/edit"
               hx-post="/windows/{{ w.id }}/edit" hx-target="#windows" hx-swap="outerHTML">
           <input name="label" value="{{ w.label }}" required maxlength="200">
           <select name="kind">{% for k in kinds %}
             <option value="{{ k.value }}" {% if k == w.kind %}selected{% endif %}>{{ k.value.replace("_"," ") }}</option>
           {% endfor %}</select>
-          <label>opens (JST) <input type="datetime-local" name="opens_at"
+          <label>Opens (JST) <input type="datetime-local" name="opens_at"
             value="{{ jst(w.opens_at_utc).strftime('%Y-%m-%dT%H:%M') if w.opens_at_utc else '' }}"></label>
-          <label>closes (JST) <input type="datetime-local" name="closes_at"
+          <label>Closes (JST) <input type="datetime-local" name="closes_at"
             value="{{ jst(w.closes_at_utc).strftime('%Y-%m-%dT%H:%M') if w.closes_at_utc else '' }}"></label>
           <input name="url" value="{{ w.url or '' }}" placeholder="https://ticket...">
-          <button>save</button>
+          <button>Save</button>
         </form>
         <form method="post" action="/windows/{{ w.id }}/delete" hx-post="/windows/{{ w.id }}/delete"
               hx-target="#windows" hx-swap="outerHTML">
-          <button class="danger">delete window</button>
+          <button class="danger">Delete window</button>
         </form>
       </details>
       {% endif %}
@@ -41,17 +41,17 @@
 
   {% if user.is_editor %}
   <details class="panel">
-    <summary>+ add window</summary>
+    <summary>+ Add window</summary>
     <form class="stack" method="post" action="/concerts/{{ concert.id }}/windows"
           hx-post="/concerts/{{ concert.id }}/windows" hx-target="#windows" hx-swap="outerHTML">
       <input name="label" required maxlength="200" placeholder="最速先行 Round 1">
       <select name="kind">{% for k in kinds %}
-        <option value="{{ k.value }}">{{ k.value.replace("_", " ") }}</option>
+        <option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>
       {% endfor %}</select>
-      <label>opens (JST) <input type="datetime-local" name="opens_at"></label>
-      <label>closes (JST) <input type="datetime-local" name="closes_at"></label>
+      <label>Opens (JST) <input type="datetime-local" name="opens_at"></label>
+      <label>Closes (JST) <input type="datetime-local" name="closes_at"></label>
       <input name="url" placeholder="https://ticket... (optional)">
-      <button>add window</button>
+      <button>Add window</button>
     </form>
   </details>
   {% endif %}

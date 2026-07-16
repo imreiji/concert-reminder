@@ -11,13 +11,13 @@
     <h3>Sort</h3>
     <nav class="sorts">
       <a href="/?sort=event{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
-         {% if sort != "added" %}class="on"{% endif %}>event date</a>
+         {% if sort != "added" %}class="on"{% endif %}>Event date</a>
       <a href="/?sort=added{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
-         {% if sort == "added" %}class="on"{% endif %}>recently added</a>
+         {% if sort == "added" %}class="on"{% endif %}>Recently added</a>
     </nav>
 
     <h3>Filter by tag</h3>
-    <input class="tag-search" type="search" placeholder="search tags…"
+    <input class="tag-search" type="search" placeholder="Search tags…"
            oninput="filterChips(this, '.sidebar')">
     {% macro chiplink(t) -%}
       {%- set active = t.id in selected_tags -%}
@@ -34,8 +34,8 @@
       </details>
       {% endif %}
     {% endfor %}
-    {% if selected_tags %}<p><a class="dim" href="/?sort={{ sort }}">clear filters</a></p>{% endif %}
-    <p><a class="dim" href="/tags">manage tags →</a></p>
+    {% if selected_tags %}<p><a class="dim" href="/?sort={{ sort }}">Clear filters</a></p>{% endif %}
+    <p><a class="dim" href="/tags">Manage tags →</a></p>
   </aside>
 
   <section class="content">
@@ -43,40 +43,45 @@
 
     {% if user.is_editor %}
     <details class="panel">
-      <summary>+ new concert</summary>
+      <summary>+ New concert</summary>
       <form method="post" action="/concerts" class="stack" id="new-concert">
-        <label>title <input name="title" required maxlength="200" placeholder="Hasunosora 6th Live"></label>
+        <label>Title <input name="title" required maxlength="200" placeholder="Hasunosora 6th Live"></label>
 
-        <label>franchises</label>
+        <label>Franchises</label>
         <div class="pickrow"><span class="taglist" id="sel-franchise"></span>
-          <button type="button" class="chip add" onclick="openPicker('franchise')">+ add franchise</button></div>
+          <button type="button" class="chip add" onclick="openPicker('franchise')">+ Add franchise</button></div>
 
-        <label>groups</label>
+        <label>Groups</label>
         <div class="pickrow"><span class="taglist" id="sel-group"></span>
-          <button type="button" class="chip add" onclick="openPicker('group')">+ add group</button></div>
+          <button type="button" class="chip add" onclick="openPicker('group')">+ Add group</button></div>
 
-        <label>artists <span class="dim tiny">(auto-filled from groups — × anyone not performing)</span></label>
+        <label>Artists <span class="dim tiny">(auto-filled from groups — × anyone not performing)</span></label>
         <div class="pickrow"><span class="taglist" id="sel-artist"></span>
-          <button type="button" class="chip add" onclick="openPicker('artist')">+ add artist</button></div>
+          <button type="button" class="chip add" onclick="openPicker('artist')">+ Add artist</button></div>
 
-        <label>venues</label>
+        <label>Venues</label>
         <div class="pickrow"><span class="taglist" id="sel-venue"></span>
-          <button type="button" class="chip add" onclick="openPicker('venue')">+ add venue</button></div>
-        <button>create</button>
-        <p class="dim tiny">missing a tag? create it on the <a href="/tags">tags page</a> first — concerts are tag-driven.</p>
+          <button type="button" class="chip add" onclick="openPicker('venue')">+ Add venue</button></div>
+        <button>Create</button>
+        <p class="dim tiny">Missing a tag? Create it on the <a href="/tags">tags page</a> first — concerts are tag-driven.</p>
       </form>
 
       {% for kindname in ["franchise", "group", "artist", "venue"] %}
       <dialog id="picker-{{ kindname }}" class="picker">
-        <h3>select {{ kindname }}s</h3>
-        <input type="search" placeholder="search…" oninput="filterChips(this, '#picker-{{ kindname }}')">
+        <div class="picker-head">
+          <h3>Add {{ kindname }}s</h3>
+          <button type="button" class="x" onclick="closePicker('{{ kindname }}')">×</button>
+        </div>
+        <div class="picker-body">
+        <input type="search" placeholder="Search…" oninput="filterChips(this, '#picker-{{ kindname }}')">
         <div class="taglist">
           {% for t in by_kind.get(kindname, []) %}
           <button type="button" class="chip kind-{{ kindname }}" data-name="{{ t.name | lower }}"
                   data-id="{{ t.id }}" onclick="togglePick('{{ kindname }}', this)">{{ t.name }}</button>
           {% endfor %}
         </div>
-        <div class="picker-actions"><button type="button" onclick="closePicker('{{ kindname }}')">done</button></div>
+        </div>
+        <div class="picker-actions"><button type="button" onclick="closePicker('{{ kindname }}')">Done</button></div>
       </dialog>
       {% endfor %}
 

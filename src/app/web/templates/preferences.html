@@ -6,25 +6,25 @@
 <h2>Timezone</h2>
 <form class="inline" method="post" action="/me/timezone">
   <select name="timezone">
-    <optgroup label="common">
+    <optgroup label="Common">
       {% for t in common_timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
     </optgroup>
-    <optgroup label="all zones (IANA)">
+    <optgroup label="All zones (IANA)">
       {% for t in all_timezones %}<option value="{{ t }}" {% if t == tz and t not in common_timezones %}selected{% endif %}>{{ t }}</option>{% endfor %}
     </optgroup>
   </select>
-  <button>save</button>
-  {% if tz_auto %}<span class="dim" title="detected from your browser">auto-detected</span>
-  {% else %}<button formaction="/me/timezone/reset" title="re-detect from browser">reset to auto</button>{% endif %}
+  <button>Save</button>
+  {% if tz_auto %}<span class="dim" title="detected from your browser">Auto-detected</span>
+  {% else %}<button formaction="/me/timezone/reset" title="re-detect from browser">Reset to auto</button>{% endif %}
 </form>
-<p class="dim tiny">event times are always shown as JST plus this timezone.</p>
+<p class="dim tiny">Event times are always shown as JST plus this timezone.</p>
 
 <h2>Reminder presets</h2>
 <p class="dim">Your standard loadout of reminders — apply to any concert in one click, or link
 to a tag subscription so new events set themselves up.</p>
 
 {% macro sentence_fields(days_val, hours_val, dir_val, anchor_val) -%}
-  <span>remind me</span>
+  <span>Remind me</span>
   <select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == days_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
   <span>day(s)</span>
   <select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}" {% if n == hours_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
@@ -34,7 +34,7 @@ to a tag subscription so new events set themselves up.</p>
     <option value="after" {% if dir_val == "after" %}selected{% endif %}>after</option>
   </select>
   <span>each</span>
-  <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ a.value.replace("_"," ") }}</option>{% endfor %}</select>
+  <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ a.value.replace("_"," ") | capitalize }}</option>{% endfor %}</select>
 {%- endmacro %}
 
 {% for p in presets %}
@@ -42,7 +42,7 @@ to a tag subscription so new events set themselves up.</p>
   <div class="preset-head">
     <form class="inline rename" method="post" action="/presets/{{ p.id }}/rename">
       <input name="name" value="{{ p.name }}" maxlength="100" required>
-      <button class="quiet" title="rename">rename</button>
+      <button class="quiet" title="Rename">Rename</button>
     </form>
     <form method="post" action="/presets/{{ p.id }}/delete"
           onsubmit="return confirm('Delete preset {{ p.name }}?')"><button class="x" title="delete preset">×</button></form>
@@ -54,7 +54,7 @@ to a tag subscription so new events set themselves up.</p>
         {{ sentence_fields(i.offset_days | abs, i.offset_hours | abs,
                            "after" if (i.offset_days > 0 or i.offset_hours > 0) else "before",
                            i.anchor.value) }}
-        <button class="quiet">save</button>
+        <button class="quiet">Save</button>
       </form>
       <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete"><button class="x" title="remove">×</button></form>
     </li>
@@ -62,7 +62,7 @@ to a tag subscription so new events set themselves up.</p>
     <li class="add-row">
       <form class="sentence" method="post" action="/presets/{{ p.id }}/items">
         {{ sentence_fields(3, 0, "before", "closes") }}
-        <button>+ add</button>
+        <button>+ Add</button>
       </form>
     </li>
   </ul>
@@ -70,12 +70,12 @@ to a tag subscription so new events set themselves up.</p>
 {% endfor %}
 
 <details class="panel" {% if not presets %}open{% endif %}>
-  <summary>+ new preset</summary>
+  <summary>+ New preset</summary>
   <form class="stack" method="post" action="/presets">
-    <label>name <input name="name" required maxlength="100" placeholder="standard lottery coverage"></label>
+    <label>Name <input name="name" required maxlength="100" placeholder="standard lottery coverage"></label>
     <div class="sentence">{{ sentence_fields(3, 0, "before", "closes") }}</div>
-    <button>create preset</button>
-    <p class="dim tiny">the preset is created with this first reminder — add more items after.</p>
+    <button>Create preset</button>
+    <p class="dim tiny">The preset is created with this first reminder — add more items after.</p>
   </form>
 </details>
 
@@ -84,25 +84,25 @@ to a tag subscription so new events set themselves up.</p>
 DM you. Click a followed tag to unfollow. Artists appear next to their group.</p>
 
 <div class="panel sub-defaults">
-  <strong>when I subscribe:</strong>
+  <strong>When I subscribe:</strong>
   <form id="sub-defaults" class="inline">
-    <label>apply preset
+    <label>Apply preset
       <select id="sub-preset">
-        <option value="0">none</option>
+        <option value="0">None</option>
         {% for p in presets %}<option value="{{ p.id }}" {% if loop.first %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
       </select></label>
     <label><input type="checkbox" id="sub-notify" checked> DM me on new events</label>
   </form>
 </div>
 
-<input class="tag-search" type="search" placeholder="search tags…" oninput="filterChips(this, '.sub-box')">
+<input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.sub-box')">
 
 {% macro subchip(t) -%}
   {%- set sub = sub_by_tag.get(t.id) -%}
   {%- if sub -%}
   <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete">
     <button class="chip kind-{{ t.kind.value }} on" data-name="{{ t.name | lower }}"
-      title="following{% if sub.preset_id %} · preset linked{% endif %}{% if sub.notify %} · 🔔{% endif %} — click to unfollow">{{ t.name }} ✓</button>
+      title="Following{% if sub.preset_id %} · preset linked{% endif %}{% if sub.notify %} · 🔔{% endif %} — click to unfollow">{{ t.name }} ✓</button>
   </form>
   {%- else -%}
   <form class="chipform" method="post" action="/subscriptions">

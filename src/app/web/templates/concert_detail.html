@@ -9,17 +9,17 @@
 
   {% if user.is_editor %}
   <details class="panel">
-    <summary>edit concert</summary>
+    <summary>Edit concert</summary>
     <form method="post" action="/concerts/{{ concert.id }}/edit" class="stack">
-      <label>title <input name="title" value="{{ concert.title }}" required maxlength="200"></label>
+      <label>Title <input name="title" value="{{ concert.title }}" required maxlength="200"></label>
       <label>franchise <input name="franchise" value="{{ concert.franchise or '' }}" maxlength="100"></label>
       <label>venue <input name="venue" value="{{ concert.venue or '' }}" maxlength="200"></label>
-      <label>notes <textarea name="notes" rows="3">{{ concert.notes or '' }}</textarea></label>
-      <button>save</button>
+      <label>Notes <textarea name="notes" rows="3">{{ concert.notes or '' }}</textarea></label>
+      <button>Save</button>
     </form>
     <form method="post" action="/concerts/{{ concert.id }}/delete"
           onsubmit="return confirm('Delete this concert and every reminder attached to it?')">
-      <button class="danger">delete concert</button>
+      <button class="danger">Delete concert</button>
     </form>
   </details>
   {% endif %}

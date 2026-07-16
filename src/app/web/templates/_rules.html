@@ -22,10 +22,10 @@
     <form method="post" action="/concerts/{{ concert.id }}/presets/{{ p.id }}/apply"
           hx-post="/concerts/{{ concert.id }}/presets/{{ p.id }}/apply"
           hx-target="#rules" hx-swap="outerHTML">
-      <button>apply “{{ p.name }}”</button>
+      <button>Apply “{{ p.name }}”</button>
     </form>
     {% endfor %}
-    <a class="dim" href="/preferences">edit presets</a>
+    <a class="dim" href="/preferences">Edit presets</a>
   </p>
   {% endif %}
 
@@ -35,6 +35,6 @@
     <select name="anchor">{% for a in anchors %}
       <option value="{{ a.value }}">{{ a.value.replace("_", " ") }}</option>
     {% endfor %}</select>
-    <button>remind me</button>
+    <button>Remind me</button>
   </form>
 </div>

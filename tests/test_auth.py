@@ -101,7 +101,7 @@ async def test_login_creates_user_and_session_rows(client):
     assert await _count(client.db, User) == 1
     assert await _count(client.db, WebSession) == 1
     r = client.get("/")
-    assert "Reiji" in r.text and "log out" in r.text
+    assert "Reiji" in r.text and "Log out" in r.text
 
 
 async def test_session_rows_store_only_hashes(client):

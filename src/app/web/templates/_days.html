@@ -20,8 +20,8 @@
   <form class="inline" method="post" action="/concerts/{{ concert.id }}/days"
         hx-post="/concerts/{{ concert.id }}/days" hx-target="#days" hx-swap="outerHTML">
     <input name="label" required maxlength="100" placeholder="Day 1">
-    <label>starts (JST) <input type="datetime-local" name="starts_at" required></label>
-    <button>add day</button>
+    <label>Starts (JST) <input type="datetime-local" name="starts_at" required></label>
+    <button>Add day</button>
   </form>
   {% endif %}
 </div>

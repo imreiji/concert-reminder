@@ -7,15 +7,15 @@ attaching a group to a concert adds all its members, which editors can then prun
 
 {% if user.is_editor %}
 <details class="panel">
-  <summary>+ new tag</summary>
+  <summary>+ New tag</summary>
   <form class="inline" method="post" action="/tags">
     <input name="name" required maxlength="100" placeholder="Kozue Otomune">
-    <select name="kind">{% for k in kinds %}<option value="{{ k.value }}">{{ k.value }}</option>{% endfor %}</select>
+    <select name="kind">{% for k in kinds %}<option value="{{ k.value }}">{{ k.value | capitalize }}</option>{% endfor %}</select>
     <select name="parent_id" title="franchise (for group tags)">
       <option value="0">— franchise (groups only) —</option>
       {% for f in franchise_tags %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
     </select>
-    <button>create</button>
+    <button>Create</button>
   </form>
 </details>
 {% endif %}
@@ -23,7 +23,7 @@ attaching a group to a concert adds all its members, which editors can then prun
 {% for k in kinds %}
   {% set ktags = tags | selectattr("kind", "equalto", k) | list %}
   {% if ktags %}
-  <h2>{{ k.value }}s</h2>
+  <h2>{{ k.value | capitalize }}s</h2>
   <ul class="rows">
     {% for t in ktags %}
     <li>
@@ -31,7 +31,7 @@ attaching a group to a concert adds all its members, which editors can then prun
         <strong>{{ t.name }}</strong>
         {% if t.kind.value == "group" %}
           <div class="dim">
-            members:
+            Members:
             {% for m in members.get(t.id, []) %}
               <span class="chip">{{ m.name }}
                 {% if user.is_editor %}<form class="chip-x" method="post"
@@ -44,7 +44,7 @@ attaching a group to a concert adds all its members, which editors can then prun
             <select name="member_tag_id">
               {% for a in artist_tags %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
             </select>
-            <button>add member</button>
+            <button>Add member</button>
           </form>
           {% endif %}
         {% endif %}

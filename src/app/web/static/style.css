@@ -124,25 +124,37 @@ button.quiet:hover { color: var(--ink); border-color: var(--ink); opacity: 1; }
 .preset-head { gap: .6rem; }
 
 /* multi-pick creation form */
-.pickrow { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-.pickrow .taglist:empty::before { content: "none"; color: var(--dim); font-size: .85rem; }
+.pickrow { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.pickrow .taglist { gap: .4rem; }
+.pickrow .taglist:empty { display: none; }
 dialog.picker {
-  border: 1px solid var(--line); border-radius: 10px; padding: 1.2rem;
-  max-width: 32rem; width: 90vw; background: var(--paper);
+  border: 1px solid var(--line); border-radius: 12px; padding: 0;
+  width: min(34rem, 92vw); background: var(--paper);
+  box-shadow: 0 16px 48px rgba(27, 27, 32, .22);
 }
-dialog.picker::backdrop { background: rgba(27,27,32,.35); }
-dialog.picker h3 { margin-top: 0; }
-dialog.picker input[type=search] { width: 100%; margin-bottom: .7rem; }
-dialog.picker .taglist { max-height: 50vh; overflow-y: auto; }
-.picker-actions { margin-top: 1rem; text-align: right; }
+dialog.picker::backdrop { background: rgba(27, 27, 32, .38); backdrop-filter: blur(1.5px); }
+.picker-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 1rem 1.25rem; border-bottom: 1px solid var(--line);
+}
+.picker-head h3 { margin: 0; font-size: 1rem; }
+.picker-head .x { font-size: 1.25rem; line-height: 1; }
+.picker-body { display: flex; flex-direction: column; gap: .8rem; padding: 1rem 1.25rem; }
+.picker-body input[type=search] { width: 100%; }
+.picker-body .taglist { max-height: 45vh; overflow-y: auto; gap: .45rem; padding: .1rem; }
+.picker-actions {
+  padding: .75rem 1.25rem; border-top: 1px solid var(--line);
+  text-align: right; margin-top: 0;
+}
 .chip .x { margin-left: .1rem; }
 .chip.on .x { color: var(--paper); }
 
-/* add-buttons share the chip silhouette */
+/* Add-buttons are chips, full stop: identical border, background, color, metrics. */
 .chip.add {
-  border-style: dashed; background: transparent; color: var(--dim);
+  border: 1px solid var(--line); background: #fff; color: var(--ink);
   cursor: pointer; font-size: .82rem; border-radius: 999px; padding: .1rem .6rem;
+  display: inline-flex; align-items: center; gap: .25rem;
 }
-.chip.add:hover { color: var(--ink); border-color: var(--ink); opacity: 1; }
+.chip.add:hover { border-color: var(--ink); opacity: 1; }
 .rowlabel { min-width: 5.5rem; font-size: .85rem; }
 #tags .pickrow { margin: .35rem 0; }
