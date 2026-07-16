@@ -23,45 +23,61 @@
 <p class="dim">Your standard loadout of reminders — apply to any concert in one click, or link
 to a tag subscription so new events set themselves up.</p>
 
+{% macro sentence_fields(days_val, hours_val, dir_val, anchor_val) -%}
+  <span>remind me</span>
+  <select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == days_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+  <span>day(s)</span>
+  <select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}" {% if n == hours_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+  <span>hour(s)</span>
+  <select name="direction">
+    <option value="before" {% if dir_val == "before" %}selected{% endif %}>before</option>
+    <option value="after" {% if dir_val == "after" %}selected{% endif %}>after</option>
+  </select>
+  <span>each</span>
+  <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ a.value.replace("_"," ") }}</option>{% endfor %}</select>
+{%- endmacro %}
+
 {% for p in presets %}
 <div class="panel">
   <div class="preset-head">
-    <strong>{{ p.name }}</strong>
+    <form class="inline rename" method="post" action="/presets/{{ p.id }}/rename">
+      <input name="name" value="{{ p.name }}" maxlength="100" required>
+      <button class="quiet" title="rename">rename</button>
+    </form>
     <form method="post" action="/presets/{{ p.id }}/delete"
-          onsubmit="return confirm('Delete preset {{ p.name }}?')"><button class="x">×</button></form>
+          onsubmit="return confirm('Delete preset {{ p.name }}?')"><button class="x" title="delete preset">×</button></form>
   </div>
-  <ul class="rows">
+  <ul class="rows items">
     {% for i in p.items %}
     <li>
-      <span>
-        {%- set d, h = i.offset_days | abs, i.offset_hours | abs -%}
-        {%- if d == 0 and h == 0 %}at the moment of
-        {%- else %}{% if d %}{{ d }} day{{ "s" if d != 1 }}{% endif %}{% if d and h %} {% endif %}{% if h %}{{ h }} hour{{ "s" if h != 1 }}{% endif %}
-          {{ "after" if (i.offset_days > 0 or i.offset_hours > 0) else "before" }}
-        {%- endif %} each <strong>{{ i.anchor.value.replace("_", " ") }}</strong>
-      </span>
-      <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete"><button class="x">×</button></form>
+      <form class="sentence" method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/edit">
+        {{ sentence_fields(i.offset_days | abs, i.offset_hours | abs,
+                           "after" if (i.offset_days > 0 or i.offset_hours > 0) else "before",
+                           i.anchor.value) }}
+        <button class="quiet">save</button>
+      </form>
+      <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete"><button class="x" title="remove">×</button></form>
     </li>
-    {% else %}<li class="dim">no items yet — build the sentence below</li>{% endfor %}
+    {% endfor %}
+    <li class="add-row">
+      <form class="sentence" method="post" action="/presets/{{ p.id }}/items">
+        {{ sentence_fields(3, 0, "before", "closes") }}
+        <button>+ add</button>
+      </form>
+    </li>
   </ul>
-  <form class="sentence" method="post" action="/presets/{{ p.id }}/items">
-    <span>remind me</span>
-    <select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == 3 %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
-    <span>day(s)</span>
-    <select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}">{{ n }}</option>{% endfor %}</select>
-    <span>hour(s)</span>
-    <select name="direction"><option value="before">before</option><option value="after">after</option></select>
-    <span>each</span>
-    <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}">{{ a.value.replace("_"," ") }}</option>{% endfor %}</select>
-    <button>add</button>
-  </form>
 </div>
 {% endfor %}
 
-<form class="inline" method="post" action="/presets">
-  <input name="name" required maxlength="100" placeholder="standard lottery coverage">
-  <button>new preset</button>
-</form>
+<details class="panel" {% if not presets %}open{% endif %}>
+  <summary>+ new preset</summary>
+  <form class="stack" method="post" action="/presets">
+    <label>name <input name="name" required maxlength="100" placeholder="standard lottery coverage"></label>
+    <div class="sentence">{{ sentence_fields(3, 0, "before", "closes") }}</div>
+    <button>create preset</button>
+    <p class="dim tiny">the preset is created with this first reminder — add more items after.</p>
+  </form>
+</details>
 
 <h2>Tag subscriptions</h2>
 <p class="dim">Click a tag to follow it — new matching events auto-apply your chosen preset and

@@ -112,3 +112,13 @@ button.chip { cursor: pointer; }
 .chip.check { cursor: pointer; user-select: none; }
 .chip.check input { accent-color: var(--ink); }
 .sub-defaults { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+
+/* preset editor: every item is live-editable */
+.items > li { flex-wrap: wrap; }
+.items .sentence { margin-top: 0; flex: 1; }
+.items .add-row { border-bottom: none; }
+button.quiet { background: none; color: var(--dim); border: 1px solid var(--line); }
+button.quiet:hover { color: var(--ink); border-color: var(--ink); opacity: 1; }
+.rename input { font-weight: 600; border: none; background: transparent; padding-left: 0; }
+.rename input:focus { background: #fff; border: 1px solid var(--line); }
+.preset-head { gap: .6rem; }

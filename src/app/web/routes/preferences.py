@@ -115,9 +115,34 @@ async def create_preset(
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
     name: str = Form(..., min_length=1, max_length=100),
+    anchor: Anchor = Form(Anchor.CLOSES),
+    days: int = Form(3, ge=0, le=60),
+    hours: int = Form(0, ge=0, le=23),
+    direction: str = Form("before"),
 ):
+    """Create a preset WITH its first item — no empty-preset limbo."""
     await ensure_user(session, user.id, user.username)
-    session.add(ReminderPreset(user_id=user.id, name=name.strip()))
+    preset = ReminderPreset(user_id=user.id, name=name.strip())
+    session.add(preset)
+    await session.flush()
+    sign = 1 if direction == "after" else -1
+    session.add(PresetItem(
+        preset_id=preset.id, anchor=anchor,
+        offset_days=sign * days, offset_hours=sign * hours,
+    ))
+    await session.commit()
+    return RedirectResponse("/preferences", status_code=303)
+
+
+@router.post("/presets/{preset_id}/rename")
+async def rename_preset(
+    preset_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    name: str = Form(..., min_length=1, max_length=100),
+):
+    preset = await owned_preset(session, user.id, preset_id)
+    preset.name = name.strip()
     await session.commit()
     return RedirectResponse("/preferences", status_code=303)
 
@@ -150,6 +175,30 @@ async def add_item(
         preset_id=preset_id, anchor=anchor,
         offset_days=sign * days, offset_hours=sign * hours,
     ))
+    await session.commit()
+    return RedirectResponse("/preferences", status_code=303)
+
+
+@router.post("/presets/{preset_id}/items/{item_id}/edit")
+async def edit_item(
+    preset_id: int,
+    item_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    anchor: Anchor = Form(...),
+    days: int = Form(..., ge=0, le=60),
+    hours: int = Form(0, ge=0, le=23),
+    direction: str = Form("before"),
+):
+    """Adjust an existing item in place — every field, no delete-and-rebuild."""
+    await owned_preset(session, user.id, preset_id)
+    item = await session.get(PresetItem, item_id)
+    if item is None or item.preset_id != preset_id:
+        raise HTTPException(status_code=404)
+    sign = 1 if direction == "after" else -1
+    item.anchor = anchor
+    item.offset_days = sign * days
+    item.offset_hours = sign * hours
     await session.commit()
     return RedirectResponse("/preferences", status_code=303)
 

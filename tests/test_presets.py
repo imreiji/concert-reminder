@@ -225,3 +225,50 @@ async def test_scheduler_delivers_notifications(client):
     assert len(sent) == 1 and "6th" in sent[0]
     notes = await _all(client.db, Notification)
     assert notes[0].sent_at_utc is not None
+
+
+# ── Full preset editability (rename, in-place edit, create-with-item) ────
+
+
+async def test_new_preset_is_born_with_its_first_item(client):
+    login_as(client, FAN_ID, "fan")
+    r = client.post("/presets", data={
+        "name": "standard", "anchor": "closes", "days": 5, "hours": 2, "direction": "before",
+    })
+    assert r.status_code == 303
+    from app.db.models import PresetItem
+
+    (item,) = await _all(client.db, PresetItem)
+    assert (item.offset_days, item.offset_hours) == (-5, -2)
+
+
+async def test_rename_preset(client):
+    login_as(client, FAN_ID, "fan")
+    client.post("/presets", data={"name": "standrad", "anchor": "closes", "days": 3})
+    client.post("/presets/1/rename", data={"name": "standard"})
+    from app.db.models import ReminderPreset
+
+    (p,) = await _all(client.db, ReminderPreset)
+    assert p.name == "standard"
+
+
+async def test_edit_item_in_place_every_field(client):
+    login_as(client, FAN_ID, "fan")
+    client.post("/presets", data={"name": "s", "anchor": "closes", "days": 3})
+    client.post("/presets/1/items/1/edit", data={
+        "anchor": "event_start", "days": 7, "hours": 12, "direction": "after",
+    })
+    from app.db.models import PresetItem
+    from app.domain.types import Anchor
+
+    (item,) = await _all(client.db, PresetItem)
+    assert item.anchor is Anchor.EVENT_START
+    assert (item.offset_days, item.offset_hours) == (7, 12)  # after -> positive
+
+
+def test_cannot_edit_items_of_someone_elses_preset(client):
+    login_as(client, FAN_ID, "fan")
+    client.post("/presets", data={"name": "s", "anchor": "closes", "days": 3})
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/presets/1/items/1/edit", data={"anchor": "closes", "days": 1})
+    assert r.status_code == 404
