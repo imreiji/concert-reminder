@@ -84,3 +84,6 @@ Backups: `deploy/backup.sh` via cron (nightly SQLite → S3).
 - [x] Phase 5 — concert CRUD web UI (htmx) + dekimasen.app branding
 - [x] Phase 6 — deployed: Cloudflare -> Caddy (origin cert) -> Lightsail
 - [x] Phase 7 — S3 backups, scheduler heartbeat in /healthz, uptime monitoring
+- [x] Phase 8 — DB-backed revocable sessions; browser timezone auto-detect + local times in UI
+- [ ] Phase 9 — tags (franchise/artist/venue/group), filtering & sorting, group auto-expansion
+- [ ] Phase 10 — reminder presets + tag subscriptions with auto-apply

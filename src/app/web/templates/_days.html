@@ -4,7 +4,7 @@
     {% for d in concert.days %}
     <li>
       <strong>{{ d.label }}</strong>
-      <span>{{ jst(d.starts_at_utc).strftime("%a %Y-%m-%d %H:%M") }} JST</span>
+      <span>{{ dual(d.starts_at_utc, tz) }}</span>
       {% if user.is_editor %}
       <form method="post" action="/days/{{ d.id }}/delete" hx-post="/days/{{ d.id }}/delete"
             hx-target="#days" hx-swap="outerHTML">

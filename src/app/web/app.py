@@ -61,20 +61,21 @@ def create_app() -> FastAPI:
         user: auth.SessionUser | None = Depends(auth.current_user),
         session: AsyncSession = Depends(get_session),
     ):
-        concerts, tz = [], settings.default_timezone
+        concerts, tz, tz_auto = [], settings.default_timezone, True
         if user:
             res = await session.execute(select(Concert).order_by(Concert.created_at.desc()))
             concerts = list(res.scalars())
             db_user = await session.get(User, user.id)
             if db_user:
-                tz = db_user.timezone
+                tz, tz_auto = db_user.timezone, db_user.tz_auto
         return templates.TemplateResponse(
             request,
             "index.html",
             {
                 "user": user,
                 "concerts": concerts,
-                "timezone": tz,
+                "tz": tz,
+                "tz_auto": tz_auto,
                 "timezones": COMMON_TIMEZONES,
                 "bot_enabled": settings.bot_enabled,
             },

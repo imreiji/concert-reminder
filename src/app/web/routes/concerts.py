@@ -24,7 +24,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Concert, ConcertDay, ReminderRule, Window
+from app.db.models import Concert, ConcertDay, ReminderRule, User, Window
 from app.db.service import ensure_user, sync_concert, sync_rule
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
@@ -58,15 +58,21 @@ async def get_concert(session: AsyncSession, concert_id: int) -> Concert:
 # ── Fragments (htmx swap targets) ────────────────────────────────────────
 
 
+async def user_tz(session: AsyncSession, user_id: int) -> str:
+    db_user = await session.get(User, user_id)
+    return db_user.timezone if db_user else "America/Moncton"
+
+
 async def render_fragment(request: Request, name: str, concert: Concert, user: SessionUser,
                           session: AsyncSession) -> HTMLResponse:
     await session.refresh(concert, ["days", "windows"])
     rules = await user_rules(session, user.id, concert.id)
+    tz = await user_tz(session, user.id)
     return templates.TemplateResponse(
         request,
         name,
-        {"concert": concert, "user": user, "rules": rules, "kinds": list(WindowKind),
-         "anchors": list(Anchor)},
+        {"concert": concert, "user": user, "rules": rules, "tz": tz,
+         "kinds": list(WindowKind), "anchors": list(Anchor)},
     )
 
 
@@ -111,10 +117,11 @@ async def concert_detail(
     concert = await get_concert(session, concert_id)
     await session.refresh(concert, ["days", "windows"])
     rules = await user_rules(session, user.id, concert_id)
+    tz = await user_tz(session, user.id)
     return templates.TemplateResponse(
         request,
         "concert_detail.html",
-        {"concert": concert, "user": user, "rules": rules,
+        {"concert": concert, "user": user, "rules": rules, "tz": tz,
          "kinds": list(WindowKind), "anchors": list(Anchor)},
     )
 
@@ -314,11 +321,43 @@ async def set_timezone(
     session: AsyncSession = Depends(get_session),
     timezone: str = Form(...),
 ):
+    """Manual choice: sticks, and turns browser auto-detection off."""
     try:
         ZoneInfo(timezone)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"unknown timezone: {timezone}") from e
     db_user = await ensure_user(session, user.id, user.username)
     db_user.timezone = timezone
+    db_user.tz_auto = False
+    await session.commit()
+    return RedirectResponse("/", status_code=303)
+
+
+@router.post("/me/timezone/auto")
+async def set_timezone_auto(
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    timezone: str = Form(...),
+):
+    """Browser-detected timezone. Respected only while the user hasn't overridden."""
+    try:
+        ZoneInfo(timezone)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"unknown timezone: {timezone}") from e
+    db_user = await ensure_user(session, user.id, user.username)
+    if db_user.tz_auto:
+        db_user.timezone = timezone
+        await session.commit()
+    return HTMLResponse("", status_code=204)
+
+
+@router.post("/me/timezone/reset")
+async def reset_timezone_auto(
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Back to auto: next page load re-detects from the browser."""
+    db_user = await ensure_user(session, user.id, user.username)
+    db_user.tz_auto = True
     await session.commit()
     return RedirectResponse("/", status_code=303)

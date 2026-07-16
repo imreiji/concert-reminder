@@ -54,15 +54,7 @@ def client(db, monkeypatch):
     async def fake_exchange(code):
         return "tok"
 
-    async def fake_persist(discord_id, username):
-        async with db() as s:
-            from app.db.service import ensure_user
-
-            await ensure_user(s, discord_id, username)
-            await s.commit()
-
     monkeypatch.setattr(auth, "exchange_code", fake_exchange)
-    monkeypatch.setattr(auth, "persist_user", fake_persist)
 
     c = TestClient(app, follow_redirects=False)
     c.db = db

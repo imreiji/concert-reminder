@@ -7,9 +7,9 @@
         <strong>{{ w.label }}</strong> <em class="kind">{{ w.kind.value.replace("_", " ") }}</em>
         {% if w.url %}<a href="{{ w.url }}" target="_blank" rel="noopener">link</a>{% endif %}
         <div class="dim">
-          {% if w.opens_at_utc %}opens {{ jst(w.opens_at_utc).strftime("%m-%d %H:%M") }} JST{% endif %}
-          {% if w.opens_at_utc and w.closes_at_utc %} · {% endif %}
-          {% if w.closes_at_utc %}closes {{ jst(w.closes_at_utc).strftime("%m-%d %H:%M") }} JST{% endif %}
+          {% if w.opens_at_utc %}opens {{ dual(w.opens_at_utc, tz) }}{% endif %}
+          {% if w.opens_at_utc and w.closes_at_utc %}<br>{% endif %}
+          {% if w.closes_at_utc %}closes {{ dual(w.closes_at_utc, tz) }}{% endif %}
         </div>
       </div>
       {% if user.is_editor %}

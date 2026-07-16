@@ -1,19 +1,19 @@
-"""Auth flow tests: OAuth redirect, state verification, session, editor gating.
+"""Auth tests: OAuth flow, DB-backed sessions, revocation, editor gating.
 
-Discord's API is monkeypatched — no network. What we're actually testing is
-OUR logic: state handling, session contents, and the authorization model.
+Discord's API is monkeypatched; the database is real (in-memory). The session
+lifecycle — including the cookie-replay attack this design exists to stop —
+runs against actual rows.
 """
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
-from starlette.requests import Request
 
 from app.config import settings
-from app.db.models import Base
+from app.db.models import Base, User, WebSession
 from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
@@ -37,16 +37,11 @@ def client(db, monkeypatch):
         return "fake-token"
 
     async def fake_identity(token: str) -> dict:
-        assert token == "fake-token"
         return {"id": "42", "username": "reiji", "global_name": "Reiji", "avatar": "abc123"}
 
-    async def fake_persist(discord_id: int, username: str) -> None:
-        fake_persist.calls.append((discord_id, username))
-
-    fake_persist.calls = []
     monkeypatch.setattr(auth, "exchange_code", fake_exchange)
     monkeypatch.setattr(auth, "fetch_identity", fake_identity)
-    monkeypatch.setattr(auth, "persist_user", fake_persist)
+
     app = create_app()
 
     async def override_session():
@@ -55,7 +50,7 @@ def client(db, monkeypatch):
 
     app.dependency_overrides[get_session] = override_session
     c = TestClient(app, follow_redirects=False)
-    c.fake_persist = fake_persist
+    c.db = db
     return c
 
 
@@ -66,75 +61,101 @@ def do_login(client) -> None:
     assert r.status_code in (302, 307)
 
 
+async def _count(db, model) -> int:
+    async with db() as s:
+        return len((await s.execute(select(model))).scalars().all())
+
+
+# ── OAuth flow ───────────────────────────────────────────────────────────
+
+
 def test_login_redirects_to_discord_with_state(client):
     r = client.get("/auth/login")
     assert r.status_code in (302, 307)
     loc = r.headers["location"]
     assert loc.startswith("https://discord.com/oauth2/authorize?")
-    assert "scope=identify" in loc
-    assert "state=" in loc
+    assert "scope=identify" in loc and "state=" in loc
 
 
 def test_callback_rejects_bad_state(client):
-    client.get("/auth/login")  # sets a state in the session
-    r = client.get("/auth/callback?code=good-code&state=WRONG")
-    assert r.status_code == 400
+    client.get("/auth/login")
+    assert client.get("/auth/callback?code=good-code&state=WRONG").status_code == 400
 
 
 def test_callback_rejects_missing_state_entirely(client):
-    # no login first — no state in session at all
-    r = client.get("/auth/callback?code=good-code&state=whatever")
-    assert r.status_code == 400
-
-
-def test_full_login_sets_session_and_persists_user(client):
-    do_login(client)
-    assert client.fake_persist.calls == [(42, "Reiji")]
-    r = client.get("/")  # session cookie carries over
-    assert "Reiji" in r.text          # username in the header nav
-    assert "log out" in r.text
-    assert "Concerts" in r.text         # logged-in users see the concert list
-
-
-def test_logout_clears_session(client):
-    do_login(client)
-    client.get("/auth/logout")
-    r = client.get("/")
-    assert "Sign in with Discord" in r.text
+    assert client.get("/auth/callback?code=good-code&state=x").status_code == 400
 
 
 def test_state_is_single_use(client):
     r = client.get("/auth/login")
     state = r.headers["location"].split("state=")[1].split("&")[0]
     client.get(f"/auth/callback?code=good-code&state={state}")
-    # replaying the same state must fail: it was popped on first use
-    r = client.get(f"/auth/callback?code=good-code&state={state}")
-    assert r.status_code == 400
+    assert client.get(f"/auth/callback?code=good-code&state={state}").status_code == 400
 
 
-# ── Editor gating (unit-level, no HTTP needed) ───────────────────────────
+# ── DB-backed sessions ───────────────────────────────────────────────────
 
 
-def make_request(session: dict) -> Request:
-    return Request(scope={"type": "http", "session": session, "headers": []})
+async def test_login_creates_user_and_session_rows(client):
+    do_login(client)
+    assert await _count(client.db, User) == 1
+    assert await _count(client.db, WebSession) == 1
+    r = client.get("/")
+    assert "Reiji" in r.text and "log out" in r.text
 
 
-def test_require_user_rejects_anonymous():
-    with pytest.raises(HTTPException) as e:
-        auth.require_user(make_request({}))
-    assert e.value.status_code == 401
+async def test_session_rows_store_only_hashes(client):
+    do_login(client)
+    raw_cookie = "; ".join(f"{k}={v}" for k, v in client.cookies.items())
+    async with client.db() as s:
+        row = (await s.execute(select(WebSession))).scalar_one()
+    assert len(row.token_hash) == 64  # sha256 hex
+    assert row.token_hash not in raw_cookie  # cookie carries token, DB carries hash
 
 
-def test_require_editor_rejects_non_whitelisted(monkeypatch):
-    monkeypatch.setattr(settings, "editor_whitelist", "999")
-    req = make_request({"user": {"id": 42, "username": "reiji", "avatar": None}})
-    with pytest.raises(HTTPException) as e:
-        auth.require_editor(req)
-    assert e.value.status_code == 403
+async def test_logout_revokes_server_side(client):
+    do_login(client)
+    client.get("/auth/logout")
+    async with client.db() as s:
+        row = (await s.execute(select(WebSession))).scalar_one()
+    assert row.revoked_at is not None
+    assert "Sign in with Discord" in client.get("/").text
 
 
-def test_require_editor_accepts_whitelisted(monkeypatch):
+def test_replayed_cookie_after_logout_is_dead(client):
+    """THE regression test: a stolen cookie must die when the user logs out."""
+    do_login(client)
+    stolen = dict(client.cookies)  # attacker copies the cookie jar
+    client.get("/auth/logout")
+
+    client.cookies.clear()
+    for k, v in stolen.items():
+        client.cookies.set(k, v)  # attacker replays it
+    r = client.get("/")
+    assert "Sign in with Discord" in r.text  # anonymous: revoked server-side
+
+
+def test_each_login_rotates_the_token(client):
+    do_login(client)
+    first = dict(client.cookies)
+    do_login(client)
+    assert dict(client.cookies) != first
+
+
+# ── Editor gating ────────────────────────────────────────────────────────
+
+
+def test_anonymous_is_rejected_by_protected_routes(client):
+    assert client.post("/concerts", data={"title": "X"}).status_code == 401
+
+
+def test_non_editor_is_forbidden(client, monkeypatch):
+    monkeypatch.setattr(settings, "editor_whitelist", "999")  # 42 not whitelisted
+    do_login(client)
+    assert client.post("/concerts", data={"title": "X"}).status_code == 403
+
+
+def test_editor_passes(client, monkeypatch):
     monkeypatch.setattr(settings, "editor_whitelist", "42")
-    req = make_request({"user": {"id": 42, "username": "reiji", "avatar": None}})
-    user = auth.require_editor(req)
-    assert user.is_editor
+    do_login(client)
+    assert client.post("/concerts", data={"title": "X"}).status_code == 303

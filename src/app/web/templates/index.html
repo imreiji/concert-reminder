@@ -10,10 +10,14 @@
     <h1>Concerts</h1>
     <form class="inline" method="post" action="/me/timezone">
       <label>my timezone
-        <input name="timezone" list="tzs" value="{{ timezone }}" size="18">
-        <datalist id="tzs">{% for t in timezones %}<option value="{{ t }}">{% endfor %}</datalist>
+        <select name="timezone">
+          {% if tz not in timezones %}<option value="{{ tz }}" selected>{{ tz }}</option>{% endif %}
+          {% for t in timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
+        </select>
       </label>
       <button>save</button>
+      {% if tz_auto %}<span class="dim" title="detected from your browser">auto</span>
+      {% else %}<button formaction="/me/timezone/reset" title="re-detect from browser">reset to auto</button>{% endif %}
     </form>
   </section>
 

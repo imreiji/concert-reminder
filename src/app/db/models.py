@@ -62,9 +62,31 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(100))
     avatar_hash: Mapped[str | None] = mapped_column(String(64))
     timezone: Mapped[str] = mapped_column(String(64), default="America/Moncton")
+    # tz_auto: timezone is browser-detected until the user overrides it manually
+    tz_auto: Mapped[bool] = mapped_column(default=True, server_default="1")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
     rules: Mapped[list["ReminderRule"]] = relationship(back_populates="user")
+
+
+class WebSession(Base):
+    """Server-side login sessions: revocable, expiring, replay-proof.
+
+    The cookie carries an opaque random token; only its SHA-256 lands here,
+    so a leaked database cannot be turned back into usable cookies.
+    Logout revokes the row -> a replayed cookie is dead server-side.
+    """
+
+    __tablename__ = "web_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class Concert(Base):
