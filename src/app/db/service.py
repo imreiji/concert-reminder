@@ -25,13 +25,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import (
     Concert,
     ConcertDay,
+    ConcertTag,
     ReminderQueue,
     ReminderRule,
+    Tag,
+    TagMember,
     User,
     Window,
 )
 from app.domain.reminders import DayInfo, RuleInfo, WindowInfo, plan_for_rule
-from app.domain.types import Anchor
+from app.domain.types import Anchor, TagKind
 
 
 def _now() -> datetime:
@@ -244,3 +247,68 @@ async def upcoming_windows(
         .order_by(Window.closes_at_utc.is_(None), Window.closes_at_utc, Window.opens_at_utc)
     )
     return [(c, w) for c, w in res.all()]
+
+
+# ── Tags ─────────────────────────────────────────────────────────────────
+
+
+async def find_tag_by_name(session: AsyncSession, name: str) -> Tag | None:
+    from sqlalchemy import func as sa_func
+
+    res = await session.execute(
+        select(Tag).where(sa_func.lower(Tag.name) == name.strip().lower())
+    )
+    return res.scalar_one_or_none()
+
+
+async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
+    res = await session.execute(
+        select(Tag)
+        .join(TagMember, Tag.id == TagMember.member_tag_id)
+        .where(TagMember.group_tag_id == group_tag_id)
+        .order_by(Tag.name)
+    )
+    return list(res.scalars())
+
+
+async def _is_attached(session: AsyncSession, concert_id: int, tag_id: int) -> bool:
+    res = await session.execute(
+        select(ConcertTag).where(
+            ConcertTag.concert_id == concert_id, ConcertTag.tag_id == tag_id
+        )
+    )
+    return res.scalar_one_or_none() is not None
+
+
+async def attach_tag(session: AsyncSession, concert_id: int, tag: Tag) -> list[Tag]:
+    """Attach a tag to a concert. Returns the list of tags newly attached.
+
+    THE EXPANSION RULE (agreed semantics): attaching a GROUP tag also
+    attaches every current member — at this moment only. Editors may then
+    remove individual members (not performing); nothing re-adds them unless
+    the group tag itself is detached and re-attached. Group membership
+    edits never touch existing concerts.
+    """
+    added: list[Tag] = []
+    if not await _is_attached(session, concert_id, tag.id):
+        session.add(ConcertTag(concert_id=concert_id, tag_id=tag.id))
+        added.append(tag)
+        if tag.kind is TagKind.GROUP:
+            for member in await group_members(session, tag.id):
+                if not await _is_attached(session, concert_id, member.id):
+                    session.add(ConcertTag(concert_id=concert_id, tag_id=member.id))
+                    added.append(member)
+    await session.flush()
+    return added
+
+
+async def detach_tag(session: AsyncSession, concert_id: int, tag_id: int) -> None:
+    res = await session.execute(
+        select(ConcertTag).where(
+            ConcertTag.concert_id == concert_id, ConcertTag.tag_id == tag_id
+        )
+    )
+    row = res.scalar_one_or_none()
+    if row is not None:
+        await session.delete(row)
+        await session.flush()

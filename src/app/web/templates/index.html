@@ -8,6 +8,14 @@
 {% else %}
   <section class="toolbar">
     <h1>Concerts</h1>
+    <nav class="sorts dim">
+      sort:
+      <a href="/?sort=event{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
+         {% if sort != "added" %}class="on"{% endif %}>event date</a> ·
+      <a href="/?sort=added{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
+         {% if sort == "added" %}class="on"{% endif %}>recently added</a>
+      · <a href="/tags">manage tags</a>
+    </nav>
     <form class="inline" method="post" action="/me/timezone">
       <label>my timezone
         <select name="timezone">
@@ -33,12 +41,25 @@
   </details>
   {% endif %}
 
+  {% if all_tags %}
+  <p class="taglist">
+    {% for t in all_tags %}
+      {% set active = t.id in selected_tags %}
+      {% set others = selected_tags | reject("equalto", t.id) | list %}
+      <a class="chip kind-{{ t.kind.value }} {% if active %}on{% endif %}"
+         href="/?sort={{ sort }}{% for s in (others if active else others + [t.id]) %}&tag={{ s }}{% endfor %}">{{ t.name }}</a>
+    {% endfor %}
+    {% if selected_tags %}<a class="dim" href="/?sort={{ sort }}">clear</a>{% endif %}
+  </p>
+  {% endif %}
+
   {% if concerts %}
   <ul class="concert-list">
     {% for c in concerts %}
     <li><a href="/concerts/{{ c.id }}"><strong>{{ c.title }}</strong>
       {% if c.franchise %}<span class="dim">{{ c.franchise }}</span>{% endif %}
-      {% if c.venue %}<span class="dim">· {{ c.venue }}</span>{% endif %}</a></li>
+      {% if c.venue %}<span class="dim">· {{ c.venue }}</span>{% endif %}
+      {% if c.days %}<span class="dim when">{{ jst(c.days[0].starts_at_utc).strftime("%Y-%m-%d") }}</span>{% endif %}</a></li>
     {% endfor %}
   </ul>
   {% else %}

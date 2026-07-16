@@ -120,7 +120,7 @@ The entire application state is one file, so backup = copy one file nightly.
   "Statement": [{
     "Effect": "Allow",
     "Action": "s3:PutObject",
-    "Resource": "arn:aws:s3:::dekimasen-backups/*"
+    "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME/*"
   }]
 }
 ```

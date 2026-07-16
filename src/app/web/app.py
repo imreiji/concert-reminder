@@ -2,21 +2,23 @@
 
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.db.models import Concert, User
+from app.db.models import Concert, ConcertDay, ConcertTag, Tag, User
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual, utc_to_jst
 from app.scheduler import heartbeat
 from app.web import auth
 from app.web.routes import concerts as concert_routes
+from app.web.routes import tags as tag_routes
 
 _here = Path(__file__).parent
 templates = Jinja2Templates(directory=_here / "templates")
@@ -44,6 +46,8 @@ def create_app() -> FastAPI:
 
     concert_routes.templates = templates
     app.include_router(concert_routes.router)
+    tag_routes.templates = templates
+    app.include_router(tag_routes.router)
 
     @app.get("/healthz")
     async def healthz() -> dict:
@@ -60,11 +64,28 @@ def create_app() -> FastAPI:
         request: Request,
         user: auth.SessionUser | None = Depends(auth.current_user),
         session: AsyncSession = Depends(get_session),
+        sort: str = "event",
+        tag: list[int] = Query(default=[]),
     ):
-        concerts, tz, tz_auto = [], settings.default_timezone, True
+        concerts, tz, tz_auto, tags = [], settings.default_timezone, True, []
         if user:
-            res = await session.execute(select(Concert).order_by(Concert.created_at.desc()))
-            concerts = list(res.scalars())
+            from sqlalchemy import func as sa_func
+
+            stmt = select(Concert).options(selectinload(Concert.days))
+            if tag:
+                # ANY-of semantics: a concert matches if it carries any selected tag
+                stmt = stmt.join(ConcertTag).where(ConcertTag.tag_id.in_(tag)).distinct()
+            if sort == "added":
+                stmt = stmt.order_by(Concert.created_at.desc())
+            else:  # "event": earliest concert day first; undated concerts last
+                first_day = sa_func.min(ConcertDay.starts_at_utc)
+                stmt = (
+                    stmt.outerjoin(ConcertDay)
+                    .group_by(Concert.id)
+                    .order_by(first_day.is_(None), first_day)
+                )
+            concerts = list((await session.execute(stmt)).scalars())
+            tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
             db_user = await session.get(User, user.id)
             if db_user:
                 tz, tz_auto = db_user.timezone, db_user.tz_auto
@@ -74,6 +95,9 @@ def create_app() -> FastAPI:
             {
                 "user": user,
                 "concerts": concerts,
+                "all_tags": tags,
+                "selected_tags": set(tag),
+                "sort": sort,
                 "tz": tz,
                 "tz_auto": tz_auto,
                 "timezones": COMMON_TIMEZONES,

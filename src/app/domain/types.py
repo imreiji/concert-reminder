@@ -23,6 +23,15 @@ class WindowKind(enum.StrEnum):
     OTHER = "other"                                  # future franchise inventions
 
 
+class TagKind(enum.StrEnum):
+    """What a tag names. GROUP tags contain member (usually ARTIST) tags."""
+
+    FRANCHISE = "franchise"   # Hasunosora, Gakumas, Ikizuraibu...
+    ARTIST = "artist"         # individual performers
+    VENUE = "venue"           # Yokohama Arena, K-Arena...
+    GROUP = "group"           # unit/group containing artist tags
+
+
 class Anchor(enum.StrEnum):
     """Which moment a reminder offset is measured from."""
 

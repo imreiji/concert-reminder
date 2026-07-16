@@ -27,7 +27,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.domain.types import Anchor, Channel, WindowKind
+from app.domain.types import Anchor, Channel, TagKind, WindowKind
 
 
 class UTCDateTime(TypeDecorator):
@@ -106,6 +106,60 @@ class Concert(Base):
     )
     windows: Mapped[list["Window"]] = relationship(
         back_populates="concert", cascade="all, delete-orphan"
+    )
+    tags: Mapped[list["Tag"]] = relationship(secondary="concert_tags", order_by="Tag.name")
+
+
+class Tag(Base):
+    """A label events carry: franchise, artist, venue, or group.
+
+    GROUP tags contain member tags (tag_members). Semantics (deliberate):
+    attaching a group tag to a concert materializes its members onto the
+    concert AT THAT MOMENT (see service.attach_tag). Editors then prune
+    non-performers. Later group-membership changes never rewrite existing
+    concerts, and notification matching (Phase 10) reads only the
+    materialized concert_tags rows.
+    """
+
+    __tablename__ = "tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    kind: Mapped[TagKind] = mapped_column(
+        Enum(TagKind, values_callable=lambda e: [m.value for m in e])
+    )
+    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.discord_id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+
+    members: Mapped[list["Tag"]] = relationship(
+        secondary="tag_members",
+        primaryjoin="Tag.id == TagMember.group_tag_id",
+        secondaryjoin="Tag.id == TagMember.member_tag_id",
+        order_by="Tag.name",
+    )
+
+
+class TagMember(Base):
+    """group tag ⊇ member tag (artists inside a group). No nested groups."""
+
+    __tablename__ = "tag_members"
+
+    group_tag_id: Mapped[int] = mapped_column(
+        ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
+    )
+    member_tag_id: Mapped[int] = mapped_column(
+        ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
+class ConcertTag(Base):
+    __tablename__ = "concert_tags"
+
+    concert_id: Mapped[int] = mapped_column(
+        ForeignKey("concerts.id", ondelete="CASCADE"), primary_key=True
+    )
+    tag_id: Mapped[int] = mapped_column(
+        ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
     )
 
 

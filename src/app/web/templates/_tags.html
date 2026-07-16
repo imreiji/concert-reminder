@@ -1,0 +1,26 @@
+<div id="tags">
+  <p class="taglist">
+    {% for t in concert.tags %}
+      <span class="chip kind-{{ t.kind.value }}">{{ t.name }}
+        {% if user.is_editor %}
+        <form class="chip-x" method="post" action="/concerts/{{ concert.id }}/tags/{{ t.id }}/delete"
+              hx-post="/concerts/{{ concert.id }}/tags/{{ t.id }}/delete"
+              hx-target="#tags" hx-swap="outerHTML"><button class="x">×</button></form>
+        {% endif %}
+      </span>
+    {% else %}<span class="dim">No tags yet.</span>{% endfor %}
+  </p>
+
+  {% if user.is_editor %}
+  <form class="inline" method="post" action="/concerts/{{ concert.id }}/tags"
+        hx-post="/concerts/{{ concert.id }}/tags" hx-target="#tags" hx-swap="outerHTML">
+    <input name="name" list="all-tags" required maxlength="100" placeholder="tag name">
+    <datalist id="all-tags">{% for t in all_tags %}<option value="{{ t.name }}">{{ t.kind.value }}</option>{% endfor %}</datalist>
+    <select name="kind" title="kind (used only if the tag is new)">
+      {% for k in tag_kinds %}<option value="{{ k.value }}" {% if k.value == "artist" %}selected{% endif %}>{{ k.value }}</option>{% endfor %}
+    </select>
+    <button>tag</button>
+  </form>
+  <p class="dim tiny">adding a <strong>group</strong> tag also adds all its member artists — remove any who aren't performing</p>
+  {% endif %}
+</div>

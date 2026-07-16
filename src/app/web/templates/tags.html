@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}tags — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Tags</h1>
+<p class="dim">Franchises, artists, venues, and groups. Group tags contain artist tags:
+attaching a group to a concert adds all its members, which editors can then prune.</p>
+
+{% if user.is_editor %}
+<details class="panel">
+  <summary>+ new tag</summary>
+  <form class="inline" method="post" action="/tags">
+    <input name="name" required maxlength="100" placeholder="Kozue Otomune">
+    <select name="kind">{% for k in kinds %}<option value="{{ k.value }}">{{ k.value }}</option>{% endfor %}</select>
+    <button>create</button>
+  </form>
+</details>
+{% endif %}
+
+{% for k in kinds %}
+  {% set ktags = tags | selectattr("kind", "equalto", k) | list %}
+  {% if ktags %}
+  <h2>{{ k.value }}s</h2>
+  <ul class="rows">
+    {% for t in ktags %}
+    <li>
+      <div>
+        <strong>{{ t.name }}</strong>
+        {% if t.kind.value == "group" %}
+          <div class="dim">
+            members:
+            {% for m in members.get(t.id, []) %}
+              <span class="chip">{{ m.name }}
+                {% if user.is_editor %}<form class="chip-x" method="post"
+                  action="/tags/{{ t.id }}/members/{{ m.id }}/delete"><button class="x">×</button></form>{% endif %}
+              </span>
+            {% else %}<em>none yet</em>{% endfor %}
+          </div>
+          {% if user.is_editor and artist_tags %}
+          <form class="inline" method="post" action="/tags/{{ t.id }}/members">
+            <select name="member_tag_id">
+              {% for a in artist_tags %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
+            </select>
+            <button>add member</button>
+          </form>
+          {% endif %}
+        {% endif %}
+      </div>
+      {% if user.is_editor %}
+      <form method="post" action="/tags/{{ t.id }}/delete"
+            onsubmit="return confirm('Delete tag {{ t.name }} everywhere?')">
+        <button class="x" title="delete tag">×</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+{% endfor %}
+{% endblock %}
