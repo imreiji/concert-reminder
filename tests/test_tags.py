@@ -193,3 +193,46 @@ def test_group_expansion_through_the_web_form(client):
     r = client.post("/concerts/1/tags", data={"name": "Hasunosora", "kind": "group"})
     assert r.status_code == 200
     assert "Kozue" in r.text  # member materialized into the fragment
+
+
+# ── Phase 11: tag-driven creation form ───────────────────────────────────
+
+
+async def test_creation_form_respects_explicit_artist_selection(client):
+    """expand=False path: editor unchecked an artist at creation -> not attached,
+    even though the group tag is. The checkbox list is authoritative."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "LoveLive", "kind": "franchise"})
+    client.post("/tags", data={"name": "Hasunosora", "kind": "group", "parent_id": 1})
+    client.post("/tags", data={"name": "Kozue", "kind": "artist"})
+    client.post("/tags", data={"name": "Kaho", "kind": "artist"})
+    client.post("/tags/2/members", data={"member_tag_id": 3})
+    client.post("/tags/2/members", data={"member_tag_id": 4})
+    client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
+
+    # create with group but ONLY Kozue checked (Kaho not performing)
+    r = client.post("/concerts", data={
+        "title": "6th Live", "franchise_tag": 1, "group_tag": 2,
+        "artist_tags": [3], "venue_tag": 5,
+    })
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        ids = await tag_ids_on(s, 1)
+        assert ids == {1, 2, 3, 5}  # franchise+group+Kozue+venue; NO Kaho
+        c = (await s.execute(select(Concert))).scalar_one()
+        assert c.franchise == "LoveLive" and c.venue == "Yokohama Arena"
+
+
+def test_creation_rejects_wrong_kind_tags(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Kozue", "kind": "artist"})
+    r = client.post("/concerts", data={"title": "X", "franchise_tag": 1})  # artist as franchise
+    assert r.status_code == 422
+
+
+def test_group_parent_must_be_franchise(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Kozue", "kind": "artist"})
+    r = client.post("/tags", data={"name": "G", "kind": "group", "parent_id": 1})
+    assert r.status_code == 422

@@ -6,64 +6,119 @@
     <p>Lottery rounds, serial-code sales, stream tickets — every concert deadline, one reminder ahead. Sign in with Discord to get started.</p>
   </section>
 {% else %}
-  <section class="toolbar">
-    <h1>Concerts</h1>
-    <nav class="sorts dim">
-      sort:
+<div class="layout">
+  <aside class="sidebar">
+    <h3>Sort</h3>
+    <nav class="sorts">
       <a href="/?sort=event{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
-         {% if sort != "added" %}class="on"{% endif %}>event date</a> ·
+         {% if sort != "added" %}class="on"{% endif %}>event date</a>
       <a href="/?sort=added{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
          {% if sort == "added" %}class="on"{% endif %}>recently added</a>
-      · <a href="/tags">manage tags</a>
     </nav>
-    <form class="inline" method="post" action="/me/timezone">
-      <label>my timezone
-        <select name="timezone">
-          {% if tz not in timezones %}<option value="{{ tz }}" selected>{{ tz }}</option>{% endif %}
-          {% for t in timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
-        </select>
-      </label>
-      <button>save</button>
-      {% if tz_auto %}<span class="dim" title="detected from your browser">auto</span>
-      {% else %}<button formaction="/me/timezone/reset" title="re-detect from browser">reset to auto</button>{% endif %}
-    </form>
-  </section>
 
-  {% if user.is_editor %}
-  <details class="panel">
-    <summary>+ new concert</summary>
-    <form method="post" action="/concerts" class="stack">
-      <label>title <input name="title" required maxlength="200" placeholder="Hasunosora 5th Live"></label>
-      <label>franchise <input name="franchise" maxlength="100" placeholder="Hasunosora"></label>
-      <label>venue <input name="venue" maxlength="200" placeholder="Yokohama Arena"></label>
-      <button>create</button>
-    </form>
-  </details>
-  {% endif %}
-
-  {% if all_tags %}
-  <p class="taglist">
-    {% for t in all_tags %}
-      {% set active = t.id in selected_tags %}
-      {% set others = selected_tags | reject("equalto", t.id) | list %}
-      <a class="chip kind-{{ t.kind.value }} {% if active %}on{% endif %}"
+    <h3>Filter by tag</h3>
+    <input class="tag-search" type="search" placeholder="search tags…"
+           oninput="filterChips(this, '.sidebar')">
+    {% macro chiplink(t) -%}
+      {%- set active = t.id in selected_tags -%}
+      {%- set others = selected_tags | reject("equalto", t.id) | list -%}
+      <a class="chip kind-{{ t.kind.value }} {% if active %}on{% endif %}" data-name="{{ t.name | lower }}"
          href="/?sort={{ sort }}{% for s in (others if active else others + [t.id]) %}&tag={{ s }}{% endfor %}">{{ t.name }}</a>
+    {%- endmacro %}
+    {% for section, kindname in [("Franchises","franchise"),("Groups","group"),("Artists","artist"),("Venues","venue")] %}
+      {% set ktags = by_kind.get(kindname, []) %}
+      {% if ktags %}
+      <details open class="tag-section">
+        <summary>{{ section }} <span class="dim">({{ ktags | length }})</span></summary>
+        <div class="taglist">{% for t in ktags %}{{ chiplink(t) }}{% endfor %}</div>
+      </details>
+      {% endif %}
     {% endfor %}
-    {% if selected_tags %}<a class="dim" href="/?sort={{ sort }}">clear</a>{% endif %}
-  </p>
-  {% endif %}
+    {% if selected_tags %}<p><a class="dim" href="/?sort={{ sort }}">clear filters</a></p>{% endif %}
+    <p><a class="dim" href="/tags">manage tags →</a></p>
+  </aside>
 
-  {% if concerts %}
-  <ul class="concert-list">
-    {% for c in concerts %}
-    <li><a href="/concerts/{{ c.id }}"><strong>{{ c.title }}</strong>
-      {% if c.franchise %}<span class="dim">{{ c.franchise }}</span>{% endif %}
-      {% if c.venue %}<span class="dim">· {{ c.venue }}</span>{% endif %}
-      {% if c.days %}<span class="dim when">{{ jst(c.days[0].starts_at_utc).strftime("%Y-%m-%d") }}</span>{% endif %}</a></li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="dim">No concerts yet.{% if user.is_editor %} Create the first one above.{% endif %}</p>
-  {% endif %}
+  <section class="content">
+    <div class="toolbar"><h1>Concerts</h1></div>
+
+    {% if user.is_editor %}
+    <details class="panel">
+      <summary>+ new concert</summary>
+      <form method="post" action="/concerts" class="stack" id="new-concert">
+        <label>title <input name="title" required maxlength="200" placeholder="Hasunosora 6th Live"></label>
+        <label>franchise
+          <select name="franchise_tag" id="nc-franchise" onchange="ncFilterGroups()">
+            <option value="0">— none —</option>
+            {% for t in by_kind.get("franchise", []) %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+          </select></label>
+        <label>group
+          <select name="group_tag" id="nc-group" onchange="ncPopulateArtists()">
+            <option value="0">— none —</option>
+            {% for t in by_kind.get("group", []) %}<option value="{{ t.id }}" data-franchise="{{ t.parent_id or 0 }}">{{ t.name }}</option>{% endfor %}
+          </select></label>
+        <label>artists <span class="dim tiny">(pre-checked from the group — untick anyone not performing)</span></label>
+        <div id="nc-artists" class="taglist">
+          {% for t in by_kind.get("artist", []) %}
+          <label class="chip check" data-artist="{{ t.id }}"><input type="checkbox" name="artist_tags" value="{{ t.id }}"> {{ t.name }}</label>
+          {% endfor %}
+        </div>
+        <label>venue
+          <select name="venue_tag">
+            <option value="0">— none —</option>
+            {% for t in by_kind.get("venue", []) %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+          </select></label>
+        <button>create</button>
+        <p class="dim tiny">missing a tag? create it on the <a href="/tags">tags page</a> first — concerts are tag-driven.</p>
+      </form>
+      <script>
+        const NC_GROUPS = {{ groups_json | safe }};
+        function ncFilterGroups() {
+          const f = document.getElementById("nc-franchise").value;
+          const sel = document.getElementById("nc-group");
+          for (const opt of sel.options) {
+            if (!opt.value || opt.value === "0") continue;
+            opt.hidden = (f !== "0" && opt.dataset.franchise !== f);
+          }
+          if (sel.selectedOptions[0]?.hidden) { sel.value = "0"; ncPopulateArtists(); }
+        }
+        function ncPopulateArtists() {
+          const g = document.getElementById("nc-group").value;
+          const memberIds = new Set((NC_GROUPS[g]?.members || []).map(m => String(m.id)));
+          document.querySelectorAll("#nc-artists .chip.check").forEach(chip => {
+            const box = chip.querySelector("input");
+            box.checked = memberIds.has(chip.dataset.artist);
+          });
+        }
+      </script>
+    </details>
+    {% endif %}
+
+    {% if concerts %}
+    <div class="tiles">
+      {% for c in concerts %}
+      {% set ctags = c.tags %}
+      {% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
+      {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
+      {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
+      {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
+      <a class="tile" href="/concerts/{{ c.id }}">
+        <strong>{{ c.title }}</strong>
+        <span class="who">
+          {#- display rules: F+G+A -> franchise+group; G+A -> group; A only -> artists -#}
+          {% if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
+          {% elif cg %}{{ cg | map(attribute="name") | join(", ") }}
+          {% elif ca %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>
+          {% endif %}
+        </span>
+        {% if cv or c.venue %}<span class="dim">📍 {{ (cv | map(attribute="name") | join(", ")) or c.venue }}</span>{% endif %}
+        {% if c.days %}<span class="when dim">{{ jst(c.days[0].starts_at_utc).strftime("%Y-%m-%d") }} JST</span>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="dim">No concerts match.{% if user.is_editor and not selected_tags %} Create the first one above.{% endif %}</p>
+    {% endif %}
+  </section>
+</div>
 {% endif %}
 {% endblock %}

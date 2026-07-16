@@ -128,6 +128,8 @@ class Tag(Base):
     kind: Mapped[TagKind] = mapped_column(
         Enum(TagKind, values_callable=lambda e: [m.value for m in e])
     )
+    # GROUP tags may belong to a FRANCHISE tag (Hasunosora -> Love Live!, etc.)
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("tags.id", ondelete="SET NULL"))
     created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.discord_id"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 

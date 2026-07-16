@@ -283,7 +283,9 @@ async def _is_attached(session: AsyncSession, concert_id: int, tag_id: int) -> b
     return res.scalar_one_or_none() is not None
 
 
-async def attach_tag(session: AsyncSession, concert_id: int, tag: Tag) -> list[Tag]:
+async def attach_tag(
+    session: AsyncSession, concert_id: int, tag: Tag, expand: bool = True
+) -> list[Tag]:
     """Attach a tag to a concert. Returns the list of tags newly attached.
 
     THE EXPANSION RULE (agreed semantics): attaching a GROUP tag also
@@ -291,12 +293,16 @@ async def attach_tag(session: AsyncSession, concert_id: int, tag: Tag) -> list[T
     remove individual members (not performing); nothing re-adds them unless
     the group tag itself is detached and re-attached. Group membership
     edits never touch existing concerts.
+
+    expand=False is for the creation form, where the editor picks artists
+    explicitly (pre-checked from the group) — expansion there would undo
+    their unchecks.
     """
     added: list[Tag] = []
     if not await _is_attached(session, concert_id, tag.id):
         session.add(ConcertTag(concert_id=concert_id, tag_id=tag.id))
         added.append(tag)
-        if tag.kind is TagKind.GROUP:
+        if expand and tag.kind is TagKind.GROUP:
             for member in await group_members(session, tag.id):
                 if not await _is_attached(session, concert_id, member.id):
                     session.add(ConcertTag(concert_id=concert_id, tag_id=member.id))

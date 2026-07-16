@@ -3,9 +3,25 @@
 {% block content %}
 <h1>Preferences</h1>
 
+<h2>Timezone</h2>
+<form class="inline" method="post" action="/me/timezone">
+  <select name="timezone">
+    <optgroup label="common">
+      {% for t in common_timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </optgroup>
+    <optgroup label="all zones (IANA)">
+      {% for t in all_timezones %}<option value="{{ t }}" {% if t == tz and t not in common_timezones %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </optgroup>
+  </select>
+  <button>save</button>
+  {% if tz_auto %}<span class="dim" title="detected from your browser">auto-detected</span>
+  {% else %}<button formaction="/me/timezone/reset" title="re-detect from browser">reset to auto</button>{% endif %}
+</form>
+<p class="dim tiny">event times are always shown as JST plus this timezone.</p>
+
 <h2>Reminder presets</h2>
-<p class="dim">A preset is your standard loadout of reminders. Apply it to any concert with one
-click, or link it to a tag subscription so new events set themselves up.</p>
+<p class="dim">Your standard loadout of reminders — apply to any concert in one click, or link
+to a tag subscription so new events set themselves up.</p>
 
 {% for p in presets %}
 <div class="panel">
@@ -17,18 +33,27 @@ click, or link it to a tag subscription so new events set themselves up.</p>
   <ul class="rows">
     {% for i in p.items %}
     <li>
-      <span>{% if i.offset_days == 0 and i.offset_hours == 0 %}at the moment of
-        {% else %}{% if i.offset_days != 0 %}{{ -i.offset_days }}d {% endif %}{% if i.offset_hours != 0 %}{{ -i.offset_hours }}h {% endif %}before
-        {% endif %} each <strong>{{ i.anchor.value.replace("_", " ") }}</strong></span>
+      <span>
+        {%- set d, h = i.offset_days | abs, i.offset_hours | abs -%}
+        {%- if d == 0 and h == 0 %}at the moment of
+        {%- else %}{% if d %}{{ d }} day{{ "s" if d != 1 }}{% endif %}{% if d and h %} {% endif %}{% if h %}{{ h }} hour{{ "s" if h != 1 }}{% endif %}
+          {{ "after" if (i.offset_days > 0 or i.offset_hours > 0) else "before" }}
+        {%- endif %} each <strong>{{ i.anchor.value.replace("_", " ") }}</strong>
+      </span>
       <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete"><button class="x">×</button></form>
     </li>
-    {% else %}<li class="dim">no items yet</li>{% endfor %}
+    {% else %}<li class="dim">no items yet — build the sentence below</li>{% endfor %}
   </ul>
-  <form class="inline" method="post" action="/presets/{{ p.id }}/items">
-    <input type="number" name="days_before" value="3" min="0" max="60" style="width:4em"> d
-    <input type="number" name="hours_before" value="0" min="0" max="23" style="width:4em"> h before
+  <form class="sentence" method="post" action="/presets/{{ p.id }}/items">
+    <span>remind me</span>
+    <select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == 3 %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+    <span>day(s)</span>
+    <select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}">{{ n }}</option>{% endfor %}</select>
+    <span>hour(s)</span>
+    <select name="direction"><option value="before">before</option><option value="after">after</option></select>
+    <span>each</span>
     <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}">{{ a.value.replace("_"," ") }}</option>{% endfor %}</select>
-    <button>add item</button>
+    <button>add</button>
   </form>
 </div>
 {% endfor %}
@@ -39,31 +64,94 @@ click, or link it to a tag subscription so new events set themselves up.</p>
 </form>
 
 <h2>Tag subscriptions</h2>
-<p class="dim">Follow a tag; when an editor adds a matching event, your linked preset applies
-automatically and you get a DM (both per-subscription).</p>
+<p class="dim">Click a tag to follow it — new matching events auto-apply your chosen preset and
+DM you. Click a followed tag to unfollow. Artists appear next to their group.</p>
+
+<div class="panel sub-defaults">
+  <strong>when I subscribe:</strong>
+  <form id="sub-defaults" class="inline">
+    <label>apply preset
+      <select id="sub-preset">
+        <option value="0">none</option>
+        {% for p in presets %}<option value="{{ p.id }}" {% if loop.first %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+      </select></label>
+    <label><input type="checkbox" id="sub-notify" checked> DM me on new events</label>
+  </form>
+</div>
+
+<input class="tag-search" type="search" placeholder="search tags…" oninput="filterChips(this, '.sub-box')">
+
+{% macro subchip(t) -%}
+  {%- set sub = sub_by_tag.get(t.id) -%}
+  {%- if sub -%}
+  <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete">
+    <button class="chip kind-{{ t.kind.value }} on" data-name="{{ t.name | lower }}"
+      title="following{% if sub.preset_id %} · preset linked{% endif %}{% if sub.notify %} · 🔔{% endif %} — click to unfollow">{{ t.name }} ✓</button>
+  </form>
+  {%- else -%}
+  <form class="chipform" method="post" action="/subscriptions">
+    <input type="hidden" name="tag_id" value="{{ t.id }}">
+    <input type="hidden" name="preset_id" value="0" class="sub-preset-field">
+    <input type="hidden" name="notify" value="" class="sub-notify-field">
+    <button class="chip kind-{{ t.kind.value }}" data-name="{{ t.name | lower }}">{{ t.name }}</button>
+  </form>
+  {%- endif -%}
+{%- endmacro %}
+
+<div class="sub-box">
+  {% for f in franchises %}
+    <details open class="tag-section">
+      <summary>{{ f.name }} {{ subchip(f) }}</summary>
+      {% for g in groups if g.parent_id == f.id %}
+        <div class="group-row">
+          {{ subchip(g) }}
+          <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span>
+        </div>
+      {% endfor %}
+    </details>
+  {% endfor %}
+  {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
+  {% if orphan_groups %}
+  <details open class="tag-section"><summary>Other groups</summary>
+    {% for g in orphan_groups %}
+    <div class="group-row">{{ subchip(g) }}
+      <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span></div>
+    {% endfor %}
+  </details>
+  {% endif %}
+  {% if solo_artists %}
+  <details open class="tag-section"><summary>Solo artists</summary>
+    <div class="taglist">{% for a in solo_artists %}{{ subchip(a) }}{% endfor %}</div>
+  </details>
+  {% endif %}
+  {% if venues %}
+  <details class="tag-section"><summary>Venues</summary>
+    <div class="taglist">{% for v in venues %}{{ subchip(v) }}{% endfor %}</div>
+  </details>
+  {% endif %}
+</div>
+
+<script>
+  // stamp the subscribe-defaults into every subscribe form at submit time
+  document.querySelectorAll(".chipform").forEach(f => f.addEventListener("submit", () => {
+    const p = f.querySelector(".sub-preset-field");
+    const n = f.querySelector(".sub-notify-field");
+    if (p) p.value = document.getElementById("sub-preset").value;
+    if (n) n.value = document.getElementById("sub-notify").checked ? "true" : "";
+  }));
+</script>
 
 {% if subs %}
+<h3>My subscriptions (details)</h3>
 <ul class="rows">
   {% for sub, tag in subs %}
   <li>
     <span><span class="chip kind-{{ tag.kind.value }}">{{ tag.name }}</span>
-      {% if sub.preset_id %}→ preset #{{ sub.preset_id }}{% else %}<em class="dim">no preset</em>{% endif %}
+      {% if sub.preset_id %}→ auto-applies a preset{% else %}<em class="dim">notice only</em>{% endif %}
       {% if sub.notify %} · 🔔 DM{% endif %}</span>
     <form method="post" action="/subscriptions/{{ sub.id }}/delete"><button class="x">×</button></form>
   </li>
   {% endfor %}
 </ul>
-{% else %}<p class="dim">No subscriptions yet.</p>{% endif %}
-
-{% if tags %}
-<form class="inline" method="post" action="/subscriptions">
-  <select name="tag_id">{% for t in tags %}<option value="{{ t.id }}">{{ t.name }} ({{ t.kind.value }})</option>{% endfor %}</select>
-  <select name="preset_id">
-    <option value="0">no preset</option>
-    {% for p in presets %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
-  </select>
-  <label><input type="checkbox" name="notify" value="true" checked> DM me</label>
-  <button>subscribe</button>
-</form>
-{% else %}<p class="dim">No tags exist yet — editors create them on <a href="/tags">the tags page</a>.</p>{% endif %}
+{% endif %}
 {% endblock %}

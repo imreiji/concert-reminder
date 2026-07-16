@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}dekimasen.app{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="/static/favicon.ico" sizes="any">
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
 </head>
 <body data-tz="{{ tz or '' }}" data-tz-auto="{{ '1' if tz_auto else '0' }}">
@@ -23,6 +24,16 @@
   </header>
   <main>{% block content %}{% endblock %}</main>
   <footer>times are entered in <strong>JST</strong> and shown as JST + your local time</footer>
+<script>
+    // shared: live-filter chips by their data-name within a container
+    function filterChips(input, scope) {
+      const q = input.value.trim().toLowerCase();
+      document.querySelectorAll(scope + " [data-name]").forEach(el => {
+        const target = el.closest(".chipform") || el;
+        target.style.display = (!q || el.dataset.name.includes(q)) ? "" : "none";
+      });
+    }
+  </script>
 {% if user %}
   <script>
     // Auto-detect timezone from the browser; respected only while the user

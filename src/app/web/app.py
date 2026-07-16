@@ -33,6 +33,15 @@ COMMON_TIMEZONES = [
 ]
 
 
+def grouped_tags(tags):
+    """franchise -> its groups (parent_id) -> members handled in templates;
+    plus buckets for orphan groups / artists / venues."""
+    by_kind = {}
+    for t in tags:
+        by_kind.setdefault(t.kind.value, []).append(t)
+    return by_kind
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="dekimasen.app", docs_url=None, redoc_url=None)
     app.add_middleware(
@@ -87,11 +96,26 @@ def create_app() -> FastAPI:
                     .group_by(Concert.id)
                     .order_by(first_day.is_(None), first_day)
                 )
+            stmt = stmt.options(selectinload(Concert.tags))
             concerts = list((await session.execute(stmt)).scalars())
             tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
             db_user = await session.get(User, user.id)
             if db_user:
                 tz, tz_auto = db_user.timezone, db_user.tz_auto
+        import json as _json
+
+        from app.db.service import group_members as _members
+        from app.domain.types import TagKind as _TK
+
+        by_kind = grouped_tags(tags)
+        groups_data = {}
+        for g in by_kind.get("group", []):
+            groups_data[g.id] = {
+                "name": g.name,
+                "franchise": g.parent_id,
+                "members": [{"id": m.id, "name": m.name} for m in await _members(session, g.id)]
+                if user else [],
+            }
         return templates.TemplateResponse(
             request,
             "index.html",
@@ -99,11 +123,13 @@ def create_app() -> FastAPI:
                 "user": user,
                 "concerts": concerts,
                 "all_tags": tags,
+                "by_kind": by_kind,
+                "groups_json": _json.dumps(groups_data),
                 "selected_tags": set(tag),
                 "sort": sort,
                 "tz": tz,
                 "tz_auto": tz_auto,
-                "timezones": COMMON_TIMEZONES,
+                "TagKind": _TK,
                 "bot_enabled": settings.bot_enabled,
             },
         )

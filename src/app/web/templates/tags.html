@@ -11,6 +11,10 @@ attaching a group to a concert adds all its members, which editors can then prun
   <form class="inline" method="post" action="/tags">
     <input name="name" required maxlength="100" placeholder="Kozue Otomune">
     <select name="kind">{% for k in kinds %}<option value="{{ k.value }}">{{ k.value }}</option>{% endfor %}</select>
+    <select name="parent_id" title="franchise (for group tags)">
+      <option value="0">— franchise (groups only) —</option>
+      {% for f in franchise_tags %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
+    </select>
     <button>create</button>
   </form>
 </details>

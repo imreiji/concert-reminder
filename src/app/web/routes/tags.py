@@ -52,7 +52,8 @@ async def tag_directory(
         request,
         "tags.html",
         {"user": user, "tags": tags, "members": members, "kinds": list(TagKind),
-         "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST]},
+         "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
+         "franchise_tags": [t for t in tags if t.kind is TagKind.FRANCHISE]},
     )
 
 
@@ -62,12 +63,21 @@ async def create_tag(
     session: AsyncSession = Depends(get_session),
     name: str = Form(..., min_length=1, max_length=100),
     kind: TagKind = Form(TagKind.ARTIST),
+    parent_id: int = Form(0),
 ):
     name = name.strip()
     if await find_tag_by_name(session, name) is not None:
         raise HTTPException(status_code=409, detail=f"tag {name!r} already exists")
+    parent = None
+    if parent_id:
+        parent = await session.get(Tag, parent_id)
+        if parent is None or parent.kind is not TagKind.FRANCHISE:
+            raise HTTPException(status_code=422, detail="parent must be a franchise tag")
+        if kind is not TagKind.GROUP:
+            raise HTTPException(status_code=422, detail="only group tags take a franchise parent")
     await ensure_user(session, user.id, user.username)
-    session.add(Tag(name=name, kind=kind, created_by=user.id))
+    session.add(Tag(name=name, kind=kind, created_by=user.id,
+                    parent_id=parent.id if parent else None))
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
 

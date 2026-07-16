@@ -70,8 +70,10 @@ def login_as(client, discord_id: int, name: str):
 def build_standard_preset(client) -> None:
     """Preset #1: 3d before closes + 7d before event day."""
     client.post("/presets", data={"name": "standard"})
-    client.post("/presets/1/items", data={"anchor": "closes", "days_before": 3})
-    client.post("/presets/1/items", data={"anchor": "event_start", "days_before": 7})
+    client.post("/presets/1/items", data={"anchor": "closes", "days": 3, "direction": "before"})
+    client.post(
+        "/presets/1/items", data={"anchor": "event_start", "days": 7, "direction": "before"}
+    )
 
 
 def build_concert_with_deadlines(client) -> None:

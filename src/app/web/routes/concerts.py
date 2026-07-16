@@ -25,7 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Concert, ConcertDay, ReminderRule, User, Window
-from app.db.service import ensure_user, sync_concert, sync_rule
+from app.db.service import attach_tag, ensure_user, handle_newly_tagged, sync_concert, sync_rule
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.domain.types import Anchor, Channel, WindowKind
@@ -97,15 +97,52 @@ async def create_concert(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
-    franchise: str = Form(""),
-    venue: str = Form(""),
+    franchise_tag: int = Form(0),
+    group_tag: int = Form(0),
+    artist_tags: list[int] = Form(default=[]),
+    venue_tag: int = Form(0),
 ):
+    """Tag-driven creation: franchise/group/venue are tag selects, artists are
+    checkboxes pre-populated from the group. The group attaches WITHOUT
+    expansion (expand=False) because the editor's artist checkboxes are the
+    authoritative performer list. The notify-and-apply pipeline fires on
+    everything attached here."""
+    from app.db.models import Tag
+
     await ensure_user(session, user.id, user.username)
+
+    async def tag_of(tag_id: int, kind) -> Tag | None:
+        if not tag_id:
+            return None
+        tag = await session.get(Tag, tag_id)
+        if tag is None or tag.kind is not kind:
+            raise HTTPException(status_code=422, detail=f"invalid {kind.value} tag")
+        return tag
+
+    from app.domain.types import TagKind
+
+    f_tag = await tag_of(franchise_tag, TagKind.FRANCHISE)
+    g_tag = await tag_of(group_tag, TagKind.GROUP)
+    v_tag = await tag_of(venue_tag, TagKind.VENUE)
+
     concert = Concert(
-        title=title.strip(), franchise=franchise.strip() or None,
-        venue=venue.strip() or None, created_by=user.id,
+        title=title.strip(),
+        franchise=f_tag.name if f_tag else None,  # denormalized display strings
+        venue=v_tag.name if v_tag else None,
+        created_by=user.id,
     )
     session.add(concert)
+    await session.flush()
+
+    newly: list[Tag] = []
+    for tag in (f_tag, g_tag, v_tag):
+        if tag is not None:
+            newly += await attach_tag(session, concert.id, tag, expand=False)
+    for artist_id in artist_tags:
+        artist = await session.get(Tag, artist_id)
+        if artist is not None and artist.kind is TagKind.ARTIST:
+            newly += await attach_tag(session, concert.id, artist)
+    await handle_newly_tagged(session, concert, newly)
     await session.commit()
     return RedirectResponse(f"/concerts/{concert.id}", status_code=303)
 
@@ -143,14 +180,11 @@ async def edit_concert(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
-    franchise: str = Form(""),
-    venue: str = Form(""),
     notes: str = Form(""),
 ):
+    """Title/notes only — franchise/group/artists/venue are managed as tags."""
     concert = await get_concert(session, concert_id)
     concert.title = title.strip()
-    concert.franchise = franchise.strip() or None
-    concert.venue = venue.strip() or None
     concert.notes = notes.strip() or None
     await session.commit()
     return RedirectResponse(f"/concerts/{concert_id}", status_code=303)
@@ -341,7 +375,7 @@ async def set_timezone(
     db_user.timezone = timezone
     db_user.tz_auto = False
     await session.commit()
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/preferences", status_code=303)
 
 
 @router.post("/me/timezone/auto")
@@ -371,4 +405,4 @@ async def reset_timezone_auto(
     db_user = await ensure_user(session, user.id, user.username)
     db_user.tz_auto = True
     await session.commit()
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/preferences", status_code=303)
