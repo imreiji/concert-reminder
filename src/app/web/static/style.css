@@ -203,3 +203,8 @@ table.rounds tr.round-row.past td { opacity: .65; }
 .meta-grid { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .8rem; margin: .4rem 0; font-size: .9rem; }
 .meta-grid dt { color: var(--dim); }
 .meta-grid dd { margin: 0; }
+
+.feed-url {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+  padding: .3rem .5rem; word-break: break-all; font-size: .85rem;
+}

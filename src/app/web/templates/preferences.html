@@ -19,6 +19,26 @@
 </form>
 <p class="dim tiny">Event times are always shown as JST plus this timezone.</p>
 
+<h2>Calendar feed</h2>
+<p class="dim">Subscribe once in your phone/calendar app and every deadline you have a
+  reminder for stays in sync automatically — no more downloading a fresh .ics per round.</p>
+{% if feed_url %}
+<div class="panel">
+  <p><strong>Your feed link is ready — save it now, it won't be shown again:</strong></p>
+  <p class="inline"><code class="feed-url">{{ feed_url }}</code>
+    <button type="button" class="quiet" data-copy="{{ feed_url }}"
+            onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy</button></p>
+  <p class="dim tiny">Paste this into your calendar app's "subscribe by URL" option (Google
+    Calendar: Settings → Add calendar → From URL. Apple Calendar: File → New Calendar Subscription).</p>
+</div>
+{% elif has_calendar_feed %}
+<p class="dim">Your feed is active. <form class="inline" method="post" action="/me/calendar-feed">
+  <button class="quiet" onclick="return confirm('This invalidates your current feed link — your calendar app will need the new one.')">Regenerate link</button>
+</form></p>
+{% else %}
+<form method="post" action="/me/calendar-feed"><button>Generate feed link</button></form>
+{% endif %}
+
 {% if user.is_admin %}
 <h2>Editors</h2>
 <p class="dim">Discord users allowed to create/edit concerts and tags.

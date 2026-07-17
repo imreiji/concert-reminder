@@ -9,9 +9,10 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 196 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 218 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
-export, and ramen.events import have shipped since).
+export, ramen.events import, and a personal calendar-feed subscription have
+shipped since).
 
 ## Commands
 
@@ -43,6 +44,11 @@ export, and ramen.events import have shipped since).
   `GET /concerts/{event_id}` route, since FastAPI matches path templates
   before literal segments.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
+- `routes/calendar.py` — the personal calendar-feed subscription
+  (`POST /me/calendar-feed` mints the token, `GET /calendar/{token}.ics` is
+  the feed itself). The `.ics` route deliberately has NO `require_user` —
+  calendar apps poll it directly with no cookies, so the token in the URL
+  *is* the credential.
 - Bot and web NEVER contain business logic; they call `db/service.py`.
 
 ## Non-negotiable invariants
@@ -77,6 +83,12 @@ export, and ramen.events import have shipped since).
    No separate CSRF token: mutating routes rely on `SameSite=Lax` cookies
    (`web/app.py`'s `SessionMiddleware`). Deliberate for an app this size —
    don't read it as a gap to fill or bolt a token system onto.
+   Any future personal-secret-link feature (the calendar feed is the first)
+   should reuse the same shape: `secrets.token_urlsafe`, only the SHA-256
+   hash stored (`User.calendar_token_hash` mirrors `WebSession.token_hash`),
+   the raw value shown to the user exactly once and never persisted
+   anywhere retrievable — recovery is "generate a new one," not "look up
+   the old one."
 6. **`event_id` vs `id`**: every FK targets `Concert.id` (internal PK), but
    URLs use the editor-chosen, unique `event_id` string instead. `"new"` and
    `"import"` are reserved and rejected as `event_id` values so they can

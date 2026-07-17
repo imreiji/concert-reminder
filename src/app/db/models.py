@@ -80,6 +80,10 @@ class User(Base):
     # DB-persisted editor grant, toggled by admins (web/Discord). Final editor
     # status is this OR settings.editor_whitelist OR settings.admin_whitelist.
     is_editor: Mapped[bool] = mapped_column(default=False, server_default="0")
+    # Personal calendar-feed subscription token, hashed at rest (same pattern
+    # as WebSession.token_hash) -- the raw token lives only in the feed URL,
+    # shown once at generation time, never stored or re-displayable.
+    calendar_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
     rules: Mapped[list["ReminderRule"]] = relationship(back_populates="user")
