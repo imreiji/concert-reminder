@@ -64,6 +64,8 @@ async def create_tag(
     name: str = Form(..., min_length=1, max_length=100),
     kind: TagKind = Form(TagKind.ARTIST),
     parent_id: int = Form(0),
+    location_url: str = Form(""),
+    region: str = Form(""),
 ):
     name = name.strip()
     if await find_tag_by_name(session, name) is not None:
@@ -76,8 +78,29 @@ async def create_tag(
         if kind is not TagKind.GROUP:
             raise HTTPException(status_code=422, detail="only group tags take a franchise parent")
     await ensure_user(session, user.id, user.username)
-    session.add(Tag(name=name, kind=kind, created_by=user.id,
-                    parent_id=parent.id if parent else None))
+    session.add(Tag(
+        name=name, kind=kind, created_by=user.id, parent_id=parent.id if parent else None,
+        location_url=location_url.strip() or None, region=region.strip() or None,
+    ))
+    await session.commit()
+    return RedirectResponse("/tags", status_code=303)
+
+
+@router.post("/tags/{tag_id}/edit")
+async def edit_tag(
+    tag_id: int,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+    location_url: str = Form(""),
+    region: str = Form(""),
+):
+    """Venue-only in practice today (the only fields worth correcting after
+    creation so far) but not kind-restricted -- harmless to set on others."""
+    tag = await session.get(Tag, tag_id)
+    if tag is None:
+        raise HTTPException(status_code=404)
+    tag.location_url = location_url.strip() or None
+    tag.region = region.strip() or None
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
 

@@ -1,70 +1,88 @@
 <div id="rounds">
-  {% macro round_item(r) %}
-  <li class="round">
-    <div>
+  {% macro round_row(r) %}
+  {% set primary_ts = r.closes_at_utc or r.opens_at_utc or r.results_at_utc or r.payment_deadline_at_utc %}
+  {% set past = r.id in past_round_ids %}
+  <tr class="round-row{% if past %} past{% endif %}">
+    <td>
       <strong>{{ r.label }}</strong>{% if r.label_en %} <span class="dim">({{ r.label_en }})</span>{% endif %}
       <em class="kind">{{ r.kind.value.replace("_", " ") }}</em>
       {% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">link</a>{% endif %}
-      <div class="dim">
-        {% if r.opens_at_utc %}opens {{ dual(r.opens_at_utc, tz) }}{% endif %}
-        {% if r.opens_at_utc and r.closes_at_utc %}<br>{% endif %}
-        {% if r.closes_at_utc %}closes {{ dual(r.closes_at_utc, tz) }}{% endif %}
-        {% if r.results_at_utc %}<br>results {{ dual(r.results_at_utc, tz) }}{% endif %}
-        {% if r.payment_deadline_at_utc %}<br>payment due {{ dual(r.payment_deadline_at_utc, tz) }}{% endif %}
-        {% if r.notes %}<br>{{ r.notes }}{% endif %}
-      </div>
-    </div>
-    {% if user.is_editor %}
-    <details class="edit-round">
-      <summary>Edit</summary>
-      <form class="stack" method="post" action="/rounds/{{ r.id }}/edit"
-            hx-post="/rounds/{{ r.id }}/edit" hx-target="#rounds" hx-swap="outerHTML">
-        <input name="label" value="{{ r.label }}" required maxlength="200">
-        <input name="label_en" value="{{ r.label_en or '' }}" maxlength="200" placeholder="Round name (EN, optional)">
-        <select name="kind">{% for k in kinds %}
-          <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ k.value.replace("_"," ") }}</option>
-        {% endfor %}</select>
-        <label>Opens (JST) <input type="datetime-local" name="opens_at"
-          value="{{ jst(r.opens_at_utc).strftime('%Y-%m-%dT%H:%M') if r.opens_at_utc else '' }}"></label>
-        <label>Closes (JST) <input type="datetime-local" name="closes_at"
-          value="{{ jst(r.closes_at_utc).strftime('%Y-%m-%dT%H:%M') if r.closes_at_utc else '' }}"></label>
-        <label>Results (JST) <input type="datetime-local" name="results_at"
-          value="{{ jst(r.results_at_utc).strftime('%Y-%m-%dT%H:%M') if r.results_at_utc else '' }}"></label>
-        <label>Payment due (JST) <input type="datetime-local" name="payment_at"
-          value="{{ jst(r.payment_deadline_at_utc).strftime('%Y-%m-%dT%H:%M') if r.payment_deadline_at_utc else '' }}"></label>
-        <input name="url" value="{{ r.url or '' }}" placeholder="https://ticket...">
-        <input name="notes" value="{{ r.notes or '' }}" maxlength="300" placeholder="Notes (optional)">
-        {% if concert.days %}
-        <label>Applies to <span class="dim tiny">(which day/leg — blank = general)</span></label>
-        <div class="daypick">
-          {% for d in concert.days %}
-          <label class="daypick-opt"><input type="checkbox" name="applies_to" value="{{ d.id }}"
-            {% if d.id in (r.applies_to or []) %}checked{% endif %}> {{ d.label }}</label>
-          {% endfor %}
-        </div>
-        {% endif %}
-        <button>Save</button>
-      </form>
-      <form method="post" action="/rounds/{{ r.id }}/delete" hx-post="/rounds/{{ r.id }}/delete"
-            hx-target="#rounds" hx-swap="outerHTML">
-        <button class="danger">Delete round</button>
-      </form>
-    </details>
-    {% endif %}
-  </li>
+      {% if r.notes %}<div class="dim tiny">{{ r.notes }}</div>{% endif %}
+    </td>
+    {% for ts in (r.opens_at_utc, r.closes_at_utc, r.results_at_utc, r.payment_deadline_at_utc) %}
+    <td>
+      {% if ts %}
+        {{ dual(ts, tz) }}
+        {% if ts == primary_ts and not past %}<br><span class="countdown dim tiny" data-countdown data-iso="{{ ts.isoformat() }}"></span>{% endif %}
+      {% else %}<span class="dim">—</span>{% endif %}
+    </td>
+    {% endfor %}
+    <td>{% if not past and primary_ts %}<a href="/rounds/{{ r.id }}/ics" title="Add to calendar">📅</a>{% endif %}</td>
+  </tr>
+  {% if user.is_editor %}
+  <tr class="round-edit-row{% if past %} past{% endif %}">
+    <td colspan="6">
+      <details class="edit-round">
+        <summary>Edit</summary>
+        <form class="stack" method="post" action="/rounds/{{ r.id }}/edit"
+              hx-post="/rounds/{{ r.id }}/edit" hx-target="#rounds" hx-swap="outerHTML">
+          <input name="label" value="{{ r.label }}" required maxlength="200">
+          <input name="label_en" value="{{ r.label_en or '' }}" maxlength="200" placeholder="Round name (EN, optional)">
+          <select name="kind">{% for k in kinds %}
+            <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ k.value.replace("_"," ") }}</option>
+          {% endfor %}</select>
+          <label>Opens (JST) <input type="datetime-local" name="opens_at"
+            value="{{ jst(r.opens_at_utc).strftime('%Y-%m-%dT%H:%M') if r.opens_at_utc else '' }}"></label>
+          <label>Closes (JST) <input type="datetime-local" name="closes_at"
+            value="{{ jst(r.closes_at_utc).strftime('%Y-%m-%dT%H:%M') if r.closes_at_utc else '' }}"></label>
+          <label>Results (JST) <input type="datetime-local" name="results_at"
+            value="{{ jst(r.results_at_utc).strftime('%Y-%m-%dT%H:%M') if r.results_at_utc else '' }}"></label>
+          <label>Payment due (JST) <input type="datetime-local" name="payment_at"
+            value="{{ jst(r.payment_deadline_at_utc).strftime('%Y-%m-%dT%H:%M') if r.payment_deadline_at_utc else '' }}"></label>
+          <input name="url" value="{{ r.url or '' }}" placeholder="https://ticket...">
+          <input name="notes" value="{{ r.notes or '' }}" maxlength="300" placeholder="Notes (optional)">
+          {% if concert.days %}
+          <label>Applies to <span class="dim tiny">(which day/leg — blank = general)</span></label>
+          <div class="daypick">
+            {% for d in concert.days %}
+            <label class="daypick-opt"><input type="checkbox" name="applies_to" value="{{ d.id }}"
+              {% if d.id in (r.applies_to or []) %}checked{% endif %}> {{ d.label }}</label>
+            {% endfor %}
+          </div>
+          {% endif %}
+          <button>Save</button>
+        </form>
+        <form method="post" action="/rounds/{{ r.id }}/delete" hx-post="/rounds/{{ r.id }}/delete"
+              hx-target="#rounds" hx-swap="outerHTML">
+          <button class="danger">Delete round</button>
+        </form>
+      </details>
+    </td>
+  </tr>
+  {% endif %}
+  {% endmacro %}
+
+  {% macro round_table(rounds) %}
+  <div class="table-scroll">
+    <table class="rounds">
+      <thead><tr><th>Round</th><th>Opens</th><th>Closes</th><th>Results</th><th>Payment</th><th></th></tr></thead>
+      <tbody>{% for r in rounds %}{{ round_row(r) }}{% endfor %}</tbody>
+    </table>
+  </div>
   {% endmacro %}
 
   {% for day in concert.days %}
     {% set day_rounds = rounds_by_day.get(day.id, []) %}
     {% if day_rounds %}
-    <h3 class="leg-heading">{{ day.label }}</h3>
-    <ul class="rows">{% for r in day_rounds %}{{ round_item(r) }}{% endfor %}</ul>
+    {% set vtag = day_venue_tags.get(day.id) %}
+    <h3 class="leg-heading{% if day.id in past_day_ids %} past{% endif %}">{{ day.label }}{% if vtag %} · {% if vtag.location_url %}<a href="{{ vtag.location_url }}" target="_blank" rel="noopener">{{ vtag.name }}</a>{% else %}{{ vtag.name }}{% endif %}{% if vtag.region %} <span class="dim tiny">({{ vtag.region }})</span>{% endif %}{% elif day.venue %} · <span class="dim">{{ day.venue }}</span>{% endif %}</h3>
+    {{ round_table(day_rounds) }}
     {% endif %}
   {% endfor %}
 
   {% if general_rounds %}
   {% if concert.days %}<h3 class="leg-heading">General</h3>{% endif %}
-  <ul class="rows">{% for r in general_rounds %}{{ round_item(r) }}{% endfor %}</ul>
+  {{ round_table(general_rounds) }}
   {% endif %}
 
   {% if not concert.rounds %}<p class="dim">No rounds yet.</p>{% endif %}

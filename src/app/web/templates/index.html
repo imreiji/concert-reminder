@@ -25,7 +25,7 @@
       <a class="chip kind-{{ t.kind.value }} {% if active %}on{% endif %}" data-name="{{ t.name | lower }}"
          href="/?sort={{ sort }}{% for s in (others if active else others + [t.id]) %}&tag={{ s }}{% endfor %}">{{ t.name }}</a>
     {%- endmacro %}
-    {% for section, kindname in [("Franchises","franchise"),("Groups","group"),("Artists","artist"),("Venues","venue")] %}
+    {% for section, kindname in [("Franchises","franchise"),("Groups","group"),("Artists","artist")] %}
       {% set ktags = by_kind.get(kindname, []) %}
       {% if ktags %}
       <details open class="tag-section">
@@ -34,6 +34,17 @@
       </details>
       {% endif %}
     {% endfor %}
+    {% if region_links %}
+    <details open class="tag-section">
+      <summary>Regions <span class="dim">({{ region_links | length }})</span></summary>
+      <div class="taglist">
+        {% for r in region_links %}
+        <a class="chip kind-venue {% if r.active %}on{% endif %}" data-name="{{ r.name | lower }}"
+           href="{{ r.href }}">{{ r.name }} <span class="dim">({{ r.count }})</span></a>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
     {% if selected_tags %}<p><a class="dim" href="/?sort={{ sort }}">Clear filters</a></p>{% endif %}
     <p><a class="dim" href="/tags">Manage tags →</a></p>
   </aside>

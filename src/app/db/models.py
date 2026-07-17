@@ -156,6 +156,11 @@ class Tag(Base):
     )
     # GROUP tags may belong to a FRANCHISE tag (Hasunosora -> Love Live!, etc.)
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("tags.id", ondelete="SET NULL"))
+    # VENUE-specific (harmless if unset on other kinds): a maps/location link,
+    # and a free-text region so venues can be browsed/filtered by area instead
+    # of one-by-one ("Kanto", "Kansai", etc.)
+    location_url: Mapped[str | None] = mapped_column(String(500))
+    region: Mapped[str | None] = mapped_column(String(100))
     created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.discord_id"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
