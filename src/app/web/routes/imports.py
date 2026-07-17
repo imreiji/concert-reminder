@@ -13,7 +13,7 @@ only the editor's final submit on that draft writes anything.
 
 import json
 import logging
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -35,6 +35,7 @@ templates = None  # set by web.app at startup
 ALLOWED_HOST = "ramen.events"
 FETCH_TIMEOUT = 10.0
 MAX_RESPONSE_BYTES = 2_000_000
+MAX_REDIRECTS = 5
 
 
 def _check_host(url: str) -> None:
@@ -47,14 +48,53 @@ def _check_host(url: str) -> None:
         )
 
 
-async def fetch_ramen_html(url: str) -> str:
-    async with httpx.AsyncClient(timeout=FETCH_TIMEOUT, follow_redirects=True) as client:
-        resp = await client.get(url, headers={"User-Agent": "dekimasen.app/1.0 (event import)"})
-    if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"fetch failed: HTTP {resp.status_code}")
-    if len(resp.content) > MAX_RESPONSE_BYTES:
-        raise HTTPException(status_code=502, detail="page too large")
-    return resp.text
+async def _check_redirect_host(response: httpx.Response) -> None:
+    """httpx response event hook, called for every hop including redirects.
+
+    follow_redirects=True alone would chase a redirect issued by ramen.events
+    (a compromised host, or an open-redirect endpoint there) to an arbitrary
+    address, silently defeating _check_host's allowlist. Re-running the same
+    check against the Location header on every hop closes that gap.
+    """
+    if response.is_redirect:
+        location = response.headers.get("location", "")
+        _check_host(urljoin(str(response.url), location))
+
+
+async def fetch_ramen_html(url: str, transport: httpx.AsyncBaseTransport | None = None) -> str:
+    """Fetch an already-host-checked URL.
+
+    The body is read in capped chunks so an oversized response is aborted
+    mid-download, instead of being fully buffered into memory first (as a
+    plain `client.get()` + `len(resp.content)` check would do).
+
+    `transport` is test-only (httpx.MockTransport); production always uses
+    httpx's default.
+    """
+    async with httpx.AsyncClient(
+        timeout=FETCH_TIMEOUT,
+        follow_redirects=True,
+        max_redirects=MAX_REDIRECTS,
+        event_hooks={"response": [_check_redirect_host]},
+        transport=transport,
+    ) as client:
+        async with client.stream(
+            "GET", url, headers={"User-Agent": "dekimasen.app/1.0 (event import)"}
+        ) as resp:
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=502, detail=f"fetch failed: HTTP {resp.status_code}"
+                )
+            body = bytearray()
+            async for chunk in resp.aiter_bytes():
+                body.extend(chunk)
+                if len(body) > MAX_RESPONSE_BYTES:
+                    raise HTTPException(status_code=502, detail="page too large")
+            content_type = resp.headers.get("content-type", "")
+            charset = "utf-8"
+            if "charset=" in content_type:
+                charset = content_type.split("charset=", 1)[1].split(";", 1)[0].strip()
+            return bytes(body).decode(charset, errors="replace")
 
 
 def _fmt(dt) -> str:

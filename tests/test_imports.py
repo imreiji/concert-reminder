@@ -7,8 +7,10 @@ tests never hit the network.
 
 from pathlib import Path
 
+import httpx
 import pytest
 import pytest_asyncio
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -239,3 +241,49 @@ def test_commit_requires_editor(client):
     login_as(client, FAN_ID, "fan")
     r = client.post("/concerts/import/commit", data={"title": "X"})
     assert r.status_code == 403
+
+
+# ── fetch_ramen_html hardening: redirect host re-check, size cap ─────────
+# These call fetch_ramen_html directly (no route/DB involved) using
+# httpx.MockTransport, so the redirect-following and streaming logic itself
+# is exercised rather than the monkeypatched version the routes use above.
+
+
+async def test_fetch_ramen_html_follows_same_host_redirect():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/old-slug/":
+            return httpx.Response(302, headers={"location": "https://ramen.events/new-slug/"})
+        return httpx.Response(200, text="<html>ok</html>")
+
+    html = await import_routes.fetch_ramen_html(
+        "https://ramen.events/old-slug/", transport=httpx.MockTransport(handler)
+    )
+    assert html == "<html>ok</html>"
+
+
+async def test_fetch_ramen_html_rejects_redirect_off_allowlisted_host():
+    """A redirect to a non-ramen.events host must be blocked even though the
+    original URL passed _check_host -- this is the exact SSRF gap a bare
+    follow_redirects=True (no per-hop re-check) would leave open."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, headers={"location": "https://internal.example/steal"})
+
+    with pytest.raises(HTTPException) as exc_info:
+        await import_routes.fetch_ramen_html(
+            "https://ramen.events/redirect-me/", transport=httpx.MockTransport(handler)
+        )
+    assert exc_info.value.status_code == 400
+
+
+async def test_fetch_ramen_html_aborts_oversized_response(monkeypatch):
+    monkeypatch.setattr(import_routes, "MAX_RESPONSE_BYTES", 10)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="x" * 1000)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await import_routes.fetch_ramen_html(
+            "https://ramen.events/big-page/", transport=httpx.MockTransport(handler)
+        )
+    assert exc_info.value.status_code == 502

@@ -1,4 +1,4 @@
-"""User preferences: reminder presets and tag subscriptions.
+"""User preferences: reminder presets, tag subscriptions, and timezone.
 
   GET  /preferences                          the page
   POST /presets                              create preset
@@ -8,10 +8,15 @@
   POST /subscriptions                        subscribe to a tag (+preset, notify)
   POST /subscriptions/{id}/delete
   POST /concerts/{event_id}/presets/{pid}/apply   one-click apply (rules fragment swap)
+  POST /me/timezone                          manual timezone choice
+  POST /me/timezone/auto                     browser-detected timezone
+  POST /me/timezone/reset                    back to browser auto-detect
 
 Everything here is per-user: routes verify ownership and 404 on other
 people's presets/subscriptions rather than admitting they exist.
 """
+
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -335,3 +340,54 @@ async def apply_preset_to_concert(
     await apply_preset(session, user.id, concert.id, preset)
     await session.commit()
     return await render_rules_fragment(request, concert, user, session)
+
+
+# ── Timezone ─────────────────────────────────────────────────────────────
+
+
+@router.post("/me/timezone")
+async def set_timezone(
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    timezone: str = Form(...),
+):
+    """Manual choice: sticks, and turns browser auto-detection off."""
+    try:
+        ZoneInfo(timezone)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"unknown timezone: {timezone}") from e
+    db_user = await ensure_user(session, user.id, user.username)
+    db_user.timezone = timezone
+    db_user.tz_auto = False
+    await session.commit()
+    return RedirectResponse("/preferences", status_code=303)
+
+
+@router.post("/me/timezone/auto")
+async def set_timezone_auto(
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    timezone: str = Form(...),
+):
+    """Browser-detected timezone. Respected only while the user hasn't overridden."""
+    try:
+        ZoneInfo(timezone)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"unknown timezone: {timezone}") from e
+    db_user = await ensure_user(session, user.id, user.username)
+    if db_user.tz_auto:
+        db_user.timezone = timezone
+        await session.commit()
+    return HTMLResponse("", status_code=204)
+
+
+@router.post("/me/timezone/reset")
+async def reset_timezone_auto(
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Back to auto: next page load re-detects from the browser."""
+    db_user = await ensure_user(session, user.id, user.username)
+    db_user.tz_auto = True
+    await session.commit()
+    return RedirectResponse("/preferences", status_code=303)

@@ -52,57 +52,67 @@ docs" gap has shown up in one review, it may be worth a lightweight habit —
 e.g. a PR checklist line, or a CI step that just diffs the Roadmap's last
 phase against recent merge commits — rather than relying on manual updates.
 
-## 3. SSRF guard in the ramen.events importer has two soft spots
+## 3. SSRF guard in the ramen.events importer had two soft spots — hardened
 
 `src/app/web/routes/imports.py`:
 
-- `_check_host()` validates that the **submitted** URL's scheme is `https`
-  and host is exactly `ramen.events` — good, allowlist not blocklist, as the
-  comment says. But `fetch_ramen_html()` then calls
-  `httpx.AsyncClient(follow_redirects=True)`. Redirect hops are never
-  re-checked against the allowlist, so if `ramen.events` ever redirects
-  somewhere else (compromised host, or an innocuous open-redirect endpoint
-  on that domain), the fetch will follow it wherever it goes — including to
-  a cloud metadata address or another internal host. Since the whole point
-  of `_check_host` is to be an SSRF guard, this defeats it in the redirect
-  case.
-  **Recommendation:** either set `follow_redirects=False` (ramen.events
-  posts are permalinks, a redirect isn't expected), or re-validate the host
-  after each hop with `httpx`'s event hooks / manual redirect handling.
+- `_check_host()` validated the **submitted** URL's scheme/host, but
+  `fetch_ramen_html()` called `httpx.AsyncClient(follow_redirects=True)`
+  with no re-check on the redirect hops — a `ramen.events` redirect
+  (compromised host, or an innocuous open-redirect endpoint there) would
+  have been followed wherever it pointed, including an internal address,
+  defeating the point of `_check_host` as an SSRF guard.
+  **Resolved:** `fetch_ramen_html` now registers `_check_redirect_host` as
+  an httpx response event hook, which re-runs `_check_host` against the
+  `Location` header on every hop (capped at `MAX_REDIRECTS = 5`), so a
+  redirect off the allowlisted host raises the same 400 the initial check
+  would have.
+- The `MAX_RESPONSE_BYTES` check ran *after* `client.get()` returned, i.e.
+  after the full body was already downloaded and buffered into
+  `resp.content` — the cap didn't bound memory/bandwidth during the fetch
+  itself.
+  **Resolved:** the fetch now uses `client.stream()` and reads the body in
+  chunks via `aiter_bytes()`, aborting as soon as the running byte count
+  exceeds `MAX_RESPONSE_BYTES` instead of after the fact.
 
-- The `MAX_RESPONSE_BYTES` check happens *after* `client.get()` returns —
-  i.e. after the full body has already been downloaded and buffered into
-  `resp.content`. The cap doesn't bound memory or bandwidth use during the
-  fetch; it only stops the parser from running on an oversized page. For a
-  URL fetcher this is a minor DoS-hardening gap.
-  **Recommendation:** stream the response and abort once the running byte
-  count exceeds the limit, rather than checking `len(resp.content)` after
-  the fact.
+Neither was exploitable today just by an ordinary user (the importer is
+editor-only, `require_editor`), so this was defense-in-depth rather than an
+active vulnerability. Covered by three new tests in `tests/test_imports.py`
+that call `fetch_ramen_html` directly against an `httpx.MockTransport`: a
+same-host redirect still resolves, a redirect off `ramen.events` raises
+`HTTPException(400)`, and an oversized response raises
+`HTTPException(502)` (with `MAX_RESPONSE_BYTES` monkeypatched down for the
+test). All 199 tests pass, `ruff check .` is clean.
 
-Neither is exploitable today just by an ordinary user (the importer is
-editor-only, `require_editor`), so this is defense-in-depth rather than an
-active vulnerability — but worth tightening given the module's whole job is
-being the SSRF boundary.
+## 4. `web/routes/concerts.py` had outgrown its name — split
 
-## 4. `web/routes/concerts.py` has outgrown its name
+At 943 lines it was by a wide margin the largest module in the app (the
+next largest, `service.py`, is 653), carrying several concerns beyond
+"concert CRUD": create/edit/delete + `event_id` validation (its stated
+job), `.ics`/YAML export, reminder-rule add/delete, and user-timezone
+preference endpoints. The last two didn't obviously belong: reminder rules
+are conceptually closer to `db/service.py`'s reminder-rule functions, and
+`/me/timezone*` duplicated the concern `web/routes/preferences.py` already
+exists for.
 
-At 943 lines it's by a wide margin the largest module in the app (the next
-largest, `service.py`, is 653). Skimming its route list shows it's carrying
-several concerns beyond "concert CRUD":
+**Resolved:**
+- `add_rule`/`delete_rule` moved to a new `web/routes/reminders.py`
+  (mirroring the naming of `bot/cogs/reminders.py`). It imports
+  `get_concert`, `get_concert_by_event_id`, and `render_rules_fragment`
+  from `concerts.py` — those three helpers stay there since the
+  concert-detail page (and `preferences.apply_preset_to_concert`, which was
+  already doing this same lazy import) still need them.
+- `/me/timezone`, `/me/timezone/auto`, `/me/timezone/reset` moved into
+  `web/routes/preferences.py`, next to the rest of the per-user preference
+  routes they were duplicating the concern of.
+- `web/app.py` registers the new `reminders` router; no route paths
+  changed, so this was a pure internal reorganization. `.ics`/YAML export
+  stayed in `concerts.py` — they're concert/round-scoped exports, not a
+  clearly separate concern the way rules/timezone were.
 
-- concert create/edit/delete + the event_id validation helpers (its stated job)
-- `.ics` export for a single round (`GET /rounds/{round_id}/ics`)
-- YAML export for a whole concert (`GET /concerts/{event_id}/export.yaml`)
-- reminder-rule add/delete (`POST /concerts/{event_id}/rules`, `POST /rules/{rule_id}/delete`)
-- user timezone preference endpoints (`POST /me/timezone`, `/me/timezone/auto`, `/me/timezone/reset`)
-
-The last two groups don't obviously belong here: reminder rules feel closer
-to `db/service.py`'s reminder-rule functions, and `/me/timezone*` duplicates
-the concern `web/routes/preferences.py` already exists for. This isn't
-urgent — nothing here is broken — but it's the kind of file that keeps
-growing because "the concert routes are already in there," and splitting it
-now (mechanical route moves, same `router` prefix conventions) is a lot
-cheaper than splitting it after another few features land on top.
+`concerts.py` is now 852 lines; all 199 tests pass unchanged (the routes
+moved, not their behavior), confirming the split didn't alter any
+request/response contract.
 
 ## 5. Minor / worth a one-line note rather than a fix
 
