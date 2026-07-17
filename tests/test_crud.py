@@ -470,6 +470,38 @@ async def test_round_with_no_day_association_shown_as_general_only(client):
     assert "Untied round" in r.text
 
 
+async def test_detail_page_nests_performances_and_their_rounds_together(client):
+    """Each performance gets one integrated section (heading + venue/time
+    info + its rounds table right underneath), including a performance with
+    no rounds yet at all -- previously that day was entirely absent from the
+    separate rounds section."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1", "Day 2"],
+            "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
+            "day_city": ["", ""], "day_venue": ["", ""],
+            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "round_label": ["Day 1 round"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+        },
+    )
+    r = client.get("/concerts/c")
+    assert r.status_code == 200
+    # both performances get their own integrated section...
+    assert r.text.count('class="perf-detail"') == 2
+    # ...Day 1's includes its round table...
+    day1_section = r.text[r.text.index('leg-heading">Day 1<'):r.text.index('leg-heading">Day 2<')]
+    assert "Day 1 round" in day1_section
+    # ...Day 2 has none yet, but still gets its section with a placeholder
+    day2_section = r.text[r.text.index('leg-heading">Day 2<'):]
+    assert "No rounds yet for this performance." in day2_section
+
+
 # ── YAML export ───────────────────────────────────────────────────────────
 
 
@@ -531,7 +563,10 @@ def test_new_concert_page_is_editor_only(client):
     assert "Add an event" in r.text
     assert 'name="event_id"' in r.text  # event id field present
     assert 'name="day_label"' in r.text  # performance row template present
-    assert 'name="round_leg"' in r.text  # round row template present
+    # the leg field is a dropdown of performances, not free text -- picking a
+    # real day instead of guessing a string that has to fuzzy-match server-side
+    assert '<select name="round_leg" class="round-leg-select"></select>' in r.text
+    assert "function syncLegOptions" in r.text
 
 
 async def test_rich_create_builds_concert_days_and_rounds_atomically(client):
@@ -661,6 +696,28 @@ async def test_edit_page_prefills_every_field(client):
     assert 'value="Org"' in r.text
     assert 'value="Day 1"' in r.text
     assert 'value="R1"' in r.text
+
+
+async def test_edit_page_leg_select_carries_the_resolved_leg_as_data_initial(client):
+    """The leg field is a <select> populated client-side from the current
+    performance rows; the server can only hand it the round's current
+    resolved leg via a data attribute for JS to honor on first sync."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+        },
+    )
+    r = client.get("/concerts/c/edit")
+    assert r.status_code == 200
+    assert 'class="round-leg-select" data-initial="Day 1"' in r.text
 
 
 def test_edit_page_is_editor_only(client):

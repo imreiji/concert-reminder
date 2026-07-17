@@ -243,7 +243,7 @@ async def test_past_day_marked_past(client):
     )
     r = client.get("/concerts/c")
     assert r.status_code == 200
-    assert 'li class="past"' in r.text
+    assert 'leg-heading past">Old day<' in r.text
 
 
 async def test_leg_heading_links_to_matching_venue_tag(client):

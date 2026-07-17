@@ -1,4 +1,4 @@
-<div id="rounds">
+<div id="performances">
   {% macro round_row(r) %}
   {% set primary_ts = r.closes_at_utc or r.opens_at_utc or r.results_at_utc or r.payment_deadline_at_utc %}
   {% set past = r.id in past_round_ids %}
@@ -30,19 +30,32 @@
   </div>
   {% endmacro %}
 
+  {% macro day_subtitle(day) %}
+  {% set vtag = day_venue_tags.get(day.id) if day_venue_tags else None %}
+  <p class="dim tiny">{% if day.city %}{{ day.city }} · {% endif %}{{ dual(day.starts_at_utc, tz) }}{% if day.doors_at_utc %} · doors {{ dual(day.doors_at_utc, tz) }}{% endif %}{% if vtag %} · 📍 {% if vtag.location_url %}<a href="{{ vtag.location_url }}" target="_blank" rel="noopener">{{ vtag.name }}</a>{% else %}{{ vtag.name }}{% endif %}{% if vtag.region %} ({{ vtag.region }}){% endif %}{% if day.venue_address %} — {{ day.venue_address }}{% endif %}{% elif day.venue %} · 📍 {{ day.venue }}{% if day.venue_address %} — {{ day.venue_address }}{% endif %}{% endif %}</p>
+  {% endmacro %}
+
   {% for day in concert.days %}
-    {% set day_rounds = rounds_by_day.get(day.id, []) %}
+  {% set day_rounds = rounds_by_day.get(day.id, []) %}
+  <section class="perf-detail">
+    <h3 class="leg-heading{% if day.id in (past_day_ids or []) %} past{% endif %}">{{ day.label }}</h3>
+    {{ day_subtitle(day) }}
     {% if day_rounds %}
-    {% set vtag = day_venue_tags.get(day.id) %}
-    <h3 class="leg-heading{% if day.id in past_day_ids %} past{% endif %}">{{ day.label }}{% if vtag %} · {% if vtag.location_url %}<a href="{{ vtag.location_url }}" target="_blank" rel="noopener">{{ vtag.name }}</a>{% else %}{{ vtag.name }}{% endif %}{% if vtag.region %} <span class="dim tiny">({{ vtag.region }})</span>{% endif %}{% elif day.venue %} · <span class="dim">{{ day.venue }}</span>{% endif %}</h3>
-    {{ round_table(day_rounds) }}
+      {{ round_table(day_rounds) }}
+    {% else %}
+      <p class="dim tiny">No rounds yet for this performance.</p>
     {% endif %}
+  </section>
   {% endfor %}
 
   {% if general_rounds %}
-  {% if concert.days %}<h3 class="leg-heading">General</h3>{% endif %}
-  {{ round_table(general_rounds) }}
+  <section class="perf-detail">
+    {% if concert.days %}<h3 class="leg-heading">General</h3>{% endif %}
+    {{ round_table(general_rounds) }}
+  </section>
   {% endif %}
 
-  {% if not concert.rounds %}<p class="dim">No rounds yet.</p>{% endif %}
+  {% if not concert.days and not concert.rounds %}
+  <p class="dim">No performances yet.</p>
+  {% endif %}
 </div>

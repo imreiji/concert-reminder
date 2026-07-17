@@ -1,0 +1,61 @@
+{#- Keeps every round row's Leg <select> in sync with the current set of
+    performance (day) rows -- picking a real performance instead of typing
+    free text that has to fuzzy-match server-side (see resolve_round_leg in
+    concerts.py, which this dropdown's submitted value still goes through
+    unchanged: value = a day's label, falling back to its city).
+
+    Include once per page, after the day-row/round-row <template>s. Also
+    defines addRow(), shared by both repeatable-row "+ Add" buttons. -#}
+<script>
+  function addRow(listId, templateId) {
+    const tpl = document.getElementById(templateId);
+    document.getElementById(listId).appendChild(tpl.content.cloneNode(true));
+    syncLegOptions();
+  }
+
+  function legOptionFor(row) {
+    const val = (name) => row.querySelector(`input[name="${name}"]`)?.value.trim() || "";
+    const label = val("day_label"), city = val("day_city");
+    const starts = val("day_starts_at"), venue = val("day_venue");
+    if (!label && !city && !starts && !venue) return null; // blank trailing row
+    const value = label || city;
+    if (!value) return null; // has other fields filled but nothing to match a leg on
+    return { value, text: (label && city) ? `${label} — ${city}` : value };
+  }
+
+  function syncLegOptions() {
+    const dayRows = document.getElementById("day-rows");
+    const options = dayRows
+      ? [...dayRows.querySelectorAll(".row-item")].map(legOptionFor).filter(Boolean)
+      : [];
+    document.querySelectorAll("select.round-leg-select").forEach((sel) => {
+      // First sync after page load: honor the server-known value (edit page
+      // prefill). Every sync after that: preserve whatever the editor picked.
+      const current = sel.dataset.synced ? sel.value : (sel.dataset.initial || "");
+      sel.innerHTML = "";
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = "— whole event —";
+      sel.appendChild(blank);
+      options.forEach(({ value, text }) => {
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = text;
+        sel.appendChild(opt);
+      });
+      sel.value = options.some((o) => o.value === current) ? current : "";
+      sel.dataset.synced = "1";
+    });
+  }
+
+  document.getElementById("day-rows")?.addEventListener("input", (e) => {
+    if (e.target.name === "day_label" || e.target.name === "day_city") syncLegOptions();
+  });
+  // Removing a performance row can invalidate a round's current leg pick --
+  // the click bubbles here after .remove() already ran, so the DOM query
+  // inside syncLegOptions sees the post-removal row list.
+  document.getElementById("day-rows")?.addEventListener("click", (e) => {
+    if (e.target.classList.contains("x")) syncLegOptions();
+  });
+  syncLegOptions();
+</script>
