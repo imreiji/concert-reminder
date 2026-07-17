@@ -1,31 +1,48 @@
-# CLAUDE.md — dekimasen.app (concert-reminder)
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with
+code in this repository.
+
+## dekimasen.app (concert-reminder)
 
 Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 100 tests as of Phase 12.
+(AWS Lightsail behind Cloudflare). 196 tests as of this writing (past the
+Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
+export, and ramen.events import have shipped since).
 
 ## Commands
 
 - Run everything: `uv run python -m app.main` (dev: leave `DISCORD_TOKEN`
   empty in `.env` → web-only mode, bot and scheduler DMs disabled)
 - Tests: `uv run pytest -q` — MUST pass before any commit
+- Single test: `uv run pytest tests/test_service.py::test_name -q`
 - Lint: `uv run ruff check .` — MUST be clean before any commit
 - New migration: `uv run alembic revision --autogenerate -m "msg"`, then
   review it (see Migrations below), then `uv run alembic upgrade head`
 - Demo data: `uv run python scripts/seed_demo.py`
+- CI (`.github/workflows/ci.yml`) runs `uv sync`, `ruff check .`, `pytest -q`
+  on every push/PR to `main` — the same two gates as above, nothing extra.
 
 ## Layout
 
 - `src/app/domain/` — pure logic, NO I/O, no discord/fastapi/sqlalchemy
-  imports. Reminder math lives in `domain/reminders.py`, timezone conversion
-  in `domain/timezones.py`.
+  imports. Reminder math in `reminders.py`, JST↔UTC conversion in
+  `timezones.py`, ramen.events HTML parsing in `ingest.py` (takes an HTML
+  string, returns a draft — no httpx call itself), and `.ics`/YAML export
+  formatting in `ics_export.py`/`yaml_export.py`.
 - `src/app/db/` — models, session, and `service.py` (all business logic that
   touches the DB; discord-free so it's testable).
 - `src/app/bot/` — thin shell: cogs, embed builders (`messages.py`),
   persistent buttons (`views.py`).
-- `src/app/web/` — thin shell: routes, templates, static.
+- `src/app/web/` — thin shell: routes, templates, static. `routes/imports.py`
+  (the ramen.events importer, fetches the URL then delegates parsing to
+  `domain/ingest.py`) MUST be registered before `routes/concerts.py` in
+  `web/app.py` — otherwise `GET /concerts/import` gets swallowed by the
+  `GET /concerts/{event_id}` route, since FastAPI matches path templates
+  before literal segments.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
 - Bot and web NEVER contain business logic; they call `db/service.py`.
 
@@ -58,6 +75,10 @@ scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
    `/demote-editor` Discord commands. Admins automatically pass editor
    checks too. Sessions are DB-backed sha256 token hashes (revocable).
    Ownership checks 404, not 403, on other users' presets/subscriptions.
+6. **`event_id` vs `id`**: every FK targets `Concert.id` (internal PK), but
+   URLs use the editor-chosen, unique `event_id` string instead. `"new"` and
+   `"import"` are reserved and rejected as `event_id` values so they can
+   never collide with the `/concerts/new` and `/concerts/import` routes.
 
 ## Migrations (SQLite gotchas — these have bitten before)
 
@@ -91,6 +112,9 @@ scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
 - Tile display rules: franchise+group → "F · G"; group only → G; artists
   only → artist chips; >1 venue → "📍 Multiple".
 - Times always render dual: JST + the user's timezone.
+- VENUE tags filter by `region` (sidebar groups venues into regions like
+  "Kanto"/"Kansai"/"Other"; toggling a region (de)selects every venue tag id
+  in it) — filtering by one exact venue was explicitly ruled out as unhelpful.
 
 ## Deploy
 
