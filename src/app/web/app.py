@@ -112,6 +112,7 @@ def create_app() -> FastAPI:
         import json as _json
 
         from app.db.service import tag_picker_context
+        from app.domain.types import ConcertKind as _CK
         from app.domain.types import TagKind as _TK
 
         picker = await tag_picker_context(session) if user else {
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
                 "tz": tz,
                 "tz_auto": tz_auto,
                 "TagKind": _TK,
+                "concert_kinds": list(_CK),
                 "bot_enabled": settings.bot_enabled,
             },
         )

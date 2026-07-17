@@ -238,3 +238,148 @@ def test_concert_detail_page_renders_for_logged_in_users(client):
     login_as(client, VIEWER_ID, "viewer")
     r = client.get("/concerts/1")
     assert r.status_code == 200  # viewers render too (read-only chips)
+
+
+# ── Concert kind ─────────────────────────────────────────────────────────
+
+
+async def test_create_concert_with_kind(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "Fest", "kind": "festival"})
+    async with client.db() as s:
+        concert = (await s.execute(select(Concert))).scalar_one()
+    assert concert.kind.value == "festival"
+
+
+async def test_create_concert_without_kind_leaves_it_unset(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "No kind"})
+    async with client.db() as s:
+        concert = (await s.execute(select(Concert))).scalar_one()
+    assert concert.kind is None
+
+
+async def test_edit_concert_kind_can_be_set_then_cleared(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C"})
+    client.post("/concerts/1/edit", data={"title": "C", "kind": "tour"})
+    async with client.db() as s:
+        concert = await s.get(Concert, 1)
+        assert concert.kind.value == "tour"
+
+    client.post("/concerts/1/edit", data={"title": "C", "kind": ""})
+    async with client.db() as s:
+        concert = await s.get(Concert, 1)
+        assert concert.kind is None
+
+
+# ── Round applies_to / leg grouping ──────────────────────────────────────
+
+
+async def test_round_applies_to_is_stored(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C"})
+    client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-08-01T18:00"})
+    client.post("/concerts/1/days", data={"label": "Day 2", "starts_at": "2099-08-02T18:00"})
+    client.post(
+        "/concerts/1/rounds",
+        data={
+            "label": "Day 1 lottery", "kind": "lottery_round",
+            "closes_at": "2099-06-25T23:59", "applies_to": ["1"],
+        },
+    )
+    async with client.db() as s:
+        round_ = (await s.execute(select(Round))).scalar_one()
+    assert round_.applies_to == [1]
+
+
+async def test_detail_page_groups_rounds_by_leg(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "Two Legs"})
+    client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-08-01T18:00"})
+    client.post("/concerts/1/days", data={"label": "Day 2", "starts_at": "2099-08-02T18:00"})
+    client.post(
+        "/concerts/1/rounds",
+        data={"label": "Day 1 round", "kind": "lottery_round",
+              "closes_at": "2099-06-25T23:59", "applies_to": ["1"]},
+    )
+    client.post(
+        "/concerts/1/rounds",
+        data={"label": "Day 2 round", "kind": "lottery_round",
+              "closes_at": "2099-06-26T23:59", "applies_to": ["2"]},
+    )
+    client.post(
+        "/concerts/1/rounds",
+        data={"label": "General round", "kind": "general_sale", "closes_at": "2099-06-27T23:59"},
+    )
+    r = client.get("/concerts/1")
+    assert r.status_code == 200
+    # Every round's edit form has a day-picker checkbox for every day, so
+    # bare "Day 1"/"Day 2" appear many times -- anchor on the actual leg
+    # heading markup instead of the label text.
+    day1_pos = r.text.index('leg-heading">Day 1<')
+    round1_pos = r.text.index("Day 1 round")
+    day2_pos = r.text.index('leg-heading">Day 2<')
+    round2_pos = r.text.index("Day 2 round")
+    general_heading_pos = r.text.index('leg-heading">General<')
+    general_round_pos = r.text.index("General round")
+    assert day1_pos < round1_pos < day2_pos < round2_pos < general_heading_pos < general_round_pos
+
+
+async def test_round_with_no_day_association_shown_as_general_only(client):
+    """A round with no applies_to shouldn't appear under any day heading."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C"})
+    client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-08-01T18:00"})
+    client.post(
+        "/concerts/1/rounds",
+        data={"label": "Untied round", "kind": "other", "closes_at": "2099-06-25T23:59"},
+    )
+    r = client.get("/concerts/1")
+    assert "General" in r.text
+    assert "Untied round" in r.text
+
+
+# ── YAML export ───────────────────────────────────────────────────────────
+
+
+async def test_export_yaml_requires_login(client):
+    client.post("/concerts", data={"title": "C"})  # will 401 anyway, no login yet
+    assert client.get("/concerts/1/export.yaml").status_code == 401
+
+
+async def test_export_yaml_shape(client):
+    import yaml
+
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post(
+        "/concerts", data={"title": "Export Me", "kind": "concert", "franchise_tags": ["1"]}
+    )
+    client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-08-01T18:00"})
+    client.post(
+        "/concerts/1/rounds",
+        data={
+            "label": "R1", "kind": "lottery_round",
+            "opens_at": "2099-06-10T00:00", "closes_at": "2099-06-25T23:59",
+            "applies_to": ["1"],
+        },
+    )
+
+    r = client.get("/concerts/1/export.yaml")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/yaml")
+    assert "attachment" in r.headers["content-disposition"]
+    assert "export-me" in r.headers["content-disposition"]
+
+    data = yaml.safe_load(r.text)
+    assert data["title"] == "Export Me"
+    assert data["kind"] == "concert"
+    assert data["slug"] == "export-me"
+    assert data["series"]["franchises"] == ["Hasunosora"]
+    assert len(data["performances"]) == 1
+    assert data["performances"][0]["label"] == "Day 1"
+    assert len(data["rounds"]) == 1
+    assert data["rounds"][0]["label"] == "R1"
+    assert data["rounds"][0]["applies_to"] == ["Day 1"]
+    assert data["rounds"][0]["apply_opens_jst"] == "2099-06-10 00:00"

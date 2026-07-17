@@ -28,7 +28,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.domain.types import Anchor, Channel, RoundKind, TagKind
+from app.domain.types import Anchor, Channel, ConcertKind, RoundKind, TagKind
 
 
 class UTCDateTime(TypeDecorator):
@@ -110,6 +110,9 @@ class Concert(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[ConcertKind | None] = mapped_column(
+        Enum(ConcertKind, values_callable=lambda e: [m.value for m in e])
+    )
     franchise: Mapped[str | None] = mapped_column(String(100))  # "Hasunosora", "Gakumas"...
     venue: Mapped[str | None] = mapped_column(String(200))
     notes: Mapped[str | None] = mapped_column(Text)

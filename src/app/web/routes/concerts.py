@@ -19,7 +19,7 @@ via domain.timezones.jst_to_utc. Nowhere else.
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +28,7 @@ from app.db.models import Concert, ConcertDay, ReminderRule, Round, Tag, User
 from app.db.service import attach_tag, ensure_user, handle_newly_tagged, sync_concert, sync_rule
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
-from app.domain.types import Anchor, Channel, RoundKind
+from app.domain.types import Anchor, Channel, ConcertKind, RoundKind
 from app.web.auth import SessionUser, require_editor, require_user
 
 router = APIRouter()
@@ -73,8 +73,14 @@ def build_round(
     results_at: str,
     payment_at: str,
     url: str,
+    applies_to: list[int] | None = None,
 ) -> Round:
-    """Shared by add_round and the URL-import commit route."""
+    """Shared by add_round and the URL-import commit route.
+
+    applies_to: which concert_day ids ("legs") this round belongs to;
+    empty/None means it's not tied to a specific day (shown under
+    "General" on the detail page). Organizational only -- never read by
+    the reminder planner."""
     opens, closes = parse_jst(opens_at), parse_jst(closes_at)
     results, payment = parse_jst(results_at), parse_jst(payment_at)
     if opens is None and closes is None and results is None and payment is None:
@@ -85,8 +91,23 @@ def build_round(
         concert_id=concert_id, kind=kind, label=label.strip(),
         opens_at_utc=opens, closes_at_utc=closes,
         results_at_utc=results, payment_deadline_at_utc=payment,
-        url=url.strip() or None,
+        url=url.strip() or None, applies_to=applies_to or None,
     )
+
+
+def group_rounds_by_day(concert: Concert) -> tuple[dict[int, list[Round]], list[Round]]:
+    """Rounds grouped by the ConcertDay(s) they apply to ("legs"), plus a
+    'general' bucket for rounds with no day association."""
+    by_day: dict[int, list[Round]] = {d.id: [] for d in concert.days}
+    general: list[Round] = []
+    for r in concert.rounds:
+        if r.applies_to:
+            for day_id in r.applies_to:
+                if day_id in by_day:
+                    by_day[day_id].append(r)
+        else:
+            general.append(r)
+    return by_day, general
 
 
 # ── Fragments (htmx swap targets) ────────────────────────────────────────
@@ -105,11 +126,13 @@ async def render_fragment(request: Request, name: str, concert: Concert, user: S
     rules = await user_rules(session, user.id, concert.id)
     tz = await user_tz(session, user.id)
     presets = await my_presets(session, user.id)
+    by_day, general = group_rounds_by_day(concert)
     return templates.TemplateResponse(
         request,
         name,
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
-         "kinds": list(RoundKind), "anchors": list(Anchor)},
+         "kinds": list(RoundKind), "anchors": list(Anchor),
+         "rounds_by_day": by_day, "general_rounds": general},
     )
 
 
@@ -147,6 +170,7 @@ async def create_concert_row(
     group_tags: list[int],
     artist_tags: list[int],
     venue_tags: list[int],
+    kind: ConcertKind | None = None,
 ) -> Concert:
     """Tag-driven creation supporting collab events: MULTIPLE franchises,
     MULTIPLE groups, explicit artist list (auto-populated client-side from
@@ -165,6 +189,7 @@ async def create_concert_row(
 
     concert = Concert(
         title=title.strip(),
+        kind=kind,
         franchise=", ".join(t.name for t in f_tags) or None,  # denormalized display
         venue=", ".join(t.name for t in v_tags) or None,
         created_by=user.id,
@@ -187,13 +212,15 @@ async def create_concert(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
+    kind: str = Form(""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
     venue_tags: list[int] = Form(default=[]),
 ):
     concert = await create_concert_row(
-        session, user, title, franchise_tags, group_tags, artist_tags, venue_tags
+        session, user, title, franchise_tags, group_tags, artist_tags, venue_tags,
+        kind=ConcertKind(kind) if kind else None,
     )
     await session.commit()
     return RedirectResponse(f"/concerts/{concert.id}", status_code=303)
@@ -218,12 +245,14 @@ async def concert_detail(
     by_kind: dict[str, list[Tag]] = {}
     for tg in tags:
         by_kind.setdefault(tg.kind.value, []).append(tg)
+    by_day, general = group_rounds_by_day(concert)
     return templates.TemplateResponse(
         request,
         "concert_detail.html",
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
-         "kinds": list(RoundKind), "anchors": list(Anchor),
-         "by_kind": by_kind, "attached": {tg.id for tg in concert.tags}},
+         "kinds": list(RoundKind), "anchors": list(Anchor), "concert_kinds": list(ConcertKind),
+         "by_kind": by_kind, "attached": {tg.id for tg in concert.tags},
+         "rounds_by_day": by_day, "general_rounds": general},
     )
 
 
@@ -233,14 +262,60 @@ async def edit_concert(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
+    kind: str = Form(""),
     notes: str = Form(""),
 ):
-    """Title/notes only — franchise/group/artists/venue are managed as tags."""
+    """Title/notes/kind only — franchise/group/artists/venue are managed as tags."""
     concert = await get_concert(session, concert_id)
     concert.title = title.strip()
+    concert.kind = ConcertKind(kind) if kind else None
     concert.notes = notes.strip() or None
     await session.commit()
     return RedirectResponse(f"/concerts/{concert_id}", status_code=303)
+
+
+@router.get("/concerts/{concert_id}/export.yaml")
+async def export_concert_yaml(
+    concert_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Read-only sharing format, shaped like mting314/event-tracker's YAML --
+    export only, never an import path. SQLite via the web UI stays the only
+    way to create/edit data."""
+    from app.domain.types import TagKind
+    from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml, slugify
+
+    concert = await get_concert(session, concert_id)
+    await session.refresh(concert, ["days", "rounds", "tags"])
+
+    days_by_id = {d.id: d.label for d in concert.days}
+    yaml_days = [YamlDay(label=d.label, starts_at_utc=d.starts_at_utc) for d in concert.days]
+    yaml_rounds = [
+        YamlRound(
+            label=r.label, kind=r.kind.value,
+            applies_to_labels=[days_by_id[d] for d in (r.applies_to or []) if d in days_by_id],
+            opens_at_utc=r.opens_at_utc, closes_at_utc=r.closes_at_utc,
+            results_at_utc=r.results_at_utc, payment_deadline_at_utc=r.payment_deadline_at_utc,
+            url=r.url,
+        )
+        for r in concert.rounds
+    ]
+
+    text = concert_to_yaml(
+        title=concert.title,
+        kind=concert.kind.value if concert.kind else None,
+        franchises=[t.name for t in concert.tags if t.kind is TagKind.FRANCHISE],
+        groups=[t.name for t in concert.tags if t.kind is TagKind.GROUP],
+        artists=[t.name for t in concert.tags if t.kind is TagKind.ARTIST],
+        venues=[t.name for t in concert.tags if t.kind is TagKind.VENUE],
+        days=yaml_days, rounds=yaml_rounds, notes=concert.notes,
+    )
+    return Response(
+        content=text,
+        media_type="application/yaml",
+        headers={"Content-Disposition": f'attachment; filename="{slugify(concert.title)}.yaml"'},
+    )
 
 
 @router.post("/concerts/{concert_id}/delete")
@@ -271,11 +346,12 @@ async def add_round(
     results_at: str = Form(""),
     payment_at: str = Form(""),
     url: str = Form(""),
+    applies_to: list[int] = Form(default=[]),
 ):
     concert = await get_concert(session, concert_id)
-    session.add(
-        build_round(concert.id, label, kind, opens_at, closes_at, results_at, payment_at, url)
-    )
+    session.add(build_round(
+        concert.id, label, kind, opens_at, closes_at, results_at, payment_at, url, applies_to
+    ))
     await session.flush()
     await sync_concert(session, concert.id)
     await session.commit()
@@ -295,6 +371,7 @@ async def edit_round(
     results_at: str = Form(""),
     payment_at: str = Form(""),
     url: str = Form(""),
+    applies_to: list[int] = Form(default=[]),
 ):
     round_ = await session.get(Round, round_id)
     if round_ is None:
@@ -306,6 +383,7 @@ async def edit_round(
     round_.results_at_utc = parse_jst(results_at)
     round_.payment_deadline_at_utc = parse_jst(payment_at)
     round_.url = url.strip() or None
+    round_.applies_to = applies_to or None
     concert = await get_concert(session, round_.concert_id)
     await sync_concert(session, concert.id)
     await session.commit()

@@ -46,6 +46,12 @@
       <summary>+ New concert</summary>
       <form method="post" action="/concerts" class="stack" id="new-concert">
         <label>Title <input name="title" required maxlength="200" placeholder="Hasunosora 6th Live"></label>
+        <label>Kind <span class="dim tiny">(optional)</span>
+          <select name="kind">
+            <option value="">— none —</option>
+            {% for k in concert_kinds %}<option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>{% endfor %}
+          </select>
+        </label>
         {% include "_tag_picker_fields.html" %}
         <button>Create</button>
       </form>
@@ -63,7 +69,7 @@
       {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
       {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
       <a class="tile" href="/concerts/{{ c.id }}">
-        <strong>{{ c.title }}</strong>
+        <strong>{{ c.title }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
         <span class="who">
           {#- display rules: F+G+A -> franchise+group; G+A -> group; A only -> artists -#}
           {% if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}

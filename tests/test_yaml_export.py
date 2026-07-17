@@ -1,0 +1,99 @@
+"""concert_to_yaml: pure-function serialization tests.
+
+Round-trip through yaml.safe_load rather than string-matching, so these
+don't break on cosmetic formatting changes.
+"""
+
+from datetime import UTC, datetime
+
+import yaml
+
+from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml, slugify
+
+
+def dt(month: int, day: int, hour: int = 12) -> datetime:
+    return datetime(2026, month, day, hour, tzinfo=UTC)
+
+
+def test_slugify():
+    assert slugify("Hasunosora 5th Live!") == "hasunosora-5th-live"
+    assert slugify("  Multiple   Spaces  ") == "multiple-spaces"
+    assert slugify("日本語タイトル") == "concert"  # no ASCII survives -> fallback
+
+
+def test_concert_to_yaml_full_shape():
+    text = concert_to_yaml(
+        title="Hasunosora 5th Live",
+        kind="concert",
+        franchises=["Hasunosora"],
+        groups=["Kaho's Class"],
+        artists=["Kaho", "Sayaka"],
+        venues=["Yokohama Arena"],
+        days=[
+            YamlDay(label="Day 1", starts_at_utc=dt(8, 1, 9)),
+            YamlDay(label="Day 2", starts_at_utc=dt(8, 2, 9)),
+        ],
+        rounds=[
+            YamlRound(
+                label="Day 1 Lottery #1", kind="lottery_round",
+                applies_to_labels=["Day 1"],
+                opens_at_utc=dt(6, 10), closes_at_utc=dt(6, 25),
+                results_at_utc=dt(7, 1), payment_deadline_at_utc=dt(7, 8),
+                url="https://example.com/ticket",
+            ),
+        ],
+        notes="Some notes",
+    )
+    data = yaml.safe_load(text)
+
+    assert data["slug"] == "hasunosora-5th-live"
+    assert data["title"] == "Hasunosora 5th Live"
+    assert data["kind"] == "concert"
+    assert data["series"] == {
+        "franchises": ["Hasunosora"], "groups": ["Kaho's Class"], "artists": ["Kaho", "Sayaka"],
+    }
+    assert data["venues"] == ["Yokohama Arena"]
+    assert data["notes"] == "Some notes"
+
+    assert len(data["performances"]) == 2
+    assert data["performances"][0] == {"label": "Day 1", "starts_at_jst": "2026-08-01 18:00"}
+    assert data["performances"][1] == {"label": "Day 2", "starts_at_jst": "2026-08-02 18:00"}
+
+    (round_,) = data["rounds"]
+    assert round_["label"] == "Day 1 Lottery #1"
+    assert round_["kind"] == "lottery_round"
+    assert round_["applies_to"] == ["Day 1"]
+    assert round_["apply_opens_jst"] == "2026-06-10 21:00"  # UTC 12:00 + 9h
+    assert round_["apply_closes_jst"] == "2026-06-25 21:00"
+    assert round_["results_jst"] == "2026-07-01 21:00"
+    assert round_["payment_deadline_jst"] == "2026-07-08 21:00"
+    assert round_["url"] == "https://example.com/ticket"
+
+
+def test_concert_to_yaml_handles_missing_optional_fields():
+    text = concert_to_yaml(
+        title="Bare Concert",
+        kind=None,
+        franchises=[], groups=[], artists=[], venues=[],
+        days=[],
+        rounds=[YamlRound(label="TBD round", kind="other")],
+        notes=None,
+    )
+    data = yaml.safe_load(text)
+    assert data["kind"] is None
+    assert data["performances"] == []
+    (round_,) = data["rounds"]
+    assert round_["applies_to"] == []
+    assert round_["apply_opens_jst"] is None
+    assert round_["url"] is None
+    assert data["notes"] is None
+
+
+def test_concert_to_yaml_is_deterministic():
+    kwargs = dict(
+        title="C", kind="tour", franchises=[], groups=[], artists=[], venues=[],
+        days=[YamlDay(label="Day 1", starts_at_utc=dt(8, 1))],
+        rounds=[YamlRound(label="R1", kind="lottery_round")],
+        notes=None,
+    )
+    assert concert_to_yaml(**kwargs) == concert_to_yaml(**kwargs)
