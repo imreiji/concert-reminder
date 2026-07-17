@@ -224,6 +224,9 @@ class DueReminder:
 async def due_reminders(
     session: AsyncSession, now: datetime | None = None, limit: int = 100
 ) -> list[DueReminder]:
+    """Batch-fetched: one SELECT for the due queue rows, then one SELECT per
+    related entity type (rule/user/round/day/concert) instead of up to 4
+    per row -- a fixed number of round trips regardless of batch size."""
     now = now or _now()
     res = await session.execute(
         select(ReminderQueue)
@@ -231,18 +234,46 @@ async def due_reminders(
         .order_by(ReminderQueue.fire_at_utc)
         .limit(limit)
     )
-    # N+1 gets below are deliberate: a due batch is tiny (usually 0-5 rows/minute)
-    # and session identity-map caching absorbs repeats. Optimize only if it hurts.
     rows = list(res.scalars())
+    if not rows:
+        return []
+
+    rule_ids = {row.rule_id for row in rows}
+    round_ids = {row.round_id for row in rows if row.round_id is not None}
+    day_ids = {row.day_id for row in rows if row.day_id is not None}
+
+    rules = {
+        r.id: r for r in
+        (await session.execute(select(ReminderRule).where(ReminderRule.id.in_(rule_ids)))).scalars()
+    }
+    user_ids = {r.user_id for r in rules.values()}
+    users = {
+        u.discord_id: u for u in
+        (await session.execute(select(User).where(User.discord_id.in_(user_ids)))).scalars()
+    } if user_ids else {}
+    rounds = {
+        r.id: r for r in
+        (await session.execute(select(Round).where(Round.id.in_(round_ids)))).scalars()
+    } if round_ids else {}
+    days = {
+        d.id: d for d in
+        (await session.execute(select(ConcertDay).where(ConcertDay.id.in_(day_ids)))).scalars()
+    } if day_ids else {}
+    concert_ids = {r.concert_id for r in rounds.values()} | {d.concert_id for d in days.values()}
+    concerts = {
+        c.id: c for c in
+        (await session.execute(select(Concert).where(Concert.id.in_(concert_ids)))).scalars()
+    } if concert_ids else {}
+
     out: list[DueReminder] = []
     for row in rows:
-        rule = await session.get(ReminderRule, row.rule_id)
-        user = await session.get(User, rule.user_id)
-        round_ = await session.get(Round, row.round_id) if row.round_id else None
-        day = await session.get(ConcertDay, row.day_id) if row.day_id else None
+        rule = rules.get(row.rule_id)
+        user = users.get(rule.user_id) if rule else None
+        round_ = rounds.get(row.round_id) if row.round_id is not None else None
+        day = days.get(row.day_id) if row.day_id is not None else None
         parent = round_ or day
-        concert = await session.get(Concert, parent.concert_id) if parent else None
-        if concert is None:
+        concert = concerts.get(parent.concert_id) if parent else None
+        if user is None or concert is None:
             continue  # orphaned row; cascades should prevent this, but never crash the loop
         out.append(
             DueReminder(

@@ -249,13 +249,137 @@ async def test_scheduler_delivers_notifications(client):
     import app.scheduler.loop as loop_mod
 
     client.monkeypatch.setattr(loop_mod, "SessionMaker", client.db)
-    client.monkeypatch.setattr(loop_mod, "SEND_GAP_SECONDS", 0)
     delivered = await tick(FakeBot())
 
     assert delivered == 1
     assert len(sent) == 1 and "6th" in sent[0]  # embed title carries the concert
     notes = await _all(client.db, Notification)
     assert notes[0].sent_at_utc is not None
+
+
+async def _seed_due_reminders(client, n: int, *, past) -> list[int]:
+    """N distinct users/concerts/rounds, each with one reminder rule and a
+    queue row already due -- built directly at the DB layer (not through
+    the web form) since these just need to exist, not be created realistically."""
+    from app.db.models import Concert, ReminderQueue, ReminderRule, Round, User
+    from app.domain.types import Anchor, RoundKind
+
+    uids = [9000 + i for i in range(n)]
+    async with client.db() as s:
+        for uid in uids:
+            s.add(User(discord_id=uid, username=f"fan{uid}", timezone="UTC"))
+            concert = Concert(
+                title=f"Concurrent {uid}", event_id=f"concurrent-{uid}", created_by=uid
+            )
+            s.add(concert)
+            await s.flush()
+            round_ = Round(
+                concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="R1", closes_at_utc=past,
+            )
+            s.add(round_)
+            await s.flush()
+            rule = ReminderRule(
+                user_id=uid, round_id=round_.id, anchor=Anchor.CLOSES, offset_days=0
+            )
+            s.add(rule)
+            await s.flush()
+            s.add(ReminderQueue(
+                rule_id=rule.id, round_id=round_.id, anchor=Anchor.CLOSES, fire_at_utc=past
+            ))
+        await s.commit()
+    return uids
+
+
+async def test_tick_delivers_multiple_due_reminders_concurrently(client):
+    """Regression guard for the concurrency fix: N sends that each take a
+    fixed amount of (simulated) network time must finish in roughly one
+    slice, not N serialized slices -- proves real concurrency is
+    happening, not just a relabeled sequential loop."""
+    import asyncio
+    from datetime import UTC, datetime, timedelta
+
+    import app.scheduler.loop as loop_mod
+    from app.scheduler.loop import tick
+
+    client.monkeypatch.setattr(loop_mod, "SessionMaker", client.db)
+
+    n = 5
+    past = datetime.now(UTC) - timedelta(seconds=5)
+    uids = await _seed_due_reminders(client, n, past=past)
+
+    sent_order = []
+
+    class FakeUser:
+        def __init__(self, uid):
+            self.uid = uid
+
+        async def send(self, body=None, *, embed=None, view=None):
+            await asyncio.sleep(0.05)  # simulated network latency
+            sent_order.append(self.uid)
+
+    class FakeBot:
+        def get_user(self, uid):
+            return FakeUser(uid)
+
+    start = asyncio.get_running_loop().time()
+    delivered = await tick(FakeBot())
+    elapsed = asyncio.get_running_loop().time() - start
+
+    assert delivered == n
+    assert set(sent_order) == set(uids)
+    # fully serialized (old 1s-gap design) would take >= 5s; bounded
+    # concurrency should finish in roughly one 0.05s slice.
+    assert elapsed < 0.2
+
+    async with client.db() as s:
+        rows = (await s.execute(select(ReminderQueue))).scalars().all()
+        assert all(r.sent_at_utc is not None for r in rows)
+
+
+async def test_tick_forbidden_send_does_not_affect_others(client):
+    """One recipient with DMs closed must not block or corrupt delivery to
+    the others in the same concurrent batch."""
+    from datetime import UTC, datetime, timedelta
+
+    import discord
+
+    import app.scheduler.loop as loop_mod
+    from app.scheduler.loop import tick
+
+    client.monkeypatch.setattr(loop_mod, "SessionMaker", client.db)
+
+    past = datetime.now(UTC) - timedelta(seconds=5)
+    uids = await _seed_due_reminders(client, 3, past=past)
+    forbidden_uid = uids[1]
+
+    sent = []
+
+    class FakeResponse:
+        status = 403
+        reason = "Forbidden"
+
+    class FakeUser:
+        def __init__(self, uid):
+            self.uid = uid
+
+        async def send(self, body=None, *, embed=None, view=None):
+            if self.uid == forbidden_uid:
+                raise discord.Forbidden(FakeResponse(), "missing access")
+            sent.append(self.uid)
+
+    class FakeBot:
+        def get_user(self, uid):
+            return FakeUser(uid)
+
+    delivered = await tick(FakeBot())
+
+    assert delivered == 3  # Forbidden counts as "delivered" (permanent drop)
+    assert set(sent) == {uids[0], uids[2]}
+
+    async with client.db() as s:
+        rows = (await s.execute(select(ReminderQueue))).scalars().all()
+        # every row marked sent, including the Forbidden one (dead, not retried)
+        assert all(r.sent_at_utc is not None for r in rows)
 
 
 # ── Full preset editability (rename, in-place edit, create-with-item) ────

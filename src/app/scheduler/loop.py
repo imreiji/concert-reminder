@@ -9,9 +9,15 @@ Failure philosophy (each case is deliberate):
   * Whole-tick exception           -> logged, loop survives. The loop dying
     silently is the one unacceptable outcome for a reminder app.
 
-Rate limits: sends are sequential with a 1s gap. discord.py also enforces
-per-route limits internally; the gap just keeps us far from the cliff when
-many rules fire in the same minute.
+Concurrency: sends run under a bounded semaphore rather than a fixed
+per-message delay. discord.py's own HTTPClient already paces/retries per
+Discord's returned rate-limit bucket headers, so a manual gap on top of
+that is strictly more conservative than necessary and caps throughput at
+1 msg/sec regardless of how many reminders are actually due. Every DB
+touch (fetching due rows, building notification embeds, marking sent)
+stays strictly sequential on the one shared AsyncSession -- it is not
+safe for concurrent use -- only the actual Discord network calls run
+concurrently.
 """
 
 import asyncio
@@ -23,10 +29,12 @@ import discord
 from app.bot.messages import build_new_event_message, build_reminder_message
 from app.db.service import (
     DueReminder,
+    NoticeContext,
     due_notifications,
     due_reminders,
     mark_notification_sent,
     mark_sent,
+    notice_context,
 )
 from app.db.session import SessionMaker
 from app.scheduler import heartbeat
@@ -34,11 +42,13 @@ from app.scheduler import heartbeat
 log = logging.getLogger(__name__)
 
 TICK_SECONDS = 60
-SEND_GAP_SECONDS = 1.0
+SEND_CONCURRENCY = 5  # bounded in-flight Discord calls; discord.py's own
+                      # rate limiter is the real backstop beyond this.
 
 
 async def deliver(bot, item: DueReminder) -> bool:
-    """Send one reminder DM (embed + buttons). True -> mark the row sent."""
+    """Send one reminder DM (embed + buttons). True -> mark the row sent.
+    Pure Discord I/O -- no session access, safe to run concurrently."""
     try:
         user = bot.get_user(item.discord_id) or await bot.fetch_user(item.discord_id)
         embed, view = build_reminder_message(item)
@@ -54,16 +64,19 @@ async def deliver(bot, item: DueReminder) -> bool:
         return False  # leave unsent; next tick retries
 
 
-async def deliver_notification(bot, session, note) -> bool:
-    """Send a notice DM. Structured (concert_id set) -> rich embed with the
-    state-aware buttons; otherwise the plain-text fallback body. Same policy
-    as deliver(): only success or a permanent failure clears the row."""
-    from app.db.service import notice_context
+async def _notification_context(session, note) -> NoticeContext | None:
+    """DB-bound prep for one notification's message payload -- reads the
+    session, so callers must run this sequentially, never concurrently."""
+    return await notice_context(session, note.concert_id, note.user_id) if note.concert_id else None
 
+
+async def _send_notification(bot, note, ctx: NoticeContext | None) -> bool:
+    """Send a notice DM. Structured (ctx set) -> rich embed with the
+    state-aware buttons; otherwise the plain-text fallback body. Same
+    policy as deliver(): only success or a permanent failure clears the
+    row. Pure Discord I/O -- no session access, safe to run concurrently."""
     try:
         user = bot.get_user(note.user_id) or await bot.fetch_user(note.user_id)
-        ctx = await notice_context(session, note.concert_id, note.user_id) \
-            if note.concert_id else None
         if ctx is not None:
             embed, view = build_new_event_message(ctx)
             await user.send(embed=embed, view=view)
@@ -82,17 +95,34 @@ async def tick(bot) -> int:
     """One scheduler pass. Returns how many messages were delivered."""
     now = datetime.now(UTC)
     delivered = 0
+    sem = asyncio.Semaphore(SEND_CONCURRENCY)
+
+    async def bounded_deliver(item: DueReminder):
+        async with sem:
+            return item, await deliver(bot, item)
+
+    async def bounded_send_notification(note, ctx):
+        async with sem:
+            return note, await _send_notification(bot, note, ctx)
+
     async with SessionMaker() as session:
-        for item in await due_reminders(session, now):
-            if await deliver(bot, item):
+        items = await due_reminders(session, now)
+        for item, ok in await asyncio.gather(*(bounded_deliver(i) for i in items)):
+            if ok:
                 await mark_sent(session, item.queue_id, now)
                 delivered += 1
-            await asyncio.sleep(SEND_GAP_SECONDS)
-        for note in await due_notifications(session):
-            if await deliver_notification(bot, session, note):
+
+        notes = await due_notifications(session)
+        # DB-bound prep stays sequential on the one shared session...
+        prepared = [(note, await _notification_context(session, note)) for note in notes]
+        # ...then the actual Discord sends run concurrently.
+        for note, ok in await asyncio.gather(
+            *(bounded_send_notification(note, ctx) for note, ctx in prepared)
+        ):
+            if ok:
                 await mark_notification_sent(session, note.id)
                 delivered += 1
-            await asyncio.sleep(SEND_GAP_SECONDS)
+
         await session.commit()
     return delivered
 

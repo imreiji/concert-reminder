@@ -11,6 +11,7 @@ Nothing is ever auto-saved: preview always renders an editable draft, and
 only the editor's final submit on that draft writes anything.
 """
 
+import asyncio
 import json
 import logging
 from urllib.parse import urljoin, urlparse
@@ -122,7 +123,10 @@ async def import_preview(
     _check_host(url)
     try:
         html = await fetch_ramen_html(url)
-        parsed = parse_ramen_event(html, url)
+        # CPU-bound HTML parsing (BeautifulSoup) -- this process's one event
+        # loop also drives the Discord gateway and the reminder scheduler,
+        # so this must never run inline on it.
+        parsed = await asyncio.to_thread(parse_ramen_event, html, url)
     except (IngestError, HTTPException) as e:
         detail = e.detail if isinstance(e, HTTPException) else str(e)
         return templates.TemplateResponse(
