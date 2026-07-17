@@ -2,8 +2,8 @@
 
 from datetime import UTC, datetime
 
-from app.bot.messages import format_reminder, relative_phrase
-from app.db.service import DueReminder
+from app.bot.messages import build_new_event_message, format_reminder, relative_phrase
+from app.db.service import DueReminder, NoticeContext
 from app.domain.types import Anchor
 
 
@@ -53,3 +53,28 @@ def test_format_day_reminder_without_round():
     msg = format_reminder(item)
     assert "Gakumas 2nd" in msg and "Day 1" in msg
     assert "starts in 7 days" in msg
+
+
+def test_new_event_message_links_to_event_id_not_internal_pk():
+    """The "Open on dekimasen.app" button must use the URL-facing event_id,
+    never the internal Concert.id -- those two diverge as soon as an editor
+    picks a custom event_id at creation."""
+    ctx = NoticeContext(
+        concert_id=999,
+        event_id="hasunosora-6th",
+        title="Hasunosora 6th",
+        tags_line="Hasunosora",
+        venue="K Arena Yokohama",
+        first_deadline_label="最速先行",
+        first_deadline_at=dt(6, 25, 14),
+        user_timezone="America/Moncton",
+        user_has_rules=False,
+        user_has_default_preset=False,
+    )
+    _, view = build_new_event_message(ctx)
+    open_button = next(
+        item for item in view.children
+        if getattr(item, "label", None) == "Open on dekimasen.app"
+    )
+    assert open_button.url.endswith("/concerts/hasunosora-6th")
+    assert "/concerts/999" not in open_button.url

@@ -81,14 +81,40 @@ def build_standard_preset(client) -> None:
     )
 
 
-def build_concert_with_deadlines(client) -> None:
-    """Concert #1 with one lottery round and one day (as the editor)."""
-    client.post("/concerts", data={"title": "Hasunosora 6th"})
+def build_concert_with_deadlines(client, **extra_tags) -> None:
+    """Concert #1 with one lottery round and one day (as the editor). The
+    rich creation form takes days/rounds/tags all in one atomic POST now --
+    no more separate add_round/add_day calls."""
     client.post(
-        "/concerts/1/rounds",
-        data={"label": "最速先行", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
+        "/concerts",
+        data={
+            "title": "Hasunosora 6th", "event_id": "hasunosora-6th",
+            "round_label": ["最速先行"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            **extra_tags,
+        },
     )
-    client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-08-01T18:00"})
+
+
+async def attach_tag_to_concert(client, concert_id: int, tag_id: int) -> None:
+    """Attach an existing tag to an already-created concert -- the rich
+    edit page's tag picker is what does this in the real UI now; tests that
+    only care about the notify-and-apply pipeline reacting to a newly
+    attached tag go straight through the same service functions the edit
+    route itself calls (attach_tag + handle_newly_tagged)."""
+    from app.db.models import Concert, Tag
+    from app.db.service import attach_tag, handle_newly_tagged
+
+    async with client.db() as s:
+        concert = await s.get(Concert, concert_id)
+        tag = await s.get(Tag, tag_id)
+        added = await attach_tag(s, concert_id, tag)
+        await handle_newly_tagged(s, concert, added)
+        await s.commit()
 
 
 async def _all(db, model):
@@ -104,7 +130,7 @@ async def test_apply_preset_creates_rules_and_queues(client):
     build_concert_with_deadlines(client)
     build_standard_preset(client)
 
-    r = client.post("/concerts/1/presets/1/apply")
+    r = client.post("/concerts/hasunosora-6th/presets/1/apply")
     assert r.status_code == 200
 
     rules = await _all(client.db, ReminderRule)
@@ -117,9 +143,9 @@ async def test_apply_is_idempotent(client):
     login_as(client, EDITOR_ID, "reiji")
     build_concert_with_deadlines(client)
     build_standard_preset(client)
-    client.post("/concerts/1/presets/1/apply")
-    client.post("/concerts/1/presets/1/apply")
-    client.post("/concerts/1/presets/1/apply")
+    client.post("/concerts/hasunosora-6th/presets/1/apply")
+    client.post("/concerts/hasunosora-6th/presets/1/apply")
+    client.post("/concerts/hasunosora-6th/presets/1/apply")
     assert len(await _all(client.db, ReminderRule)) == 2  # clicks are harmless
 
 
@@ -128,7 +154,7 @@ def test_cannot_apply_someone_elses_preset(client):
     build_concert_with_deadlines(client)
     build_standard_preset(client)
     login_as(client, FAN_ID, "fan")
-    assert client.post("/concerts/1/presets/1/apply").status_code == 404
+    assert client.post("/concerts/hasunosora-6th/presets/1/apply").status_code == 404
 
 
 # ── The notify-and-apply pipeline ────────────────────────────────────────
@@ -151,7 +177,7 @@ async def test_new_tagged_event_auto_applies_and_notifies(client):
     # editor creates the event and tags the GROUP (expansion adds the artist)
     login_as(client, EDITOR_ID, "reiji")
     build_concert_with_deadlines(client)
-    client.post("/concerts/1/tags", data={"name": "Hasunosora", "kind": "group"})
+    await attach_tag_to_concert(client, 1, 1)
 
     rules = await _all(client.db, ReminderRule)
     fan_rules = [r for r in rules if r.user_id == FAN_ID]
@@ -170,8 +196,8 @@ async def test_subscriber_without_preset_gets_notification_only(client):
     login_as(client, FAN_ID, "fan")
     client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "Gakumas 3rd"})
-    client.post("/concerts/1/tags", data={"name": "Gakumas", "kind": "franchise"})
+    client.post("/concerts", data={"title": "Gakumas 3rd", "event_id": "gakumas-3rd"})
+    await attach_tag_to_concert(client, 1, 1)
 
     assert [r for r in await _all(client.db, ReminderRule) if r.user_id == FAN_ID] == []
     notes = await _all(client.db, Notification)
@@ -189,8 +215,8 @@ async def test_user_with_existing_rules_is_skipped(client):
     client.post("/subscriptions", data={"tag_id": 2, "preset_id": 1, "notify": "true"})
     login_as(client, EDITOR_ID, "reiji")
     build_concert_with_deadlines(client)
-    client.post("/concerts/1/tags", data={"name": "Hasunosora", "kind": "franchise"})
-    client.post("/concerts/1/tags", data={"name": "Kozue", "kind": "artist"})  # second tag later
+    await attach_tag_to_concert(client, 1, 1)
+    await attach_tag_to_concert(client, 1, 2)  # second tag later
 
     fan_rules = [r for r in await _all(client.db, ReminderRule) if r.user_id == FAN_ID]
     assert len(fan_rules) == 2  # still just the one application
@@ -206,8 +232,8 @@ async def test_scheduler_delivers_notifications(client):
     login_as(client, FAN_ID, "fan")
     client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "6th"})
-    client.post("/concerts/1/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/concerts", data={"title": "6th", "event_id": "6th"})
+    await attach_tag_to_concert(client, 1, 1)
 
     sent = []
 
@@ -319,7 +345,7 @@ async def test_remove_rules_button_logic(client):
     login_as(client, EDITOR_ID, "reiji")
     build_concert_with_deadlines(client)
     build_standard_preset(client)
-    client.post("/concerts/1/presets/1/apply")
+    client.post("/concerts/hasunosora-6th/presets/1/apply")
 
     async with client.db() as s:
         assert await remove_user_rules(s, EDITOR_ID, 1) == 2
@@ -334,12 +360,17 @@ async def test_snooze_rearms_with_deadline_cap(client):
     from app.db.service import snooze_reminder
 
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
     client.post(
-        "/concerts/1/rounds",
-        data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
     )
-    client.post("/concerts/1/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
 
     async with client.db() as s:
         (row,) = await _all(client.db, ReminderQueue)
@@ -369,7 +400,7 @@ async def test_snooze_refuses_within_24h_of_deadline(client):
         await ensure_user(s, FAN_ID, "fan")
         from app.db.models import Concert
 
-        c = Concert(title="Soon", created_by=FAN_ID)
+        c = Concert(title="Soon", event_id="soon", created_by=FAN_ID)
         s.add(c)
         await s.flush()
         round_ = Round(concert_id=c.id, kind=RoundKind.LOTTERY_ROUND, label="R1",
@@ -393,8 +424,8 @@ async def test_notifications_carry_structured_payload(client):
     login_as(client, FAN_ID, "fan")
     client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "6th"})
-    client.post("/concerts/1/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/concerts", data={"title": "6th", "event_id": "6th"})
+    await attach_tag_to_concert(client, 1, 1)
 
     (note,) = await _all(client.db, Notification)
     assert note.concert_id == 1 and note.kind == "new_event"
@@ -414,7 +445,7 @@ async def test_notice_context_state_awareness(client):
         assert ctx.first_deadline_label == "最速先行"
         assert not ctx.user_has_rules  # -> would render [Set my reminders]
 
-    client.post("/concerts/1/presets/1/apply")
+    client.post("/concerts/hasunosora-6th/presets/1/apply")
     async with client.db() as s:
         ctx = await notice_context(s, 1, EDITOR_ID)
         assert ctx.user_has_rules  # -> would render [Remove these reminders]

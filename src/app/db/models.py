@@ -109,6 +109,10 @@ class Concert(Base):
     __tablename__ = "concerts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # URL-facing handle, distinct from the internal PK (which every FK still
+    # targets). Editor-chosen at creation; existing concerts were backfilled
+    # to str(id) so old links keep resolving.
+    event_id: Mapped[str] = mapped_column(String(100), unique=True)
     title: Mapped[str] = mapped_column(String(200))
     title_en: Mapped[str | None] = mapped_column(String(200))
     kind: Mapped[ConcertKind | None] = mapped_column(

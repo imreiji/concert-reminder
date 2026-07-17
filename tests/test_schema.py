@@ -42,7 +42,7 @@ def session():
 
 def seed(s: Session) -> tuple[Concert, Round, ReminderRule]:
     user = User(discord_id=42, username="reiji")
-    concert = Concert(title="Test Live", created_by=42)
+    concert = Concert(title="Test Live", event_id="test-live", created_by=42)
     s.add_all([user, concert])
     s.flush()
     round_ = Round(

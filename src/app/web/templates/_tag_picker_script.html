@@ -1,7 +1,10 @@
 {#- Pairs with _tag_picker_fields.html: the picker <dialog>s + the vanilla-JS
     client-side staging (selection stays in the DOM until the form's one real
     POST fires). Include right after the </form> that has id="new-concert".
-    Caller provides by_kind, groups_json, tag_names_json. -#}
+    Caller provides by_kind, groups_json, tag_names_json, and
+    initial_selected_json (string tag ids per kind, plus artist_excluded --
+    "{}" for a blank creation form, the concert's current tags for the edit
+    page). -#}
 {% for kindname in ["franchise", "group", "artist", "venue"] %}
 <dialog id="picker-{{ kindname }}" class="picker">
   <div class="picker-head">
@@ -23,10 +26,16 @@
 <script>
   const NC_GROUPS = {{ groups_json | safe }};
   const TAG_NAMES = {{ tag_names_json | safe }};
+  const INITIAL_SELECTED = {{ initial_selected_json | safe }};
   // selection state: sets of tag ids (strings)
-  const sel = { franchise: new Set(), group: new Set(), artist: new Set(), venue: new Set() };
-  const artistExcluded = new Set();   // auto-added artists the editor removed
-  const artistManual = new Set();     // artists added explicitly via the picker
+  const sel = {
+    franchise: new Set(INITIAL_SELECTED.franchise || []),
+    group: new Set(INITIAL_SELECTED.group || []),
+    artist: new Set(),
+    venue: new Set(INITIAL_SELECTED.venue || []),
+  };
+  const artistExcluded = new Set(INITIAL_SELECTED.artist_excluded || []); // auto-added artists the editor removed
+  const artistManual = new Set(INITIAL_SELECTED.artist || []);     // artists added explicitly via the picker
 
   function autoArtists() {
     const ids = new Set();

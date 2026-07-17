@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}edit {{ concert.title }} — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Edit event</h1>
+<p class="dim">Same shape as creation — every field, performance, and round for this
+  event lives on this one page. Submitting saves everything at once.</p>
+
+<form class="stack wide" method="post" action="/concerts/{{ concert.event_id }}/edit" id="new-concert">
+  <label>Title (JP) <input class="title-input" name="title" required maxlength="200"
+    value="{{ concert.title }}"></label>
+  <label>Event ID <span class="dim tiny">(this event's URL — letters, digits, hyphens, underscores only)</span>
+    <input name="event_id" required maxlength="100" pattern="[A-Za-z0-9_\-]+"
+           value="{{ concert.event_id }}"></label>
+
+  <div class="grid2">
+    <label>Title (EN) <input name="title_en" maxlength="200" value="{{ concert.title_en or '' }}"></label>
+    <label>Artist / organizer <input name="organizer" maxlength="200" value="{{ concert.organizer or '' }}"></label>
+    <label>Kind
+      <select name="kind">
+        <option value="">— none —</option>
+        {% for k in concert_kinds %}
+        <option value="{{ k.value }}" {% if k == concert.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Categories (comma-sep) <input name="categories" value="{{ concert.categories or '' }}"></label>
+    <label>eventernote URL <input name="eventernote_url" type="url" value="{{ concert.eventernote_url or '' }}"></label>
+    <label>Official URL <input name="official_url" type="url" value="{{ concert.official_url or '' }}"></label>
+    <label>Source URL <input name="source_url" type="url" value="{{ concert.source_url or '' }}"></label>
+  </div>
+
+  {% include "_tag_picker_fields.html" %}
+
+  <label>Performers (one per line) <textarea name="performers_text" rows="3">{{ concert.performers_text or '' }}</textarea></label>
+  <label>Notes <textarea name="notes" rows="2">{{ concert.notes or '' }}</textarea></label>
+
+  <h2>Performances <small class="dim">(one per show / day)</small></h2>
+  <div id="day-rows" class="row-list">
+    {% for d in concert.days %}
+    <div class="row-item">
+      <input type="hidden" name="day_id" value="{{ d.id }}">
+      <input name="day_label" maxlength="100" placeholder="Day 1" value="{{ d.label }}">
+      <input name="day_city" maxlength="100" placeholder="Leg / city (e.g. Kanagawa)" value="{{ d.city or '' }}">
+      <input name="day_venue" maxlength="200" placeholder="Venue" value="{{ d.venue or '' }}">
+      <input name="day_venue_address" maxlength="300" placeholder="Venue address" value="{{ d.venue_address or '' }}">
+      <label>Doors (JST) <input type="datetime-local" name="day_doors_at"
+        value="{{ jst(d.doors_at_utc).strftime('%Y-%m-%dT%H:%M') if d.doors_at_utc else '' }}"></label>
+      <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required
+        value="{{ jst(d.starts_at_utc).strftime('%Y-%m-%dT%H:%M') }}"></label>
+      <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+    </div>
+    {% endfor %}
+  </div>
+  <button type="button" class="quiet" onclick="addRow('day-rows','day-row-template')">+ Add performance</button>
+
+  <h2>Lottery rounds <small class="dim">(times are JST)</small></h2>
+  <div id="round-rows" class="row-list">
+    {% for r, leg in rounds_with_leg %}
+    <div class="row-item">
+      <input type="hidden" name="round_id" value="{{ r.id }}">
+      <input name="round_label" required maxlength="200" placeholder="1次先行抽選" value="{{ r.label }}">
+      <input name="round_label_en" maxlength="200" placeholder="1st-round advance lottery" value="{{ r.label_en or '' }}">
+      <select name="round_kind">{% for k in kinds %}
+        <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
+      {% endfor %}</select>
+      <input name="round_leg" maxlength="100" placeholder="Leg (blank = whole event)" value="{{ leg }}">
+      <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"
+        value="{{ jst(r.opens_at_utc).strftime('%Y-%m-%dT%H:%M') if r.opens_at_utc else '' }}"></label>
+      <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"
+        value="{{ jst(r.closes_at_utc).strftime('%Y-%m-%dT%H:%M') if r.closes_at_utc else '' }}"></label>
+      <label>Results (JST) <input type="datetime-local" name="round_results_at"
+        value="{{ jst(r.results_at_utc).strftime('%Y-%m-%dT%H:%M') if r.results_at_utc else '' }}"></label>
+      <label>Payment deadline (JST) <input type="datetime-local" name="round_payment_at"
+        value="{{ jst(r.payment_deadline_at_utc).strftime('%Y-%m-%dT%H:%M') if r.payment_deadline_at_utc else '' }}"></label>
+      <input name="round_url" type="url" placeholder="Apply URL (optional)" value="{{ r.url or '' }}">
+      <input name="round_notes" maxlength="300" placeholder="Notes (optional)" value="{{ r.notes or '' }}">
+      <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+    </div>
+    {% endfor %}
+  </div>
+  <button type="button" class="quiet" onclick="addRow('round-rows','round-row-template')">+ Add round</button>
+
+  <button>Save event</button>
+</form>
+{% include "_tag_picker_script.html" %}
+
+<details class="panel">
+  <summary>Delete this event</summary>
+  <form method="post" action="/concerts/{{ concert.event_id }}/delete"
+        onsubmit="return confirm('Delete this concert and every reminder attached to it?')">
+    <button class="danger">Delete concert</button>
+  </form>
+</details>
+
+<template id="day-row-template">
+  <div class="row-item">
+    <input type="hidden" name="day_id" value="">
+    <input name="day_label" maxlength="100" placeholder="Day 1">
+    <input name="day_city" maxlength="100" placeholder="Leg / city (e.g. Kanagawa)">
+    <input name="day_venue" maxlength="200" placeholder="Venue">
+    <input name="day_venue_address" maxlength="300" placeholder="Venue address">
+    <label>Doors (JST) <input type="datetime-local" name="day_doors_at"></label>
+    <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required></label>
+    <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+  </div>
+</template>
+
+<template id="round-row-template">
+  <div class="row-item">
+    <input type="hidden" name="round_id" value="">
+    <input name="round_label" required maxlength="200" placeholder="1次先行抽選">
+    <input name="round_label_en" maxlength="200" placeholder="1st-round advance lottery">
+    <select name="round_kind">{% for k in kinds %}
+      <option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>
+    {% endfor %}</select>
+    <input name="round_leg" maxlength="100" placeholder="Leg (blank = whole event)">
+    <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"></label>
+    <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"></label>
+    <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
+    <label>Payment deadline (JST) <input type="datetime-local" name="round_payment_at"></label>
+    <input name="round_url" type="url" placeholder="Apply URL (optional)">
+    <input name="round_notes" maxlength="300" placeholder="Notes (optional)">
+    <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+  </div>
+</template>
+<script>
+  function addRow(listId, templateId) {
+    const tpl = document.getElementById(templateId);
+    document.getElementById(listId).appendChild(tpl.content.cloneNode(true));
+  }
+</script>
+{% endblock %}

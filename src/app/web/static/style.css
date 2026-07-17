@@ -180,8 +180,6 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 /* Rounds grouped by day ("legs") */
 .leg-heading { margin: 1rem 0 .2rem; font-size: 1rem; color: var(--dim); }
 .leg-heading:first-child { margin-top: 0; }
-.daypick { display: flex; flex-wrap: wrap; gap: .5rem; margin: .2rem 0; }
-.daypick-opt { display: inline-flex; align-items: center; gap: .25rem; font-size: .85rem; }
 .tile .kind-tag { color: var(--dim); font-size: .8em; }
 
 /* Past deadlines / days: struck through and dimmed, not hidden */
@@ -197,7 +195,6 @@ table.rounds th {
   padding: .3rem .6rem; border-bottom: 1px solid var(--line);
 }
 table.rounds td { padding: .5rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-table.rounds tr.round-edit-row td { border-bottom: 1px solid var(--line); padding-top: 0; }
 table.rounds tr.round-row.past td { opacity: .65; }
 .countdown { display: inline-block; }
 

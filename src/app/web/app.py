@@ -75,9 +75,10 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
 
     # import_routes MUST be registered before concert_routes: GET /concerts/import
-    # would otherwise be swallowed by GET /concerts/{concert_id} (FastAPI matches
-    # the path template first and 422s on the int conversion, it doesn't fall
-    # through to try the next route).
+    # would otherwise be swallowed by GET /concerts/{event_id} -- FastAPI matches
+    # the path template first, not the literal segment, so it doesn't fall
+    # through to try the next route. (concerts.py additionally rejects "import"
+    # and "new" as event_id values so they can never collide the other way.)
     import_routes.templates = templates
     app.include_router(import_routes.router)
     concert_routes.templates = templates
