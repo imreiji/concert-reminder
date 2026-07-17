@@ -24,7 +24,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Concert, ConcertDay, ReminderRule, User, Window
+from app.db.models import Concert, ConcertDay, ReminderRule, Tag, User, Window
 from app.db.service import attach_tag, ensure_user, handle_newly_tagged, sync_concert, sync_rule
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
@@ -53,6 +53,28 @@ async def get_concert(session: AsyncSession, concert_id: int) -> Concert:
     if concert is None:
         raise HTTPException(status_code=404, detail="concert not found")
     return concert
+
+
+def build_day(concert_id: int, label: str, starts_at: str) -> ConcertDay:
+    """Shared by add_day and the URL-import commit route -- same validation
+    ("a day needs a start time") either way, one JST -> UTC boundary."""
+    starts = parse_jst(starts_at)
+    if starts is None:
+        raise HTTPException(status_code=422, detail="a day needs a start time")
+    return ConcertDay(concert_id=concert_id, label=label.strip(), starts_at_utc=starts)
+
+
+def build_window(
+    concert_id: int, label: str, kind: WindowKind, opens_at: str, closes_at: str, url: str
+) -> Window:
+    """Shared by add_window and the URL-import commit route."""
+    opens, closes = parse_jst(opens_at), parse_jst(closes_at)
+    if opens is None and closes is None:
+        raise HTTPException(status_code=422, detail="a window needs at least one of opens/closes")
+    return Window(
+        concert_id=concert_id, kind=kind, label=label.strip(),
+        opens_at_utc=opens, closes_at_utc=closes, url=url.strip() or None,
+    )
 
 
 # ── Fragments (htmx swap targets) ────────────────────────────────────────
@@ -91,42 +113,43 @@ async def user_rules(session: AsyncSession, user_id: int, concert_id: int) -> li
 # ── Concerts ─────────────────────────────────────────────────────────────
 
 
-@router.post("/concerts")
-async def create_concert(
-    request: Request,
-    user: SessionUser = Depends(require_editor),
-    session: AsyncSession = Depends(get_session),
-    title: str = Form(..., min_length=1, max_length=200),
-    franchise_tags: list[int] = Form(default=[]),
-    group_tags: list[int] = Form(default=[]),
-    artist_tags: list[int] = Form(default=[]),
-    venue_tags: list[int] = Form(default=[]),
-):
+async def resolve_tags(session: AsyncSession, tag_ids: list[int], kind) -> list[Tag]:
+    """Shared by create_concert and the URL-import commit route: every
+    submitted tag id must exist and match the expected kind."""
+    out = []
+    for tag_id in tag_ids:
+        if not tag_id:
+            continue
+        tag = await session.get(Tag, tag_id)
+        if tag is None or tag.kind is not kind:
+            raise HTTPException(status_code=422, detail=f"invalid {kind.value} tag")
+        out.append(tag)
+    return out
+
+
+async def create_concert_row(
+    session: AsyncSession,
+    user: SessionUser,
+    title: str,
+    franchise_tags: list[int],
+    group_tags: list[int],
+    artist_tags: list[int],
+    venue_tags: list[int],
+) -> Concert:
     """Tag-driven creation supporting collab events: MULTIPLE franchises,
     MULTIPLE groups, explicit artist list (auto-populated client-side from
     the selected groups, editor-pruned). Groups attach WITHOUT expansion —
     the submitted artist list is authoritative. The notify-and-apply
-    pipeline fires on everything attached here."""
-    from app.db.models import Tag
+    pipeline fires on everything attached here. Shared by create_concert
+    and the URL-import commit route."""
     from app.domain.types import TagKind
 
     await ensure_user(session, user.id, user.username)
 
-    async def tags_of(tag_ids: list[int], kind) -> list[Tag]:
-        out = []
-        for tag_id in tag_ids:
-            if not tag_id:
-                continue
-            tag = await session.get(Tag, tag_id)
-            if tag is None or tag.kind is not kind:
-                raise HTTPException(status_code=422, detail=f"invalid {kind.value} tag")
-            out.append(tag)
-        return out
-
-    f_tags = await tags_of(franchise_tags, TagKind.FRANCHISE)
-    g_tags = await tags_of(group_tags, TagKind.GROUP)
-    a_tags = await tags_of(artist_tags, TagKind.ARTIST)
-    v_tags = await tags_of(venue_tags, TagKind.VENUE)
+    f_tags = await resolve_tags(session, franchise_tags, TagKind.FRANCHISE)
+    g_tags = await resolve_tags(session, group_tags, TagKind.GROUP)
+    a_tags = await resolve_tags(session, artist_tags, TagKind.ARTIST)
+    v_tags = await resolve_tags(session, venue_tags, TagKind.VENUE)
 
     concert = Concert(
         title=title.strip(),
@@ -143,6 +166,23 @@ async def create_concert(
     for artist in a_tags:
         newly += await attach_tag(session, concert.id, artist)
     await handle_newly_tagged(session, concert, newly)
+    return concert
+
+
+@router.post("/concerts")
+async def create_concert(
+    request: Request,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+    title: str = Form(..., min_length=1, max_length=200),
+    franchise_tags: list[int] = Form(default=[]),
+    group_tags: list[int] = Form(default=[]),
+    artist_tags: list[int] = Form(default=[]),
+    venue_tags: list[int] = Form(default=[]),
+):
+    concert = await create_concert_row(
+        session, user, title, franchise_tags, group_tags, artist_tags, venue_tags
+    )
     await session.commit()
     return RedirectResponse(f"/concerts/{concert.id}", status_code=303)
 
@@ -219,13 +259,7 @@ async def add_window(
     url: str = Form(""),
 ):
     concert = await get_concert(session, concert_id)
-    opens, closes = parse_jst(opens_at), parse_jst(closes_at)
-    if opens is None and closes is None:
-        raise HTTPException(status_code=422, detail="a window needs at least one of opens/closes")
-    session.add(Window(
-        concert_id=concert.id, kind=kind, label=label.strip(),
-        opens_at_utc=opens, closes_at_utc=closes, url=url.strip() or None,
-    ))
+    session.add(build_window(concert.id, label, kind, opens_at, closes_at, url))
     await session.flush()
     await sync_concert(session, concert.id)
     await session.commit()
@@ -289,10 +323,7 @@ async def add_day(
     starts_at: str = Form(...),
 ):
     concert = await get_concert(session, concert_id)
-    starts = parse_jst(starts_at)
-    if starts is None:
-        raise HTTPException(status_code=422, detail="a day needs a start time")
-    session.add(ConcertDay(concert_id=concert.id, label=label.strip(), starts_at_utc=starts))
+    session.add(build_day(concert.id, label, starts_at))
     await session.flush()
     await sync_concert(session, concert.id)
     await session.commit()

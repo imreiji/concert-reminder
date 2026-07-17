@@ -162,4 +162,13 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .rowlabel { min-width: 5.5rem; font-size: .85rem; }
 #tags .pickrow { margin: .35rem 0; }
 
+/* URL import: repeatable day/window rows + parse-error message */
+.row-list { display: flex; flex-direction: column; margin: .4rem 0; }
+.row-item {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .4rem;
+  padding: .5rem 0; border-bottom: 1px solid var(--line);
+}
+.row-item input, .row-item select { flex: 1 1 auto; min-width: 8rem; }
+.import-error { color: var(--danger); }
+
 .header-tags { margin: .2rem 0 .4rem; }

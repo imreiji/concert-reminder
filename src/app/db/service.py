@@ -309,6 +309,26 @@ async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
     return list(res.scalars())
 
 
+async def tag_picker_context(session: AsyncSession) -> dict:
+    """Data the shared tag-picker partial needs: tags grouped by kind, plus
+    the two JSON blobs its client-side script reads (group->members for
+    auto-populating artists, and id->name for rendering selected chips).
+    Shared by the new-concert form and the URL-import draft form."""
+    tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
+    by_kind: dict[str, list[Tag]] = {}
+    for t in tags:
+        by_kind.setdefault(t.kind.value, []).append(t)
+    groups_data = {}
+    for g in by_kind.get("group", []):
+        groups_data[g.id] = {
+            "name": g.name,
+            "franchise": g.parent_id,
+            "members": [{"id": m.id, "name": m.name} for m in await group_members(session, g.id)],
+        }
+    tag_names = {t.id: t.name for t in tags}
+    return {"by_kind": by_kind, "groups_json": groups_data, "tag_names_json": tag_names}
+
+
 async def _is_attached(session: AsyncSession, concert_id: int, tag_id: int) -> bool:
     res = await session.execute(
         select(ConcertTag).where(
