@@ -185,10 +185,15 @@ async def test_create_tag_accepts_region_and_location_url(client):
 
 async def test_round_ics_downloads_valid_vevent_for_future_round(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
     client.post(
-        "/concerts/1/rounds",
-        data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
     )
     r = client.get("/rounds/1/ics")
     assert r.status_code == 200
@@ -206,16 +211,20 @@ async def test_round_ics_requires_login(client):
 
 async def test_past_round_has_no_ics_link_and_is_marked_past(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
     client.post(
-        "/concerts/1/rounds",
-        data={"label": "Old round", "kind": "lottery_round", "closes_at": "2000-01-01T00:00"},
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "round_label": ["Old round", "Future round"],
+            "round_kind": ["lottery_round", "lottery_round"],
+            "round_opens_at": ["", ""],
+            "round_closes_at": ["2000-01-01T00:00", "2099-06-25T23:59"],
+            "round_results_at": ["", ""], "round_payment_at": ["", ""],
+            "round_label_en": ["", ""], "round_url": ["", ""], "round_notes": ["", ""],
+            "round_leg": ["", ""],
+        },
     )
-    client.post(
-        "/concerts/1/rounds",
-        data={"label": "Future round", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
-    )
-    r = client.get("/concerts/1")
+    r = client.get("/concerts/c")
     assert r.status_code == 200
     assert "/rounds/2/ics" in r.text  # future round: exportable
     assert "/rounds/1/ics" not in r.text  # past round: no export link
@@ -224,9 +233,15 @@ async def test_past_round_has_no_ics_link_and_is_marked_past(client):
 
 async def test_past_day_marked_past(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
-    client.post("/concerts/1/days", data={"label": "Old day", "starts_at": "2000-01-01T00:00"})
-    r = client.get("/concerts/1")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Old day"], "day_starts_at": ["2000-01-01T00:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        },
+    )
+    r = client.get("/concerts/c")
     assert r.status_code == 200
     assert 'li class="past"' in r.text
 
@@ -240,15 +255,16 @@ async def test_leg_heading_links_to_matching_venue_tag(client):
             "location_url": "https://maps.example/k-arena", "region": "Kanto",
         },
     )
-    client.post("/concerts", data={"title": "C"})
     client.post(
-        "/concerts/1/days",
+        "/concerts",
         data={
-            "label": "Day 1", "starts_at": "2099-08-01T18:00",
-            "venue": "K Arena Yokohama",
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": ["K Arena Yokohama"],
+            "day_venue_address": [""], "day_doors_at": [""],
         },
     )
-    r = client.get("/concerts/1")
+    r = client.get("/concerts/c")
     assert r.status_code == 200
     assert 'href="https://maps.example/k-arena"' in r.text
     assert "(Kanto)" in r.text
@@ -264,9 +280,13 @@ async def test_region_filter_selects_all_venues_in_region(client):
         "/tags",
         data={"name": "Hall B", "kind": "venue", "region": "Kanto"},
     )
-    client.post("/concerts", data={"title": "At Hall A", "venue_tags": ["1"]})
-    client.post("/concerts", data={"title": "At Hall B", "venue_tags": ["2"]})
-    client.post("/concerts", data={"title": "Untagged"})
+    client.post(
+        "/concerts", data={"title": "At Hall A", "event_id": "at-hall-a", "venue_tags": ["1"]}
+    )
+    client.post(
+        "/concerts", data={"title": "At Hall B", "event_id": "at-hall-b", "venue_tags": ["2"]}
+    )
+    client.post("/concerts", data={"title": "Untagged", "event_id": "untagged"})
 
     r = client.get("/")
     assert "Regions" in r.text

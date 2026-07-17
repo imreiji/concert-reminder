@@ -7,7 +7,7 @@
   POST /presets/{id}/items/{item_id}/delete
   POST /subscriptions                        subscribe to a tag (+preset, notify)
   POST /subscriptions/{id}/delete
-  POST /concerts/{cid}/presets/{pid}/apply   one-click apply (rules fragment swap)
+  POST /concerts/{event_id}/presets/{pid}/apply   one-click apply (rules fragment swap)
 
 Everything here is per-user: routes verify ownership and 404 on other
 people's presets/subscriptions rather than admitting they exist.
@@ -320,21 +320,18 @@ async def remove_editor(
 # ── One-click apply on a concert ─────────────────────────────────────────
 
 
-@router.post("/concerts/{concert_id}/presets/{preset_id}/apply", response_class=HTMLResponse)
+@router.post("/concerts/{event_id}/presets/{preset_id}/apply", response_class=HTMLResponse)
 async def apply_preset_to_concert(
     request: Request,
-    concert_id: int,
+    event_id: str,
     preset_id: int,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    from app.db.models import Concert
-    from app.web.routes.concerts import render_fragment
+    from app.web.routes.concerts import get_concert_by_event_id, render_rules_fragment
 
-    concert = await session.get(Concert, concert_id)
-    if concert is None:
-        raise HTTPException(status_code=404)
+    concert = await get_concert_by_event_id(session, event_id)
     preset = await owned_preset(session, user.id, preset_id)
-    await apply_preset(session, user.id, concert_id, preset)
+    await apply_preset(session, user.id, concert.id, preset)
     await session.commit()
-    return await render_fragment(request, "_rules.html", concert, user, session)
+    return await render_rules_fragment(request, concert, user, session)

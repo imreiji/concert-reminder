@@ -158,7 +158,7 @@ def test_non_editor_is_forbidden(client, monkeypatch):
 def test_editor_passes(client, monkeypatch):
     monkeypatch.setattr(settings, "editor_whitelist", "42")
     do_login(client)
-    assert client.post("/concerts", data={"title": "X"}).status_code == 303
+    assert client.post("/concerts", data={"title": "X", "event_id": "x"}).status_code == 303
 
 
 # ── Admin gating ─────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ def test_admin_implicitly_passes_editor_routes(client, monkeypatch):
     """Admins can create/edit concerts even with no editor_whitelist/DB flag."""
     monkeypatch.setattr(settings, "admin_whitelist", "42")
     do_login(client)
-    assert client.post("/concerts", data={"title": "X"}).status_code == 303
+    assert client.post("/concerts", data={"title": "X", "event_id": "x"}).status_code == 303
 
 
 async def test_promote_then_demote_round_trip(client, monkeypatch):
@@ -224,7 +224,7 @@ def test_promoted_editor_gains_access(client, monkeypatch):
 
     monkeypatch.setattr(auth, "fetch_identity", fake_identity)
     do_login(client)
-    assert client.post("/concerts", data={"title": "Y"}).status_code == 303
+    assert client.post("/concerts", data={"title": "Y", "event_id": "y"}).status_code == 303
 
 
 def test_admin_sees_editors_panel_on_preferences_page(client, monkeypatch):

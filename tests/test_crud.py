@@ -1,4 +1,5 @@
-"""Web CRUD tests: authorization, JST parsing, and the edit->re-sync contract.
+"""Web CRUD tests: authorization, JST parsing, the edit->re-sync contract,
+event_id URLs, and the rich edit page's id-preserving reconciliation.
 
 Test DB isolation: get_session is dependency-overridden with an in-memory
 async SQLite, so these tests never touch app.db. Login is simulated by
@@ -72,6 +73,22 @@ def login_as(client, discord_id: int, name: str):
     client.get(f"/auth/callback?code=x&state={state}")
 
 
+def create_with_round(client, title="C", event_id="c", closes_at="2099-06-25T23:59"):
+    """The rich creation form is the only way to create a round now (the
+    old standalone add_round endpoint is gone) -- one lottery round, no
+    days, event_id fixed so callers can build follow-up URLs."""
+    return client.post(
+        "/concerts",
+        data={
+            "title": title, "event_id": event_id,
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": [closes_at],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+
+
 # ── Authorization boundaries ─────────────────────────────────────────────
 
 
@@ -88,28 +105,61 @@ def test_viewer_cannot_create_concert(client):
 
 def test_editor_creates_concert_and_it_lists(client):
     login_as(client, EDITOR_ID, "reiji")
-    r = client.post("/concerts", data={"title": "Hasunosora 5th", "franchise": "Hasunosora"})
+    r = client.post("/concerts", data={"title": "Hasunosora 5th", "event_id": "hasunosora-5th"})
     assert r.status_code == 303
     r = client.get("/")
     assert "Hasunosora 5th" in r.text
 
 
+# ── event_id ──────────────────────────────────────────────────────────────
+
+
+def test_event_id_rejects_bad_characters(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/concerts", data={"title": "X", "event_id": "bad id!"})
+    assert r.status_code == 422
+
+
+def test_event_id_rejects_reserved_words(client):
+    login_as(client, EDITOR_ID, "reiji")
+    assert client.post("/concerts", data={"title": "X", "event_id": "new"}).status_code == 422
+    assert client.post("/concerts", data={"title": "X", "event_id": "Import"}).status_code == 422
+
+
+def test_event_id_must_be_unique_on_create(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "X", "event_id": "dup"})
+    r = client.post("/concerts", data={"title": "Y", "event_id": "dup"})
+    assert r.status_code == 409
+
+
+def test_event_id_must_be_unique_on_edit_but_self_is_exempt(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "X", "event_id": "one"})
+    client.post("/concerts", data={"title": "Y", "event_id": "two"})
+
+    # re-submitting the same event_id on its own edit is fine (no-op)
+    r = client.post("/concerts/one/edit", data={"title": "X", "event_id": "one"})
+    assert r.status_code == 303
+
+    # but stealing another concert's event_id is not
+    r = client.post("/concerts/one/edit", data={"title": "X", "event_id": "two"})
+    assert r.status_code == 409
+
+
+def test_get_concert_resolves_by_event_id_and_404s_on_unknown(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "Hasunosora 5th", "event_id": "5"})  # backfill-shaped
+    assert client.get("/concerts/5").status_code == 200
+    assert client.get("/concerts/does-not-exist").status_code == 404
+
+
 # ── JST datetime contract ────────────────────────────────────────────────
-
-
-@pytest.mark.anyio
-async def anyio_noop():  # keeps pytest-asyncio quiet about the async helper below
-    pass
 
 
 def test_round_datetime_is_parsed_as_jst(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
-    r = client.post(
-        "/concerts/1/rounds",
-        data={"label": "最速先行", "kind": "lottery_round", "closes_at": "2026-08-01T19:00"},
-    )
-    assert r.status_code == 200
+    create_with_round(client, closes_at="2026-08-01T19:00")
 
     import asyncio
 
@@ -124,52 +174,135 @@ def test_round_datetime_is_parsed_as_jst(client):
 
 def test_round_needs_at_least_one_bound(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
-    r = client.post("/concerts/1/rounds", data={"label": "empty", "kind": "other"})
+    r = client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "round_label": ["empty"], "round_kind": ["other"],
+            "round_opens_at": [""], "round_closes_at": [""],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
     assert r.status_code == 422
 
 
-# ── The core contract: edits re-sync the queue ───────────────────────────
+# ── The core contract: edits re-sync the queue, ids are preserved ────────
 
 
 def test_editing_round_over_http_reschedules_queue(client):
-    """User story: staff extends a lottery; every affected reminder moves."""
+    """User story: staff extends a lottery via the edit page; the reminder
+    moves. The round keeps its id across the edit -- required so its
+    ReminderQueue history isn't lost (see the id-preservation test below)."""
     import asyncio
 
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
-    client.post(
-        "/concerts/1/rounds",
-        data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
-    )
-    client.post("/concerts/1/rules", data={"anchor": "closes", "days_before": 3})
+    create_with_round(client, closes_at="2099-06-25T23:59")
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
 
     async def fire_at():
         async with client.db() as s:
             return (await s.execute(select(ReminderQueue))).scalar_one().fire_at_utc
 
+    async def round_id():
+        async with client.db() as s:
+            return (await s.execute(select(Round))).scalar_one().id
+
     loop = asyncio.get_event_loop()
     before = loop.run_until_complete(fire_at())
     assert before == jst_to_utc(datetime(2099, 6, 22, 23, 59))
+    rid = loop.run_until_complete(round_id())
 
     client.post(
-        "/rounds/1/edit",
-        data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-28T23:59"},
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            "round_id": [str(rid)], "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-28T23:59"],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
     )
     after = loop.run_until_complete(fire_at())
     assert after == jst_to_utc(datetime(2099, 6, 25, 23, 59))  # moved with the deadline
+    assert loop.run_until_complete(round_id()) == rid  # same row, not delete+recreate
+
+
+async def test_edit_reconciliation_preserves_unrelated_round_and_day_ids(client):
+    """Editing the concert title alone must not touch any round/day id --
+    a naive delete-and-recreate would silently reset ReminderQueue.sent_at
+    history for rows that never conceptually changed."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+        round_id = (await s.execute(select(Round))).scalar_one().id
+
+    client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C (renamed)", "event_id": "c",
+            "day_id": [str(day_id)], "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_id": [str(round_id)], "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    async with client.db() as s:
+        assert (await s.execute(select(ConcertDay))).scalar_one().id == day_id
+        assert (await s.execute(select(Round))).scalar_one().id == round_id
+        assert (await s.get(Concert, 1)).title == "C (renamed)"
+
+
+async def test_edit_can_remove_a_day_and_add_a_round(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        },
+    )
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+
+    client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            # day rows omitted entirely -> the existing day is dropped
+            "round_id": [""], "round_label": ["New round"], "round_kind": ["other"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    async with client.db() as s:
+        assert (await s.get(ConcertDay, day_id)) is None
+        round_ = (await s.execute(select(Round))).scalar_one()
+        assert round_.label == "New round"
 
 
 def test_deleting_rule_removes_queue_rows(client):
     import asyncio
 
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
-    client.post(
-        "/concerts/1/rounds",
-        data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
-    )
-    client.post("/concerts/1/rules", data={"anchor": "closes", "days_before": 3})
+    create_with_round(client)
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
     client.post("/rules/1/delete")
 
     async def count():
@@ -181,12 +314,8 @@ def test_deleting_rule_removes_queue_rows(client):
 
 def test_cannot_delete_someone_elses_rule(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
-    client.post(
-        "/concerts/1/rounds",
-        data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
-    )
-    client.post("/concerts/1/rules", data={"anchor": "closes", "days_before": 3})
+    create_with_round(client)
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
 
     login_as(client, VIEWER_ID, "viewer")  # switch identity in the same client
     r = client.post("/rules/1/delete")
@@ -203,13 +332,9 @@ def test_delete_concert_cascades_everything(client):
     import asyncio
 
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
-    client.post(
-        "/concerts/1/rounds",
-        data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
-    )
-    client.post("/concerts/1/rules", data={"anchor": "closes", "days_before": 3})
-    client.post("/concerts/1/delete")
+    create_with_round(client)
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c/delete")
 
     async def counts():
         async with client.db() as s:
@@ -222,22 +347,21 @@ def test_delete_concert_cascades_everything(client):
 
 
 def test_concert_detail_page_renders_for_logged_in_users(client):
-    """Regression: the detail page must render with full context (tags fragment
-    included) — this exact page 500'd in production because no test loaded it."""
+    """Regression: the detail page must render with full context -- this
+    exact page 500'd in production once because no test loaded it. The
+    page is read-only now (no inline edit boxes); editors additionally see
+    an Edit Concert link."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "Render Me"})
-    client.post(
-        "/concerts/1/rounds",
-        data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
-    )
-    r = client.get("/concerts/1")
+    create_with_round(client, title="Render Me")
+    r = client.get("/concerts/c")
     assert r.status_code == 200
     assert "Render Me" in r.text
-    assert "Franchises" in r.text  # tags fragment rendered
+    assert "/concerts/c/edit" in r.text  # editor sees the Edit Concert link
 
     login_as(client, VIEWER_ID, "viewer")
-    r = client.get("/concerts/1")
-    assert r.status_code == 200  # viewers render too (read-only chips)
+    r = client.get("/concerts/c")
+    assert r.status_code == 200  # viewers render too
+    assert "/concerts/c/edit" not in r.text  # but get no edit link
 
 
 # ── Concert kind ─────────────────────────────────────────────────────────
@@ -245,7 +369,7 @@ def test_concert_detail_page_renders_for_logged_in_users(client):
 
 async def test_create_concert_with_kind(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "Fest", "kind": "festival"})
+    client.post("/concerts", data={"title": "Fest", "event_id": "fest", "kind": "festival"})
     async with client.db() as s:
         concert = (await s.execute(select(Concert))).scalar_one()
     assert concert.kind.value == "festival"
@@ -253,7 +377,7 @@ async def test_create_concert_with_kind(client):
 
 async def test_create_concert_without_kind_leaves_it_unset(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "No kind"})
+    client.post("/concerts", data={"title": "No kind", "event_id": "no-kind"})
     async with client.db() as s:
         concert = (await s.execute(select(Concert))).scalar_one()
     assert concert.kind is None
@@ -261,13 +385,13 @@ async def test_create_concert_without_kind_leaves_it_unset(client):
 
 async def test_edit_concert_kind_can_be_set_then_cleared(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
-    client.post("/concerts/1/edit", data={"title": "C", "kind": "tour"})
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+    client.post("/concerts/c/edit", data={"title": "C", "event_id": "c", "kind": "tour"})
     async with client.db() as s:
         concert = await s.get(Concert, 1)
         assert concert.kind.value == "tour"
 
-    client.post("/concerts/1/edit", data={"title": "C", "kind": ""})
+    client.post("/concerts/c/edit", data={"title": "C", "event_id": "c", "kind": ""})
     async with client.db() as s:
         concert = await s.get(Concert, 1)
         assert concert.kind is None
@@ -278,45 +402,45 @@ async def test_edit_concert_kind_can_be_set_then_cleared(client):
 
 async def test_round_applies_to_is_stored(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
-    client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-08-01T18:00"})
-    client.post("/concerts/1/days", data={"label": "Day 2", "starts_at": "2099-08-02T18:00"})
     client.post(
-        "/concerts/1/rounds",
+        "/concerts",
         data={
-            "label": "Day 1 lottery", "kind": "lottery_round",
-            "closes_at": "2099-06-25T23:59", "applies_to": ["1"],
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["Day 1 lottery"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
         },
     )
     async with client.db() as s:
+        day = (await s.execute(select(ConcertDay))).scalar_one()
         round_ = (await s.execute(select(Round))).scalar_one()
-    assert round_.applies_to == [1]
+    assert round_.applies_to == [day.id]
 
 
 async def test_detail_page_groups_rounds_by_leg(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "Two Legs"})
-    client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-08-01T18:00"})
-    client.post("/concerts/1/days", data={"label": "Day 2", "starts_at": "2099-08-02T18:00"})
     client.post(
-        "/concerts/1/rounds",
-        data={"label": "Day 1 round", "kind": "lottery_round",
-              "closes_at": "2099-06-25T23:59", "applies_to": ["1"]},
+        "/concerts",
+        data={
+            "title": "Two Legs", "event_id": "two-legs",
+            "day_label": ["Day 1", "Day 2"],
+            "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
+            "day_city": ["", ""], "day_venue": ["", ""],
+            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "round_label": ["Day 1 round", "Day 2 round", "General round"],
+            "round_kind": ["lottery_round", "lottery_round", "general_sale"],
+            "round_opens_at": ["", "", ""],
+            "round_closes_at": ["2099-06-25T23:59", "2099-06-26T23:59", "2099-06-27T23:59"],
+            "round_results_at": ["", "", ""], "round_payment_at": ["", "", ""],
+            "round_label_en": ["", "", ""], "round_url": ["", "", ""], "round_notes": ["", "", ""],
+            "round_leg": ["Day 1", "Day 2", ""],
+        },
     )
-    client.post(
-        "/concerts/1/rounds",
-        data={"label": "Day 2 round", "kind": "lottery_round",
-              "closes_at": "2099-06-26T23:59", "applies_to": ["2"]},
-    )
-    client.post(
-        "/concerts/1/rounds",
-        data={"label": "General round", "kind": "general_sale", "closes_at": "2099-06-27T23:59"},
-    )
-    r = client.get("/concerts/1")
+    r = client.get("/concerts/two-legs")
     assert r.status_code == 200
-    # Every round's edit form has a day-picker checkbox for every day, so
-    # bare "Day 1"/"Day 2" appear many times -- anchor on the actual leg
-    # heading markup instead of the label text.
     day1_pos = r.text.index('leg-heading">Day 1<')
     round1_pos = r.text.index("Day 1 round")
     day2_pos = r.text.index('leg-heading">Day 2<')
@@ -329,13 +453,19 @@ async def test_detail_page_groups_rounds_by_leg(client):
 async def test_round_with_no_day_association_shown_as_general_only(client):
     """A round with no applies_to shouldn't appear under any day heading."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
-    client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-08-01T18:00"})
     client.post(
-        "/concerts/1/rounds",
-        data={"label": "Untied round", "kind": "other", "closes_at": "2099-06-25T23:59"},
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["Untied round"], "round_kind": ["other"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
     )
-    r = client.get("/concerts/1")
+    r = client.get("/concerts/c")
     assert "General" in r.text
     assert "Untied round" in r.text
 
@@ -354,19 +484,20 @@ async def test_export_yaml_shape(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
     client.post(
-        "/concerts", data={"title": "Export Me", "kind": "concert", "franchise_tags": ["1"]}
-    )
-    client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-08-01T18:00"})
-    client.post(
-        "/concerts/1/rounds",
+        "/concerts",
         data={
-            "label": "R1", "kind": "lottery_round",
-            "opens_at": "2099-06-10T00:00", "closes_at": "2099-06-25T23:59",
-            "applies_to": ["1"],
+            "title": "Export Me", "event_id": "export-me", "kind": "concert",
+            "franchise_tags": ["1"],
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": ["2099-06-10T00:00"], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
         },
     )
 
-    r = client.get("/concerts/1/export.yaml")
+    r = client.get("/concerts/export-me/export.yaml")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("application/yaml")
     assert "attachment" in r.headers["content-disposition"]
@@ -398,6 +529,7 @@ def test_new_concert_page_is_editor_only(client):
     r = client.get("/concerts/new")
     assert r.status_code == 200
     assert "Add an event" in r.text
+    assert 'name="event_id"' in r.text  # event id field present
     assert 'name="day_label"' in r.text  # performance row template present
     assert 'name="round_leg"' in r.text  # round row template present
 
@@ -408,6 +540,7 @@ async def test_rich_create_builds_concert_days_and_rounds_atomically(client):
         "/concerts",
         data={
             "title": "Rich Concert",
+            "event_id": "rich-concert",
             "title_en": "Rich Concert (EN)",
             "kind": "tour",
             "organizer": "LustQueen",
@@ -436,10 +569,12 @@ async def test_rich_create_builds_concert_days_and_rounds_atomically(client):
         },
     )
     assert r.status_code == 303
-    concert_id = int(r.headers["location"].rsplit("/", 1)[-1])
+    assert r.headers["location"] == "/concerts/rich-concert"
 
     async with client.db() as s:
-        concert = await s.get(Concert, concert_id)
+        concert = (await s.execute(
+            select(Concert).where(Concert.event_id == "rich-concert")
+        )).scalar_one()
         await s.refresh(concert, ["days", "rounds"])
 
     assert concert.title_en == "Rich Concert (EN)"
@@ -467,7 +602,7 @@ async def test_rich_create_tolerates_blank_trailing_rows(client):
     r = client.post(
         "/concerts",
         data={
-            "title": "Minimal",
+            "title": "Minimal", "event_id": "minimal",
             "day_label": [""], "day_starts_at": [""], "day_city": [""],
             "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             "round_label": [""], "round_label_en": [""], "round_kind": ["other"],
@@ -483,11 +618,11 @@ async def test_rich_create_tolerates_blank_trailing_rows(client):
 
 async def test_edit_concert_persists_all_new_fields(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C"})
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
     client.post(
-        "/concerts/1/edit",
+        "/concerts/c/edit",
         data={
-            "title": "C", "title_en": "C (EN)", "organizer": "Org",
+            "title": "C", "event_id": "c", "title_en": "C (EN)", "organizer": "Org",
             "categories": "a, b", "eventernote_url": "https://eventernote.com/x",
             "official_url": "https://official.example/x", "source_url": "https://src.example/x",
             "performers_text": "A\nB", "notes": "notes",
@@ -502,6 +637,39 @@ async def test_edit_concert_persists_all_new_fields(client):
     assert concert.official_url == "https://official.example/x"
     assert concert.source_url == "https://src.example/x"
     assert concert.performers_text == "A\nB"
+
+
+async def test_edit_page_prefills_every_field(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c", "title_en": "C (EN)", "organizer": "Org",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    r = client.get("/concerts/c/edit")
+    assert r.status_code == 200
+    assert 'value="C"' in r.text
+    assert 'value="c"' in r.text
+    assert 'value="C (EN)"' in r.text
+    assert 'value="Org"' in r.text
+    assert 'value="Day 1"' in r.text
+    assert 'value="R1"' in r.text
+
+
+def test_edit_page_is_editor_only(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+
+    login_as(client, VIEWER_ID, "viewer")
+    assert client.get("/concerts/c/edit").status_code == 403
+    assert client.post("/concerts/c/edit", data={"title": "C", "event_id": "c"}).status_code == 403
 
 
 def test_nav_add_link_shown_only_to_editors(client):

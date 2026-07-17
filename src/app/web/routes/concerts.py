@@ -2,13 +2,18 @@
 
 Route conventions:
   * Mutations are POSTs. Page-level actions redirect (PRG pattern);
-    list-level actions (rounds/days/rules) are htmx fragment swaps —
-    the server renders the updated list and htmx swaps it in place.
-  * require_editor guards everything that changes concerts/days/rounds.
-    require_user guards personal reminder rules.
+    reminder-rule actions are htmx fragment swaps -- the server renders
+    the updated `_rules.html` and htmx swaps it in place.
+  * require_editor guards everything that changes a concert's own data
+    (creation, the rich edit page, deletion). require_user guards personal
+    reminder rules -- those aren't "editing the concert."
   * EVERY mutation that touches dates ends with a queue re-sync
     (sync_concert / sync_rule). That is the contract that makes the web UI
     and the scheduler agree with each other.
+  * Concerts are looked up by `event_id` (a stable, editor-chosen URL
+    handle) everywhere in this file's routes. `Concert.id` (the real PK)
+    stays the FK target for everything internal -- reminder rules, the
+    queue, bot button custom_ids -- and is never itself URL-facing.
 
 Datetime contract: <input type="datetime-local"> values are interpreted as
 JST — that is how Japanese ticketing announces times, so the form matches
@@ -17,6 +22,7 @@ via domain.timezones.jst_to_utc. Nowhere else.
 """
 
 import json
+import re
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
@@ -28,7 +34,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Concert, ConcertDay, ReminderRule, Round, Tag, User
 from app.db.service import (
     attach_tag,
+    detach_tag,
     ensure_user,
+    group_members,
     handle_newly_tagged,
     sync_concert,
     sync_rule,
@@ -44,6 +52,14 @@ router = APIRouter()
 # set by web.app at startup to avoid a circular import
 templates = None
 
+# event_id becomes a URL path segment: restrict to a safe charset, and block
+# the two literal segments FastAPI would otherwise treat as real routes
+# (/concerts/new, /concerts/import) -- literal paths must stay unambiguous
+# from the {event_id} catch-all (this project has hit that routing-order
+# gotcha once already).
+EVENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
+RESERVED_EVENT_IDS = {"new", "import"}
+
 
 def parse_jst(value: str | None) -> datetime | None:
     """'2026-08-01T19:00' from a datetime-local input, interpreted as JST -> UTC."""
@@ -57,10 +73,83 @@ def parse_jst(value: str | None) -> datetime | None:
 
 
 async def get_concert(session: AsyncSession, concert_id: int) -> Concert:
+    """Internal PK lookup -- for code that already has a real id (rounds,
+    reminder rules) and isn't resolving a URL."""
     concert = await session.get(Concert, concert_id)
     if concert is None:
         raise HTTPException(status_code=404, detail="concert not found")
     return concert
+
+
+async def get_concert_by_event_id(session: AsyncSession, event_id: str) -> Concert:
+    """The URL-facing lookup every route in this file uses."""
+    result = await session.execute(select(Concert).where(Concert.event_id == event_id))
+    concert = result.scalar_one_or_none()
+    if concert is None:
+        raise HTTPException(status_code=404, detail="concert not found")
+    return concert
+
+
+async def validate_event_id(
+    session: AsyncSession, event_id: str, exclude_concert_id: int | None = None
+) -> str:
+    """Format + reserved-word + uniqueness checks, shared by creation and
+    the edit page. `exclude_concert_id` lets a concert keep its own
+    (unchanged) event_id when re-submitting the edit form."""
+    event_id = event_id.strip()
+    if not EVENT_ID_RE.match(event_id):
+        raise HTTPException(
+            status_code=422,
+            detail="event id may only contain letters, digits, hyphens, and underscores",
+        )
+    if event_id.lower() in RESERVED_EVENT_IDS:
+        raise HTTPException(status_code=422, detail=f"event id {event_id!r} is reserved")
+    stmt = select(Concert.id).where(Concert.event_id == event_id)
+    if exclude_concert_id is not None:
+        stmt = stmt.where(Concert.id != exclude_concert_id)
+    if (await session.execute(stmt)).scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail=f"event id {event_id!r} is already in use")
+    return event_id
+
+
+async def generate_event_id(session: AsyncSession, title: str) -> str:
+    """Auto-suggest an event_id for flows with no dedicated input for one
+    (the URL-import commit route) -- slugified title, de-duplicated with a
+    numeric suffix. Editable afterward via the edit page."""
+    from app.domain.yaml_export import slugify
+
+    base = slugify(title)
+    candidate = base
+    suffix = 2
+    while (await session.execute(
+        select(Concert.id).where(Concert.event_id == candidate)
+    )).scalar_one_or_none() is not None:
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    return candidate
+
+
+def apply_day_fields(
+    day: ConcertDay,
+    label: str,
+    starts_at: str,
+    city: str = "",
+    venue: str = "",
+    venue_address: str = "",
+    doors_at: str = "",
+) -> ConcertDay:
+    """The JST->UTC parse + assignment shared by build_day (new rows) and
+    the edit page's in-place update of existing rows."""
+    starts = parse_jst(starts_at)
+    if starts is None:
+        raise HTTPException(status_code=422, detail="a day needs a start time")
+    day.label = label.strip()
+    day.starts_at_utc = starts
+    day.city = city.strip() or None
+    day.venue = venue.strip() or None
+    day.venue_address = venue_address.strip() or None
+    day.doors_at_utc = parse_jst(doors_at)
+    return day
 
 
 def build_day(
@@ -72,17 +161,50 @@ def build_day(
     venue_address: str = "",
     doors_at: str = "",
 ) -> ConcertDay:
-    """Shared by add_day, the rich /concerts creation form, and the
-    URL-import commit route -- same validation ("a day needs a start
-    time") either way, one JST -> UTC boundary."""
-    starts = parse_jst(starts_at)
-    if starts is None:
-        raise HTTPException(status_code=422, detail="a day needs a start time")
-    return ConcertDay(
-        concert_id=concert_id, label=label.strip(), starts_at_utc=starts,
-        city=city.strip() or None, venue=venue.strip() or None,
-        venue_address=venue_address.strip() or None, doors_at_utc=parse_jst(doors_at),
+    """New-row constructor: the rich creation form, the edit page's new
+    rows, and the URL-import commit route."""
+    return apply_day_fields(
+        ConcertDay(concert_id=concert_id), label, starts_at, city, venue, venue_address, doors_at
     )
+
+
+def apply_round_fields(
+    round_: Round,
+    label: str,
+    kind: RoundKind,
+    opens_at: str,
+    closes_at: str,
+    results_at: str,
+    payment_at: str,
+    url: str,
+    applies_to: list[int] | None = None,
+    label_en: str = "",
+    notes: str = "",
+) -> Round:
+    """The parse + assignment shared by build_round (new rows) and the edit
+    page's in-place update of existing rows.
+
+    applies_to: which concert_day ids ("legs") this round belongs to;
+    empty/None means it's not tied to a specific day (shown under
+    "General" on the detail page). Organizational only -- never read by
+    the reminder planner."""
+    opens, closes = parse_jst(opens_at), parse_jst(closes_at)
+    results, payment = parse_jst(results_at), parse_jst(payment_at)
+    if opens is None and closes is None and results is None and payment is None:
+        raise HTTPException(
+            status_code=422, detail="a round needs at least one of opens/closes/results/payment"
+        )
+    round_.kind = kind
+    round_.label = label.strip()
+    round_.opens_at_utc = opens
+    round_.closes_at_utc = closes
+    round_.results_at_utc = results
+    round_.payment_deadline_at_utc = payment
+    round_.url = url.strip() or None
+    round_.applies_to = applies_to or None
+    round_.label_en = label_en.strip() or None
+    round_.notes = notes.strip() or None
+    return round_
 
 
 def build_round(
@@ -98,40 +220,36 @@ def build_round(
     label_en: str = "",
     notes: str = "",
 ) -> Round:
-    """Shared by add_round, the rich /concerts creation form, and the
-    URL-import commit route.
-
-    applies_to: which concert_day ids ("legs") this round belongs to;
-    empty/None means it's not tied to a specific day (shown under
-    "General" on the detail page). Organizational only -- never read by
-    the reminder planner."""
-    opens, closes = parse_jst(opens_at), parse_jst(closes_at)
-    results, payment = parse_jst(results_at), parse_jst(payment_at)
-    if opens is None and closes is None and results is None and payment is None:
-        raise HTTPException(
-            status_code=422, detail="a round needs at least one of opens/closes/results/payment"
-        )
-    return Round(
-        concert_id=concert_id, kind=kind, label=label.strip(),
-        opens_at_utc=opens, closes_at_utc=closes,
-        results_at_utc=results, payment_deadline_at_utc=payment,
-        url=url.strip() or None, applies_to=applies_to or None,
-        label_en=label_en.strip() or None, notes=notes.strip() or None,
+    """New-row constructor: the rich creation form, the edit page's new
+    rows, and the URL-import commit route."""
+    return apply_round_fields(
+        Round(concert_id=concert_id), label, kind, opens_at, closes_at, results_at,
+        payment_at, url, applies_to, label_en, notes,
     )
 
 
 def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
-    """Free-text leg matching for the rich creation page only, where
-    performance rows don't have real ids yet at submit time. Matches a
-    day's city or label, case-insensitively, exact match (not substring --
-    avoids "Day 1" matching "Day 10"). Blank or no match -> None (round
-    shown under "General"; fixable afterward via the edit-round day-picker,
-    which uses real ids and never goes through this function)."""
+    """Free-text leg matching for the creation/edit forms, where repeatable
+    performance rows are matched to rounds by typed text rather than a
+    picker. Matches a day's city or label, case-insensitively, exact match
+    (not substring -- avoids "Day 1" matching "Day 10"). Blank or no match
+    -> None (round shown under "General")."""
     leg = leg.strip().lower()
     if not leg:
         return None
     matches = [d.id for d in days if leg in ((d.city or "").lower(), (d.label or "").lower())]
     return matches or None
+
+
+def round_leg_display(round_: Round, days_by_id: dict[int, ConcertDay]) -> str:
+    """Inverse of resolve_round_leg, for pre-filling the edit page's
+    free-text leg field from a round's real applies_to day ids."""
+    if not round_.applies_to:
+        return ""
+    day = days_by_id.get(round_.applies_to[0])
+    if day is None:
+        return ""
+    return day.city or day.label
 
 
 def group_rounds_by_day(concert: Concert) -> tuple[dict[int, list[Round]], list[Round]]:
@@ -188,39 +306,12 @@ def concert_date_range(days: list[ConcertDay]) -> tuple[datetime, datetime] | No
     return min(starts), max(starts)
 
 
-# ── Fragments (htmx swap targets) ────────────────────────────────────────
+# ── Reminder-rule fragment (htmx swap target) ────────────────────────────
 
 
 async def user_tz(session: AsyncSession, user_id: int) -> str:
     db_user = await session.get(User, user_id)
     return db_user.timezone if db_user else "America/Moncton"
-
-
-async def render_fragment(request: Request, name: str, concert: Concert, user: SessionUser,
-                          session: AsyncSession) -> HTMLResponse:
-    from app.web.routes.preferences import my_presets
-
-    await session.refresh(concert, ["days", "rounds"])
-    rules = await user_rules(session, user.id, concert.id)
-    tz = await user_tz(session, user.id)
-    presets = await my_presets(session, user.id)
-    by_day, general = group_rounds_by_day(concert)
-    now = datetime.now(UTC)
-    venue_tags = list(
-        (await session.execute(select(Tag).where(Tag.kind == TagKind.VENUE))).scalars()
-    )
-    day_venue_tags = {d.id: find_venue_tag(venue_tags, d.venue) for d in concert.days}
-    past_round_ids = {r.id for r in concert.rounds if is_round_past(r, now)}
-    past_day_ids = {d.id for d in concert.days if is_day_past(d, now)}
-    return templates.TemplateResponse(
-        request,
-        name,
-        {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
-         "kinds": list(RoundKind), "anchors": list(Anchor),
-         "rounds_by_day": by_day, "general_rounds": general,
-         "day_venue_tags": day_venue_tags, "past_round_ids": past_round_ids,
-         "past_day_ids": past_day_ids, "now": now},
-    )
 
 
 async def user_rules(session: AsyncSession, user_id: int, concert_id: int) -> list[ReminderRule]:
@@ -232,12 +323,31 @@ async def user_rules(session: AsyncSession, user_id: int, concert_id: int) -> li
     return list(res.scalars())
 
 
+async def render_rules_fragment(
+    request: Request, concert: Concert, user: SessionUser, session: AsyncSession
+) -> HTMLResponse:
+    """Renders _rules.html after a user-level reminder-rule mutation -- the
+    only htmx fragment swap left on the (now read-only) concert detail
+    page; editing the concert itself always redirects (PRG), it never
+    swaps a fragment."""
+    from app.web.routes.preferences import my_presets
+
+    rules = await user_rules(session, user.id, concert.id)
+    presets = await my_presets(session, user.id)
+    return templates.TemplateResponse(
+        request,
+        "_rules.html",
+        {"concert": concert, "user": user, "rules": rules, "presets": presets,
+         "anchors": list(Anchor)},
+    )
+
+
 # ── Concerts ─────────────────────────────────────────────────────────────
 
 
 async def resolve_tags(session: AsyncSession, tag_ids: list[int], kind) -> list[Tag]:
-    """Shared by create_concert and the URL-import commit route: every
-    submitted tag id must exist and match the expected kind."""
+    """Shared by create_concert_row and the edit route: every submitted tag
+    id must exist and match the expected kind."""
     out = []
     for tag_id in tag_ids:
         if not tag_id:
@@ -253,6 +363,7 @@ async def create_concert_row(
     session: AsyncSession,
     user: SessionUser,
     title: str,
+    event_id: str,
     franchise_tags: list[int],
     group_tags: list[int],
     artist_tags: list[int],
@@ -265,9 +376,8 @@ async def create_concert_row(
     the submitted artist list is authoritative. The notify-and-apply
     pipeline fires on everything attached here. Shared by create_concert
     and the URL-import commit route."""
-    from app.domain.types import TagKind
-
     await ensure_user(session, user.id, user.username)
+    event_id = await validate_event_id(session, event_id)
 
     f_tags = await resolve_tags(session, franchise_tags, TagKind.FRANCHISE)
     g_tags = await resolve_tags(session, group_tags, TagKind.GROUP)
@@ -276,6 +386,7 @@ async def create_concert_row(
 
     concert = Concert(
         title=title.strip(),
+        event_id=event_id,
         kind=kind,
         franchise=", ".join(t.name for t in f_tags) or None,  # denormalized display
         venue=", ".join(t.name for t in v_tags) or None,
@@ -312,6 +423,7 @@ async def new_concert_form(
             "by_kind": picker["by_kind"],
             "groups_json": json.dumps(picker["groups_json"]),
             "tag_names_json": json.dumps(picker["tag_names_json"]),
+            "initial_selected_json": "{}",
         },
     )
 
@@ -321,6 +433,7 @@ async def create_concert(
     request: Request,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
+    event_id: str = Form(..., max_length=100),
     title: str = Form(..., min_length=1, max_length=200),
     title_en: str = Form(""),
     kind: str = Form(""),
@@ -357,7 +470,7 @@ async def create_concert(
     compose-and-loop shape imports.py's import_commit uses, just with the
     fuller add.html-matched field set."""
     concert = await create_concert_row(
-        session, user, title, franchise_tags, group_tags, artist_tags, venue_tags,
+        session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
         kind=ConcertKind(kind) if kind else None,
     )
     concert.title_en = title_en.strip() or None
@@ -399,30 +512,28 @@ async def create_concert(
     await session.flush()
     await sync_concert(session, concert.id)
     await session.commit()
-    return RedirectResponse(f"/concerts/{concert.id}", status_code=303)
+    return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)
 
 
-@router.get("/concerts/{concert_id}", response_class=HTMLResponse)
+@router.get("/concerts/{event_id}", response_class=HTMLResponse)
 async def concert_detail(
     request: Request,
-    concert_id: int,
+    event_id: str,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    concert = await get_concert_by_event_id(session, event_id)
+    await session.refresh(concert, ["days", "rounds", "tags"])
+    rules = await user_rules(session, user.id, concert.id)
+    tz = await user_tz(session, user.id)
     from app.web.routes.preferences import my_presets
 
-    concert = await get_concert(session, concert_id)
-    await session.refresh(concert, ["days", "rounds", "tags"])
-    rules = await user_rules(session, user.id, concert_id)
-    tz = await user_tz(session, user.id)
     presets = await my_presets(session, user.id)
-    tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
-    by_kind: dict[str, list[Tag]] = {}
-    for tg in tags:
-        by_kind.setdefault(tg.kind.value, []).append(tg)
+    venue_tags = list(
+        (await session.execute(select(Tag).where(Tag.kind == TagKind.VENUE))).scalars()
+    )
     by_day, general = group_rounds_by_day(concert)
     now = datetime.now(UTC)
-    venue_tags = by_kind.get(TagKind.VENUE.value, [])
     day_venue_tags = {d.id: find_venue_tag(venue_tags, d.venue) for d in concert.days}
     past_round_ids = {r.id for r in concert.rounds if is_round_past(r, now)}
     past_day_ids = {d.id for d in concert.days if is_day_past(d, now)}
@@ -432,8 +543,7 @@ async def concert_detail(
         request,
         "concert_detail.html",
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
-         "kinds": list(RoundKind), "anchors": list(Anchor), "concert_kinds": list(ConcertKind),
-         "by_kind": by_kind, "attached": {tg.id for tg in concert.tags},
+         "anchors": list(Anchor),
          "rounds_by_day": by_day, "general_rounds": general,
          "day_venue_tags": day_venue_tags, "past_round_ids": past_round_ids,
          "past_day_ids": past_day_ids, "now": now,
@@ -441,11 +551,62 @@ async def concert_detail(
     )
 
 
-@router.post("/concerts/{concert_id}/edit")
-async def edit_concert(
-    concert_id: int,
+@router.get("/concerts/{event_id}/edit", response_class=HTMLResponse)
+async def edit_concert_form(
+    request: Request,
+    event_id: str,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
+):
+    """A near-clone of /concerts/new, pre-filled with this concert's
+    current scalars, tags, days, and rounds -- the only place editors edit
+    a concert's own data (the detail page is read-only)."""
+    concert = await get_concert_by_event_id(session, event_id)
+    await session.refresh(concert, ["days", "rounds", "tags"])
+    picker = await tag_picker_context(session)
+    days_by_id = {d.id: d for d in concert.days}
+
+    # artist_excluded: members of an already-attached group that AREN'T
+    # currently on the concert (previously pruned). Without this, the
+    # picker's group->members auto-population would show them as selected
+    # again just because their group is initially checked, and an editor
+    # who doesn't notice would silently re-add a pruned non-performer.
+    attached_artist_ids = {t.id for t in concert.tags if t.kind is TagKind.ARTIST}
+    excluded_ids: list[int] = []
+    for t in concert.tags:
+        if t.kind is TagKind.GROUP:
+            for m in await group_members(session, t.id):
+                if m.id not in attached_artist_ids:
+                    excluded_ids.append(m.id)
+    initial_selected = {
+        "franchise": [str(t.id) for t in concert.tags if t.kind is TagKind.FRANCHISE],
+        "group": [str(t.id) for t in concert.tags if t.kind is TagKind.GROUP],
+        "artist": [str(i) for i in attached_artist_ids],
+        "artist_excluded": [str(i) for i in excluded_ids],
+        "venue": [str(t.id) for t in concert.tags if t.kind is TagKind.VENUE],
+    }
+    rounds_with_leg = [(r, round_leg_display(r, days_by_id)) for r in concert.rounds]
+    return templates.TemplateResponse(
+        request,
+        "concert_edit.html",
+        {
+            "user": user, "concert": concert, "kinds": list(RoundKind),
+            "concert_kinds": list(ConcertKind),
+            "by_kind": picker["by_kind"],
+            "groups_json": json.dumps(picker["groups_json"]),
+            "tag_names_json": json.dumps(picker["tag_names_json"]),
+            "initial_selected_json": json.dumps(initial_selected),
+            "rounds_with_leg": rounds_with_leg,
+        },
+    )
+
+
+@router.post("/concerts/{event_id}/edit")
+async def edit_concert(
+    event_id: str,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+    new_event_id: str = Form(..., alias="event_id", max_length=100),
     title: str = Form(..., min_length=1, max_length=200),
     title_en: str = Form(""),
     kind: str = Form(""),
@@ -456,10 +617,37 @@ async def edit_concert(
     source_url: str = Form(""),
     performers_text: str = Form(""),
     notes: str = Form(""),
+    franchise_tags: list[int] = Form(default=[]),
+    group_tags: list[int] = Form(default=[]),
+    artist_tags: list[int] = Form(default=[]),
+    venue_tags: list[int] = Form(default=[]),
+    day_id: list[str] = Form(default=[]),
+    day_label: list[str] = Form(default=[]),
+    day_starts_at: list[str] = Form(default=[]),
+    day_city: list[str] = Form(default=[]),
+    day_venue: list[str] = Form(default=[]),
+    day_venue_address: list[str] = Form(default=[]),
+    day_doors_at: list[str] = Form(default=[]),
+    round_id: list[str] = Form(default=[]),
+    round_label: list[str] = Form(default=[]),
+    round_label_en: list[str] = Form(default=[]),
+    round_kind: list[RoundKind] = Form(default=[]),
+    round_opens_at: list[str] = Form(default=[]),
+    round_closes_at: list[str] = Form(default=[]),
+    round_results_at: list[str] = Form(default=[]),
+    round_payment_at: list[str] = Form(default=[]),
+    round_url: list[str] = Form(default=[]),
+    round_notes: list[str] = Form(default=[]),
+    round_leg: list[str] = Form(default=[]),
 ):
-    """Franchise/group/artists/venue are managed as tags -- everything
-    else settable at creation stays editable here too."""
-    concert = await get_concert(session, concert_id)
+    """Atomic update: scalars assigned directly; tags/days/rounds
+    RECONCILED (not blindly recreated) against what's submitted, so rows
+    that didn't conceptually change keep their id -- required by the
+    queue-sync invariant (a Round/ConcertDay that keeps its id keeps its
+    ReminderQueue.sent_at_utc history; delete-and-recreate would re-arm
+    already-delivered reminders on an unrelated edit)."""
+    concert = await get_concert_by_event_id(session, event_id)
+    concert.event_id = await validate_event_id(session, new_event_id, exclude_concert_id=concert.id)
     concert.title = title.strip()
     concert.title_en = title_en.strip() or None
     concert.kind = ConcertKind(kind) if kind else None
@@ -470,23 +658,103 @@ async def edit_concert(
     concert.source_url = source_url.strip() or None
     concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
+
+    # -- Tags: diff before/after, detach dropped ids, attach new ones only.
+    # An unchanged, already-attached group is never re-touched, so its
+    # previously-pruned members stay pruned (invariant: group expansion is
+    # a one-time, at-attach-time event).
+    f_tags = await resolve_tags(session, franchise_tags, TagKind.FRANCHISE)
+    g_tags = await resolve_tags(session, group_tags, TagKind.GROUP)
+    a_tags = await resolve_tags(session, artist_tags, TagKind.ARTIST)
+    v_tags = await resolve_tags(session, venue_tags, TagKind.VENUE)
+    desired_tags = {t.id: t for t in [*f_tags, *g_tags, *a_tags, *v_tags]}
+
+    await session.refresh(concert, ["tags"])
+    before_ids = {t.id for t in concert.tags}
+    after_ids = set(desired_tags)
+    for tid in before_ids - after_ids:
+        await detach_tag(session, concert.id, tid)
+    newly: list[Tag] = []
+    for tid in after_ids - before_ids:
+        newly += await attach_tag(session, concert.id, desired_tags[tid], expand=False)
+    await handle_newly_tagged(session, concert, newly)
+
+    # -- Days: update existing rows in place by id, insert blank-id rows,
+    # delete rows that were dropped.
+    await session.refresh(concert, ["days"])
+    existing_days = {d.id: d for d in concert.days}
+    kept_day_ids: set[int] = set()
+    days_for_leg_matching: list[ConcertDay] = []
+    for did, label, starts_at, city, venue, venue_address, doors_at in zip(
+        day_id, day_label, day_starts_at, day_city, day_venue, day_venue_address, day_doors_at,
+        strict=True,
+    ):
+        if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
+            continue  # blank trailing row from the repeatable UI
+        did = did.strip()
+        if did.isdigit() and int(did) in existing_days:
+            day = apply_day_fields(
+                existing_days[int(did)], label, starts_at, city, venue, venue_address, doors_at
+            )
+            kept_day_ids.add(day.id)
+        else:
+            day = build_day(concert.id, label, starts_at, city, venue, venue_address, doors_at)
+            session.add(day)
+        days_for_leg_matching.append(day)
+    for did, day in existing_days.items():
+        if did not in kept_day_ids:
+            await session.delete(day)
+    await session.flush()  # new/kept days have real ids, needed for leg-matching below
+
+    # -- Rounds: same id-preserving reconciliation.
+    await session.refresh(concert, ["rounds"])
+    existing_rounds = {r.id: r for r in concert.rounds}
+    kept_round_ids: set[int] = set()
+    for (
+        rid, label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url, notes_, leg
+    ) in zip(
+        round_id, round_label, round_label_en, round_kind, round_opens_at, round_closes_at,
+        round_results_at, round_payment_at, round_url, round_notes, round_leg,
+        strict=True,
+    ):
+        if not any([label.strip(), opens_at.strip(), closes_at.strip(),
+                    results_at.strip(), payment_at.strip()]):
+            continue
+        applies_to = resolve_round_leg(days_for_leg_matching, leg)
+        rid = rid.strip()
+        if rid.isdigit() and int(rid) in existing_rounds:
+            round_ = apply_round_fields(
+                existing_rounds[int(rid)], label, kind_, opens_at, closes_at, results_at,
+                payment_at, url, applies_to, label_en, notes_,
+            )
+            kept_round_ids.add(round_.id)
+        else:
+            session.add(build_round(
+                concert.id, label, kind_, opens_at, closes_at, results_at, payment_at, url,
+                applies_to, label_en, notes_,
+            ))
+    for rid, round_ in existing_rounds.items():
+        if rid not in kept_round_ids:
+            await session.delete(round_)
+
+    await session.flush()
+    await sync_concert(session, concert.id)
     await session.commit()
-    return RedirectResponse(f"/concerts/{concert_id}", status_code=303)
+    return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)
 
 
-@router.get("/concerts/{concert_id}/export.yaml")
+@router.get("/concerts/{event_id}/export.yaml")
 async def export_concert_yaml(
-    concert_id: int,
+    event_id: str,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
     """Read-only sharing format, shaped like mting314/event-tracker's YAML --
     export only, never an import path. SQLite via the web UI stays the only
     way to create/edit data."""
-    from app.domain.types import TagKind
     from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml, slugify
 
-    concert = await get_concert(session, concert_id)
+    concert = await get_concert_by_event_id(session, event_id)
     await session.refresh(concert, ["days", "rounds", "tags"])
 
     days_by_id = {d.id: d.label for d in concert.days}
@@ -532,13 +800,13 @@ async def export_concert_yaml(
     )
 
 
-@router.post("/concerts/{concert_id}/delete")
+@router.post("/concerts/{event_id}/delete")
 async def delete_concert(
-    concert_id: int,
+    event_id: str,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
 ):
-    concert = await get_concert(session, concert_id)
+    concert = await get_concert_by_event_id(session, event_id)
     await session.delete(concert)  # cascades: days, rounds, rules, queue
     await session.commit()
     return RedirectResponse("/", status_code=303)
@@ -583,143 +851,19 @@ async def round_ics(
     )
 
 
-@router.post("/concerts/{concert_id}/rounds", response_class=HTMLResponse)
-async def add_round(
-    request: Request,
-    concert_id: int,
-    user: SessionUser = Depends(require_editor),
-    session: AsyncSession = Depends(get_session),
-    label: str = Form(..., min_length=1, max_length=200),
-    label_en: str = Form(""),
-    kind: RoundKind = Form(RoundKind.OTHER),
-    opens_at: str = Form(""),
-    closes_at: str = Form(""),
-    results_at: str = Form(""),
-    payment_at: str = Form(""),
-    url: str = Form(""),
-    notes: str = Form(""),
-    applies_to: list[int] = Form(default=[]),
-):
-    concert = await get_concert(session, concert_id)
-    session.add(build_round(
-        concert.id, label, kind, opens_at, closes_at, results_at, payment_at, url,
-        applies_to, label_en, notes,
-    ))
-    await session.flush()
-    await sync_concert(session, concert.id)
-    await session.commit()
-    return await render_fragment(request, "_rounds.html", concert, user, session)
-
-
-@router.post("/rounds/{round_id}/edit", response_class=HTMLResponse)
-async def edit_round(
-    request: Request,
-    round_id: int,
-    user: SessionUser = Depends(require_editor),
-    session: AsyncSession = Depends(get_session),
-    label: str = Form(..., min_length=1, max_length=200),
-    label_en: str = Form(""),
-    kind: RoundKind = Form(...),
-    opens_at: str = Form(""),
-    closes_at: str = Form(""),
-    results_at: str = Form(""),
-    payment_at: str = Form(""),
-    url: str = Form(""),
-    notes: str = Form(""),
-    applies_to: list[int] = Form(default=[]),
-):
-    round_ = await session.get(Round, round_id)
-    if round_ is None:
-        raise HTTPException(status_code=404)
-    round_.label = label.strip()
-    round_.label_en = label_en.strip() or None
-    round_.kind = kind
-    round_.opens_at_utc = parse_jst(opens_at)
-    round_.closes_at_utc = parse_jst(closes_at)
-    round_.results_at_utc = parse_jst(results_at)
-    round_.payment_deadline_at_utc = parse_jst(payment_at)
-    round_.url = url.strip() or None
-    round_.notes = notes.strip() or None
-    round_.applies_to = applies_to or None
-    concert = await get_concert(session, round_.concert_id)
-    await sync_concert(session, concert.id)
-    await session.commit()
-    return await render_fragment(request, "_rounds.html", concert, user, session)
-
-
-@router.post("/rounds/{round_id}/delete", response_class=HTMLResponse)
-async def delete_round(
-    request: Request,
-    round_id: int,
-    user: SessionUser = Depends(require_editor),
-    session: AsyncSession = Depends(get_session),
-):
-    round_ = await session.get(Round, round_id)
-    if round_ is None:
-        raise HTTPException(status_code=404)
-    concert = await get_concert(session, round_.concert_id)
-    await session.delete(round_)
-    await session.flush()
-    await sync_concert(session, concert.id)
-    await session.commit()
-    return await render_fragment(request, "_rounds.html", concert, user, session)
-
-
-# ── Days ─────────────────────────────────────────────────────────────────
-
-
-@router.post("/concerts/{concert_id}/days", response_class=HTMLResponse)
-async def add_day(
-    request: Request,
-    concert_id: int,
-    user: SessionUser = Depends(require_editor),
-    session: AsyncSession = Depends(get_session),
-    label: str = Form(..., min_length=1, max_length=100),
-    starts_at: str = Form(...),
-    city: str = Form(""),
-    venue: str = Form(""),
-    venue_address: str = Form(""),
-    doors_at: str = Form(""),
-):
-    concert = await get_concert(session, concert_id)
-    session.add(build_day(concert.id, label, starts_at, city, venue, venue_address, doors_at))
-    await session.flush()
-    await sync_concert(session, concert.id)
-    await session.commit()
-    return await render_fragment(request, "_days.html", concert, user, session)
-
-
-@router.post("/days/{day_id}/delete", response_class=HTMLResponse)
-async def delete_day(
-    request: Request,
-    day_id: int,
-    user: SessionUser = Depends(require_editor),
-    session: AsyncSession = Depends(get_session),
-):
-    day = await session.get(ConcertDay, day_id)
-    if day is None:
-        raise HTTPException(status_code=404)
-    concert = await get_concert(session, day.concert_id)
-    await session.delete(day)
-    await session.flush()
-    await sync_concert(session, concert.id)
-    await session.commit()
-    return await render_fragment(request, "_days.html", concert, user, session)
-
-
 # ── Reminder rules (any signed-in user) ──────────────────────────────────
 
 
-@router.post("/concerts/{concert_id}/rules", response_class=HTMLResponse)
+@router.post("/concerts/{event_id}/rules", response_class=HTMLResponse)
 async def add_rule(
     request: Request,
-    concert_id: int,
+    event_id: str,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
     anchor: Anchor = Form(...),
     days_before: int = Form(..., ge=0, le=60),
 ):
-    concert = await get_concert(session, concert_id)
+    concert = await get_concert_by_event_id(session, event_id)
     await ensure_user(session, user.id, user.username)
     rule = ReminderRule(
         user_id=user.id, concert_id=concert.id, anchor=anchor,
@@ -729,7 +873,7 @@ async def add_rule(
     await session.flush()
     await sync_rule(session, rule)
     await session.commit()
-    return await render_fragment(request, "_rules.html", concert, user, session)
+    return await render_rules_fragment(request, concert, user, session)
 
 
 @router.post("/rules/{rule_id}/delete", response_class=HTMLResponse)
@@ -745,7 +889,7 @@ async def delete_rule(
     concert = await get_concert(session, rule.concert_id)
     await session.delete(rule)  # cascade removes its queue rows
     await session.commit()
-    return await render_fragment(request, "_rules.html", concert, user, session)
+    return await render_rules_fragment(request, concert, user, session)
 
 
 # ── User settings ────────────────────────────────────────────────────────

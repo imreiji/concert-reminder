@@ -19,47 +19,6 @@
     {% endfor %}
     <td>{% if not past and primary_ts %}<a href="/rounds/{{ r.id }}/ics" title="Add to calendar">📅</a>{% endif %}</td>
   </tr>
-  {% if user.is_editor %}
-  <tr class="round-edit-row{% if past %} past{% endif %}">
-    <td colspan="6">
-      <details class="edit-round">
-        <summary>Edit</summary>
-        <form class="stack" method="post" action="/rounds/{{ r.id }}/edit"
-              hx-post="/rounds/{{ r.id }}/edit" hx-target="#rounds" hx-swap="outerHTML">
-          <input name="label" value="{{ r.label }}" required maxlength="200">
-          <input name="label_en" value="{{ r.label_en or '' }}" maxlength="200" placeholder="Round name (EN, optional)">
-          <select name="kind">{% for k in kinds %}
-            <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ k.value.replace("_"," ") }}</option>
-          {% endfor %}</select>
-          <label>Opens (JST) <input type="datetime-local" name="opens_at"
-            value="{{ jst(r.opens_at_utc).strftime('%Y-%m-%dT%H:%M') if r.opens_at_utc else '' }}"></label>
-          <label>Closes (JST) <input type="datetime-local" name="closes_at"
-            value="{{ jst(r.closes_at_utc).strftime('%Y-%m-%dT%H:%M') if r.closes_at_utc else '' }}"></label>
-          <label>Results (JST) <input type="datetime-local" name="results_at"
-            value="{{ jst(r.results_at_utc).strftime('%Y-%m-%dT%H:%M') if r.results_at_utc else '' }}"></label>
-          <label>Payment due (JST) <input type="datetime-local" name="payment_at"
-            value="{{ jst(r.payment_deadline_at_utc).strftime('%Y-%m-%dT%H:%M') if r.payment_deadline_at_utc else '' }}"></label>
-          <input name="url" value="{{ r.url or '' }}" placeholder="https://ticket...">
-          <input name="notes" value="{{ r.notes or '' }}" maxlength="300" placeholder="Notes (optional)">
-          {% if concert.days %}
-          <label>Applies to <span class="dim tiny">(which day/leg — blank = general)</span></label>
-          <div class="daypick">
-            {% for d in concert.days %}
-            <label class="daypick-opt"><input type="checkbox" name="applies_to" value="{{ d.id }}"
-              {% if d.id in (r.applies_to or []) %}checked{% endif %}> {{ d.label }}</label>
-            {% endfor %}
-          </div>
-          {% endif %}
-          <button>Save</button>
-        </form>
-        <form method="post" action="/rounds/{{ r.id }}/delete" hx-post="/rounds/{{ r.id }}/delete"
-              hx-target="#rounds" hx-swap="outerHTML">
-          <button class="danger">Delete round</button>
-        </form>
-      </details>
-    </td>
-  </tr>
-  {% endif %}
   {% endmacro %}
 
   {% macro round_table(rounds) %}
@@ -86,33 +45,4 @@
   {% endif %}
 
   {% if not concert.rounds %}<p class="dim">No rounds yet.</p>{% endif %}
-
-  {% if user.is_editor %}
-  <details class="panel">
-    <summary>+ Add round</summary>
-    <form class="stack" method="post" action="/concerts/{{ concert.id }}/rounds"
-          hx-post="/concerts/{{ concert.id }}/rounds" hx-target="#rounds" hx-swap="outerHTML">
-      <input name="label" required maxlength="200" placeholder="最速先行 Round 1">
-      <input name="label_en" maxlength="200" placeholder="Round name (EN, optional)">
-      <select name="kind">{% for k in kinds %}
-        <option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>
-      {% endfor %}</select>
-      <label>Opens (JST) <input type="datetime-local" name="opens_at"></label>
-      <label>Closes (JST) <input type="datetime-local" name="closes_at"></label>
-      <label>Results (JST) <input type="datetime-local" name="results_at"></label>
-      <label>Payment due (JST) <input type="datetime-local" name="payment_at"></label>
-      <input name="url" placeholder="https://ticket... (optional)">
-      <input name="notes" maxlength="300" placeholder="Notes (optional)">
-      {% if concert.days %}
-      <label>Applies to <span class="dim tiny">(which day/leg — blank = general)</span></label>
-      <div class="daypick">
-        {% for d in concert.days %}
-        <label class="daypick-opt"><input type="checkbox" name="applies_to" value="{{ d.id }}"> {{ d.label }}</label>
-        {% endfor %}
-      </div>
-      {% endif %}
-      <button>Add round</button>
-    </form>
-  </details>
-  {% endif %}
 </div>

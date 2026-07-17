@@ -25,7 +25,7 @@ from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import RoundKind
 from app.web.auth import SessionUser, require_editor
-from app.web.routes.concerts import build_day, build_round, create_concert_row
+from app.web.routes.concerts import build_day, build_round, create_concert_row, generate_event_id
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/concerts/import")
@@ -99,6 +99,7 @@ async def import_preview(
             "by_kind": picker["by_kind"],
             "groups_json": json.dumps(picker["groups_json"]),
             "tag_names_json": json.dumps(picker["tag_names_json"]),
+            "initial_selected_json": "{}",
         },
     )
 
@@ -124,9 +125,13 @@ async def import_commit(
     round_url: list[str] = Form(default=[]),
 ):
     """Same validation as manual entry (build_day/build_round), just looped
-    -- create_concert_row + add_day + add_round combined into one commit."""
+    -- create_concert_row + add_day + add_round combined into one commit.
+    event_id isn't a field the import form collects, so it's auto-suggested
+    from the title (slugified, de-duplicated) -- editable afterward via the
+    edit page."""
+    event_id = await generate_event_id(session, title)
     concert = await create_concert_row(
-        session, user, title, franchise_tags, group_tags, artist_tags, venue_tags
+        session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags
     )
 
     for label, starts_at in zip(day_label, day_starts_at, strict=True):
@@ -148,4 +153,4 @@ async def import_commit(
     await session.flush()
     await sync_concert(session, concert.id)
     await session.commit()
-    return RedirectResponse(f"/concerts/{concert.id}", status_code=303)
+    return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)

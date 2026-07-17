@@ -51,7 +51,7 @@ async def session():
 
 async def seed(s) -> tuple[Concert, Round, ReminderRule]:
     await ensure_user(s, 42, "reiji")
-    concert = Concert(title="Hasunosora 5th", created_by=42)
+    concert = Concert(title="Hasunosora 5th", event_id="hasunosora-5th", created_by=42)
     s.add(concert)
     await s.flush()
     round_ = Round(
@@ -171,7 +171,7 @@ async def test_round_with_all_four_timestamps_syncs_each_anchor_independently(se
     """One round entry, 4 reminder rules (one per anchor) -- each gets its
     own queue row and re-arms independently of the others."""
     await ensure_user(session, 42, "reiji")
-    concert = Concert(title="Full Round", created_by=42)
+    concert = Concert(title="Full Round", event_id="full-round", created_by=42)
     session.add(concert)
     await session.flush()
     round_ = Round(
