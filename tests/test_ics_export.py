@@ -1,10 +1,10 @@
-"""build_ics: pure-function .ics generation tests."""
+"""build_ics/build_calendar: pure-function .ics generation tests."""
 
 from datetime import UTC, datetime
 
 import pytest
 
-from app.domain.ics_export import build_ics
+from app.domain.ics_export import build_calendar, build_ics
 
 
 def dt(month: int, day: int, hour: int = 12) -> datetime:
@@ -61,3 +61,34 @@ def test_build_ics_uid_is_stable_for_same_inputs():
 def test_build_ics_dtstamp_uses_now_when_given():
     text = build_ics("Round closes", dt(6, 25), now_utc=dt(1, 1, 0))
     assert "DTSTAMP:20260101T000000Z\r\n" in text
+
+
+def test_build_calendar_one_vcalendar_multiple_vevents():
+    text = build_calendar([
+        ("Concert A — R1", dt(6, 25), None, None),
+        ("Concert B — R1", dt(7, 1), "https://example.com", "notes"),
+    ])
+    assert text.count("BEGIN:VCALENDAR") == 1
+    assert text.count("END:VCALENDAR") == 1
+    assert text.count("BEGIN:VEVENT") == 2
+    assert text.count("END:VEVENT") == 2
+    assert "SUMMARY:Concert A — R1\r\n" in text
+    assert "SUMMARY:Concert B — R1\r\n" in text
+    assert "URL:https://example.com\r\n" in text
+    assert "DESCRIPTION:notes\r\n" in text
+
+
+def test_build_calendar_empty_list_is_still_a_valid_shell():
+    text = build_calendar([])
+    assert text.startswith("BEGIN:VCALENDAR\r\n")
+    assert text.endswith("END:VCALENDAR\r\n")
+    assert "BEGIN:VEVENT" not in text
+
+
+def test_build_calendar_shares_one_dtstamp_across_events():
+    text = build_calendar(
+        [("A", dt(6, 25), None, None), ("B", dt(7, 1), None, None)],
+        now_utc=dt(1, 1),
+    )
+    stamps = [line for line in text.split("\r\n") if line.startswith("DTSTAMP:")]
+    assert stamps == ["DTSTAMP:20260101T120000Z", "DTSTAMP:20260101T120000Z"]

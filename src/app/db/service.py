@@ -16,6 +16,8 @@ Sync semantics (per rule):
   * queued, unsent, no longer planned -> delete (window removed / now past)
 """
 
+import hashlib
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -322,6 +324,117 @@ async def upcoming_rounds(
         .order_by(Round.closes_at_utc.is_(None), Round.closes_at_utc, Round.opens_at_utc)
     )
     return [(c, r) for c, r in res.all()]
+
+
+# ── Personal calendar feed ────────────────────────────────────────────────
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def generate_calendar_token(session: AsyncSession, user_id: int) -> str:
+    """(Re)generate the user's calendar-feed token. Only the hash is stored
+    (same pattern as WebSession.token_hash) -- the raw value is returned
+    once, for the caller to hand back in a URL; it can never be recovered
+    afterward, only replaced by generating a new one. Callers are always
+    behind require_user, so the row already exists (ensure_user ran at
+    login) -- fetched plainly here to avoid overwriting the username with
+    a blank one."""
+    user = await session.get(User, user_id)
+    if user is None:
+        raise ValueError(f"no such user: {user_id}")
+    token = secrets.token_urlsafe(32)
+    user.calendar_token_hash = _hash_token(token)
+    await session.flush()
+    return token
+
+
+async def get_user_by_calendar_token(session: AsyncSession, token: str) -> User | None:
+    res = await session.execute(
+        select(User).where(User.calendar_token_hash == _hash_token(token))
+    )
+    return res.scalar_one_or_none()
+
+
+@dataclass(frozen=True)
+class CalendarEvent:
+    """One deadline on a user's personal feed -- the actual moment (same
+    timestamp the single-round .ics download already uses), not any
+    reminder's lead time."""
+
+    concert_title: str
+    label: str
+    at_utc: datetime
+    url: str | None = None
+    notes: str | None = None
+
+
+async def user_calendar_events(
+    session: AsyncSession, user_id: int, now: datetime | None = None
+) -> list[CalendarEvent]:
+    """Every round/day the user currently has an active reminder rule
+    covering (concert-wide or round-specific), each producing ONE event at
+    its real deadline -- sourced from reminder_queue, which already encodes
+    exactly which rounds/days are in scope per rule (sync_rule/plan_for_rule
+    already did the anchor-specific filtering). Future-only: a round/day
+    whose deadline already passed is left off the feed.
+    """
+    now = now or _now()
+    round_ids = set((await session.execute(
+        select(ReminderQueue.round_id)
+        .join(ReminderRule, ReminderQueue.rule_id == ReminderRule.id)
+        .where(ReminderRule.user_id == user_id, ReminderQueue.round_id.is_not(None))
+        .distinct()
+    )).scalars())
+    day_ids = set((await session.execute(
+        select(ReminderQueue.day_id)
+        .join(ReminderRule, ReminderQueue.rule_id == ReminderRule.id)
+        .where(ReminderRule.user_id == user_id, ReminderQueue.day_id.is_not(None))
+        .distinct()
+    )).scalars())
+
+    events: list[CalendarEvent] = []
+
+    if round_ids:
+        rounds = list((await session.execute(
+            select(Round).where(Round.id.in_(round_ids))
+        )).scalars())
+        concerts = {
+            c.id: c for c in (await session.execute(
+                select(Concert).where(Concert.id.in_({r.concert_id for r in rounds}))
+            )).scalars()
+        }
+        for r in rounds:
+            at = r.closes_at_utc or r.opens_at_utc or r.results_at_utc or r.payment_deadline_at_utc
+            if at is None or at < now:
+                continue
+            concert = concerts.get(r.concert_id)
+            events.append(CalendarEvent(
+                concert_title=concert.title if concert else "Concert",
+                label=r.label, at_utc=at, url=r.url, notes=r.notes,
+            ))
+
+    if day_ids:
+        days = list((await session.execute(
+            select(ConcertDay).where(ConcertDay.id.in_(day_ids))
+        )).scalars())
+        concerts = {
+            c.id: c for c in (await session.execute(
+                select(Concert).where(Concert.id.in_({d.concert_id for d in days}))
+            )).scalars()
+        }
+        for d in days:
+            if d.starts_at_utc < now:
+                continue
+            concert = concerts.get(d.concert_id)
+            events.append(CalendarEvent(
+                concert_title=concert.title if concert else "Concert",
+                label=d.label, at_utc=d.starts_at_utc,
+            ))
+
+    events.sort(key=lambda e: e.at_utc)
+    return events
 
 
 # ── Tags ─────────────────────────────────────────────────────────────────
