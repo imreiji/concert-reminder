@@ -10,9 +10,9 @@
   <aside class="sidebar">
     <h3>Sort</h3>
     <nav class="sorts">
-      <a href="/?sort=event{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
+      <a data-sort="event" href="/?sort=event{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
          {% if sort != "added" %}class="on"{% endif %}>Event date</a>
-      <a href="/?sort=added{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
+      <a data-sort="added" href="/?sort=added{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
          {% if sort == "added" %}class="on"{% endif %}>Recently added</a>
     </nav>
 
@@ -23,6 +23,7 @@
       {%- set active = t.id in selected_tags -%}
       {%- set others = selected_tags | reject("equalto", t.id) | list -%}
       <a class="chip kind-{{ t.kind.value }} {% if active %}on{% endif %}" data-name="{{ t.name | lower }}"
+         data-tag-ids="{{ t.id }}" onclick="return toggleTagFilter(event, this)"
          href="/?sort={{ sort }}{% for s in (others if active else others + [t.id]) %}&tag={{ s }}{% endfor %}">{{ t.name }}</a>
     {%- endmacro %}
     {% for section, kindname in [("Franchises","franchise"),("Groups","group"),("Artists","artist")] %}
@@ -40,12 +41,15 @@
       <div class="taglist">
         {% for r in region_links %}
         <a class="chip kind-venue {% if r.active %}on{% endif %}" data-name="{{ r.name | lower }}"
+           data-tag-ids="{{ r.ids | join(',') }}" onclick="return toggleTagFilter(event, this)"
            href="{{ r.href }}">{{ r.name }} <span class="dim">({{ r.count }})</span></a>
         {% endfor %}
       </div>
     </details>
     {% endif %}
-    {% if selected_tags %}<p><a class="dim" href="/?sort={{ sort }}">Clear filters</a></p>{% endif %}
+    <p id="clear-filters" {% if not selected_tags %}style="display:none"{% endif %}>
+      <a class="dim" href="/?sort={{ sort }}" onclick="return clearTagFilters(event)">Clear filters</a>
+    </p>
     <p><a class="dim" href="/tags">Manage tags →</a></p>
   </aside>
 
@@ -60,7 +64,9 @@
       {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
       {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
       {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
-      <a class="tile" href="/concerts/{{ c.event_id }}">
+      <a class="tile" href="/concerts/{{ c.event_id }}"
+         data-tags="{{ ctags | map(attribute='id') | join(',') }}"
+         {% if c.id not in visible_concert_ids %}style="display:none"{% endif %}>
         <strong>{{ c.title }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
         <span class="who">
           {#- display rules: F+G+A -> franchise+group; G+A -> group; A only -> artists -#}
@@ -75,10 +81,95 @@
       </a>
       {% endfor %}
     </div>
+    <p class="dim" id="no-match" {% if visible_concert_ids or not selected_tags %}style="display:none"{% endif %}>No concerts match.</p>
     {% else %}
     <p class="dim">No concerts match.{% if user.is_editor and not selected_tags %} <a href="/concerts/new">Create the first one →</a>{% endif %}</p>
     {% endif %}
   </section>
 </div>
+<script>
+  // Tag/region filtering is entirely client-side: every concert tile is
+  // already in the DOM with its tag ids, so toggling a chip just shows/hides
+  // tiles -- no server round trip, no page reload. Chips stay real <a href>
+  // links (see chiplink() above) so filtering still works, just slower, with
+  // JS disabled.
+  (function () {
+    function selectedIds() {
+      return new Set(new URLSearchParams(location.search).getAll("tag").map(Number));
+    }
+
+    function applyVisibility(selected) {
+      let anyVisible = false;
+      document.querySelectorAll(".tile").forEach((tile) => {
+        const tags = (tile.dataset.tags || "").split(",").filter(Boolean).map(Number);
+        const visible = selected.size === 0 || tags.some((id) => selected.has(id));
+        tile.style.display = visible ? "" : "none";
+        if (visible) anyVisible = true;
+      });
+      const noMatch = document.getElementById("no-match");
+      if (noMatch) noMatch.style.display = anyVisible ? "none" : "";
+    }
+
+    function updateChipState(selected) {
+      document.querySelectorAll("[data-tag-ids]").forEach((chip) => {
+        const ids = chip.dataset.tagIds.split(",").filter(Boolean).map(Number);
+        chip.classList.toggle("on", ids.some((id) => selected.has(id)));
+      });
+      const clearP = document.getElementById("clear-filters");
+      if (clearP) clearP.style.display = selected.size ? "" : "none";
+    }
+
+    function updateLinks(selected) {
+      const tagParams = [...selected].map((id) => "tag=" + id).join("&");
+      document.querySelectorAll(".sorts a[data-sort]").forEach((a) => {
+        a.href = "/?sort=" + a.dataset.sort + (tagParams ? "&" + tagParams : "");
+      });
+      const clearLink = document.querySelector("#clear-filters a");
+      if (clearLink) {
+        const sort = document.querySelector(".sorts a.on")?.dataset.sort
+          || new URLSearchParams(location.search).get("sort") || "event";
+        clearLink.href = "/?sort=" + sort;
+      }
+      document.querySelectorAll("[data-tag-ids]").forEach((chip) => {
+        const ids = chip.dataset.tagIds.split(",").filter(Boolean).map(Number);
+        const active = ids.some((id) => selected.has(id));
+        const rest = [...selected].filter((id) => !ids.includes(id));
+        const nextIds = active ? rest : rest.concat(ids);
+        const sort = new URLSearchParams(location.search).get("sort") || "event";
+        chip.href = "/?sort=" + sort + nextIds.map((id) => "&tag=" + id).join("");
+      });
+    }
+
+    function updateUrl(selected) {
+      const params = new URLSearchParams(location.search);
+      params.delete("tag");
+      selected.forEach((id) => params.append("tag", id));
+      history.replaceState(null, "", "?" + params.toString());
+    }
+
+    function applyAll(selected) {
+      updateUrl(selected);
+      applyVisibility(selected);
+      updateChipState(selected);
+      updateLinks(selected);
+    }
+
+    window.toggleTagFilter = function (event, el) {
+      event.preventDefault();
+      const ids = el.dataset.tagIds.split(",").filter(Boolean).map(Number);
+      const selected = selectedIds();
+      const active = ids.some((id) => selected.has(id));
+      ids.forEach((id) => (active ? selected.delete(id) : selected.add(id)));
+      applyAll(selected);
+      return false;
+    };
+
+    window.clearTagFilters = function (event) {
+      event.preventDefault();
+      applyAll(new Set());
+      return false;
+    };
+  })();
+</script>
 {% endif %}
 {% endblock %}

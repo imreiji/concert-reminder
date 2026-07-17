@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.db.models import Concert, ConcertDay, ConcertTag, Tag, User
+from app.db.models import Concert, ConcertDay, Tag, User
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual, utc_to_jst
 from app.scheduler import heartbeat
@@ -48,7 +48,11 @@ def region_sidebar_links(venue_tags: list[Tag], selected: list[int], sort: str) 
     """Sidebar filter data for VENUE tags grouped by region ("Other" bucket
     for unset) instead of one link per venue -- filtering by exact venue
     was called out as not useful. Toggling a region (de)selects every venue
-    tag id in it together, reusing the existing ?tag= ANY-of query param."""
+    tag id in it together.
+
+    `ids` is what the client-side filter actually uses (toggles all of a
+    region's tag ids together, no server round trip); `href` stays as a
+    plain-nav fallback for when JS is unavailable."""
     by_region: dict[str, list[Tag]] = {}
     for t in venue_tags:
         by_region.setdefault(t.region or "Other", []).append(t)
@@ -59,7 +63,10 @@ def region_sidebar_links(venue_tags: list[Tag], selected: list[int], sort: str) 
         others = [i for i in selected if i not in rtag_ids]
         href_ids = others if active else others + rtag_ids
         href = f"/?sort={sort}" + "".join(f"&tag={i}" for i in href_ids)
-        links.append({"name": region_name, "count": len(rtag_ids), "active": active, "href": href})
+        links.append({
+            "name": region_name, "count": len(rtag_ids), "active": active,
+            "href": href, "ids": rtag_ids,
+        })
     return links
 
 
@@ -114,9 +121,10 @@ def create_app() -> FastAPI:
             from sqlalchemy import func as sa_func
 
             stmt = select(Concert).options(selectinload(Concert.days))
-            if tag:
-                # ANY-of semantics: a concert matches if it carries any selected tag
-                stmt = stmt.join(ConcertTag).where(ConcertTag.tag_id.in_(tag)).distinct()
+            # No server-side tag filtering: every concert renders into the DOM
+            # tagged with its tag ids, and JS toggles tile visibility -- tag
+            # filtering was the slowest part of this page when it round-tripped
+            # the server on every click.
             if sort == "added":
                 stmt = stmt.order_by(Concert.created_at.desc())
             else:  # "event": earliest concert day first; undated concerts last
@@ -142,6 +150,14 @@ def create_app() -> FastAPI:
             "by_kind": grouped_tags(tags), "groups_json": {}, "tag_names_json": {},
         }
         region_links = region_sidebar_links(picker["by_kind"].get("venue", []), tag, sort)
+        selected_tags = set(tag)
+        # Initial visibility, computed server-side so there's no flash of
+        # wrongly-shown tiles before JS runs on first load; every subsequent
+        # filter change is handled entirely client-side (see index.html).
+        visible_concert_ids = {
+            c.id for c in concerts
+            if not selected_tags or ({t.id for t in c.tags} & selected_tags)
+        }
         return templates.TemplateResponse(
             request,
             "index.html",
@@ -153,7 +169,8 @@ def create_app() -> FastAPI:
                 "region_links": region_links,
                 "groups_json": _json.dumps(picker["groups_json"]),
                 "tag_names_json": _json.dumps(picker["tag_names_json"]),
-                "selected_tags": set(tag),
+                "selected_tags": selected_tags,
+                "visible_concert_ids": visible_concert_ids,
                 "sort": sort,
                 "tz": tz,
                 "tz_auto": tz_auto,

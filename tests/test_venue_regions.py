@@ -295,4 +295,6 @@ async def test_region_filter_selects_all_venues_in_region(client):
     r = client.get("/?sort=event&tag=1&tag=2")
     assert "At Hall A" in r.text
     assert "At Hall B" in r.text
-    assert "Untagged" not in r.text
+    assert "Untagged" in r.text  # still in the DOM for client-side filtering...
+    untagged_tile = r.text[r.text.rindex('<a class="tile"', 0, r.text.index("Untagged")):]
+    assert 'style="display:none"' in untagged_tile.split("</a>", 1)[0]  # ...just hidden

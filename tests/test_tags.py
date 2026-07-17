@@ -168,8 +168,17 @@ def test_index_filters_by_tag(client):
 
     everything = client.get("/").text
     assert "Hasu Live" in everything and "Gakumas Live" in everything
+
     filtered = client.get("/?tag=1").text
-    assert "Hasu Live" in filtered and "Gakumas Live" not in filtered
+    # Client-side filtering: every tile is always in the DOM (tagged with its
+    # own tag ids) so JS can toggle visibility instantly with no round trip --
+    # the non-matching tile is still present, just server-marked hidden for
+    # the initial (no-JS) render.
+    assert "Hasu Live" in filtered and "Gakumas Live" in filtered
+    hasu_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Hasu Live")):]
+    gakumas_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Gakumas Live")):]
+    assert 'style="display:none"' not in hasu_tile.split("</a>", 1)[0]
+    assert 'style="display:none"' in gakumas_tile.split("</a>", 1)[0]
 
 
 def test_index_sorts_by_earliest_event_day(client):
