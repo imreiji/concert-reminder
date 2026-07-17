@@ -142,6 +142,29 @@ class Concert(Base):
         back_populates="concert", cascade="all, delete-orphan"
     )
     tags: Mapped[list["Tag"]] = relationship(secondary="concert_tags", order_by="Tag.name")
+    audits: Mapped[list["ConcertAudit"]] = relationship(
+        cascade="all, delete-orphan", order_by="ConcertAudit.edited_at_utc.desc()"
+    )
+
+
+class ConcertAudit(Base):
+    """One row per edit that actually changed a tracked scalar field --
+    lightweight by design: only the concert's own top-level fields (title,
+    organizer, URLs, notes, ...), not day/round/tag adds-and-removes. `changes`
+    is a JSON list of {"field", "before", "after"}; enum values are stored as
+    their plain `.value` string so the column stays JSON-serializable."""
+
+    __tablename__ = "concert_audit"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    concert_id: Mapped[int] = mapped_column(
+        ForeignKey("concerts.id", ondelete="CASCADE"), index=True
+    )
+    edited_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.discord_id"))
+    edited_at_utc: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    changes: Mapped[list] = mapped_column(JSON)
+
+    editor: Mapped["User"] = relationship()
 
 
 class Tag(Base):

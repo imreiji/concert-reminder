@@ -36,10 +36,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Concert, ConcertDay, ReminderRule, Round, Tag, User
 from app.db.service import (
     attach_tag,
+    concert_audit_log,
     detach_tag,
     ensure_user,
     group_members,
     handle_newly_tagged,
+    record_concert_edit,
+    snapshot_concert,
     sync_concert,
     tag_picker_context,
 )
@@ -544,6 +547,9 @@ async def concert_detail(
     past_day_ids = {d.id for d in concert.days if is_day_past(d, now)}
     date_range = concert_date_range(concert.days)
     concert_past = bool(date_range) and date_range[1] < now
+    # Editor-only, and only fetched for editors -- viewers have no use for
+    # who-changed-what, and it's one extra query worth skipping for them.
+    audit_log = await concert_audit_log(session, concert.id) if user.is_editor else []
     return templates.TemplateResponse(
         request,
         "concert_detail.html",
@@ -552,7 +558,8 @@ async def concert_detail(
          "rounds_by_day": by_day, "general_rounds": general,
          "day_venue_tags": day_venue_tags, "past_round_ids": past_round_ids,
          "past_day_ids": past_day_ids, "now": now,
-         "date_range": date_range, "concert_past": concert_past},
+         "date_range": date_range, "concert_past": concert_past,
+         "audit_log": audit_log},
     )
 
 
@@ -652,6 +659,7 @@ async def edit_concert(
     ReminderQueue.sent_at_utc history; delete-and-recreate would re-arm
     already-delivered reminders on an unrelated edit)."""
     concert = await get_concert_by_event_id(session, event_id)
+    before = snapshot_concert(concert)
     concert.event_id = await validate_event_id(session, new_event_id, exclude_concert_id=concert.id)
     concert.title = title.strip()
     concert.title_en = title_en.strip() or None
@@ -742,6 +750,7 @@ async def edit_concert(
         if rid not in kept_round_ids:
             await session.delete(round_)
 
+    await record_concert_edit(session, concert, user.id, before)
     await session.flush()
     await sync_concert(session, concert.id)
     await session.commit()

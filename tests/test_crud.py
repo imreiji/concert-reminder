@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, ReminderQueue, Round
+from app.db.models import Base, Concert, ConcertAudit, ConcertDay, ReminderQueue, Round
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.web import auth
@@ -832,3 +832,59 @@ def test_duplicate_button_shown_on_edit_page(client):
     client.post("/concerts", data={"title": "C", "event_id": "c"})
     r = client.get("/concerts/c/edit")
     assert '/concerts/c/duplicate' in r.text
+
+
+# ── Concert edit history ─────────────────────────────────────────────────
+
+
+async def test_editing_concert_over_http_records_an_audit_row(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c", "organizer": "Old Org"})
+    client.post(
+        "/concerts/c/edit",
+        data={"title": "C (renamed)", "event_id": "c", "organizer": "New Org"},
+    )
+    async with client.db() as s:
+        audits = (await s.execute(select(ConcertAudit))).scalars().all()
+    assert len(audits) == 1
+    fields = {c["field"] for c in audits[0].changes}
+    assert fields == {"title", "organizer"}
+    assert audits[0].edited_by == EDITOR_ID
+
+
+async def test_resubmitting_the_edit_form_unchanged_records_nothing(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+    client.post("/concerts/c/edit", data={"title": "C", "event_id": "c"})  # no-op resubmit
+    async with client.db() as s:
+        assert (await s.execute(select(ConcertAudit))).scalars().all() == []
+
+
+def test_edit_history_shown_to_editors_not_viewers(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+    client.post("/concerts/c/edit", data={"title": "C (renamed)", "event_id": "c"})
+
+    r = client.get("/concerts/c")
+    assert "Edit history" in r.text
+    assert "C (renamed)" in r.text  # the new title appears in the diff line
+
+    login_as(client, VIEWER_ID, "viewer")
+    r = client.get("/concerts/c")
+    assert "Edit history" not in r.text
+
+
+def test_edit_history_absent_when_concert_never_edited(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+    r = client.get("/concerts/c")
+    assert "Edit history" not in r.text
+
+
+async def test_deleting_concert_cascades_its_audit_log_over_http(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+    client.post("/concerts/c/edit", data={"title": "C (renamed)", "event_id": "c"})
+    client.post("/concerts/c/delete")
+    async with client.db() as s:
+        assert (await s.execute(select(ConcertAudit))).scalars().all() == []

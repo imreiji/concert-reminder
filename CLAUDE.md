@@ -9,10 +9,11 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 222 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 238 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
-export, ramen.events import, a personal calendar-feed subscription, and
-free-text concert search have shipped since).
+export, ramen.events import, a personal calendar-feed subscription,
+free-text concert search, a personalized `/mydeadlines` Discord command,
+and a per-concert edit history have shipped since).
 
 ## Commands
 
@@ -49,6 +50,14 @@ free-text concert search have shipped since).
   the feed itself). The `.ics` route deliberately has NO `require_user` —
   calendar apps poll it directly with no cookies, so the token in the URL
   *is* the credential.
+- Concert edit history: `db/service.py`'s `snapshot_concert`/
+  `record_concert_edit`/`concert_audit_log`, backing the `ConcertAudit`
+  table (`db/models.py`). Deliberately lightweight — only the concert's own
+  top-level scalar fields (title, organizer, URLs, notes, ...), NOT
+  day/round/tag adds-removes-edits. `edit_concert` (`web/routes/concerts.py`)
+  must call `snapshot_concert` BEFORE mutating the concert and
+  `record_concert_edit` AFTER — get that order backwards and every diff
+  reads as unchanged.
 - Bot and web NEVER contain business logic; they call `db/service.py`.
 
 ## Non-negotiable invariants
