@@ -38,6 +38,30 @@
         target.style.display = (!q || el.dataset.name.includes(q)) ? "" : "none";
       });
     }
+    // shared: refresh every [data-countdown][data-iso] span with a live
+    // "Xd Yh" / "Zh Wm" / "Nm" countdown to that ISO timestamp.
+    function refreshCountdowns() {
+      var now = Date.now();
+      document.querySelectorAll("[data-countdown][data-iso]").forEach(function (el) {
+        var target = Date.parse(el.dataset.iso);
+        var diffMs = target - now;
+        if (isNaN(target) || diffMs <= 0) { el.textContent = ""; return; }
+        var mins = Math.floor(diffMs / 60000);
+        var days = Math.floor(mins / 1440);
+        var hours = Math.floor((mins % 1440) / 60);
+        var remMins = mins % 60;
+        var text;
+        if (days > 0) text = days + "d " + hours + "h left";
+        else if (hours > 0) text = hours + "h " + remMins + "m left";
+        else text = remMins + "m left";
+        el.textContent = text;
+      });
+    }
+    if (document.querySelector("[data-countdown][data-iso]")) {
+      refreshCountdowns();
+      setInterval(refreshCountdowns, 60000);
+    }
+    document.body.addEventListener("htmx:afterSwap", refreshCountdowns);
   </script>
 {% if user %}
   <script>

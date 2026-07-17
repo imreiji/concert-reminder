@@ -43,6 +43,25 @@ def grouped_tags(tags):
     return by_kind
 
 
+def region_sidebar_links(venue_tags: list[Tag], selected: list[int], sort: str) -> list[dict]:
+    """Sidebar filter data for VENUE tags grouped by region ("Other" bucket
+    for unset) instead of one link per venue -- filtering by exact venue
+    was called out as not useful. Toggling a region (de)selects every venue
+    tag id in it together, reusing the existing ?tag= ANY-of query param."""
+    by_region: dict[str, list[Tag]] = {}
+    for t in venue_tags:
+        by_region.setdefault(t.region or "Other", []).append(t)
+    links = []
+    for region_name in sorted(by_region, key=lambda r: (r == "Other", r)):
+        rtag_ids = [t.id for t in by_region[region_name]]
+        active = any(i in selected for i in rtag_ids)
+        others = [i for i in selected if i not in rtag_ids]
+        href_ids = others if active else others + rtag_ids
+        href = f"/?sort={sort}" + "".join(f"&tag={i}" for i in href_ids)
+        links.append({"name": region_name, "count": len(rtag_ids), "active": active, "href": href})
+    return links
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="dekimasen.app", docs_url=None, redoc_url=None)
     app.add_middleware(
@@ -118,6 +137,7 @@ def create_app() -> FastAPI:
         picker = await tag_picker_context(session) if user else {
             "by_kind": grouped_tags(tags), "groups_json": {}, "tag_names_json": {},
         }
+        region_links = region_sidebar_links(picker["by_kind"].get("venue", []), tag, sort)
         return templates.TemplateResponse(
             request,
             "index.html",
@@ -126,6 +146,7 @@ def create_app() -> FastAPI:
                 "concerts": concerts,
                 "all_tags": tags,
                 "by_kind": picker["by_kind"],
+                "region_links": region_links,
                 "groups_json": _json.dumps(picker["groups_json"]),
                 "tag_names_json": _json.dumps(picker["tag_names_json"]),
                 "selected_tags": set(tag),

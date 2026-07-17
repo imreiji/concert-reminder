@@ -183,3 +183,25 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .daypick { display: flex; flex-wrap: wrap; gap: .5rem; margin: .2rem 0; }
 .daypick-opt { display: inline-flex; align-items: center; gap: .25rem; font-size: .85rem; }
 .tile .kind-tag { color: var(--dim); font-size: .8em; }
+
+/* Past deadlines / days: struck through and dimmed, not hidden */
+.past, .past strong, .past a { color: var(--dim); text-decoration: line-through; }
+.past .kind, .past .chip { text-decoration: none; }
+h3.leg-heading.past { text-decoration: line-through; }
+
+/* Round table */
+.table-scroll { overflow-x: auto; margin: .4rem 0 1rem; }
+table.rounds { border-collapse: collapse; width: 100%; font-size: .9rem; }
+table.rounds th {
+  text-align: left; font-weight: 600; color: var(--dim); font-size: .8rem;
+  padding: .3rem .6rem; border-bottom: 1px solid var(--line);
+}
+table.rounds td { padding: .5rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.rounds tr.round-edit-row td { border-bottom: 1px solid var(--line); padding-top: 0; }
+table.rounds tr.round-row.past td { opacity: .65; }
+.countdown { display: inline-block; }
+
+/* Header meta grid ("dt"/"dd" summary), mirrors the reference site's layout */
+.meta-grid { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .8rem; margin: .4rem 0; font-size: .9rem; }
+.meta-grid dt { color: var(--dim); }
+.meta-grid dd { margin: 0; }

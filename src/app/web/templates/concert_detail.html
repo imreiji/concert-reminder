@@ -4,18 +4,26 @@
 <article class="concert">
   <header class="concert-head">
     <h1>{{ concert.title }}{% if concert.kind %} <span class="dim kind-tag">{{ concert.kind.value.replace("_", " ") }}</span>{% endif %}</h1>
-    {% if concert.title_en %}<p class="dim">{{ concert.title_en }}</p>{% endif %}
-    {% if concert.organizer %}<p class="dim">{{ concert.organizer }}</p>{% endif %}
+    {% if date_range %}
+    <p class="dim {% if concert_past %}past{% endif %}">
+      {% if date_range[0] == date_range[1] %}{{ dual(date_range[0], tz) }}
+      {% else %}{{ jst(date_range[0]).strftime('%Y-%m-%d') }} – {{ jst(date_range[1]).strftime('%Y-%m-%d') }} JST{% endif %}
+    </p>
+    {% endif %}
     {% if concert.tags %}
     <p class="taglist header-tags">
       {% for t in concert.tags %}<span class="chip kind-{{ t.kind.value }}">{{ t.name }}</span>{% endfor %}
     </p>
     {% endif %}
-    {% if concert.categories %}<p class="dim tiny">{{ concert.categories }}</p>{% endif %}
-    {% if concert.notes %}<p class="dim">{{ concert.notes }}</p>{% endif %}
-    {% if concert.performers_text %}
-    <p class="dim tiny">Performers: {{ concert.performers_text.replace('\n', ', ') }}</p>
+    {% if concert.title_en or concert.organizer or concert.categories or concert.performers_text %}
+    <dl class="meta-grid">
+      {% if concert.title_en %}<dt>Title (EN)</dt><dd>{{ concert.title_en }}</dd>{% endif %}
+      {% if concert.organizer %}<dt>Artist / organizer</dt><dd>{{ concert.organizer }}</dd>{% endif %}
+      {% if concert.categories %}<dt>Categories</dt><dd>{{ concert.categories }}</dd>{% endif %}
+      {% if concert.performers_text %}<dt>Performers</dt><dd>{{ concert.performers_text.replace('\n', ', ') }}</dd>{% endif %}
+    </dl>
     {% endif %}
+    {% if concert.notes %}<p class="dim">{{ concert.notes }}</p>{% endif %}
     <p class="dim tiny">
       {% if concert.eventernote_url %}<a href="{{ concert.eventernote_url }}" target="_blank" rel="noopener">eventernote</a> · {% endif %}
       {% if concert.official_url %}<a href="{{ concert.official_url }}" target="_blank" rel="noopener">official site</a> · {% endif %}

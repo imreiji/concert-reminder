@@ -17,7 +17,7 @@ via domain.timezones.jst_to_utc. Nowhere else.
 """
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
@@ -36,7 +36,7 @@ from app.db.service import (
 )
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
-from app.domain.types import Anchor, Channel, ConcertKind, RoundKind
+from app.domain.types import Anchor, Channel, ConcertKind, RoundKind, TagKind
 from app.web.auth import SessionUser, require_editor, require_user
 
 router = APIRouter()
@@ -149,6 +149,45 @@ def group_rounds_by_day(concert: Concert) -> tuple[dict[int, list[Round]], list[
     return by_day, general
 
 
+def find_venue_tag(venue_tags: list[Tag], name: str | None) -> Tag | None:
+    """Resolve a day's free-text venue against real VENUE tags by exact,
+    case-insensitive name match -- same free-text-to-structured pattern as
+    resolve_round_leg above. No match just means no link is shown (a nudge
+    to go create that tag, not a hard requirement)."""
+    if not name:
+        return None
+    name = name.strip().lower()
+    for t in venue_tags:
+        if t.name.strip().lower() == name:
+            return t
+    return None
+
+
+def is_round_past(round_: Round, now: datetime) -> bool:
+    """A round is past once every timestamp it has set has already
+    happened; a round with no timestamps set at all can't be "past"."""
+    timestamps = [
+        t for t in (
+            round_.opens_at_utc, round_.closes_at_utc,
+            round_.results_at_utc, round_.payment_deadline_at_utc,
+        ) if t is not None
+    ]
+    return bool(timestamps) and all(t < now for t in timestamps)
+
+
+def is_day_past(day: ConcertDay, now: datetime) -> bool:
+    return day.starts_at_utc < now
+
+
+def concert_date_range(days: list[ConcertDay]) -> tuple[datetime, datetime] | None:
+    """Earliest and latest day.starts_at_utc, for the detail page header's
+    date-range summary. None when there are no days yet."""
+    if not days:
+        return None
+    starts = [d.starts_at_utc for d in days]
+    return min(starts), max(starts)
+
+
 # ── Fragments (htmx swap targets) ────────────────────────────────────────
 
 
@@ -166,12 +205,21 @@ async def render_fragment(request: Request, name: str, concert: Concert, user: S
     tz = await user_tz(session, user.id)
     presets = await my_presets(session, user.id)
     by_day, general = group_rounds_by_day(concert)
+    now = datetime.now(UTC)
+    venue_tags = list(
+        (await session.execute(select(Tag).where(Tag.kind == TagKind.VENUE))).scalars()
+    )
+    day_venue_tags = {d.id: find_venue_tag(venue_tags, d.venue) for d in concert.days}
+    past_round_ids = {r.id for r in concert.rounds if is_round_past(r, now)}
+    past_day_ids = {d.id for d in concert.days if is_day_past(d, now)}
     return templates.TemplateResponse(
         request,
         name,
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
          "kinds": list(RoundKind), "anchors": list(Anchor),
-         "rounds_by_day": by_day, "general_rounds": general},
+         "rounds_by_day": by_day, "general_rounds": general,
+         "day_venue_tags": day_venue_tags, "past_round_ids": past_round_ids,
+         "past_day_ids": past_day_ids, "now": now},
     )
 
 
@@ -361,7 +409,6 @@ async def concert_detail(
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    from app.db.models import Tag
     from app.web.routes.preferences import my_presets
 
     concert = await get_concert(session, concert_id)
@@ -374,13 +421,23 @@ async def concert_detail(
     for tg in tags:
         by_kind.setdefault(tg.kind.value, []).append(tg)
     by_day, general = group_rounds_by_day(concert)
+    now = datetime.now(UTC)
+    venue_tags = by_kind.get(TagKind.VENUE.value, [])
+    day_venue_tags = {d.id: find_venue_tag(venue_tags, d.venue) for d in concert.days}
+    past_round_ids = {r.id for r in concert.rounds if is_round_past(r, now)}
+    past_day_ids = {d.id for d in concert.days if is_day_past(d, now)}
+    date_range = concert_date_range(concert.days)
+    concert_past = bool(date_range) and date_range[1] < now
     return templates.TemplateResponse(
         request,
         "concert_detail.html",
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
          "kinds": list(RoundKind), "anchors": list(Anchor), "concert_kinds": list(ConcertKind),
          "by_kind": by_kind, "attached": {tg.id for tg in concert.tags},
-         "rounds_by_day": by_day, "general_rounds": general},
+         "rounds_by_day": by_day, "general_rounds": general,
+         "day_venue_tags": day_venue_tags, "past_round_ids": past_round_ids,
+         "past_day_ids": past_day_ids, "now": now,
+         "date_range": date_range, "concert_past": concert_past},
     )
 
 
@@ -488,6 +545,42 @@ async def delete_concert(
 
 
 # ── Rounds ───────────────────────────────────────────────────────────────
+
+
+@router.get("/rounds/{round_id}/ics")
+async def round_ics(
+    round_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """One .ics per round, keyed to whichever timestamp is most relevant:
+    closes -> opens -> results -> payment, first one set. Matches the
+    reference site's one-icon-per-row pattern rather than exporting all 4
+    possible deadlines separately."""
+    from app.domain.ics_export import build_ics
+    from app.domain.yaml_export import slugify
+
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
+        raise HTTPException(status_code=404)
+    at_utc = (
+        round_.closes_at_utc or round_.opens_at_utc
+        or round_.results_at_utc or round_.payment_deadline_at_utc
+    )
+    if at_utc is None:
+        raise HTTPException(status_code=422, detail="round has no timestamps to export")
+    concert = await get_concert(session, round_.concert_id)
+    text = build_ics(
+        f"{concert.title} — {round_.label}", at_utc,
+        url=round_.url, description=round_.notes,
+    )
+    return Response(
+        content=text,
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": f'attachment; filename="{slugify(round_.label)}.ics"'
+        },
+    )
 
 
 @router.post("/concerts/{concert_id}/rounds", response_class=HTMLResponse)
