@@ -5,38 +5,29 @@ and the application code under src/app/ (this repo has no `pod/` or `tools/`
 directory — reviewed the actual root-level layout instead). Findings are
 ordered by urgency.
 
-## 1. `scripts/seed_demo.py` is broken — it crashes on import
+## 1. `scripts/seed_demo.py` was broken — removed
 
 ```
 $ uv run python scripts/seed_demo.py
 ImportError: cannot import name 'Window' from 'app.db.models'
 ```
 
-The script still imports `Window`/`WindowKind` from `app.db.models` /
+The script still imported `Window`/`WindowKind` from `app.db.models` /
 `app.domain.types`. Those were renamed to `Round`/`RoundKind` in the
 "Windows to Rounds" restructuring (commit `e13447d`, migration
-`20b27b1046f4_windows_to_rounds.py`) and no longer exist anywhere in `src/`.
-`grep -rn Window src/` turns up nothing except this file and an unrelated
-docstring reference in `yaml_export.py`.
+`20b27b1046f4_windows_to_rounds.py`) and no longer existed anywhere else in
+`src/`. It also predated `event_id`: it constructed `Concert(...)` with no
+`event_id`, now a required, unique, non-null column — so a straight
+find-and-replace wouldn't have been enough to fix it either.
 
-This is the only place in the repo that still uses the old names, which is
-why `ruff check .` and `pytest -q` (the two CI gates) both stay green —
-neither one executes the script, and Ruff doesn't verify that an imported
-name actually exists in the target module. The breakage is invisible until
-someone actually runs the documented command (README.md and CLAUDE.md both
-advertise `uv run python scripts/seed_demo.py` as the way to get demo data).
-
-Beyond the rename, the script also predates `event_id`: it constructs
-`Concert(title=..., franchise=..., venue=..., notes=..., created_by=...)`
-with no `event_id`, which is now a required, unique, non-null column — so a
-straight find-and-replace of `Window`→`Round` isn't enough, the `Concert(...)`
-call needs an `event_id=` too (e.g. via the same `generate_event_id` helper
-`routes/imports.py` uses).
-
-**Recommendation:** fix the script (rename + add `event_id`), and add a cheap
-regression guard — either a smoke test that imports `scripts.seed_demo` and
-calls `main()` against the test DB, or a `uv run python scripts/seed_demo.py
---clean` step in CI — so a future rename doesn't silently break it again.
+Neither CI gate (`ruff check .`, `pytest -q`) caught this, since neither one
+executes the script and Ruff doesn't verify that an imported name actually
+exists in the target module. **Resolved:** the script (and the now-empty
+`scripts/` directory) was deleted rather than repaired, along with the
+"Demo data" line in CLAUDE.md — it had drifted twice already (once on the
+Window→Round rename, once on `event_id`) and the app has no other use for
+it, so removal is cheaper long-term than maintaining a demo-data path
+nothing else in the codebase exercises.
 
 ## 2. README.md has the same staleness problem CLAUDE.md had
 

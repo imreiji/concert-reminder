@@ -25,7 +25,7 @@ Layout:
 
 ```
 src/app/
-  config.py      env-driven settings; editor whitelist lives here
+  config.py      env-driven settings; editor/admin whitelists live here
   domain/        pure logic, no I/O — timezone math now, reminder math in Phase 2
   db/            SQLAlchemy models + async session (Phase 2)
   bot/           discord.py client + one cog per feature
@@ -40,8 +40,12 @@ deploy/          setup.sh, systemd unit, Caddyfile, backup.sh
 1. **Timezones:** DB stores aware UTC only. Forms accept JST (that's how
    Japanese ticketing announces). Display shows user-local + JST. All
    conversions go through `app/domain/timezones.py` — nowhere else.
-2. **Access:** anyone with Discord can log in and manage their own reminders;
-   only IDs in `EDITOR_WHITELIST` can create/edit concerts.
+2. **Access:** anyone with Discord can log in and manage their own reminders.
+   Creating/editing concerts needs editor rights: either a Discord ID in the
+   `EDITOR_WHITELIST` env var (permanent bootstrap/break-glass set) or the
+   DB-backed `users.is_editor` flag, which admins (`ADMIN_WHITELIST`) can
+   grant or revoke live from the preferences page or `/promote-editor` /
+   `/demote-editor`. Admins automatically have editor rights too.
 3. **Reminders are idempotent:** the queue has a UNIQUE constraint, editing a
    date reschedules instead of duplicating, and the scheduler only marks a row
    sent after the DM succeeds.
@@ -89,3 +93,12 @@ Backups: `deploy/backup.sh` via cron (nightly SQLite → S3).
 - [x] Phase 10 — reminder presets, one-click apply, tag subscriptions with notify-and-apply
 - [x] Phase 11 — UI overhaul: sidebar filters, tiles, tag-driven creation, sentence presets, hierarchical subscriptions, favicon
 - [x] Phase 12 — interactive DM embeds: state-aware buttons, default preset, snooze, deadline list
+
+Shipped since Phase 12 (no phase numbers assigned, tracked as feature PRs instead):
+- [x] Three-tier access control: Admin, Editor, User
+- [x] Import a concert draft from a ramen.events URL
+- [x] Windows restructured into Rounds: apply/results/payment bundled into one row
+- [x] Concert kind, day/leg round grouping, and a YAML export
+- [x] A dedicated, richer `/concerts/new` creation page
+- [x] Venue tags with region + link, round table, `.ics` export, live countdown, past-marking
+- [x] `event_id` URLs and a dedicated Edit Concert page

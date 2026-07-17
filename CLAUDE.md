@@ -22,7 +22,6 @@ export, and ramen.events import have shipped since).
 - Lint: `uv run ruff check .` — MUST be clean before any commit
 - New migration: `uv run alembic revision --autogenerate -m "msg"`, then
   review it (see Migrations below), then `uv run alembic upgrade head`
-- Demo data: `uv run python scripts/seed_demo.py`
 - CI (`.github/workflows/ci.yml`) runs `uv sync`, `ruff check .`, `pytest -q`
   on every push/PR to `main` — the same two gates as above, nothing extra.
 
