@@ -13,7 +13,12 @@ class Ping(commands.Cog):
 
     @app_commands.command(description="Check the bot is alive")
     async def ping(self, interaction: discord.Interaction) -> None:
-        role = "editor" if settings.is_editor(interaction.user.id) else "viewer"
+        uid = interaction.user.id
+        role = (
+            "admin" if settings.is_admin(uid)
+            else "editor" if settings.is_editor(uid)
+            else "viewer"
+        )
         await interaction.response.send_message(
             f"pong — latency {self.bot.latency * 1000:.0f}ms — you are a **{role}**",
             ephemeral=True,

@@ -50,9 +50,14 @@ scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
 4. **Notifications**: new-event notices go through the `notifications`
    table (DB outbox drained by the scheduler) — never send DMs directly
    from web routes.
-5. **Auth**: editors = `EDITOR_WHITELIST` env (Discord IDs). Sessions are
-   DB-backed sha256 token hashes (revocable). Ownership checks 404, not 403,
-   on other users' presets/subscriptions.
+5. **Auth**: three tiers — admin, editor, user. Admins = `ADMIN_WHITELIST`
+   env (Discord IDs), env-only by design (no runtime UI; edit `.env` +
+   restart). Editors = `EDITOR_WHITELIST` env (permanent bootstrap/
+   break-glass set) OR the `users.is_editor` DB flag, which admins can
+   toggle live from the preferences page or `/promote-editor` /
+   `/demote-editor` Discord commands. Admins automatically pass editor
+   checks too. Sessions are DB-backed sha256 token hashes (revocable).
+   Ownership checks 404, not 403, on other users' presets/subscriptions.
 
 ## Migrations (SQLite gotchas — these have bitten before)
 

@@ -77,6 +77,9 @@ class User(Base):
     timezone: Mapped[str] = mapped_column(String(64), default="America/Moncton")
     # tz_auto: timezone is browser-detected until the user overrides it manually
     tz_auto: Mapped[bool] = mapped_column(default=True, server_default="1")
+    # DB-persisted editor grant, toggled by admins (web/Discord). Final editor
+    # status is this OR settings.editor_whitelist OR settings.admin_whitelist.
+    is_editor: Mapped[bool] = mapped_column(default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
     rules: Mapped[list["ReminderRule"]] = relationship(back_populates="user")

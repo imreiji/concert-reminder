@@ -30,7 +30,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db.models import WebSession
+from app.db.models import User, WebSession
 from app.db.service import ensure_user
 from app.db.session import get_session
 
@@ -47,10 +47,13 @@ class SessionUser:
     id: int
     username: str
     avatar: str | None
+    # Resolved once in current_user() (env whitelist OR admin OR DB flag) —
+    # unlike is_admin this needs a DB read, so it can't be a cheap property.
+    is_editor: bool = False
 
     @property
-    def is_editor(self) -> bool:
-        return settings.is_editor(self.id)
+    def is_admin(self) -> bool:
+        return settings.is_admin(self.id)
 
     @property
     def avatar_url(self) -> str:
@@ -191,7 +194,16 @@ async def current_user(
         request.session.pop("sid", None)  # stale/revoked cookie: clean it up
         request.session.pop("user", None)
         return None
-    return SessionUser(id=data["id"], username=data["username"], avatar=data.get("avatar"))
+    user_id = data["id"]
+    db_user = await db.get(User, user_id)
+    is_editor = (
+        settings.is_editor(user_id)
+        or settings.is_admin(user_id)
+        or (db_user.is_editor if db_user else False)
+    )
+    return SessionUser(
+        id=user_id, username=data["username"], avatar=data.get("avatar"), is_editor=is_editor
+    )
 
 
 async def require_user(user: SessionUser | None = Depends(current_user)) -> SessionUser:
@@ -203,4 +215,10 @@ async def require_user(user: SessionUser | None = Depends(current_user)) -> Sess
 async def require_editor(user: SessionUser = Depends(require_user)) -> SessionUser:
     if not user.is_editor:
         raise HTTPException(status_code=403, detail="Editor access required")
+    return user
+
+
+async def require_admin(user: SessionUser = Depends(require_user)) -> SessionUser:
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user

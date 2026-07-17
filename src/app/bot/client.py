@@ -25,6 +25,7 @@ class ReminderBot(commands.Bot):
         self.add_dynamic_items(*DYNAMIC_ITEMS)  # buttons survive restarts
         await self.load_extension("app.bot.cogs.ping")
         await self.load_extension("app.bot.cogs.reminders")
+        await self.load_extension("app.bot.cogs.admin")
         synced = await self.tree.sync()
         log.info("synced %d slash command(s)", len(synced))
 

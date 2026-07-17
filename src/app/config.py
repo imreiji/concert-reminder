@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     # Access control: comma-separated Discord user IDs with edit rights
     editor_whitelist: str = ""
+    # Access control: comma-separated Discord user IDs who can manage editors
+    admin_whitelist: str = ""
 
     # Web
     base_url: str = "http://localhost:8000"
@@ -44,6 +46,19 @@ class Settings(BaseSettings):
 
     def is_editor(self, discord_id: int) -> bool:
         return discord_id in self.editor_ids
+
+    @property
+    def admin_ids(self) -> frozenset[int]:
+        """Parsed whitelist. Malformed entries are ignored rather than fatal."""
+        ids: set[int] = set()
+        for part in self.admin_whitelist.split(","):
+            part = part.strip()
+            if part.isdigit():
+                ids.add(int(part))
+        return frozenset(ids)
+
+    def is_admin(self, discord_id: int) -> bool:
+        return discord_id in self.admin_ids
 
     @property
     def bot_enabled(self) -> bool:
