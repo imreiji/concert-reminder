@@ -30,37 +30,63 @@ def test_concert_to_yaml_full_shape():
         artists=["Kaho", "Sayaka"],
         venues=["Yokohama Arena"],
         days=[
-            YamlDay(label="Day 1", starts_at_utc=dt(8, 1, 9)),
+            YamlDay(
+                label="Day 1", starts_at_utc=dt(8, 1, 9),
+                city="Kanagawa", venue="K Arena Yokohama", venue_address="Yokohama, Japan",
+                doors_at_utc=dt(8, 1, 8),
+            ),
             YamlDay(label="Day 2", starts_at_utc=dt(8, 2, 9)),
         ],
         rounds=[
             YamlRound(
-                label="Day 1 Lottery #1", kind="lottery_round",
+                label="Day 1 Lottery #1", label_en="Day 1 lottery round 1", kind="lottery_round",
                 applies_to_labels=["Day 1"],
                 opens_at_utc=dt(6, 10), closes_at_utc=dt(6, 25),
                 results_at_utc=dt(7, 1), payment_deadline_at_utc=dt(7, 8),
-                url="https://example.com/ticket",
+                url="https://example.com/ticket", notes="CD-code lottery",
             ),
         ],
         notes="Some notes",
+        title_en="Hasunosora 5th Live (EN)",
+        organizer="LustQueen",
+        categories="concert, tour",
+        eventernote_url="https://eventernote.com/x",
+        official_url="https://official.example/x",
+        source_url="https://ramen.events/x",
+        performers=["Kaho", "Sayaka"],
     )
     data = yaml.safe_load(text)
 
     assert data["slug"] == "hasunosora-5th-live"
     assert data["title"] == "Hasunosora 5th Live"
+    assert data["title_en"] == "Hasunosora 5th Live (EN)"
     assert data["kind"] == "concert"
+    assert data["organizer"] == "LustQueen"
+    assert data["categories"] == "concert, tour"
     assert data["series"] == {
         "franchises": ["Hasunosora"], "groups": ["Kaho's Class"], "artists": ["Kaho", "Sayaka"],
     }
     assert data["venues"] == ["Yokohama Arena"]
+    assert data["performers"] == ["Kaho", "Sayaka"]
+    assert data["eventernote_url"] == "https://eventernote.com/x"
+    assert data["official_url"] == "https://official.example/x"
+    assert data["source_url"] == "https://ramen.events/x"
     assert data["notes"] == "Some notes"
 
     assert len(data["performances"]) == 2
-    assert data["performances"][0] == {"label": "Day 1", "starts_at_jst": "2026-08-01 18:00"}
-    assert data["performances"][1] == {"label": "Day 2", "starts_at_jst": "2026-08-02 18:00"}
+    assert data["performances"][0] == {
+        "label": "Day 1", "city": "Kanagawa", "venue": "K Arena Yokohama",
+        "venue_address": "Yokohama, Japan", "doors_jst": "2026-08-01 17:00",
+        "starts_at_jst": "2026-08-01 18:00",
+    }
+    assert data["performances"][1] == {
+        "label": "Day 2", "city": None, "venue": None, "venue_address": None,
+        "doors_jst": None, "starts_at_jst": "2026-08-02 18:00",
+    }
 
     (round_,) = data["rounds"]
     assert round_["label"] == "Day 1 Lottery #1"
+    assert round_["label_en"] == "Day 1 lottery round 1"
     assert round_["kind"] == "lottery_round"
     assert round_["applies_to"] == ["Day 1"]
     assert round_["apply_opens_jst"] == "2026-06-10 21:00"  # UTC 12:00 + 9h
@@ -68,6 +94,7 @@ def test_concert_to_yaml_full_shape():
     assert round_["results_jst"] == "2026-07-01 21:00"
     assert round_["payment_deadline_jst"] == "2026-07-08 21:00"
     assert round_["url"] == "https://example.com/ticket"
+    assert round_["notes"] == "CD-code lottery"
 
 
 def test_concert_to_yaml_handles_missing_optional_fields():
@@ -81,11 +108,18 @@ def test_concert_to_yaml_handles_missing_optional_fields():
     )
     data = yaml.safe_load(text)
     assert data["kind"] is None
+    assert data["title_en"] is None
+    assert data["organizer"] is None
+    assert data["categories"] is None
+    assert data["performers"] == []
+    assert data["eventernote_url"] is None
     assert data["performances"] == []
     (round_,) = data["rounds"]
+    assert round_["label_en"] is None
     assert round_["applies_to"] == []
     assert round_["apply_opens_jst"] is None
     assert round_["url"] is None
+    assert round_["notes"] is None
     assert data["notes"] is None
 
 

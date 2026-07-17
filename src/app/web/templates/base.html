@@ -15,6 +15,7 @@
       {% if user %}
         <img class="avatar" src="{{ user.avatar_url }}" alt="">
         <span>{{ user.username }}{% if user.is_admin %} <em class="badge">admin</em>{% elif user.is_editor %} <em class="badge">editor</em>{% endif %}</span>
+        {% if user.is_editor %}<a href="/concerts/new">+ Add</a>{% endif %}
         <a href="/preferences">Preferences</a>
         <a href="/auth/logout">Log out</a>
       {% else %}
