@@ -114,21 +114,25 @@ exists for.
 moved, not their behavior), confirming the split didn't alter any
 request/response contract.
 
-## 5. Minor / worth a one-line note rather than a fix
+## 5. Minor — both addressed
 
 - **No CSRF token.** State-changing routes are all POST forms and rely on
   `SameSite=Lax` cookies (`web/app.py`'s `SessionMiddleware`) for CSRF
   protection, with no separate token. That's a reasonable, common tradeoff
-  for an app this size, but it's implicit — worth a one-line note in
-  CLAUDE.md so a future contributor doesn't either assume it's an oversight
-  or bolt on a token system that isn't needed.
+  for an app this size, but it was implicit.
+  **Resolved:** added a one-line note to CLAUDE.md's Auth invariant so a
+  future contributor doesn't assume it's an oversight or bolt on a token
+  system that isn't needed. No code change.
 - **Global slash-command sync on every startup.** `bot/client.py`'s
-  `setup_hook` calls `self.tree.sync()` unscoped. Global syncs can take up
-  to an hour to propagate and share Discord's global rate limit; for a bot
-  that's only ever installed in one or two servers, a guild-scoped sync
-  (`copy_global_to` + `sync(guild=...)`) would make local iteration faster.
-  Pure dev-experience, no user-facing impact once commands have propagated
-  once.
+  `setup_hook` called `self.tree.sync()` unscoped. Global syncs can take up
+  to an hour to propagate; for local dev against a single test server, a
+  guild-scoped sync is near-instant.
+  **Resolved:** added an optional `DEV_GUILD_ID` setting
+  (`config.py`/`.env.example`); when set, `setup_hook` does
+  `copy_global_to(guild=...)` + `sync(guild=...)` instead of the global
+  sync, documented in README's "run the bot locally" section. Leaving it
+  unset (the production default) keeps the old global-sync behavior
+  unchanged, so this only affects opted-in local dev.
 
 ## Not flagged
 

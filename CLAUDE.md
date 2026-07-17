@@ -74,6 +74,9 @@ export, and ramen.events import have shipped since).
    `/demote-editor` Discord commands. Admins automatically pass editor
    checks too. Sessions are DB-backed sha256 token hashes (revocable).
    Ownership checks 404, not 403, on other users' presets/subscriptions.
+   No separate CSRF token: mutating routes rely on `SameSite=Lax` cookies
+   (`web/app.py`'s `SessionMiddleware`). Deliberate for an app this size —
+   don't read it as a gap to fill or bolt a token system onto.
 6. **`event_id` vs `id`**: every FK targets `Concert.id` (internal PK), but
    URLs use the editor-chosen, unique `event_id` string instead. `"new"` and
    `"import"` are reserved and rejected as `event_id` values so they can

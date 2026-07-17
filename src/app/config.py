@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     discord_token: str = ""  # empty -> web-only dev mode
     discord_client_id: str = ""
     discord_client_secret: str = ""
+    # Set to a test server's ID for instant slash-command sync during local
+    # dev (guild-scoped syncs propagate in seconds; global syncs can take up
+    # to an hour). Leave empty in production so commands reach every server
+    # the bot is added to.
+    dev_guild_id: int = 0
 
     # Access control: comma-separated Discord user IDs with edit rights
     editor_whitelist: str = ""

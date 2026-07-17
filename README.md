@@ -63,7 +63,9 @@ uv run ruff check .            # lint
 
 To run the bot locally: create an app at https://discord.com/developers,
 put the token in `.env`, invite the bot to a test server with the
-`bot` + `applications.commands` scopes, then `/ping` it.
+`bot` + `applications.commands` scopes, then `/ping` it. Set
+`DEV_GUILD_ID` to that test server's ID for slash commands to sync in
+seconds instead of up to an hour (global sync, used when it's unset).
 
 ## Deployment (short version — full runbook: docs/deploy.md)
 
