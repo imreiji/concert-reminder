@@ -9,9 +9,10 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 196 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 210 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
-export, and ramen.events import have shipped since).
+export, ramen.events import, and duplicate-concert-as-template have
+shipped since).
 
 ## Commands
 
@@ -62,7 +63,10 @@ export, and ramen.events import have shipped since).
    Editors prune non-performers; removed members stay removed; detach +
    re-attach re-expands; group membership edits never rewrite existing
    concerts. The creation form passes `expand=False` because its explicit
-   artist list is authoritative.
+   artist list is authoritative. `POST /concerts/{event_id}/duplicate`
+   (`web/routes/concerts.py`) follows the same rule when cloning a concert:
+   it re-attaches the source's exact already-pruned tag set with
+   `expand=False`, never re-expanding a GROUP tag to its current membership.
 4. **Notifications**: new-event notices go through the `notifications`
    table (DB outbox drained by the scheduler) — never send DMs directly
    from web routes.
