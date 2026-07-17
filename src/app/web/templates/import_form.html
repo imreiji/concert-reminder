@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}import concert — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Import from a URL</h1>
+<p class="dim">Paste a <code>ramen.events</code> event page — it'll fetch the title, days, and
+  lottery windows as a draft. Nothing is saved until you review and submit the form on the next page.</p>
+
+{% if error %}<p class="import-error">Couldn't parse that page: {{ error }}. You can still
+  <a href="/">create the concert manually</a>.</p>{% endif %}
+
+<form class="stack" method="post" action="/concerts/import/preview">
+  <label>ramen.events URL
+    <input type="url" name="url" required placeholder="https://ramen.events/..." pattern="https://ramen\.events/.*">
+  </label>
+  <button>Fetch draft</button>
+</form>
+<p class="dim tiny"><a href="/">← Back to concerts</a></p>
+{% endblock %}

@@ -18,6 +18,7 @@ from app.domain.timezones import fmt_dual, utc_to_jst
 from app.scheduler import heartbeat
 from app.web import auth
 from app.web.routes import concerts as concert_routes
+from app.web.routes import imports as import_routes
 from app.web.routes import preferences as pref_routes
 from app.web.routes import tags as tag_routes
 
@@ -54,6 +55,12 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=_here / "static"), name="static")
     app.include_router(auth.router)
 
+    # import_routes MUST be registered before concert_routes: GET /concerts/import
+    # would otherwise be swallowed by GET /concerts/{concert_id} (FastAPI matches
+    # the path template first and 422s on the int conversion, it doesn't fall
+    # through to try the next route).
+    import_routes.templates = templates
+    app.include_router(import_routes.router)
     concert_routes.templates = templates
     app.include_router(concert_routes.router)
     tag_routes.templates = templates
@@ -104,19 +111,12 @@ def create_app() -> FastAPI:
                 tz, tz_auto = db_user.timezone, db_user.tz_auto
         import json as _json
 
-        from app.db.service import group_members as _members
+        from app.db.service import tag_picker_context
         from app.domain.types import TagKind as _TK
 
-        by_kind = grouped_tags(tags)
-        tag_names = {t2.id: t2.name for t2 in tags}
-        groups_data = {}
-        for g in by_kind.get("group", []):
-            groups_data[g.id] = {
-                "name": g.name,
-                "franchise": g.parent_id,
-                "members": [{"id": m.id, "name": m.name} for m in await _members(session, g.id)]
-                if user else [],
-            }
+        picker = await tag_picker_context(session) if user else {
+            "by_kind": grouped_tags(tags), "groups_json": {}, "tag_names_json": {},
+        }
         return templates.TemplateResponse(
             request,
             "index.html",
@@ -124,9 +124,9 @@ def create_app() -> FastAPI:
                 "user": user,
                 "concerts": concerts,
                 "all_tags": tags,
-                "by_kind": by_kind,
-                "groups_json": _json.dumps(groups_data),
-                "tag_names_json": _json.dumps(tag_names),
+                "by_kind": picker["by_kind"],
+                "groups_json": _json.dumps(picker["groups_json"]),
+                "tag_names_json": _json.dumps(picker["tag_names_json"]),
                 "selected_tags": set(tag),
                 "sort": sort,
                 "tz": tz,

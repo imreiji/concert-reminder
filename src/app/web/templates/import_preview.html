@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}review import — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Review draft</h1>
+<p class="dim">Parsed from <a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_url }}</a>.
+  Nothing is saved yet — edit anything below, then submit.</p>
+
+{% if parsed.warnings %}
+<ul class="dim tiny">
+  {% for w in parsed.warnings %}<li>⚠ {{ w }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+<form class="stack" method="post" action="/concerts/import/commit" id="new-concert">
+  <label>Title <input name="title" required maxlength="200" value="{{ parsed.title }}"></label>
+  {% set venue_hint = parsed.venue_name %}
+  {% include "_tag_picker_fields.html" %}
+
+  <h2>Performance days</h2>
+  <div id="day-rows" class="row-list">
+    {% for d in parsed.days %}
+    <div class="row-item">
+      <input name="day_label" value="{{ d.label }}" maxlength="100" placeholder="Day 1">
+      <label>Starts (JST) <input type="datetime-local" name="day_starts_at" value="{{ fmt(d.starts_at_jst) }}"></label>
+      <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+    </div>
+    {% endfor %}
+  </div>
+  <button type="button" class="quiet" onclick="addRow('day-rows','day-row-template')">+ Add day</button>
+
+  <h2>Lottery / sale windows</h2>
+  <div id="window-rows" class="row-list">
+    {% for w in parsed.windows %}
+    <div class="row-item">
+      <input name="window_label" value="{{ w.label }}" maxlength="200" placeholder="最速先行 Round 1">
+      <select name="window_kind">{% for k in kinds %}
+        <option value="{{ k.value }}" {% if k == w.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
+      {% endfor %}</select>
+      <label>Opens (JST) <input type="datetime-local" name="window_opens_at" value="{{ fmt(w.opens_at_jst) }}"></label>
+      <label>Closes (JST) <input type="datetime-local" name="window_closes_at" value="{{ fmt(w.closes_at_jst) }}"></label>
+      <input name="window_url" value="{{ w.url or '' }}" placeholder="https://ticket... (optional)">
+      <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+    </div>
+    {% endfor %}
+  </div>
+  <button type="button" class="quiet" onclick="addRow('window-rows','window-row-template')">+ Add window</button>
+
+  <button>Create concert</button>
+</form>
+{% include "_tag_picker_script.html" %}
+
+<template id="day-row-template">
+  <div class="row-item">
+    <input name="day_label" maxlength="100" placeholder="Day 1">
+    <label>Starts (JST) <input type="datetime-local" name="day_starts_at"></label>
+    <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+  </div>
+</template>
+<template id="window-row-template">
+  <div class="row-item">
+    <input name="window_label" maxlength="200" placeholder="最速先行 Round 1">
+    <select name="window_kind">{% for k in kinds %}
+      <option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>
+    {% endfor %}</select>
+    <label>Opens (JST) <input type="datetime-local" name="window_opens_at"></label>
+    <label>Closes (JST) <input type="datetime-local" name="window_closes_at"></label>
+    <input name="window_url" placeholder="https://ticket... (optional)">
+    <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+  </div>
+</template>
+<script>
+  function addRow(listId, templateId) {
+    const tpl = document.getElementById(templateId);
+    document.getElementById(listId).appendChild(tpl.content.cloneNode(true));
+  }
+</script>
+{% endblock %}
