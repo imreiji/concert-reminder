@@ -150,6 +150,47 @@ async def test_due_and_mark_sent_roundtrip(session):
     assert await due_reminders(session, dt(6, 22, 14)) == []  # drained
 
 
+async def test_due_reminders_batches_queries_regardless_of_row_count(session):
+    """Regression guard for the N+1 fix: due_reminders must do a fixed
+    number of round trips (queue + one batch select per entity type)
+    rather than one round trip per due row."""
+    await ensure_user(session, 42, "reiji")
+    n = 5
+    for i in range(n):
+        concert = Concert(title=f"Concert {i}", event_id=f"concert-{i}", created_by=42)
+        session.add(concert)
+        await session.flush()
+        round_ = Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label=f"R{i}",
+            closes_at_utc=dt(6, 25),
+        )
+        session.add(round_)
+        await session.flush()
+        rule = ReminderRule(
+            user_id=42, round_id=round_.id, anchor=Anchor.CLOSES, offset_days=0
+        )
+        session.add(rule)
+        await session.flush()
+        await sync_rule(session, rule, NOW)
+    await session.commit()
+
+    queries: list[str] = []
+
+    def _count(conn, cursor, statement, parameters, context, executemany):
+        queries.append(statement)
+
+    event.listen(session.bind.sync_engine, "before_cursor_execute", _count)
+    try:
+        due = await due_reminders(session, dt(6, 26))
+    finally:
+        event.remove(session.bind.sync_engine, "before_cursor_execute", _count)
+
+    assert len(due) == n
+    # queue + rules + users + rounds + concerts (days skipped: none used here)
+    # -- fixed regardless of n, not one query per due row.
+    assert len(queries) <= 6
+
+
 async def test_event_start_rule_targets_days(session):
     concert, _, _ = await seed(session)
     rule = ReminderRule(

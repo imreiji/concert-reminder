@@ -195,8 +195,11 @@ class ConcertTag(Base):
     concert_id: Mapped[int] = mapped_column(
         ForeignKey("concerts.id", ondelete="CASCADE"), primary_key=True
     )
+    # index=True alongside primary_key=True: the composite PK only indexes
+    # (concert_id, tag_id) as a leftmost prefix, so filtering by tag_id alone
+    # (the sidebar's tag/region filter) needs its own index.
     tag_id: Mapped[int] = mapped_column(
-        ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True, index=True
     )
 
 
@@ -204,7 +207,9 @@ class ConcertDay(Base):
     __tablename__ = "concert_days"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    concert_id: Mapped[int] = mapped_column(ForeignKey("concerts.id", ondelete="CASCADE"))
+    concert_id: Mapped[int] = mapped_column(
+        ForeignKey("concerts.id", ondelete="CASCADE"), index=True
+    )
     label: Mapped[str] = mapped_column(String(100))  # "Day 1", "Day 2 夜公演"
     city: Mapped[str | None] = mapped_column(String(100))  # leg/city, e.g. "Kanagawa"
     venue: Mapped[str | None] = mapped_column(String(200))  # per-day venue (tours change cities)
@@ -225,7 +230,9 @@ class Round(Base):
     __tablename__ = "rounds"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    concert_id: Mapped[int] = mapped_column(ForeignKey("concerts.id", ondelete="CASCADE"))
+    concert_id: Mapped[int] = mapped_column(
+        ForeignKey("concerts.id", ondelete="CASCADE"), index=True
+    )
     kind: Mapped[RoundKind] = mapped_column(
         Enum(RoundKind, values_callable=lambda e: [m.value for m in e])
     )
@@ -250,8 +257,12 @@ class ReminderRule(Base):
         BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
     )
     # Exactly one of these is set: concert-wide rule, or one-round rule.
-    concert_id: Mapped[int | None] = mapped_column(ForeignKey("concerts.id", ondelete="CASCADE"))
-    round_id: Mapped[int | None] = mapped_column(ForeignKey("rounds.id", ondelete="CASCADE"))
+    concert_id: Mapped[int | None] = mapped_column(
+        ForeignKey("concerts.id", ondelete="CASCADE"), index=True
+    )
+    round_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rounds.id", ondelete="CASCADE"), index=True
+    )
 
     anchor: Mapped[Anchor] = mapped_column(
         Enum(Anchor, values_callable=lambda e: [m.value for m in e])
