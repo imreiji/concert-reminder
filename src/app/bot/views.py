@@ -105,18 +105,22 @@ class ShowDeadlinesButton(
             if concert is None:
                 await interaction.response.send_message("That event no longer exists.")
                 return
-            await session.refresh(concert, ["windows", "days"])
+            await session.refresh(concert, ["rounds", "days"])
             user = await session.get(User, interaction.user.id)
             tz = user.timezone if user else "America/Moncton"
 
             lines = []
-            for w in concert.windows:
+            for r in concert.rounds:
                 bits = []
-                if w.opens_at_utc:
-                    bits.append(f"opens {fmt_dual(w.opens_at_utc, tz)}")
-                if w.closes_at_utc:
-                    bits.append(f"closes {fmt_dual(w.closes_at_utc, tz)}")
-                lines.append(f"**{w.label}** — {' / '.join(bits)}")
+                if r.opens_at_utc:
+                    bits.append(f"opens {fmt_dual(r.opens_at_utc, tz)}")
+                if r.closes_at_utc:
+                    bits.append(f"closes {fmt_dual(r.closes_at_utc, tz)}")
+                if r.results_at_utc:
+                    bits.append(f"results {fmt_dual(r.results_at_utc, tz)}")
+                if r.payment_deadline_at_utc:
+                    bits.append(f"payment due {fmt_dual(r.payment_deadline_at_utc, tz)}")
+                lines.append(f"**{r.label}** — {' / '.join(bits)}")
             for d in concert.days:
                 lines.append(f"🎤 **{d.label}** — {fmt_dual(d.starts_at_utc, tz)}")
         await interaction.response.send_message(

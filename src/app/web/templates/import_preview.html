@@ -28,22 +28,24 @@
   </div>
   <button type="button" class="quiet" onclick="addRow('day-rows','day-row-template')">+ Add day</button>
 
-  <h2>Lottery / sale windows</h2>
-  <div id="window-rows" class="row-list">
-    {% for w in parsed.windows %}
+  <h2>Lottery / sale rounds</h2>
+  <div id="round-rows" class="row-list">
+    {% for r in parsed.rounds %}
     <div class="row-item">
-      <input name="window_label" value="{{ w.label }}" maxlength="200" placeholder="最速先行 Round 1">
-      <select name="window_kind">{% for k in kinds %}
-        <option value="{{ k.value }}" {% if k == w.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
+      <input name="round_label" value="{{ r.label }}" maxlength="200" placeholder="最速先行 Round 1">
+      <select name="round_kind">{% for k in kinds %}
+        <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
       {% endfor %}</select>
-      <label>Opens (JST) <input type="datetime-local" name="window_opens_at" value="{{ fmt(w.opens_at_jst) }}"></label>
-      <label>Closes (JST) <input type="datetime-local" name="window_closes_at" value="{{ fmt(w.closes_at_jst) }}"></label>
-      <input name="window_url" value="{{ w.url or '' }}" placeholder="https://ticket... (optional)">
+      <label>Opens (JST) <input type="datetime-local" name="round_opens_at" value="{{ fmt(r.opens_at_jst) }}"></label>
+      <label>Closes (JST) <input type="datetime-local" name="round_closes_at" value="{{ fmt(r.closes_at_jst) }}"></label>
+      <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
+      <label>Payment due (JST) <input type="datetime-local" name="round_payment_at"></label>
+      <input name="round_url" value="{{ r.url or '' }}" placeholder="https://ticket... (optional)">
       <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
     </div>
     {% endfor %}
   </div>
-  <button type="button" class="quiet" onclick="addRow('window-rows','window-row-template')">+ Add window</button>
+  <button type="button" class="quiet" onclick="addRow('round-rows','round-row-template')">+ Add round</button>
 
   <button>Create concert</button>
 </form>
@@ -56,15 +58,17 @@
     <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
   </div>
 </template>
-<template id="window-row-template">
+<template id="round-row-template">
   <div class="row-item">
-    <input name="window_label" maxlength="200" placeholder="最速先行 Round 1">
-    <select name="window_kind">{% for k in kinds %}
+    <input name="round_label" maxlength="200" placeholder="最速先行 Round 1">
+    <select name="round_kind">{% for k in kinds %}
       <option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>
     {% endfor %}</select>
-    <label>Opens (JST) <input type="datetime-local" name="window_opens_at"></label>
-    <label>Closes (JST) <input type="datetime-local" name="window_closes_at"></label>
-    <input name="window_url" placeholder="https://ticket... (optional)">
+    <label>Opens (JST) <input type="datetime-local" name="round_opens_at"></label>
+    <label>Closes (JST) <input type="datetime-local" name="round_closes_at"></label>
+    <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
+    <label>Payment due (JST) <input type="datetime-local" name="round_payment_at"></label>
+    <input name="round_url" placeholder="https://ticket... (optional)">
     <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
   </div>
 </template>

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, ReminderQueue, ReminderRule, User, Window
+from app.db.models import Base, Concert, ConcertDay, ReminderQueue, ReminderRule, Round, User
 from app.db.service import (
     due_reminders,
     ensure_user,
@@ -22,7 +22,7 @@ from app.db.service import (
     sync_concert,
     sync_rule,
 )
-from app.domain.types import Anchor, WindowKind
+from app.domain.types import Anchor, RoundKind
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)
 
@@ -49,25 +49,25 @@ async def session():
     await engine.dispose()
 
 
-async def seed(s) -> tuple[Concert, Window, ReminderRule]:
+async def seed(s) -> tuple[Concert, Round, ReminderRule]:
     await ensure_user(s, 42, "reiji")
     concert = Concert(title="Hasunosora 5th", created_by=42)
     s.add(concert)
     await s.flush()
-    window = Window(
+    round_ = Round(
         concert_id=concert.id,
-        kind=WindowKind.LOTTERY_ROUND,
+        kind=RoundKind.LOTTERY_ROUND,
         label="最速先行",
         opens_at_utc=dt(6, 10),
         closes_at_utc=dt(6, 25),
     )
     day = ConcertDay(concert_id=concert.id, label="Day 1", starts_at_utc=dt(8, 1, 9))
-    s.add_all([window, day])
+    s.add_all([round_, day])
     await s.flush()
     rule = ReminderRule(user_id=42, concert_id=concert.id, anchor=Anchor.CLOSES, offset_days=-3)
     s.add(rule)
     await s.flush()
-    return concert, window, rule
+    return concert, round_, rule
 
 
 async def queue_rows(s) -> list[ReminderQueue]:
@@ -75,12 +75,12 @@ async def queue_rows(s) -> list[ReminderQueue]:
 
 
 async def test_sync_creates_queue_rows(session):
-    _, window, rule = await seed(session)
+    _, round_, rule = await seed(session)
     await sync_rule(session, rule, NOW)
     rows = await queue_rows(session)
     assert len(rows) == 1
     assert rows[0].fire_at_utc == dt(6, 22)  # 3 days before June 25 close
-    assert rows[0].window_id == window.id
+    assert rows[0].round_id == round_.id
 
 
 async def test_resync_is_idempotent(session):
@@ -91,23 +91,23 @@ async def test_resync_is_idempotent(session):
     assert len(await queue_rows(session)) == 1
 
 
-async def test_editing_window_reschedules(session):
-    _, window, rule = await seed(session)
+async def test_editing_round_reschedules(session):
+    _, round_, rule = await seed(session)
     await sync_rule(session, rule, NOW)
-    window.closes_at_utc = dt(6, 28)  # staff extended the lottery
-    await sync_concert(session, window.concert_id, NOW)
+    round_.closes_at_utc = dt(6, 28)  # staff extended the lottery
+    await sync_concert(session, round_.concert_id, NOW)
     (row,) = await queue_rows(session)
     assert row.fire_at_utc == dt(6, 25)  # rescheduled: 3 days before the NEW close
 
 
 async def test_postponed_deadline_rearms_sent_reminder(session):
     """The 'deadline moved after we already reminded' case — must re-fire."""
-    _, window, rule = await seed(session)
+    _, round_, rule = await seed(session)
     await sync_rule(session, rule, NOW)
     (row,) = await queue_rows(session)
     await mark_sent(session, row.id, dt(6, 22, 13))
-    window.closes_at_utc = dt(7, 5)  # postponed well after the sent reminder
-    await sync_concert(session, window.concert_id, dt(6, 23))
+    round_.closes_at_utc = dt(7, 5)  # postponed well after the sent reminder
+    await sync_concert(session, round_.concert_id, dt(6, 23))
     (row,) = await queue_rows(session)
     assert row.sent_at_utc is None  # re-armed
     assert row.fire_at_utc == dt(7, 2)
@@ -124,10 +124,10 @@ async def test_sent_rows_left_alone_when_nothing_changed(session):
     assert row.sent_at_utc == sent_at  # not re-armed, not duplicated
 
 
-async def test_removing_window_cleans_unsent_rows(session):
-    _, window, rule = await seed(session)
+async def test_removing_round_cleans_unsent_rows(session):
+    _, round_, rule = await seed(session)
     await sync_rule(session, rule, NOW)
-    await session.delete(window)
+    await session.delete(round_)
     await session.flush()
     await sync_rule(session, rule, NOW)
     assert await queue_rows(session) == []
@@ -143,7 +143,7 @@ async def test_due_and_mark_sent_roundtrip(session):
     item = due[0]
     assert item.discord_id == 42
     assert item.concert_title == "Hasunosora 5th"
-    assert item.window_label == "最速先行"
+    assert item.round_label == "最速先行"
     assert item.anchor_time_utc == dt(6, 25)
 
     await mark_sent(session, item.queue_id, dt(6, 22, 13))
@@ -162,6 +162,57 @@ async def test_event_start_rule_targets_days(session):
     assert len(rows) == 1
     assert rows[0].day_id is not None
     assert rows[0].fire_at_utc == dt(7, 25, 9)
+
+
+# ── A round with all 4 timestamps: the actual point of this refactor ────
+
+
+async def test_round_with_all_four_timestamps_syncs_each_anchor_independently(session):
+    """One round entry, 4 reminder rules (one per anchor) -- each gets its
+    own queue row and re-arms independently of the others."""
+    await ensure_user(session, 42, "reiji")
+    concert = Concert(title="Full Round", created_by=42)
+    session.add(concert)
+    await session.flush()
+    round_ = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="Bundled round",
+        opens_at_utc=dt(6, 5), closes_at_utc=dt(6, 10),
+        results_at_utc=dt(6, 15), payment_deadline_at_utc=dt(6, 22),
+    )
+    session.add(round_)
+    await session.flush()
+
+    rules = {
+        anchor: ReminderRule(
+            user_id=42, round_id=round_.id, anchor=anchor, offset_days=-1
+        )
+        for anchor in (Anchor.OPENS, Anchor.CLOSES, Anchor.RESULTS, Anchor.PAYMENT)
+    }
+    session.add_all(rules.values())
+    await session.flush()
+    for rule in rules.values():
+        await sync_rule(session, rule, NOW)
+
+    rows = {r.rule_id: r for r in await queue_rows(session)}
+    assert rows[rules[Anchor.OPENS].id].fire_at_utc == dt(6, 4)
+    assert rows[rules[Anchor.CLOSES].id].fire_at_utc == dt(6, 9)
+    assert rows[rules[Anchor.RESULTS].id].fire_at_utc == dt(6, 14)
+    assert rows[rules[Anchor.PAYMENT].id].fire_at_utc == dt(6, 21)
+
+    # Mark the RESULTS reminder sent, then postpone only the results
+    # timestamp and re-sync only that rule -- it re-arms without touching
+    # the other 3 anchors' queue rows at all.
+    results_row = rows[rules[Anchor.RESULTS].id]
+    await mark_sent(session, results_row.id, dt(6, 14, 1))
+    round_.results_at_utc = dt(6, 18)
+    await sync_rule(session, rules[Anchor.RESULTS], dt(6, 14, 2))
+
+    rows = {r.rule_id: r for r in await queue_rows(session)}
+    assert rows[rules[Anchor.RESULTS].id].sent_at_utc is None  # re-armed
+    assert rows[rules[Anchor.RESULTS].id].fire_at_utc == dt(6, 17)
+    assert rows[rules[Anchor.OPENS].id].fire_at_utc == dt(6, 4)  # untouched
+    assert rows[rules[Anchor.CLOSES].id].fire_at_utc == dt(6, 9)  # untouched
+    assert rows[rules[Anchor.PAYMENT].id].fire_at_utc == dt(6, 21)  # untouched
 
 
 # ── set_editor / list_editors ───────────────────────────────────────────

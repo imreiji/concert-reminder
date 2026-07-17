@@ -31,13 +31,13 @@ from app.db.models import (
     ReminderPreset,
     ReminderQueue,
     ReminderRule,
+    Round,
     Tag,
     TagMember,
     TagSubscription,
     User,
-    Window,
 )
-from app.domain.reminders import DayInfo, RuleInfo, WindowInfo, plan_for_rule
+from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.types import Anchor, TagKind
 
 
@@ -97,8 +97,14 @@ async def list_editors(session: AsyncSession) -> list[dict]:
 # ── Adapters: ORM -> domain dataclasses ──────────────────────────────────
 
 
-def _window_info(w: Window) -> WindowInfo:
-    return WindowInfo(id=w.id, opens_at_utc=w.opens_at_utc, closes_at_utc=w.closes_at_utc)
+def _round_info(r: Round) -> RoundInfo:
+    return RoundInfo(
+        id=r.id,
+        opens_at_utc=r.opens_at_utc,
+        closes_at_utc=r.closes_at_utc,
+        results_at_utc=r.results_at_utc,
+        payment_deadline_at_utc=r.payment_deadline_at_utc,
+    )
 
 
 def _day_info(d: ConcertDay) -> DayInfo:
@@ -111,7 +117,7 @@ def _rule_info(r: ReminderRule) -> RuleInfo:
         anchor=r.anchor,
         offset_days=r.offset_days,
         offset_hours=r.offset_hours,
-        window_id=r.window_id,
+        round_id=r.round_id,
         concert_id=r.concert_id,
     )
 
@@ -123,28 +129,28 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
     """Reconcile reminder_queue with what this rule currently implies."""
     now = now or _now()
 
-    # Gather the windows/days in this rule's scope.
-    if rule.window_id is not None:
-        window = await session.get(Window, rule.window_id)
-        windows = [_window_info(window)] if window else []
+    # Gather the rounds/days in this rule's scope.
+    if rule.round_id is not None:
+        round_ = await session.get(Round, rule.round_id)
+        rounds = [_round_info(round_)] if round_ else []
         days: list[DayInfo] = []
     else:
-        wres = await session.execute(select(Window).where(Window.concert_id == rule.concert_id))
+        rres = await session.execute(select(Round).where(Round.concert_id == rule.concert_id))
         dres = await session.execute(
             select(ConcertDay).where(ConcertDay.concert_id == rule.concert_id)
         )
-        windows = [_window_info(w) for w in wres.scalars()]
+        rounds = [_round_info(r) for r in rres.scalars()]
         days = [_day_info(d) for d in dres.scalars()]
 
-    planned = plan_for_rule(_rule_info(rule), windows, days, now)
-    planned_by_key = {(p.window_id or 0, p.day_id or 0, p.anchor): p for p in planned}
+    planned = plan_for_rule(_rule_info(rule), rounds, days, now)
+    planned_by_key = {(p.round_id or 0, p.day_id or 0, p.anchor): p for p in planned}
 
     qres = await session.execute(select(ReminderQueue).where(ReminderQueue.rule_id == rule.id))
     existing = list(qres.scalars())
     existing_keys = set()
 
     for row in existing:
-        key = (row.window_id or 0, row.day_id or 0, row.anchor)
+        key = (row.round_id or 0, row.day_id or 0, row.anchor)
         existing_keys.add(key)
         p = planned_by_key.get(key)
         if p is None:
@@ -163,7 +169,7 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
             session.add(
                 ReminderQueue(
                     rule_id=rule.id,
-                    window_id=p.window_id,
+                    round_id=p.round_id,
                     day_id=p.day_id,
                     anchor=p.anchor,
                     fire_at_utc=p.fire_at_utc,
@@ -177,14 +183,14 @@ async def sync_concert(
 ) -> int:
     """Re-sync every rule touching this concert (called after any edit).
 
-    Covers concert-scoped rules and window-scoped rules on its windows.
+    Covers concert-scoped rules and round-scoped rules on its rounds.
     Returns the number of rules synced.
     """
     res = await session.execute(
         select(ReminderRule)
-        .outerjoin(Window, ReminderRule.window_id == Window.id)
+        .outerjoin(Round, ReminderRule.round_id == Round.id)
         .where(
-            (ReminderRule.concert_id == concert_id) | (Window.concert_id == concert_id)
+            (ReminderRule.concert_id == concert_id) | (Round.concert_id == concert_id)
         )
     )
     rules = list(res.scalars())
@@ -206,9 +212,9 @@ class DueReminder:
     concert_title: str
     anchor: Anchor
     fire_at_utc: datetime
-    # window-anchored:
-    window_label: str | None = None
-    window_kind: str | None = None
+    # round-anchored:
+    round_label: str | None = None
+    round_kind: str | None = None
     anchor_time_utc: datetime | None = None
     url: str | None = None
     # day-anchored:
@@ -232,9 +238,9 @@ async def due_reminders(
     for row in rows:
         rule = await session.get(ReminderRule, row.rule_id)
         user = await session.get(User, rule.user_id)
-        window = await session.get(Window, row.window_id) if row.window_id else None
+        round_ = await session.get(Round, row.round_id) if row.round_id else None
         day = await session.get(ConcertDay, row.day_id) if row.day_id else None
-        parent = window or day
+        parent = round_ or day
         concert = await session.get(Concert, parent.concert_id) if parent else None
         if concert is None:
             continue  # orphaned row; cascades should prevent this, but never crash the loop
@@ -246,14 +252,14 @@ async def due_reminders(
                 concert_title=concert.title,
                 anchor=row.anchor,
                 fire_at_utc=row.fire_at_utc,
-                window_label=window.label if window else None,
-                window_kind=window.kind.value if window else None,
+                round_label=round_.label if round_ else None,
+                round_kind=round_.kind.value if round_ else None,
                 anchor_time_utc=(
-                    (window.opens_at_utc if row.anchor is Anchor.OPENS else window.closes_at_utc)
-                    if window
+                    anchor_time(_round_info(round_), row.anchor)
+                    if round_
                     else (day.starts_at_utc if day else None)
                 ),
-                url=window.url if window else None,
+                url=round_.url if round_ else None,
                 day_label=day.label if day else None,
             )
         )
@@ -267,24 +273,24 @@ async def mark_sent(session: AsyncSession, queue_id: int, now: datetime | None =
         await session.flush()
 
 
-async def upcoming_windows(
+async def upcoming_rounds(
     session: AsyncSession, now: datetime | None = None, horizon_days: int = 14
-) -> list[tuple[Concert, Window]]:
-    """Windows opening or closing within the horizon — powers /upcoming."""
+) -> list[tuple[Concert, Round]]:
+    """Rounds opening or closing within the horizon — powers /upcoming."""
     from datetime import timedelta
 
     now = now or _now()
     end = now + timedelta(days=horizon_days)
     res = await session.execute(
-        select(Concert, Window)
-        .join(Window, Window.concert_id == Concert.id)
+        select(Concert, Round)
+        .join(Round, Round.concert_id == Concert.id)
         .where(
-            (Window.opens_at_utc.between(now, end))
-            | (Window.closes_at_utc.between(now, end))
+            (Round.opens_at_utc.between(now, end))
+            | (Round.closes_at_utc.between(now, end))
         )
-        .order_by(Window.closes_at_utc.is_(None), Window.closes_at_utc, Window.opens_at_utc)
+        .order_by(Round.closes_at_utc.is_(None), Round.closes_at_utc, Round.opens_at_utc)
     )
-    return [(c, w) for c, w in res.all()]
+    return [(c, r) for c, r in res.all()]
 
 
 # ── Tags ─────────────────────────────────────────────────────────────────
@@ -575,12 +581,10 @@ async def snooze_reminder(
 
     new_fire = now + timedelta(hours=24)
     anchor_at: datetime | None = None
-    if row.window_id is not None:
-        window = await session.get(Window, row.window_id)
-        if window is not None:
-            anchor_at = (
-                window.opens_at_utc if row.anchor is Anchor.OPENS else window.closes_at_utc
-            )
+    if row.round_id is not None:
+        round_ = await session.get(Round, row.round_id)
+        if round_ is not None:
+            anchor_at = anchor_time(_round_info(round_), row.anchor)
     elif row.day_id is not None:
         day = await session.get(ConcertDay, row.day_id)
         anchor_at = day.starts_at_utc if day else None
@@ -615,12 +619,12 @@ async def notice_context(
     concert = await session.get(Concert, concert_id)
     if concert is None:
         return None
-    await session.refresh(concert, ["tags", "windows"])
+    await session.refresh(concert, ["tags", "rounds"])
     now = _now()
     upcoming = [
-        (w, w.closes_at_utc or w.opens_at_utc)
-        for w in concert.windows
-        if (w.closes_at_utc or w.opens_at_utc) and (w.closes_at_utc or w.opens_at_utc) > now
+        (r, r.closes_at_utc or r.opens_at_utc)
+        for r in concert.rounds
+        if (r.closes_at_utc or r.opens_at_utc) and (r.closes_at_utc or r.opens_at_utc) > now
     ]
     upcoming.sort(key=lambda pair: pair[1])
     first = upcoming[0] if upcoming else None

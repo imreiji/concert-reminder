@@ -3,7 +3,7 @@
 These verify the three properties the models exist to guarantee:
   1. Naive datetimes are rejected at the boundary; reads come back aware-UTC.
   2. The functional dedupe index makes duplicate queue rows impossible.
-  3. Deleting a concert cascades through days/windows/rules/queue.
+  3. Deleting a concert cascades through days/rounds/rules/queue.
 """
 
 from datetime import UTC, datetime
@@ -19,10 +19,10 @@ from app.db.models import (
     ConcertDay,
     ReminderQueue,
     ReminderRule,
+    Round,
     User,
-    Window,
 )
-from app.domain.types import Anchor, WindowKind
+from app.domain.types import Anchor, RoundKind
 
 AWARE = datetime(2026, 8, 1, 10, 0, tzinfo=UTC)
 
@@ -40,19 +40,19 @@ def session():
         yield s
 
 
-def seed(s: Session) -> tuple[Concert, Window, ReminderRule]:
+def seed(s: Session) -> tuple[Concert, Round, ReminderRule]:
     user = User(discord_id=42, username="reiji")
     concert = Concert(title="Test Live", created_by=42)
     s.add_all([user, concert])
     s.flush()
-    window = Window(
-        concert_id=concert.id, kind=WindowKind.LOTTERY_ROUND, label="R1", opens_at_utc=AWARE
+    round_ = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="R1", opens_at_utc=AWARE
     )
     day = ConcertDay(concert_id=concert.id, label="Day 1", starts_at_utc=AWARE)
     rule = ReminderRule(user_id=42, concert_id=concert.id, anchor=Anchor.OPENS, offset_days=-1)
-    s.add_all([window, day, rule])
+    s.add_all([round_, day, rule])
     s.flush()
-    return concert, window, rule
+    return concert, round_, rule
 
 
 def test_naive_datetime_rejected(session):
@@ -62,22 +62,22 @@ def test_naive_datetime_rejected(session):
 
 
 def test_datetimes_roundtrip_as_aware_utc(session):
-    concert, window, _ = seed(session)
+    concert, round_, _ = seed(session)
     session.commit()
     session.expire_all()
-    got = session.get(Window, window.id)
+    got = session.get(Round, round_.id)
     assert got.opens_at_utc == AWARE
     assert got.opens_at_utc.tzinfo is not None
 
 
 def test_dedupe_index_blocks_duplicate_queue_rows(session):
-    _, window, rule = seed(session)
+    _, round_, rule = seed(session)
     session.add(
-        ReminderQueue(rule_id=rule.id, window_id=window.id, anchor=Anchor.OPENS, fire_at_utc=AWARE)
+        ReminderQueue(rule_id=rule.id, round_id=round_.id, anchor=Anchor.OPENS, fire_at_utc=AWARE)
     )
     session.commit()
     session.add(
-        ReminderQueue(rule_id=rule.id, window_id=window.id, anchor=Anchor.OPENS, fire_at_utc=AWARE)
+        ReminderQueue(rule_id=rule.id, round_id=round_.id, anchor=Anchor.OPENS, fire_at_utc=AWARE)
     )
     with pytest.raises(IntegrityError):
         session.commit()
@@ -94,14 +94,14 @@ def test_dedupe_applies_even_with_null_day_ids(session):
 
 
 def test_deleting_concert_cascades(session):
-    concert, window, rule = seed(session)
+    concert, round_, rule = seed(session)
     session.add(
-        ReminderQueue(rule_id=rule.id, window_id=window.id, anchor=Anchor.OPENS, fire_at_utc=AWARE)
+        ReminderQueue(rule_id=rule.id, round_id=round_.id, anchor=Anchor.OPENS, fire_at_utc=AWARE)
     )
     session.commit()
     session.delete(concert)
     session.commit()
-    assert session.query(Window).count() == 0
+    assert session.query(Round).count() == 0
     assert session.query(ConcertDay).count() == 0
     assert session.query(ReminderRule).count() == 0
     assert session.query(ReminderQueue).count() == 0

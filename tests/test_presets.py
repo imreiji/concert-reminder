@@ -82,10 +82,10 @@ def build_standard_preset(client) -> None:
 
 
 def build_concert_with_deadlines(client) -> None:
-    """Concert #1 with one lottery window and one day (as the editor)."""
+    """Concert #1 with one lottery round and one day (as the editor)."""
     client.post("/concerts", data={"title": "Hasunosora 6th"})
     client.post(
-        "/concerts/1/windows",
+        "/concerts/1/rounds",
         data={"label": "最速先行", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
     )
     client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-08-01T18:00"})
@@ -110,7 +110,7 @@ async def test_apply_preset_creates_rules_and_queues(client):
     rules = await _all(client.db, ReminderRule)
     assert len(rules) == 2  # one per preset item
     queue = await _all(client.db, ReminderQueue)
-    assert len(queue) == 2  # window-close reminder + day reminder
+    assert len(queue) == 2  # round-close reminder + day reminder
 
 
 async def test_apply_is_idempotent(client):
@@ -336,7 +336,7 @@ async def test_snooze_rearms_with_deadline_cap(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title": "C"})
     client.post(
-        "/concerts/1/windows",
+        "/concerts/1/rounds",
         data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
     )
     client.post("/concerts/1/rules", data={"anchor": "closes", "days_before": 3})
@@ -359,9 +359,9 @@ async def test_snooze_refuses_within_24h_of_deadline(client):
     from datetime import UTC, datetime, timedelta
 
     from app.db.models import ReminderRule as RR
-    from app.db.models import Window
+    from app.db.models import Round
     from app.db.service import snooze_reminder, sync_rule
-    from app.domain.types import Anchor, WindowKind
+    from app.domain.types import Anchor, RoundKind
 
     async with client.db() as s:
         from app.db.service import ensure_user
@@ -372,9 +372,9 @@ async def test_snooze_refuses_within_24h_of_deadline(client):
         c = Concert(title="Soon", created_by=FAN_ID)
         s.add(c)
         await s.flush()
-        w = Window(concert_id=c.id, kind=WindowKind.LOTTERY_ROUND, label="R1",
-                   closes_at_utc=datetime.now(UTC) + timedelta(hours=10))
-        s.add(w)
+        round_ = Round(concert_id=c.id, kind=RoundKind.LOTTERY_ROUND, label="R1",
+                        closes_at_utc=datetime.now(UTC) + timedelta(hours=10))
+        s.add(round_)
         rule = RR(user_id=FAN_ID, concert_id=c.id, anchor=Anchor.CLOSES,
                   offset_days=0, offset_hours=-9)
         s.add(rule)

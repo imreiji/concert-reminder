@@ -1,7 +1,7 @@
 """Reminder planning: the pure math at the heart of the app.
 
 Given a user's rule ("remind me 3 days before every lottery round closes")
-and a concert's windows/days, compute exactly WHEN reminders should fire.
+and a concert's rounds/days, compute exactly WHEN reminders should fire.
 
 This module has NO imports from discord, fastapi, or sqlalchemy — it works
 on plain dataclasses and datetimes, which is what makes it exhaustively
@@ -12,11 +12,11 @@ Semantics:
   * offset_days < 0  -> before the anchor   (-3 = three days before)
   * offset_days > 0  -> after the anchor    (+1 = one day after, e.g. results recap)
   * offset_days = 0  -> at the anchor moment (plus offset_hours, if any)
-  * A rule scoped to one window plans only that window.
-  * A rule scoped to a concert expands to all its windows (OPENS/CLOSES)
-    or all its days (EVENT_START).
-  * Windows missing the anchored bound (e.g. CLOSES on a window with no
-    closes_at) are skipped silently — not every window has both bounds.
+  * A rule scoped to one round plans only that round.
+  * A rule scoped to a concert expands to all its rounds (OPENS/CLOSES/
+    RESULTS/PAYMENT) or all its days (EVENT_START).
+  * Rounds missing the anchored bound (e.g. CLOSES on a round with no
+    closes_at) are skipped silently — not every round has all 4 bounds.
   * Fire times in the past are skipped: we never queue stale reminders.
 """
 
@@ -29,10 +29,12 @@ from app.domain.types import Anchor
 
 
 @dataclass(frozen=True)
-class WindowInfo:
+class RoundInfo:
     id: int
     opens_at_utc: datetime | None
     closes_at_utc: datetime | None
+    results_at_utc: datetime | None = None
+    payment_deadline_at_utc: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -47,7 +49,7 @@ class RuleInfo:
     anchor: Anchor
     offset_days: int
     offset_hours: int = 0
-    window_id: int | None = None   # set -> rule targets one specific window
+    round_id: int | None = None    # set -> rule targets one specific round
     concert_id: int | None = None  # set -> rule targets a whole concert
 
 
@@ -59,7 +61,7 @@ class PlannedReminder:
     rule_id: int
     anchor: Anchor
     fire_at_utc: datetime
-    window_id: int | None = None
+    round_id: int | None = None
     day_id: int | None = None
 
 
@@ -70,34 +72,42 @@ def offset_delta(offset_days: int, offset_hours: int) -> timedelta:
     return timedelta(days=offset_days, hours=offset_hours)
 
 
-def anchor_time(window: WindowInfo, anchor: Anchor) -> datetime | None:
-    """The moment a window-anchored rule measures from, or None if absent."""
-    if anchor is Anchor.OPENS:
-        return window.opens_at_utc
-    if anchor is Anchor.CLOSES:
-        return window.closes_at_utc
-    return None  # EVENT_START never anchors to a window
+# The one place an Anchor maps to a Round field. due_reminders() and
+# snooze_reminder() in db/service.py both reuse anchor_time() below instead
+# of re-implementing this switch — previously it was duplicated 3 times.
+_ROUND_ANCHOR_FIELDS: dict[Anchor, str] = {
+    Anchor.OPENS: "opens_at_utc",
+    Anchor.CLOSES: "closes_at_utc",
+    Anchor.RESULTS: "results_at_utc",
+    Anchor.PAYMENT: "payment_deadline_at_utc",
+}
+
+
+def anchor_time(round_: RoundInfo, anchor: Anchor) -> datetime | None:
+    """The moment a round-anchored rule measures from, or None if absent."""
+    field = _ROUND_ANCHOR_FIELDS.get(anchor)
+    return getattr(round_, field) if field else None  # EVENT_START never anchors to a round
 
 
 def plan_for_rule(
     rule: RuleInfo,
-    windows: list[WindowInfo],
+    rounds: list[RoundInfo],
     days: list[DayInfo],
     now: datetime,
 ) -> list[PlannedReminder]:
     """Compute every future reminder this rule implies.
 
     Deterministic and side-effect free: same inputs, same output, always.
-    Callers re-run this after any window/day edit; the DB layer's dedupe
+    Callers re-run this after any round/day edit; the DB layer's dedupe
     index turns re-planning into upserts instead of duplicates.
     """
     delta = offset_delta(rule.offset_days, rule.offset_hours)
     planned: list[PlannedReminder] = []
 
     if rule.anchor is Anchor.EVENT_START:
-        # Day-anchored. A window-scoped rule with EVENT_START is a contradiction;
+        # Day-anchored. A round-scoped rule with EVENT_START is a contradiction;
         # plan nothing rather than guess.
-        if rule.window_id is not None:
+        if rule.round_id is not None:
             return []
         for day in days:
             fire = day.starts_at_utc + delta
@@ -109,20 +119,20 @@ def plan_for_rule(
                 )
         return planned
 
-    # Window-anchored (OPENS / CLOSES)
-    targets = windows
-    if rule.window_id is not None:
-        targets = [w for w in windows if w.id == rule.window_id]
+    # Round-anchored (OPENS / CLOSES / RESULTS / PAYMENT)
+    targets = rounds
+    if rule.round_id is not None:
+        targets = [r for r in rounds if r.id == rule.round_id]
 
-    for window in targets:
-        at = anchor_time(window, rule.anchor)
+    for round_ in targets:
+        at = anchor_time(round_, rule.anchor)
         if at is None:
-            continue  # this window doesn't have that bound — skip, don't error
+            continue  # this round doesn't have that bound — skip, don't error
         fire = at + delta
         if fire > now:
             planned.append(
                 PlannedReminder(
-                    rule_id=rule.id, anchor=rule.anchor, fire_at_utc=fire, window_id=window.id
+                    rule_id=rule.id, anchor=rule.anchor, fire_at_utc=fire, round_id=round_.id
                 )
             )
     return planned
@@ -130,12 +140,12 @@ def plan_for_rule(
 
 def plan_for_rules(
     rules: list[RuleInfo],
-    windows: list[WindowInfo],
+    rounds: list[RoundInfo],
     days: list[DayInfo],
     now: datetime,
 ) -> list[PlannedReminder]:
-    """Plan a batch of rules against one concert's windows and days."""
+    """Plan a batch of rules against one concert's rounds and days."""
     out: list[PlannedReminder] = []
     for rule in rules:
-        out.extend(plan_for_rule(rule, windows, days, now))
+        out.extend(plan_for_rule(rule, rounds, days, now))
     return out

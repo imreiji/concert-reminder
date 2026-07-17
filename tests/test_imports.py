@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, Window
+from app.db.models import Base, Concert, ConcertDay, Round
 from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
@@ -146,7 +146,7 @@ def test_preview_renders_parsed_draft(client):
     assert r.status_code == 200
     assert "103rd Class Graduation" in r.text
     assert 'value="2027-01-23T17:00"' in r.text  # day prefilled
-    assert 'value="2026-10-14T12:00"' in r.text  # window opens prefilled
+    assert 'value="2026-10-14T12:00"' in r.text  # round opens prefilled
 
 
 def test_preview_of_event_with_no_rounds_shows_warning(client):
@@ -181,7 +181,7 @@ def test_unparseable_page_rerenders_form_with_error(client):
 # ── Commit ───────────────────────────────────────────────────────────────
 
 
-async def test_commit_creates_concert_days_and_windows(client):
+async def test_commit_creates_concert_days_and_rounds(client):
     login_as(client, EDITOR_ID, "reiji")
     r = client.post(
         "/concerts/import/commit",
@@ -189,11 +189,13 @@ async def test_commit_creates_concert_days_and_windows(client):
             "title": "Hasunosora 103rd Class Graduation Concert",
             "day_label": ["Day 1", "Day 2"],
             "day_starts_at": ["2027-01-23T17:00", "2027-01-24T15:30"],
-            "window_label": ["Day 1 Lottery", "Day 2 Lottery"],
-            "window_kind": ["lottery_round", "lottery_round"],
-            "window_opens_at": ["2026-10-14T12:00", "2026-09-25T12:00"],
-            "window_closes_at": ["2026-11-08T23:59", "2026-11-08T23:59"],
-            "window_url": ["", ""],
+            "round_label": ["Day 1 Lottery", "Day 2 Lottery"],
+            "round_kind": ["lottery_round", "lottery_round"],
+            "round_opens_at": ["2026-10-14T12:00", "2026-09-25T12:00"],
+            "round_closes_at": ["2026-11-08T23:59", "2026-11-08T23:59"],
+            "round_results_at": ["", ""],
+            "round_payment_at": ["", ""],
+            "round_url": ["", ""],
         },
     )
     assert r.status_code == 303
@@ -203,13 +205,13 @@ async def test_commit_creates_concert_days_and_windows(client):
     assert len(concerts) == 1 and concerts[0].title == "Hasunosora 103rd Class Graduation Concert"
     days = await _all(client.db, ConcertDay)
     assert [d.label for d in days] == ["Day 1", "Day 2"]
-    windows = await _all(client.db, Window)
-    assert len(windows) == 2
+    rounds = await _all(client.db, Round)
+    assert len(rounds) == 2
 
 
 async def test_commit_tolerates_blank_trailing_rows(client):
     """The JS lets an editor add then not fill a row -- a fully blank row
-    from the repeatable UI shouldn't become a junk day/window."""
+    from the repeatable UI shouldn't become a junk day/round."""
     login_as(client, EDITOR_ID, "reiji")
     r = client.post(
         "/concerts/import/commit",
@@ -217,16 +219,18 @@ async def test_commit_tolerates_blank_trailing_rows(client):
             "title": "Some Concert",
             "day_label": [""],
             "day_starts_at": [""],
-            "window_label": [""],
-            "window_kind": ["other"],
-            "window_opens_at": [""],
-            "window_closes_at": [""],
-            "window_url": [""],
+            "round_label": [""],
+            "round_kind": ["other"],
+            "round_opens_at": [""],
+            "round_closes_at": [""],
+            "round_results_at": [""],
+            "round_payment_at": [""],
+            "round_url": [""],
         },
     )
     assert r.status_code == 303
     assert await _all(client.db, ConcertDay) == []
-    assert await _all(client.db, Window) == []
+    assert await _all(client.db, Round) == []
 
 
 def test_commit_requires_editor(client):

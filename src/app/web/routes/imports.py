@@ -4,7 +4,7 @@
   POST /concerts/import/preview   fetch + parse only -- nothing touches the DB
   POST /concerts/import/commit    the only route that writes; same field
                                    shape and validation as manual creation
-                                   (create_concert_row / build_day / build_window
+                                   (create_concert_row / build_day / build_round
                                    in concerts.py), just called in a loop.
 
 Nothing is ever auto-saved: preview always renders an editable draft, and
@@ -23,9 +23,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.service import sync_concert, tag_picker_context
 from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
-from app.domain.types import WindowKind
+from app.domain.types import RoundKind
 from app.web.auth import SessionUser, require_editor
-from app.web.routes.concerts import build_day, build_window, create_concert_row
+from app.web.routes.concerts import build_day, build_round, create_concert_row
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/concerts/import")
@@ -95,7 +95,7 @@ async def import_preview(
         "import_preview.html",
         {
             "user": user, "parsed": parsed, "source_url": url,
-            "fmt": _fmt, "kinds": list(WindowKind),
+            "fmt": _fmt, "kinds": list(RoundKind),
             "by_kind": picker["by_kind"],
             "groups_json": json.dumps(picker["groups_json"]),
             "tag_names_json": json.dumps(picker["tag_names_json"]),
@@ -115,14 +115,16 @@ async def import_commit(
     venue_tags: list[int] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
-    window_label: list[str] = Form(default=[]),
-    window_kind: list[WindowKind] = Form(default=[]),
-    window_opens_at: list[str] = Form(default=[]),
-    window_closes_at: list[str] = Form(default=[]),
-    window_url: list[str] = Form(default=[]),
+    round_label: list[str] = Form(default=[]),
+    round_kind: list[RoundKind] = Form(default=[]),
+    round_opens_at: list[str] = Form(default=[]),
+    round_closes_at: list[str] = Form(default=[]),
+    round_results_at: list[str] = Form(default=[]),
+    round_payment_at: list[str] = Form(default=[]),
+    round_url: list[str] = Form(default=[]),
 ):
-    """Same validation as manual entry (build_day/build_window), just looped
-    -- create_concert_row + add_day + add_window combined into one commit."""
+    """Same validation as manual entry (build_day/build_round), just looped
+    -- create_concert_row + add_day + add_round combined into one commit."""
     concert = await create_concert_row(
         session, user, title, franchise_tags, group_tags, artist_tags, venue_tags
     )
@@ -132,12 +134,16 @@ async def import_commit(
             continue  # a blank trailing row from the repeatable UI
         session.add(build_day(concert.id, label, starts_at))
 
-    for label, kind, opens_at, closes_at, w_url in zip(
-        window_label, window_kind, window_opens_at, window_closes_at, window_url, strict=True
+    for label, kind, opens_at, closes_at, results_at, payment_at, r_url in zip(
+        round_label, round_kind, round_opens_at, round_closes_at,
+        round_results_at, round_payment_at, round_url, strict=True
     ):
-        if not label.strip() and not opens_at.strip() and not closes_at.strip():
-            continue
-        session.add(build_window(concert.id, label, kind, opens_at, closes_at, w_url))
+        if not any([label.strip(), opens_at.strip(), closes_at.strip(),
+                    results_at.strip(), payment_at.strip()]):
+            continue  # a blank trailing row from the repeatable UI
+        session.add(build_round(
+            concert.id, label, kind, opens_at, closes_at, results_at, payment_at, r_url
+        ))
 
     await session.flush()
     await sync_concert(session, concert.id)
