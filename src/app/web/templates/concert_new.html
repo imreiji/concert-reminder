@@ -7,7 +7,10 @@
 <p class="dim tiny"><a href="/concerts/import">Prefer to import from a ramen.events URL instead? →</a></p>
 
 <form class="stack wide" method="post" action="/concerts" id="new-concert">
-  <label>Title (JP) <input class="title-input" name="title" required maxlength="200" placeholder="Hasunosora 6th Live"></label>
+  <label>Title (JP) <input class="title-input" name="title" id="ec-title" required maxlength="200" placeholder="Hasunosora 6th Live"></label>
+  <label>Event ID <span class="dim tiny">(this event's URL — letters, digits, hyphens, underscores only)</span>
+    <input name="event_id" id="ec-event-id" required maxlength="100" pattern="[A-Za-z0-9_\-]+"
+           placeholder="hasunosora-6th-live"></label>
 
   <div class="grid2">
     <label>Title (EN) <input name="title_en" maxlength="200"></label>
@@ -75,5 +78,18 @@
     const tpl = document.getElementById(templateId);
     document.getElementById(listId).appendChild(tpl.content.cloneNode(true));
   }
+  // Convenience: suggest an event id from the title, but only while the
+  // editor hasn't typed one themselves.
+  (function () {
+    const titleEl = document.getElementById("ec-title");
+    const idEl = document.getElementById("ec-event-id");
+    if (!titleEl || !idEl) return;
+    idEl.addEventListener("input", () => { idEl.dataset.touched = "1"; });
+    titleEl.addEventListener("blur", () => {
+      if (idEl.dataset.touched || idEl.value.trim()) return;
+      idEl.value = titleEl.value.trim().toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    });
+  })();
 </script>
 {% endblock %}

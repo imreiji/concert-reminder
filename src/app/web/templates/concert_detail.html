@@ -28,45 +28,10 @@
       {% if concert.eventernote_url %}<a href="{{ concert.eventernote_url }}" target="_blank" rel="noopener">eventernote</a> · {% endif %}
       {% if concert.official_url %}<a href="{{ concert.official_url }}" target="_blank" rel="noopener">official site</a> · {% endif %}
       {% if concert.source_url %}<a href="{{ concert.source_url }}" target="_blank" rel="noopener">source</a> · {% endif %}
-      <a href="/concerts/{{ concert.id }}/export.yaml">Export YAML →</a>
+      <a href="/concerts/{{ concert.event_id }}/export.yaml">Export YAML →</a>
+      {% if user.is_editor %} · <a href="/concerts/{{ concert.event_id }}/edit">Edit Concert →</a>{% endif %}
     </p>
   </header>
-
-  {% if user.is_editor %}
-  <details class="panel">
-    <summary>Edit concert</summary>
-    <form method="post" action="/concerts/{{ concert.id }}/edit" class="stack wide">
-      <label>Title <input name="title" value="{{ concert.title }}" required maxlength="200"></label>
-      <div class="grid2">
-        <label>Title (EN) <input name="title_en" value="{{ concert.title_en or '' }}" maxlength="200"></label>
-        <label>Artist / organizer <input name="organizer" value="{{ concert.organizer or '' }}" maxlength="200"></label>
-        <label>Kind
-          <select name="kind">
-            <option value="">— none —</option>
-            {% for k in concert_kinds %}
-            <option value="{{ k.value }}" {% if k == concert.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Categories (comma-sep) <input name="categories" value="{{ concert.categories or '' }}"></label>
-        <label>eventernote URL <input name="eventernote_url" type="url" value="{{ concert.eventernote_url or '' }}"></label>
-        <label>Official URL <input name="official_url" type="url" value="{{ concert.official_url or '' }}"></label>
-        <label>Source URL <input name="source_url" type="url" value="{{ concert.source_url or '' }}"></label>
-      </div>
-      <label>Performers (one per line) <textarea name="performers_text" rows="3">{{ concert.performers_text or '' }}</textarea></label>
-      <label>Notes <textarea name="notes" rows="3">{{ concert.notes or '' }}</textarea></label>
-      <button>Save</button>
-    </form>
-
-    {# The same tag controls as the New concert form: chip rows + picker popups #}
-    {% include "_tags.html" %}
-
-    <form method="post" action="/concerts/{{ concert.id }}/delete"
-          onsubmit="return confirm('Delete this concert and every reminder attached to it?')">
-      <button class="danger">Delete concert</button>
-    </form>
-  </details>
-  {% endif %}
 
   <section>
     <h2>Concert days</h2>

@@ -1,13 +1,16 @@
-"""Tag management (editors) + attaching tags to concerts.
+"""Tag management (editors).
 
 Endpoints:
   GET  /tags                            tag directory (anyone signed in)
   POST /tags                            create tag                (editor)
+  POST /tags/{id}/edit                  update location_url/region(editor)
   POST /tags/{id}/delete                delete tag everywhere     (editor)
   POST /tags/{id}/members               add member to a group     (editor)
   POST /tags/{gid}/members/{mid}/delete remove member from group  (editor)
-  POST /concerts/{id}/tags              attach (find-or-create; groups expand)
-  POST /concerts/{id}/tags/{tid}/delete detach from this concert  (editor)
+
+Attaching/detaching tags on a concert now happens through the rich concert
+edit page (web/routes/concerts.py's GET/POST /concerts/{event_id}/edit),
+not through per-tag htmx endpoints here.
 """
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -16,14 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Tag, TagMember
-from app.db.service import (
-    attach_tag,
-    detach_tag,
-    ensure_user,
-    find_tag_by_name,
-    group_members,
-    handle_newly_tagged,
-)
+from app.db.service import ensure_user, find_tag_by_name, group_members
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web.auth import SessionUser, require_editor, require_user
@@ -153,87 +149,3 @@ async def remove_member(
         await session.delete(row)
         await session.commit()
     return RedirectResponse("/tags", status_code=303)
-
-
-# ── Tags on a concert (htmx fragment) ────────────────────────────────────
-
-
-async def render_tags_fragment(
-    request: Request, concert_id: int, user: SessionUser, session: AsyncSession
-) -> HTMLResponse:
-    from app.db.models import Concert
-
-    concert = await session.get(Concert, concert_id)
-    await session.refresh(concert, ["tags"])
-    tags = await all_tags(session)
-    by_kind: dict[str, list[Tag]] = {}
-    for t in tags:
-        by_kind.setdefault(t.kind.value, []).append(t)
-    attached = {t.id for t in concert.tags}
-    return templates.TemplateResponse(
-        request,
-        "_tags.html",
-        {"concert": concert, "user": user, "tag_kinds": list(TagKind),
-         "by_kind": by_kind, "attached": attached},
-    )
-
-
-@router.post("/concerts/{concert_id}/tags", response_class=HTMLResponse)
-async def attach_concert_tag(
-    request: Request,
-    concert_id: int,
-    user: SessionUser = Depends(require_editor),
-    session: AsyncSession = Depends(get_session),
-    name: str = Form(..., min_length=1, max_length=100),
-    kind: TagKind = Form(TagKind.ARTIST),
-):
-    from app.db.models import Concert
-
-    concert = await session.get(Concert, concert_id)
-    if concert is None:
-        raise HTTPException(status_code=404)
-    tag = await find_tag_by_name(session, name)
-    if tag is None:  # find-or-create; `kind` applies only on create
-        await ensure_user(session, user.id, user.username)
-        tag = Tag(name=name.strip(), kind=kind, created_by=user.id)
-        session.add(tag)
-        await session.flush()
-    added = await attach_tag(session, concert_id, tag)  # groups expand here
-    await handle_newly_tagged(session, concert, added)  # notify-and-apply
-    await session.commit()
-    return await render_tags_fragment(request, concert_id, user, session)
-
-
-@router.post("/concerts/{concert_id}/tags/{tag_id}/attach", response_class=HTMLResponse)
-async def attach_concert_tag_by_id(
-    request: Request,
-    concert_id: int,
-    tag_id: int,
-    user: SessionUser = Depends(require_editor),
-    session: AsyncSession = Depends(get_session),
-):
-    """Picker path: attach an existing tag by id. Groups expand here (the
-    agreed post-creation semantics) — prune members after if needed."""
-    from app.db.models import Concert
-
-    concert = await session.get(Concert, concert_id)
-    tag = await session.get(Tag, tag_id)
-    if concert is None or tag is None:
-        raise HTTPException(status_code=404)
-    added = await attach_tag(session, concert_id, tag)
-    await handle_newly_tagged(session, concert, added)
-    await session.commit()
-    return await render_tags_fragment(request, concert_id, user, session)
-
-
-@router.post("/concerts/{concert_id}/tags/{tag_id}/delete", response_class=HTMLResponse)
-async def detach_concert_tag(
-    request: Request,
-    concert_id: int,
-    tag_id: int,
-    user: SessionUser = Depends(require_editor),
-    session: AsyncSession = Depends(get_session),
-):
-    await detach_tag(session, concert_id, tag_id)
-    await session.commit()
-    return await render_tags_fragment(request, concert_id, user, session)

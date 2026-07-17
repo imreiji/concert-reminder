@@ -199,7 +199,9 @@ async def test_commit_creates_concert_days_and_rounds(client):
         },
     )
     assert r.status_code == 303
-    assert r.headers["location"] == "/concerts/1"
+    # event_id isn't a field the import form collects -- auto-suggested from
+    # the title (slugified) via generate_event_id.
+    assert r.headers["location"] == "/concerts/hasunosora-103rd-class-graduation-concert"
 
     concerts = await _all(client.db, Concert)
     assert len(concerts) == 1 and concerts[0].title == "Hasunosora 103rd Class Graduation Concert"

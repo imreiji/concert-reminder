@@ -60,7 +60,7 @@
       {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
       {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
       {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
-      <a class="tile" href="/concerts/{{ c.id }}">
+      <a class="tile" href="/concerts/{{ c.event_id }}">
         <strong>{{ c.title }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
         <span class="who">
           {#- display rules: F+G+A -> franchise+group; G+A -> group; A only -> artists -#}

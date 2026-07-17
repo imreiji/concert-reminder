@@ -46,7 +46,7 @@ async def seed_group(s) -> tuple[Tag, Tag, Tag, Concert]:
     group = Tag(name="Hasunosora", kind=TagKind.GROUP, created_by=EDITOR_ID)
     a1 = Tag(name="Kozue Otomune", kind=TagKind.ARTIST, created_by=EDITOR_ID)
     a2 = Tag(name="Kaho Hinoshita", kind=TagKind.ARTIST, created_by=EDITOR_ID)
-    concert = Concert(title="Hasunosora 6th", created_by=EDITOR_ID)
+    concert = Concert(title="Hasunosora 6th", event_id="hasunosora-6th", created_by=EDITOR_ID)
     s.add_all([group, a1, a2, concert])
     await s.flush()
     s.add_all([
@@ -160,9 +160,11 @@ def test_groups_cannot_contain_groups(client):
 
 def test_index_filters_by_tag(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "Hasu Live"})
-    client.post("/concerts", data={"title": "Gakumas Live"})
-    client.post("/concerts/1/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/concerts", data={
+        "title": "Hasu Live", "event_id": "hasu-live", "franchise_tags": [1],
+    })
+    client.post("/concerts", data={"title": "Gakumas Live", "event_id": "gakumas-live"})
 
     everything = client.get("/").text
     assert "Hasu Live" in everything and "Gakumas Live" in everything
@@ -172,10 +174,16 @@ def test_index_filters_by_tag(client):
 
 def test_index_sorts_by_earliest_event_day(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "AAA Later Show"})
-    client.post("/concerts/1/days", data={"label": "Day 1", "starts_at": "2099-12-01T18:00"})
-    client.post("/concerts", data={"title": "BBB Sooner Show"})
-    client.post("/concerts/2/days", data={"label": "Day 1", "starts_at": "2099-06-01T18:00"})
+    client.post("/concerts", data={
+        "title": "AAA Later Show", "event_id": "aaa",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-12-01T18:00"],
+        "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+    })
+    client.post("/concerts", data={
+        "title": "BBB Sooner Show", "event_id": "bbb",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-06-01T18:00"],
+        "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+    })
 
     by_event = client.get("/?sort=event").text
     assert by_event.index("BBB Sooner Show") < by_event.index("AAA Later Show")
@@ -183,16 +191,61 @@ def test_index_sorts_by_earliest_event_day(client):
     assert by_added.index("BBB Sooner Show") < by_added.index("AAA Later Show")  # newest first
 
 
-def test_group_expansion_through_the_web_form(client):
-    """End-to-end: build group on /tags, attach via concert form, members appear."""
+async def test_edit_page_can_attach_a_new_tag_to_an_existing_concert(client):
+    """Tags are no longer attached post-creation via a dedicated endpoint --
+    the rich edit page's picker (submitted atomically, same as creation) is
+    the only way now. Checking a group tag there auto-populates its members
+    client-side (untestable without JS), so this submits the member id
+    explicitly, same as the creation form always has."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Hasunosora", "kind": "group"})
     client.post("/tags", data={"name": "Kozue", "kind": "artist"})
     client.post("/tags/1/members", data={"member_tag_id": 2})
-    client.post("/concerts", data={"title": "6th Live"})
-    r = client.post("/concerts/1/tags", data={"name": "Hasunosora", "kind": "group"})
-    assert r.status_code == 200
-    assert "Kozue" in r.text  # member materialized into the fragment
+    client.post("/concerts", data={"title": "6th Live", "event_id": "6th-live"})
+
+    r = client.post(
+        "/concerts/6th-live/edit",
+        data={
+            "event_id": "6th-live", "title": "6th Live",
+            "group_tags": [1], "artist_tags": [2],
+        },
+    )
+    assert r.status_code == 303
+    async with client.db() as s:
+        assert await tag_ids_on(s, 1) == {1, 2}
+
+
+async def test_edit_resubmission_does_not_reexpand_pruned_group_member(client):
+    """Rule 3 through the edit page specifically: a group tag that's already
+    attached and stays checked across an edit must NOT be re-expanded, or a
+    previously-pruned non-performer would silently come back just because
+    the editor changed something unrelated (like the title)."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "group"})  # 1
+    client.post("/tags", data={"name": "Kozue", "kind": "artist"})      # 2
+    client.post("/tags", data={"name": "Kaho", "kind": "artist"})       # 3
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    client.post("/tags/1/members", data={"member_tag_id": 3})
+
+    # created with the group but only Kozue checked -- Kaho pruned
+    client.post(
+        "/concerts",
+        data={"title": "6th Live", "event_id": "6th-live", "group_tags": [1], "artist_tags": [2]},
+    )
+    async with client.db() as s:
+        assert await tag_ids_on(s, 1) == {1, 2}
+
+    # unrelated edit: rename the title, resubmit the SAME tag selection
+    r = client.post(
+        "/concerts/6th-live/edit",
+        data={
+            "event_id": "6th-live", "title": "6th Live (renamed)",
+            "group_tags": [1], "artist_tags": [2],
+        },
+    )
+    assert r.status_code == 303
+    async with client.db() as s:
+        assert await tag_ids_on(s, 1) == {1, 2}  # Kaho (3) still pruned
 
 
 # ── Phase 11: tag-driven creation form ───────────────────────────────────
@@ -212,7 +265,7 @@ async def test_creation_form_respects_explicit_artist_selection(client):
 
     # create with group but ONLY Kozue checked (Kaho not performing)
     r = client.post("/concerts", data={
-        "title": "6th Live", "franchise_tags": [1], "group_tags": [2],
+        "title": "6th Live", "event_id": "6th-live", "franchise_tags": [1], "group_tags": [2],
         "artist_tags": [3], "venue_tags": [5],
     })
     assert r.status_code == 303
@@ -251,7 +304,7 @@ async def test_creation_supports_multiple_groups_and_franchises(client):
     client.post("/tags/4/members", data={"member_tag_id": 6})
 
     r = client.post("/concerts", data={
-        "title": "Godo Live",
+        "title": "Godo Live", "event_id": "godo-live",
         "franchise_tags": [1, 2], "group_tags": [3, 4], "artist_tags": [5, 6],
     })
     assert r.status_code == 303
@@ -265,7 +318,7 @@ async def test_multiple_venues_attach_and_join(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})   # 1
     client.post("/tags", data={"name": "K-Arena", "kind": "venue"})          # 2
-    r = client.post("/concerts", data={"title": "Tour", "venue_tags": [1, 2]})
+    r = client.post("/concerts", data={"title": "Tour", "event_id": "tour", "venue_tags": [1, 2]})
     assert r.status_code == 303
     async with client.db() as s:
         assert await tag_ids_on(s, 1) == {1, 2}
@@ -274,12 +327,3 @@ async def test_multiple_venues_attach_and_join(client):
     assert "Multiple" in client.get("/").text  # tile shows Multiple, not the join
 
 
-def test_attach_by_id_endpoint_expands_groups(client):
-    """Detail-page picker path: attaching a group by id expands members."""
-    login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "group"})  # 1
-    client.post("/tags", data={"name": "Kozue", "kind": "artist"})      # 2
-    client.post("/tags/1/members", data={"member_tag_id": 2})
-    client.post("/concerts", data={"title": "6th"})
-    r = client.post("/concerts/1/tags/1/attach")
-    assert r.status_code == 200 and "Kozue" in r.text

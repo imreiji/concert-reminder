@@ -603,6 +603,7 @@ class NoticeContext:
     """Everything needed to render the new-event embed for one recipient."""
 
     concert_id: int
+    event_id: str
     title: str
     tags_line: str
     venue: str | None
@@ -640,6 +641,7 @@ async def notice_context(
 
     return NoticeContext(
         concert_id=concert_id,
+        event_id=concert.event_id,
         title=concert.title,
         tags_line=" · ".join(non_venue),
         venue=("Multiple" if len(venues) > 1 else (venues[0] if venues else concert.venue)),

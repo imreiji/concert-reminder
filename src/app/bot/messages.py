@@ -91,7 +91,7 @@ def build_new_event_message(ctx) -> tuple:
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(
         label="Open on dekimasen.app",
-        url=f"{settings.base_url}/concerts/{ctx.concert_id}",
+        url=f"{settings.base_url}/concerts/{ctx.event_id}",
     ))
     # State-aware: auto-applied subscribers get the undo; others get the apply.
     if ctx.user_has_rules:
