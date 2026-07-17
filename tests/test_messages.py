@@ -18,7 +18,7 @@ def test_relative_phrase():
     assert relative_phrase(dt(6, 25), dt(6, 27)) == "2 days ago"  # after-offset recap
 
 
-def test_format_window_reminder():
+def test_format_round_reminder():
     item = DueReminder(
         queue_id=1,
         discord_id=42,
@@ -26,8 +26,8 @@ def test_format_window_reminder():
         concert_title="Hasunosora 5th",
         anchor=Anchor.CLOSES,
         fire_at_utc=dt(6, 22, 14, ),
-        window_label="最速先行 Round 1",
-        window_kind="lottery_round",
+        round_label="最速先行 Round 1",
+        round_kind="lottery_round",
         anchor_time_utc=dt(6, 25, 14),
         url="https://example.com/tickets",
     )
@@ -39,7 +39,7 @@ def test_format_window_reminder():
     assert "https://example.com/tickets" in msg
 
 
-def test_format_day_reminder_without_window():
+def test_format_day_reminder_without_round():
     item = DueReminder(
         queue_id=2,
         discord_id=42,

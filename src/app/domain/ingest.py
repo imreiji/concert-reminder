@@ -26,7 +26,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from bs4 import Tag as BS4Tag
 
-from app.domain.types import WindowKind
+from app.domain.types import RoundKind
 
 DAY_LINE = re.compile(
     r"^(?P<label>Day\s+\d+|When):\s*"
@@ -42,16 +42,16 @@ APPLY_WITHIN = re.compile(
     re.IGNORECASE,
 )
 
-_KIND_KEYWORDS: list[tuple[str, WindowKind]] = [
-    ("general sale", WindowKind.GENERAL_SALE),
-    ("first-come", WindowKind.GENERAL_SALE),
-    ("result", WindowKind.RESULT_ANNOUNCEMENT),
-    ("announce", WindowKind.RESULT_ANNOUNCEMENT),
-    ("payment", WindowKind.PAYMENT_DEADLINE),
-    ("stream", WindowKind.STREAM_TICKET_SALE),
-    ("配信", WindowKind.STREAM_TICKET_SALE),
-    ("lottery", WindowKind.LOTTERY_ROUND),
-    ("抽選", WindowKind.LOTTERY_ROUND),
+_KIND_KEYWORDS: list[tuple[str, RoundKind]] = [
+    ("general sale", RoundKind.GENERAL_SALE),
+    ("first-come", RoundKind.GENERAL_SALE),
+    ("result", RoundKind.RESULT_ANNOUNCEMENT),
+    ("announce", RoundKind.RESULT_ANNOUNCEMENT),
+    ("payment", RoundKind.PAYMENT_DEADLINE),
+    ("stream", RoundKind.STREAM_TICKET_SALE),
+    ("配信", RoundKind.STREAM_TICKET_SALE),
+    ("lottery", RoundKind.LOTTERY_ROUND),
+    ("抽選", RoundKind.LOTTERY_ROUND),
 ]
 
 
@@ -66,9 +66,9 @@ class ParsedDay:
 
 
 @dataclass
-class ParsedWindow:
+class ParsedRound:
     label: str
-    kind: WindowKind
+    kind: RoundKind
     opens_at_jst: datetime | None
     closes_at_jst: datetime | None
     url: str | None
@@ -79,16 +79,16 @@ class ParsedConcert:
     title: str
     venue_name: str | None
     days: list[ParsedDay] = field(default_factory=list)
-    windows: list[ParsedWindow] = field(default_factory=list)
+    rounds: list[ParsedRound] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
-def _guess_kind(text: str) -> WindowKind:
+def _guess_kind(text: str) -> RoundKind:
     lowered = text.lower()
     for keyword, kind in _KIND_KEYWORDS:
         if keyword in lowered:
             return kind
-    return WindowKind.OTHER
+    return RoundKind.OTHER
 
 
 def _parse_datetime(value: str) -> datetime:
@@ -132,10 +132,10 @@ def _parse_basic_info(content: BS4Tag, warnings: list[str]) -> tuple[list[Parsed
     return days, venue
 
 
-def _parse_windows(
+def _parse_rounds(
     content: BS4Tag, fallback_url: str | None, warnings: list[str]
-) -> list[ParsedWindow]:
-    windows: list[ParsedWindow] = []
+) -> list[ParsedRound]:
+    rounds: list[ParsedRound] = []
     for heading in content.find_all("h3"):
         label = heading.get_text(strip=True)[:200]
         # Scan siblings between this heading and the next h2/h3 for "Apply within".
@@ -152,14 +152,14 @@ def _parse_windows(
                     closes = _parse_datetime(m.group("closes"))
         if opens is None and closes is None:
             continue  # not a round heading (e.g. "Upgrade Tickets" has no dates)
-        windows.append(ParsedWindow(
+        rounds.append(ParsedRound(
             label=label, kind=_guess_kind(label),
             opens_at_jst=opens, closes_at_jst=closes,
             url=fallback_url,
         ))
-    if not windows:
+    if not rounds:
         warnings.append("no lottery/sale rounds found -- may not be announced yet")
-    return windows
+    return rounds
 
 
 def parse_ramen_event(html: str, source_url: str) -> ParsedConcert:
@@ -177,8 +177,8 @@ def parse_ramen_event(html: str, source_url: str) -> ParsedConcert:
     warnings: list[str] = []
     days, venue = _parse_basic_info(content, warnings)
     fallback_url = _official_url(content) or source_url
-    windows = _parse_windows(content, fallback_url, warnings)
+    rounds = _parse_rounds(content, fallback_url, warnings)
 
     return ParsedConcert(
-        title=title, venue_name=venue, days=days, windows=windows, warnings=warnings
+        title=title, venue_name=venue, days=days, rounds=rounds, warnings=warnings
     )

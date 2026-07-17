@@ -8,7 +8,7 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from app.db.models import Concert, ReminderRule
-from app.db.service import ensure_user, sync_rule, upcoming_windows
+from app.db.service import ensure_user, sync_rule, upcoming_rounds
 from app.db.session import SessionMaker
 from app.domain.timezones import fmt_dual
 from app.domain.types import Anchor
@@ -33,7 +33,7 @@ class Reminders(commands.Cog):
         async with SessionMaker() as session:
             user = await ensure_user(session, interaction.user.id, interaction.user.name)
             tz = user.timezone
-            pairs = await upcoming_windows(session, horizon_days=days)
+            pairs = await upcoming_rounds(session, horizon_days=days)
             await session.commit()
 
         if not pairs:
@@ -44,14 +44,14 @@ class Reminders(commands.Cog):
 
         now = datetime.now(UTC)
         lines: list[str] = []
-        for concert, window in pairs[:20]:
+        for concert, round_ in pairs[:20]:
             bits = []
-            if window.opens_at_utc and window.opens_at_utc > now:
-                bits.append(f"opens {fmt_dual(window.opens_at_utc, tz)}")
-            if window.closes_at_utc and window.closes_at_utc > now:
-                bits.append(f"closes {fmt_dual(window.closes_at_utc, tz)}")
+            if round_.opens_at_utc and round_.opens_at_utc > now:
+                bits.append(f"opens {fmt_dual(round_.opens_at_utc, tz)}")
+            if round_.closes_at_utc and round_.closes_at_utc > now:
+                bits.append(f"closes {fmt_dual(round_.closes_at_utc, tz)}")
             if bits:
-                lines.append(f"**{concert.title}** — {window.label}\n{' / '.join(bits)}")
+                lines.append(f"**{concert.title}** — {round_.label}\n{' / '.join(bits)}")
 
         embed = discord.Embed(
             title=f"Next {days} days",
@@ -135,7 +135,7 @@ class Reminders(commands.Cog):
 
         lines = []
         for rule, concert in rows:
-            scope = concert.title if concert else f"window #{rule.window_id}"
+            scope = concert.title if concert else f"round #{rule.round_id}"
             d = abs(rule.offset_days)
             direction = "before" if rule.offset_days < 0 else "after"
             timing = "same-day" if d == 0 else f"{d}d {direction}"

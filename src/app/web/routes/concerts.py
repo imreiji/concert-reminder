@@ -2,9 +2,9 @@
 
 Route conventions:
   * Mutations are POSTs. Page-level actions redirect (PRG pattern);
-    list-level actions (windows/days/rules) are htmx fragment swaps —
+    list-level actions (rounds/days/rules) are htmx fragment swaps —
     the server renders the updated list and htmx swaps it in place.
-  * require_editor guards everything that changes concerts/days/windows.
+  * require_editor guards everything that changes concerts/days/rounds.
     require_user guards personal reminder rules.
   * EVERY mutation that touches dates ends with a queue re-sync
     (sync_concert / sync_rule). That is the contract that makes the web UI
@@ -24,11 +24,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Concert, ConcertDay, ReminderRule, Tag, User, Window
+from app.db.models import Concert, ConcertDay, ReminderRule, Round, Tag, User
 from app.db.service import attach_tag, ensure_user, handle_newly_tagged, sync_concert, sync_rule
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
-from app.domain.types import Anchor, Channel, WindowKind
+from app.domain.types import Anchor, Channel, RoundKind
 from app.web.auth import SessionUser, require_editor, require_user
 
 router = APIRouter()
@@ -64,16 +64,28 @@ def build_day(concert_id: int, label: str, starts_at: str) -> ConcertDay:
     return ConcertDay(concert_id=concert_id, label=label.strip(), starts_at_utc=starts)
 
 
-def build_window(
-    concert_id: int, label: str, kind: WindowKind, opens_at: str, closes_at: str, url: str
-) -> Window:
-    """Shared by add_window and the URL-import commit route."""
+def build_round(
+    concert_id: int,
+    label: str,
+    kind: RoundKind,
+    opens_at: str,
+    closes_at: str,
+    results_at: str,
+    payment_at: str,
+    url: str,
+) -> Round:
+    """Shared by add_round and the URL-import commit route."""
     opens, closes = parse_jst(opens_at), parse_jst(closes_at)
-    if opens is None and closes is None:
-        raise HTTPException(status_code=422, detail="a window needs at least one of opens/closes")
-    return Window(
+    results, payment = parse_jst(results_at), parse_jst(payment_at)
+    if opens is None and closes is None and results is None and payment is None:
+        raise HTTPException(
+            status_code=422, detail="a round needs at least one of opens/closes/results/payment"
+        )
+    return Round(
         concert_id=concert_id, kind=kind, label=label.strip(),
-        opens_at_utc=opens, closes_at_utc=closes, url=url.strip() or None,
+        opens_at_utc=opens, closes_at_utc=closes,
+        results_at_utc=results, payment_deadline_at_utc=payment,
+        url=url.strip() or None,
     )
 
 
@@ -89,7 +101,7 @@ async def render_fragment(request: Request, name: str, concert: Concert, user: S
                           session: AsyncSession) -> HTMLResponse:
     from app.web.routes.preferences import my_presets
 
-    await session.refresh(concert, ["days", "windows"])
+    await session.refresh(concert, ["days", "rounds"])
     rules = await user_rules(session, user.id, concert.id)
     tz = await user_tz(session, user.id)
     presets = await my_presets(session, user.id)
@@ -97,7 +109,7 @@ async def render_fragment(request: Request, name: str, concert: Concert, user: S
         request,
         name,
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
-         "kinds": list(WindowKind), "anchors": list(Anchor)},
+         "kinds": list(RoundKind), "anchors": list(Anchor)},
     )
 
 
@@ -198,7 +210,7 @@ async def concert_detail(
     from app.web.routes.preferences import my_presets
 
     concert = await get_concert(session, concert_id)
-    await session.refresh(concert, ["days", "windows", "tags"])
+    await session.refresh(concert, ["days", "rounds", "tags"])
     rules = await user_rules(session, user.id, concert_id)
     tz = await user_tz(session, user.id)
     presets = await my_presets(session, user.id)
@@ -210,7 +222,7 @@ async def concert_detail(
         request,
         "concert_detail.html",
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
-         "kinds": list(WindowKind), "anchors": list(Anchor),
+         "kinds": list(RoundKind), "anchors": list(Anchor),
          "by_kind": by_kind, "attached": {tg.id for tg in concert.tags}},
     )
 
@@ -238,76 +250,84 @@ async def delete_concert(
     session: AsyncSession = Depends(get_session),
 ):
     concert = await get_concert(session, concert_id)
-    await session.delete(concert)  # cascades: days, windows, rules, queue
+    await session.delete(concert)  # cascades: days, rounds, rules, queue
     await session.commit()
     return RedirectResponse("/", status_code=303)
 
 
-# ── Windows ──────────────────────────────────────────────────────────────
+# ── Rounds ───────────────────────────────────────────────────────────────
 
 
-@router.post("/concerts/{concert_id}/windows", response_class=HTMLResponse)
-async def add_window(
+@router.post("/concerts/{concert_id}/rounds", response_class=HTMLResponse)
+async def add_round(
     request: Request,
     concert_id: int,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     label: str = Form(..., min_length=1, max_length=200),
-    kind: WindowKind = Form(WindowKind.OTHER),
+    kind: RoundKind = Form(RoundKind.OTHER),
     opens_at: str = Form(""),
     closes_at: str = Form(""),
+    results_at: str = Form(""),
+    payment_at: str = Form(""),
     url: str = Form(""),
 ):
     concert = await get_concert(session, concert_id)
-    session.add(build_window(concert.id, label, kind, opens_at, closes_at, url))
+    session.add(
+        build_round(concert.id, label, kind, opens_at, closes_at, results_at, payment_at, url)
+    )
     await session.flush()
     await sync_concert(session, concert.id)
     await session.commit()
-    return await render_fragment(request, "_windows.html", concert, user, session)
+    return await render_fragment(request, "_rounds.html", concert, user, session)
 
 
-@router.post("/windows/{window_id}/edit", response_class=HTMLResponse)
-async def edit_window(
+@router.post("/rounds/{round_id}/edit", response_class=HTMLResponse)
+async def edit_round(
     request: Request,
-    window_id: int,
+    round_id: int,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     label: str = Form(..., min_length=1, max_length=200),
-    kind: WindowKind = Form(...),
+    kind: RoundKind = Form(...),
     opens_at: str = Form(""),
     closes_at: str = Form(""),
+    results_at: str = Form(""),
+    payment_at: str = Form(""),
     url: str = Form(""),
 ):
-    window = await session.get(Window, window_id)
-    if window is None:
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
         raise HTTPException(status_code=404)
-    window.label = label.strip()
-    window.kind = kind
-    window.opens_at_utc = parse_jst(opens_at)
-    window.closes_at_utc = parse_jst(closes_at)
-    window.url = url.strip() or None
-    concert = await get_concert(session, window.concert_id)
+    round_.label = label.strip()
+    round_.kind = kind
+    round_.opens_at_utc = parse_jst(opens_at)
+    round_.closes_at_utc = parse_jst(closes_at)
+    round_.results_at_utc = parse_jst(results_at)
+    round_.payment_deadline_at_utc = parse_jst(payment_at)
+    round_.url = url.strip() or None
+    concert = await get_concert(session, round_.concert_id)
     await sync_concert(session, concert.id)
     await session.commit()
-    return await render_fragment(request, "_windows.html", concert, user, session)
+    return await render_fragment(request, "_rounds.html", concert, user, session)
 
 
-@router.post("/windows/{window_id}/delete", response_class=HTMLResponse)
-async def delete_window(
+@router.post("/rounds/{round_id}/delete", response_class=HTMLResponse)
+async def delete_round(
     request: Request,
-    window_id: int,
+    round_id: int,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
 ):
-    window = await session.get(Window, window_id)
-    if window is None:
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
         raise HTTPException(status_code=404)
-    concert = await get_concert(session, window.concert_id)
-    await session.delete(window)
+    concert = await get_concert(session, round_.concert_id)
+    await session.delete(round_)
     await session.flush()
     await sync_concert(session, concert.id)
     await session.commit()
-    return await render_fragment(request, "_windows.html", concert, user, session)
+    return await render_fragment(request, "_rounds.html", concert, user, session)
 
 
 # ── Days ─────────────────────────────────────────────────────────────────

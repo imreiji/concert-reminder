@@ -2,7 +2,7 @@
 
 These enums are imported by BOTH the pure domain logic and the ORM models,
 so the database and the business rules can never drift apart on what a
-"window kind" or an "anchor" means.
+"round kind" or an "anchor" means.
 
 Stored as strings in SQLite (readable in any DB browser, stable across
 enum reordering).
@@ -11,8 +11,15 @@ enum reordering).
 import enum
 
 
-class WindowKind(enum.StrEnum):
-    """What a deadline window represents in the Japanese concert lifecycle."""
+class RoundKind(enum.StrEnum):
+    """What a deadline round represents in the Japanese concert lifecycle.
+
+    A round can carry up to 4 timestamps (opens/closes/results/payment,
+    see Round in db/models.py) -- these members classify what KIND of
+    round it is, independent of how many of those 4 fields are filled in.
+    RESULT_ANNOUNCEMENT/PAYMENT_DEADLINE stay valid standalone kinds for
+    editors who don't want to bundle everything into one lottery round.
+    """
 
     LOTTERY_ROUND = "lottery_round"                  # 先行抽選 round (最速/1次/2次...)
     ELIGIBILITY_ITEM_SALE = "eligibility_item_sale"  # serial-code item on sale (CD/BD)
@@ -35,8 +42,10 @@ class TagKind(enum.StrEnum):
 class Anchor(enum.StrEnum):
     """Which moment a reminder offset is measured from."""
 
-    OPENS = "opens"              # window.opens_at_utc
-    CLOSES = "closes"            # window.closes_at_utc
+    OPENS = "opens"              # round.opens_at_utc
+    CLOSES = "closes"            # round.closes_at_utc
+    RESULTS = "results"          # round.results_at_utc
+    PAYMENT = "payment"          # round.payment_deadline_at_utc
     EVENT_START = "event_start"  # concert_day.starts_at_utc
 
 

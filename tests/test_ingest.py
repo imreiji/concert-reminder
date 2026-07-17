@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from app.domain.ingest import IngestError, parse_ramen_event
-from app.domain.types import WindowKind
+from app.domain.types import RoundKind
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GRADUATION_URL = "https://ramen.events/hasunosora-103rd-class-graduation-concert/"
@@ -42,21 +42,21 @@ def test_parses_multiple_named_days():
     assert parsed.days[1].starts_at_jst == datetime(2027, 1, 24, 15, 30)
 
 
-def test_parses_lottery_windows():
+def test_parses_lottery_rounds():
     parsed = parse_ramen_event(load("ramen_graduation_concert.html"), GRADUATION_URL)
-    assert len(parsed.windows) == 2
-    w1, w2 = parsed.windows
-    assert w1.kind is WindowKind.LOTTERY_ROUND
-    assert w1.opens_at_jst == datetime(2026, 10, 14, 12, 0)
-    assert w1.closes_at_jst == datetime(2026, 11, 8, 23, 59)
-    assert "Day 1 Lottery" in w1.label
-    assert w2.opens_at_jst == datetime(2026, 9, 25, 12, 0)
-    assert w2.closes_at_jst == datetime(2026, 11, 8, 23, 59)
+    assert len(parsed.rounds) == 2
+    r1, r2 = parsed.rounds
+    assert r1.kind is RoundKind.LOTTERY_ROUND
+    assert r1.opens_at_jst == datetime(2026, 10, 14, 12, 0)
+    assert r1.closes_at_jst == datetime(2026, 11, 8, 23, 59)
+    assert "Day 1 Lottery" in r1.label
+    assert r2.opens_at_jst == datetime(2026, 9, 25, 12, 0)
+    assert r2.closes_at_jst == datetime(2026, 11, 8, 23, 59)
 
 
-def test_windows_default_url_to_official_site():
+def test_rounds_default_url_to_official_site():
     parsed = parse_ramen_event(load("ramen_graduation_concert.html"), GRADUATION_URL)
-    assert all(w.url and "lovelive-anime.jp" in w.url for w in parsed.windows)
+    assert all(r.url and "lovelive-anime.jp" in r.url for r in parsed.rounds)
 
 
 def test_no_warnings_when_fully_parsed():
@@ -75,7 +75,7 @@ def test_single_day_event_uses_when_label():
 
 def test_event_with_no_rounds_yet_warns_instead_of_failing():
     parsed = parse_ramen_event(load("ramen_welcoming_concert.html"), WELCOMING_URL)
-    assert parsed.windows == []
+    assert parsed.rounds == []
     assert any("no lottery" in w for w in parsed.warnings)
 
 

@@ -2,7 +2,7 @@
 
 Design recap (see README):
   concerts ─┬─ concert_days      "Day 1", 昼公演/夜公演 — actual show datetimes
-            └─ windows           generic typed deadline windows (lotteries, sales...)
+            └─ rounds            generic typed deadline rounds (lotteries, sales...)
   users ──── reminder_rules      "remind me N days before/after X"
   reminder_queue                 materialized outbox the scheduler drains
 
@@ -28,7 +28,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.domain.types import Anchor, Channel, TagKind, WindowKind
+from app.domain.types import Anchor, Channel, RoundKind, TagKind
 
 
 class UTCDateTime(TypeDecorator):
@@ -120,7 +120,7 @@ class Concert(Base):
     days: Mapped[list["ConcertDay"]] = relationship(
         back_populates="concert", cascade="all, delete-orphan", order_by="ConcertDay.starts_at_utc"
     )
-    windows: Mapped[list["Window"]] = relationship(
+    rounds: Mapped[list["Round"]] = relationship(
         back_populates="concert", cascade="all, delete-orphan"
     )
     tags: Mapped[list["Tag"]] = relationship(secondary="concert_tags", order_by="Tag.name")
@@ -192,21 +192,29 @@ class ConcertDay(Base):
     concert: Mapped[Concert] = relationship(back_populates="days")
 
 
-class Window(Base):
-    __tablename__ = "windows"
+class Round(Base):
+    """A deadline round: up to 4 timestamps (apply-opens, apply-closes,
+    results, payment-deadline), all optional -- a round can be as simple as
+    one open/close sale window, or carry the full lottery lifecycle in one
+    row. `kind` classifies the round independent of which timestamps are
+    filled in (see RoundKind)."""
+
+    __tablename__ = "rounds"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     concert_id: Mapped[int] = mapped_column(ForeignKey("concerts.id", ondelete="CASCADE"))
-    kind: Mapped[WindowKind] = mapped_column(
-        Enum(WindowKind, values_callable=lambda e: [m.value for m in e])
+    kind: Mapped[RoundKind] = mapped_column(
+        Enum(RoundKind, values_callable=lambda e: [m.value for m in e])
     )
     label: Mapped[str] = mapped_column(String(200))  # "最速先行 Round 1", "Day 2 配信"
     opens_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     closes_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    results_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    payment_deadline_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     applies_to: Mapped[list | None] = mapped_column(JSON)  # optional concert_day ids
     url: Mapped[str | None] = mapped_column(String(500))
 
-    concert: Mapped[Concert] = relationship(back_populates="windows")
+    concert: Mapped[Concert] = relationship(back_populates="rounds")
 
 
 class ReminderRule(Base):
@@ -216,9 +224,9 @@ class ReminderRule(Base):
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
     )
-    # Exactly one of these is set: concert-wide rule, or one-window rule.
+    # Exactly one of these is set: concert-wide rule, or one-round rule.
     concert_id: Mapped[int | None] = mapped_column(ForeignKey("concerts.id", ondelete="CASCADE"))
-    window_id: Mapped[int | None] = mapped_column(ForeignKey("windows.id", ondelete="CASCADE"))
+    round_id: Mapped[int | None] = mapped_column(ForeignKey("rounds.id", ondelete="CASCADE"))
 
     anchor: Mapped[Anchor] = mapped_column(
         Enum(Anchor, values_callable=lambda e: [m.value for m in e])
@@ -314,7 +322,7 @@ class Notification(Base):
 class ReminderQueue(Base):
     """Materialized outbox. The scheduler's entire job is draining this table.
 
-    Idempotency: the functional unique index below treats NULL window/day as 0,
+    Idempotency: the functional unique index below treats NULL round/day as 0,
     so re-planning after an edit UPSERTS instead of duplicating. (Plain SQLite
     UNIQUE constraints consider NULLs distinct — the coalesce() sidesteps that.)
     """
@@ -324,7 +332,7 @@ class ReminderQueue(Base):
         Index(
             "uq_reminder_queue_dedupe",
             "rule_id",
-            text("coalesce(window_id, 0)"),
+            text("coalesce(round_id, 0)"),
             text("coalesce(day_id, 0)"),
             "anchor",
             unique=True,
@@ -334,7 +342,7 @@ class ReminderQueue(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     rule_id: Mapped[int] = mapped_column(ForeignKey("reminder_rules.id", ondelete="CASCADE"))
-    window_id: Mapped[int | None] = mapped_column(ForeignKey("windows.id", ondelete="CASCADE"))
+    round_id: Mapped[int | None] = mapped_column(ForeignKey("rounds.id", ondelete="CASCADE"))
     day_id: Mapped[int | None] = mapped_column(ForeignKey("concert_days.id", ondelete="CASCADE"))
     anchor: Mapped[Anchor] = mapped_column(
         Enum(Anchor, values_callable=lambda e: [m.value for m in e])

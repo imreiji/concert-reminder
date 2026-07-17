@@ -45,8 +45,8 @@ def relative_phrase(anchor_time: datetime, fire_at: datetime) -> str:
 
 
 def format_reminder(item: DueReminder) -> str:
-    subject = item.window_label or item.day_label or "event"
-    emoji = KIND_EMOJI.get(item.window_kind or "", "🗓️")
+    subject = item.round_label or item.day_label or "event"
+    emoji = KIND_EMOJI.get(item.round_kind or "", "🗓️")
     verb = ANCHOR_VERB[item.anchor]
 
     lines = [f"{emoji} **{item.concert_title}** — {subject}"]
@@ -109,8 +109,8 @@ def build_reminder_message(item: DueReminder) -> tuple:
     from app.bot.views import SnoozeButton
     from app.config import settings
 
-    subject = item.window_label or item.day_label or "event"
-    emoji = KIND_EMOJI.get(item.window_kind or "", "🗓️")
+    subject = item.round_label or item.day_label or "event"
+    emoji = KIND_EMOJI.get(item.round_kind or "", "🗓️")
     verb = ANCHOR_VERB[item.anchor]
 
     embed = discord.Embed(title=f"{emoji} {item.concert_title}", color=0x1A7F4E)

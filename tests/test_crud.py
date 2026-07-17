@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ReminderQueue, Window
+from app.db.models import Base, Concert, ReminderQueue, Round
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.web import auth
@@ -102,11 +102,11 @@ async def anyio_noop():  # keeps pytest-asyncio quiet about the async helper bel
     pass
 
 
-def test_window_datetime_is_parsed_as_jst(client):
+def test_round_datetime_is_parsed_as_jst(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title": "C"})
     r = client.post(
-        "/concerts/1/windows",
+        "/concerts/1/rounds",
         data={"label": "最速先行", "kind": "lottery_round", "closes_at": "2026-08-01T19:00"},
     )
     assert r.status_code == 200
@@ -115,31 +115,31 @@ def test_window_datetime_is_parsed_as_jst(client):
 
     async def check():
         async with client.db() as s:
-            w = (await s.execute(select(Window))).scalar_one()
-            assert w.closes_at_utc == jst_to_utc(datetime(2026, 8, 1, 19, 0))
-            assert w.closes_at_utc == datetime(2026, 8, 1, 10, 0, tzinfo=UTC)  # JST-9
+            round_ = (await s.execute(select(Round))).scalar_one()
+            assert round_.closes_at_utc == jst_to_utc(datetime(2026, 8, 1, 19, 0))
+            assert round_.closes_at_utc == datetime(2026, 8, 1, 10, 0, tzinfo=UTC)  # JST-9
 
     asyncio.get_event_loop().run_until_complete(check())
 
 
-def test_window_needs_at_least_one_bound(client):
+def test_round_needs_at_least_one_bound(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title": "C"})
-    r = client.post("/concerts/1/windows", data={"label": "empty", "kind": "other"})
+    r = client.post("/concerts/1/rounds", data={"label": "empty", "kind": "other"})
     assert r.status_code == 422
 
 
 # ── The core contract: edits re-sync the queue ───────────────────────────
 
 
-def test_editing_window_over_http_reschedules_queue(client):
+def test_editing_round_over_http_reschedules_queue(client):
     """User story: staff extends a lottery; every affected reminder moves."""
     import asyncio
 
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title": "C"})
     client.post(
-        "/concerts/1/windows",
+        "/concerts/1/rounds",
         data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
     )
     client.post("/concerts/1/rules", data={"anchor": "closes", "days_before": 3})
@@ -153,7 +153,7 @@ def test_editing_window_over_http_reschedules_queue(client):
     assert before == jst_to_utc(datetime(2099, 6, 22, 23, 59))
 
     client.post(
-        "/windows/1/edit",
+        "/rounds/1/edit",
         data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-28T23:59"},
     )
     after = loop.run_until_complete(fire_at())
@@ -166,7 +166,7 @@ def test_deleting_rule_removes_queue_rows(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title": "C"})
     client.post(
-        "/concerts/1/windows",
+        "/concerts/1/rounds",
         data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
     )
     client.post("/concerts/1/rules", data={"anchor": "closes", "days_before": 3})
@@ -183,7 +183,7 @@ def test_cannot_delete_someone_elses_rule(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title": "C"})
     client.post(
-        "/concerts/1/windows",
+        "/concerts/1/rounds",
         data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
     )
     client.post("/concerts/1/rules", data={"anchor": "closes", "days_before": 3})
@@ -205,7 +205,7 @@ def test_delete_concert_cascades_everything(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title": "C"})
     client.post(
-        "/concerts/1/windows",
+        "/concerts/1/rounds",
         data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
     )
     client.post("/concerts/1/rules", data={"anchor": "closes", "days_before": 3})
@@ -214,9 +214,9 @@ def test_delete_concert_cascades_everything(client):
     async def counts():
         async with client.db() as s:
             c = len((await s.execute(select(Concert))).scalars().all())
-            w = len((await s.execute(select(Window))).scalars().all())
+            r = len((await s.execute(select(Round))).scalars().all())
             q = len((await s.execute(select(ReminderQueue))).scalars().all())
-            return c, w, q
+            return c, r, q
 
     assert asyncio.get_event_loop().run_until_complete(counts()) == (0, 0, 0)
 
@@ -227,7 +227,7 @@ def test_concert_detail_page_renders_for_logged_in_users(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title": "Render Me"})
     client.post(
-        "/concerts/1/windows",
+        "/concerts/1/rounds",
         data={"label": "R1", "kind": "lottery_round", "closes_at": "2099-06-25T23:59"},
     )
     r = client.get("/concerts/1")
