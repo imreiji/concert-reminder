@@ -9,10 +9,10 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 218 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 226 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
-export, ramen.events import, and a personal calendar-feed subscription have
-shipped since).
+export, ramen.events import, a personal calendar-feed subscription, and a
+personalized `/mydeadlines` Discord command have shipped since).
 
 ## Commands
 
@@ -119,6 +119,14 @@ shipped since).
   one shipped a 500 once (template context drift).
 - Discord is never imported in service tests; button/scheduler behavior is
   tested through service functions and fake bot objects.
+- Slash-command cogs (`bot/cogs/*.py`) ARE tested directly (see
+  `tests/test_bot_reminders.py`): call `Cog.command_name.callback(cog, ...)`
+  (the `app_commands.Command` wrapper exposes the original coroutine as
+  `.callback`) with a minimal fake `discord.Interaction` (just `.user.id`/
+  `.name` and an async `.response.send_message` that records its args), and
+  monkeypatch the cog module's `SessionMaker` to a real in-memory async
+  engine -- same fixture shape as the service-layer tests, no Discord
+  gateway involved.
 
 ## UI conventions
 

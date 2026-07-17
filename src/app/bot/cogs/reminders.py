@@ -8,7 +8,7 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from app.db.models import Concert, ReminderRule
-from app.db.service import ensure_user, sync_rule, upcoming_rounds
+from app.db.service import ensure_user, sync_rule, upcoming_rounds, user_calendar_events
 from app.db.session import SessionMaker
 from app.domain.timezones import fmt_dual
 from app.domain.types import Anchor
@@ -56,6 +56,43 @@ class Reminders(commands.Cog):
         embed = discord.Embed(
             title=f"Next {days} days",
             description="\n\n".join(lines) or "Nothing upcoming.",
+            color=0x5865F2,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # ── /mydeadlines ─────────────────────────────────────────────────
+
+    @app_commands.command(description="Your own next deadlines -- only reminders you have set")
+    @app_commands.describe(count="How many to show (default 10)")
+    async def mydeadlines(self, interaction: discord.Interaction, count: int = 10) -> None:
+        """The personalized counterpart to /upcoming: that command lists
+        every deadline in the next N days regardless of who's watching it;
+        this one lists only the concerts/rounds *this* user has an active
+        reminder rule on, sourced from the same reminder_queue-backed
+        user_calendar_events() the personal .ics feed uses -- same
+        real-deadline timestamps, not the reminder's lead-time-adjusted
+        fire time."""
+        count = max(1, min(count, 25))
+        async with SessionMaker() as session:
+            user = await ensure_user(session, interaction.user.id, interaction.user.name)
+            tz = user.timezone
+            events = await user_calendar_events(session, interaction.user.id)
+            await session.commit()
+
+        if not events:
+            await interaction.response.send_message(
+                "No upcoming deadlines on your reminders. `/remindme` to add one.",
+                ephemeral=True,
+            )
+            return
+
+        lines = [
+            f"**{e.concert_title}** — {e.label}\n{fmt_dual(e.at_utc, tz)}"
+            for e in events[:count]
+        ]
+        embed = discord.Embed(
+            title="Your upcoming deadlines",
+            description="\n\n".join(lines),
             color=0x5865F2,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
