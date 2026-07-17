@@ -85,6 +85,7 @@ async def preferences(
     request: Request,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
+    feed_token: str = "",
 ):
     from app.domain.types import TagKind
 
@@ -108,6 +109,7 @@ async def preferences(
     db_user = await session.get(User, user.id)
     tz = db_user.timezone if db_user else "America/Moncton"
     tz_auto = db_user.tz_auto if db_user else True
+    has_calendar_feed = bool(db_user and db_user.calendar_token_hash)
     editors = await list_editors(session) if user.is_admin else []
     return templates.TemplateResponse(
         request,
@@ -117,7 +119,9 @@ async def preferences(
          "solo_artists": solo_artists, "venues": venues,
          "tz": tz, "tz_auto": tz_auto,
          "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
-         "anchors": list(Anchor), "editors": editors},
+         "anchors": list(Anchor), "editors": editors,
+         "has_calendar_feed": has_calendar_feed,
+         "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None},
     )
 
 

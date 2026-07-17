@@ -17,6 +17,7 @@ from app.db.session import get_session
 from app.domain.timezones import fmt_dual, utc_to_jst
 from app.scheduler import heartbeat
 from app.web import auth
+from app.web.routes import calendar as calendar_routes
 from app.web.routes import concerts as concert_routes
 from app.web.routes import imports as import_routes
 from app.web.routes import preferences as pref_routes
@@ -97,6 +98,8 @@ def create_app() -> FastAPI:
     app.include_router(tag_routes.router)
     pref_routes.templates = templates
     app.include_router(pref_routes.router)
+    # no templates: pure .ics responses
+    app.include_router(calendar_routes.router)
 
     @app.get("/healthz")
     async def healthz() -> dict:

@@ -21,6 +21,7 @@ from app.db.service import (
     set_editor,
     sync_concert,
     sync_rule,
+    user_calendar_events,
 )
 from app.domain.types import Anchor, RoundKind
 
@@ -203,6 +204,32 @@ async def test_event_start_rule_targets_days(session):
     assert len(rows) == 1
     assert rows[0].day_id is not None
     assert rows[0].fire_at_utc == dt(7, 25, 9)
+
+
+async def test_user_calendar_events_covers_rounds_and_days(session):
+    """The personal calendar feed shows each covered round/day's own real
+    deadline -- not the reminder rule's lead-time-adjusted fire_at."""
+    concert, round_, rule = await seed(session)  # concert-wide CLOSES rule -> round only
+    await sync_rule(session, rule, NOW)
+
+    day_rule = ReminderRule(
+        user_id=42, concert_id=concert.id, anchor=Anchor.EVENT_START, offset_days=-7
+    )
+    session.add(day_rule)
+    await session.flush()
+    await sync_rule(session, day_rule, NOW)
+
+    events = await user_calendar_events(session, 42, NOW)
+    by_label = {e.label: e for e in events}
+    assert by_label["最速先行"].at_utc == dt(6, 25)  # the round's own close, not a lead time
+    assert by_label["最速先行"].concert_title == "Hasunosora 5th"
+    assert by_label["Day 1"].at_utc == dt(8, 1, 9)  # the day's own start, not the -7d fire time
+
+
+async def test_user_calendar_events_excludes_past_deadlines(session):
+    _, _, rule = await seed(session)
+    await sync_rule(session, rule, NOW)
+    assert await user_calendar_events(session, 42, dt(7, 1)) == []  # round already closed by then
 
 
 # ── A round with all 4 timestamps: the actual point of this refactor ────
