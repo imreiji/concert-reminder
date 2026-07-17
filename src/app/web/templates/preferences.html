@@ -19,6 +19,27 @@
 </form>
 <p class="dim tiny">Event times are always shown as JST plus this timezone.</p>
 
+{% if user.is_admin %}
+<h2>Editors</h2>
+<p class="dim">Discord users allowed to create/edit concerts and tags.
+  Env-managed editors (<code>EDITOR_WHITELIST</code>) can't be removed here — edit <code>.env</code> instead.</p>
+<ul class="rows">
+  {% for e in editors %}
+  <li>
+    <span>{{ e.username or e.id }} <span class="dim tiny">({{ e.id }})</span>{% if e.env %} <em class="badge">env</em>{% endif %}</span>
+    {% if not e.env %}
+    <form method="post" action="/admin/editors/{{ e.id }}/remove"><button class="x" title="remove editor">×</button></form>
+    {% endif %}
+  </li>
+  {% endfor %}
+  {% if not editors %}<li class="dim">No editors yet.</li>{% endif %}
+</ul>
+<form class="inline" method="post" action="/admin/editors">
+  <input name="discord_id" type="number" inputmode="numeric" placeholder="Discord user ID" required>
+  <button>+ Add editor</button>
+</form>
+{% endif %}
+
 <h2>Reminder presets</h2>
 <p class="dim">Your standard loadout of reminders — apply to any concert in one click, or link
 to a tag subscription so new events set themselves up.</p>

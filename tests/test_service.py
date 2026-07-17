@@ -11,8 +11,17 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.db.models import Base, Concert, ConcertDay, ReminderQueue, ReminderRule, Window
-from app.db.service import due_reminders, ensure_user, mark_sent, sync_concert, sync_rule
+from app.config import settings
+from app.db.models import Base, Concert, ConcertDay, ReminderQueue, ReminderRule, User, Window
+from app.db.service import (
+    due_reminders,
+    ensure_user,
+    list_editors,
+    mark_sent,
+    set_editor,
+    sync_concert,
+    sync_rule,
+)
 from app.domain.types import Anchor, WindowKind
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)
@@ -153,3 +162,52 @@ async def test_event_start_rule_targets_days(session):
     assert len(rows) == 1
     assert rows[0].day_id is not None
     assert rows[0].fire_at_utc == dt(7, 25, 9)
+
+
+# ── set_editor / list_editors ───────────────────────────────────────────
+
+
+async def test_set_editor_creates_stub_user_when_unknown(session):
+    user = await set_editor(session, 99, True)
+    assert user.username == "99"  # placeholder, corrected on next login
+    assert user.is_editor is True
+
+
+async def test_set_editor_uses_provided_username(session):
+    user = await set_editor(session, 99, True, username="reiji")
+    assert user.username == "reiji"
+
+
+async def test_set_editor_toggles_existing_user(session):
+    await ensure_user(session, 42, "reiji")
+    await set_editor(session, 42, True)
+    await session.flush()
+    (row,) = (await session.execute(select(User).where(User.discord_id == 42))).scalars()
+    assert row.is_editor is True
+
+    await set_editor(session, 42, False)
+    await session.flush()
+    (row,) = (await session.execute(select(User).where(User.discord_id == 42))).scalars()
+    assert row.is_editor is False
+
+
+async def test_list_editors_combines_db_and_env(session, monkeypatch):
+    monkeypatch.setattr(settings, "editor_whitelist", "777")  # never logged in
+    await ensure_user(session, 42, "reiji")
+    await set_editor(session, 42, True)
+    await session.flush()
+
+    editors = await list_editors(session)
+    by_id = {e["id"]: e for e in editors}
+    assert by_id[42] == {"id": 42, "username": "reiji", "env": False}
+    assert by_id[777] == {"id": 777, "username": None, "env": True}
+
+
+async def test_list_editors_marks_env_lock_on_db_editor(session, monkeypatch):
+    monkeypatch.setattr(settings, "editor_whitelist", "42")
+    await ensure_user(session, 42, "reiji")
+    await set_editor(session, 42, True)
+    await session.flush()
+
+    editors = await list_editors(session)
+    assert editors == [{"id": 42, "username": "reiji", "env": True}]

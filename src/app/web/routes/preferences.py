@@ -18,11 +18,19 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.models import PresetItem, ReminderPreset, Tag, TagSubscription, User
-from app.db.service import apply_preset, ensure_user, group_members, set_default_preset
+from app.db.service import (
+    apply_preset,
+    ensure_user,
+    group_members,
+    list_editors,
+    set_default_preset,
+    set_editor,
+)
 from app.db.session import get_session
 from app.domain.types import Anchor
-from app.web.auth import SessionUser, require_user
+from app.web.auth import SessionUser, require_admin, require_user
 
 router = APIRouter()
 
@@ -95,6 +103,7 @@ async def preferences(
     db_user = await session.get(User, user.id)
     tz = db_user.timezone if db_user else "America/Moncton"
     tz_auto = db_user.tz_auto if db_user else True
+    editors = await list_editors(session) if user.is_admin else []
     return templates.TemplateResponse(
         request,
         "preferences.html",
@@ -103,7 +112,7 @@ async def preferences(
          "solo_artists": solo_artists, "venues": venues,
          "tz": tz, "tz_auto": tz_auto,
          "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
-         "anchors": list(Anchor)},
+         "anchors": list(Anchor), "editors": editors},
     )
 
 
@@ -275,6 +284,35 @@ async def unsubscribe(
     if sub is None or sub.user_id != user.id:
         raise HTTPException(status_code=404)
     await session.delete(sub)
+    await session.commit()
+    return RedirectResponse("/preferences", status_code=303)
+
+
+# ── Admin: editors ───────────────────────────────────────────────────────
+
+
+@router.post("/admin/editors")
+async def add_editor(
+    admin: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+    discord_id: int = Form(...),
+):
+    await set_editor(session, discord_id, True)
+    await session.commit()
+    return RedirectResponse("/preferences", status_code=303)
+
+
+@router.post("/admin/editors/{discord_id}/remove")
+async def remove_editor(
+    discord_id: int,
+    admin: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    if discord_id in settings.editor_ids:
+        raise HTTPException(
+            status_code=400, detail="Editor is env-managed (EDITOR_WHITELIST) — edit .env instead"
+        )
+    await set_editor(session, discord_id, False)
     await session.commit()
     return RedirectResponse("/preferences", status_code=303)
 

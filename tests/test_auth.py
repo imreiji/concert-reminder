@@ -159,3 +159,85 @@ def test_editor_passes(client, monkeypatch):
     monkeypatch.setattr(settings, "editor_whitelist", "42")
     do_login(client)
     assert client.post("/concerts", data={"title": "X"}).status_code == 303
+
+
+# ── Admin gating ─────────────────────────────────────────────────────────
+
+
+def test_non_admin_is_forbidden_from_admin_routes(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", "999")  # 42 not whitelisted
+    do_login(client)
+    assert client.post("/admin/editors", data={"discord_id": 777}).status_code == 403
+
+
+def test_admin_passes_admin_routes(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    do_login(client)
+    assert client.post("/admin/editors", data={"discord_id": 777}).status_code == 303
+
+
+def test_admin_implicitly_passes_editor_routes(client, monkeypatch):
+    """Admins can create/edit concerts even with no editor_whitelist/DB flag."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    do_login(client)
+    assert client.post("/concerts", data={"title": "X"}).status_code == 303
+
+
+async def test_promote_then_demote_round_trip(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    do_login(client)  # logged in as admin 42
+
+    # Promote 999 to editor.
+    r = client.post("/admin/editors", data={"discord_id": 999})
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        row = await s.get(User, 999)
+        assert row is not None and row.is_editor is True
+
+    # Demote 999 again.
+    r = client.post("/admin/editors/999/remove")
+    assert r.status_code == 303
+    async with client.db() as s:
+        row = await s.get(User, 999)
+        assert row is not None and row.is_editor is False
+
+
+def test_cannot_remove_env_whitelisted_editor(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr(settings, "editor_whitelist", "999")
+    do_login(client)
+    r = client.post("/admin/editors/999/remove")
+    assert r.status_code == 400
+
+
+def test_promoted_editor_gains_access(client, monkeypatch):
+    """The whole point: an admin-promoted editor (no env entry, no restart)
+    can now hit editor-gated routes."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    do_login(client)  # admin 42 promotes 999
+    client.post("/admin/editors", data={"discord_id": 999})
+
+    # Log in as 999 and confirm editor access, purely from the DB flag.
+    async def fake_identity(token: str) -> dict:
+        return {"id": "999", "username": "newbie", "global_name": "Newbie", "avatar": None}
+
+    monkeypatch.setattr(auth, "fetch_identity", fake_identity)
+    do_login(client)
+    assert client.post("/concerts", data={"title": "Y"}).status_code == 303
+
+
+def test_admin_sees_editors_panel_on_preferences_page(client, monkeypatch):
+    """Logged-in GET render test for the new admin section."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    do_login(client)
+    r = client.get("/preferences")
+    assert r.status_code == 200
+    assert "Editors" in r.text
+
+
+def test_non_admin_does_not_see_editors_panel(client):
+    do_login(client)
+    r = client.get("/preferences")
+    assert r.status_code == 200
+    assert "Editors" not in r.text

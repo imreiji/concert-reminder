@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.models import (
     Concert,
     ConcertDay,
@@ -57,6 +58,40 @@ async def ensure_user(session: AsyncSession, discord_id: int, username: str) -> 
     elif user.username != username:
         user.username = username
     return user
+
+
+async def set_editor(
+    session: AsyncSession, discord_id: int, is_editor: bool, username: str | None = None
+) -> User:
+    """Get-or-create the user row and set the DB-persisted editor flag.
+
+    `username` is unknown when an admin promotes someone by raw Discord ID
+    who has never logged in / used the bot — the stub is corrected by
+    `ensure_user`'s refresh-on-login logic the next time they show up.
+    """
+    user = await session.get(User, discord_id)
+    if user is None:
+        user = User(discord_id=discord_id, username=username or str(discord_id))
+        session.add(user)
+        await session.flush()
+    user.is_editor = is_editor
+    return user
+
+
+async def list_editors(session: AsyncSession) -> list[dict]:
+    """DB-flagged editors (each noting env-lock), plus env-whitelisted ids
+    that have never logged in / used the bot (no username known yet)."""
+    db_editors = list((await session.execute(
+        select(User).where(User.is_editor.is_(True)).order_by(User.username)
+    )).scalars())
+    editors = [
+        {"id": u.discord_id, "username": u.username, "env": settings.is_editor(u.discord_id)}
+        for u in db_editors
+    ]
+    seen = {u.discord_id for u in db_editors}
+    for eid in sorted(settings.editor_ids - seen):
+        editors.append({"id": eid, "username": None, "env": True})
+    return editors
 
 
 # ── Adapters: ORM -> domain dataclasses ──────────────────────────────────
