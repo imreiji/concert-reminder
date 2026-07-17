@@ -2,7 +2,8 @@
   {% macro round_item(r) %}
   <li class="round">
     <div>
-      <strong>{{ r.label }}</strong> <em class="kind">{{ r.kind.value.replace("_", " ") }}</em>
+      <strong>{{ r.label }}</strong>{% if r.label_en %} <span class="dim">({{ r.label_en }})</span>{% endif %}
+      <em class="kind">{{ r.kind.value.replace("_", " ") }}</em>
       {% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">link</a>{% endif %}
       <div class="dim">
         {% if r.opens_at_utc %}opens {{ dual(r.opens_at_utc, tz) }}{% endif %}
@@ -10,6 +11,7 @@
         {% if r.closes_at_utc %}closes {{ dual(r.closes_at_utc, tz) }}{% endif %}
         {% if r.results_at_utc %}<br>results {{ dual(r.results_at_utc, tz) }}{% endif %}
         {% if r.payment_deadline_at_utc %}<br>payment due {{ dual(r.payment_deadline_at_utc, tz) }}{% endif %}
+        {% if r.notes %}<br>{{ r.notes }}{% endif %}
       </div>
     </div>
     {% if user.is_editor %}
@@ -18,6 +20,7 @@
       <form class="stack" method="post" action="/rounds/{{ r.id }}/edit"
             hx-post="/rounds/{{ r.id }}/edit" hx-target="#rounds" hx-swap="outerHTML">
         <input name="label" value="{{ r.label }}" required maxlength="200">
+        <input name="label_en" value="{{ r.label_en or '' }}" maxlength="200" placeholder="Round name (EN, optional)">
         <select name="kind">{% for k in kinds %}
           <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ k.value.replace("_"," ") }}</option>
         {% endfor %}</select>
@@ -30,6 +33,7 @@
         <label>Payment due (JST) <input type="datetime-local" name="payment_at"
           value="{{ jst(r.payment_deadline_at_utc).strftime('%Y-%m-%dT%H:%M') if r.payment_deadline_at_utc else '' }}"></label>
         <input name="url" value="{{ r.url or '' }}" placeholder="https://ticket...">
+        <input name="notes" value="{{ r.notes or '' }}" maxlength="300" placeholder="Notes (optional)">
         {% if concert.days %}
         <label>Applies to <span class="dim tiny">(which day/leg — blank = general)</span></label>
         <div class="daypick">
@@ -71,6 +75,7 @@
     <form class="stack" method="post" action="/concerts/{{ concert.id }}/rounds"
           hx-post="/concerts/{{ concert.id }}/rounds" hx-target="#rounds" hx-swap="outerHTML">
       <input name="label" required maxlength="200" placeholder="最速先行 Round 1">
+      <input name="label_en" maxlength="200" placeholder="Round name (EN, optional)">
       <select name="kind">{% for k in kinds %}
         <option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>
       {% endfor %}</select>
@@ -79,6 +84,7 @@
       <label>Results (JST) <input type="datetime-local" name="results_at"></label>
       <label>Payment due (JST) <input type="datetime-local" name="payment_at"></label>
       <input name="url" placeholder="https://ticket... (optional)">
+      <input name="notes" maxlength="300" placeholder="Notes (optional)">
       {% if concert.days %}
       <label>Applies to <span class="dim tiny">(which day/leg — blank = general)</span></label>
       <div class="daypick">

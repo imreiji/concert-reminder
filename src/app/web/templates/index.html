@@ -41,25 +41,6 @@
   <section class="content">
     <div class="toolbar"><h1>Concerts</h1></div>
 
-    {% if user.is_editor %}
-    <details class="panel">
-      <summary>+ New concert</summary>
-      <form method="post" action="/concerts" class="stack" id="new-concert">
-        <label>Title <input name="title" required maxlength="200" placeholder="Hasunosora 6th Live"></label>
-        <label>Kind <span class="dim tiny">(optional)</span>
-          <select name="kind">
-            <option value="">— none —</option>
-            {% for k in concert_kinds %}<option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>{% endfor %}
-          </select>
-        </label>
-        {% include "_tag_picker_fields.html" %}
-        <button>Create</button>
-      </form>
-      {% include "_tag_picker_script.html" %}
-    </details>
-    <p class="dim tiny"><a href="/concerts/import">Import from a ramen.events URL →</a></p>
-    {% endif %}
-
     {% if concerts %}
     <div class="tiles">
       {% for c in concerts %}
@@ -84,7 +65,7 @@
       {% endfor %}
     </div>
     {% else %}
-    <p class="dim">No concerts match.{% if user.is_editor and not selected_tags %} Create the first one above.{% endif %}</p>
+    <p class="dim">No concerts match.{% if user.is_editor and not selected_tags %} <a href="/concerts/new">Create the first one →</a>{% endif %}</p>
     {% endif %}
   </section>
 </div>

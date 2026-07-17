@@ -3,8 +3,12 @@
   <ul class="rows">
     {% for d in concert.days %}
     <li>
-      <strong>{{ d.label }}</strong>
-      <span>{{ dual(d.starts_at_utc, tz) }}</span>
+      <div>
+        <strong>{{ d.label }}</strong>{% if d.city %} <em class="kind">{{ d.city }}</em>{% endif %}
+        <span>{{ dual(d.starts_at_utc, tz) }}</span>
+        {% if d.doors_at_utc %}<div class="dim">doors {{ dual(d.doors_at_utc, tz) }}</div>{% endif %}
+        {% if d.venue %}<div class="dim">📍 {{ d.venue }}{% if d.venue_address %} — {{ d.venue_address }}{% endif %}</div>{% endif %}
+      </div>
       {% if user.is_editor %}
       <form method="post" action="/days/{{ d.id }}/delete" hx-post="/days/{{ d.id }}/delete"
             hx-target="#days" hx-swap="outerHTML">
@@ -17,11 +21,18 @@
   {% else %}<p class="dim">No days yet.</p>{% endif %}
 
   {% if user.is_editor %}
-  <form class="inline" method="post" action="/concerts/{{ concert.id }}/days"
-        hx-post="/concerts/{{ concert.id }}/days" hx-target="#days" hx-swap="outerHTML">
-    <input name="label" required maxlength="100" placeholder="Day 1">
-    <label>Starts (JST) <input type="datetime-local" name="starts_at" required></label>
-    <button>Add day</button>
-  </form>
+  <details class="panel">
+    <summary>+ Add day</summary>
+    <form class="stack" method="post" action="/concerts/{{ concert.id }}/days"
+          hx-post="/concerts/{{ concert.id }}/days" hx-target="#days" hx-swap="outerHTML">
+      <input name="label" required maxlength="100" placeholder="Day 1">
+      <input name="city" maxlength="100" placeholder="Leg / city (optional)">
+      <input name="venue" maxlength="200" placeholder="Venue (optional)">
+      <input name="venue_address" maxlength="300" placeholder="Venue address (optional)">
+      <label>Doors (JST) <input type="datetime-local" name="doors_at"></label>
+      <label>Starts (JST) <input type="datetime-local" name="starts_at" required></label>
+      <button>Add day</button>
+    </form>
+  </details>
   {% endif %}
 </div>

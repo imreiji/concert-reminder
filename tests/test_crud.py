@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ReminderQueue, Round
+from app.db.models import Base, Concert, ConcertDay, ReminderQueue, Round
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.web import auth
@@ -383,3 +383,130 @@ async def test_export_yaml_shape(client):
     assert data["rounds"][0]["label"] == "R1"
     assert data["rounds"][0]["applies_to"] == ["Day 1"]
     assert data["rounds"][0]["apply_opens_jst"] == "2099-06-10 00:00"
+
+
+# ── The rich /concerts/new page and its all-in-one POST /concerts ────────
+
+
+def test_new_concert_page_is_editor_only(client):
+    assert client.get("/concerts/new").status_code == 401  # anonymous
+
+    login_as(client, VIEWER_ID, "viewer")
+    assert client.get("/concerts/new").status_code == 403
+
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/concerts/new")
+    assert r.status_code == 200
+    assert "Add an event" in r.text
+    assert 'name="day_label"' in r.text  # performance row template present
+    assert 'name="round_leg"' in r.text  # round row template present
+
+
+async def test_rich_create_builds_concert_days_and_rounds_atomically(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts",
+        data={
+            "title": "Rich Concert",
+            "title_en": "Rich Concert (EN)",
+            "kind": "tour",
+            "organizer": "LustQueen",
+            "categories": "concert, tour",
+            "eventernote_url": "https://eventernote.com/x",
+            "official_url": "https://official.example/x",
+            "source_url": "https://ramen.events/x",
+            "performers_text": "Kaho\nSayaka",
+            "notes": "Event notes",
+            "day_label": ["Day 1", "Day 2"],
+            "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
+            "day_city": ["Kanagawa", "Osaka"],
+            "day_venue": ["K Arena Yokohama", ""],
+            "day_venue_address": ["", ""],
+            "day_doors_at": ["2099-08-01T17:00", ""],
+            "round_label": ["Kanagawa lottery", "Whole-tour goods sale"],
+            "round_label_en": ["Kanagawa lottery round", ""],
+            "round_kind": ["lottery_round", "general_sale"],
+            "round_opens_at": ["2099-06-01T00:00", "2099-07-01T00:00"],
+            "round_closes_at": ["2099-06-15T23:59", "2099-07-31T23:59"],
+            "round_results_at": ["", ""],
+            "round_payment_at": ["", ""],
+            "round_url": ["", ""],
+            "round_notes": ["", ""],
+            "round_leg": ["Kanagawa", ""],  # matches day 1's city; blank = whole event
+        },
+    )
+    assert r.status_code == 303
+    concert_id = int(r.headers["location"].rsplit("/", 1)[-1])
+
+    async with client.db() as s:
+        concert = await s.get(Concert, concert_id)
+        await s.refresh(concert, ["days", "rounds"])
+
+    assert concert.title_en == "Rich Concert (EN)"
+    assert concert.organizer == "LustQueen"
+    assert concert.categories == "concert, tour"
+    assert concert.performers_text == "Kaho\nSayaka"
+
+    days = sorted(concert.days, key=lambda d: d.label)
+    assert [d.label for d in days] == ["Day 1", "Day 2"]
+    assert days[0].city == "Kanagawa"
+    assert days[0].venue == "K Arena Yokohama"
+    assert days[0].doors_at_utc is not None
+
+    rounds = sorted(concert.rounds, key=lambda r: r.label)
+    kanagawa_round = next(r for r in rounds if r.label == "Kanagawa lottery")
+    general_round = next(r for r in rounds if r.label == "Whole-tour goods sale")
+    # leg "Kanagawa" matched Day 1's city -> applies_to resolved to its real id.
+    assert kanagawa_round.applies_to == [days[0].id]
+    # blank leg -> no match -> lands in "General".
+    assert general_round.applies_to is None
+
+
+async def test_rich_create_tolerates_blank_trailing_rows(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts",
+        data={
+            "title": "Minimal",
+            "day_label": [""], "day_starts_at": [""], "day_city": [""],
+            "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": [""], "round_label_en": [""], "round_kind": ["other"],
+            "round_opens_at": [""], "round_closes_at": [""], "round_results_at": [""],
+            "round_payment_at": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    assert r.status_code == 303
+    async with client.db() as s:
+        assert (await s.execute(select(ConcertDay))).scalars().all() == []
+        assert (await s.execute(select(Round))).scalars().all() == []
+
+
+async def test_edit_concert_persists_all_new_fields(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C"})
+    client.post(
+        "/concerts/1/edit",
+        data={
+            "title": "C", "title_en": "C (EN)", "organizer": "Org",
+            "categories": "a, b", "eventernote_url": "https://eventernote.com/x",
+            "official_url": "https://official.example/x", "source_url": "https://src.example/x",
+            "performers_text": "A\nB", "notes": "notes",
+        },
+    )
+    async with client.db() as s:
+        concert = await s.get(Concert, 1)
+    assert concert.title_en == "C (EN)"
+    assert concert.organizer == "Org"
+    assert concert.categories == "a, b"
+    assert concert.eventernote_url == "https://eventernote.com/x"
+    assert concert.official_url == "https://official.example/x"
+    assert concert.source_url == "https://src.example/x"
+    assert concert.performers_text == "A\nB"
+
+
+def test_nav_add_link_shown_only_to_editors(client):
+    login_as(client, EDITOR_ID, "reiji")
+    assert '/concerts/new">+ Add' in client.get("/").text
+
+    login_as(client, VIEWER_ID, "viewer")
+    assert '/concerts/new">+ Add' not in client.get("/").text

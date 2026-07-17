@@ -48,6 +48,10 @@ h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 2.2rem; }
 .panel summary, details.edit-round summary { cursor: pointer; color: var(--dim); }
 .stack { display: grid; gap: .55rem; max-width: 26rem; margin-top: .6rem; }
 .stack label { display: grid; gap: .2rem; font-size: .85rem; color: var(--dim); }
+.stack.wide { max-width: 44rem; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem .8rem; }
+.grid2 label { display: grid; gap: .2rem; font-size: .85rem; color: var(--dim); }
+.title-input { font-size: 1.1rem; padding: .5rem .6rem; }
 .inline { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; font-size: .9rem; }
 input, select, textarea, button {
   font: inherit; padding: .4rem .55rem; border: 1px solid var(--line);

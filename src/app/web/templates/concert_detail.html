@@ -4,28 +4,48 @@
 <article class="concert">
   <header class="concert-head">
     <h1>{{ concert.title }}{% if concert.kind %} <span class="dim kind-tag">{{ concert.kind.value.replace("_", " ") }}</span>{% endif %}</h1>
+    {% if concert.title_en %}<p class="dim">{{ concert.title_en }}</p>{% endif %}
+    {% if concert.organizer %}<p class="dim">{{ concert.organizer }}</p>{% endif %}
     {% if concert.tags %}
     <p class="taglist header-tags">
       {% for t in concert.tags %}<span class="chip kind-{{ t.kind.value }}">{{ t.name }}</span>{% endfor %}
     </p>
     {% endif %}
+    {% if concert.categories %}<p class="dim tiny">{{ concert.categories }}</p>{% endif %}
     {% if concert.notes %}<p class="dim">{{ concert.notes }}</p>{% endif %}
-    <p class="dim tiny"><a href="/concerts/{{ concert.id }}/export.yaml">Export YAML →</a></p>
+    {% if concert.performers_text %}
+    <p class="dim tiny">Performers: {{ concert.performers_text.replace('\n', ', ') }}</p>
+    {% endif %}
+    <p class="dim tiny">
+      {% if concert.eventernote_url %}<a href="{{ concert.eventernote_url }}" target="_blank" rel="noopener">eventernote</a> · {% endif %}
+      {% if concert.official_url %}<a href="{{ concert.official_url }}" target="_blank" rel="noopener">official site</a> · {% endif %}
+      {% if concert.source_url %}<a href="{{ concert.source_url }}" target="_blank" rel="noopener">source</a> · {% endif %}
+      <a href="/concerts/{{ concert.id }}/export.yaml">Export YAML →</a>
+    </p>
   </header>
 
   {% if user.is_editor %}
   <details class="panel">
     <summary>Edit concert</summary>
-    <form method="post" action="/concerts/{{ concert.id }}/edit" class="stack">
+    <form method="post" action="/concerts/{{ concert.id }}/edit" class="stack wide">
       <label>Title <input name="title" value="{{ concert.title }}" required maxlength="200"></label>
-      <label>Kind <span class="dim tiny">(optional)</span>
-        <select name="kind">
-          <option value="">— none —</option>
-          {% for k in concert_kinds %}
-          <option value="{{ k.value }}" {% if k == concert.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
-          {% endfor %}
-        </select>
-      </label>
+      <div class="grid2">
+        <label>Title (EN) <input name="title_en" value="{{ concert.title_en or '' }}" maxlength="200"></label>
+        <label>Artist / organizer <input name="organizer" value="{{ concert.organizer or '' }}" maxlength="200"></label>
+        <label>Kind
+          <select name="kind">
+            <option value="">— none —</option>
+            {% for k in concert_kinds %}
+            <option value="{{ k.value }}" {% if k == concert.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Categories (comma-sep) <input name="categories" value="{{ concert.categories or '' }}"></label>
+        <label>eventernote URL <input name="eventernote_url" type="url" value="{{ concert.eventernote_url or '' }}"></label>
+        <label>Official URL <input name="official_url" type="url" value="{{ concert.official_url or '' }}"></label>
+        <label>Source URL <input name="source_url" type="url" value="{{ concert.source_url or '' }}"></label>
+      </div>
+      <label>Performers (one per line) <textarea name="performers_text" rows="3">{{ concert.performers_text or '' }}</textarea></label>
       <label>Notes <textarea name="notes" rows="3">{{ concert.notes or '' }}</textarea></label>
       <button>Save</button>
     </form>

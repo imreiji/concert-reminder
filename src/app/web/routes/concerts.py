@@ -16,6 +16,7 @@ the source material. Conversion to UTC happens here, at the boundary,
 via domain.timezones.jst_to_utc. Nowhere else.
 """
 
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -25,7 +26,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Concert, ConcertDay, ReminderRule, Round, Tag, User
-from app.db.service import attach_tag, ensure_user, handle_newly_tagged, sync_concert, sync_rule
+from app.db.service import (
+    attach_tag,
+    ensure_user,
+    handle_newly_tagged,
+    sync_concert,
+    sync_rule,
+    tag_picker_context,
+)
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.domain.types import Anchor, Channel, ConcertKind, RoundKind
@@ -55,13 +63,26 @@ async def get_concert(session: AsyncSession, concert_id: int) -> Concert:
     return concert
 
 
-def build_day(concert_id: int, label: str, starts_at: str) -> ConcertDay:
-    """Shared by add_day and the URL-import commit route -- same validation
-    ("a day needs a start time") either way, one JST -> UTC boundary."""
+def build_day(
+    concert_id: int,
+    label: str,
+    starts_at: str,
+    city: str = "",
+    venue: str = "",
+    venue_address: str = "",
+    doors_at: str = "",
+) -> ConcertDay:
+    """Shared by add_day, the rich /concerts creation form, and the
+    URL-import commit route -- same validation ("a day needs a start
+    time") either way, one JST -> UTC boundary."""
     starts = parse_jst(starts_at)
     if starts is None:
         raise HTTPException(status_code=422, detail="a day needs a start time")
-    return ConcertDay(concert_id=concert_id, label=label.strip(), starts_at_utc=starts)
+    return ConcertDay(
+        concert_id=concert_id, label=label.strip(), starts_at_utc=starts,
+        city=city.strip() or None, venue=venue.strip() or None,
+        venue_address=venue_address.strip() or None, doors_at_utc=parse_jst(doors_at),
+    )
 
 
 def build_round(
@@ -74,8 +95,11 @@ def build_round(
     payment_at: str,
     url: str,
     applies_to: list[int] | None = None,
+    label_en: str = "",
+    notes: str = "",
 ) -> Round:
-    """Shared by add_round and the URL-import commit route.
+    """Shared by add_round, the rich /concerts creation form, and the
+    URL-import commit route.
 
     applies_to: which concert_day ids ("legs") this round belongs to;
     empty/None means it's not tied to a specific day (shown under
@@ -92,7 +116,22 @@ def build_round(
         opens_at_utc=opens, closes_at_utc=closes,
         results_at_utc=results, payment_deadline_at_utc=payment,
         url=url.strip() or None, applies_to=applies_to or None,
+        label_en=label_en.strip() or None, notes=notes.strip() or None,
     )
+
+
+def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
+    """Free-text leg matching for the rich creation page only, where
+    performance rows don't have real ids yet at submit time. Matches a
+    day's city or label, case-insensitively, exact match (not substring --
+    avoids "Day 1" matching "Day 10"). Blank or no match -> None (round
+    shown under "General"; fixable afterward via the edit-round day-picker,
+    which uses real ids and never goes through this function)."""
+    leg = leg.strip().lower()
+    if not leg:
+        return None
+    matches = [d.id for d in days if leg in ((d.city or "").lower(), (d.label or "").lower())]
+    return matches or None
 
 
 def group_rounds_by_day(concert: Concert) -> tuple[dict[int, list[Round]], list[Round]]:
@@ -206,22 +245,111 @@ async def create_concert_row(
     return concert
 
 
+@router.get("/concerts/new", response_class=HTMLResponse)
+async def new_concert_form(
+    request: Request,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+):
+    """The rich, all-in-one creation page: matches mting314/event-tracker's
+    add.html field set (see CLAUDE.md / the plan this shipped from) --
+    event fields, performers/notes, then repeatable performance and round
+    rows, one atomic submit to POST /concerts below."""
+    picker = await tag_picker_context(session)
+    return templates.TemplateResponse(
+        request,
+        "concert_new.html",
+        {
+            "user": user, "kinds": list(RoundKind), "concert_kinds": list(ConcertKind),
+            "by_kind": picker["by_kind"],
+            "groups_json": json.dumps(picker["groups_json"]),
+            "tag_names_json": json.dumps(picker["tag_names_json"]),
+        },
+    )
+
+
 @router.post("/concerts")
 async def create_concert(
     request: Request,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
+    title_en: str = Form(""),
     kind: str = Form(""),
+    organizer: str = Form(""),
+    categories: str = Form(""),
+    eventernote_url: str = Form(""),
+    official_url: str = Form(""),
+    source_url: str = Form(""),
+    performers_text: str = Form(""),
+    notes: str = Form(""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
     venue_tags: list[int] = Form(default=[]),
+    day_label: list[str] = Form(default=[]),
+    day_starts_at: list[str] = Form(default=[]),
+    day_city: list[str] = Form(default=[]),
+    day_venue: list[str] = Form(default=[]),
+    day_venue_address: list[str] = Form(default=[]),
+    day_doors_at: list[str] = Form(default=[]),
+    round_label: list[str] = Form(default=[]),
+    round_label_en: list[str] = Form(default=[]),
+    round_kind: list[RoundKind] = Form(default=[]),
+    round_opens_at: list[str] = Form(default=[]),
+    round_closes_at: list[str] = Form(default=[]),
+    round_results_at: list[str] = Form(default=[]),
+    round_payment_at: list[str] = Form(default=[]),
+    round_url: list[str] = Form(default=[]),
+    round_notes: list[str] = Form(default=[]),
+    round_leg: list[str] = Form(default=[]),
 ):
+    """The rich all-in-one submit: concert + tags, then every performance
+    and round row, created together in one transaction -- same
+    compose-and-loop shape imports.py's import_commit uses, just with the
+    fuller add.html-matched field set."""
     concert = await create_concert_row(
         session, user, title, franchise_tags, group_tags, artist_tags, venue_tags,
         kind=ConcertKind(kind) if kind else None,
     )
+    concert.title_en = title_en.strip() or None
+    concert.organizer = organizer.strip() or None
+    concert.categories = categories.strip() or None
+    concert.eventernote_url = eventernote_url.strip() or None
+    concert.official_url = official_url.strip() or None
+    concert.source_url = source_url.strip() or None
+    concert.performers_text = performers_text.strip() or None
+    concert.notes = notes.strip() or None
+
+    days: list[ConcertDay] = []
+    for label, starts_at, city, venue, venue_address, doors_at in zip(
+        day_label, day_starts_at, day_city, day_venue, day_venue_address, day_doors_at,
+        strict=True,
+    ):
+        if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
+            continue  # blank trailing row from the repeatable UI
+        day = build_day(concert.id, label, starts_at, city, venue, venue_address, doors_at)
+        session.add(day)
+        days.append(day)
+    await session.flush()  # real ids, needed for leg-matching below
+
+    for (
+        label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url, notes_, leg
+    ) in zip(
+        round_label, round_label_en, round_kind, round_opens_at, round_closes_at,
+        round_results_at, round_payment_at, round_url, round_notes, round_leg,
+        strict=True,
+    ):
+        if not any([label.strip(), opens_at.strip(), closes_at.strip(),
+                    results_at.strip(), payment_at.strip()]):
+            continue
+        session.add(build_round(
+            concert.id, label, kind_, opens_at, closes_at, results_at, payment_at, url,
+            applies_to=resolve_round_leg(days, leg), label_en=label_en, notes=notes_,
+        ))
+
+    await session.flush()
+    await sync_concert(session, concert.id)
     await session.commit()
     return RedirectResponse(f"/concerts/{concert.id}", status_code=303)
 
@@ -262,13 +390,28 @@ async def edit_concert(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
+    title_en: str = Form(""),
     kind: str = Form(""),
+    organizer: str = Form(""),
+    categories: str = Form(""),
+    eventernote_url: str = Form(""),
+    official_url: str = Form(""),
+    source_url: str = Form(""),
+    performers_text: str = Form(""),
     notes: str = Form(""),
 ):
-    """Title/notes/kind only — franchise/group/artists/venue are managed as tags."""
+    """Franchise/group/artists/venue are managed as tags -- everything
+    else settable at creation stays editable here too."""
     concert = await get_concert(session, concert_id)
     concert.title = title.strip()
+    concert.title_en = title_en.strip() or None
     concert.kind = ConcertKind(kind) if kind else None
+    concert.organizer = organizer.strip() or None
+    concert.categories = categories.strip() or None
+    concert.eventernote_url = eventernote_url.strip() or None
+    concert.official_url = official_url.strip() or None
+    concert.source_url = source_url.strip() or None
+    concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
     await session.commit()
     return RedirectResponse(f"/concerts/{concert_id}", status_code=303)
@@ -290,14 +433,21 @@ async def export_concert_yaml(
     await session.refresh(concert, ["days", "rounds", "tags"])
 
     days_by_id = {d.id: d.label for d in concert.days}
-    yaml_days = [YamlDay(label=d.label, starts_at_utc=d.starts_at_utc) for d in concert.days]
+    yaml_days = [
+        YamlDay(
+            label=d.label, starts_at_utc=d.starts_at_utc,
+            city=d.city, venue=d.venue, venue_address=d.venue_address,
+            doors_at_utc=d.doors_at_utc,
+        )
+        for d in concert.days
+    ]
     yaml_rounds = [
         YamlRound(
-            label=r.label, kind=r.kind.value,
+            label=r.label, label_en=r.label_en, kind=r.kind.value,
             applies_to_labels=[days_by_id[d] for d in (r.applies_to or []) if d in days_by_id],
             opens_at_utc=r.opens_at_utc, closes_at_utc=r.closes_at_utc,
             results_at_utc=r.results_at_utc, payment_deadline_at_utc=r.payment_deadline_at_utc,
-            url=r.url,
+            url=r.url, notes=r.notes,
         )
         for r in concert.rounds
     ]
@@ -310,6 +460,13 @@ async def export_concert_yaml(
         artists=[t.name for t in concert.tags if t.kind is TagKind.ARTIST],
         venues=[t.name for t in concert.tags if t.kind is TagKind.VENUE],
         days=yaml_days, rounds=yaml_rounds, notes=concert.notes,
+        title_en=concert.title_en, organizer=concert.organizer, categories=concert.categories,
+        eventernote_url=concert.eventernote_url, official_url=concert.official_url,
+        source_url=concert.source_url,
+        performers=(
+            [line.strip() for line in concert.performers_text.splitlines() if line.strip()]
+            if concert.performers_text else []
+        ),
     )
     return Response(
         content=text,
@@ -340,17 +497,20 @@ async def add_round(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     label: str = Form(..., min_length=1, max_length=200),
+    label_en: str = Form(""),
     kind: RoundKind = Form(RoundKind.OTHER),
     opens_at: str = Form(""),
     closes_at: str = Form(""),
     results_at: str = Form(""),
     payment_at: str = Form(""),
     url: str = Form(""),
+    notes: str = Form(""),
     applies_to: list[int] = Form(default=[]),
 ):
     concert = await get_concert(session, concert_id)
     session.add(build_round(
-        concert.id, label, kind, opens_at, closes_at, results_at, payment_at, url, applies_to
+        concert.id, label, kind, opens_at, closes_at, results_at, payment_at, url,
+        applies_to, label_en, notes,
     ))
     await session.flush()
     await sync_concert(session, concert.id)
@@ -365,24 +525,28 @@ async def edit_round(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     label: str = Form(..., min_length=1, max_length=200),
+    label_en: str = Form(""),
     kind: RoundKind = Form(...),
     opens_at: str = Form(""),
     closes_at: str = Form(""),
     results_at: str = Form(""),
     payment_at: str = Form(""),
     url: str = Form(""),
+    notes: str = Form(""),
     applies_to: list[int] = Form(default=[]),
 ):
     round_ = await session.get(Round, round_id)
     if round_ is None:
         raise HTTPException(status_code=404)
     round_.label = label.strip()
+    round_.label_en = label_en.strip() or None
     round_.kind = kind
     round_.opens_at_utc = parse_jst(opens_at)
     round_.closes_at_utc = parse_jst(closes_at)
     round_.results_at_utc = parse_jst(results_at)
     round_.payment_deadline_at_utc = parse_jst(payment_at)
     round_.url = url.strip() or None
+    round_.notes = notes.strip() or None
     round_.applies_to = applies_to or None
     concert = await get_concert(session, round_.concert_id)
     await sync_concert(session, concert.id)
@@ -419,9 +583,13 @@ async def add_day(
     session: AsyncSession = Depends(get_session),
     label: str = Form(..., min_length=1, max_length=100),
     starts_at: str = Form(...),
+    city: str = Form(""),
+    venue: str = Form(""),
+    venue_address: str = Form(""),
+    doors_at: str = Form(""),
 ):
     concert = await get_concert(session, concert_id)
-    session.add(build_day(concert.id, label, starts_at))
+    session.add(build_day(concert.id, label, starts_at, city, venue, venue_address, doors_at))
     await session.flush()
     await sync_concert(session, concert.id)
     await session.commit()

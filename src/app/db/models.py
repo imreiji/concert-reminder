@@ -110,9 +110,16 @@ class Concert(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200))
+    title_en: Mapped[str | None] = mapped_column(String(200))
     kind: Mapped[ConcertKind | None] = mapped_column(
         Enum(ConcertKind, values_callable=lambda e: [m.value for m in e])
     )
+    organizer: Mapped[str | None] = mapped_column(String(200))  # free-text artist/organizer
+    categories: Mapped[str | None] = mapped_column(String(300))  # comma-sep free text
+    eventernote_url: Mapped[str | None] = mapped_column(String(500))
+    official_url: Mapped[str | None] = mapped_column(String(500))
+    source_url: Mapped[str | None] = mapped_column(String(500))
+    performers_text: Mapped[str | None] = mapped_column(Text)  # free-text, one per line
     franchise: Mapped[str | None] = mapped_column(String(100))  # "Hasunosora", "Gakumas"...
     venue: Mapped[str | None] = mapped_column(String(200))
     notes: Mapped[str | None] = mapped_column(Text)
@@ -190,6 +197,10 @@ class ConcertDay(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     concert_id: Mapped[int] = mapped_column(ForeignKey("concerts.id", ondelete="CASCADE"))
     label: Mapped[str] = mapped_column(String(100))  # "Day 1", "Day 2 夜公演"
+    city: Mapped[str | None] = mapped_column(String(100))  # leg/city, e.g. "Kanagawa"
+    venue: Mapped[str | None] = mapped_column(String(200))  # per-day venue (tours change cities)
+    venue_address: Mapped[str | None] = mapped_column(String(300))
+    doors_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     starts_at_utc: Mapped[datetime] = mapped_column(UTCDateTime)
 
     concert: Mapped[Concert] = relationship(back_populates="days")
@@ -210,12 +221,14 @@ class Round(Base):
         Enum(RoundKind, values_callable=lambda e: [m.value for m in e])
     )
     label: Mapped[str] = mapped_column(String(200))  # "最速先行 Round 1", "Day 2 配信"
+    label_en: Mapped[str | None] = mapped_column(String(200))
     opens_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     closes_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     results_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     payment_deadline_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     applies_to: Mapped[list | None] = mapped_column(JSON)  # optional concert_day ids
     url: Mapped[str | None] = mapped_column(String(500))
+    notes: Mapped[str | None] = mapped_column(Text)
 
     concert: Mapped[Concert] = relationship(back_populates="rounds")
 

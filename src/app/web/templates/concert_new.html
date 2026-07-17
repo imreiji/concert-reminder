@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}new event — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Add an event</h1>
+<p class="dim">Add each show as a performance, and lottery rounds (a round's <strong>leg</strong> ties it
+  to one performance by city/label — leave it blank if the round applies to the whole event).</p>
+<p class="dim tiny"><a href="/concerts/import">Prefer to import from a ramen.events URL instead? →</a></p>
+
+<form class="stack wide" method="post" action="/concerts" id="new-concert">
+  <label>Title (JP) <input class="title-input" name="title" required maxlength="200" placeholder="Hasunosora 6th Live"></label>
+
+  <div class="grid2">
+    <label>Title (EN) <input name="title_en" maxlength="200"></label>
+    <label>Artist / organizer <input name="organizer" maxlength="200" placeholder="non-series acts, etc."></label>
+    <label>Kind
+      <select name="kind">
+        <option value="">— none —</option>
+        {% for k in concert_kinds %}<option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Categories (comma-sep) <input name="categories" placeholder="concert, tour"></label>
+    <label>eventernote URL <input name="eventernote_url" type="url"></label>
+    <label>Official URL <input name="official_url" type="url"></label>
+    <label>Source URL <input name="source_url" type="url" placeholder="where this was sourced from"></label>
+  </div>
+
+  {% include "_tag_picker_fields.html" %}
+
+  <label>Performers (one per line) <textarea name="performers_text" rows="3"></textarea></label>
+  <label>Notes <textarea name="notes" rows="2"></textarea></label>
+
+  <h2>Performances <small class="dim">(one per show / day)</small></h2>
+  <div id="day-rows" class="row-list"></div>
+  <button type="button" class="quiet" onclick="addRow('day-rows','day-row-template')">+ Add performance</button>
+
+  <h2>Lottery rounds <small class="dim">(times are JST)</small></h2>
+  <div id="round-rows" class="row-list"></div>
+  <button type="button" class="quiet" onclick="addRow('round-rows','round-row-template')">+ Add round</button>
+
+  <button>Create event</button>
+</form>
+{% include "_tag_picker_script.html" %}
+
+<template id="day-row-template">
+  <div class="row-item">
+    <input name="day_label" maxlength="100" placeholder="Day 1">
+    <input name="day_city" maxlength="100" placeholder="Leg / city (e.g. Kanagawa)">
+    <input name="day_venue" maxlength="200" placeholder="Venue">
+    <input name="day_venue_address" maxlength="300" placeholder="Venue address">
+    <label>Doors (JST) <input type="datetime-local" name="day_doors_at"></label>
+    <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required></label>
+    <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+  </div>
+</template>
+
+<template id="round-row-template">
+  <div class="row-item">
+    <input name="round_label" required maxlength="200" placeholder="1次先行抽選">
+    <input name="round_label_en" maxlength="200" placeholder="1st-round advance lottery">
+    <select name="round_kind">{% for k in kinds %}
+      <option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>
+    {% endfor %}</select>
+    <input name="round_leg" maxlength="100" placeholder="Leg (blank = whole event)">
+    <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"></label>
+    <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"></label>
+    <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
+    <label>Payment deadline (JST) <input type="datetime-local" name="round_payment_at"></label>
+    <input name="round_url" type="url" placeholder="Apply URL (optional)">
+    <input name="round_notes" maxlength="300" placeholder="Notes (optional)">
+    <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+  </div>
+</template>
+<script>
+  function addRow(listId, templateId) {
+    const tpl = document.getElementById(templateId);
+    document.getElementById(listId).appendChild(tpl.content.cloneNode(true));
+  }
+</script>
+{% endblock %}
