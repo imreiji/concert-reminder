@@ -42,5 +42,26 @@
     <h2>My reminders</h2>
     {% include "_rules.html" %}
   </section>
+
+  {% if user.is_editor and audit_log %}
+  <details class="panel">
+    <summary>Edit history ({{ audit_log | length }})</summary>
+    <ul class="rows">
+      {% for a in audit_log %}
+      <li>
+        <div>
+          <strong>{{ a.editor.username if a.editor else a.edited_by }}</strong>
+          <span class="dim tiny">{{ dual(a.edited_at_utc, tz) }}</span>
+          <ul class="dim tiny audit-changes">
+            {% for c in a.changes %}
+            <li>{{ c.field }}: {{ c.before if c.before is not none else "(empty)" }} → {{ c.after if c.after is not none else "(empty)" }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
 </article>
 {% endblock %}

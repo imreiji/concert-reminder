@@ -14,16 +14,19 @@ from sqlalchemy.pool import StaticPool
 from app.config import settings
 from app.db.models import Base, Concert, ConcertDay, ReminderQueue, ReminderRule, Round, User
 from app.db.service import (
+    concert_audit_log,
     due_reminders,
     ensure_user,
     list_editors,
     mark_sent,
+    record_concert_edit,
     set_editor,
+    snapshot_concert,
     sync_concert,
     sync_rule,
     user_calendar_events,
 )
-from app.domain.types import Anchor, RoundKind
+from app.domain.types import Anchor, ConcertKind, RoundKind
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)
 
@@ -281,6 +284,72 @@ async def test_round_with_all_four_timestamps_syncs_each_anchor_independently(se
     assert rows[rules[Anchor.OPENS].id].fire_at_utc == dt(6, 4)  # untouched
     assert rows[rules[Anchor.CLOSES].id].fire_at_utc == dt(6, 9)  # untouched
     assert rows[rules[Anchor.PAYMENT].id].fire_at_utc == dt(6, 21)  # untouched
+
+
+# ── Concert edit history ─────────────────────────────────────────────────
+
+
+async def test_record_concert_edit_diffs_only_changed_fields(session):
+    concert, _, _ = await seed(session)
+    before = snapshot_concert(concert)
+    concert.title = "Hasunosora 5th (renamed)"
+    concert.organizer = "New Organizer"
+    audit = await record_concert_edit(session, concert, edited_by=42, before=before)
+    assert audit is not None
+    assert {c["field"] for c in audit.changes} == {"title", "organizer"}
+    title_change = next(c for c in audit.changes if c["field"] == "title")
+    assert title_change == {
+        "field": "title", "before": "Hasunosora 5th", "after": "Hasunosora 5th (renamed)"
+    }
+
+
+async def test_record_concert_edit_returns_none_when_nothing_changed(session):
+    concert, _, _ = await seed(session)
+    before = snapshot_concert(concert)
+    # re-set every field to its own current value -- a no-op resubmit
+    concert.title = concert.title
+    audit = await record_concert_edit(session, concert, edited_by=42, before=before)
+    assert audit is None
+    assert await concert_audit_log(session, concert.id) == []
+
+
+async def test_record_concert_edit_serializes_enum_fields(session):
+    concert, _, _ = await seed(session)
+    before = snapshot_concert(concert)
+    assert before["kind"] is None
+    concert.kind = ConcertKind.TOUR
+    audit = await record_concert_edit(session, concert, edited_by=42, before=before)
+    kind_change = next(c for c in audit.changes if c["field"] == "kind")
+    assert kind_change == {"field": "kind", "before": None, "after": "tour"}
+
+
+async def test_concert_audit_log_orders_newest_first_and_loads_editor(session):
+    concert, _, _ = await seed(session)
+    before1 = snapshot_concert(concert)
+    concert.title = "First edit"
+    await record_concert_edit(session, concert, edited_by=42, before=before1)
+
+    before2 = snapshot_concert(concert)
+    concert.title = "Second edit"
+    await record_concert_edit(session, concert, edited_by=42, before=before2)
+    await session.commit()
+
+    log = await concert_audit_log(session, concert.id)
+    assert len(log) == 2
+    assert log[0].changes[0]["after"] == "Second edit"  # newest first
+    assert log[0].editor.username == "reiji"
+
+
+async def test_deleting_concert_cascades_its_audit_log(session):
+    concert, _, _ = await seed(session)
+    before = snapshot_concert(concert)
+    concert.title = "Renamed"
+    await record_concert_edit(session, concert, edited_by=42, before=before)
+    await session.commit()
+
+    await session.delete(concert)
+    await session.commit()
+    assert await concert_audit_log(session, concert.id) == []
 
 
 # ── set_editor / list_editors ───────────────────────────────────────────
