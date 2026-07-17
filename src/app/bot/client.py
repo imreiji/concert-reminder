@@ -9,6 +9,8 @@ import logging
 import discord
 from discord.ext import commands
 
+from app.config import settings
+
 log = logging.getLogger(__name__)
 
 # No privileged intents needed: slash commands + DMs work with defaults.
@@ -26,8 +28,19 @@ class ReminderBot(commands.Bot):
         await self.load_extension("app.bot.cogs.ping")
         await self.load_extension("app.bot.cogs.reminders")
         await self.load_extension("app.bot.cogs.admin")
-        synced = await self.tree.sync()
-        log.info("synced %d slash command(s)", len(synced))
+
+        if settings.dev_guild_id:
+            # Guild-scoped sync propagates in seconds instead of up to an
+            # hour -- set DEV_GUILD_ID for fast local iteration.
+            guild = discord.Object(id=settings.dev_guild_id)
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            log.info(
+                "synced %d slash command(s) to dev guild %s", len(synced), settings.dev_guild_id
+            )
+        else:
+            synced = await self.tree.sync()
+            log.info("synced %d slash command(s) globally", len(synced))
 
     async def on_ready(self) -> None:
         assert self.user is not None
