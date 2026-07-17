@@ -805,6 +805,50 @@ async def export_concert_yaml(
     )
 
 
+@router.post("/concerts/{event_id}/duplicate")
+async def duplicate_concert(
+    event_id: str,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+):
+    """Clone this concert's scalar fields + tags into a fresh draft, for
+    recurring-franchise events where the tags/kind/organizer carry over but
+    the dates don't. Days and rounds are deliberately NOT copied -- a new
+    edition has its own performances, and copying them would just be dates
+    the editor has to delete one by one. Redirects straight to the new
+    concert's edit page to fill those in."""
+    source = await get_concert_by_event_id(session, event_id)
+    await session.refresh(source, ["tags"])
+    await ensure_user(session, user.id, user.username)
+
+    new_event_id = await generate_event_id(session, f"{source.title} copy")
+    f_names = [t.name for t in source.tags if t.kind is TagKind.FRANCHISE]
+    v_names = [t.name for t in source.tags if t.kind is TagKind.VENUE]
+    clone = Concert(
+        title=f"{source.title} (copy)",
+        event_id=new_event_id,
+        kind=source.kind,
+        organizer=source.organizer,
+        categories=source.categories,
+        franchise=", ".join(f_names) or None,
+        venue=", ".join(v_names) or None,
+        created_by=user.id,
+    )
+    session.add(clone)
+    await session.flush()
+
+    newly: list[Tag] = []
+    for tag in source.tags:
+        # expand=False regardless of kind: source.tags already reflects
+        # this concert's own pruned GROUP membership, so we carry that
+        # exact set over rather than re-expanding to the group's current
+        # (possibly different) membership.
+        newly += await attach_tag(session, clone.id, tag, expand=False)
+    await handle_newly_tagged(session, clone, newly)
+    await session.commit()
+    return RedirectResponse(f"/concerts/{clone.event_id}/edit", status_code=303)
+
+
 @router.post("/concerts/{event_id}/delete")
 async def delete_concert(
     event_id: str,

@@ -84,6 +84,12 @@
 </form>
 {% include "_tag_picker_script.html" %}
 
+<div class="inline">
+  <form method="post" action="/concerts/{{ concert.event_id }}/duplicate">
+    <button class="quiet" title="Clone this event's tags, kind, and organizer into a new draft — for the next edition of a recurring event">Duplicate as new event</button>
+  </form>
+</div>
+
 <details class="panel">
   <summary>Delete this event</summary>
   <form method="post" action="/concerts/{{ concert.event_id }}/delete"

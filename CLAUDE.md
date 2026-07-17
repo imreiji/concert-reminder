@@ -68,7 +68,10 @@ shipped since).
    Editors prune non-performers; removed members stay removed; detach +
    re-attach re-expands; group membership edits never rewrite existing
    concerts. The creation form passes `expand=False` because its explicit
-   artist list is authoritative.
+   artist list is authoritative. `POST /concerts/{event_id}/duplicate`
+   (`web/routes/concerts.py`) follows the same rule when cloning a concert:
+   it re-attaches the source's exact already-pruned tag set with
+   `expand=False`, never re-expanding a GROUP tag to its current membership.
 4. **Notifications**: new-event notices go through the `notifications`
    table (DB outbox drained by the scheduler) — never send DMs directly
    from web routes.

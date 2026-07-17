@@ -735,3 +735,100 @@ def test_nav_add_link_shown_only_to_editors(client):
 
     login_as(client, VIEWER_ID, "viewer")
     assert '/concerts/new">+ Add' not in client.get("/").text
+
+
+# ── Duplicate concert as template ────────────────────────────────────────
+
+
+async def test_duplicate_clones_scalars_and_tags_but_not_days_or_rounds(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={"name": "K Arena", "kind": "venue"})
+    client.post(
+        "/concerts",
+        data={
+            "title": "Hasunosora 5th", "event_id": "hasunosora-5th",
+            "kind": "concert", "organizer": "LustQueen", "categories": "concert, tour",
+            "franchise_tags": ["1"], "venue_tags": ["2"],
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    r = client.post("/concerts/hasunosora-5th/duplicate")
+    assert r.status_code == 303
+    location = r.headers["location"]
+    assert location.endswith("/edit")
+    new_event_id = location.removeprefix("/concerts/").removesuffix("/edit")
+    assert new_event_id != "hasunosora-5th"
+
+    async with client.db() as s:
+        clone = (await s.execute(
+            select(Concert).where(Concert.event_id == new_event_id)
+        )).scalar_one()
+        await s.refresh(clone, ["days", "rounds", "tags"])
+
+    assert clone.title == "Hasunosora 5th (copy)"
+    assert clone.kind.value == "concert"
+    assert clone.organizer == "LustQueen"
+    assert clone.categories == "concert, tour"
+    assert {t.name for t in clone.tags} == {"Hasunosora", "K Arena"}
+    assert clone.days == []
+    assert clone.rounds == []
+
+
+def test_duplicate_requires_editor(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+
+    login_as(client, VIEWER_ID, "viewer")
+    assert client.post("/concerts/c/duplicate").status_code == 403
+
+
+async def test_duplicate_pruned_group_members_stay_pruned(client):
+    """A GROUP tag whose non-performing members were pruned on the source
+    concert must carry over the same pruned artist set, not re-expand to
+    the group's current (possibly larger) membership."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Kaho", "kind": "artist"})
+    client.post("/tags", data={"name": "Sayaka", "kind": "artist"})
+    client.post("/tags/1/members", data={"member_tag_id": "2"})
+    client.post("/tags/1/members", data={"member_tag_id": "3"})
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "group_tags": ["1"], "artist_tags": ["2"],  # Sayaka pruned
+        },
+    )
+    r = client.post("/concerts/c/duplicate")
+    location = r.headers["location"]
+    new_event_id = location.removeprefix("/concerts/").removesuffix("/edit")
+
+    async with client.db() as s:
+        clone = (await s.execute(
+            select(Concert).where(Concert.event_id == new_event_id)
+        )).scalar_one()
+        await s.refresh(clone, ["tags"])
+    assert {t.name for t in clone.tags} == {"Liella", "Kaho"}  # Sayaka stays pruned
+
+
+async def test_duplicate_generates_a_fresh_unique_event_id_on_repeat(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+    r1 = client.post("/concerts/c/duplicate")
+    r2 = client.post("/concerts/c/duplicate")
+    id1 = r1.headers["location"].removeprefix("/concerts/").removesuffix("/edit")
+    id2 = r2.headers["location"].removeprefix("/concerts/").removesuffix("/edit")
+    assert id1 != id2
+
+
+def test_duplicate_button_shown_on_edit_page(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+    r = client.get("/concerts/c/edit")
+    assert '/concerts/c/duplicate' in r.text
