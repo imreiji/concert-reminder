@@ -56,6 +56,14 @@
   <section class="content">
     <div class="toolbar"><h1>Concerts</h1></div>
 
+    <form class="search-form" method="get" action="/">
+      <input type="hidden" name="sort" value="{{ sort }}">
+      {% for tid in selected_tags %}<input type="hidden" name="tag" value="{{ tid }}">{% endfor %}
+      <input type="search" name="q" id="concert-search" value="{{ query }}"
+             placeholder="Search concerts…" oninput="return liveSearch(this)">
+      <button class="quiet" type="submit">Search</button>
+    </form>
+
     {% if concerts %}
     <div class="tiles">
       {% for c in concerts %}
@@ -66,6 +74,7 @@
       {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
       <a class="tile" href="/concerts/{{ c.event_id }}"
          data-tags="{{ ctags | map(attribute='id') | join(',') }}"
+         data-search="{{ (c.title ~ ' ' ~ (c.title_en or '')) | lower }}"
          {% if c.id not in visible_concert_ids %}style="display:none"{% endif %}>
         <strong>{{ c.title }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
         <span class="who">
@@ -81,28 +90,36 @@
       </a>
       {% endfor %}
     </div>
-    <p class="dim" id="no-match" {% if visible_concert_ids or not selected_tags %}style="display:none"{% endif %}>No concerts match.</p>
+    <p class="dim" id="no-match"
+       {% if visible_concert_ids or (not selected_tags and not query) %}style="display:none"{% endif %}>No concerts match.</p>
     {% else %}
-    <p class="dim">No concerts match.{% if user.is_editor and not selected_tags %} <a href="/concerts/new">Create the first one →</a>{% endif %}</p>
+    <p class="dim">No concerts match.{% if user.is_editor and not selected_tags and not query %} <a href="/concerts/new">Create the first one →</a>{% endif %}</p>
     {% endif %}
   </section>
 </div>
 <script>
-  // Tag/region filtering is entirely client-side: every concert tile is
-  // already in the DOM with its tag ids, so toggling a chip just shows/hides
-  // tiles -- no server round trip, no page reload. Chips stay real <a href>
-  // links (see chiplink() above) so filtering still works, just slower, with
-  // JS disabled.
+  // Tag/region filtering AND free-text search are both entirely
+  // client-side: every concert tile is already in the DOM with its tag ids
+  // and lowercased title text, so toggling a chip or typing a query just
+  // shows/hides tiles -- no server round trip, no page reload. Chips stay
+  // real <a href> links and the search box stays inside a real GET <form>
+  // (see chiplink() above / the search-form markup) so both keep working,
+  // just slower, with JS disabled.
   (function () {
+    let currentQuery = new URLSearchParams(location.search).get("q") || "";
+
     function selectedIds() {
       return new Set(new URLSearchParams(location.search).getAll("tag").map(Number));
     }
 
-    function applyVisibility(selected) {
+    function applyVisibility(selected, query) {
       let anyVisible = false;
+      const q = query.trim().toLowerCase();
       document.querySelectorAll(".tile").forEach((tile) => {
         const tags = (tile.dataset.tags || "").split(",").filter(Boolean).map(Number);
-        const visible = selected.size === 0 || tags.some((id) => selected.has(id));
+        const tagMatch = selected.size === 0 || tags.some((id) => selected.has(id));
+        const searchMatch = !q || (tile.dataset.search || "").includes(q);
+        const visible = tagMatch && searchMatch;
         tile.style.display = visible ? "" : "none";
         if (visible) anyVisible = true;
       });
@@ -140,16 +157,19 @@
       });
     }
 
-    function updateUrl(selected) {
+    function updateUrl(selected, query) {
       const params = new URLSearchParams(location.search);
       params.delete("tag");
       selected.forEach((id) => params.append("tag", id));
+      if (query) params.set("q", query);
+      else params.delete("q");
       history.replaceState(null, "", "?" + params.toString());
     }
 
-    function applyAll(selected) {
-      updateUrl(selected);
-      applyVisibility(selected);
+    function applyAll(selected, query) {
+      currentQuery = query;
+      updateUrl(selected, query);
+      applyVisibility(selected, query);
       updateChipState(selected);
       updateLinks(selected);
     }
@@ -160,13 +180,18 @@
       const selected = selectedIds();
       const active = ids.some((id) => selected.has(id));
       ids.forEach((id) => (active ? selected.delete(id) : selected.add(id)));
-      applyAll(selected);
+      applyAll(selected, currentQuery);
       return false;
     };
 
     window.clearTagFilters = function (event) {
       event.preventDefault();
-      applyAll(new Set());
+      applyAll(new Set(), currentQuery);
+      return false;
+    };
+
+    window.liveSearch = function (input) {
+      applyAll(selectedIds(), input.value);
       return false;
     };
   })();

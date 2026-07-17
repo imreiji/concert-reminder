@@ -9,10 +9,10 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 226 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 222 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
-export, ramen.events import, a personal calendar-feed subscription, and a
-personalized `/mydeadlines` Discord command have shipped since).
+export, ramen.events import, a personal calendar-feed subscription, and
+free-text concert search have shipped since).
 
 ## Commands
 
@@ -140,6 +140,12 @@ personalized `/mydeadlines` Discord command have shipped since).
 - VENUE tags filter by `region` (sidebar groups venues into regions like
   "Kanto"/"Kansai"/"Other"; toggling a region (de)selects every venue tag id
   in it) — filtering by one exact venue was explicitly ruled out as unhelpful.
+- The index page's tag filter and its free-text search box (matches title +
+  title_en, case-insensitive) combine as AND, not OR — both narrow the same
+  tile set together. Same client-side-first pattern as tag filtering: every
+  tile carries a `data-search` attribute so typing re-filters instantly with
+  no round trip; the search `<input>` still sits in a real GET `<form>` so
+  it degrades to a normal server-side search with JS disabled.
 
 ## Deploy
 

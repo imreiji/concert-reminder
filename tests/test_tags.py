@@ -181,6 +181,57 @@ def test_index_filters_by_tag(client):
     assert 'style="display:none"' in gakumas_tile.split("</a>", 1)[0]
 
 
+def test_index_search_filters_by_title(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "Hasu Live", "event_id": "hasu-live"})
+    client.post("/concerts", data={"title": "Gakumas Live", "event_id": "gakumas-live"})
+
+    filtered = client.get("/?q=hasu").text
+    assert "Hasu Live" in filtered and "Gakumas Live" in filtered
+    hasu_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Hasu Live")):]
+    gakumas_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Gakumas Live")):]
+    assert 'style="display:none"' not in hasu_tile.split("</a>", 1)[0]
+    assert 'style="display:none"' in gakumas_tile.split("</a>", 1)[0]
+
+
+def test_index_search_is_case_insensitive_and_matches_title_en(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={"title": "はすのそら 5th", "event_id": "c", "title_en": "Hasunosora 5th"},
+    )
+    r = client.get("/?q=HASUNOSORA").text
+    tile = r[r.index('<a class="tile"'):]
+    assert 'style="display:none"' not in tile.split("</a>", 1)[0]
+
+
+def test_index_search_combines_with_tag_filter_as_and(client):
+    """Search AND tag filter together -- a concert must satisfy both to show,
+    matching the "combined AND" requirement (not either/or)."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/concerts", data={
+        "title": "Hasu Live", "event_id": "hasu-live", "franchise_tags": [1],
+    })
+    client.post("/concerts", data={"title": "Hasu Anniversary", "event_id": "hasu-anni"})
+
+    # matches the search text but NOT the tag -> hidden
+    r = client.get("/?tag=1&q=anniversary").text
+    anni_tile = r[r.rindex('<a class="tile"', 0, r.index("Hasu Anniversary")):]
+    assert 'style="display:none"' in anni_tile.split("</a>", 1)[0]
+
+    # matches both -> shown
+    r = client.get("/?tag=1&q=live").text
+    live_tile = r[r.rindex('<a class="tile"', 0, r.index("Hasu Live")):]
+    assert 'style="display:none"' not in live_tile.split("</a>", 1)[0]
+
+
+def test_index_search_box_prefills_from_query_param(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/?q=hasunosora")
+    assert 'id="concert-search" value="hasunosora"' in r.text
+
+
 def test_index_sorts_by_earliest_event_day(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={

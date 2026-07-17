@@ -118,6 +118,7 @@ def create_app() -> FastAPI:
         session: AsyncSession = Depends(get_session),
         sort: str = "event",
         tag: list[int] = Query(default=[]),
+        q: str = "",
     ):
         concerts, tz, tz_auto, tags = [], settings.default_timezone, True, []
         if user:
@@ -154,12 +155,21 @@ def create_app() -> FastAPI:
         }
         region_links = region_sidebar_links(picker["by_kind"].get("venue", []), tag, sort)
         selected_tags = set(tag)
+        query = q.strip().lower()
+
+        def matches_query(c: Concert) -> bool:
+            if not query:
+                return True
+            haystack = f"{c.title} {c.title_en or ''}".lower()
+            return query in haystack
+
         # Initial visibility, computed server-side so there's no flash of
         # wrongly-shown tiles before JS runs on first load; every subsequent
-        # filter change is handled entirely client-side (see index.html).
+        # filter change (tag AND search, combined) is handled entirely
+        # client-side (see index.html).
         visible_concert_ids = {
             c.id for c in concerts
-            if not selected_tags or ({t.id for t in c.tags} & selected_tags)
+            if (not selected_tags or ({t.id for t in c.tags} & selected_tags)) and matches_query(c)
         }
         return templates.TemplateResponse(
             request,
@@ -174,6 +184,7 @@ def create_app() -> FastAPI:
                 "tag_names_json": _json.dumps(picker["tag_names_json"]),
                 "selected_tags": selected_tags,
                 "visible_concert_ids": visible_concert_ids,
+                "query": q,
                 "sort": sort,
                 "tz": tz,
                 "tz_auto": tz_auto,
