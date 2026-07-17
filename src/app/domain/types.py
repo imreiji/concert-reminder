@@ -30,6 +30,25 @@ class RoundKind(enum.StrEnum):
     OTHER = "other"                                  # future franchise inventions
 
 
+class ConcertKind(enum.StrEnum):
+    """What TYPE of event this is, independent of its lottery/sale rounds.
+    Optional, purely organizational -- existing concerts have no kind set
+    until an editor backfills one."""
+
+    CONCERT = "concert"
+    TOUR = "tour"
+    FESTIVAL = "festival"
+    RELEASE = "release"
+    MEET_GREET = "meet_greet"
+    FAN_MEETING = "fan_meeting"
+    TALK = "talk"
+    STAGE = "stage"
+    SCREENING = "screening"
+    GOODS = "goods"
+    STREAM = "stream"
+    OTHER = "other"
+
+
 class TagKind(enum.StrEnum):
     """What a tag names. GROUP tags contain member (usually ARTIST) tags."""
 

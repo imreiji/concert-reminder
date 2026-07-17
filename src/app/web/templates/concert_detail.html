@@ -3,13 +3,14 @@
 {% block content %}
 <article class="concert">
   <header class="concert-head">
-    <h1>{{ concert.title }}</h1>
+    <h1>{{ concert.title }}{% if concert.kind %} <span class="dim kind-tag">{{ concert.kind.value.replace("_", " ") }}</span>{% endif %}</h1>
     {% if concert.tags %}
     <p class="taglist header-tags">
       {% for t in concert.tags %}<span class="chip kind-{{ t.kind.value }}">{{ t.name }}</span>{% endfor %}
     </p>
     {% endif %}
     {% if concert.notes %}<p class="dim">{{ concert.notes }}</p>{% endif %}
+    <p class="dim tiny"><a href="/concerts/{{ concert.id }}/export.yaml">Export YAML →</a></p>
   </header>
 
   {% if user.is_editor %}
@@ -17,6 +18,14 @@
     <summary>Edit concert</summary>
     <form method="post" action="/concerts/{{ concert.id }}/edit" class="stack">
       <label>Title <input name="title" value="{{ concert.title }}" required maxlength="200"></label>
+      <label>Kind <span class="dim tiny">(optional)</span>
+        <select name="kind">
+          <option value="">— none —</option>
+          {% for k in concert_kinds %}
+          <option value="{{ k.value }}" {% if k == concert.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <label>Notes <textarea name="notes" rows="3">{{ concert.notes or '' }}</textarea></label>
       <button>Save</button>
     </form>

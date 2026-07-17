@@ -172,3 +172,10 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .import-error { color: var(--danger); }
 
 .header-tags { margin: .2rem 0 .4rem; }
+
+/* Rounds grouped by day ("legs") */
+.leg-heading { margin: 1rem 0 .2rem; font-size: 1rem; color: var(--dim); }
+.leg-heading:first-child { margin-top: 0; }
+.daypick { display: flex; flex-wrap: wrap; gap: .5rem; margin: .2rem 0; }
+.daypick-opt { display: inline-flex; align-items: center; gap: .25rem; font-size: .85rem; }
+.tile .kind-tag { color: var(--dim); font-size: .8em; }
