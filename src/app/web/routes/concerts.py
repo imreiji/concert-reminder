@@ -243,14 +243,18 @@ def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
 
 
 def round_leg_display(round_: Round, days_by_id: dict[int, ConcertDay]) -> str:
-    """Inverse of resolve_round_leg, for pre-filling the edit page's
-    free-text leg field from a round's real applies_to day ids."""
+    """Inverse of resolve_round_leg, for pre-filling the edit page's leg
+    <select> from a round's real applies_to day ids. Label-first, falling
+    back to city -- must match the same preference the leg dropdown's
+    options use client-side (_leg_picker_script.html's legOptionFor), or
+    this value won't match any of that dropdown's option values and the
+    round's current leg would silently fail to pre-select."""
     if not round_.applies_to:
         return ""
     day = days_by_id.get(round_.applies_to[0])
     if day is None:
         return ""
-    return day.city or day.label
+    return day.label or day.city
 
 
 def group_rounds_by_day(concert: Concert) -> tuple[dict[int, list[Round]], list[Round]]:

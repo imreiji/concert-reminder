@@ -2,8 +2,8 @@
 {% block title %}new event — dekimasen.app{% endblock %}
 {% block content %}
 <h1>Add an event</h1>
-<p class="dim">Add each show as a performance, and lottery rounds (a round's <strong>leg</strong> ties it
-  to one performance by city/label — leave it blank if the round applies to the whole event).</p>
+<p class="dim">Add each show as a performance, and lottery rounds (a round's <strong>leg</strong> picks
+  which performance it applies to — leave it as "whole event" if it isn't tied to one).</p>
 <p class="dim tiny"><a href="/concerts/import">Prefer to import from a ramen.events URL instead? →</a></p>
 
 <form class="stack wide" method="post" action="/concerts" id="new-concert">
@@ -63,7 +63,7 @@
     <select name="round_kind">{% for k in kinds %}
       <option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>
     {% endfor %}</select>
-    <input name="round_leg" maxlength="100" placeholder="Leg (blank = whole event)">
+    <select name="round_leg" class="round-leg-select"></select>
     <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"></label>
     <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"></label>
     <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
@@ -73,11 +73,8 @@
     <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
   </div>
 </template>
+{% include "_leg_picker_script.html" %}
 <script>
-  function addRow(listId, templateId) {
-    const tpl = document.getElementById(templateId);
-    document.getElementById(listId).appendChild(tpl.content.cloneNode(true));
-  }
   // Convenience: suggest an event id from the title, but only while the
   // editor hasn't typed one themselves.
   (function () {

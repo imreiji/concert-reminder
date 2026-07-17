@@ -177,9 +177,10 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 
 .header-tags { margin: .2rem 0 .4rem; }
 
-/* Rounds grouped by day ("legs") */
-.leg-heading { margin: 1rem 0 .2rem; font-size: 1rem; color: var(--dim); }
-.leg-heading:first-child { margin-top: 0; }
+/* Performances: one section per day/leg, its rounds table nested right under it */
+.perf-detail { margin: 1.2rem 0; padding-top: 1.2rem; border-top: 1px solid var(--line); }
+.perf-detail:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.leg-heading { margin: 0 0 .2rem; font-size: 1rem; color: var(--dim); }
 .tile .kind-tag { color: var(--dim); font-size: .8em; }
 
 /* Past deadlines / days: struck through and dimmed, not hidden */
