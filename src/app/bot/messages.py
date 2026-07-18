@@ -10,7 +10,7 @@ from datetime import datetime
 
 from app.db.service import DueReminder
 from app.domain.timezones import fmt_dual
-from app.domain.types import Anchor
+from app.domain.types import Anchor, LotteryOutcome
 
 KIND_EMOJI = {
     "lottery_round": "🎟️",
@@ -25,6 +25,8 @@ KIND_EMOJI = {
 ANCHOR_VERB = {
     Anchor.OPENS: "opens",
     Anchor.CLOSES: "closes",
+    Anchor.RESULTS: "results announced",
+    Anchor.PAYMENT: "payment due",
     Anchor.EVENT_START: "starts",
 }
 
@@ -127,7 +129,15 @@ def build_reminder_message(item: DueReminder) -> tuple:
     """(embed, view) for a deadline reminder DM."""
     import discord
 
-    from app.bot.views import SnoozeButton
+    from app.bot.views import (
+        AppliedButton,
+        LostButton,
+        NotAppliedButton,
+        PaidButton,
+        RemindLaterButton,
+        SnoozeButton,
+        WonButton,
+    )
     from app.config import settings
 
     subject = item.round_label or item.day_label or "event"
@@ -145,9 +155,24 @@ def build_reminder_message(item: DueReminder) -> tuple:
 
     view = discord.ui.View(timeout=None)
     if item.url:
-        view.add_item(discord.ui.Button(label="Ticket page", url=item.url))
+        link_label = "Apply here" if item.anchor is Anchor.CLOSES else "Ticket page"
+        view.add_item(discord.ui.Button(label=link_label, url=item.url))
     view.add_item(discord.ui.Button(
         label="Open on dekimasen.app", url=f"{settings.base_url}"
     ))
-    view.add_item(SnoozeButton(item.queue_id))
+
+    if item.round_id is not None:
+        if item.anchor is Anchor.CLOSES and item.outcome is None:
+            view.add_item(AppliedButton(item.round_id))
+            view.add_item(NotAppliedButton(item.round_id))
+        elif item.anchor is Anchor.RESULTS and item.outcome in (None, LotteryOutcome.APPLIED):
+            view.add_item(WonButton(item.round_id))
+            view.add_item(LostButton(item.round_id))
+        elif item.anchor is Anchor.PAYMENT and item.outcome is LotteryOutcome.WON:
+            view.add_item(PaidButton(item.round_id))
+
+    if item.anchor is Anchor.CLOSES:
+        view.add_item(RemindLaterButton(item.queue_id))
+    else:
+        view.add_item(SnoozeButton(item.queue_id))
     return embed, view

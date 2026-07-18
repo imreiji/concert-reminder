@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 305 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 337 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -18,8 +18,10 @@ page (search, hierarchy, dialog-based editing, rename, retroactive
 artist-to-active-events apply), an index-page reorg (open-and-upcoming
 bucketing plus a global chronological deadline list), surfaced
 undeliverable-DM feedback (a sitewide banner plus a synchronous test-DM
-diagnostic), and free-text search matching tag names (franchise/group/
-artist/venue) and a free-text-venue fallback have shipped since).
+diagnostic), free-text search matching tag names (franchise/group/
+artist/venue) and a free-text-venue fallback, and per-round lottery outcome
+tracking (applied/won/lost/paid, with automatic reminder suppression and
+next-round auto-arming) have shipped since).
 
 ## Commands
 
@@ -109,6 +111,10 @@ deleting them.
    `group_rounds_by_day()` and every `applies_to` consumer rely on the day
    row still existing. Rounds have no status of their own; a round counts
    as cancelled when every day in its `applies_to` is cancelled.
+   `RoundOutcome` (per-user, per-round lottery progress) layers a second,
+   per-user suppression pass onto the same `sync_rule` candidate-list
+   filtering, orthogonal to cancellation — see
+   `db/service.py`'s `_apply_outcome_suppression`.
 3. **Group tag expansion** (agreed with the owner, do not change): attaching
    a GROUP tag to a concert materializes its members AT THAT MOMENT only.
    Editors prune non-performers; removed members stay removed; detach +

@@ -745,3 +745,17 @@ async def test_record_dm_outcome_sets_and_clears_flag(session):
 
     await record_dm_outcome(session, 42, blocked=False)
     assert user.dm_blocked_since is None
+
+
+async def test_due_reminder_carries_round_id_and_outcome(session):
+    from app.db.models import RoundOutcome
+    from app.domain.types import LotteryOutcome
+
+    concert, round_, rule = await seed(session)
+    await sync_rule(session, rule, NOW)
+    session.add(RoundOutcome(user_id=42, round_id=round_.id, outcome=LotteryOutcome.APPLIED))
+    await session.flush()
+
+    (due,) = await due_reminders(session, dt(6, 22))
+    assert due.round_id == round_.id
+    assert due.outcome == LotteryOutcome.APPLIED
