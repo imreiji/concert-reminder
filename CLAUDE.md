@@ -9,13 +9,14 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 279 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 290 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
-per-concert edit history, a per-leg cancelled status, and a redesigned Tags
+per-concert edit history, a per-leg cancelled status, a redesigned Tags
 page (search, hierarchy, dialog-based editing, rename, retroactive
-artist-to-active-events apply) have shipped since).
+artist-to-active-events apply), and an index-page reorg (open-and-upcoming
+bucketing plus a global chronological deadline list) have shipped since).
 
 ## Commands
 
@@ -157,10 +158,13 @@ artist-to-active-events apply) have shipped since).
   in it) — filtering by one exact venue was explicitly ruled out as unhelpful.
 - The index page's tag filter and its free-text search box (matches title +
   title_en, case-insensitive) combine as AND, not OR — both narrow the same
-  tile set together. Same client-side-first pattern as tag filtering: every
-  tile carries a `data-search` attribute so typing re-filters instantly with
-  no round trip; the search `<input>` still sits in a real GET `<form>` so
-  it degrades to a normal server-side search with JS disabled.
+  tile set together, AND the "Coming up soon" chronological deadline-list
+  section below the tile grids (each `<li>` carries the same `data-tags`/
+  `data-search` attributes a tile does). Same client-side-first pattern as
+  tag filtering: every tile (and deadline-list row) carries a `data-search`
+  attribute so typing re-filters instantly with no round trip; the search
+  `<input>` still sits in a real GET `<form>` so it degrades to a normal
+  server-side search with JS disabled.
 
 ## Deploy
 

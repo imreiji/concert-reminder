@@ -14,6 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.db.models import Concert, ConcertDay, Tag, User
+from app.db.service import LABEL_BY_ANCHOR
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual, utc_to_jst
 from app.scheduler import heartbeat
@@ -29,6 +30,7 @@ _here = Path(__file__).parent
 templates = Jinja2Templates(directory=_here / "templates")
 templates.env.globals["dual"] = fmt_dual        # {{ dual(dt, tz) }}
 templates.env.globals["jst"] = utc_to_jst       # {{ jst(dt).strftime(...) }}
+templates.env.globals["deadline_label"] = lambda anchor: LABEL_BY_ANCHOR[anchor]
 
 COMMON_TIMEZONES = [
     "America/Moncton", "America/Halifax", "America/Toronto", "America/Vancouver",
@@ -141,8 +143,11 @@ def create_app() -> FastAPI:
     ):
         concerts, tz, tz_auto, tags = [], settings.default_timezone, True, []
         open_concert_ids: set[int] = set()
+        deadlines, concert_tags_by_event_id = [], {}
         if user:
             from sqlalchemy import func as sa_func
+
+            from app.db.service import upcoming_deadlines
 
             stmt = select(Concert).options(selectinload(Concert.days), selectinload(Concert.rounds))
             # Hide a concert whose every existing leg is cancelled -- it has
@@ -184,6 +189,8 @@ def create_app() -> FastAPI:
             concerts = list((await session.execute(stmt)).scalars())
             now = datetime.now(UTC)
             open_concert_ids = {c.id for c in concerts if has_open_round(c, now)}
+            deadlines = await upcoming_deadlines(session, now, limit=10) if user else []
+            concert_tags_by_event_id = {c.event_id: {t.id for t in c.tags} for c in concerts}
             tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
             db_user = await session.get(User, user.id)
             if db_user:
@@ -229,6 +236,8 @@ def create_app() -> FastAPI:
                 "selected_tags": selected_tags,
                 "visible_concert_ids": visible_concert_ids,
                 "open_concert_ids": open_concert_ids,
+                "deadlines": deadlines,
+                "concert_tags_by_event_id": concert_tags_by_event_id,
                 "query": q,
                 "sort": sort,
                 "tz": tz,
