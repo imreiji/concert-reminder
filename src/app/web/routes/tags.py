@@ -57,7 +57,7 @@ async def tag_directory(
         request,
         "tags.html",
         {
-            "user": user, "members": members, "kinds": list(TagKind),
+            "user": user, "members": members, "kinds": list(TagKind), "all_tags": tags,
             "franchise_tags": [t for t in tags if t.kind is TagKind.FRANCHISE],
             "franchises": [t for t in tags if t.kind is TagKind.FRANCHISE],
             "groups": groups,

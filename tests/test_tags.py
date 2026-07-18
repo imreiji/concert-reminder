@@ -239,6 +239,22 @@ def test_tags_page_viewer_sees_no_edit_dialogs(client):
     assert 'id="tag-dialog-1"' not in r.text
 
 
+def test_tags_page_renders_one_dialog_even_for_artist_in_multiple_groups(client):
+    """Regression guard: an artist that belongs to two different groups
+    must still get exactly one <dialog id="tag-dialog-{id}"> in the
+    rendered page, not one per group it appears under."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Group A", "kind": "group"})
+    client.post("/tags", data={"name": "Group B", "kind": "group"})
+    client.post("/tags", data={"name": "Shared Member", "kind": "artist"})
+    client.post("/tags/1/members", data={"member_tag_id": 3})
+    client.post("/tags/2/members", data={"member_tag_id": 3})
+
+    r = client.get("/tags")
+    assert r.status_code == 200
+    assert r.text.count('id="tag-dialog-3"') == 1
+
+
 def test_new_tag_form_includes_parent_visibility_script(client):
     """The kind/parent select-hiding is JS-only, client-side behavior --
     not server-testable via HTTP. This just confirms the toggle script and

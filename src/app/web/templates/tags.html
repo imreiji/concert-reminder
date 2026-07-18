@@ -84,7 +84,6 @@ attaching a group to a concert adds all its members, which editors can then prun
 {% macro tag_chip(t) %}
 <button type="button" class="chip kind-{{ t.kind.value }}" data-name="{{ t.name | lower }}"
         {% if user.is_editor %}onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()"{% endif %}>{{ t.name }}</button>
-{% if user.is_editor %}{{ tag_dialog(t) }}{% endif %}
 {% endmacro %}
 
 <div class="tags-page">
@@ -130,4 +129,5 @@ attaching a group to a concert adds all its members, which editors can then prun
   </details>
   {% endif %}
 </div>
+{% if user.is_editor %}{% for t in all_tags %}{{ tag_dialog(t) }}{% endfor %}{% endif %}
 {% endblock %}
