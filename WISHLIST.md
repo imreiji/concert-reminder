@@ -8,9 +8,19 @@ rejected ideas move to the bottom sections instead of being deleted.
 
 ## Proposed (highest impact first)
 
-(none currently — first-run guided setup, the last remaining entry,
-shipped alongside per-round lottery outcome tracking; next feature idea
-starts a fresh section after this header)
+### 1. Minute-level reminder offsets
+
+Impact: low today — effort: small. Raised: 2026-07-18 (domain-model
+review discussion).
+
+`ReminderRule`/`PresetItem` already support `offset_days` + `offset_hours`
+(0-23); there's no `offset_minutes`. The 60s scheduler tick already
+delivers at ~1-minute granularity, so the gap is purely the data model +
+form UI, not scheduling precision. Not worth building yet — the owner's
+read is that this only starts to matter once a first-come-first-served
+round type exists, where users might genuinely want "remind me 5 minutes
+before sale opens" instead of hours. Revisit if/when FCFS-style rounds
+get their own flag or handling.
 
 ## Shipped
 
