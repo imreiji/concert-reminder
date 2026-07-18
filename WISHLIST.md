@@ -21,17 +21,7 @@ round's payment reminder and arm the next round's opens reminder; won →
 skip the general-sale ping. Natural surface: the existing state-aware DM
 buttons ("Did you apply?") right in the reminder embed.
 
-### 2. Free-text search matches artists, groups, and venues
-
-Impact: medium-high — findability. Effort: small.
-Raised: 2026-07-18 UX review.
-
-Search matches title + title_en only, but users think "when's the next
-○○ show", not the exact tour title. Every tile already carries a
-`data-search` attribute — append tag names to it (and to the server-side
-fallback query) and search starts working the way users expect.
-
-### 3. Daily digest mode
+### 2. Daily digest mode
 
 Impact: medium — noise reduction for multi-subscription users. Effort: medium.
 Raised: 2026-07-18 UX review.
@@ -41,7 +31,7 @@ One DM per deadline per rule trains busy users to ignore pings. Opt-in
 delivery time when the outbox is drained — the queue design already
 supports grouping rows per user per tick.
 
-### 4. First-run guided setup
+### 3. First-run guided setup
 
 Impact: medium — new-user activation. Effort: medium.
 Raised: 2026-07-18 UX review.
@@ -54,6 +44,17 @@ test DM to confirm delivery works → here's your calendar feed URL. Goal:
 first useful reminder armed in one sitting.
 
 ## Shipped
+
+### Free-text search matches artists, groups, and venues (2026-07-18)
+
+Shipped as: a centralized `concert_search_text` helper (`web/app.py`) that
+is now the single source of truth for what search matches — title,
+title_en, every attached tag's name across all four kinds
+(franchise/group/artist/venue), and a free-text `Concert.venue` fallback
+only when no VENUE tag is attached. Used at all three call sites: the
+server-side `matches_query` fallback, the tile grid's `data-search`
+attribute, and the "Coming up soon" deadline list's `data-search`
+attribute (previously title-only).
 
 ### Surface undeliverable DMs to the user (2026-07-18)
 
