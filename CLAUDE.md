@@ -22,6 +22,9 @@ bucketing plus a global chronological deadline list) have shipped since).
 
 - Run everything: `uv run python -m app.main` (dev: leave `DISCORD_TOKEN`
   empty in `.env` → web-only mode, bot and scheduler DMs disabled)
+- Bot dev: set `DEV_GUILD_ID` to your test server's ID — slash commands
+  sync to that guild in seconds instead of the up-to-an-hour global sync
+  (unset, the production default, keeps the global sync)
 - Tests: `uv run pytest -q` — MUST pass before any commit
 - Single test: `uv run pytest tests/test_service.py::test_name -q`
 - Lint: `uv run ruff check .` — MUST be clean before any commit
@@ -46,7 +49,13 @@ bucketing plus a global chronological deadline list) have shipped since).
   `domain/ingest.py`) MUST be registered before `routes/concerts.py` in
   `web/app.py` — otherwise `GET /concerts/import` gets swallowed by the
   `GET /concerts/{event_id}` route, since FastAPI matches path templates
-  before literal segments.
+  before literal segments. Its fetch is SSRF-guarded three ways: https +
+  `ramen.events` host only, the same check re-run on every redirect hop via
+  an httpx response hook, and the body streamed under a byte cap — don't
+  loosen any of them. Reminder-rule add/delete lives in
+  `routes/reminders.py` (split out of `concerts.py`; renders via
+  `concerts.render_rules_fragment`), and the `/me/timezone*` routes live in
+  `routes/preferences.py` with the other per-user preference routes.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
 - `routes/calendar.py` — the personal calendar-feed subscription
   (`POST /me/calendar-feed` mints the token, `GET /calendar/{token}.ics` is
@@ -62,6 +71,11 @@ bucketing plus a global chronological deadline list) have shipped since).
   `record_concert_edit` AFTER — get that order backwards and every diff
   reads as unchanged.
 - Bot and web NEVER contain business logic; they call `db/service.py`.
+- `docs/superpowers/specs/` + `plans/` — date-prefixed design specs and
+  implementation plans; each recent feature (cancelled legs, Tags redesign,
+  index reorg) committed one of each before code. Follow that pattern for
+  substantial features. `docs/codebase-review-2026-07-17.md` records a
+  full-codebase review and the fixes it drove.
 
 ## Non-negotiable invariants
 
