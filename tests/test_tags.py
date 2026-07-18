@@ -158,6 +158,54 @@ def test_groups_cannot_contain_groups(client):
     assert r.status_code == 422
 
 
+def test_rename_tag_round_trips(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    r = client.post("/tags/1/edit", data={"name": "Hasunosora Idols"})
+    assert r.status_code == 303
+
+    async def check():
+        async with client.db() as s:
+            tag = await s.get(Tag, 1)
+            assert tag.name == "Hasunosora Idols"
+
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(check())
+
+
+def test_rename_tag_rejects_case_insensitive_duplicate(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    r = client.post("/tags/2/edit", data={"name": "hasunosora"})
+    assert r.status_code == 409
+
+
+def test_rename_tag_to_its_own_current_name_is_a_noop(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    r = client.post("/tags/1/edit", data={"name": "Hasunosora"})
+    assert r.status_code == 303
+
+
+def test_edit_tag_without_name_field_leaves_name_unchanged(client):
+    """Backward compatibility: the venue-only edit form that existed before
+    this feature never sends `name` at all."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "K Arena", "kind": "venue"})
+    r = client.post("/tags/1/edit", data={"region": "Kanto"})
+    assert r.status_code == 303
+
+    async def check():
+        async with client.db() as s:
+            tag = await s.get(Tag, 1)
+            assert tag.name == "K Arena"
+            assert tag.region == "Kanto"
+
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(check())
+
+
 def test_index_filters_by_tag(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})

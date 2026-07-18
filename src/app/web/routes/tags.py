@@ -87,14 +87,24 @@ async def edit_tag(
     tag_id: int,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
+    name: str = Form(""),
     location_url: str = Form(""),
     region: str = Form(""),
 ):
-    """Venue-only in practice today (the only fields worth correcting after
-    creation so far) but not kind-restricted -- harmless to set on others."""
+    """Rename (any kind) plus venue-only location_url/region -- not
+    kind-restricted on the latter two, harmless to set on others.
+    `name` is optional so callers that never send it (there were none
+    before this feature; kept optional in case any external client still
+    doesn't) leave the tag's name untouched."""
     tag = await session.get(Tag, tag_id)
     if tag is None:
         raise HTTPException(status_code=404)
+    name = name.strip()
+    if name and name.lower() != tag.name.lower():
+        existing = await find_tag_by_name(session, name)
+        if existing is not None and existing.id != tag.id:
+            raise HTTPException(status_code=409, detail=f"tag {name!r} already exists")
+        tag.name = name
     tag.location_url = location_url.strip() or None
     tag.region = region.strip() or None
     await session.commit()
