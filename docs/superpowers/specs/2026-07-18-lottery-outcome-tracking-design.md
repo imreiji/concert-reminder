@@ -140,7 +140,13 @@ Attached to the reminder DM (`build_reminder_message` in
 `bot/messages.py`) based on the reminder's anchor and the round's current
 outcome state for that user:
 
-- **CLOSES reminder**, no outcome recorded → "I applied" / "Didn't apply"
+- **CLOSES reminder**, no outcome recorded → **"I applied" / "Didn't
+  apply"**, plus two more buttons unrelated to the outcome state machine
+  (below): the existing URL link button (relabeled "Apply here" for this
+  anchor specifically, still driven by `item.url` exactly as today) and a
+  new **"Remind me later"** button that *replaces* the generic
+  fixed-1-day `SnoozeButton` on this reminder only (per your answer —
+  other anchors keep the existing plain Snooze button unchanged).
 - **RESULTS reminder**, outcome is `APPLIED` (or unset — see backfill
   below) → "Won" / "Lost"
 - **PAYMENT reminder**, outcome is `WON` → "Paid"
@@ -150,7 +156,7 @@ Requires adding `round_id: int | None` to the `DueReminder` dataclass
 `due_reminders()`'s query and into `build_reminder_message`'s
 button-attachment logic.
 
-Every button's callback calls a new service function:
+Each of the four outcome buttons' callback calls a new service function:
 
 ```python
 async def record_round_outcome(
@@ -179,6 +185,35 @@ Per this project's established convention (every existing `DynamicItem`
 button callback), these callbacks are not independently unit-tested —
 `record_round_outcome` is tested at the service layer, and the buttons
 themselves are reviewed by inspection.
+
+**A fifth, unrelated button on the CLOSES reminder only: "Remind me
+later."** This doesn't touch `RoundOutcome` at all — it needs a Discord
+*modal* (a small form popup) instead, since a plain button click can't
+collect free-text/numeric input, new interaction machinery this codebase
+doesn't use yet. Clicking it opens a `discord.ui.Modal` with one numeric
+`TextInput` ("How many days?"); its `on_submit` calls the existing
+`snooze_reminder` service function, generalized to take a day count
+instead of being hardcoded to 24 hours:
+
+```python
+async def snooze_reminder(
+    session: AsyncSession, queue_id: int, user_id: int, days: int = 1,
+    now: datetime | None = None,
+) -> str:
+    """[Snooze 1 day] / [Remind me later] buttons. Re-arms a delivered
+    reminder for +`days` days, capped so it can never fire after the
+    deadline it's about. `days` defaults to 1 -- unchanged behavior for
+    every reminder except the CLOSES one, where the new modal-driven
+    button supplies a user-chosen value instead."""
+```
+
+The existing `'snoozed' | 'too_close' | 'not_yours' | 'gone'` return
+values are unchanged and reused as-is for the modal's response message;
+a non-numeric modal submission is rejected before the function is even
+called, with its own plain error reply. Like the outcome buttons, this
+modal's callback is reviewed by inspection, not independently unit-tested
+— only `snooze_reminder`'s generalized `days` parameter is tested at the
+service layer.
 
 ## Section 3: Suppression mechanism
 
@@ -255,11 +290,21 @@ When a user marks a round `LOST`:
   auto-arm creates a real `ReminderRule` using the default preset's offset
   or immediate; auto-arm doesn't duplicate an existing rule; the
   `sync_concert` catch-up path for a next round that didn't exist at
-  lose-time.
+  lose-time; `snooze_reminder`'s generalized `days` parameter — a custom
+  value re-arms correctly, still capped against the anchor deadline
+  exactly as the existing fixed-24h behavior already is, and `days=1`
+  (the default) reproduces today's exact behavior unchanged, a
+  regression guard for the existing plain Snooze button on every other
+  reminder.
 - **Message-building**: `build_reminder_message` attaches the correct
-  button pair (or none) for a CLOSES/RESULTS/PAYMENT reminder depending on
-  the round's current outcome state — pure embed/view construction, no
-  Discord network needed.
-- **Button callbacks**: not independently unit-tested, per this project's
-  established convention for every other `DynamicItem` — reviewed by
-  inspection.
+  button set for a CLOSES/RESULTS/PAYMENT reminder depending on the
+  round's current outcome state — pure embed/view construction, no
+  Discord network needed. Specifically confirms the CLOSES reminder gets
+  the relabeled "Apply here" link button (when `item.url` is set) and
+  "Remind me later" *instead of* the plain Snooze button, while
+  RESULTS/PAYMENT reminders keep the plain Snooze button unchanged.
+- **Button/modal callbacks**: not independently unit-tested, per this
+  project's established convention for every other `DynamicItem` —
+  reviewed by inspection. This includes the new modal's `on_submit`
+  handler (non-numeric input rejected before `snooze_reminder` is ever
+  called).
