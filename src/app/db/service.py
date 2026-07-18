@@ -249,6 +249,75 @@ async def record_round_outcome(
 
     await reinstate_user_rules(session, user_id, round_.concert_id, now)
 
+    if outcome is LotteryOutcome.LOST:
+        await _auto_arm_next_round(session, user_id, round_, now)
+
+
+async def _next_round_for_leg(session: AsyncSession, lost_round: Round) -> Round | None:
+    """The next round for the same leg(s) a just-lost round applied to --
+    the earliest-opening round (of those with an opens_at_utc set) whose
+    applies_to overlaps the lost round's (or is empty -- General rounds
+    cover every leg), opening strictly after the lost round's own close
+    (falling back to its open time if it has no close)."""
+    candidates = list((await session.execute(
+        select(Round).where(
+            Round.concert_id == lost_round.concert_id,
+            Round.id != lost_round.id,
+            Round.opens_at_utc.is_not(None),
+        )
+    )).scalars())
+    lost_legs = set(lost_round.applies_to) if lost_round.applies_to else None
+    after = lost_round.closes_at_utc or lost_round.opens_at_utc
+
+    def overlaps(r: Round) -> bool:
+        if lost_legs is None or not r.applies_to:
+            return True  # either side is "every leg" -- always overlaps
+        return bool(lost_legs & set(r.applies_to))
+
+    qualifying = [r for r in candidates if overlaps(r) and r.opens_at_utc > after]
+    if not qualifying:
+        return None
+    return min(qualifying, key=lambda r: r.opens_at_utc)
+
+
+async def _auto_arm_next_round(
+    session: AsyncSession, user_id: int, lost_round: Round, now: datetime | None = None
+) -> None:
+    """After a LOST outcome: find the next round for the same leg and
+    auto-create a real ReminderRule for its OPENS anchor, using the
+    user's default preset offset if they have one, else immediate."""
+    now = now or _now()
+    next_round = await _next_round_for_leg(session, lost_round)
+    if next_round is None:
+        return  # nothing to arm yet -- sync_concert catches up when it's added
+
+    existing = (await session.execute(
+        select(ReminderRule.id).where(
+            ReminderRule.user_id == user_id,
+            ReminderRule.round_id == next_round.id,
+            ReminderRule.anchor == Anchor.OPENS,
+        )
+    )).scalar_one_or_none()
+    if existing is not None:
+        return  # already armed
+
+    offset_days, offset_hours = 0, 0
+    preset = await get_default_preset(session, user_id)
+    if preset is not None:
+        await session.refresh(preset, ["items"])
+        for item in preset.items:
+            if item.anchor is Anchor.OPENS:
+                offset_days, offset_hours = item.offset_days, item.offset_hours
+                break
+
+    rule = ReminderRule(
+        user_id=user_id, round_id=next_round.id, anchor=Anchor.OPENS,
+        offset_days=offset_days, offset_hours=offset_hours,
+    )
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, now)
+
 
 async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | None = None) -> None:
     """Reconcile reminder_queue with what this rule currently implies."""
@@ -332,7 +401,10 @@ async def sync_concert(
     """Re-sync every rule touching this concert (called after any edit).
 
     Covers concert-scoped rules and round-scoped rules on its rounds.
-    Returns the number of rules synced.
+    Also catches up any LOST outcome whose auto-armed "next round" didn't
+    exist yet at the time of the loss -- now that a round was just added
+    or edited on this concert, check again. Returns the number of rules
+    synced.
     """
     res = await session.execute(
         select(ReminderRule)
@@ -344,6 +416,15 @@ async def sync_concert(
     rules = list(res.scalars())
     for rule in rules:
         await sync_rule(session, rule, now)
+
+    lost_outcomes = list((await session.execute(
+        select(RoundOutcome, Round)
+        .join(Round, RoundOutcome.round_id == Round.id)
+        .where(Round.concert_id == concert_id, RoundOutcome.outcome == LotteryOutcome.LOST)
+    )).all())
+    for outcome, lost_round in lost_outcomes:
+        await _auto_arm_next_round(session, outcome.user_id, lost_round, now)
+
     return len(rules)
 
 

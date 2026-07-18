@@ -19,7 +19,7 @@ from app.db.models import (
     Round,
     RoundOutcome,
 )
-from app.db.service import ensure_user, sync_rule
+from app.db.service import ensure_user, sync_concert, sync_rule
 from app.domain.types import Anchor, LotteryOutcome, RoundKind
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)
@@ -354,3 +354,113 @@ async def test_record_round_outcome_rejects_paid_when_existing_state_is_not_won(
         select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
     )).scalars()
     assert row.outcome == LotteryOutcome.LOST  # unchanged -- PAID rejected
+
+
+# ── Auto-arm the next round ────────────────────────────────────────────────
+
+
+async def test_losing_arms_the_next_round_for_the_same_leg(session):
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    round_a_only.opens_at_utc = dt(6, 10)
+    next_round = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="A-only round 2",
+        opens_at_utc=dt(7, 1), closes_at_utc=dt(7, 15), applies_to=[leg_a.id],
+    )
+    session.add(next_round)
+    await session.flush()
+
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.LOST, NOW)
+
+    (rule,) = (await session.execute(
+        select(ReminderRule).where(
+            ReminderRule.round_id == next_round.id, ReminderRule.anchor == Anchor.OPENS,
+        )
+    )).scalars()
+    assert rule.offset_days == 0 and rule.offset_hours == 0
+    assert len(await queue_rows_for(session, rule.id)) == 1
+
+
+async def test_auto_arm_uses_default_preset_opens_offset(session):
+    from app.db.models import PresetItem, ReminderPreset
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    round_a_only.opens_at_utc = dt(6, 10)
+    next_round = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="A-only round 2",
+        opens_at_utc=dt(7, 1), closes_at_utc=dt(7, 15), applies_to=[leg_a.id],
+    )
+    session.add(next_round)
+    preset = ReminderPreset(user_id=42, name="standard", is_default=True)
+    session.add(preset)
+    await session.flush()
+    session.add(
+        PresetItem(preset_id=preset.id, anchor=Anchor.OPENS, offset_days=-2, offset_hours=0)
+    )
+    await session.flush()
+
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.LOST, NOW)
+
+    (rule,) = (await session.execute(
+        select(ReminderRule).where(
+            ReminderRule.round_id == next_round.id, ReminderRule.anchor == Anchor.OPENS,
+        )
+    )).scalars()
+    assert rule.offset_days == -2
+
+
+async def test_auto_arm_does_not_duplicate_existing_rule(session):
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    round_a_only.opens_at_utc = dt(6, 10)
+    next_round = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="A-only round 2",
+        opens_at_utc=dt(7, 1), closes_at_utc=dt(7, 15), applies_to=[leg_a.id],
+    )
+    session.add(next_round)
+    await session.flush()
+    existing_rule = ReminderRule(
+        user_id=42, round_id=next_round.id, anchor=Anchor.OPENS, offset_days=-5,
+    )
+    session.add(existing_rule)
+    await session.flush()
+
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.LOST, NOW)
+
+    rules = list((await session.execute(
+        select(ReminderRule).where(
+            ReminderRule.round_id == next_round.id, ReminderRule.anchor == Anchor.OPENS,
+        )
+    )).scalars())
+    assert len(rules) == 1
+    assert rules[0].offset_days == -5  # untouched, not duplicated/overwritten
+
+
+async def test_auto_arm_catches_up_when_next_round_added_later(session):
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    round_a_only.opens_at_utc = dt(6, 10)
+    await session.flush()
+
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.LOST, NOW)
+    # nothing to arm yet -- no next round exists
+
+    next_round = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="A-only round 2",
+        opens_at_utc=dt(7, 1), closes_at_utc=dt(7, 15), applies_to=[leg_a.id],
+    )
+    session.add(next_round)
+    await session.flush()
+
+    await sync_concert(session, concert.id, NOW)
+
+    (rule,) = (await session.execute(
+        select(ReminderRule).where(
+            ReminderRule.round_id == next_round.id, ReminderRule.anchor == Anchor.OPENS,
+        )
+    )).scalars()
+    assert len(await queue_rows_for(session, rule.id)) == 1
