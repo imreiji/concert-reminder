@@ -44,7 +44,9 @@ APPLY_WITHIN = re.compile(
 
 _KIND_KEYWORDS: list[tuple[str, RoundKind]] = [
     ("general sale", RoundKind.GENERAL_SALE),
-    ("first-come", RoundKind.GENERAL_SALE),
+    ("first-come", RoundKind.FCFS_SALE),
+    ("tour package", RoundKind.TOUR_PACKAGE),
+    ("overseas", RoundKind.TOUR_PACKAGE),
     ("result", RoundKind.RESULT_ANNOUNCEMENT),
     ("announce", RoundKind.RESULT_ANNOUNCEMENT),
     ("payment", RoundKind.PAYMENT_DEADLINE),

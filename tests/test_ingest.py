@@ -54,6 +54,30 @@ def test_parses_lottery_rounds():
     assert r2.closes_at_jst == datetime(2026, 11, 8, 23, 59)
 
 
+def test_first_come_classifies_as_fcfs_not_general_sale():
+    from app.domain.ingest import _guess_kind
+
+    assert _guess_kind("First-come, first-served round") is RoundKind.FCFS_SALE
+
+
+def test_general_sale_text_still_classifies_as_general_sale():
+    from app.domain.ingest import _guess_kind
+
+    assert _guess_kind("General sale") is RoundKind.GENERAL_SALE
+
+
+def test_tour_package_text_classifies_as_tour_package():
+    from app.domain.ingest import _guess_kind
+
+    assert _guess_kind("Overseas Tour Package Lottery") is RoundKind.TOUR_PACKAGE
+
+
+def test_overseas_text_classifies_as_tour_package():
+    from app.domain.ingest import _guess_kind
+
+    assert _guess_kind("Overseas Fan Lottery") is RoundKind.TOUR_PACKAGE
+
+
 def test_rounds_default_url_to_official_site():
     parsed = parse_ramen_event(load("ramen_graduation_concert.html"), GRADUATION_URL)
     assert all(r.url and "lovelive-anime.jp" in r.url for r in parsed.rounds)
