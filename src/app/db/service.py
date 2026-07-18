@@ -541,8 +541,10 @@ class DueReminder:
     anchor: Anchor
     fire_at_utc: datetime
     # round-anchored:
+    round_id: int | None = None
     round_label: str | None = None
     round_kind: str | None = None
+    outcome: LotteryOutcome | None = None
     anchor_time_utc: datetime | None = None
     url: str | None = None
     # day-anchored:
@@ -592,6 +594,14 @@ async def due_reminders(
         c.id: c for c in
         (await session.execute(select(Concert).where(Concert.id.in_(concert_ids)))).scalars()
     } if concert_ids else {}
+    # queue + rules + users + rounds + concerts + outcomes -- still a
+    # fixed number of round trips regardless of batch size.
+    outcomes: dict[tuple[int, int], LotteryOutcome] = {}
+    if round_ids:
+        outcome_rows = list((await session.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id.in_(round_ids))
+        )).scalars())
+        outcomes = {(o.user_id, o.round_id): o.outcome for o in outcome_rows}
 
     out: list[DueReminder] = []
     for row in rows:
@@ -611,8 +621,10 @@ async def due_reminders(
                 concert_title=concert.title,
                 anchor=row.anchor,
                 fire_at_utc=row.fire_at_utc,
+                round_id=round_.id if round_ else None,
                 round_label=round_.label if round_ else None,
                 round_kind=round_.kind.value if round_ else None,
+                outcome=outcomes.get((user.discord_id, round_.id)) if round_ else None,
                 anchor_time_utc=(
                     anchor_time(_round_info(round_), row.anchor)
                     if round_
