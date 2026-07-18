@@ -97,6 +97,15 @@ async def list_editors(session: AsyncSession) -> list[dict]:
     return editors
 
 
+async def record_dm_outcome(session: AsyncSession, discord_id: int, blocked: bool) -> None:
+    """Persist whether the most recent attempted DM to this user succeeded
+    or hit discord.Forbidden -- the sitewide "DMs blocked" banner reads
+    dm_blocked_since directly off the User row (see auth.current_user)."""
+    user = await session.get(User, discord_id)
+    if user is not None:
+        user.dm_blocked_since = _now() if blocked else None
+
+
 # ── Adapters: ORM -> domain dataclasses ──────────────────────────────────
 
 

@@ -34,6 +34,7 @@ from app.db.service import (
     mark_sent,
     notify_newly_cancelled_legs,
     record_concert_edit,
+    record_dm_outcome,
     reinstate_user_rules,
     set_editor,
     snapshot_concert,
@@ -733,3 +734,14 @@ async def test_list_editors_marks_env_lock_on_db_editor(session, monkeypatch):
 
     editors = await list_editors(session)
     assert editors == [{"id": 42, "username": "reiji", "env": True}]
+
+
+async def test_record_dm_outcome_sets_and_clears_flag(session):
+    await ensure_user(session, 42, "reiji")
+
+    await record_dm_outcome(session, 42, blocked=True)
+    user = await session.get(User, 42)
+    assert user.dm_blocked_since is not None
+
+    await record_dm_outcome(session, 42, blocked=False)
+    assert user.dm_blocked_since is None
