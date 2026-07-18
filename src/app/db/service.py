@@ -209,6 +209,47 @@ async def _apply_outcome_suppression(
     return survivors
 
 
+async def record_round_outcome(
+    session: AsyncSession, user_id: int, round_id: int, outcome: LotteryOutcome,
+    now: datetime | None = None,
+) -> None:
+    """A user's DM-button click recording their lottery progress on one
+    round. Permissive sequence: NOT_APPLIED/APPLIED only set the FIRST
+    outcome ever recorded for a round; WON/LOST can be set regardless of
+    the current state -- clicking them without ever clicking "I applied"
+    first just works; PAID only reachable from WON.
+
+    Re-syncs every one of this user's rules for the round's whole
+    concert (round-scoped or concert-wide), not just rules on this one
+    round -- a concert-wide rule's own candidate list also needs to drop
+    a now-suppressed round, and re-running sync_rule is always safe."""
+    now = now or _now()
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
+        return
+
+    existing = (await session.execute(
+        select(RoundOutcome).where(
+            RoundOutcome.user_id == user_id, RoundOutcome.round_id == round_id
+        )
+    )).scalar_one_or_none()
+
+    if outcome in (LotteryOutcome.NOT_APPLIED, LotteryOutcome.APPLIED) and existing is not None:
+        return  # starting states only apply once
+    if outcome is LotteryOutcome.PAID and (
+        existing is None or existing.outcome is not LotteryOutcome.WON
+    ):
+        return  # PAID only reachable from WON
+
+    if existing is None:
+        session.add(RoundOutcome(user_id=user_id, round_id=round_id, outcome=outcome))
+    else:
+        existing.outcome = outcome
+    await session.flush()
+
+    await reinstate_user_rules(session, user_id, round_.concert_id, now)
+
+
 async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | None = None) -> None:
     """Reconcile reminder_queue with what this rule currently implies."""
     now = now or _now()

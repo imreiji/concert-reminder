@@ -216,3 +216,75 @@ async def test_losing_one_leg_leaves_its_own_rounds_reminding_as_normal(session)
     await sync_rule(session, rule, NOW)
 
     assert len(await queue_rows_for(session, rule.id)) == 1
+
+
+# ── record_round_outcome ───────────────────────────────────────────────────
+
+
+async def test_record_round_outcome_upserts_and_resyncs(session):
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    round_a_only.payment_deadline_at_utc = dt(6, 28)
+    await session.flush()
+    rule = ReminderRule(user_id=42, round_id=round_a_only.id, anchor=Anchor.PAYMENT, offset_days=0)
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert len(await queue_rows_for(session, rule.id)) == 1
+
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.LOST, NOW)
+
+    assert await queue_rows_for(session, rule.id) == []
+    (row,) = (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
+    )).scalars()
+    assert row.outcome == LotteryOutcome.LOST
+
+
+async def test_record_round_outcome_permissively_allows_lost_without_prior_applied(session):
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.LOST, NOW)
+    (row,) = (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
+    )).scalars()
+    assert row.outcome == LotteryOutcome.LOST
+
+
+async def test_record_round_outcome_rejects_paid_without_prior_won(session):
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.PAID, NOW)
+    assert (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
+    )).scalar_one_or_none() is None
+
+
+async def test_record_round_outcome_allows_paid_after_won(session):
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.WON, NOW)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.PAID, NOW)
+    (row,) = (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
+    )).scalars()
+    assert row.outcome == LotteryOutcome.PAID
+
+
+async def test_record_round_outcome_ignores_repeated_applied(session):
+    """A starting state (NOT_APPLIED/APPLIED) only ever applies once --
+    once WON is recorded, a stray repeated "I applied" click must not
+    revert it."""
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.WON, NOW)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.APPLIED, NOW)
+    (row,) = (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
+    )).scalars()
+    assert row.outcome == LotteryOutcome.WON
