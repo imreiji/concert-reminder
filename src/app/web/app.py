@@ -26,6 +26,7 @@ from app.web.routes import imports as import_routes
 from app.web.routes import preferences as pref_routes
 from app.web.routes import reminders as reminder_routes
 from app.web.routes import tags as tag_routes
+from app.web.routes import welcome as welcome_routes
 
 _here = Path(__file__).parent
 templates = Jinja2Templates(directory=_here / "templates")
@@ -135,6 +136,8 @@ def create_app() -> FastAPI:
     app.include_router(tag_routes.router)
     pref_routes.templates = templates
     app.include_router(pref_routes.router)
+    welcome_routes.templates = templates
+    app.include_router(welcome_routes.router)
     # no templates: pure .ics responses
     app.include_router(calendar_routes.router)
 
