@@ -25,14 +25,17 @@ Layout:
 
 ```
 src/app/
-  config.py      env-driven settings; editor/admin whitelists live here
-  domain/        pure logic, no I/O — timezone math now, reminder math in Phase 2
-  db/            SQLAlchemy models + async session (Phase 2)
-  bot/           discord.py client + one cog per feature
-  scheduler/     the 60s loop that drains reminder_queue (Phase 3)
-  web/           FastAPI app, Discord OAuth (Phase 4), CRUD UI (Phase 5)
+  config.py      env-driven settings; admin/editor whitelists live here
+  domain/        pure logic, no I/O — timezone + reminder math, ramen.events
+                 HTML parsing, .ics/YAML export formatting
+  db/            SQLAlchemy models, async session, and service.py — all
+                 business logic that touches the DB lives here
+  bot/           discord.py client + cogs, embed builders, persistent buttons
+  scheduler/     the 60s loop that drains reminder_queue + notifications
+  web/           FastAPI app: Discord OAuth, htmx CRUD UI, calendar feed
 tests/           pytest; domain logic is tested hardest
 deploy/          setup.sh, systemd unit, Caddyfile, backup.sh
+docs/            deploy runbook + per-feature design specs and plans
 ```
 
 ## Rules that prevent the classic bugs
@@ -104,3 +107,10 @@ Shipped since Phase 12 (no phase numbers assigned, tracked as feature PRs instea
 - [x] A dedicated, richer `/concerts/new` creation page
 - [x] Venue tags with region + link, round table, `.ics` export, live countdown, past-marking
 - [x] `event_id` URLs and a dedicated Edit Concert page
+- [x] Personal calendar-feed subscription (a secret `.ics` URL calendar apps poll)
+- [x] Free-text concert search on the index page (combines with tag filters as AND)
+- [x] `/mydeadlines` — your upcoming deadlines as a Discord slash command
+- [x] Per-concert edit history
+- [x] Per-leg cancelled status: legs stay visible, their reminders drop, one-click reinstate
+- [x] Tags page redesign — search, hierarchy, dialog-based editing, rename, retroactive apply
+- [x] Index page reorg — open-and-upcoming bucketing + a global chronological deadline list
