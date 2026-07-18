@@ -288,3 +288,69 @@ async def test_record_round_outcome_ignores_repeated_applied(session):
         select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
     )).scalars()
     assert row.outcome == LotteryOutcome.WON
+
+
+async def test_record_round_outcome_allows_not_applied_when_fresh(session):
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.NOT_APPLIED, NOW)
+    (row,) = (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
+    )).scalars()
+    assert row.outcome == LotteryOutcome.NOT_APPLIED
+
+
+async def test_record_round_outcome_ignores_repeated_not_applied(session):
+    """Like APPLIED, NOT_APPLIED only ever applies as a first outcome --
+    once WON is recorded, a stray repeated "didn't apply" click must not
+    revert it."""
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.WON, NOW)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.NOT_APPLIED, NOW)
+    (row,) = (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
+    )).scalars()
+    assert row.outcome == LotteryOutcome.WON
+
+
+async def test_record_round_outcome_allows_applied_when_fresh(session):
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.APPLIED, NOW)
+    (row,) = (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
+    )).scalars()
+    assert row.outcome == LotteryOutcome.APPLIED
+
+
+async def test_record_round_outcome_overwrites_lost_with_won(session):
+    """WON/LOST can be re-set regardless of the current state -- confirms
+    the row's outcome actually flips between two non-PAID terminal
+    states, not just from-nothing or into-PAID."""
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.LOST, NOW)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.WON, NOW)
+    (row,) = (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
+    )).scalars()
+    assert row.outcome == LotteryOutcome.WON
+
+
+async def test_record_round_outcome_rejects_paid_when_existing_state_is_not_won(session):
+    """PAID is only reachable from WON -- confirm this also blocks PAID
+    when a DIFFERENT terminal state (not just "no row") already exists."""
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.LOST, NOW)
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.PAID, NOW)
+    (row,) = (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_a_only.id)
+    )).scalars()
+    assert row.outcome == LotteryOutcome.LOST  # unchanged -- PAID rejected
