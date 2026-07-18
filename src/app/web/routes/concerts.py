@@ -311,11 +311,13 @@ def is_day_past(day: ConcertDay, now: datetime) -> bool:
 
 
 def concert_date_range(days: list[ConcertDay]) -> tuple[datetime, datetime] | None:
-    """Earliest and latest day.starts_at_utc, for the detail page header's
-    date-range summary. None when there are no days yet."""
-    if not days:
+    """Earliest and latest day.starts_at_utc among LIVE (non-cancelled)
+    legs, for the detail page header's date-range summary. None when there
+    are no days yet, or every existing day is cancelled."""
+    live_days = [d for d in days if not d.cancelled]
+    if not live_days:
         return None
-    starts = [d.starts_at_utc for d in days]
+    starts = [d.starts_at_utc for d in live_days]
     return min(starts), max(starts)
 
 

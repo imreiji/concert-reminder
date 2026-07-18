@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.middleware.sessions import SessionMiddleware
@@ -125,6 +125,25 @@ def create_app() -> FastAPI:
             from sqlalchemy import func as sa_func
 
             stmt = select(Concert).options(selectinload(Concert.days))
+            # Hide a concert whose every existing leg is cancelled -- it has
+            # no valid dates left, same treatment as a concert with zero
+            # legs would get if it also had no live rounds, except this is a
+            # deliberate exclusion rather than just sorting last. Still
+            # reachable directly via /concerts/{event_id}. A concert with NO
+            # days at all (e.g. a fresh draft) keeps today's existing
+            # behavior of showing up, sorted last -- untouched by this.
+            # .correlate(Concert) is required here: the "event" sort branch
+            # below also outerjoins ConcertDay onto this same statement, so
+            # without an explicit correlate() SQLAlchemy's auto-correlation
+            # sees ConcertDay in both places and "correlates it away" from
+            # these subqueries too, leaving them with zero FROM clauses.
+            has_any_day = exists().where(ConcertDay.concert_id == Concert.id).correlate(Concert)
+            has_live_day = (
+                exists()
+                .where(ConcertDay.concert_id == Concert.id, ConcertDay.cancelled.is_(False))
+                .correlate(Concert)
+            )
+            stmt = stmt.where(~has_any_day | has_live_day)
             # No server-side tag filtering: every concert renders into the DOM
             # tagged with its tag ids, and JS toggles tile visibility -- tag
             # filtering was the slowest part of this page when it round-tripped

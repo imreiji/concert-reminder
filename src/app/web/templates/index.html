@@ -86,7 +86,8 @@
         </span>
         {% if cv | length > 1 %}<span class="dim">📍 Multiple</span>
         {% elif cv or c.venue %}<span class="dim">📍 {{ (cv | map(attribute="name") | join(", ")) or c.venue }}</span>{% endif %}
-        {% if c.days %}<span class="when dim">{{ jst(c.days[0].starts_at_utc).strftime("%Y-%m-%d") }} JST</span>{% endif %}
+        {% set live_days = c.days | rejectattr("cancelled") | list %}
+        {% if live_days %}<span class="when dim">{{ jst(live_days[0].starts_at_utc).strftime("%Y-%m-%d") }} JST</span>{% endif %}
       </a>
       {% endfor %}
     </div>
