@@ -230,6 +230,105 @@ async def sync_concert(
     return len(rules)
 
 
+async def notify_newly_cancelled_legs(
+    session: AsyncSession,
+    concert_id: int,
+    newly_cancelled_day_ids: set[int],
+    now: datetime | None = None,
+) -> int:
+    """Call BEFORE sync_concert (which will delete the now-unplanned queue
+    rows for these legs). Queues one Notification per user who is about to
+    lose EVERY one of their unsent reminders on this concert as a direct
+    result of these legs being newly cancelled -- a user with other live
+    legs/rounds to fall back on gets nothing. Returns how many notifications
+    were queued."""
+    if not newly_cancelled_day_ids:
+        return 0
+    now = now or _now()
+
+    all_cancelled_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(
+            ConcertDay.concert_id == concert_id, ConcertDay.cancelled.is_(True)
+        )
+    )).scalars())
+    rounds = list(
+        (await session.execute(select(Round).where(Round.concert_id == concert_id))).scalars()
+    )
+    affected_round_ids = {
+        r.id for r in rounds
+        if set(r.applies_to or []) & newly_cancelled_day_ids
+        and _is_round_cancelled(r, all_cancelled_day_ids)
+    }
+
+    res = await session.execute(
+        select(ReminderRule.user_id, ReminderQueue.id)
+        .join(ReminderQueue, ReminderQueue.rule_id == ReminderRule.id)
+        .where(
+            ReminderQueue.sent_at_utc.is_(None),
+            (ReminderQueue.day_id.in_(newly_cancelled_day_ids))
+            | (ReminderQueue.round_id.in_(affected_round_ids)),
+        )
+    )
+    doomed_by_user: dict[int, set[int]] = {}
+    for user_id, queue_id in res.all():
+        doomed_by_user.setdefault(user_id, set()).add(queue_id)
+    if not doomed_by_user:
+        return 0
+
+    concert = await session.get(Concert, concert_id)
+    queued = 0
+    for user_id, doomed_ids in doomed_by_user.items():
+        other_row = (await session.execute(
+            select(ReminderQueue.id)
+            .join(ReminderRule, ReminderQueue.rule_id == ReminderRule.id)
+            .outerjoin(Round, ReminderRule.round_id == Round.id)
+            .where(
+                ReminderRule.user_id == user_id,
+                (ReminderRule.concert_id == concert_id) | (Round.concert_id == concert_id),
+                ReminderQueue.sent_at_utc.is_(None),
+                ReminderQueue.id.not_in(doomed_ids),
+            )
+            .limit(1)
+        )).scalar_one_or_none()
+        if other_row is not None:
+            continue  # other live legs/rounds on this concert -- no notice
+        session.add(Notification(
+            user_id=user_id,
+            body=f"A performance for {concert.title} was cancelled, and your "
+                 f"reminder(s) for it were cleared.",
+            concert_id=concert_id,
+            kind="leg_cancelled",
+            created_at=now,
+        ))
+        queued += 1
+    await session.flush()
+    return queued
+
+
+async def reinstate_user_rules(
+    session: AsyncSession, user_id: int, concert_id: int, now: datetime | None = None
+) -> int:
+    """[Reinstate my reminders] button, after a leg-cancellation notice.
+    Re-syncs this user's still-existing rules on this concert -- if the
+    cancelled leg is still cancelled, sync finds nothing to plan for it and
+    this is a no-op; if an editor has since un-cancelled it, the reminder
+    re-arms normally. Never deletes or recreates ReminderRule rows -- they
+    were never touched by the cancellation in the first place. Returns how
+    many rules were re-synced."""
+    res = await session.execute(
+        select(ReminderRule)
+        .outerjoin(Round, ReminderRule.round_id == Round.id)
+        .where(
+            ReminderRule.user_id == user_id,
+            (ReminderRule.concert_id == concert_id) | (Round.concert_id == concert_id),
+        )
+    )
+    rules = list(res.scalars())
+    for rule in rules:
+        await sync_rule(session, rule, now)
+    return len(rules)
+
+
 # ── Retrieval for the scheduler and /upcoming ────────────────────────────
 
 
@@ -884,4 +983,24 @@ async def notice_context(
         user_timezone=user.timezone if user else "America/Moncton",
         user_has_rules=has_rules,
         user_has_default_preset=await get_default_preset(session, user_id) is not None,
+    )
+
+
+@dataclass(frozen=True)
+class LegCancelledContext:
+    """Everything needed to render the leg-cancellation embed."""
+
+    concert_id: int
+    event_id: str
+    title: str
+
+
+async def leg_cancelled_context(
+    session: AsyncSession, concert_id: int
+) -> LegCancelledContext | None:
+    concert = await session.get(Concert, concert_id)
+    if concert is None:
+        return None
+    return LegCancelledContext(
+        concert_id=concert.id, event_id=concert.event_id, title=concert.title
     )

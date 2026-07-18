@@ -12,14 +12,26 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, ReminderQueue, ReminderRule, Round, User
+from app.db.models import (
+    Base,
+    Concert,
+    ConcertDay,
+    Notification,
+    ReminderQueue,
+    ReminderRule,
+    Round,
+    User,
+)
 from app.db.service import (
     concert_audit_log,
     due_reminders,
     ensure_user,
+    leg_cancelled_context,
     list_editors,
     mark_sent,
+    notify_newly_cancelled_legs,
     record_concert_edit,
+    reinstate_user_rules,
     set_editor,
     snapshot_concert,
     sync_concert,
@@ -372,6 +384,88 @@ async def test_sync_round_specific_rule_on_cancelled_round_clears_it(session):
     await session.flush()
     await sync_rule(session, rule, NOW)
     assert await queue_rows(session) == []
+
+
+# ── Notification on cancel + reinstate ───────────────────────────────────
+
+
+async def test_notify_newly_cancelled_legs_notifies_only_users_left_with_nothing(session):
+    concert, leg_a, leg_b, round_a_only, round_both, _ = await seed_two_legs(session)
+    # user 42: a rule only on the A-only round -- will lose everything.
+    rule_a_only = ReminderRule(
+        user_id=42, round_id=round_a_only.id, anchor=Anchor.CLOSES, offset_days=0
+    )
+    # user 43: a concert-wide rule -- still has round_both + round_general on leg B.
+    await ensure_user(session, 43, "other-fan")
+    rule_concert_wide = ReminderRule(
+        user_id=43, concert_id=concert.id, anchor=Anchor.CLOSES, offset_days=0
+    )
+    session.add_all([rule_a_only, rule_concert_wide])
+    await session.flush()
+    await sync_rule(session, rule_a_only, NOW)
+    await sync_rule(session, rule_concert_wide, NOW)
+
+    leg_a.cancelled = True
+    await session.flush()
+    n = await notify_newly_cancelled_legs(session, concert.id, {leg_a.id}, NOW)
+    await session.commit()
+
+    assert n == 1
+    notes = list((await session.execute(select(Notification))).scalars())
+    assert len(notes) == 1
+    assert notes[0].user_id == 42
+    assert notes[0].kind == "leg_cancelled"
+    assert notes[0].concert_id == concert.id
+
+
+async def test_notify_newly_cancelled_legs_noop_when_no_new_cancellations(session):
+    concert, leg_a, _, _, _, _ = await seed_two_legs(session)
+    n = await notify_newly_cancelled_legs(session, concert.id, set(), NOW)
+    assert n == 0
+    assert list((await session.execute(select(Notification))).scalars()) == []
+
+
+async def test_reinstate_user_rules_resyncs_when_uncancelled(session):
+    concert, leg_a, leg_b, round_a_only, _, _ = await seed_two_legs(session)
+    rule = ReminderRule(user_id=42, round_id=round_a_only.id, anchor=Anchor.CLOSES, offset_days=0)
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    leg_a.cancelled = True
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert await queue_rows(session) == []  # cleared
+
+    leg_a.cancelled = False  # editor un-cancels it
+    await session.flush()
+    n = await reinstate_user_rules(session, 42, concert.id, NOW)
+    assert n == 1  # one rule re-synced
+    assert len(await queue_rows(session)) == 1  # re-armed
+
+
+async def test_reinstate_user_rules_is_a_noop_while_still_cancelled(session):
+    concert, leg_a, leg_b, round_a_only, _, _ = await seed_two_legs(session)
+    rule = ReminderRule(user_id=42, round_id=round_a_only.id, anchor=Anchor.CLOSES, offset_days=0)
+    session.add(rule)
+    await session.flush()
+    leg_a.cancelled = True
+    await session.flush()
+
+    n = await reinstate_user_rules(session, 42, concert.id, NOW)
+    assert n == 1  # the rule was re-synced...
+    assert await queue_rows(session) == []  # ...but nothing gets planned, still cancelled
+
+
+async def test_leg_cancelled_context_reads_concert_title(session):
+    concert, _, _, _, _, _ = await seed_two_legs(session)
+    ctx = await leg_cancelled_context(session, concert.id)
+    assert ctx.title == "Two-Leg Tour"
+    assert ctx.event_id == "two-leg-tour"
+    assert ctx.concert_id == concert.id
+
+
+async def test_leg_cancelled_context_none_for_missing_concert(session):
+    assert await leg_cancelled_context(session, 999) is None
 
 
 # ── Concert edit history ─────────────────────────────────────────────────
