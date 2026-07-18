@@ -204,6 +204,42 @@ async def test_subscriber_without_preset_gets_notification_only(client):
     assert len(notes) == 1 and "no preset linked" in notes[0].body
 
 
+async def test_subscribe_default_redirect_is_unchanged(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    login_as(client, FAN_ID, "fan")
+    r = client.post("/subscriptions", data={"tag_id": 1})
+    assert r.headers["location"] == "/preferences"
+
+
+async def test_subscribe_honors_next_param(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    login_as(client, FAN_ID, "fan")
+    r = client.post("/subscriptions", data={"tag_id": 1, "next": "/welcome"})
+    assert r.headers["location"] == "/welcome"
+
+
+async def test_subscribe_rejects_an_unrecognized_next_value(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    login_as(client, FAN_ID, "fan")
+    r = client.post("/subscriptions", data={"tag_id": 1, "next": "https://evil.example"})
+    assert r.headers["location"] == "/preferences"
+
+
+async def test_create_preset_honors_next_param(client):
+    login_as(client, FAN_ID, "fan")
+    r = client.post("/presets", data={"name": "standard", "next": "/welcome"})
+    assert r.headers["location"] == "/welcome"
+
+
+async def test_set_timezone_honors_next_param(client):
+    login_as(client, FAN_ID, "fan")
+    r = client.post("/me/timezone", data={"timezone": "Asia/Tokyo", "next": "/welcome"})
+    assert r.headers["location"] == "/welcome"
+
+
 async def test_user_with_existing_rules_is_skipped(client):
     """Second matching tag on the same concert must not double-apply or re-notify."""
     login_as(client, EDITOR_ID, "reiji")

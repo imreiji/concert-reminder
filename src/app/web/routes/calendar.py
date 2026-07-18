@@ -8,7 +8,7 @@ a URL calendar apps poll on their own schedule.
                                  directly, not through a browser)
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Form, HTTPException, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,17 +23,21 @@ from app.web.auth import SessionUser, require_user
 
 router = APIRouter()
 
+_ALLOWED_NEXT = {"/preferences", "/welcome"}
+
 
 @router.post("/me/calendar-feed")
 async def create_calendar_feed(
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
+    next_url: str = Form("/preferences", alias="next"),
 ):
     """Generating a new token invalidates any previously-issued feed URL
     (only the hash is stored, so the old raw token stops matching)."""
     token = await generate_calendar_token(session, user.id)
     await session.commit()
-    return RedirectResponse(f"/preferences?feed_token={token}", status_code=303)
+    destination = next_url if next_url in _ALLOWED_NEXT else "/preferences"
+    return RedirectResponse(f"{destination}?feed_token={token}", status_code=303)
 
 
 @router.get("/calendar/{token}.ics")
