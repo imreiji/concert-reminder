@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 337 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 360 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -19,9 +19,11 @@ artist-to-active-events apply), an index-page reorg (open-and-upcoming
 bucketing plus a global chronological deadline list), surfaced
 undeliverable-DM feedback (a sitewide banner plus a synchronous test-DM
 diagnostic), free-text search matching tag names (franchise/group/
-artist/venue) and a free-text-venue fallback, and per-round lottery outcome
+artist/venue) and a free-text-venue fallback, per-round lottery outcome
 tracking (applied/won/lost/paid, with automatic reminder suppression and
-next-round auto-arming) have shipped since).
+next-round auto-arming), and a first-run guided setup wizard sequencing
+tag subscriptions, a default preset, timezone confirmation, a test DM,
+and the calendar feed for brand-new logins have shipped since).
 
 ## Commands
 

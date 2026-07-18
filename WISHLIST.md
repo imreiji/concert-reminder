@@ -8,24 +8,22 @@ rejected ideas move to the bottom sections instead of being deleted.
 
 ## Proposed (highest impact first)
 
-### 1. First-run guided setup
-
-Impact: medium — new-user activation. Effort: medium.
-Raised: 2026-07-18 UX review.
-
-All the onboarding pieces exist (tag subscriptions, default preset,
-timezone auto-detect, `/mydeadlines`, the calendar feed) but a new login
-lands on an index shaped by none of them. Sequence them: follow some
-artists → pick a default reminder preset → confirm timezone → send a
-test DM to confirm delivery works → here's your calendar feed URL. Goal:
-first useful reminder armed in one sitting.
-
-Re-reviewed 2026-07-18 (after lottery outcome tracking shipped): still the
-top remaining entry, and not obviously invalidated or newly enabled by
-that ship — the two features touch different parts of the funnel (setup
-vs. steady-state deadline tracking).
+(none currently — first-run guided setup, the last remaining entry,
+shipped alongside per-round lottery outcome tracking; next feature idea
+starts a fresh section after this header)
 
 ## Shipped
+
+### First-run guided setup (2026-07-18)
+
+Shipped as: a `/welcome` wizard route that sequences new logins through
+tag subscriptions (follow artists), default reminder preset selection,
+timezone confirmation, a test DM to verify delivery, and calendar feed
+subscription. Backed by an `onboarding_step` column on `User` to track
+progress, a new-user redirect in the OAuth callback, and a `next`
+redirect parameter added to the five existing routes the wizard reuses
+(concerts, presets, tags, preferences, calendar) to stitch them together
+into one seamless flow.
 
 ### Per-round personal lottery outcome tracking (applied / won / lost / paid) (2026-07-18)
 

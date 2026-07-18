@@ -90,6 +90,10 @@ class User(Base):
     # DeliveryOutcome and db/service.py's record_dm_outcome). Surfaced as a
     # sitewide banner via auth.SessionUser.dm_blocked.
     dm_blocked_since: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # First-run guided setup: 0-4 = the wizard step in progress, >=5 = done
+    # (finished naturally or skipped). Offered once at first login only --
+    # never re-derived from this value on any later login.
+    onboarding_step: Mapped[int] = mapped_column(default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
     rules: Mapped[list["ReminderRule"]] = relationship(back_populates="user")

@@ -100,6 +100,13 @@ def test_generate_feed_creates_token_and_redirects_with_it(client):
     assert "feed_token=" in r.headers["location"]
 
 
+def test_generate_feed_honors_next_param(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/me/calendar-feed", data={"next": "/welcome"})
+    assert r.status_code == 303
+    assert r.headers["location"].startswith("/welcome?feed_token=")
+
+
 def test_calendar_feed_returns_ics_with_active_reminders(client):
     login_as(client, EDITOR_ID, "reiji")
     create_round_with_rule(client, "2099-06-25T23:59")

@@ -98,6 +98,21 @@ def test_state_is_single_use(client):
     assert client.get(f"/auth/callback?code=good-code&state={state}").status_code == 400
 
 
+def test_callback_redirects_new_user_to_welcome(client):
+    r = client.get("/auth/login")
+    state = r.headers["location"].split("state=")[1].split("&")[0]
+    r = client.get(f"/auth/callback?code=good-code&state={state}")
+    assert r.headers["location"] == "/welcome"
+
+
+def test_callback_redirects_returning_user_to_index(client):
+    do_login(client)  # first login: creates the row
+    r = client.get("/auth/login")
+    state = r.headers["location"].split("state=")[1].split("&")[0]
+    r = client.get(f"/auth/callback?code=good-code&state={state}")
+    assert r.headers["location"] == "/"
+
+
 # ── DB-backed sessions ───────────────────────────────────────────────────
 
 

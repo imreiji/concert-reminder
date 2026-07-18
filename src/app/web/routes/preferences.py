@@ -66,6 +66,13 @@ async def owned_preset(
     return preset
 
 
+_ALLOWED_NEXT = {"/preferences", "/welcome"}
+
+
+def _safe_next(next_url: str) -> str:
+    return next_url if next_url in _ALLOWED_NEXT else "/preferences"
+
+
 # ── The page ─────────────────────────────────────────────────────────────
 
 
@@ -141,6 +148,7 @@ async def create_preset(
     days: int = Form(3, ge=0, le=60),
     hours: int = Form(0, ge=0, le=23),
     direction: str = Form("before"),
+    next_url: str = Form("/preferences", alias="next"),
 ):
     """Create a preset WITH its first item — no empty-preset limbo."""
     await ensure_user(session, user.id, user.username)
@@ -153,7 +161,7 @@ async def create_preset(
         offset_days=sign * days, offset_hours=sign * hours,
     ))
     await session.commit()
-    return RedirectResponse("/preferences", status_code=303)
+    return RedirectResponse(_safe_next(next_url), status_code=303)
 
 
 @router.post("/presets/{preset_id}/rename")
@@ -263,6 +271,7 @@ async def subscribe(
     tag_id: int = Form(...),
     preset_id: int = Form(0),
     notify: bool = Form(False),
+    next_url: str = Form("/preferences", alias="next"),
 ):
     if await session.get(Tag, tag_id) is None:
         raise HTTPException(status_code=404, detail="tag not found")
@@ -284,7 +293,7 @@ async def subscribe(
         sub.preset_id = preset_id or None
         sub.notify = notify
     await session.commit()
-    return RedirectResponse("/preferences", status_code=303)
+    return RedirectResponse(_safe_next(next_url), status_code=303)
 
 
 @router.post("/subscriptions/{sub_id}/delete")
@@ -292,13 +301,14 @@ async def unsubscribe(
     sub_id: int,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
+    next_url: str = Form("/preferences", alias="next"),
 ):
     sub = await session.get(TagSubscription, sub_id)
     if sub is None or sub.user_id != user.id:
         raise HTTPException(status_code=404)
     await session.delete(sub)
     await session.commit()
-    return RedirectResponse("/preferences", status_code=303)
+    return RedirectResponse(_safe_next(next_url), status_code=303)
 
 
 # ── Admin: editors ───────────────────────────────────────────────────────
@@ -358,6 +368,7 @@ async def set_timezone(
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
     timezone: str = Form(...),
+    next_url: str = Form("/preferences", alias="next"),
 ):
     """Manual choice: sticks, and turns browser auto-detection off."""
     try:
@@ -368,7 +379,7 @@ async def set_timezone(
     db_user.timezone = timezone
     db_user.tz_auto = False
     await session.commit()
-    return RedirectResponse("/preferences", status_code=303)
+    return RedirectResponse(_safe_next(next_url), status_code=303)
 
 
 @router.post("/me/timezone/auto")
