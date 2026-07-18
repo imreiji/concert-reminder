@@ -78,6 +78,35 @@ async def queue_rows(s) -> list[ReminderQueue]:
     return list((await s.execute(select(ReminderQueue))).scalars())
 
 
+async def seed_two_legs(s) -> tuple[Concert, ConcertDay, ConcertDay, Round, Round, Round]:
+    """Two legs (one will be cancelled by the test), three rounds covering
+    all three applies_to shapes: tied only to leg A, tied to both legs, and
+    General (no day association)."""
+    await ensure_user(s, 42, "reiji")
+    concert = Concert(title="Two-Leg Tour", event_id="two-leg-tour", created_by=42)
+    s.add(concert)
+    await s.flush()
+    leg_a = ConcertDay(concert_id=concert.id, label="Leg A", starts_at_utc=dt(8, 1, 9))
+    leg_b = ConcertDay(concert_id=concert.id, label="Leg B", starts_at_utc=dt(8, 2, 9))
+    s.add_all([leg_a, leg_b])
+    await s.flush()
+    round_a_only = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="A-only",
+        closes_at_utc=dt(6, 25), applies_to=[leg_a.id],
+    )
+    round_both = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="Both-legs",
+        closes_at_utc=dt(6, 26), applies_to=[leg_a.id, leg_b.id],
+    )
+    round_general = Round(
+        concert_id=concert.id, kind=RoundKind.GENERAL_SALE, label="General",
+        closes_at_utc=dt(6, 27),
+    )
+    s.add_all([round_a_only, round_both, round_general])
+    await s.flush()
+    return concert, leg_a, leg_b, round_a_only, round_both, round_general
+
+
 async def test_sync_creates_queue_rows(session):
     _, round_, rule = await seed(session)
     await sync_rule(session, rule, NOW)
@@ -284,6 +313,65 @@ async def test_round_with_all_four_timestamps_syncs_each_anchor_independently(se
     assert rows[rules[Anchor.OPENS].id].fire_at_utc == dt(6, 4)  # untouched
     assert rows[rules[Anchor.CLOSES].id].fire_at_utc == dt(6, 9)  # untouched
     assert rows[rules[Anchor.PAYMENT].id].fire_at_utc == dt(6, 21)  # untouched
+
+
+# ── Cancelled-leg filtering ──────────────────────────────────────────────
+
+
+async def test_sync_skips_cancelled_leg_and_its_solely_tied_round(session):
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    rule = ReminderRule(user_id=42, concert_id=concert.id, anchor=Anchor.CLOSES, offset_days=0)
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    before = {(r.round_id, r.day_id) for r in await queue_rows(session)}
+    assert (round_a_only.id, None) in before
+    assert (round_both.id, None) in before
+    assert (round_general.id, None) in before
+
+    leg_a.cancelled = True
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    after = {(r.round_id, r.day_id) for r in await queue_rows(session)}
+    # A-only is fully cancelled (its one leg is cancelled) -> gone.
+    assert (round_a_only.id, None) not in after
+    # Both-legs still has leg B live -> untouched.
+    assert (round_both.id, None) in after
+    # General has no day association -> never affected.
+    assert (round_general.id, None) in after
+
+
+async def test_sync_event_start_rule_skips_cancelled_day(session):
+    concert, leg_a, leg_b, _, _, _ = await seed_two_legs(session)
+    rule = ReminderRule(
+        user_id=42, concert_id=concert.id, anchor=Anchor.EVENT_START, offset_days=-1
+    )
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    before = {r.day_id for r in await queue_rows(session)}
+    assert {leg_a.id, leg_b.id} <= before
+
+    leg_a.cancelled = True
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    after = {r.day_id for r in await queue_rows(session)}
+    assert leg_a.id not in after
+    assert leg_b.id in after
+
+
+async def test_sync_round_specific_rule_on_cancelled_round_clears_it(session):
+    concert, leg_a, leg_b, round_a_only, _, _ = await seed_two_legs(session)
+    rule = ReminderRule(user_id=42, round_id=round_a_only.id, anchor=Anchor.CLOSES, offset_days=0)
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert len(await queue_rows(session)) == 1
+
+    leg_a.cancelled = True
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert await queue_rows(session) == []
 
 
 # ── Concert edit history ─────────────────────────────────────────────────

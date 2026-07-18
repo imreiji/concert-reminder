@@ -125,6 +125,15 @@ def _rule_info(r: ReminderRule) -> RuleInfo:
     )
 
 
+def _is_round_cancelled(round_: Round, cancelled_day_ids: set[int]) -> bool:
+    """A round is implicitly cancelled when every leg it applies to is
+    cancelled. A "General" round (empty/None applies_to) is never
+    auto-cancelled this way -- it isn't tied to any specific leg."""
+    if not round_.applies_to:
+        return False
+    return all(day_id in cancelled_day_ids for day_id in round_.applies_to)
+
+
 # ── Queue sync ───────────────────────────────────────────────────────────
 
 
@@ -132,18 +141,37 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
     """Reconcile reminder_queue with what this rule currently implies."""
     now = now or _now()
 
-    # Gather the rounds/days in this rule's scope.
+    # Gather the rounds/days in this rule's scope. Cancelled legs and rounds
+    # implicitly cancelled by them (see _is_round_cancelled) are filtered
+    # out here, before domain/reminders.py ever sees them -- the pure
+    # planner never learns the concept of "cancelled"; it just sees fewer
+    # candidates, and the existing "nothing planned -> delete" sync
+    # semantics clear the reminders with no new suppression logic.
     if rule.round_id is not None:
         round_ = await session.get(Round, rule.round_id)
-        rounds = [_round_info(round_)] if round_ else []
+        if round_ is None:
+            rounds = []
+        else:
+            cancelled_day_ids = set((await session.execute(
+                select(ConcertDay.id).where(
+                    ConcertDay.concert_id == round_.concert_id,
+                    ConcertDay.cancelled.is_(True),
+                )
+            )).scalars())
+            rounds = [] if _is_round_cancelled(round_, cancelled_day_ids) else [_round_info(round_)]
         days: list[DayInfo] = []
     else:
         rres = await session.execute(select(Round).where(Round.concert_id == rule.concert_id))
         dres = await session.execute(
             select(ConcertDay).where(ConcertDay.concert_id == rule.concert_id)
         )
-        rounds = [_round_info(r) for r in rres.scalars()]
-        days = [_day_info(d) for d in dres.scalars()]
+        all_rounds = list(rres.scalars())
+        all_days = list(dres.scalars())
+        cancelled_day_ids = {d.id for d in all_days if d.cancelled}
+        rounds = [
+            _round_info(r) for r in all_rounds if not _is_round_cancelled(r, cancelled_day_ids)
+        ]
+        days = [_day_info(d) for d in all_days if not d.cancelled]
 
     planned = plan_for_rule(_rule_info(rule), rounds, days, now)
     planned_by_key = {(p.round_id or 0, p.day_id or 0, p.anchor): p for p in planned}
