@@ -26,12 +26,16 @@ from datetime import UTC, datetime
 
 import discord
 
-from app.bot.messages import build_new_event_message, build_reminder_message
+from app.bot.messages import (
+    build_leg_cancelled_message,
+    build_new_event_message,
+    build_reminder_message,
+)
 from app.db.service import (
     DueReminder,
-    NoticeContext,
     due_notifications,
     due_reminders,
+    leg_cancelled_context,
     mark_notification_sent,
     mark_sent,
     notice_context,
@@ -64,20 +68,28 @@ async def deliver(bot, item: DueReminder) -> bool:
         return False  # leave unsent; next tick retries
 
 
-async def _notification_context(session, note) -> NoticeContext | None:
+async def _notification_context(session, note):
     """DB-bound prep for one notification's message payload -- reads the
-    session, so callers must run this sequentially, never concurrently."""
+    session, so callers must run this sequentially, never concurrently.
+    Dispatches on note.kind since different notice kinds need different
+    context shapes (a leg-cancellation notice doesn't need the new-event
+    context's subscriber-state fields, and vice versa)."""
+    if note.kind == "leg_cancelled":
+        return await leg_cancelled_context(session, note.concert_id) if note.concert_id else None
     return await notice_context(session, note.concert_id, note.user_id) if note.concert_id else None
 
 
-async def _send_notification(bot, note, ctx: NoticeContext | None) -> bool:
+async def _send_notification(bot, note, ctx) -> bool:
     """Send a notice DM. Structured (ctx set) -> rich embed with the
     state-aware buttons; otherwise the plain-text fallback body. Same
     policy as deliver(): only success or a permanent failure clears the
     row. Pure Discord I/O -- no session access, safe to run concurrently."""
     try:
         user = bot.get_user(note.user_id) or await bot.fetch_user(note.user_id)
-        if ctx is not None:
+        if ctx is not None and note.kind == "leg_cancelled":
+            embed, view = build_leg_cancelled_message(ctx)
+            await user.send(embed=embed, view=view)
+        elif ctx is not None:
             embed, view = build_new_event_message(ctx)
             await user.send(embed=embed, view=view)
         else:
