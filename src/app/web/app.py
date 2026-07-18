@@ -17,6 +17,7 @@ from app.db.models import Concert, ConcertDay, Tag, User
 from app.db.service import LABEL_BY_ANCHOR
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual, utc_to_jst
+from app.domain.types import TagKind
 from app.scheduler import heartbeat
 from app.web import auth
 from app.web.routes import calendar as calendar_routes
@@ -92,6 +93,21 @@ def has_open_round(concert: Concert, now: datetime) -> bool:
     return False
 
 
+def concert_search_text(c: Concert) -> str:
+    """Lowercased blob everything free-text search matches: title,
+    title_en, every attached tag's name (all four kinds count --
+    franchise/group/artist/venue), and the concert's free-text venue as a
+    fallback ONLY when no VENUE tag is attached (mirrors the tile macro's
+    own venue display fallback in index.html exactly)."""
+    parts = [c.title]
+    if c.title_en:
+        parts.append(c.title_en)
+    parts.extend(t.name for t in c.tags)
+    if not any(t.kind is TagKind.VENUE for t in c.tags) and c.venue:
+        parts.append(c.venue)
+    return " ".join(parts).lower()
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="dekimasen.app", docs_url=None, redoc_url=None)
     app.add_middleware(
@@ -143,7 +159,7 @@ def create_app() -> FastAPI:
     ):
         concerts, tz, tz_auto, tags = [], settings.default_timezone, True, []
         open_concert_ids: set[int] = set()
-        deadlines, concert_tags_by_event_id = [], {}
+        deadlines, concert_tags_by_event_id, concert_search_by_event_id = [], {}, {}
         if user:
             from sqlalchemy import func as sa_func
 
@@ -191,6 +207,7 @@ def create_app() -> FastAPI:
             open_concert_ids = {c.id for c in concerts if has_open_round(c, now)}
             deadlines = await upcoming_deadlines(session, now, limit=10) if user else []
             concert_tags_by_event_id = {c.event_id: {t.id for t in c.tags} for c in concerts}
+            concert_search_by_event_id = {c.event_id: concert_search_text(c) for c in concerts}
             tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
             db_user = await session.get(User, user.id)
             if db_user:
@@ -211,8 +228,7 @@ def create_app() -> FastAPI:
         def matches_query(c: Concert) -> bool:
             if not query:
                 return True
-            haystack = f"{c.title} {c.title_en or ''}".lower()
-            return query in haystack
+            return query in concert_search_text(c)
 
         # Initial visibility, computed server-side so there's no flash of
         # wrongly-shown tiles before JS runs on first load; every subsequent
@@ -238,6 +254,7 @@ def create_app() -> FastAPI:
                 "open_concert_ids": open_concert_ids,
                 "deadlines": deadlines,
                 "concert_tags_by_event_id": concert_tags_by_event_id,
+                "concert_search_by_event_id": concert_search_by_event_id,
                 "query": q,
                 "sort": sort,
                 "tz": tz,

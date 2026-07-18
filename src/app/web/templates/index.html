@@ -72,7 +72,7 @@
     {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
     <a class="tile" href="/concerts/{{ c.event_id }}"
        data-tags="{{ ctags | map(attribute='id') | join(',') }}"
-       data-search="{{ (c.title ~ ' ' ~ (c.title_en or '')) | lower }}"
+       data-search="{{ concert_search_by_event_id.get(c.event_id, '') }}"
        {% if c.id not in visible_concert_ids %}style="display:none"{% endif %}>
       <strong>{{ c.title }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
       <span class="who">
@@ -115,7 +115,7 @@
     <ul class="rows" id="deadline-list">
       {% for d in deadlines %}
       {% set dtags = concert_tags_by_event_id.get(d.event_id, []) %}
-      <li data-tags="{{ dtags | join(',') }}" data-search="{{ d.concert_title | lower }}">
+      <li data-tags="{{ dtags | join(',') }}" data-search="{{ concert_search_by_event_id.get(d.event_id, '') }}">
         <span><a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a> — {{ d.label }}
           <span class="dim tiny">{{ deadline_label(d.anchor) }}</span>
         </span>

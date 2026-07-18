@@ -9,16 +9,17 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 299 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 305 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
 per-concert edit history, a per-leg cancelled status, a redesigned Tags
 page (search, hierarchy, dialog-based editing, rename, retroactive
 artist-to-active-events apply), an index-page reorg (open-and-upcoming
-bucketing plus a global chronological deadline list), and surfaced
+bucketing plus a global chronological deadline list), surfaced
 undeliverable-DM feedback (a sitewide banner plus a synchronous test-DM
-diagnostic) have shipped since).
+diagnostic), and free-text search matching tag names (franchise/group/
+artist/venue) and a free-text-venue fallback have shipped since).
 
 ## Commands
 
@@ -191,8 +192,9 @@ deleting them.
 - VENUE tags filter by `region` (sidebar groups venues into regions like
   "Kanto"/"Kansai"/"Other"; toggling a region (de)selects every venue tag id
   in it) — filtering by one exact venue was explicitly ruled out as unhelpful.
-- The index page's tag filter and its free-text search box (matches title +
-  title_en, case-insensitive) combine as AND, not OR — both narrow the same
+- The index page's tag filter and its free-text search box (matches title,
+  title_en, every attached tag's name, and a free-text-venue fallback when no
+  VENUE tag exists, all case-insensitive) combine as AND, not OR — both narrow the same
   tile set together, AND the "Coming up soon" chronological deadline-list
   section below the tile grids (each `<li>` carries the same `data-tags`/
   `data-search` attributes a tile does). Same client-side-first pattern as

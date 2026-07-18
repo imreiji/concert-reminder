@@ -438,6 +438,108 @@ def test_index_search_box_prefills_from_query_param(client):
     assert 'id="concert-search" value="hasunosora"' in r.text
 
 
+def test_index_search_matches_artist_tag_name(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Kozue Otomune", "kind": "artist"})
+    client.post("/concerts", data={
+        "title": "Some Show", "event_id": "some-show", "artist_tags": [1],
+    })
+    client.post("/concerts", data={"title": "Other Show", "event_id": "other-show"})
+
+    filtered = client.get("/?q=kozue").text
+    some_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Some Show")):]
+    other_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Other Show")):]
+    assert 'style="display:none"' not in some_tile.split("</a>", 1)[0]
+    assert 'style="display:none"' in other_tile.split("</a>", 1)[0]
+
+
+def test_index_search_matches_group_tag_name(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/concerts", data={
+        "title": "Some Show", "event_id": "some-show", "group_tags": [1],
+    })
+    filtered = client.get("/?q=liella").text
+    tile = filtered[filtered.index('<a class="tile"'):]
+    assert 'style="display:none"' not in tile.split("</a>", 1)[0]
+
+
+def test_index_search_matches_franchise_tag_name(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    client.post("/concerts", data={
+        "title": "Some Show", "event_id": "some-show", "franchise_tags": [1],
+    })
+    filtered = client.get("/?q=gakumas").text
+    tile = filtered[filtered.index('<a class="tile"'):]
+    assert 'style="display:none"' not in tile.split("</a>", 1)[0]
+
+
+def test_index_search_matches_venue_tag_name(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
+    client.post("/concerts", data={
+        "title": "Some Show", "event_id": "some-show", "venue_tags": [1],
+    })
+    filtered = client.get("/?q=yokohama").text
+    tile = filtered[filtered.index('<a class="tile"'):]
+    assert 'style="display:none"' not in tile.split("</a>", 1)[0]
+
+
+async def test_index_search_falls_back_to_free_text_venue_when_no_venue_tag(client):
+    """Concert.venue is a legacy top-level field the current creation form
+    doesn't expose (only per-day ConcertDay.venue is settable through the
+    UI) -- set it directly at the DB layer, matching how other tests reach
+    fields the form doesn't cover."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "Some Show", "event_id": "some-show"})
+    async with client.db() as s:
+        from app.db.models import Concert as ConcertModel
+
+        concert = (await s.execute(
+            select(ConcertModel).where(ConcertModel.event_id == "some-show")
+        )).scalar_one()
+        concert.venue = "Nippon Budokan"
+        await s.commit()
+
+    filtered = client.get("/?q=budokan").text
+    tile = filtered[filtered.index('<a class="tile"'):]
+    assert 'style="display:none"' not in tile.split("</a>", 1)[0]
+
+
+async def test_index_search_ignores_free_text_venue_when_venue_tag_exists(client):
+    """The free-text-venue fallback only applies when NO VENUE tag is
+    attached -- if a VENUE tag exists, stale/mismatched free-text venue
+    text must not spuriously match. The positive assertion below (search
+    still finds the concert by its actual VENUE tag name) is what proves
+    search is functioning at all for this concert -- without it, this
+    test would pass identically whether the exclusion works correctly or
+    search is silently broken."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
+    client.post("/concerts", data={
+        "title": "Some Show", "event_id": "some-show", "venue_tags": [1],
+    })
+    async with client.db() as s:
+        from app.db.models import Concert as ConcertModel
+
+        concert = (await s.execute(
+            select(ConcertModel).where(ConcertModel.event_id == "some-show")
+        )).scalar_one()
+        concert.venue = "Stale Old Name"
+        await s.commit()
+
+    stale_filtered = client.get("/?q=stale").text
+    stale_tile = stale_filtered[stale_filtered.index('<a class="tile"'):]
+    assert 'style="display:none"' in stale_tile.split("</a>", 1)[0]
+
+    # proves search actually works for this concert (not just silently
+    # broken) -- it still finds it by the VENUE tag's real name
+    tag_name_filtered = client.get("/?q=yokohama").text
+    tag_name_tile = tag_name_filtered[tag_name_filtered.index('<a class="tile"'):]
+    assert 'style="display:none"' not in tag_name_tile.split("</a>", 1)[0]
+
+
 def test_index_sorts_by_earliest_event_day(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={
@@ -820,6 +922,6 @@ async def test_index_deadline_list_carries_tag_and_search_attributes(client):
     li_end = r.index("</li>", li_start)
     li_html = r[li_start:li_end]
     assert f'data-tags="{tag_id}"' in li_html
-    assert 'data-search="tagged deadline show"' in li_html
+    assert 'data-search="tagged deadline show test artist"' in li_html
 
 
