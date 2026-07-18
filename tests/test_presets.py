@@ -257,6 +257,49 @@ async def test_scheduler_delivers_notifications(client):
     assert notes[0].sent_at_utc is not None
 
 
+async def test_scheduler_delivers_leg_cancelled_notice_with_reinstate_button(client):
+    """A leg_cancelled notification drains through the same tick as a
+    new_event one, but renders the cancellation embed + reinstate button."""
+    from app.db.models import Concert, Notification
+    from app.scheduler.loop import tick
+
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "Cancelled Tour", "event_id": "cancelled-tour"})
+    login_as(client, FAN_ID, "fan")  # creates the User row the Notification FK needs
+    async with client.db() as s:
+        concert = (await s.execute(select(Concert))).scalar_one()
+        s.add(Notification(
+            user_id=FAN_ID, body="fallback text", concert_id=concert.id, kind="leg_cancelled",
+        ))
+        await s.commit()
+
+    sent = []
+
+    class FakeUser:
+        async def send(self, body=None, *, embed=None, view=None):
+            sent.append((embed.title if embed is not None else body, view))
+
+    class FakeBot:
+        def get_user(self, uid):
+            return FakeUser()
+
+    import app.scheduler.loop as loop_mod
+
+    client.monkeypatch.setattr(loop_mod, "SessionMaker", client.db)
+    delivered = await tick(FakeBot())
+
+    assert delivered == 1
+    title, view = sent[0]
+    assert "Cancelled Tour" in title
+    # discord.ui.DynamicItem only proxies custom_id (not .label) -- checking
+    # custom_id is also the more precise assertion, since it identifies
+    # exactly which button this is, not just its display text.
+    custom_ids = [getattr(item, "custom_id", None) for item in view.children]
+    assert any(cid and cid.startswith("dk:reinstate:") for cid in custom_ids)
+    notes = await _all(client.db, Notification)
+    assert notes[0].sent_at_utc is not None
+
+
 async def _seed_due_reminders(client, n: int, *, past) -> list[int]:
     """N distinct users/concerts/rounds, each with one reminder rule and a
     queue row already due -- built directly at the DB layer (not through

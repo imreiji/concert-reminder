@@ -38,7 +38,7 @@
   {% for day in concert.days %}
   {% set day_rounds = rounds_by_day.get(day.id, []) %}
   <section class="perf-detail">
-    <h3 class="leg-heading{% if day.id in (past_day_ids or []) %} past{% endif %}">{{ day.label }}</h3>
+    <h3 class="leg-heading{% if day.id in (past_day_ids or []) %} past{% endif %}{% if day.cancelled %} cancelled{% endif %}">{{ day.label }}{% if day.cancelled %} <span class="badge cancelled">Cancelled</span>{% endif %}</h3>
     {{ day_subtitle(day) }}
     {% if day_rounds %}
       {{ round_table(day_rounds) }}

@@ -387,3 +387,43 @@ async def test_multiple_venues_attach_and_join(client):
     assert "Multiple" in client.get("/").text  # tile shows Multiple, not the join
 
 
+async def test_index_hides_concert_whose_only_leg_is_cancelled(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "All Cancelled", "event_id": "all-cancelled",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        },
+    )
+    client.post("/concerts", data={"title": "Still Here", "event_id": "still-here"})
+    async with client.db() as s:
+        from app.db.models import ConcertDay
+
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+    client.post(
+        "/concerts/all-cancelled/edit",
+        data={
+            "title": "All Cancelled", "event_id": "all-cancelled",
+            "day_id": [str(day_id)], "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["true"],
+        },
+    )
+    r = client.get("/").text
+    assert "All Cancelled" not in r
+    assert "Still Here" in r
+    # still reachable directly by event_id even though hidden from the index
+    assert client.get("/concerts/all-cancelled").status_code == 200
+
+
+async def test_index_keeps_concert_with_zero_days_visible(client):
+    """A concert that simply has no legs entered yet (e.g. freshly created,
+    or duplicated as a template) is unaffected -- only a concert whose
+    EXISTING legs are all cancelled gets hidden."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "No Dates Yet", "event_id": "no-dates-yet"})
+    assert "No Dates Yet" in client.get("/").text
+
+

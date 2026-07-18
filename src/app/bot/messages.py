@@ -102,6 +102,27 @@ def build_new_event_message(ctx) -> tuple:
     return embed, view
 
 
+def build_leg_cancelled_message(ctx) -> tuple:
+    """(embed, view) for a leg-cancellation notice. ctx: service.LegCancelledContext."""
+    import discord
+
+    from app.bot.views import ReinstateRemindersButton
+    from app.config import settings
+
+    embed = discord.Embed(
+        title=f"🚫 {ctx.title}",
+        description="A performance you had a reminder for was cancelled, and it's been cleared.",
+        color=0xB3261E,
+    )
+    view = discord.ui.View(timeout=None)
+    view.add_item(discord.ui.Button(
+        label="Open on dekimasen.app",
+        url=f"{settings.base_url}/concerts/{ctx.event_id}",
+    ))
+    view.add_item(ReinstateRemindersButton(ctx.concert_id))
+    return embed, view
+
+
 def build_reminder_message(item: DueReminder) -> tuple:
     """(embed, view) for a deadline reminder DM."""
     import discord

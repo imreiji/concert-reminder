@@ -12,6 +12,7 @@ custom_id namespace:
     dk:remove:{concert_id}    remove the user's rules on this concert
     dk:deadlines:{concert_id} reply with the full deadline list
     dk:snooze:{queue_id}      re-arm a delivered reminder for +24h (capped)
+    dk:reinstate:{concert_id} re-sync the clicking user's rules on this concert
 """
 
 import re
@@ -20,6 +21,7 @@ import discord
 
 from app.db.service import (
     apply_default_preset,
+    reinstate_user_rules,
     remove_user_rules,
     snooze_reminder,
 )
@@ -78,6 +80,33 @@ class RemoveRemindersButton(
         msg = (
             f"Removed {n} reminder(s) for this event — you won't be pinged about it."
             if n else "You had no reminders on this event."
+        )
+        await interaction.response.send_message(msg)
+
+
+class ReinstateRemindersButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:reinstate:(?P<cid>\d+)"
+):
+    def __init__(self, concert_id: int) -> None:
+        super().__init__(discord.ui.Button(
+            label="Reinstate my reminders",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"dk:reinstate:{concert_id}",
+        ))
+        self.concert_id = concert_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["cid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        async with SessionMaker() as session:
+            n = await reinstate_user_rules(session, interaction.user.id, self.concert_id)
+            await session.commit()
+        msg = (
+            f"Reinstated {n} reminder(s) — you'll be notified again per your existing "
+            "settings for any that are still active."
+            if n else "You had no reminders set up on this event."
         )
         await interaction.response.send_message(msg)
 
@@ -156,4 +185,7 @@ class SnoozeButton(
         await interaction.response.send_message(msg)
 
 
-DYNAMIC_ITEMS = [ApplyDefaultButton, RemoveRemindersButton, ShowDeadlinesButton, SnoozeButton]
+DYNAMIC_ITEMS = [
+    ApplyDefaultButton, RemoveRemindersButton, ReinstateRemindersButton, ShowDeadlinesButton,
+    SnoozeButton,
+]

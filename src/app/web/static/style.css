@@ -204,6 +204,9 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .past .kind, .past .chip { text-decoration: none; }
 h3.leg-heading.past { text-decoration: line-through; }
 
+h3.leg-heading.cancelled { text-decoration: line-through; }
+.badge.cancelled { color: var(--danger); }
+
 /* Round table */
 .table-scroll { overflow-x: auto; margin: .4rem 0 1rem; }
 table.rounds { border-collapse: collapse; width: 100%; font-size: .9rem; }

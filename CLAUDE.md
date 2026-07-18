@@ -9,11 +9,12 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 238 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 262 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
-free-text concert search, a personalized `/mydeadlines` Discord command,
-and a per-concert edit history have shipped since).
+free-text concert search, a personalized `/mydeadlines` Discord command, a
+per-concert edit history, and a per-leg cancelled status have shipped
+since).
 
 ## Commands
 
@@ -72,6 +73,10 @@ and a per-concert edit history have shipped since).
    postponed after its reminder was sent re-arms it (sent_at cleared). Only
    successful DM delivery marks a row sent; discord.Forbidden drops it;
    transient errors retry next tick. Never break these semantics.
+   A cancelled `ConcertDay` is never deleted, only flagged —
+   `group_rounds_by_day()` and every `applies_to` consumer rely on the day
+   row still existing. Rounds have no status of their own; a round counts
+   as cancelled when every day in its `applies_to` is cancelled.
 3. **Group tag expansion** (agreed with the owner, do not change): attaching
    a GROUP tag to a concert materializes its members AT THAT MOMENT only.
    Editors prune non-performers; removed members stay removed; detach +
