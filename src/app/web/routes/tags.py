@@ -19,7 +19,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Tag, TagMember
-from app.db.service import ensure_user, find_tag_by_name, group_members
+from app.db.service import (
+    active_concerts_missing_member,
+    attach_tag,
+    ensure_user,
+    find_tag_by_name,
+    group_members,
+    handle_newly_tagged,
+)
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web.auth import SessionUser, require_editor, require_user
@@ -43,13 +50,23 @@ async def tag_directory(
     session: AsyncSession = Depends(get_session),
 ):
     tags = await all_tags(session)
-    members = {t.id: await group_members(session, t.id) for t in tags if t.kind is TagKind.GROUP}
+    groups = [t for t in tags if t.kind is TagKind.GROUP]
+    members = {t.id: await group_members(session, t.id) for t in groups}
+    grouped_artist_ids = {m.id for ms in members.values() for m in ms}
     return templates.TemplateResponse(
         request,
         "tags.html",
-        {"user": user, "tags": tags, "members": members, "kinds": list(TagKind),
-         "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
-         "franchise_tags": [t for t in tags if t.kind is TagKind.FRANCHISE]},
+        {
+            "user": user, "members": members, "kinds": list(TagKind), "all_tags": tags,
+            "franchise_tags": [t for t in tags if t.kind is TagKind.FRANCHISE],
+            "franchises": [t for t in tags if t.kind is TagKind.FRANCHISE],
+            "groups": groups,
+            "solo_artists": [
+                t for t in tags if t.kind is TagKind.ARTIST and t.id not in grouped_artist_ids
+            ],
+            "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
+            "venues": [t for t in tags if t.kind is TagKind.VENUE],
+        },
     )
 
 
@@ -87,14 +104,24 @@ async def edit_tag(
     tag_id: int,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
+    name: str = Form(""),
     location_url: str = Form(""),
     region: str = Form(""),
 ):
-    """Venue-only in practice today (the only fields worth correcting after
-    creation so far) but not kind-restricted -- harmless to set on others."""
+    """Rename (any kind) plus venue-only location_url/region -- not
+    kind-restricted on the latter two, harmless to set on others.
+    `name` is optional so callers that never send it (there were none
+    before this feature; kept optional in case any external client still
+    doesn't) leave the tag's name untouched."""
     tag = await session.get(Tag, tag_id)
     if tag is None:
         raise HTTPException(status_code=404)
+    name = name.strip()
+    if name and name.lower() != tag.name.lower():
+        existing = await find_tag_by_name(session, name)
+        if existing is not None and existing.id != tag.id:
+            raise HTTPException(status_code=409, detail=f"tag {name!r} already exists")
+        tag.name = name
     tag.location_url = location_url.strip() or None
     tag.region = region.strip() or None
     await session.commit()
@@ -134,6 +161,54 @@ async def add_member(
     if existing is None:
         session.add(TagMember(group_tag_id=tag_id, member_tag_id=member_tag_id))
         await session.commit()
+        eligible = await active_concerts_missing_member(session, tag_id, member_tag_id)
+        if eligible:
+            return RedirectResponse(
+                f"/tags/{tag_id}/members/{member_tag_id}/retroactive-apply", status_code=303
+            )
+    return RedirectResponse("/tags", status_code=303)
+
+
+@router.get("/tags/{group_id}/members/{member_id}/retroactive-apply", response_class=HTMLResponse)
+async def retroactive_apply_form(
+    request: Request,
+    group_id: int,
+    member_id: int,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+):
+    """The one-time confirmation offered right after adding a member to a
+    group: bulk-attach that artist to every currently-active concert that
+    already has the group tag but not this member individually. Always an
+    explicit, editor-confirmed action -- never automatic (see the Group Tag
+    Expansion invariant in CLAUDE.md)."""
+    group = await session.get(Tag, group_id)
+    member = await session.get(Tag, member_id)
+    if group is None or member is None:
+        raise HTTPException(status_code=404)
+    concerts = await active_concerts_missing_member(session, group_id, member_id)
+    return templates.TemplateResponse(
+        request,
+        "retroactive_apply.html",
+        {"user": user, "group": group, "member": member, "concerts": concerts},
+    )
+
+
+@router.post("/tags/{group_id}/members/{member_id}/retroactive-apply")
+async def retroactive_apply(
+    group_id: int,
+    member_id: int,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+):
+    member = await session.get(Tag, member_id)
+    if member is None:
+        raise HTTPException(status_code=404)
+    concerts = await active_concerts_missing_member(session, group_id, member_id)
+    for concert in concerts:
+        newly = await attach_tag(session, concert.id, member)
+        await handle_newly_tagged(session, concert, newly)
+    await session.commit()
     return RedirectResponse("/tags", status_code=303)
 
 

@@ -16,13 +16,16 @@ from app.db.models import (
     Base,
     Concert,
     ConcertDay,
+    ConcertTag,
     Notification,
     ReminderQueue,
     ReminderRule,
     Round,
+    Tag,
     User,
 )
 from app.db.service import (
+    active_concerts_missing_member,
     concert_audit_log,
     due_reminders,
     ensure_user,
@@ -38,7 +41,7 @@ from app.db.service import (
     sync_rule,
     user_calendar_events,
 )
-from app.domain.types import Anchor, ConcertKind, RoundKind
+from app.domain.types import Anchor, ConcertKind, RoundKind, TagKind
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)
 
@@ -532,6 +535,73 @@ async def test_deleting_concert_cascades_its_audit_log(session):
     await session.delete(concert)
     await session.commit()
     assert await concert_audit_log(session, concert.id) == []
+
+
+# ── Retroactive artist-to-active-events (Tags page) ──────────────────────
+
+
+async def seed_group_and_concerts(s) -> tuple[Tag, Tag, Tag]:
+    """A group with one already-attached artist, and three concerts all
+    tagged with the group: one with a live future leg (active, missing the
+    new member), one with only a cancelled leg (not active), one already
+    carrying the new member (not eligible -- already covered)."""
+    await ensure_user(s, 42, "reiji")
+    group = Tag(name="Liella", kind=TagKind.GROUP, created_by=42)
+    existing_member = Tag(name="Kaho", kind=TagKind.ARTIST, created_by=42)
+    new_member = Tag(name="Sumire", kind=TagKind.ARTIST, created_by=42)
+    s.add_all([group, existing_member, new_member])
+    await s.flush()
+
+    active = Concert(title="Active Show", event_id="active-show", created_by=42)
+    cancelled_only = Concert(title="Cancelled Show", event_id="cancelled-show", created_by=42)
+    already_covered = Concert(title="Covered Show", event_id="covered-show", created_by=42)
+    s.add_all([active, cancelled_only, already_covered])
+    await s.flush()
+
+    s.add_all([
+        ConcertDay(concert_id=active.id, label="Day 1", starts_at_utc=dt(9, 1, 18)),
+        ConcertDay(
+            concert_id=cancelled_only.id, label="Day 1", starts_at_utc=dt(9, 1, 18), cancelled=True
+        ),
+        ConcertDay(concert_id=already_covered.id, label="Day 1", starts_at_utc=dt(9, 1, 18)),
+    ])
+    await s.flush()
+
+    s.add_all([
+        ConcertTag(concert_id=active.id, tag_id=group.id),
+        ConcertTag(concert_id=cancelled_only.id, tag_id=group.id),
+        ConcertTag(concert_id=already_covered.id, tag_id=group.id),
+        ConcertTag(concert_id=already_covered.id, tag_id=new_member.id),
+    ])
+    await s.flush()
+    return group, existing_member, new_member
+
+
+async def test_active_concerts_missing_member_excludes_cancelled_and_covered(session):
+    group, _, new_member = await seed_group_and_concerts(session)
+    result = await active_concerts_missing_member(session, group.id, new_member.id, NOW)
+    assert [c.title for c in result] == ["Active Show"]
+
+
+async def test_active_concerts_missing_member_excludes_past_dated(session):
+    """Same seed as above, but queried with a `now` after the "Active
+    Show"'s only leg (2026-09-01) -- it should no longer count as active,
+    leaving nothing eligible at all (the other two concerts are already
+    excluded for their own reasons regardless of `now`)."""
+    group, _, new_member = await seed_group_and_concerts(session)
+    result = await active_concerts_missing_member(session, group.id, new_member.id, dt(10, 1))
+    assert result == []
+
+
+async def test_active_concerts_missing_member_empty_for_ungrouped_concert(session):
+    group, _, new_member = await seed_group_and_concerts(session)
+    unrelated = Concert(title="No Group", event_id="no-group", created_by=42)
+    session.add(unrelated)
+    await session.flush()
+    session.add(ConcertDay(concert_id=unrelated.id, label="Day 1", starts_at_utc=dt(9, 1, 18)))
+    await session.flush()
+    result = await active_concerts_missing_member(session, group.id, new_member.id, NOW)
+    assert "No Group" not in [c.title for c in result]
 
 
 # ── set_editor / list_editors ───────────────────────────────────────────

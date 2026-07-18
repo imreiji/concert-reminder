@@ -158,6 +158,207 @@ def test_groups_cannot_contain_groups(client):
     assert r.status_code == 422
 
 
+async def test_rename_tag_round_trips(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    r = client.post("/tags/1/edit", data={"name": "Hasunosora Idols"})
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        tag = await s.get(Tag, 1)
+        assert tag.name == "Hasunosora Idols"
+
+
+def test_rename_tag_rejects_case_insensitive_duplicate(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    r = client.post("/tags/2/edit", data={"name": "hasunosora"})
+    assert r.status_code == 409
+
+
+def test_rename_tag_to_its_own_current_name_is_a_noop(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    r = client.post("/tags/1/edit", data={"name": "Hasunosora"})
+    assert r.status_code == 303
+
+
+async def test_edit_tag_without_name_field_leaves_name_unchanged(client):
+    """Backward compatibility: the venue-only edit form that existed before
+    this feature never sends `name` at all."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "K Arena", "kind": "venue"})
+    r = client.post("/tags/1/edit", data={"region": "Kanto"})
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        tag = await s.get(Tag, 1)
+        assert tag.name == "K Arena"
+        assert tag.region == "Kanto"
+
+
+# ── Tags page rendering: search, hierarchy, unified dialogs ──────────────
+
+
+def test_tags_page_renders_hierarchy_and_search_box(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={"name": "Liella", "kind": "group", "parent_id": 1})
+    client.post("/tags", data={"name": "Kaho", "kind": "artist"})
+    client.post("/tags/2/members", data={"member_tag_id": 3})
+    client.post("/tags", data={"name": "K Arena", "kind": "venue"})
+
+    r = client.get("/tags")
+    assert r.status_code == 200
+    assert 'placeholder="Search tags…"' in r.text
+    assert "Hasunosora" in r.text and "Liella" in r.text
+    assert "Kaho" in r.text and "K Arena" in r.text
+    # every tag gets its own dialog
+    assert 'id="tag-dialog-1"' in r.text  # Hasunosora
+    assert 'id="tag-dialog-2"' in r.text  # Liella
+    assert 'dialog.picker' not in r.text  # sanity: that's a CSS selector, not markup
+    assert 'class="picker"' in r.text
+    # hierarchy container must have sub-box class for group/member styling
+    assert 'class="tags-page sub-box"' in r.text
+
+
+def test_tags_page_solo_artist_bucket(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Solo Artist", "kind": "artist"})
+    r = client.get("/tags")
+    assert r.status_code == 200
+    assert "Solo artists" in r.text
+    assert "Solo Artist" in r.text
+
+
+def test_tags_page_viewer_sees_no_edit_dialogs(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    login_as(client, VIEWER_ID, "viewer")
+    r = client.get("/tags")
+    assert r.status_code == 200
+    assert 'id="tag-dialog-1"' not in r.text
+
+
+def test_tags_page_renders_one_dialog_even_for_artist_in_multiple_groups(client):
+    """Regression guard: an artist that belongs to two different groups
+    must still get exactly one <dialog id="tag-dialog-{id}"> in the
+    rendered page, not one per group it appears under."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Group A", "kind": "group"})
+    client.post("/tags", data={"name": "Group B", "kind": "group"})
+    client.post("/tags", data={"name": "Shared Member", "kind": "artist"})
+    client.post("/tags/1/members", data={"member_tag_id": 3})
+    client.post("/tags/2/members", data={"member_tag_id": 3})
+
+    r = client.get("/tags")
+    assert r.status_code == 200
+    assert r.text.count('id="tag-dialog-3"') == 1
+
+
+def test_new_tag_form_includes_parent_visibility_script(client):
+    """The kind/parent select-hiding is JS-only, client-side behavior --
+    not server-testable via HTTP. This just confirms the toggle script and
+    its target elements are actually present in the rendered page."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/tags")
+    assert "new-tag-kind" in r.text and "new-tag-parent" in r.text
+    assert "syncParentVisibility" in r.text
+
+
+# ── Retroactive-apply confirmation flow ──────────────────────────────────
+
+
+def create_active_concert_with_group(client, event_id, group_tag_id):
+    """A concert with one live future leg, tagged with the given group --
+    the shape active_concerts_missing_member requires to count a concert
+    as an eligible retroactive-apply target."""
+    return client.post(
+        "/concerts",
+        data={
+            "title": event_id, "event_id": event_id, "group_tags": [group_tag_id],
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["false"],
+        },
+    )
+
+
+def test_add_member_redirects_straight_to_tags_when_nothing_eligible(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    r = client.post("/tags/1/members", data={"member_tag_id": 2})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/tags"
+
+
+def test_add_member_redirects_to_confirmation_when_something_eligible(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+    r = client.post("/tags/1/members", data={"member_tag_id": 2})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/tags/1/members/2/retroactive-apply"
+
+
+def test_confirmation_page_lists_eligible_concert_titles(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    r = client.get("/tags/1/members/2/retroactive-apply")
+    assert r.status_code == 200
+    assert "liella-live" in r.text
+    assert "Sumire" in r.text
+
+
+def test_confirmation_page_handles_nothing_eligible_gracefully(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    r = client.get("/tags/1/members/2/retroactive-apply")
+    assert r.status_code == 200
+    assert "Nothing to apply" in r.text
+
+
+async def test_apply_to_all_attaches_tag_and_notifies_subscriber(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+
+    login_as(client, VIEWER_ID, "viewer")
+    client.post("/subscriptions", data={"tag_id": 2, "notify": "true"})
+    login_as(client, EDITOR_ID, "reiji")
+
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    r = client.post("/tags/1/members/2/retroactive-apply")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/tags"
+
+    async with client.db() as s:
+        from app.db.models import Notification
+
+        concert_tags = (await s.execute(select(ConcertTag))).scalars().all()
+        assert any(ct.tag_id == 2 for ct in concert_tags)  # Sumire attached
+        notes = (await s.execute(select(Notification))).scalars().all()
+        assert any(n.user_id == VIEWER_ID for n in notes)
+
+
+def test_confirmation_page_requires_editor(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+
+    login_as(client, VIEWER_ID, "viewer")
+    assert client.get("/tags/1/members/2/retroactive-apply").status_code == 403
+    assert client.post("/tags/1/members/2/retroactive-apply").status_code == 403
+
+
 def test_index_filters_by_tag(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
