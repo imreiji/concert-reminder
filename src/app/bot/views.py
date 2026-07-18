@@ -18,6 +18,7 @@ custom_id namespace:
     dk:won:{round_id}         mark this round as won
     dk:lost:{round_id}        mark this round as lost
     dk:paid:{round_id}        mark this round's payment as done
+    dk:remindlater:{queue_id} open a modal asking how many days to snooze
 """
 
 import re
@@ -309,7 +310,55 @@ class PaidButton(
         )
 
 
+class RemindLaterModal(discord.ui.Modal, title="Remind me later"):
+    days = discord.ui.TextInput(label="How many days?", placeholder="e.g. 3", max_length=3)
+
+    def __init__(self, queue_id: int) -> None:
+        super().__init__()
+        self.queue_id = queue_id
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            n = int(str(self.days))
+            if n <= 0:
+                raise ValueError
+        except ValueError:
+            await interaction.response.send_message(
+                "Enter a whole number of days greater than 0."
+            )
+            return
+        async with SessionMaker() as session:
+            status = await snooze_reminder(session, self.queue_id, interaction.user.id, days=n)
+            await session.commit()
+        msg = {
+            "snoozed": f"Got it — I'll remind you again in {n} day(s).",
+            "too_close": "Can't snooze that far — the deadline is too close. ⏳",
+            "not_yours": "That reminder isn't yours.",
+            "gone": "That reminder no longer exists.",
+        }[status]
+        await interaction.response.send_message(msg)
+
+
+class RemindLaterButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:remindlater:(?P<qid>\d+)"
+):
+    def __init__(self, queue_id: int) -> None:
+        super().__init__(discord.ui.Button(
+            label="Remind me later", style=discord.ButtonStyle.secondary,
+            custom_id=f"dk:remindlater:{queue_id}",
+        ))
+        self.queue_id = queue_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["qid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_modal(RemindLaterModal(self.queue_id))
+
+
 DYNAMIC_ITEMS = [
     ApplyDefaultButton, RemoveRemindersButton, ReinstateRemindersButton, ShowDeadlinesButton,
     SnoozeButton, AppliedButton, NotAppliedButton, WonButton, LostButton, PaidButton,
+    RemindLaterButton,
 ]

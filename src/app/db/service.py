@@ -1227,10 +1227,14 @@ async def remove_user_rules(session: AsyncSession, user_id: int, concert_id: int
 
 
 async def snooze_reminder(
-    session: AsyncSession, queue_id: int, user_id: int, now: datetime | None = None
+    session: AsyncSession, queue_id: int, user_id: int, days: int = 1,
+    now: datetime | None = None,
 ) -> str:
-    """[Snooze 1 day] button. Re-arms a delivered reminder for +24h, capped so
-    it can never fire after the deadline it's about.
+    """[Snooze 1 day] / [Remind me later] buttons. Re-arms a delivered
+    reminder for +`days` days, capped so it can never fire after the
+    deadline it's about. `days` defaults to 1 -- unchanged behavior for
+    every reminder except the CLOSES one, where a modal-driven button
+    supplies a user-chosen value instead.
     Returns: 'snoozed' | 'too_close' | 'not_yours' | 'gone'."""
     from datetime import timedelta
 
@@ -1242,7 +1246,7 @@ async def snooze_reminder(
     if rule is None or rule.user_id != user_id:
         return "not_yours"
 
-    new_fire = now + timedelta(hours=24)
+    new_fire = now + timedelta(days=days)
     anchor_at: datetime | None = None
     if row.round_id is not None:
         round_ = await session.get(Round, row.round_id)

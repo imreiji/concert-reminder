@@ -134,6 +134,7 @@ def build_reminder_message(item: DueReminder) -> tuple:
         LostButton,
         NotAppliedButton,
         PaidButton,
+        RemindLaterButton,
         SnoozeButton,
         WonButton,
     )
@@ -154,7 +155,8 @@ def build_reminder_message(item: DueReminder) -> tuple:
 
     view = discord.ui.View(timeout=None)
     if item.url:
-        view.add_item(discord.ui.Button(label="Ticket page", url=item.url))
+        link_label = "Apply here" if item.anchor is Anchor.CLOSES else "Ticket page"
+        view.add_item(discord.ui.Button(label=link_label, url=item.url))
     view.add_item(discord.ui.Button(
         label="Open on dekimasen.app", url=f"{settings.base_url}"
     ))
@@ -169,5 +171,8 @@ def build_reminder_message(item: DueReminder) -> tuple:
         elif item.anchor is Anchor.PAYMENT and item.outcome is LotteryOutcome.WON:
             view.add_item(PaidButton(item.round_id))
 
-    view.add_item(SnoozeButton(item.queue_id))
+    if item.anchor is Anchor.CLOSES:
+        view.add_item(RemindLaterButton(item.queue_id))
+    else:
+        view.add_item(SnoozeButton(item.queue_id))
     return embed, view

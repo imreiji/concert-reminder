@@ -140,3 +140,35 @@ def test_build_reminder_message_shows_no_outcome_buttons_on_payment_when_lost():
     custom_ids = [getattr(c, "custom_id", None) for c in view.children]
     blocked_prefixes = ("dk:paid:", "dk:won:", "dk:lost:")
     assert not any(cid and cid.startswith(blocked_prefixes) for cid in custom_ids)
+
+
+def test_build_reminder_message_closes_reminder_uses_remind_later_not_snooze():
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.CLOSES, fire_at_utc=dt(6, 22),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25), url="https://example.com/apply",
+    )
+    _, view = build_reminder_message(item)
+    # discord.ui.DynamicItem only proxies custom_id (not .label) -- checking
+    # custom_id is also the more precise assertion, since it identifies
+    # exactly which button this is, not just its display text.
+    custom_ids = [getattr(c, "custom_id", None) for c in view.children]
+    assert any(cid and cid.startswith("dk:remindlater:") for cid in custom_ids)
+    assert not any(cid and cid.startswith("dk:snooze:") for cid in custom_ids)
+    labels = {getattr(c, "label", None) for c in view.children}
+    assert "Apply here" in labels
+    assert "Ticket page" not in labels
+
+
+def test_build_reminder_message_other_anchors_keep_plain_snooze():
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.RESULTS, fire_at_utc=dt(6, 25),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25),
+    )
+    _, view = build_reminder_message(item)
+    custom_ids = [getattr(c, "custom_id", None) for c in view.children]
+    assert any(cid and cid.startswith("dk:snooze:") for cid in custom_ids)
+    assert not any(cid and cid.startswith("dk:remindlater:") for cid in custom_ids)

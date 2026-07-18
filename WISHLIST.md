@@ -8,20 +8,7 @@ rejected ideas move to the bottom sections instead of being deleted.
 
 ## Proposed (highest impact first)
 
-### 1. Per-round personal lottery outcome tracking (applied / won / lost / paid)
-
-Impact: high — the most domain-shaped feature here. Effort: large.
-Raised: 2026-07-18 UX review.
-
-The domain is a chain: apply → results → payment → next round if you
-lose. Reminders currently fire regardless of the user's situation —
-someone who lost the 先行抽選 still gets its payment reminder. Let users
-mark an outcome per round and tailor the queue: lost → suppress that
-round's payment reminder and arm the next round's opens reminder; won →
-skip the general-sale ping. Natural surface: the existing state-aware DM
-buttons ("Did you apply?") right in the reminder embed.
-
-### 2. First-run guided setup
+### 1. First-run guided setup
 
 Impact: medium — new-user activation. Effort: medium.
 Raised: 2026-07-18 UX review.
@@ -33,7 +20,24 @@ artists → pick a default reminder preset → confirm timezone → send a
 test DM to confirm delivery works → here's your calendar feed URL. Goal:
 first useful reminder armed in one sitting.
 
+Re-reviewed 2026-07-18 (after lottery outcome tracking shipped): still the
+top remaining entry, and not obviously invalidated or newly enabled by
+that ship — the two features touch different parts of the funnel (setup
+vs. steady-state deadline tracking).
+
 ## Shipped
+
+### Per-round personal lottery outcome tracking (applied / won / lost / paid) (2026-07-18)
+
+Shipped as: state-aware DM buttons (Applied/Not applied, Won/Lost, Paid)
+on the reminder embed, backed by a new `RoundOutcome` table and
+`record_round_outcome`/`_apply_outcome_suppression` in `db/service.py` —
+losing suppresses that round's payment reminder and arms the next
+round's opens reminder; winning skips the general-sale ping. Also
+generalized `snooze_reminder` to accept a `days` parameter and added a
+"Remind me later" modal-driven button (replacing the plain 24h snooze)
+on the CLOSES-anchor reminder specifically, plus relabeled that anchor's
+link button to "Apply here".
 
 ### Free-text search matches artists, groups, and venues (2026-07-18)
 

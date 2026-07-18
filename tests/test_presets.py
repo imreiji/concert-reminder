@@ -695,6 +695,88 @@ async def test_snooze_refuses_within_24h_of_deadline(client):
         assert await snooze_reminder(s, row.id, FAN_ID) == "too_close"
 
 
+async def test_snooze_reminder_accepts_custom_day_count(client):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db.service import snooze_reminder
+
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C2", "event_id": "c2",
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    client.post("/concerts/c2/rules", data={"anchor": "closes", "days_before": 3})
+
+    async with client.db() as s:
+        (row,) = await _all(client.db, ReminderQueue)
+        assert await snooze_reminder(s, row.id, EDITOR_ID, days=10) == "snoozed"
+        await s.commit()
+    (row,) = await _all(client.db, ReminderQueue)
+    assert row.fire_at_utc > datetime.now(UTC) + timedelta(days=9)
+
+
+async def test_snooze_reminder_default_days_matches_existing_behavior(client):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db.service import snooze_reminder
+
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C3", "event_id": "c3",
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    client.post("/concerts/c3/rules", data={"anchor": "closes", "days_before": 3})
+
+    async with client.db() as s:
+        (row,) = await _all(client.db, ReminderQueue)
+        assert await snooze_reminder(s, row.id, EDITOR_ID) == "snoozed"
+        await s.commit()
+    (row,) = await _all(client.db, ReminderQueue)
+    assert row.fire_at_utc > datetime.now(UTC) + timedelta(hours=23)
+    assert row.fire_at_utc < datetime.now(UTC) + timedelta(hours=25)
+
+
+async def test_snooze_reminder_custom_days_still_capped_at_deadline(client):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db.models import Concert, Round
+    from app.db.models import ReminderRule as RR
+    from app.db.service import ensure_user, snooze_reminder, sync_rule
+    from app.domain.types import Anchor, RoundKind
+
+    async with client.db() as s:
+        await ensure_user(s, FAN_ID, "fan")
+        c = Concert(title="Soon2", event_id="soon2", created_by=FAN_ID)
+        s.add(c)
+        await s.flush()
+        round_ = Round(concert_id=c.id, kind=RoundKind.LOTTERY_ROUND, label="R1",
+                        closes_at_utc=datetime.now(UTC) + timedelta(hours=10))
+        s.add(round_)
+        rule = RR(user_id=FAN_ID, concert_id=c.id, anchor=Anchor.CLOSES,
+                  offset_days=0, offset_hours=-9)
+        s.add(rule)
+        await s.flush()
+        await sync_rule(s, rule)
+        await s.commit()
+
+    async with client.db() as s:
+        (row,) = await _all(client.db, ReminderQueue)
+        # deadline is only 10h away; a 5-day custom snooze would sleep past it
+        assert await snooze_reminder(s, row.id, FAN_ID, days=5) == "too_close"
+
+
 async def test_notifications_carry_structured_payload(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
