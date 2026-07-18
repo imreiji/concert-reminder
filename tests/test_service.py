@@ -40,6 +40,7 @@ from app.db.service import (
     sync_concert,
     sync_rule,
     upcoming_deadlines,
+    upcoming_rounds,
     user_calendar_events,
 )
 from app.domain.types import Anchor, ConcertKind, RoundKind, TagKind
@@ -672,6 +673,17 @@ async def test_upcoming_deadlines_sorted_chronologically_and_truncated(session):
     result = await upcoming_deadlines(session, NOW, limit=2)
     assert len(result) == 2
     assert result[0].at_utc <= result[1].at_utc
+
+
+async def test_upcoming_rounds_excludes_implicitly_cancelled_round(session):
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    leg_a.cancelled = True
+    await session.flush()
+    result = await upcoming_rounds(session, NOW, horizon_days=60)
+    round_ids = {r.id for _, r in result}
+    assert round_a_only.id not in round_ids  # fully cancelled (its only leg is now cancelled)
+    assert round_both.id in round_ids  # leg B still live
+    assert round_general.id in round_ids  # never tied to a leg, unaffected
 
 
 # ── set_editor / list_editors ───────────────────────────────────────────

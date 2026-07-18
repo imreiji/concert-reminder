@@ -442,7 +442,9 @@ async def mark_sent(session: AsyncSession, queue_id: int, now: datetime | None =
 async def upcoming_rounds(
     session: AsyncSession, now: datetime | None = None, horizon_days: int = 14
 ) -> list[tuple[Concert, Round]]:
-    """Rounds opening or closing within the horizon — powers /upcoming."""
+    """Rounds opening or closing within the horizon — powers /upcoming.
+    Implicitly-cancelled rounds (every leg they apply to is cancelled) are
+    excluded, same rule sync_rule/upcoming_deadlines already use."""
     from datetime import timedelta
 
     now = now or _now()
@@ -456,7 +458,13 @@ async def upcoming_rounds(
         )
         .order_by(Round.closes_at_utc.is_(None), Round.closes_at_utc, Round.opens_at_utc)
     )
-    return [(c, r) for c, r in res.all()]
+    pairs = [(c, r) for c, r in res.all()]
+    if not pairs:
+        return pairs
+    cancelled_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(ConcertDay.cancelled.is_(True))
+    )).scalars())
+    return [(c, r) for c, r in pairs if not is_round_cancelled(r, cancelled_day_ids)]
 
 
 LABEL_BY_ANCHOR: dict[Anchor, str] = {
