@@ -84,6 +84,52 @@ by the time any outcome is recordable):
 | `LOST` | PAYMENT (nothing to pay) |
 | `PAID` | PAYMENT (already done) |
 
+**Outcome flow** (which DM triggers which transition, and each state's effect):
+
+```
+                       ┌──────────────────────┐
+                       │   (no outcome yet)   │
+                       └──────────┬───────────┘
+                                  │
+                   CLOSES reminder DM shows:
+                   "I applied"  /  "Didn't apply"
+                                  │
+              ┌───────────────────┴───────────────────┐
+              │                                        │
+              ▼                                        ▼
+       ┌─────────────┐                       ┌──────────────────┐
+       │   APPLIED   │                       │   NOT_APPLIED    │
+       └──────┬──────┘                       └────────┬─────────┘
+              │                                        │
+   RESULTS reminder DM shows:                  suppresses RESULTS
+   "Won"  /  "Lost"                            and PAYMENT reminders
+              │                                for this round
+     ┌────────┴────────┐
+     │                 │
+     ▼                 ▼
+ ┌───────┐        ┌────────┐
+ │  WON  │        │  LOST  │
+ └───┬───┘        └───┬────┘
+     │                │
+     │                ├─ suppresses this round's PAYMENT reminder
+     │                └─ auto-arms an OPENS reminder on the next
+     │                   round for the same leg (immediately, or
+     │                   later via sync_concert once that round
+     │                   is added — Section 4)
+     │
+     ├─ PAYMENT reminder DM shows: "Paid"
+     │
+     ▼
+ ┌────────┐
+ │  PAID  │  suppresses this round's PAYMENT reminder (done)
+ └────────┘
+
+ Cross-round rule (from WON or PAID, any leg): once EVERY leg a
+ round applies to has reached WON/PAID by this user (via any
+ round covering that leg), that round is suppressed entirely,
+ for any anchor — Section 3.
+```
+
 ## Section 2: DM buttons
 
 Four new `discord.ui.DynamicItem` buttons in `bot/views.py`, following the
