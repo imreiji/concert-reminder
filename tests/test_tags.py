@@ -198,6 +198,57 @@ async def test_edit_tag_without_name_field_leaves_name_unchanged(client):
         assert tag.region == "Kanto"
 
 
+# ── Tags page rendering: search, hierarchy, unified dialogs ──────────────
+
+
+def test_tags_page_renders_hierarchy_and_search_box(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={"name": "Liella", "kind": "group", "parent_id": 1})
+    client.post("/tags", data={"name": "Kaho", "kind": "artist"})
+    client.post("/tags/2/members", data={"member_tag_id": 3})
+    client.post("/tags", data={"name": "K Arena", "kind": "venue"})
+
+    r = client.get("/tags")
+    assert r.status_code == 200
+    assert 'placeholder="Search tags…"' in r.text
+    assert "Hasunosora" in r.text and "Liella" in r.text
+    assert "Kaho" in r.text and "K Arena" in r.text
+    # every tag gets its own dialog
+    assert 'id="tag-dialog-1"' in r.text  # Hasunosora
+    assert 'id="tag-dialog-2"' in r.text  # Liella
+    assert 'dialog.picker' not in r.text  # sanity: that's a CSS selector, not markup
+    assert 'class="picker"' in r.text
+
+
+def test_tags_page_solo_artist_bucket(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Solo Artist", "kind": "artist"})
+    r = client.get("/tags")
+    assert r.status_code == 200
+    assert "Solo artists" in r.text
+    assert "Solo Artist" in r.text
+
+
+def test_tags_page_viewer_sees_no_edit_dialogs(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    login_as(client, VIEWER_ID, "viewer")
+    r = client.get("/tags")
+    assert r.status_code == 200
+    assert 'id="tag-dialog-1"' not in r.text
+
+
+def test_new_tag_form_includes_parent_visibility_script(client):
+    """The kind/parent select-hiding is JS-only, client-side behavior --
+    not server-testable via HTTP. This just confirms the toggle script and
+    its target elements are actually present in the rendered page."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/tags")
+    assert "new-tag-kind" in r.text and "new-tag-parent" in r.text
+    assert "syncParentVisibility" in r.text
+
+
 # ── Retroactive-apply confirmation flow ──────────────────────────────────
 
 

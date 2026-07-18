@@ -8,10 +8,10 @@ attaching a group to a concert adds all its members, which editors can then prun
 {% if user.is_editor %}
 <details class="panel">
   <summary>+ New tag</summary>
-  <form class="inline" method="post" action="/tags">
+  <form class="inline" method="post" action="/tags" id="new-tag-form">
     <input name="name" required maxlength="100" placeholder="Kozue Otomune">
-    <select name="kind">{% for k in kinds %}<option value="{{ k.value }}">{{ k.value | capitalize }}</option>{% endfor %}</select>
-    <select name="parent_id" title="franchise (for group tags)">
+    <select name="kind" id="new-tag-kind">{% for k in kinds %}<option value="{{ k.value }}">{{ k.value | capitalize }}</option>{% endfor %}</select>
+    <select name="parent_id" id="new-tag-parent" title="franchise (for group tags)">
       <option value="0">— franchise (groups only) —</option>
       {% for f in franchise_tags %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
     </select>
@@ -20,62 +20,114 @@ attaching a group to a concert adds all its members, which editors can then prun
     <button>Create</button>
   </form>
 </details>
+<script>
+  (function () {
+    var kindSel = document.getElementById("new-tag-kind");
+    var parentSel = document.getElementById("new-tag-parent");
+    function syncParentVisibility() {
+      parentSel.style.display = kindSel.value === "group" ? "" : "none";
+    }
+    kindSel.addEventListener("change", syncParentVisibility);
+    syncParentVisibility();
+  })();
+</script>
 {% endif %}
 
-{% for k in kinds %}
-  {% set ktags = tags | selectattr("kind", "equalto", k) | list %}
-  {% if ktags %}
-  <h2>{{ k.value | capitalize }}s</h2>
-  <ul class="rows">
-    {% for t in ktags %}
-    <li>
-      <div>
-        <strong>{{ t.name }}</strong>
-        {% if t.kind.value == "venue" %}
-          <span class="dim tiny">
-            {% if t.region %}{{ t.region }}{% else %}<em>no region set</em>{% endif %}
-            {% if t.location_url %} · <a href="{{ t.location_url }}" target="_blank" rel="noopener">map →</a>{% endif %}
-          </span>
-          {% if user.is_editor %}
-          <details class="edit-round">
-            <summary>Edit region / link</summary>
-            <form class="inline" method="post" action="/tags/{{ t.id }}/edit">
-              <input name="location_url" type="url" value="{{ t.location_url or '' }}" placeholder="Location link">
-              <input name="region" maxlength="100" value="{{ t.region or '' }}" placeholder="Region">
-              <button>Save</button>
-            </form>
-          </details>
-          {% endif %}
-        {% endif %}
-        {% if t.kind.value == "group" %}
-          <div class="dim">
-            Members:
-            {% for m in members.get(t.id, []) %}
-              <span class="chip">{{ m.name }}
-                {% if user.is_editor %}<form class="chip-x" method="post"
-                  action="/tags/{{ t.id }}/members/{{ m.id }}/delete"><button class="x">×</button></form>{% endif %}
-              </span>
-            {% else %}<em>none yet</em>{% endfor %}
-          </div>
-          {% if user.is_editor and artist_tags %}
-          <form class="inline" method="post" action="/tags/{{ t.id }}/members">
-            <select name="member_tag_id">
-              {% for a in artist_tags %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
-            </select>
-            <button>Add member</button>
+<input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.tags-page')">
+
+{% macro tag_dialog(t) %}
+<dialog id="tag-dialog-{{ t.id }}" class="picker">
+  <div class="picker-head">
+    <h3>{{ t.name }}</h3>
+    <button type="button" class="x" onclick="document.getElementById('tag-dialog-{{ t.id }}').close()">×</button>
+  </div>
+  <div class="picker-body">
+    <form method="post" action="/tags/{{ t.id }}/edit" class="stack">
+      <label>Name <input name="name" required maxlength="100" value="{{ t.name }}"></label>
+      {% if t.kind.value == "venue" %}
+      <label>Location link <input name="location_url" type="url" value="{{ t.location_url or '' }}"></label>
+      <label>Region <input name="region" maxlength="100" value="{{ t.region or '' }}"></label>
+      {% endif %}
+      <button>Save</button>
+    </form>
+    {% if t.kind.value == "group" %}
+    <div>
+      <strong>Members</strong>
+      <div class="taglist">
+        {% for m in members.get(t.id, []) %}
+        <span class="chip">{{ m.name }}
+          <form class="chip-x" method="post" action="/tags/{{ t.id }}/members/{{ m.id }}/delete">
+            <button class="x">×</button>
           </form>
-          {% endif %}
-        {% endif %}
+        </span>
+        {% else %}<em class="dim">none yet</em>
+        {% endfor %}
       </div>
-      {% if user.is_editor %}
-      <form method="post" action="/tags/{{ t.id }}/delete"
-            onsubmit="return confirm('Delete tag {{ t.name }} everywhere?')">
-        <button class="x" title="delete tag">×</button>
+      {% if artist_tags %}
+      <form class="inline" method="post" action="/tags/{{ t.id }}/members">
+        <select name="member_tag_id">
+          {% for a in artist_tags %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
+        </select>
+        <button>Add member</button>
       </form>
       {% endif %}
-    </li>
+    </div>
+    {% endif %}
+    <form method="post" action="/tags/{{ t.id }}/delete"
+          onsubmit="return confirm('Delete tag {{ t.name }} everywhere?')">
+      <button class="danger">Delete tag</button>
+    </form>
+  </div>
+</dialog>
+{% endmacro %}
+
+{% macro tag_chip(t) %}
+<button type="button" class="chip kind-{{ t.kind.value }}" data-name="{{ t.name | lower }}"
+        {% if user.is_editor %}onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()"{% endif %}>{{ t.name }}</button>
+{% if user.is_editor %}{{ tag_dialog(t) }}{% endif %}
+{% endmacro %}
+
+<div class="tags-page">
+  {% if franchises %}
+  <details open class="tag-section">
+    <summary>Franchises</summary>
+    {% for f in franchises %}
+    <details open class="tag-section">
+      <summary>{{ tag_chip(f) }}</summary>
+      {% for g in groups if g.parent_id == f.id %}
+      <div class="group-row">
+        {{ tag_chip(g) }}
+        <span class="member-chips">{% for m in members.get(g.id, []) %}{{ tag_chip(m) }}{% endfor %}</span>
+      </div>
+      {% endfor %}
+    </details>
     {% endfor %}
-  </ul>
+  </details>
   {% endif %}
-{% endfor %}
+
+  {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
+  {% if orphan_groups %}
+  <details open class="tag-section">
+    <summary>Other groups</summary>
+    {% for g in orphan_groups %}
+    <div class="group-row">{{ tag_chip(g) }}
+      <span class="member-chips">{% for m in members.get(g.id, []) %}{{ tag_chip(m) }}{% endfor %}</span></div>
+    {% endfor %}
+  </details>
+  {% endif %}
+
+  {% if solo_artists %}
+  <details open class="tag-section">
+    <summary>Solo artists</summary>
+    <div class="taglist">{% for a in solo_artists %}{{ tag_chip(a) }}{% endfor %}</div>
+  </details>
+  {% endif %}
+
+  {% if venues %}
+  <details open class="tag-section">
+    <summary>Venues</summary>
+    <div class="taglist">{% for v in venues %}{{ tag_chip(v) }}{% endfor %}</div>
+  </details>
+  {% endif %}
+</div>
 {% endblock %}

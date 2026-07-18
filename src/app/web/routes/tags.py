@@ -50,13 +50,23 @@ async def tag_directory(
     session: AsyncSession = Depends(get_session),
 ):
     tags = await all_tags(session)
-    members = {t.id: await group_members(session, t.id) for t in tags if t.kind is TagKind.GROUP}
+    groups = [t for t in tags if t.kind is TagKind.GROUP]
+    members = {t.id: await group_members(session, t.id) for t in groups}
+    grouped_artist_ids = {m.id for ms in members.values() for m in ms}
     return templates.TemplateResponse(
         request,
         "tags.html",
-        {"user": user, "tags": tags, "members": members, "kinds": list(TagKind),
-         "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
-         "franchise_tags": [t for t in tags if t.kind is TagKind.FRANCHISE]},
+        {
+            "user": user, "members": members, "kinds": list(TagKind),
+            "franchise_tags": [t for t in tags if t.kind is TagKind.FRANCHISE],
+            "franchises": [t for t in tags if t.kind is TagKind.FRANCHISE],
+            "groups": groups,
+            "solo_artists": [
+                t for t in tags if t.kind is TagKind.ARTIST and t.id not in grouped_artist_ids
+            ],
+            "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
+            "venues": [t for t in tags if t.kind is TagKind.VENUE],
+        },
     )
 
 
