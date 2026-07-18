@@ -638,6 +638,13 @@ def test_new_concert_page_is_editor_only(client):
     assert r.status_code == 200
     assert "Add an event" in r.text
     assert 'name="event_id"' in r.text  # event id field present
+
+
+def test_new_concert_page_shows_new_round_kind_labels(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/concerts/new")
+    assert "First come, first served" in r.text
+    assert "Overseas tour package" in r.text
     assert 'name="day_label"' in r.text  # performance row template present
     # the leg field is a dropdown of performances, not free text -- picking a
     # real day instead of guessing a string that has to fuzzy-match server-side
@@ -772,6 +779,14 @@ async def test_edit_page_prefills_every_field(client):
     assert 'value="Org"' in r.text
     assert 'value="Day 1"' in r.text
     assert 'value="R1"' in r.text
+
+
+async def test_edit_page_shows_new_round_kind_labels(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+    r = client.get("/concerts/c/edit")
+    assert "First come, first served" in r.text
+    assert "Overseas tour package" in r.text
 
 
 async def test_edit_page_leg_select_carries_the_resolved_leg_as_data_initial(client):
