@@ -9,14 +9,16 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 290 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 299 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
 per-concert edit history, a per-leg cancelled status, a redesigned Tags
 page (search, hierarchy, dialog-based editing, rename, retroactive
-artist-to-active-events apply), and an index-page reorg (open-and-upcoming
-bucketing plus a global chronological deadline list) have shipped since).
+artist-to-active-events apply), an index-page reorg (open-and-upcoming
+bucketing plus a global chronological deadline list), and surfaced
+undeliverable-DM feedback (a sitewide banner plus a synchronous test-DM
+diagnostic) have shipped since).
 
 ## Commands
 
@@ -117,7 +119,13 @@ deleting them.
    `expand=False`, never re-expanding a GROUP tag to its current membership.
 4. **Notifications**: new-event notices go through the `notifications`
    table (DB outbox drained by the scheduler) — never send DMs directly
-   from web routes.
+   from web routes. One narrow, explicit exception: `POST /me/test-dm`
+   (`web/routes/preferences.py`) sends synchronously and reports the
+   result inline — a manual, user-initiated, low-volume diagnostic
+   action is a different animal from a system-initiated notice, which
+   must still go through the outbox for its retry/ordering/audit
+   properties. Don't extend this carve-out to anything else without
+   discussing it first.
 5. **Auth**: three tiers — admin, editor, user. Admins = `ADMIN_WHITELIST`
    env (Discord IDs), env-only by design (no runtime UI; edit `.env` +
    restart). Editors = `EDITOR_WHITELIST` env (permanent bootstrap/

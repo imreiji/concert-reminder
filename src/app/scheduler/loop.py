@@ -3,9 +3,14 @@
 Failure philosophy (each case is deliberate):
   * Bot not ready / web-only mode  -> skip the tick, rows stay queued.
   * DM delivered                   -> mark sent. Only success marks sent.
-  * Forbidden (user blocks DMs)    -> mark sent anyway, log a warning.
-    Retrying forever would spam the log and never succeed; the row is dead.
+    Also clears User.dm_blocked_since.
+  * Forbidden (user blocks DMs)    -> mark sent anyway, log a warning, and
+    set User.dm_blocked_since (surfaced as a sitewide banner -- see
+    auth.SessionUser.dm_blocked). Retrying forever would spam the log and
+    never succeed; the row is dead.
   * Any other error (network...)   -> leave unsent; next tick retries.
+    Doesn't touch dm_blocked_since -- an unrelated hiccup says nothing
+    about whether DMs are actually blocked.
   * Whole-tick exception           -> logged, loop survives. The loop dying
     silently is the one unacceptable outcome for a reminder app.
 
@@ -23,6 +28,7 @@ concurrently.
 import asyncio
 import logging
 from datetime import UTC, datetime
+from enum import Enum
 
 import discord
 
@@ -39,6 +45,7 @@ from app.db.service import (
     mark_notification_sent,
     mark_sent,
     notice_context,
+    record_dm_outcome,
 )
 from app.db.session import SessionMaker
 from app.scheduler import heartbeat
@@ -50,22 +57,33 @@ SEND_CONCURRENCY = 5  # bounded in-flight Discord calls; discord.py's own
                       # rate limiter is the real backstop beyond this.
 
 
-async def deliver(bot, item: DueReminder) -> bool:
-    """Send one reminder DM (embed + buttons). True -> mark the row sent.
-    Pure Discord I/O -- no session access, safe to run concurrently."""
+class DeliveryOutcome(Enum):
+    """A DM send's result. Distinct from "should this row be marked sent"
+    (SUCCESS and FORBIDDEN both do; TRANSIENT_FAILURE doesn't) and from
+    "should the per-user dm_blocked_since flag change" (SUCCESS clears it,
+    FORBIDDEN sets it, TRANSIENT_FAILURE touches neither)."""
+
+    SUCCESS = "success"
+    FORBIDDEN = "forbidden"
+    TRANSIENT_FAILURE = "transient_failure"
+
+
+async def deliver(bot, item: DueReminder) -> DeliveryOutcome:
+    """Send one reminder DM (embed + buttons). Pure Discord I/O -- no
+    session access, safe to run concurrently."""
     try:
         user = bot.get_user(item.discord_id) or await bot.fetch_user(item.discord_id)
         embed, view = build_reminder_message(item)
         await user.send(embed=embed, view=view)
-        return True
+        return DeliveryOutcome.SUCCESS
     except discord.Forbidden:
         log.warning(
             "user %s has DMs closed; dropping reminder %s", item.discord_id, item.queue_id
         )
-        return True  # permanent failure: retrying can never succeed
+        return DeliveryOutcome.FORBIDDEN  # permanent failure: retrying can never succeed
     except discord.HTTPException as e:
         log.error("transient send failure for queue row %s: %s", item.queue_id, e)
-        return False  # leave unsent; next tick retries
+        return DeliveryOutcome.TRANSIENT_FAILURE  # leave unsent; next tick retries
 
 
 async def _notification_context(session, note):
@@ -79,11 +97,10 @@ async def _notification_context(session, note):
     return await notice_context(session, note.concert_id, note.user_id) if note.concert_id else None
 
 
-async def _send_notification(bot, note, ctx) -> bool:
+async def _send_notification(bot, note, ctx) -> DeliveryOutcome:
     """Send a notice DM. Structured (ctx set) -> rich embed with the
-    state-aware buttons; otherwise the plain-text fallback body. Same
-    policy as deliver(): only success or a permanent failure clears the
-    row. Pure Discord I/O -- no session access, safe to run concurrently."""
+    state-aware buttons; otherwise the plain-text fallback body. Pure
+    Discord I/O -- no session access, safe to run concurrently."""
     try:
         user = bot.get_user(note.user_id) or await bot.fetch_user(note.user_id)
         if ctx is not None and note.kind == "leg_cancelled":
@@ -94,13 +111,13 @@ async def _send_notification(bot, note, ctx) -> bool:
             await user.send(embed=embed, view=view)
         else:
             await user.send(note.body)
-        return True
+        return DeliveryOutcome.SUCCESS
     except discord.Forbidden:
         log.warning("user %s has DMs closed; dropping notification", note.user_id)
-        return True
+        return DeliveryOutcome.FORBIDDEN
     except discord.HTTPException as e:
         log.error("transient notification failure for user %s: %s", note.user_id, e)
-        return False
+        return DeliveryOutcome.TRANSIENT_FAILURE
 
 
 async def tick(bot) -> int:
@@ -119,21 +136,29 @@ async def tick(bot) -> int:
 
     async with SessionMaker() as session:
         items = await due_reminders(session, now)
-        for item, ok in await asyncio.gather(*(bounded_deliver(i) for i in items)):
-            if ok:
+        for item, outcome in await asyncio.gather(*(bounded_deliver(i) for i in items)):
+            if outcome in (DeliveryOutcome.SUCCESS, DeliveryOutcome.FORBIDDEN):
                 await mark_sent(session, item.queue_id, now)
                 delivered += 1
+            if outcome is not DeliveryOutcome.TRANSIENT_FAILURE:
+                await record_dm_outcome(
+                    session, item.discord_id, blocked=outcome is DeliveryOutcome.FORBIDDEN
+                )
 
         notes = await due_notifications(session)
         # DB-bound prep stays sequential on the one shared session...
         prepared = [(note, await _notification_context(session, note)) for note in notes]
         # ...then the actual Discord sends run concurrently.
-        for note, ok in await asyncio.gather(
+        for note, outcome in await asyncio.gather(
             *(bounded_send_notification(note, ctx) for note, ctx in prepared)
         ):
-            if ok:
+            if outcome in (DeliveryOutcome.SUCCESS, DeliveryOutcome.FORBIDDEN):
                 await mark_notification_sent(session, note.id)
                 delivered += 1
+            if outcome is not DeliveryOutcome.TRANSIENT_FAILURE:
+                await record_dm_outcome(
+                    session, note.user_id, blocked=outcome is DeliveryOutcome.FORBIDDEN
+                )
 
         await session.commit()
     return delivered

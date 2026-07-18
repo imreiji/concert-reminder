@@ -84,6 +84,12 @@ class User(Base):
     # as WebSession.token_hash) -- the raw token lives only in the feed URL,
     # shown once at generation time, never stored or re-displayable.
     calendar_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    # None = DMs working (or never tested); a timestamp = the most recent
+    # attempted send hit discord.Forbidden. One shared signal across both
+    # reminder-DM and notification-DM sends (see scheduler/loop.py's
+    # DeliveryOutcome and db/service.py's record_dm_outcome). Surfaced as a
+    # sitewide banner via auth.SessionUser.dm_blocked.
+    dm_blocked_since: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
     rules: Mapped[list["ReminderRule"]] = relationship(back_populates="user")

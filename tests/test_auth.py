@@ -8,7 +8,7 @@ runs against actual rows.
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -24,6 +24,11 @@ async def db():
     engine = create_async_engine(
         "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
     )
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _fk(conn, _):
+        conn.execute("PRAGMA foreign_keys=ON")
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield async_sessionmaker(engine, expire_on_commit=False)
@@ -241,3 +246,25 @@ def test_non_admin_does_not_see_editors_panel(client):
     r = client.get("/preferences")
     assert r.status_code == 200
     assert "Editors" not in r.text
+
+
+# ── Undeliverable-DM banner ──────────────────────────────────────────────
+
+
+def test_banner_hidden_when_dm_not_blocked(client):
+    do_login(client)
+    r = client.get("/")
+    assert "couldn't be delivered" not in r.text
+
+
+async def test_banner_shown_when_dm_blocked(client):
+    from datetime import UTC, datetime
+
+    do_login(client)
+    async with client.db() as s:
+        user = await s.get(User, 42)
+        user.dm_blocked_since = datetime.now(UTC)
+        await s.commit()
+
+    r = client.get("/")
+    assert "couldn't be delivered" in r.text
