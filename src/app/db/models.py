@@ -243,6 +243,13 @@ class ConcertDay(Base):
     venue_address: Mapped[str | None] = mapped_column(String(300))
     doors_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     starts_at_utc: Mapped[datetime] = mapped_column(UTCDateTime)
+    # A cancelled leg is never deleted (its rounds' applies_to would dangle --
+    # see docs/superpowers/specs/2026-07-17-cancelled-leg-status-design.md)
+    # -- only marked. Rounds have no status field of their own: a round is
+    # implicitly cancelled when every ConcertDay id in its applies_to is
+    # cancelled ("General" rounds with no day association are never
+    # auto-cancelled this way).
+    cancelled: Mapped[bool] = mapped_column(default=False, server_default="0")
 
     concert: Mapped[Concert] = relationship(back_populates="days")
 
