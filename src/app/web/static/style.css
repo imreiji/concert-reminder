@@ -21,8 +21,6 @@ main { max-width: 72rem; width: 100%; margin: 2rem auto; padding: 0 1.5rem; flex
 footer { text-align: center; color: var(--dim); font-size: .75rem; padding: 1.5rem; }
 
 nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; font-size: .9rem; }
-nav.auth a { color: var(--ink); }
-nav.auth a.login { border: 1px solid var(--line); padding: .35rem .8rem; border-radius: 6px; text-decoration: none; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; }
 .badge { color: var(--ok); font-style: normal; font-size: .8em; border: 1px solid currentColor; padding: 0 .3em; border-radius: 4px; }
 
@@ -66,6 +64,21 @@ button.danger { background: var(--danger); border-color: var(--danger); }
 button.x { background: none; border: none; color: var(--dim); font-size: 1.1rem; padding: 0 .3rem; }
 button.x:hover { color: var(--danger); opacity: 1; }
 .concert-head p { margin-top: -.6rem; }
+
+/* Links that act like buttons (nav actions, page-level actions) get the
+   same visual treatment as real <button>s -- filled for the primary
+   action, bordered/quiet for secondary ones -- instead of reading as
+   plain inline text. */
+.btn {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .35rem .8rem; border-radius: 6px; border: 1px solid var(--ink);
+  background: var(--ink); color: var(--paper); text-decoration: none;
+  font-size: .85rem; line-height: 1.3;
+}
+.btn:hover { opacity: .88; }
+.btn.quiet { background: none; color: var(--dim); border-color: var(--line); }
+.btn.quiet:hover { color: var(--ink); border-color: var(--ink); opacity: 1; }
+.actions { display: flex; gap: .5rem; flex-wrap: wrap; margin: .6rem 0 0; }
 
 /* Phase 9: tags */
 .taglist { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }

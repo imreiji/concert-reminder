@@ -15,11 +15,11 @@
       {% if user %}
         <img class="avatar" src="{{ user.avatar_url }}" alt="">
         <span>{{ user.username }}{% if user.is_admin %} <em class="badge">admin</em>{% elif user.is_editor %} <em class="badge">editor</em>{% endif %}</span>
-        {% if user.is_editor %}<a href="/concerts/new">+ Add</a>{% endif %}
-        <a href="/preferences">Preferences</a>
-        <a href="/auth/logout">Log out</a>
+        {% if user.is_editor %}<a class="btn" href="/concerts/new">+ Add</a>{% endif %}
+        <a class="btn quiet" href="/preferences">Preferences</a>
+        <a class="btn quiet" href="/auth/logout">Log out</a>
       {% else %}
-        <a class="login" href="/auth/login">Sign in with Discord</a>
+        <a class="btn" href="/auth/login">Sign in with Discord</a>
       {% endif %}
     </nav>
   </header>
