@@ -77,6 +77,19 @@ bucketing plus a global chronological deadline list) have shipped since).
   substantial features. `docs/codebase-review-2026-07-17.md` records a
   full-codebase review and the fixes it drove.
 
+## Feature wishlist
+
+`WISHLIST.md` (repo root) tracks every potential feature raised in
+roadmap/UX discussions, ordered by user impact (highest first), with
+impact + effort noted per entry. Read it before any feature-planning or
+roadmap discussion. Every time a new feature is pushed: move the shipped
+entry to its Shipped section (with the date), then do a full revision
+pass over the remaining entries — re-rank by impact and reconsider which
+are still useful, since a shipped feature can raise, lower, or obsolete
+others. Append new ideas from any discussion with their date and context;
+move rejected ideas to the Rejected section with the reason instead of
+deleting them.
+
 ## Non-negotiable invariants
 
 1. **Timezones**: the DB stores aware UTC only — the `UTCDateTime`
