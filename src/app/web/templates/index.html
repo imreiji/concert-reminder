@@ -64,33 +64,46 @@
       <button class="quiet" type="submit">Search</button>
     </form>
 
+    {% macro tile(c) %}
+    {% set ctags = c.tags %}
+    {% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
+    {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
+    {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
+    {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
+    <a class="tile" href="/concerts/{{ c.event_id }}"
+       data-tags="{{ ctags | map(attribute='id') | join(',') }}"
+       data-search="{{ (c.title ~ ' ' ~ (c.title_en or '')) | lower }}"
+       {% if c.id not in visible_concert_ids %}style="display:none"{% endif %}>
+      <strong>{{ c.title }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
+      <span class="who">
+        {#- display rules: F+G+A -> franchise+group; G+A -> group; A only -> artists -#}
+        {% if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
+        {% elif cg %}{{ cg | map(attribute="name") | join(", ") }}
+        {% elif ca %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>
+        {% endif %}
+      </span>
+      {% if cv | length > 1 %}<span class="dim">📍 Multiple</span>
+      {% elif cv or c.venue %}<span class="dim">📍 {{ (cv | map(attribute="name") | join(", ")) or c.venue }}</span>{% endif %}
+      {% set live_days = c.days | rejectattr("cancelled") | list %}
+      {% if live_days %}<span class="when dim">{{ jst(live_days[0].starts_at_utc).strftime("%Y-%m-%d") }} JST</span>{% endif %}
+    </a>
+    {% endmacro %}
+
     {% if concerts %}
+    {% set open_concerts = concerts | selectattr("id", "in", open_concert_ids) | list %}
+    {% set upcoming_concerts = concerts | rejectattr("id", "in", open_concert_ids) | list %}
+    {% if open_concerts %}
+    <h2>Open &amp; upcoming</h2>
     <div class="tiles">
-      {% for c in concerts %}
-      {% set ctags = c.tags %}
-      {% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
-      {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
-      {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
-      {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
-      <a class="tile" href="/concerts/{{ c.event_id }}"
-         data-tags="{{ ctags | map(attribute='id') | join(',') }}"
-         data-search="{{ (c.title ~ ' ' ~ (c.title_en or '')) | lower }}"
-         {% if c.id not in visible_concert_ids %}style="display:none"{% endif %}>
-        <strong>{{ c.title }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
-        <span class="who">
-          {#- display rules: F+G+A -> franchise+group; G+A -> group; A only -> artists -#}
-          {% if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
-          {% elif cg %}{{ cg | map(attribute="name") | join(", ") }}
-          {% elif ca %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>
-          {% endif %}
-        </span>
-        {% if cv | length > 1 %}<span class="dim">📍 Multiple</span>
-        {% elif cv or c.venue %}<span class="dim">📍 {{ (cv | map(attribute="name") | join(", ")) or c.venue }}</span>{% endif %}
-        {% set live_days = c.days | rejectattr("cancelled") | list %}
-        {% if live_days %}<span class="when dim">{{ jst(live_days[0].starts_at_utc).strftime("%Y-%m-%d") }} JST</span>{% endif %}
-      </a>
-      {% endfor %}
+      {% for c in open_concerts %}{{ tile(c) }}{% endfor %}
     </div>
+    {% endif %}
+    {% if upcoming_concerts %}
+    <h2>Upcoming</h2>
+    <div class="tiles">
+      {% for c in upcoming_concerts %}{{ tile(c) }}{% endfor %}
+    </div>
+    {% endif %}
     <p class="dim" id="no-match"
        {% if visible_concert_ids or (not selected_tags and not query) %}style="display:none"{% endif %}>No concerts match.</p>
     {% else %}

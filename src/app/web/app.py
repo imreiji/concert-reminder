@@ -1,5 +1,6 @@
 """Web application: sessions, auth, concert CRUD."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Query, Request
@@ -71,6 +72,24 @@ def region_sidebar_links(venue_tags: list[Tag], selected: list[int], sort: str) 
     return links
 
 
+def has_open_round(concert: Concert, now: datetime) -> bool:
+    """A concert is "open" if any of its non-cancelled rounds currently has
+    an active application window: closes_at_utc set and in the future, AND
+    opens_at_utc either unset or already passed. A round with only
+    results/payment timestamps set is never "open" on its own."""
+    from app.db.service import is_round_cancelled
+
+    cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
+    for r in concert.rounds:
+        if is_round_cancelled(r, cancelled_day_ids):
+            continue
+        if r.closes_at_utc and r.closes_at_utc > now and (
+            r.opens_at_utc is None or r.opens_at_utc <= now
+        ):
+            return True
+    return False
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="dekimasen.app", docs_url=None, redoc_url=None)
     app.add_middleware(
@@ -121,10 +140,11 @@ def create_app() -> FastAPI:
         q: str = "",
     ):
         concerts, tz, tz_auto, tags = [], settings.default_timezone, True, []
+        open_concert_ids: set[int] = set()
         if user:
             from sqlalchemy import func as sa_func
 
-            stmt = select(Concert).options(selectinload(Concert.days))
+            stmt = select(Concert).options(selectinload(Concert.days), selectinload(Concert.rounds))
             # Hide a concert whose every existing leg is cancelled -- it has
             # no valid dates left, same treatment as a concert with zero
             # legs would get if it also had no live rounds, except this is a
@@ -150,15 +170,20 @@ def create_app() -> FastAPI:
             # the server on every click.
             if sort == "added":
                 stmt = stmt.order_by(Concert.created_at.desc())
-            else:  # "event": earliest concert day first; undated concerts last
+            else:  # "event": earliest LIVE concert day first; undated concerts last
                 first_day = sa_func.min(ConcertDay.starts_at_utc)
                 stmt = (
-                    stmt.outerjoin(ConcertDay)
+                    stmt.outerjoin(
+                        ConcertDay,
+                        (ConcertDay.concert_id == Concert.id) & (ConcertDay.cancelled.is_(False)),
+                    )
                     .group_by(Concert.id)
                     .order_by(first_day.is_(None), first_day)
                 )
             stmt = stmt.options(selectinload(Concert.tags))
             concerts = list((await session.execute(stmt)).scalars())
+            now = datetime.now(UTC)
+            open_concert_ids = {c.id for c in concerts if has_open_round(c, now)}
             tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
             db_user = await session.get(User, user.id)
             if db_user:
@@ -203,6 +228,7 @@ def create_app() -> FastAPI:
                 "tag_names_json": _json.dumps(picker["tag_names_json"]),
                 "selected_tags": selected_tags,
                 "visible_concert_ids": visible_concert_ids,
+                "open_concert_ids": open_concert_ids,
                 "query": q,
                 "sort": sort,
                 "tz": tz,
