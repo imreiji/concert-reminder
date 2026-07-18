@@ -40,13 +40,12 @@ into one seamless flow.
 Shipped as: two new `RoundKind` enum values, `FCFS_SALE` and `TOUR_PACKAGE`,
 splitting out first-come-first-served sales from the previously-conflated
 general-sale kind and adding support for overseas tour package sales. A
-centralized `LABEL_BY_ROUND_KIND` dict in `db/models.py` now provides
-singular display labels for all seven kinds (replacing six inline label
-derivations scattered across templates), with corrected emoji assignments
-(removing the racing emoji misapplied to `GENERAL_SALE`, adding the
-appropriate emoji for the two new kinds). Also updated `ingest.py`'s
-ramen.events keyword tables to recognize FCFS and tour-package keywords in
-HTML parsing.
+centralized `LABEL_BY_ROUND_KIND` dict in `db/service.py` now provides
+display labels for all nine kinds (replacing six inline label derivations
+scattered across templates), with corrected emoji assignments (removing
+the racing emoji misapplied to `GENERAL_SALE`, adding the appropriate
+emoji for the two new kinds). Also updated `ingest.py`'s ramen.events
+keyword table to recognize FCFS and tour-package keywords in HTML parsing.
 
 ### Per-round personal lottery outcome tracking (applied / won / lost / paid) (2026-07-18)
 
