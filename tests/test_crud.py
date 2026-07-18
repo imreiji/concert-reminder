@@ -1037,3 +1037,86 @@ async def test_resubmitting_edit_with_same_cancelled_state_does_not_renotify(cli
     )
     async with client.db() as s:
         assert (await s.execute(select(Notification))).scalars().all() == []
+
+
+async def test_detail_page_shows_cancelled_badge_on_cancelled_leg_only(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1", "Day 2"],
+            "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
+            "day_city": ["", ""], "day_venue": ["", ""],
+            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+        },
+    )
+    async with client.db() as s:
+        days = sorted(
+            (await s.execute(select(ConcertDay))).scalars(), key=lambda d: d.label
+        )
+        day1_id, day2_id = days[0].id, days[1].id
+
+    client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            "day_id": [str(day1_id), str(day2_id)],
+            "day_label": ["Day 1", "Day 2"],
+            "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
+            "day_city": ["", ""], "day_venue": ["", ""],
+            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_cancelled": ["true", "false"],
+        },
+    )
+    r = client.get("/concerts/c")
+    assert r.status_code == 200
+    day1_section = r.text[r.text.index('">Day 1'):r.text.index('">Day 2')]
+    day2_section = r.text[r.text.index('">Day 2'):]
+    assert "Cancelled" in day1_section
+    assert "Cancelled" not in day2_section
+
+
+async def test_round_tied_to_cancelled_day_still_renders_not_vanishes(client):
+    """Regression guard for the exact bug this whole design was built to
+    avoid (see the spec's "bug this design has to avoid" section):
+    group_rounds_by_day() looks up round.applies_to ids in a dict keyed by
+    concert.days ids. If a cancelled day were ever DELETED rather than just
+    flagged, a round referencing it would silently disappear from the page
+    entirely -- not fall back to "General", just vanish. Marking (not
+    deleting) the day keeps it in concert.days, so the round still resolves
+    correctly under that day's now-visibly-cancelled heading."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+        },
+    )
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+        round_id = (await s.execute(select(Round))).scalar_one().id
+
+    client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            "day_id": [str(day_id)], "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["true"],
+            "round_id": [str(round_id)], "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+        },
+    )
+    r = client.get("/concerts/c")
+    assert r.status_code == 200
+    assert "R1" in r.text  # still rendered -- not silently dropped
+    assert "No rounds yet for this performance." not in r.text
