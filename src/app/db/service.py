@@ -35,13 +35,14 @@ from app.db.models import (
     ReminderQueue,
     ReminderRule,
     Round,
+    RoundOutcome,
     Tag,
     TagMember,
     TagSubscription,
     User,
 )
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
-from app.domain.types import Anchor, TagKind
+from app.domain.types import Anchor, LotteryOutcome, TagKind
 
 
 def _now() -> datetime:
@@ -151,6 +152,63 @@ def is_round_cancelled(round_: Round, cancelled_day_ids: set[int]) -> bool:
 # ── Queue sync ───────────────────────────────────────────────────────────
 
 
+async def _apply_outcome_suppression(
+    session: AsyncSession, user_id: int, rounds: list[Round], anchor: Anchor
+) -> list[Round]:
+    """Drop rounds this user's outcomes make irrelevant, before the pure
+    planner ever sees them -- same pattern as the cancelled-round
+    filtering sync_rule already does. Two passes: cross-round (every leg
+    a round covers is already secured via WON/PAID elsewhere on this
+    concert) then same-round (this rule's own anchor is moot given this
+    round's outcome)."""
+    if not rounds:
+        return rounds
+
+    concert_id = rounds[0].concert_id
+    all_concert_rounds = list((await session.execute(
+        select(Round).where(Round.concert_id == concert_id)
+    )).scalars())
+    all_round_ids = [r.id for r in all_concert_rounds]
+    outcomes = {
+        o.round_id: o.outcome for o in (await session.execute(
+            select(RoundOutcome).where(
+                RoundOutcome.user_id == user_id, RoundOutcome.round_id.in_(all_round_ids)
+            )
+        )).scalars()
+    } if all_round_ids else {}
+    all_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(ConcertDay.concert_id == concert_id)
+    )).scalars())
+
+    # Per-round contribution, so each round's own outcome can be excluded
+    # when checking IT for cross-round suppression -- "secured elsewhere"
+    # must not let a round's own WON/PAID outcome suppress itself; a round
+    # can only be cross-suppressed by OTHER rounds covering its legs.
+    secured_by: dict[int, set[int]] = {}
+    for r in all_concert_rounds:
+        if outcomes.get(r.id) in (LotteryOutcome.WON, LotteryOutcome.PAID):
+            secured_by[r.id] = set(r.applies_to) if r.applies_to else all_day_ids
+
+    survivors = []
+    for r in rounds:
+        applies = set(r.applies_to) if r.applies_to else all_day_ids
+        secured_elsewhere: set[int] = set()
+        for other_id, legs in secured_by.items():
+            if other_id != r.id:
+                secured_elsewhere |= legs
+        if applies and applies <= secured_elsewhere:
+            continue  # every leg this round covers is already secured elsewhere
+        outcome = outcomes.get(r.id)
+        if anchor is Anchor.RESULTS and outcome is LotteryOutcome.NOT_APPLIED:
+            continue
+        if anchor is Anchor.PAYMENT and outcome in (
+            LotteryOutcome.LOST, LotteryOutcome.PAID, LotteryOutcome.NOT_APPLIED
+        ):
+            continue
+        survivors.append(r)
+    return survivors
+
+
 async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | None = None) -> None:
     """Reconcile reminder_queue with what this rule currently implies."""
     now = now or _now()
@@ -160,11 +218,14 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
     # out here, before domain/reminders.py ever sees them -- the pure
     # planner never learns the concept of "cancelled"; it just sees fewer
     # candidates, and the existing "nothing planned -> delete" sync
-    # semantics clear the reminders with no new suppression logic.
+    # semantics clear the reminders with no new suppression logic. This
+    # user's own RoundOutcome state is filtered the same way (see
+    # _apply_outcome_suppression) -- the planner stays equally ignorant
+    # of lottery outcomes.
     if rule.round_id is not None:
         round_ = await session.get(Round, rule.round_id)
         if round_ is None:
-            rounds = []
+            live_rounds: list[Round] = []
         else:
             cancelled_day_ids = set((await session.execute(
                 select(ConcertDay.id).where(
@@ -172,7 +233,7 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
                     ConcertDay.cancelled.is_(True),
                 )
             )).scalars())
-            rounds = [] if is_round_cancelled(round_, cancelled_day_ids) else [_round_info(round_)]
+            live_rounds = [] if is_round_cancelled(round_, cancelled_day_ids) else [round_]
         days: list[DayInfo] = []
     else:
         rres = await session.execute(select(Round).where(Round.concert_id == rule.concert_id))
@@ -182,10 +243,11 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
         all_rounds = list(rres.scalars())
         all_days = list(dres.scalars())
         cancelled_day_ids = {d.id for d in all_days if d.cancelled}
-        rounds = [
-            _round_info(r) for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)
-        ]
+        live_rounds = [r for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)]
         days = [_day_info(d) for d in all_days if not d.cancelled]
+
+    live_rounds = await _apply_outcome_suppression(session, rule.user_id, live_rounds, rule.anchor)
+    rounds = [_round_info(r) for r in live_rounds]
 
     planned = plan_for_rule(_rule_info(rule), rounds, days, now)
     planned_by_key = {(p.round_id or 0, p.day_id or 0, p.anchor): p for p in planned}
