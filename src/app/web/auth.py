@@ -161,6 +161,7 @@ async def callback(
 
     user_id = int(me["id"])
     username = me.get("global_name") or me["username"]
+    is_new_user = await db.get(User, user_id) is None
     await ensure_user(db, user_id, username)
     sid = await create_web_session(db, user_id)
     await db.commit()
@@ -168,7 +169,7 @@ async def callback(
     request.session["sid"] = sid
     request.session["user"] = {"id": user_id, "username": username, "avatar": me.get("avatar")}
     log.info("login: %s (%s)", username, user_id)
-    return RedirectResponse("/")
+    return RedirectResponse("/welcome" if is_new_user else "/")
 
 
 @router.get("/logout")
