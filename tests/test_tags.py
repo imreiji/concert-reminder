@@ -219,6 +219,8 @@ def test_tags_page_renders_hierarchy_and_search_box(client):
     assert 'id="tag-dialog-2"' in r.text  # Liella
     assert 'dialog.picker' not in r.text  # sanity: that's a CSS selector, not markup
     assert 'class="picker"' in r.text
+    # hierarchy container must have sub-box class for group/member styling
+    assert 'class="tags-page sub-box"' in r.text
 
 
 def test_tags_page_solo_artist_bucket(client):

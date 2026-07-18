@@ -86,7 +86,7 @@ attaching a group to a concert adds all its members, which editors can then prun
         {% if user.is_editor %}onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()"{% endif %}>{{ t.name }}</button>
 {% endmacro %}
 
-<div class="tags-page">
+<div class="tags-page sub-box">
   {% if franchises %}
   <details open class="tag-section">
     <summary>Franchises</summary>
