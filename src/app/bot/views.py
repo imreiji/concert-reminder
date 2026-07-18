@@ -13,6 +13,11 @@ custom_id namespace:
     dk:deadlines:{concert_id} reply with the full deadline list
     dk:snooze:{queue_id}      re-arm a delivered reminder for +24h (capped)
     dk:reinstate:{concert_id} re-sync the clicking user's rules on this concert
+    dk:applied:{round_id}     mark this round as applied to
+    dk:notapplied:{round_id}  mark this round as not applied to
+    dk:won:{round_id}         mark this round as won
+    dk:lost:{round_id}        mark this round as lost
+    dk:paid:{round_id}        mark this round's payment as done
 """
 
 import re
@@ -22,12 +27,14 @@ import discord
 from app.db.service import (
     apply_default_preset,
     is_round_cancelled,
+    record_round_outcome,
     reinstate_user_rules,
     remove_user_rules,
     snooze_reminder,
 )
 from app.db.session import SessionMaker
 from app.domain.timezones import fmt_dual
+from app.domain.types import LotteryOutcome
 
 
 class ApplyDefaultButton(
@@ -189,7 +196,120 @@ class SnoozeButton(
         await interaction.response.send_message(msg)
 
 
+async def _handle_outcome_click(
+    interaction: discord.Interaction, round_id: int, outcome: LotteryOutcome, success_msg: str
+) -> None:
+    async with SessionMaker() as session:
+        await record_round_outcome(session, interaction.user.id, round_id, outcome)
+        await session.commit()
+    await interaction.response.send_message(success_msg)
+
+
+class AppliedButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:applied:(?P<rid>\d+)"
+):
+    def __init__(self, round_id: int) -> None:
+        super().__init__(discord.ui.Button(
+            label="I applied", style=discord.ButtonStyle.primary,
+            custom_id=f"dk:applied:{round_id}",
+        ))
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _handle_outcome_click(
+            interaction, self.round_id, LotteryOutcome.APPLIED, "Got it — marked as applied!"
+        )
+
+
+class NotAppliedButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:notapplied:(?P<rid>\d+)"
+):
+    def __init__(self, round_id: int) -> None:
+        super().__init__(discord.ui.Button(
+            label="Didn't apply", style=discord.ButtonStyle.secondary,
+            custom_id=f"dk:notapplied:{round_id}",
+        ))
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _handle_outcome_click(
+            interaction, self.round_id, LotteryOutcome.NOT_APPLIED,
+            "No worries — you won't get results/payment reminders for this one.",
+        )
+
+
+class WonButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:won:(?P<rid>\d+)"
+):
+    def __init__(self, round_id: int) -> None:
+        super().__init__(discord.ui.Button(
+            label="Won", style=discord.ButtonStyle.success,
+            custom_id=f"dk:won:{round_id}",
+        ))
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _handle_outcome_click(
+            interaction, self.round_id, LotteryOutcome.WON,
+            "Congrats! I'll remind you when payment is due.",
+        )
+
+
+class LostButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:lost:(?P<rid>\d+)"
+):
+    def __init__(self, round_id: int) -> None:
+        super().__init__(discord.ui.Button(
+            label="Lost", style=discord.ButtonStyle.secondary,
+            custom_id=f"dk:lost:{round_id}",
+        ))
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _handle_outcome_click(
+            interaction, self.round_id, LotteryOutcome.LOST,
+            "Sorry to hear it — no payment reminder needed, and I'll let you know "
+            "when the next round opens if there is one.",
+        )
+
+
+class PaidButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:paid:(?P<rid>\d+)"
+):
+    def __init__(self, round_id: int) -> None:
+        super().__init__(discord.ui.Button(
+            label="Paid", style=discord.ButtonStyle.success,
+            custom_id=f"dk:paid:{round_id}",
+        ))
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _handle_outcome_click(
+            interaction, self.round_id, LotteryOutcome.PAID, "Marked as paid — all set!"
+        )
+
+
 DYNAMIC_ITEMS = [
     ApplyDefaultButton, RemoveRemindersButton, ReinstateRemindersButton, ShowDeadlinesButton,
-    SnoozeButton,
+    SnoozeButton, AppliedButton, NotAppliedButton, WonButton, LostButton, PaidButton,
 ]

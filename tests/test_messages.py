@@ -2,9 +2,14 @@
 
 from datetime import UTC, datetime
 
-from app.bot.messages import build_new_event_message, format_reminder, relative_phrase
+from app.bot.messages import (
+    build_new_event_message,
+    build_reminder_message,
+    format_reminder,
+    relative_phrase,
+)
 from app.db.service import DueReminder, NoticeContext
-from app.domain.types import Anchor
+from app.domain.types import Anchor, LotteryOutcome
 
 
 def dt(month, day, hour=12):
@@ -78,3 +83,60 @@ def test_new_event_message_links_to_event_id_not_internal_pk():
     )
     assert open_button.url.endswith("/concerts/hasunosora-6th")
     assert "/concerts/999" not in open_button.url
+
+
+def test_build_reminder_message_shows_apply_buttons_on_closes_with_no_outcome():
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.CLOSES, fire_at_utc=dt(6, 22),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25), outcome=None,
+    )
+    _, view = build_reminder_message(item)
+    # discord.ui.DynamicItem only proxies custom_id (not .label) -- checking
+    # custom_id is also the more precise assertion, since it identifies
+    # exactly which button this is, not just its display text.
+    custom_ids = [getattr(c, "custom_id", None) for c in view.children]
+    assert any(cid and cid.startswith("dk:applied:") for cid in custom_ids)
+    assert any(cid and cid.startswith("dk:notapplied:") for cid in custom_ids)
+    assert not any(
+        cid and (cid.startswith("dk:won:") or cid.startswith("dk:paid:")) for cid in custom_ids
+    )
+
+
+def test_build_reminder_message_shows_won_lost_buttons_on_results_when_applied():
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.RESULTS, fire_at_utc=dt(6, 25),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25), outcome=LotteryOutcome.APPLIED,
+    )
+    _, view = build_reminder_message(item)
+    custom_ids = [getattr(c, "custom_id", None) for c in view.children]
+    assert any(cid and cid.startswith("dk:won:") for cid in custom_ids)
+    assert any(cid and cid.startswith("dk:lost:") for cid in custom_ids)
+
+
+def test_build_reminder_message_shows_paid_button_on_payment_when_won():
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.PAYMENT, fire_at_utc=dt(6, 28),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 30), outcome=LotteryOutcome.WON,
+    )
+    _, view = build_reminder_message(item)
+    custom_ids = [getattr(c, "custom_id", None) for c in view.children]
+    assert any(cid and cid.startswith("dk:paid:") for cid in custom_ids)
+
+
+def test_build_reminder_message_shows_no_outcome_buttons_on_payment_when_lost():
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.PAYMENT, fire_at_utc=dt(6, 28),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 30), outcome=LotteryOutcome.LOST,
+    )
+    _, view = build_reminder_message(item)
+    custom_ids = [getattr(c, "custom_id", None) for c in view.children]
+    blocked_prefixes = ("dk:paid:", "dk:won:", "dk:lost:")
+    assert not any(cid and cid.startswith(blocked_prefixes) for cid in custom_ids)
