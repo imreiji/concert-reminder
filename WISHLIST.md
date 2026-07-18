@@ -8,19 +8,7 @@ rejected ideas move to the bottom sections instead of being deleted.
 
 ## Proposed (highest impact first)
 
-### 1. Surface undeliverable DMs to the user
-
-Impact: high — silent failure of the app's core promise. Effort: small.
-Raised: 2026-07-18 UX review.
-
-When a user has DMs blocked, the scheduler marks the reminder row sent
-anyway and only logs a warning (`scheduler/loop.py`) — from the user's
-side the app simply goes dark. Since they can still log in on the web:
-show a banner on the index ("your last reminder couldn't be DM'd — enable
-DMs from server members") and add a "send me a test DM" button on the
-preferences page. Cheapest trust win on this list.
-
-### 2. Per-round personal lottery outcome tracking (applied / won / lost / paid)
+### 1. Per-round personal lottery outcome tracking (applied / won / lost / paid)
 
 Impact: high — the most domain-shaped feature here. Effort: large.
 Raised: 2026-07-18 UX review.
@@ -33,7 +21,7 @@ round's payment reminder and arm the next round's opens reminder; won →
 skip the general-sale ping. Natural surface: the existing state-aware DM
 buttons ("Did you apply?") right in the reminder embed.
 
-### 3. Free-text search matches artists, groups, and venues
+### 2. Free-text search matches artists, groups, and venues
 
 Impact: medium-high — findability. Effort: small.
 Raised: 2026-07-18 UX review.
@@ -43,7 +31,7 @@ Search matches title + title_en only, but users think "when's the next
 `data-search` attribute — append tag names to it (and to the server-side
 fallback query) and search starts working the way users expect.
 
-### 4. Daily digest mode
+### 3. Daily digest mode
 
 Impact: medium — noise reduction for multi-subscription users. Effort: medium.
 Raised: 2026-07-18 UX review.
@@ -53,7 +41,7 @@ One DM per deadline per rule trains busy users to ignore pings. Opt-in
 delivery time when the outbox is drained — the queue design already
 supports grouping rows per user per tick.
 
-### 5. First-run guided setup
+### 4. First-run guided setup
 
 Impact: medium — new-user activation. Effort: medium.
 Raised: 2026-07-18 UX review.
@@ -61,12 +49,18 @@ Raised: 2026-07-18 UX review.
 All the onboarding pieces exist (tag subscriptions, default preset,
 timezone auto-detect, `/mydeadlines`, the calendar feed) but a new login
 lands on an index shaped by none of them. Sequence them: follow some
-artists → pick a default reminder preset → confirm timezone → here's
-your calendar feed URL. Goal: first useful reminder armed in one sitting.
+artists → pick a default reminder preset → confirm timezone → send a
+test DM to confirm delivery works → here's your calendar feed URL. Goal:
+first useful reminder armed in one sitting.
 
 ## Shipped
 
-(none yet — move entries here with the ship date when they land)
+### Surface undeliverable DMs to the user (2026-07-18)
+
+Shipped as: a sitewide `dm_blocked` banner (driven by `SessionUser` /
+`users.dm_blocked_since`, set by the scheduler's delivery-outcome
+tracking) plus a synchronous `POST /me/test-dm` diagnostic route and
+"Send test DM" button on the preferences page.
 
 ## Rejected
 
