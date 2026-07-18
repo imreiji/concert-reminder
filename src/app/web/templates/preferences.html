@@ -19,6 +19,20 @@
 </form>
 <p class="dim tiny">Event times are always shown as JST plus this timezone.</p>
 
+<h2>Discord DMs</h2>
+{% if user.dm_blocked %}
+<p class="dim">Your last reminder couldn't be delivered — check your Discord privacy
+  settings to allow DMs from server members, then try again.</p>
+{% endif %}
+{% if bot_enabled %}
+<p class="inline">
+  <button hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">Send test DM</button>
+  <span id="dm-test-result" class="dim"></span>
+</p>
+{% else %}
+<p class="dim">The Discord bot isn't running in this environment (dev mode), so DMs can't be tested here.</p>
+{% endif %}
+
 <h2>Calendar feed</h2>
 <p class="dim">Subscribe once in your phone/calendar app and every deadline you have a
   reminder for stays in sync automatically — no more downloading a fresh .ics per round.</p>

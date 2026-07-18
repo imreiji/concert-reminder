@@ -328,6 +328,82 @@ def test_timezone_setting_validates(client):
     assert client.post("/me/timezone", data={"timezone": "Mars/Olympus"}).status_code == 422
 
 
+async def test_test_dm_succeeds_and_clears_dm_blocked(client, monkeypatch):
+    from app.config import settings as app_settings
+    from app.db.models import User
+
+    class FakeUser:
+        async def send(self, body):
+            pass
+
+    class FakeBot:
+        def get_user(self, uid):
+            return FakeUser()
+
+    # bot_enabled defaults to False in tests (discord_token defaults to "");
+    # this route short-circuits on that flag, so it must be turned on here.
+    monkeypatch.setattr(app_settings, "discord_token", "fake-token")
+    login_as(client, EDITOR_ID, "reiji")
+    async with client.db() as s:
+        user = await s.get(User, EDITOR_ID)
+        user.dm_blocked_since = datetime.now(UTC)
+        await s.commit()
+
+    import app.bot.client as bot_client_mod
+
+    client.monkeypatch.setattr(bot_client_mod, "bot", FakeBot())
+    r = client.post("/me/test-dm")
+    assert r.status_code == 200
+    assert "Test DM sent" in r.text
+
+    async with client.db() as s:
+        user = await s.get(User, EDITOR_ID)
+        assert user.dm_blocked_since is None
+
+
+async def test_test_dm_forbidden_sets_dm_blocked(client, monkeypatch):
+    import discord
+
+    from app.config import settings as app_settings
+    from app.db.models import User
+
+    class FakeResponse:
+        status = 403
+        reason = "Forbidden"
+
+    class FakeUser:
+        async def send(self, body):
+            raise discord.Forbidden(FakeResponse(), "missing access")
+
+    class FakeBot:
+        def get_user(self, uid):
+            return FakeUser()
+
+    monkeypatch.setattr(app_settings, "discord_token", "fake-token")
+    login_as(client, EDITOR_ID, "reiji")
+
+    import app.bot.client as bot_client_mod
+
+    client.monkeypatch.setattr(bot_client_mod, "bot", FakeBot())
+    r = client.post("/me/test-dm")
+    assert r.status_code == 200
+    assert "Still blocked" in r.text
+
+    async with client.db() as s:
+        user = await s.get(User, EDITOR_ID)
+        assert user.dm_blocked_since is not None
+
+
+def test_test_dm_when_bot_disabled(client):
+    """discord_token defaults to "" (bot_enabled False) in every test
+    environment, so no monkeypatch is needed for this one -- it's the
+    default state."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/me/test-dm")
+    assert r.status_code == 200
+    assert "isn't running" in r.text
+
+
 def test_delete_concert_cascades_everything(client):
     import asyncio
 

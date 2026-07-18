@@ -11,6 +11,7 @@
   POST /me/timezone                          manual timezone choice
   POST /me/timezone/auto                     browser-detected timezone
   POST /me/timezone/reset                    back to browser auto-detect
+  POST /me/test-dm                           send a synchronous diagnostic test DM
 
 Everything here is per-user: routes verify ownership and 404 on other
 people's presets/subscriptions rather than admitting they exist.
@@ -18,6 +19,7 @@ people's presets/subscriptions rather than admitting they exist.
 
 from zoneinfo import ZoneInfo
 
+import discord
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
@@ -30,6 +32,7 @@ from app.db.service import (
     ensure_user,
     group_members,
     list_editors,
+    record_dm_outcome,
     set_default_preset,
     set_editor,
 )
@@ -121,7 +124,8 @@ async def preferences(
          "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
          "anchors": list(Anchor), "editors": editors,
          "has_calendar_feed": has_calendar_feed,
-         "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None},
+         "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
+         "bot_enabled": settings.bot_enabled},
     )
 
 
@@ -395,3 +399,38 @@ async def reset_timezone_auto(
     db_user.tz_auto = True
     await session.commit()
     return RedirectResponse("/preferences", status_code=303)
+
+
+# ── DM diagnostics ───────────────────────────────────────────────────────
+
+
+@router.post("/me/test-dm", response_class=HTMLResponse)
+async def send_test_dm(
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Synchronous, explicit exception to CLAUDE.md's "never send DMs
+    directly from web routes" invariant (see the invariant's own addendum
+    for why) -- a manual, user-initiated diagnostic action, unlike the
+    notifications-table-driven system notices. Returns a one-line htmx
+    fragment (this codebase has no flash-message system), following the
+    hx-post/hx-target/hx-swap idiom _rules.html already establishes."""
+    if not settings.bot_enabled:
+        return HTMLResponse("Discord bot isn't running in this environment.")
+
+    from app.bot.client import bot  # lazy: avoid discord.py setup cost in web-only dev mode
+
+    try:
+        discord_user = bot.get_user(user.id) or await bot.fetch_user(user.id)
+        await discord_user.send(
+            "This is a test DM from dekimasen.app — your reminders are working!"
+        )
+        await record_dm_outcome(session, user.id, blocked=False)
+        await session.commit()
+        return HTMLResponse("Test DM sent!")
+    except discord.Forbidden:
+        await record_dm_outcome(session, user.id, blocked=True)
+        await session.commit()
+        return HTMLResponse("Still blocked — check your Discord privacy settings.")
+    except discord.HTTPException:
+        return HTMLResponse("Couldn't reach Discord, try again.")
