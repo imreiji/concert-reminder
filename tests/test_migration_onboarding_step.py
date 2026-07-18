@@ -14,7 +14,7 @@ from alembic.config import Config
 from app.config import settings
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PRE_MIGRATION_REVISION = "5ea945b713c4"  # head immediately before this column
+PRE_MIGRATION_REVISION = "d4cfaf0149ee"  # head immediately before this column
 
 
 def _alembic_config(monkeypatch, db_path: Path) -> Config:

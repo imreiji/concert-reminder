@@ -1,7 +1,7 @@
 """onboarding step
 
 Revision ID: e8a1c9d2f7b5
-Revises: 5ea945b713c4
+Revises: d4cfaf0149ee
 Create Date: 2026-07-18 15:00:00.000000
 """
 from alembic import op
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 revision = 'e8a1c9d2f7b5'
-down_revision = '5ea945b713c4'
+down_revision = 'd4cfaf0149ee'
 branch_labels = None
 depends_on = None
 
