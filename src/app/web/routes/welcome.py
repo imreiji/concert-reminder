@@ -13,12 +13,13 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.models import Tag, TagSubscription
 from app.db.service import ensure_user, group_members
 from app.db.session import get_session
 from app.domain.types import Anchor, TagKind
 from app.web.auth import SessionUser, require_user
-from app.web.routes.preferences import my_presets
+from app.web.routes.preferences import COMMON_TIMEZONES, all_timezones, my_presets
 
 router = APIRouter()
 
@@ -32,13 +33,14 @@ async def welcome(
     request: Request,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
+    feed_token: str = "",
 ):
     db_user = await ensure_user(session, user.id, user.username)
     if db_user.onboarding_step >= TOTAL_STEPS:
         return RedirectResponse("/", status_code=303)
 
     step = db_user.onboarding_step
-    context = {"user": user, "step": step}
+    context = {"user": user, "step": step, "bot_enabled": settings.bot_enabled}
 
     if step == 0:
         subs = list((await session.execute(
@@ -63,6 +65,16 @@ async def welcome(
     elif step == 1:
         presets = await my_presets(session, user.id)
         context.update({"has_preset": bool(presets), "anchors": list(Anchor)})
+    elif step == 2:
+        context.update({
+            "tz": db_user.timezone, "tz_auto": db_user.tz_auto,
+            "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
+        })
+    elif step == 4:
+        context.update({
+            "has_calendar_feed": bool(db_user.calendar_token_hash),
+            "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
+        })
 
     return templates.TemplateResponse(request, "welcome.html", context)
 

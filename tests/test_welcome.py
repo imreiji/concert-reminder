@@ -145,3 +145,51 @@ def test_step_1_shows_continue_once_a_preset_exists(client):
     client.post("/presets", data={"name": "standard", "next": "/welcome"})
     r = client.get("/welcome")
     assert "Continue" in r.text and "Preset created" in r.text
+
+
+async def test_welcome_shows_step_2_timezone(client):
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # 0 -> 1
+    client.post("/welcome/advance")  # 1 -> 2
+    r = client.get("/welcome")
+    assert "Confirm your timezone" in r.text
+
+
+async def test_step_2_set_timezone_returns_to_welcome(client):
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")
+    client.post("/welcome/advance")
+    r = client.post("/me/timezone", data={"timezone": "Asia/Tokyo", "next": "/welcome"})
+    assert r.headers["location"] == "/welcome"
+    # "Asia/Tokyo" alone would render regardless (it's already one of the
+    # ~400 option values in the picker); only the `selected` marker proves
+    # the wizard is actually showing the NEW value, not just any option.
+    assert 'value="Asia/Tokyo" selected' in client.get("/welcome").text
+
+
+async def test_welcome_shows_step_3_test_dm(client):
+    login_as(client, FAN_ID, "fan")
+    for _ in range(3):
+        client.post("/welcome/advance")  # 0 -> 1 -> 2 -> 3
+    r = client.get("/welcome")
+    assert "Send a test DM" in r.text
+
+
+async def test_welcome_shows_step_4_calendar_feed(client):
+    login_as(client, FAN_ID, "fan")
+    for _ in range(4):
+        client.post("/welcome/advance")  # 0 -> 1 -> 2 -> 3 -> 4
+    r = client.get("/welcome")
+    assert "Get your calendar feed" in r.text
+    assert "Skip this" in r.text
+
+
+async def test_step_4_generate_feed_returns_to_welcome_with_link_shown(client):
+    login_as(client, FAN_ID, "fan")
+    for _ in range(4):
+        client.post("/welcome/advance")
+    r = client.post("/me/calendar-feed", data={"next": "/welcome"})
+    assert r.headers["location"].startswith("/welcome?feed_token=")
+    r = client.get(r.headers["location"])
+    assert "feed link is ready" in r.text
+    assert "Continue" in r.text

@@ -96,4 +96,59 @@
 {% endif %}
 <form method="post" action="/welcome/advance"><button>{{ "Continue" if has_preset else "Skip this" }}</button></form>
 {% endif %}
+
+{% if step == 2 %}
+<h2>Confirm your timezone</h2>
+<p class="dim">Deadlines always show in JST plus this timezone.</p>
+<p>Detected: <strong>{{ tz }}</strong>{% if tz_auto %} <span class="dim tiny">(auto-detected from your browser)</span>{% endif %}</p>
+<form class="inline" method="post" action="/me/timezone">
+  <input type="hidden" name="next" value="/welcome">
+  <select name="timezone">
+    <optgroup label="Common">
+      {% for t in common_timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </optgroup>
+    <optgroup label="All zones (IANA)">
+      {% for t in all_timezones %}<option value="{{ t }}" {% if t == tz and t not in common_timezones %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </optgroup>
+  </select>
+  <button>Use this timezone</button>
+</form>
+<form method="post" action="/welcome/advance"><button>Looks right, continue</button></form>
+{% endif %}
+
+{% if step == 3 %}
+<h2>Send a test DM</h2>
+<p class="dim">Confirm reminders can actually reach you on Discord before you rely on them.</p>
+{% if bot_enabled %}
+<p class="inline">
+  <button hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">Send test DM</button>
+  <span id="dm-test-result" class="dim"></span>
+</p>
+{% else %}
+<p class="dim">The Discord bot isn't running in this environment (dev mode), so DMs can't be tested here.</p>
+{% endif %}
+<form method="post" action="/welcome/advance"><button>Continue</button></form>
+{% endif %}
+
+{% if step == 4 %}
+<h2>Get your calendar feed</h2>
+<p class="dim">Subscribe once in your phone/calendar app and every deadline you have a
+  reminder for stays in sync automatically.</p>
+{% if feed_url %}
+<div class="panel">
+  <p><strong>Your feed link is ready — save it now, it won't be shown again:</strong></p>
+  <p class="inline"><code class="feed-url">{{ feed_url }}</code>
+    <button type="button" class="quiet" data-copy="{{ feed_url }}"
+            onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy</button></p>
+</div>
+{% elif has_calendar_feed %}
+<p class="dim">Your feed is active.</p>
+{% else %}
+<form method="post" action="/me/calendar-feed">
+  <input type="hidden" name="next" value="/welcome">
+  <button>Generate feed link</button>
+</form>
+{% endif %}
+<form method="post" action="/welcome/advance"><button>{{ "Continue" if has_calendar_feed else "Skip this" }}</button></form>
+{% endif %}
 {% endblock %}
