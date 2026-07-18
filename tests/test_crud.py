@@ -638,6 +638,11 @@ def test_new_concert_page_is_editor_only(client):
     assert r.status_code == 200
     assert "Add an event" in r.text
     assert 'name="event_id"' in r.text  # event id field present
+    assert 'name="day_label"' in r.text  # performance row template present
+    # the leg field is a dropdown of performances, not free text -- picking a
+    # real day instead of guessing a string that has to fuzzy-match server-side
+    assert '<select name="round_leg" class="round-leg-select"></select>' in r.text
+    assert "function syncLegOptions" in r.text
 
 
 def test_new_concert_page_shows_new_round_kind_labels(client):
@@ -645,11 +650,6 @@ def test_new_concert_page_shows_new_round_kind_labels(client):
     r = client.get("/concerts/new")
     assert "First come, first served" in r.text
     assert "Overseas tour package" in r.text
-    assert 'name="day_label"' in r.text  # performance row template present
-    # the leg field is a dropdown of performances, not free text -- picking a
-    # real day instead of guessing a string that has to fuzzy-match server-side
-    assert '<select name="round_leg" class="round-leg-select"></select>' in r.text
-    assert "function syncLegOptions" in r.text
 
 
 async def test_rich_create_builds_concert_days_and_rounds_atomically(client):
