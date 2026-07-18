@@ -648,6 +648,41 @@ async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
     return list(res.scalars())
 
 
+async def active_concerts_missing_member(
+    session: AsyncSession, group_id: int, member_id: int, now: datetime | None = None
+) -> list[Concert]:
+    """Concerts tagged with `group_id` that don't already carry `member_id`
+    and have at least one live (non-cancelled) leg whose date hasn't
+    passed -- the set the Tags page's retroactive-apply confirmation
+    offers to bulk-attach an artist to. "Active" reuses the same
+    live-leg-date-range logic concert_date_range()/concert_past already use
+    on the concert detail page (routes/concerts.py), reimplemented directly
+    here rather than imported from web/routes/ -- this module sits below
+    routes in this project's dependency direction, so importing the other
+    way would invert it for a few lines of straightforward logic."""
+    now = now or _now()
+    res = await session.execute(
+        select(Concert)
+        .join(ConcertTag, ConcertTag.concert_id == Concert.id)
+        .where(ConcertTag.tag_id == group_id)
+    )
+    candidates = list(res.scalars())
+    already_tagged = set((await session.execute(
+        select(ConcertTag.concert_id).where(ConcertTag.tag_id == member_id)
+    )).scalars())
+
+    out = []
+    for c in candidates:
+        if c.id in already_tagged:
+            continue
+        await session.refresh(c, ["days"])
+        live_starts = [d.starts_at_utc for d in c.days if not d.cancelled]
+        if not live_starts or max(live_starts) < now:
+            continue
+        out.append(c)
+    return out
+
+
 async def tag_picker_context(session: AsyncSession) -> dict:
     """Data the shared tag-picker partial needs: tags grouped by kind, plus
     the two JSON blobs its client-side script reads (group->members for
