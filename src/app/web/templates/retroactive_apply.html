@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}confirm — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Add {{ member.name }} to active events?</h1>
+{% if concerts %}
+<p class="dim">{{ member.name }} was just added to {{ group.name }}. These {{ concerts | length }}
+  active event(s) already have {{ group.name }} attached but not {{ member.name }} individually:</p>
+<ul class="rows">
+  {% for c in concerts %}<li><a href="/concerts/{{ c.event_id }}">{{ c.title }}</a></li>{% endfor %}
+</ul>
+<form class="inline" method="post" action="/tags/{{ group.id }}/members/{{ member.id }}/retroactive-apply">
+  <button>Apply to all</button>
+  <a class="btn quiet" href="/tags">Skip</a>
+</form>
+{% else %}
+<p class="dim">Nothing to apply — every active event with {{ group.name }} already has {{ member.name }}.</p>
+<p><a class="btn quiet" href="/tags">Back to tags</a></p>
+{% endif %}
+{% endblock %}

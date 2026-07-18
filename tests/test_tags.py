@@ -198,6 +198,98 @@ async def test_edit_tag_without_name_field_leaves_name_unchanged(client):
         assert tag.region == "Kanto"
 
 
+# ── Retroactive-apply confirmation flow ──────────────────────────────────
+
+
+def create_active_concert_with_group(client, event_id, group_tag_id):
+    """A concert with one live future leg, tagged with the given group --
+    the shape active_concerts_missing_member requires to count a concert
+    as an eligible retroactive-apply target."""
+    return client.post(
+        "/concerts",
+        data={
+            "title": event_id, "event_id": event_id, "group_tags": [group_tag_id],
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["false"],
+        },
+    )
+
+
+def test_add_member_redirects_straight_to_tags_when_nothing_eligible(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    r = client.post("/tags/1/members", data={"member_tag_id": 2})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/tags"
+
+
+def test_add_member_redirects_to_confirmation_when_something_eligible(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+    r = client.post("/tags/1/members", data={"member_tag_id": 2})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/tags/1/members/2/retroactive-apply"
+
+
+def test_confirmation_page_lists_eligible_concert_titles(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    r = client.get("/tags/1/members/2/retroactive-apply")
+    assert r.status_code == 200
+    assert "liella-live" in r.text
+    assert "Sumire" in r.text
+
+
+def test_confirmation_page_handles_nothing_eligible_gracefully(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    r = client.get("/tags/1/members/2/retroactive-apply")
+    assert r.status_code == 200
+    assert "Nothing to apply" in r.text
+
+
+async def test_apply_to_all_attaches_tag_and_notifies_subscriber(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+
+    login_as(client, VIEWER_ID, "viewer")
+    client.post("/subscriptions", data={"tag_id": 2, "notify": "true"})
+    login_as(client, EDITOR_ID, "reiji")
+
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    r = client.post("/tags/1/members/2/retroactive-apply")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/tags"
+
+    async with client.db() as s:
+        from app.db.models import Notification
+
+        concert_tags = (await s.execute(select(ConcertTag))).scalars().all()
+        assert any(ct.tag_id == 2 for ct in concert_tags)  # Sumire attached
+        notes = (await s.execute(select(Notification))).scalars().all()
+        assert any(n.user_id == VIEWER_ID for n in notes)
+
+
+def test_confirmation_page_requires_editor(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+
+    login_as(client, VIEWER_ID, "viewer")
+    assert client.get("/tags/1/members/2/retroactive-apply").status_code == 403
+    assert client.post("/tags/1/members/2/retroactive-apply").status_code == 403
+
+
 def test_index_filters_by_tag(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
