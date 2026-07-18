@@ -39,6 +39,8 @@ from app.db.service import (
     snapshot_concert,
     sync_concert,
     sync_rule,
+    upcoming_deadlines,
+    upcoming_rounds,
     user_calendar_events,
 )
 from app.domain.types import Anchor, ConcertKind, RoundKind, TagKind
@@ -602,6 +604,86 @@ async def test_active_concerts_missing_member_empty_for_ungrouped_concert(sessio
     await session.flush()
     result = await active_concerts_missing_member(session, group.id, new_member.id, NOW)
     assert "No Group" not in [c.title for c in result]
+
+
+# ── Global upcoming-deadlines list (index page) ──────────────────────────
+
+
+async def seed_deadline_scenarios(s) -> tuple[Concert, Round, ConcertDay]:
+    """One concert with a round carrying two set timestamps (to confirm it
+    produces two independent rows) plus a live future day; one concert
+    that's entirely cancelled; one concert with only a past-dated round."""
+    await ensure_user(s, 42, "reiji")
+
+    concert = Concert(title="Two-Timestamp Show", event_id="two-ts", created_by=42)
+    s.add(concert)
+    await s.flush()
+    round_both = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="Bundled",
+        opens_at_utc=dt(6, 5), closes_at_utc=dt(6, 10),
+    )
+    day = ConcertDay(concert_id=concert.id, label="Day 1", starts_at_utc=dt(8, 1, 9))
+    s.add_all([round_both, day])
+
+    cancelled_concert = Concert(title="Cancelled Show", event_id="cancelled-show", created_by=42)
+    s.add(cancelled_concert)
+    await s.flush()
+    cancelled_day = ConcertDay(
+        concert_id=cancelled_concert.id, label="Day 1", starts_at_utc=dt(8, 5, 9), cancelled=True,
+    )
+    s.add(cancelled_day)
+    await s.flush()
+    cancelled_round = Round(
+        concert_id=cancelled_concert.id, kind=RoundKind.LOTTERY_ROUND, label="Cancelled Round",
+        closes_at_utc=dt(6, 15), applies_to=[cancelled_day.id],
+    )
+    s.add(cancelled_round)
+
+    past_concert = Concert(title="Past Show", event_id="past-show", created_by=42)
+    s.add(past_concert)
+    await s.flush()
+    past_round = Round(
+        concert_id=past_concert.id, kind=RoundKind.LOTTERY_ROUND, label="Past Round",
+        closes_at_utc=dt(1, 1),
+    )
+    s.add(past_round)
+    await s.flush()
+    return concert, round_both, day
+
+
+async def test_upcoming_deadlines_one_row_per_set_timestamp(session):
+    concert, round_both, day = await seed_deadline_scenarios(session)
+    result = await upcoming_deadlines(session, NOW, limit=10)
+    pairs = [(e.label, e.anchor) for e in result if e.concert_title == "Two-Timestamp Show"]
+    assert (round_both.label, Anchor.OPENS) in pairs
+    assert (round_both.label, Anchor.CLOSES) in pairs
+    assert (day.label, Anchor.EVENT_START) in pairs
+
+
+async def test_upcoming_deadlines_excludes_cancelled_and_past(session):
+    await seed_deadline_scenarios(session)
+    result = await upcoming_deadlines(session, NOW, limit=10)
+    titles = {e.concert_title for e in result}
+    assert "Cancelled Show" not in titles
+    assert "Past Show" not in titles
+
+
+async def test_upcoming_deadlines_sorted_chronologically_and_truncated(session):
+    await seed_deadline_scenarios(session)
+    result = await upcoming_deadlines(session, NOW, limit=2)
+    assert len(result) == 2
+    assert result[0].at_utc <= result[1].at_utc
+
+
+async def test_upcoming_rounds_excludes_implicitly_cancelled_round(session):
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    leg_a.cancelled = True
+    await session.flush()
+    result = await upcoming_rounds(session, NOW, horizon_days=60)
+    round_ids = {r.id for _, r in result}
+    assert round_a_only.id not in round_ids  # fully cancelled (its only leg is now cancelled)
+    assert round_both.id in round_ids  # leg B still live
+    assert round_general.id in round_ids  # never tied to a leg, unaffected
 
 
 # ── set_editor / list_editors ───────────────────────────────────────────

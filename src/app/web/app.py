@@ -1,5 +1,6 @@
 """Web application: sessions, auth, concert CRUD."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Query, Request
@@ -13,6 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.db.models import Concert, ConcertDay, Tag, User
+from app.db.service import LABEL_BY_ANCHOR
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual, utc_to_jst
 from app.scheduler import heartbeat
@@ -28,6 +30,7 @@ _here = Path(__file__).parent
 templates = Jinja2Templates(directory=_here / "templates")
 templates.env.globals["dual"] = fmt_dual        # {{ dual(dt, tz) }}
 templates.env.globals["jst"] = utc_to_jst       # {{ jst(dt).strftime(...) }}
+templates.env.globals["deadline_label"] = lambda anchor: LABEL_BY_ANCHOR[anchor]
 
 COMMON_TIMEZONES = [
     "America/Moncton", "America/Halifax", "America/Toronto", "America/Vancouver",
@@ -69,6 +72,24 @@ def region_sidebar_links(venue_tags: list[Tag], selected: list[int], sort: str) 
             "href": href, "ids": rtag_ids,
         })
     return links
+
+
+def has_open_round(concert: Concert, now: datetime) -> bool:
+    """A concert is "open" if any of its non-cancelled rounds currently has
+    an active application window: closes_at_utc set and in the future, AND
+    opens_at_utc either unset or already passed. A round with only
+    results/payment timestamps set is never "open" on its own."""
+    from app.db.service import is_round_cancelled
+
+    cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
+    for r in concert.rounds:
+        if is_round_cancelled(r, cancelled_day_ids):
+            continue
+        if r.closes_at_utc and r.closes_at_utc > now and (
+            r.opens_at_utc is None or r.opens_at_utc <= now
+        ):
+            return True
+    return False
 
 
 def create_app() -> FastAPI:
@@ -121,10 +142,14 @@ def create_app() -> FastAPI:
         q: str = "",
     ):
         concerts, tz, tz_auto, tags = [], settings.default_timezone, True, []
+        open_concert_ids: set[int] = set()
+        deadlines, concert_tags_by_event_id = [], {}
         if user:
             from sqlalchemy import func as sa_func
 
-            stmt = select(Concert).options(selectinload(Concert.days))
+            from app.db.service import upcoming_deadlines
+
+            stmt = select(Concert).options(selectinload(Concert.days), selectinload(Concert.rounds))
             # Hide a concert whose every existing leg is cancelled -- it has
             # no valid dates left, same treatment as a concert with zero
             # legs would get if it also had no live rounds, except this is a
@@ -150,15 +175,22 @@ def create_app() -> FastAPI:
             # the server on every click.
             if sort == "added":
                 stmt = stmt.order_by(Concert.created_at.desc())
-            else:  # "event": earliest concert day first; undated concerts last
+            else:  # "event": earliest LIVE concert day first; undated concerts last
                 first_day = sa_func.min(ConcertDay.starts_at_utc)
                 stmt = (
-                    stmt.outerjoin(ConcertDay)
+                    stmt.outerjoin(
+                        ConcertDay,
+                        (ConcertDay.concert_id == Concert.id) & (ConcertDay.cancelled.is_(False)),
+                    )
                     .group_by(Concert.id)
                     .order_by(first_day.is_(None), first_day)
                 )
             stmt = stmt.options(selectinload(Concert.tags))
             concerts = list((await session.execute(stmt)).scalars())
+            now = datetime.now(UTC)
+            open_concert_ids = {c.id for c in concerts if has_open_round(c, now)}
+            deadlines = await upcoming_deadlines(session, now, limit=10) if user else []
+            concert_tags_by_event_id = {c.event_id: {t.id for t in c.tags} for c in concerts}
             tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
             db_user = await session.get(User, user.id)
             if db_user:
@@ -203,6 +235,9 @@ def create_app() -> FastAPI:
                 "tag_names_json": _json.dumps(picker["tag_names_json"]),
                 "selected_tags": selected_tags,
                 "visible_concert_ids": visible_concert_ids,
+                "open_concert_ids": open_concert_ids,
+                "deadlines": deadlines,
+                "concert_tags_by_event_id": concert_tags_by_event_id,
                 "query": q,
                 "sort": sort,
                 "tz": tz,

@@ -21,6 +21,7 @@ import discord
 
 from app.db.service import (
     apply_default_preset,
+    is_round_cancelled,
     reinstate_user_rules,
     remove_user_rules,
     snooze_reminder,
@@ -138,6 +139,7 @@ class ShowDeadlinesButton(
             user = await session.get(User, interaction.user.id)
             tz = user.timezone if user else "America/Moncton"
 
+            cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
             lines = []
             for r in concert.rounds:
                 bits = []
@@ -149,9 +151,11 @@ class ShowDeadlinesButton(
                     bits.append(f"results {fmt_dual(r.results_at_utc, tz)}")
                 if r.payment_deadline_at_utc:
                     bits.append(f"payment due {fmt_dual(r.payment_deadline_at_utc, tz)}")
-                lines.append(f"**{r.label}** — {' / '.join(bits)}")
+                suffix = " (cancelled)" if is_round_cancelled(r, cancelled_day_ids) else ""
+                lines.append(f"**{r.label}**{suffix} — {' / '.join(bits)}")
             for d in concert.days:
-                lines.append(f"🎤 **{d.label}** — {fmt_dual(d.starts_at_utc, tz)}")
+                suffix = " (cancelled)" if d.cancelled else ""
+                lines.append(f"🎤 **{d.label}**{suffix} — {fmt_dual(d.starts_at_utc, tz)}")
         await interaction.response.send_message(
             "\n".join(lines) or "No deadlines entered yet."
         )

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertTag, Tag, TagMember, User
+from app.db.models import Base, Concert, ConcertDay, ConcertTag, Round, Tag, TagMember, User
 from app.db.service import attach_tag, detach_tag
 from app.db.session import get_session
 from app.domain.types import TagKind
@@ -626,5 +626,195 @@ async def test_index_keeps_concert_with_zero_days_visible(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title": "No Dates Yet", "event_id": "no-dates-yet"})
     assert "No Dates Yet" in client.get("/").text
+
+
+async def test_index_open_upcoming_bucket_shown_first(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "Open Round Show", "event_id": "open-show",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    client.post("/concerts", data={"title": "No Open Round", "event_id": "no-open-round"})
+
+    r = client.get("/").text
+    assert "Open &amp; upcoming" in r
+    open_heading_pos = r.index("Open &amp; upcoming")
+    upcoming_heading_pos = r.index(">Upcoming<")
+    open_show_pos = r.index("Open Round Show")
+    no_open_pos = r.index("No Open Round")
+    assert open_heading_pos < open_show_pos < upcoming_heading_pos < no_open_pos
+
+
+async def test_index_round_with_only_results_date_is_not_open(client):
+    """A round with only results_at set (no opens/closes) never counts as
+    "open" -- you can't apply to it, it's a pending action on an
+    already-closed round."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "Results Only Show", "event_id": "results-only",
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": [""],
+            "round_results_at": ["2099-06-25T23:59"], "round_payment_at": [""],
+            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    r = client.get("/").text
+    assert "Open &amp; upcoming" not in r
+
+
+async def test_index_sort_key_ignores_cancelled_leg_date(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "Mixed Legs Show", "event_id": "mixed-legs",
+            "day_label": ["Day 1", "Day 2"],
+            "day_starts_at": ["2099-06-01T18:00", "2099-09-01T18:00"],
+            "day_city": ["", ""], "day_venue": ["", ""],
+            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+        },
+    )
+    client.post("/concerts", data={
+        "title": "Between Show", "event_id": "between-show",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-07-01T18:00"],
+        "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+    })
+    async with client.db() as s:
+        from app.db.models import Concert as ConcertModel
+
+        mixed = (await s.execute(
+            select(ConcertModel).where(ConcertModel.event_id == "mixed-legs")
+        )).scalar_one()
+        days = sorted(
+            (await s.execute(
+                select(ConcertDay).where(ConcertDay.concert_id == mixed.id)
+            )).scalars(),
+            key=lambda d: d.starts_at_utc,
+        )
+        day1_id, day2_id = days[0].id, days[1].id  # June (will be cancelled), September
+
+    client.post(
+        "/concerts/mixed-legs/edit",
+        data={
+            "title": "Mixed Legs Show", "event_id": "mixed-legs",
+            "day_id": [str(day1_id), str(day2_id)],
+            "day_label": ["Day 1", "Day 2"],
+            "day_starts_at": ["2099-06-01T18:00", "2099-09-01T18:00"],
+            "day_city": ["", ""], "day_venue": ["", ""],
+            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_cancelled": ["true", "false"],
+        },
+    )
+    r = client.get("/?sort=event").text
+    # Mixed Legs Show's only LIVE date is September, after Between Show's
+    # July date -- if the sort key still used the cancelled June date,
+    # Mixed Legs would incorrectly sort before Between Show.
+    assert r.index("Between Show") < r.index("Mixed Legs Show")
+
+
+async def test_index_shows_chronological_deadline_list(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "Deadline Show", "event_id": "deadline-show",
+            "round_label": ["最速先行"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    r = client.get("/").text
+    assert "Deadline Show" in r
+    assert "最速先行" in r
+    assert "closes" in r
+
+
+async def test_index_deadline_list_excludes_cancelled_round(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+        },
+    )
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+        round_id = (await s.execute(select(Round))).scalar_one().id
+
+    client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            "day_id": [str(day_id)], "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["true"],
+            "round_id": [str(round_id)], "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+        },
+    )
+    r = client.get("/").text
+    assert "R1" not in r
+
+
+async def test_index_deadline_list_carries_tag_and_search_attributes(client):
+    """Tag filter and free-text search apply to the chronological deadline
+    list the same way they apply to tiles -- via data-tags/data-search
+    attributes the existing client-side JS reads. This test checks the
+    attributes are rendered correctly (server-side), matching how this
+    file's existing tile tests verify data-tags/data-search rather than
+    simulating JS execution."""
+    login_as(client, EDITOR_ID, "reiji")
+    async with client.db() as s:
+        tag = Tag(name="Test Artist", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        s.add(tag)
+        await s.flush()
+        tag_id = tag.id
+        await s.commit()
+
+    client.post(
+        "/concerts",
+        data={
+            "title": "Tagged Deadline Show", "event_id": "tagged-deadline",
+            "round_label": ["R1"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""], "round_leg": [""],
+        },
+    )
+    async with client.db() as s:
+        from app.db.models import Concert as ConcertModel
+        from app.db.service import attach_tag
+
+        concert = (await s.execute(
+            select(ConcertModel).where(ConcertModel.event_id == "tagged-deadline")
+        )).scalar_one()
+        await attach_tag(s, concert.id, tag)
+        await s.commit()
+
+    r = client.get("/").text
+    li_start = r.index("<li", r.index("deadline-list"))
+    li_end = r.index("</li>", li_start)
+    li_html = r[li_start:li_end]
+    assert f'data-tags="{tag_id}"' in li_html
+    assert 'data-search="tagged deadline show"' in li_html
 
 
