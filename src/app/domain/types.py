@@ -73,3 +73,16 @@ class Channel(enum.StrEnum):
 
     DM = "dm"
     CHANNEL = "channel"
+
+
+class LotteryOutcome(enum.StrEnum):
+    """A user's recorded progress through one round's lottery, tracked per
+    (user, round) in RoundOutcome. Strict sequence enforced in
+    record_round_outcome, not at the DB layer:
+    APPLIED -> (WON | LOST) -> PAID (PAID only reachable from WON)."""
+
+    NOT_APPLIED = "not_applied"
+    APPLIED = "applied"
+    WON = "won"
+    LOST = "lost"
+    PAID = "paid"

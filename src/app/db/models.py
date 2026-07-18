@@ -28,7 +28,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.domain.types import Anchor, Channel, ConcertKind, RoundKind, TagKind
+from app.domain.types import Anchor, Channel, ConcertKind, LotteryOutcome, RoundKind, TagKind
 
 
 class UTCDateTime(TypeDecorator):
@@ -287,6 +287,26 @@ class Round(Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     concert: Mapped[Concert] = relationship(back_populates="rounds")
+
+
+class RoundOutcome(Base):
+    """One user's recorded progress through a specific round's lottery:
+    NOT_APPLIED (explicitly opted out) / APPLIED / WON / LOST / PAID.
+    Strict sequence enforced in record_round_outcome, not at the DB layer:
+    APPLIED -> (WON | LOST) -> PAID (PAID only reachable from WON)."""
+
+    __tablename__ = "round_outcomes"
+    __table_args__ = (Index("uq_round_outcome", "user_id", "round_id", unique=True),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
+    round_id: Mapped[int] = mapped_column(ForeignKey("rounds.id", ondelete="CASCADE"))
+    outcome: Mapped[LotteryOutcome] = mapped_column(
+        Enum(LotteryOutcome, values_callable=lambda e: [m.value for m in e])
+    )
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now, onupdate=_now)
 
 
 class ReminderRule(Base):
