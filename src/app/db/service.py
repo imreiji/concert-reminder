@@ -42,7 +42,7 @@ from app.db.models import (
     User,
 )
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
-from app.domain.types import Anchor, LotteryOutcome, TagKind
+from app.domain.types import Anchor, LotteryOutcome, RoundKind, TagKind
 
 
 def _now() -> datetime:
@@ -678,6 +678,18 @@ LABEL_BY_ANCHOR: dict[Anchor, str] = {
     Anchor.RESULTS: "results announced",
     Anchor.PAYMENT: "payment due",
     Anchor.EVENT_START: "event",
+}
+
+LABEL_BY_ROUND_KIND: dict[RoundKind, str] = {
+    RoundKind.LOTTERY_ROUND: "Lottery round",
+    RoundKind.ELIGIBILITY_ITEM_SALE: "Eligibility item sale",
+    RoundKind.STREAM_TICKET_SALE: "Stream ticket sale",
+    RoundKind.GENERAL_SALE: "General sale",
+    RoundKind.RESULT_ANNOUNCEMENT: "Result announcement",
+    RoundKind.PAYMENT_DEADLINE: "Payment deadline",
+    RoundKind.FCFS_SALE: "First come, first served",
+    RoundKind.TOUR_PACKAGE: "Overseas tour package",
+    RoundKind.OTHER: "Other",
 }
 
 
