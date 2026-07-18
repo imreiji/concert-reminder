@@ -125,10 +125,15 @@ def _rule_info(r: ReminderRule) -> RuleInfo:
     )
 
 
-def _is_round_cancelled(round_: Round, cancelled_day_ids: set[int]) -> bool:
+def is_round_cancelled(round_: Round, cancelled_day_ids: set[int]) -> bool:
     """A round is implicitly cancelled when every leg it applies to is
     cancelled. A "General" round (empty/None applies_to) is never
-    auto-cancelled this way -- it isn't tied to any specific leg."""
+    auto-cancelled this way -- it isn't tied to any specific leg.
+
+    Public (no longer a leading-underscore module-private helper): used
+    outside this module too now, by upcoming_rounds/upcoming_deadlines
+    (below), the index route (web/app.py), and ShowDeadlinesButton
+    (bot/views.py)."""
     if not round_.applies_to:
         return False
     return all(day_id in cancelled_day_ids for day_id in round_.applies_to)
@@ -142,7 +147,7 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
     now = now or _now()
 
     # Gather the rounds/days in this rule's scope. Cancelled legs and rounds
-    # implicitly cancelled by them (see _is_round_cancelled) are filtered
+    # implicitly cancelled by them (see is_round_cancelled) are filtered
     # out here, before domain/reminders.py ever sees them -- the pure
     # planner never learns the concept of "cancelled"; it just sees fewer
     # candidates, and the existing "nothing planned -> delete" sync
@@ -158,7 +163,7 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
                     ConcertDay.cancelled.is_(True),
                 )
             )).scalars())
-            rounds = [] if _is_round_cancelled(round_, cancelled_day_ids) else [_round_info(round_)]
+            rounds = [] if is_round_cancelled(round_, cancelled_day_ids) else [_round_info(round_)]
         days: list[DayInfo] = []
     else:
         rres = await session.execute(select(Round).where(Round.concert_id == rule.concert_id))
@@ -169,7 +174,7 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
         all_days = list(dres.scalars())
         cancelled_day_ids = {d.id for d in all_days if d.cancelled}
         rounds = [
-            _round_info(r) for r in all_rounds if not _is_round_cancelled(r, cancelled_day_ids)
+            _round_info(r) for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)
         ]
         days = [_day_info(d) for d in all_days if not d.cancelled]
 
@@ -257,7 +262,7 @@ async def notify_newly_cancelled_legs(
     affected_round_ids = {
         r.id for r in rounds
         if set(r.applies_to or []) & newly_cancelled_day_ids
-        and _is_round_cancelled(r, all_cancelled_day_ids)
+        and is_round_cancelled(r, all_cancelled_day_ids)
     }
 
     res = await session.execute(
@@ -452,6 +457,83 @@ async def upcoming_rounds(
         .order_by(Round.closes_at_utc.is_(None), Round.closes_at_utc, Round.opens_at_utc)
     )
     return [(c, r) for c, r in res.all()]
+
+
+LABEL_BY_ANCHOR: dict[Anchor, str] = {
+    Anchor.OPENS: "opens",
+    Anchor.CLOSES: "closes",
+    Anchor.RESULTS: "results announced",
+    Anchor.PAYMENT: "payment due",
+    Anchor.EVENT_START: "event",
+}
+
+
+@dataclass(frozen=True)
+class UpcomingDeadline:
+    """One row on the index page's global chronological "things happening
+    soon" list -- every non-cancelled round/day across every concert, one
+    entry per SET timestamp field (not one per round: a round with both a
+    close and a payment deadline set produces two independent rows).
+    Future-only, meant to be sorted soonest-first and truncated to a fixed
+    count by the caller."""
+
+    concert_title: str
+    event_id: str
+    label: str
+    anchor: Anchor
+    at_utc: datetime
+    url: str | None = None
+
+
+async def upcoming_deadlines(
+    session: AsyncSession, now: datetime | None = None, limit: int = 10
+) -> list[UpcomingDeadline]:
+    """Global (not reminder-rule-scoped, not per-user) chronological
+    deadline list for the index page. Reuses is_round_cancelled the same
+    way sync_rule/notify_newly_cancelled_legs already do."""
+    now = now or _now()
+    days = list((await session.execute(select(ConcertDay))).scalars())
+    rounds = list((await session.execute(select(Round))).scalars())
+    cancelled_day_ids = {d.id for d in days if d.cancelled}
+    concert_ids = {d.concert_id for d in days} | {r.concert_id for r in rounds}
+    concerts = {
+        c.id: c for c in
+        (await session.execute(select(Concert).where(Concert.id.in_(concert_ids)))).scalars()
+    } if concert_ids else {}
+
+    out: list[UpcomingDeadline] = []
+    for d in days:
+        if d.cancelled or d.starts_at_utc <= now:
+            continue
+        concert = concerts.get(d.concert_id)
+        if concert is None:
+            continue
+        out.append(UpcomingDeadline(
+            concert_title=concert.title, event_id=concert.event_id, label=d.label,
+            anchor=Anchor.EVENT_START, at_utc=d.starts_at_utc,
+        ))
+
+    for r in rounds:
+        if is_round_cancelled(r, cancelled_day_ids):
+            continue
+        concert = concerts.get(r.concert_id)
+        if concert is None:
+            continue
+        for anchor, ts in (
+            (Anchor.OPENS, r.opens_at_utc),
+            (Anchor.CLOSES, r.closes_at_utc),
+            (Anchor.RESULTS, r.results_at_utc),
+            (Anchor.PAYMENT, r.payment_deadline_at_utc),
+        ):
+            if ts is None or ts <= now:
+                continue
+            out.append(UpcomingDeadline(
+                concert_title=concert.title, event_id=concert.event_id, label=r.label,
+                anchor=anchor, at_utc=ts, url=r.url,
+            ))
+
+    out.sort(key=lambda e: e.at_utc)
+    return out[:limit]
 
 
 # ── Personal calendar feed ────────────────────────────────────────────────
