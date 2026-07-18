@@ -496,12 +496,19 @@ async def test_tick_transient_failure_leaves_dm_blocked_unchanged(client):
 
     import app.scheduler.loop as loop_mod
     from app.db.models import ReminderQueue, User
+    from app.db.service import record_dm_outcome
     from app.scheduler.loop import tick
 
     client.monkeypatch.setattr(loop_mod, "SessionMaker", client.db)
 
     past = datetime.now(UTC) - timedelta(seconds=5)
     uids = await _seed_due_reminders(client, 1, past=past)
+    async with client.db() as s:
+        await record_dm_outcome(s, uids[0], blocked=True)
+        await s.commit()
+        user = await s.get(User, uids[0])
+        blocked_since_before = user.dm_blocked_since
+    assert blocked_since_before is not None
 
     class FakeResponse:
         status = 500
@@ -520,7 +527,10 @@ async def test_tick_transient_failure_leaves_dm_blocked_unchanged(client):
     assert delivered == 0
     async with client.db() as s:
         user = await s.get(User, uids[0])
-        assert user.dm_blocked_since is None  # never set, nothing to clear
+        # unchanged, not just coincidentally None -- a regression that calls
+        # record_dm_outcome(..., blocked=False) on transient failure would
+        # wrongly clear this to None and fail this assertion
+        assert user.dm_blocked_since == blocked_since_before
         rows = (await s.execute(select(ReminderQueue))).scalars().all()
         assert all(r.sent_at_utc is None for r in rows)  # left unsent, retries next tick
 
