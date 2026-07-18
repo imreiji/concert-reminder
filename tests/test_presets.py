@@ -425,6 +425,106 @@ async def test_tick_forbidden_send_does_not_affect_others(client):
         assert all(r.sent_at_utc is not None for r in rows)
 
 
+async def test_tick_forbidden_send_sets_dm_blocked(client):
+    from datetime import UTC, datetime, timedelta
+
+    import discord
+
+    import app.scheduler.loop as loop_mod
+    from app.db.models import User
+    from app.scheduler.loop import tick
+
+    client.monkeypatch.setattr(loop_mod, "SessionMaker", client.db)
+
+    past = datetime.now(UTC) - timedelta(seconds=5)
+    uids = await _seed_due_reminders(client, 1, past=past)
+
+    class FakeResponse:
+        status = 403
+        reason = "Forbidden"
+
+    class FakeUser:
+        async def send(self, body=None, *, embed=None, view=None):
+            raise discord.Forbidden(FakeResponse(), "missing access")
+
+    class FakeBot:
+        def get_user(self, uid):
+            return FakeUser()
+
+    await tick(FakeBot())
+
+    async with client.db() as s:
+        user = await s.get(User, uids[0])
+        assert user.dm_blocked_since is not None
+
+
+async def test_tick_successful_send_clears_dm_blocked(client):
+    from datetime import UTC, datetime, timedelta
+
+    import app.scheduler.loop as loop_mod
+    from app.db.models import User
+    from app.db.service import record_dm_outcome
+    from app.scheduler.loop import tick
+
+    client.monkeypatch.setattr(loop_mod, "SessionMaker", client.db)
+
+    past = datetime.now(UTC) - timedelta(seconds=5)
+    uids = await _seed_due_reminders(client, 1, past=past)
+    async with client.db() as s:
+        await record_dm_outcome(s, uids[0], blocked=True)
+        await s.commit()
+
+    class FakeUser:
+        async def send(self, body=None, *, embed=None, view=None):
+            pass
+
+    class FakeBot:
+        def get_user(self, uid):
+            return FakeUser()
+
+    await tick(FakeBot())
+
+    async with client.db() as s:
+        user = await s.get(User, uids[0])
+        assert user.dm_blocked_since is None
+
+
+async def test_tick_transient_failure_leaves_dm_blocked_unchanged(client):
+    from datetime import UTC, datetime, timedelta
+
+    import discord
+
+    import app.scheduler.loop as loop_mod
+    from app.db.models import ReminderQueue, User
+    from app.scheduler.loop import tick
+
+    client.monkeypatch.setattr(loop_mod, "SessionMaker", client.db)
+
+    past = datetime.now(UTC) - timedelta(seconds=5)
+    uids = await _seed_due_reminders(client, 1, past=past)
+
+    class FakeResponse:
+        status = 500
+        reason = "Internal Server Error"
+
+    class FakeUser:
+        async def send(self, body=None, *, embed=None, view=None):
+            raise discord.HTTPException(FakeResponse(), "temporary blip")
+
+    class FakeBot:
+        def get_user(self, uid):
+            return FakeUser()
+
+    delivered = await tick(FakeBot())
+
+    assert delivered == 0
+    async with client.db() as s:
+        user = await s.get(User, uids[0])
+        assert user.dm_blocked_since is None  # never set, nothing to clear
+        rows = (await s.execute(select(ReminderQueue))).scalars().all()
+        assert all(r.sent_at_utc is None for r in rows)  # left unsent, retries next tick
+
+
 # ── Full preset editability (rename, in-place edit, create-with-item) ────
 
 
