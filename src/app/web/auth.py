@@ -50,6 +50,10 @@ class SessionUser:
     # Resolved once in current_user() (env whitelist OR admin OR DB flag) —
     # unlike is_admin this needs a DB read, so it can't be a cheap property.
     is_editor: bool = False
+    # Also resolved in current_user() from the same already-loaded User row
+    # (dm_blocked_since is not None) -- zero extra query cost. Drives the
+    # sitewide "DMs blocked" banner in base.html.
+    dm_blocked: bool = False
 
     @property
     def is_admin(self) -> bool:
@@ -202,7 +206,8 @@ async def current_user(
         or (db_user.is_editor if db_user else False)
     )
     return SessionUser(
-        id=user_id, username=data["username"], avatar=data.get("avatar"), is_editor=is_editor
+        id=user_id, username=data["username"], avatar=data.get("avatar"), is_editor=is_editor,
+        dm_blocked=bool(db_user and db_user.dm_blocked_since is not None),
     )
 
 

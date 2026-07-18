@@ -23,6 +23,13 @@
       {% endif %}
     </nav>
   </header>
+  {% if user and user.dm_blocked %}
+  <div class="banner-warn">
+    Your last Discord DM couldn't be delivered — check your Discord privacy
+    settings to allow DMs from server members, or
+    <a href="/preferences">test it from Preferences</a>.
+  </div>
+  {% endif %}
   <main>{% block content %}{% endblock %}</main>
   <footer>Times are entered in <strong>JST</strong> and shown as JST + your local time.</footer>
 <script>
