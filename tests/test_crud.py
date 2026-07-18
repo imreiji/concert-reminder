@@ -888,3 +888,152 @@ async def test_deleting_concert_cascades_its_audit_log_over_http(client):
     client.post("/concerts/c/delete")
     async with client.db() as s:
         assert (await s.execute(select(ConcertAudit))).scalars().all() == []
+
+
+# ── Cancelled legs ────────────────────────────────────────────────────────
+
+
+async def test_edit_page_can_mark_a_day_cancelled(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        },
+    )
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+
+    r = client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            "day_id": [str(day_id)], "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["true"],
+        },
+    )
+    assert r.status_code == 303
+    async with client.db() as s:
+        day = await s.get(ConcertDay, day_id)
+        assert day.cancelled is True
+
+    # flipping it back to Scheduled un-cancels it
+    client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            "day_id": [str(day_id)], "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["false"],
+        },
+    )
+    async with client.db() as s:
+        day = await s.get(ConcertDay, day_id)
+        assert day.cancelled is False
+
+
+async def test_edit_page_defaults_new_day_rows_to_not_cancelled(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["false"],
+        },
+    )
+    async with client.db() as s:
+        day = (await s.execute(select(ConcertDay))).scalar_one()
+        assert day.cancelled is False
+
+
+async def test_edit_page_prefills_day_cancelled_select(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        },
+    )
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+    client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            "day_id": [str(day_id)], "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["true"],
+        },
+    )
+    r = client.get("/concerts/c/edit")
+    assert r.status_code == 200
+    assert '<option value="true" selected>Cancelled</option>' in r.text
+
+
+async def test_cancelling_the_only_leg_clears_its_reminders_and_notifies(client):
+    from app.db.models import Notification
+
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        },
+    )
+    client.post("/concerts/c/rules", data={"anchor": "event_start", "days_before": 7})
+    async with client.db() as s:
+        assert len((await s.execute(select(ReminderQueue))).scalars().all()) == 1
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+
+    client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            "day_id": [str(day_id)], "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["true"],
+        },
+    )
+    async with client.db() as s:
+        assert (await s.execute(select(ReminderQueue))).scalars().all() == []
+        notes = (await s.execute(select(Notification))).scalars().all()
+        assert len(notes) == 1
+        assert notes[0].kind == "leg_cancelled"
+        assert notes[0].user_id == EDITOR_ID
+
+
+async def test_resubmitting_edit_with_same_cancelled_state_does_not_renotify(client):
+    from app.db.models import Notification
+
+    login_as(client, EDITOR_ID, "reiji")
+    client.post(
+        "/concerts",
+        data={
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["true"],
+        },
+    )
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+    client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            "day_id": [str(day_id)], "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_cancelled": ["true"],  # already cancelled -- resubmitting the same state
+        },
+    )
+    async with client.db() as s:
+        assert (await s.execute(select(Notification))).scalars().all() == []

@@ -41,6 +41,7 @@ from app.db.service import (
     ensure_user,
     group_members,
     handle_newly_tagged,
+    notify_newly_cancelled_legs,
     record_concert_edit,
     snapshot_concert,
     sync_concert,
@@ -141,6 +142,7 @@ def apply_day_fields(
     venue: str = "",
     venue_address: str = "",
     doors_at: str = "",
+    cancelled: str = "false",
 ) -> ConcertDay:
     """The JST->UTC parse + assignment shared by build_day (new rows) and
     the edit page's in-place update of existing rows."""
@@ -153,6 +155,7 @@ def apply_day_fields(
     day.venue = venue.strip() or None
     day.venue_address = venue_address.strip() or None
     day.doors_at_utc = parse_jst(doors_at)
+    day.cancelled = cancelled == "true"
     return day
 
 
@@ -164,11 +167,13 @@ def build_day(
     venue: str = "",
     venue_address: str = "",
     doors_at: str = "",
+    cancelled: str = "false",
 ) -> ConcertDay:
     """New-row constructor: the rich creation form, the edit page's new
     rows, and the URL-import commit route."""
     return apply_day_fields(
-        ConcertDay(concert_id=concert_id), label, starts_at, city, venue, venue_address, doors_at
+        ConcertDay(concert_id=concert_id), label, starts_at, city, venue, venue_address,
+        doors_at, cancelled,
     )
 
 
@@ -462,6 +467,7 @@ async def create_concert(
     day_venue: list[str] = Form(default=[]),
     day_venue_address: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
+    day_cancelled: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
     round_label_en: list[str] = Form(default=[]),
     round_kind: list[RoundKind] = Form(default=[]),
@@ -490,14 +496,21 @@ async def create_concert(
     concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
 
+    # day_cancelled is newer than the other day_* fields; a submitter that
+    # omits it entirely (rather than one row per day) means "not cancelled"
+    # for every row, matching apply_day_fields'/build_day's own default --
+    # pad rather than let a whole-array omission trip the strict zip below.
+    day_cancelled = day_cancelled + ["false"] * (len(day_label) - len(day_cancelled))
     days: list[ConcertDay] = []
-    for label, starts_at, city, venue, venue_address, doors_at in zip(
+    for label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
         day_label, day_starts_at, day_city, day_venue, day_venue_address, day_doors_at,
-        strict=True,
+        day_cancelled, strict=True,
     ):
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
             continue  # blank trailing row from the repeatable UI
-        day = build_day(concert.id, label, starts_at, city, venue, venue_address, doors_at)
+        day = build_day(
+            concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled
+        )
         session.add(day)
         days.append(day)
     await session.flush()  # real ids, needed for leg-matching below
@@ -640,6 +653,7 @@ async def edit_concert(
     day_venue: list[str] = Form(default=[]),
     day_venue_address: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
+    day_cancelled: list[str] = Form(default=[]),
     round_id: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
     round_label_en: list[str] = Form(default=[]),
@@ -696,28 +710,38 @@ async def edit_concert(
     # delete rows that were dropped.
     await session.refresh(concert, ["days"])
     existing_days = {d.id: d for d in concert.days}
+    before_cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
+    # See create_concert's identical comment: a submitter that omits
+    # day_cancelled entirely means "not cancelled" for every row.
+    day_cancelled = day_cancelled + ["false"] * (len(day_label) - len(day_cancelled))
     kept_day_ids: set[int] = set()
     days_for_leg_matching: list[ConcertDay] = []
-    for did, label, starts_at, city, venue, venue_address, doors_at in zip(
+    for did, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
         day_id, day_label, day_starts_at, day_city, day_venue, day_venue_address, day_doors_at,
-        strict=True,
+        day_cancelled, strict=True,
     ):
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
             continue  # blank trailing row from the repeatable UI
         did = did.strip()
         if did.isdigit() and int(did) in existing_days:
             day = apply_day_fields(
-                existing_days[int(did)], label, starts_at, city, venue, venue_address, doors_at
+                existing_days[int(did)], label, starts_at, city, venue, venue_address,
+                doors_at, cancelled,
             )
             kept_day_ids.add(day.id)
         else:
-            day = build_day(concert.id, label, starts_at, city, venue, venue_address, doors_at)
+            day = build_day(
+                concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled
+            )
             session.add(day)
         days_for_leg_matching.append(day)
     for did, day in existing_days.items():
         if did not in kept_day_ids:
             await session.delete(day)
     await session.flush()  # new/kept days have real ids, needed for leg-matching below
+    newly_cancelled_day_ids = {
+        d.id for d in days_for_leg_matching if d.cancelled
+    } - before_cancelled_day_ids
 
     # -- Rounds: same id-preserving reconciliation.
     await session.refresh(concert, ["rounds"])
@@ -752,6 +776,8 @@ async def edit_concert(
 
     await record_concert_edit(session, concert, user.id, before)
     await session.flush()
+    if newly_cancelled_day_ids:
+        await notify_newly_cancelled_legs(session, concert.id, newly_cancelled_day_ids)
     await sync_concert(session, concert.id)
     await session.commit()
     return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)

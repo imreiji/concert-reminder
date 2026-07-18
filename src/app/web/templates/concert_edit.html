@@ -47,6 +47,10 @@
         value="{{ jst(d.doors_at_utc).strftime('%Y-%m-%dT%H:%M') if d.doors_at_utc else '' }}"></label>
       <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required
         value="{{ jst(d.starts_at_utc).strftime('%Y-%m-%dT%H:%M') }}"></label>
+      <select name="day_cancelled">
+        <option value="false" {% if not d.cancelled %}selected{% endif %}>Scheduled</option>
+        <option value="true" {% if d.cancelled %}selected{% endif %}>Cancelled</option>
+      </select>
       <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
     </div>
     {% endfor %}
@@ -107,6 +111,10 @@
     <input name="day_venue_address" maxlength="300" placeholder="Venue address">
     <label>Doors (JST) <input type="datetime-local" name="day_doors_at"></label>
     <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required></label>
+    <select name="day_cancelled">
+      <option value="false" selected>Scheduled</option>
+      <option value="true">Cancelled</option>
+    </select>
     <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
   </div>
 </template>
