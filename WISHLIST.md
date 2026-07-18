@@ -21,17 +21,7 @@ round's payment reminder and arm the next round's opens reminder; won →
 skip the general-sale ping. Natural surface: the existing state-aware DM
 buttons ("Did you apply?") right in the reminder embed.
 
-### 2. Daily digest mode
-
-Impact: medium — noise reduction for multi-subscription users. Effort: medium.
-Raised: 2026-07-18 UX review.
-
-One DM per deadline per rule trains busy users to ignore pings. Opt-in
-"one morning DM listing everything due in the next N days", batched at
-delivery time when the outbox is drained — the queue design already
-supports grouping rows per user per tick.
-
-### 3. First-run guided setup
+### 2. First-run guided setup
 
 Impact: medium — new-user activation. Effort: medium.
 Raised: 2026-07-18 UX review.
@@ -65,4 +55,11 @@ tracking) plus a synchronous `POST /me/test-dm` diagnostic route and
 
 ## Rejected
 
-(none yet — move entries here with the reason instead of deleting them)
+### Daily digest mode (rejected 2026-07-18)
+
+Was: an opt-in "one morning DM listing everything due" to reduce
+per-deadline ping fatigue for multi-subscription users. Rejected by the
+owner during design review — not worth the scheduling complexity it
+would have needed (a per-user local-morning gate layered onto
+`due_reminders()`/`tick()`) for a noise problem the owner doesn't
+consider significant enough to solve right now.
