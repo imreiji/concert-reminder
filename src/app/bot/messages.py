@@ -16,9 +16,11 @@ KIND_EMOJI = {
     "lottery_round": "🎟️",
     "eligibility_item_sale": "💿",
     "stream_ticket_sale": "📺",
-    "general_sale": "🏃",
+    "general_sale": "🎫",
     "result_announcement": "📣",
     "payment_deadline": "💴",
+    "fcfs_sale": "🏁",
+    "tour_package": "✈️",
     "other": "📌",
 }
 
