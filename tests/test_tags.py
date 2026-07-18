@@ -510,7 +510,11 @@ async def test_index_search_falls_back_to_free_text_venue_when_no_venue_tag(clie
 async def test_index_search_ignores_free_text_venue_when_venue_tag_exists(client):
     """The free-text-venue fallback only applies when NO VENUE tag is
     attached -- if a VENUE tag exists, stale/mismatched free-text venue
-    text must not spuriously match."""
+    text must not spuriously match. The positive assertion below (search
+    still finds the concert by its actual VENUE tag name) is what proves
+    search is functioning at all for this concert -- without it, this
+    test would pass identically whether the exclusion works correctly or
+    search is silently broken."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
     client.post("/concerts", data={
@@ -525,9 +529,15 @@ async def test_index_search_ignores_free_text_venue_when_venue_tag_exists(client
         concert.venue = "Stale Old Name"
         await s.commit()
 
-    filtered = client.get("/?q=stale").text
-    tile = filtered[filtered.index('<a class="tile"'):]
-    assert 'style="display:none"' in tile.split("</a>", 1)[0]
+    stale_filtered = client.get("/?q=stale").text
+    stale_tile = stale_filtered[stale_filtered.index('<a class="tile"'):]
+    assert 'style="display:none"' in stale_tile.split("</a>", 1)[0]
+
+    # proves search actually works for this concert (not just silently
+    # broken) -- it still finds it by the VENUE tag's real name
+    tag_name_filtered = client.get("/?q=yokohama").text
+    tag_name_tile = tag_name_filtered[tag_name_filtered.index('<a class="tile"'):]
+    assert 'style="display:none"' not in tag_name_tile.split("</a>", 1)[0]
 
 
 def test_index_sorts_by_earliest_event_day(client):
