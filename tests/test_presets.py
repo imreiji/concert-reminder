@@ -387,13 +387,19 @@ async def test_tick_delivers_multiple_due_reminders_concurrently(client):
     uids = await _seed_due_reminders(client, n, past=past)
 
     sent_order = []
+    in_flight = 0
+    peak_in_flight = 0
 
     class FakeUser:
         def __init__(self, uid):
             self.uid = uid
 
         async def send(self, body=None, *, embed=None, view=None):
+            nonlocal in_flight, peak_in_flight
+            in_flight += 1
+            peak_in_flight = max(peak_in_flight, in_flight)
             await asyncio.sleep(0.05)  # simulated network latency
+            in_flight -= 1
             sent_order.append(self.uid)
 
     class FakeBot:
@@ -406,9 +412,19 @@ async def test_tick_delivers_multiple_due_reminders_concurrently(client):
 
     assert delivered == n
     assert set(sent_order) == set(uids)
-    # fully serialized (old 1s-gap design) would take >= 5s; bounded
-    # concurrency should finish in roughly one 0.05s slice.
-    assert elapsed < 0.2
+
+    # Concurrency is asserted STRUCTURALLY, not by wall clock. The old
+    # `elapsed < 0.2` budget was 0.05s of real work against a 0.2s threshold,
+    # so a busy CI runner failed it while the code was perfectly correct
+    # (0.253s on one such run) -- a flaky test that cries wolf about the thing
+    # it is guarding teaches you to ignore it.
+    assert peak_in_flight > 1, "sends were serialized, not concurrent"
+    assert peak_in_flight == min(n, loop_mod.SEND_CONCURRENCY)
+
+    # Kept only as a coarse guard against reintroducing the old 1s-inter-send
+    # gap, which would put this at >= 5s. Deliberately loose: the structural
+    # assertion above is what actually proves concurrency.
+    assert elapsed < 2.0
 
     async with client.db() as s:
         rows = (await s.execute(select(ReminderQueue))).scalars().all()
