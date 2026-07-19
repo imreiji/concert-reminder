@@ -105,7 +105,9 @@ async def edit_tag(
     tag_id: int,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
-    name: str = Form(""),
+    # max_length matches create_tag's: a rename must not be able to produce a
+    # name the creation form would have rejected.
+    name: str = Form("", max_length=100),
     location_url: str = Form(""),
     region: str = Form(""),
 ):

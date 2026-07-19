@@ -8,6 +8,8 @@ notifications will rely on, so they get exhaustive coverage:
   4. detach + re-attach of the group DOES re-expand (it's "newly added" again)
 """
 
+import re
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -925,3 +927,39 @@ async def test_index_deadline_list_carries_tag_and_search_attributes(client):
     assert 'data-search="tagged deadline show test artist"' in li_html
 
 
+
+
+# ── Inline confirm() handler injection ───────────────────────────────────
+
+# The browser HTML-decodes an attribute value BEFORE parsing it as JS, so
+# Jinja's &#39; escaping is undone by the time confirm()'s argument is read:
+# a name interpolated straight into onsubmit is executable regardless.
+HANDLER_PAYLOAD = "'); alert(1); //"
+_ON_ATTR_RE = re.compile(r"\son[a-z]+\s*=\s*\"([^\"]*)\"")
+
+
+def test_delete_confirm_does_not_execute_a_hostile_tag_name(client):
+    login_as(client, EDITOR_ID, "reiji")
+    assert client.post("/tags", data={"name": HANDLER_PAYLOAD, "kind": "artist"}).status_code == 303
+    html = client.get("/tags").text
+    for attr in _ON_ATTR_RE.findall(html):
+        assert "alert(1)" not in attr, f"payload sits raw in an inline handler: {attr}"
+
+
+def test_delete_confirm_still_names_the_tag_and_deletes_it(client):
+    """The data-attribute refactor must not change what the editor sees."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "artist"})
+    html = client.get("/tags").text
+    assert 'data-tag-name="Hasunosora"' in html  # the confirm() reads this
+    assert 'action="/tags/1/delete"' in html
+    assert client.post("/tags/1/delete").status_code == 303
+    assert "Hasunosora" not in client.get("/tags").text
+
+
+def test_rename_longer_than_the_creation_cap_is_rejected(client):
+    """create_tag caps name at 100; the rename route must match it."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "artist"})
+    assert client.post("/tags/1/edit", data={"name": "x" * 101}).status_code == 422
+    assert client.post("/tags/1/edit", data={"name": "x" * 100}).status_code == 303

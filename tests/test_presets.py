@@ -844,3 +844,29 @@ async def test_notice_context_state_awareness(client):
     async with client.db() as s:
         ctx = await notice_context(s, 1, EDITOR_ID)
         assert ctx.user_has_rules  # -> would render [Remove these reminders]
+
+
+# ── Preferences page: inline confirm() handler injection ─────────────────
+
+
+def test_preset_delete_confirm_does_not_execute_a_hostile_preset_name(client):
+    """Self-XSS only (a preset renders on its own owner's page), but the
+    pattern is identical to the Tags page's, so it is closed the same way:
+    the browser HTML-decodes an on* attribute before parsing it as JS, so
+    Jinja's &#39; escaping does not protect confirm()'s argument."""
+    import re
+
+    login_as(client, FAN_ID, "fan")
+    assert client.post("/presets", data={"name": "'); alert(1); //"}).status_code == 303
+    html = client.get("/preferences").text
+    for attr in re.findall(r"\son[a-z]+\s*=\s*\"([^\"]*)\"", html):
+        assert "alert(1)" not in attr, f"payload sits raw in an inline handler: {attr}"
+
+
+def test_preset_delete_confirm_still_names_the_preset_and_deletes_it(client):
+    login_as(client, FAN_ID, "fan")
+    client.post("/presets", data={"name": "standard"})
+    html = client.get("/preferences").text
+    assert 'data-preset-name="standard"' in html  # the confirm() reads this
+    assert client.post("/presets/1/delete").status_code == 303
+    assert 'data-preset-name="standard"' not in client.get("/preferences").text

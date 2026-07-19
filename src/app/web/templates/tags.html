@@ -74,7 +74,7 @@ attaching a group to a concert adds all its members, which editors can then prun
     </div>
     {% endif %}
     <form method="post" action="/tags/{{ t.id }}/delete"
-          onsubmit="return confirm('Delete tag {{ t.name }} everywhere?')">
+          data-tag-name="{{ t.name }}" onsubmit="return confirmDeleteTag(this)">
       <button class="danger">Delete tag</button>
     </form>
   </div>

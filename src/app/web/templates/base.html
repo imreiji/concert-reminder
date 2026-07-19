@@ -45,6 +45,18 @@
         target.style.display = (!q || el.dataset.name.includes(q)) ? "" : "none";
       });
     }
+    // shared: delete confirmations whose message embeds an editor- or
+    // user-authored name. The name MUST arrive via a data- attribute read
+    // through dataset, never interpolated into the onsubmit attribute
+    // itself: the browser HTML-decodes an attribute value before parsing it
+    // as JS, so Jinja's &#39; escaping is undone first and a name like
+    // "'); alert(1); //" would execute. Read this way it stays a string.
+    function confirmDeleteTag(form) {
+      return confirm("Delete tag " + form.dataset.tagName + " everywhere?");
+    }
+    function confirmDeletePreset(form) {
+      return confirm("Delete preset " + form.dataset.presetName + "?");
+    }
     // shared: refresh every [data-countdown][data-iso] span with a live
     // "Xd Yh" / "Zh Wm" / "Nm" countdown to that ISO timestamp.
     function refreshCountdowns() {
