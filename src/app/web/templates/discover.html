@@ -1,19 +1,33 @@
 {% extends "base.html" %}
 {% block content %}
-{% if not user %}
-  <section class="hero">
-    <h1>Never say できませんでした again.</h1>
-    <p>Lottery rounds, serial-code sales, stream tickets — every concert deadline, one reminder ahead. Sign in with Discord to get started.</p>
-  </section>
-{% else %}
+{# Discover is PUBLIC -- there is no `if user` gate around this page's
+   content, unlike the old index. The only thing that varies by viewer is the
+   status pill, which falls back to the event's own round state when nobody is
+   signed in (routes/discover.py passes user_id=None and no outcome query
+   runs at all). #}
 <div class="layout">
   <aside class="sidebar">
     <h3>Sort</h3>
     <nav class="sorts">
-      <a data-sort="event" href="/discover?sort=event{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
-         {% if sort != "added" %}class="on"{% endif %}>Event date</a>
-      <a data-sort="added" href="/discover?sort=added{% for s in selected_tags %}&tag={{ s }}{% endfor %}"
-         {% if sort == "added" %}class="on"{% endif %}>Recently added</a>
+      {% for key, label in sorts %}
+      <a data-sort="{{ key }}" href="/discover?{{ filter_query(key, selected_tags, status) }}"
+         {% if sort == key or (key == "event" and sort not in ["added", "next"]) %}class="on"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+
+    {# The round-status facet: filtering by whether you can act, which on a
+       discovery page beats taxonomy alone. Real <a href> links, so with JS
+       off the server does the filtering (see visible_concert_ids); with JS on
+       toggleStatusFilter shows/hides tiles by their data-status with no round
+       trip, the same contract the tag chips and the search box already keep. #}
+    <h3>Round status</h3>
+    <nav class="sorts facets">
+      {% for key, label in status_facets %}
+      <a data-status="{{ key }}"
+         href="/discover?{{ filter_query(sort, selected_tags, '' if status == key else key) }}"
+         onclick="return toggleStatusFilter(event, this)"
+         {% if status == key %}class="on"{% endif %}>{{ label }}</a>
+      {% endfor %}
     </nav>
 
     <h3>Filter by tag</h3>
@@ -24,7 +38,7 @@
       {%- set others = selected_tags | reject("equalto", t.id) | list -%}
       <a class="chip kind-{{ t.kind.value }} {% if active %}on{% endif %}" data-name="{{ t.name | lower }}"
          data-tag-ids="{{ t.id }}" onclick="return toggleTagFilter(event, this)"
-         href="/discover?sort={{ sort }}{% for s in (others if active else others + [t.id]) %}&tag={{ s }}{% endfor %}">{{ t.name }}</a>
+         href="/discover?{{ filter_query(sort, (others if active else others + [t.id]), status) }}">{{ t.name }}</a>
     {%- endmacro %}
     {% for section, kindname in [("Franchises","franchise"),("Groups","group"),("Artists","artist")] %}
       {% set ktags = by_kind.get(kindname, []) %}
@@ -48,9 +62,10 @@
     </details>
     {% endif %}
     <p id="clear-filters" {% if not selected_tags %}style="display:none"{% endif %}>
-      <a class="dim" href="/discover?sort={{ sort }}" onclick="return clearTagFilters(event)">Clear filters</a>
+      <a class="dim" href="/discover?{{ filter_query(sort, [], status) }}"
+         onclick="return clearTagFilters(event)">Clear filters</a>
     </p>
-    <p><a class="btn quiet" href="/tags">Manage tags</a></p>
+    {% if user %}<p><a class="btn quiet" href="/tags">Manage tags</a></p>{% endif %}
   </aside>
 
   <section class="content">
@@ -59,6 +74,7 @@
     <form class="search-form" method="get" action="/discover">
       <input type="hidden" name="sort" value="{{ sort }}">
       {% for tid in selected_tags %}<input type="hidden" name="tag" value="{{ tid }}">{% endfor %}
+      {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
       <input type="search" name="q" id="concert-search" value="{{ query }}"
              placeholder="Search concerts…" oninput="return liveSearch(this)">
       <button class="quiet" type="submit">Search</button>
@@ -66,6 +82,7 @@
 
     {% macro tile(c) %}
     {% set ctags = c.tags %}
+    {% set st = statuses.get(c.id) %}
     {% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
     {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
     {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
@@ -73,6 +90,7 @@
     <a class="tile" href="/concerts/{{ c.event_id }}"
        data-tags="{{ ctags | map(attribute='id') | join(',') }}"
        data-search="{{ concert_search_by_event_id.get(c.event_id, '') }}"
+       data-status="{{ st.status if st else 'none' }}"
        {% if c.id not in visible_concert_ids %}style="display:none"{% endif %}>
       <strong>{{ c.title }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
       <span class="who">
@@ -86,10 +104,23 @@
       {% elif cv or c.venue %}<span class="dim">📍 {{ (cv | map(attribute="name") | join(", ")) or c.venue }}</span>{% endif %}
       {% set live_days = c.days | rejectattr("cancelled") | list %}
       {% if live_days %}<span class="when dim">{{ jst(live_days[0].starts_at_utc).strftime("%Y-%m-%d") }} JST</span>{% endif %}
+      {#- ONE pill: the viewer's standing REPLACES the countdown rather than
+          sitting beside it. Signed out there is no standing to merge, so this
+          is the event's round state alone. The dual JST + local time lives in
+          the title so the pill itself can stay a short countdown. -#}
+      {% if st %}
+      <span class="tile-status">
+        <span class="pill p-{{ st.tone }}"
+              {% if st.at_utc %}title="{{ dual(st.at_utc, tz) }}"{% endif %}>{{ st.text }}</span>
+      </span>
+      {% endif %}
     </a>
     {% endmacro %}
 
     {% if concerts %}
+    {#- The open/upcoming split reuses the facet's own "open" status, so the
+        bucket a tile lands in and the facet that selects it can never
+        disagree. -#}
     {% set open_concerts = concerts | selectattr("id", "in", open_concert_ids) | list %}
     {% set upcoming_concerts = concerts | rejectattr("id", "in", open_concert_ids) | list %}
     {% if open_concerts %}
@@ -105,9 +136,9 @@
     </div>
     {% endif %}
     <p class="dim" id="no-match"
-       {% if visible_concert_ids or (not selected_tags and not query) %}style="display:none"{% endif %}>No concerts match.</p>
+       {% if visible_concert_ids or (not selected_tags and not query and not status) %}style="display:none"{% endif %}>No concerts match.</p>
     {% else %}
-    <p class="dim">No concerts match.{% if user.is_editor and not selected_tags and not query %} <a href="/concerts/new">Create the first one →</a>{% endif %}</p>
+    <p class="dim">No concerts match.{% if user and user.is_editor and not selected_tags and not query %} <a href="/concerts/new">Create the first one →</a>{% endif %}</p>
     {% endif %}
 
     {% if deadlines %}
@@ -127,13 +158,12 @@
   </section>
 </div>
 <script>
-  // Tag/region filtering AND free-text search are both entirely
-  // client-side: every concert tile is already in the DOM with its tag ids
-  // and lowercased title text, so toggling a chip or typing a query just
-  // shows/hides tiles -- no server round trip, no page reload. Chips stay
-  // real <a href> links and the search box stays inside a real GET <form>
-  // (see chiplink() above / the search-form markup) so both keep working,
-  // just slower, with JS disabled.
+  // Tag/region filtering, the round-status facet AND free-text search are all
+  // entirely client-side: every concert tile is already in the DOM with its
+  // tag ids, its round status and its lowercased search blob, so toggling a
+  // chip, a facet or typing a query just shows/hides tiles -- no server round
+  // trip, no page reload. All three stay real <a href> links / a real GET
+  // <form>, so they keep working, just slower, with JS disabled.
   (function () {
     let currentQuery = new URLSearchParams(location.search).get("q") || "";
 
@@ -141,14 +171,21 @@
       return new Set(new URLSearchParams(location.search).getAll("tag").map(Number));
     }
 
-    function applyVisibility(selected, query) {
+    function currentStatus() {
+      return new URLSearchParams(location.search).get("status") || "";
+    }
+
+    function applyVisibility(selected, query, status) {
       let anyVisible = false;
       const q = query.trim().toLowerCase();
       document.querySelectorAll(".tile, #deadline-list li").forEach((tile) => {
         const tags = (tile.dataset.tags || "").split(",").filter(Boolean).map(Number);
         const tagMatch = selected.size === 0 || tags.some((id) => selected.has(id));
         const searchMatch = !q || (tile.dataset.search || "").includes(q);
-        const visible = tagMatch && searchMatch;
+        // Deadline rows carry no data-status; the facet is about a concert's
+        // rounds, so a row without one is never hidden by it.
+        const statusMatch = !status || !tile.dataset.status || tile.dataset.status === status;
+        const visible = tagMatch && searchMatch && statusMatch;
         tile.style.display = visible ? "" : "none";
         if (visible) anyVisible = true;
       });
@@ -156,51 +193,62 @@
       if (noMatch) noMatch.style.display = anyVisible ? "none" : "";
     }
 
-    function updateChipState(selected) {
+    function updateChipState(selected, status) {
       document.querySelectorAll("[data-tag-ids]").forEach((chip) => {
         const ids = chip.dataset.tagIds.split(",").filter(Boolean).map(Number);
         chip.classList.toggle("on", ids.some((id) => selected.has(id)));
+      });
+      document.querySelectorAll(".facets [data-status]").forEach((a) => {
+        a.classList.toggle("on", a.dataset.status === status);
       });
       const clearP = document.getElementById("clear-filters");
       if (clearP) clearP.style.display = selected.size ? "" : "none";
     }
 
-    function updateLinks(selected) {
-      const tagParams = [...selected].map((id) => "tag=" + id).join("&");
+    function query_string(sort, ids, status) {
+      let out = "sort=" + sort;
+      ids.forEach((id) => (out += "&tag=" + id));
+      if (status) out += "&status=" + status;
+      return out;
+    }
+
+    function updateLinks(selected, status) {
+      const sort = document.querySelector(".sorts a.on[data-sort]")?.dataset.sort
+        || new URLSearchParams(location.search).get("sort") || "event";
       document.querySelectorAll(".sorts a[data-sort]").forEach((a) => {
-        a.href = "/discover?sort=" + a.dataset.sort + (tagParams ? "&" + tagParams : "");
+        a.href = "/discover?" + query_string(a.dataset.sort, [...selected], status);
+      });
+      document.querySelectorAll(".facets [data-status]").forEach((a) => {
+        const next = a.dataset.status === status ? "" : a.dataset.status;
+        a.href = "/discover?" + query_string(sort, [...selected], next);
       });
       const clearLink = document.querySelector("#clear-filters a");
-      if (clearLink) {
-        const sort = document.querySelector(".sorts a.on")?.dataset.sort
-          || new URLSearchParams(location.search).get("sort") || "event";
-        clearLink.href = "/discover?sort=" + sort;
-      }
+      if (clearLink) clearLink.href = "/discover?" + query_string(sort, [], status);
       document.querySelectorAll("[data-tag-ids]").forEach((chip) => {
         const ids = chip.dataset.tagIds.split(",").filter(Boolean).map(Number);
         const active = ids.some((id) => selected.has(id));
         const rest = [...selected].filter((id) => !ids.includes(id));
-        const nextIds = active ? rest : rest.concat(ids);
-        const sort = new URLSearchParams(location.search).get("sort") || "event";
-        chip.href = "/discover?sort=" + sort + nextIds.map((id) => "&tag=" + id).join("");
+        chip.href = "/discover?" + query_string(sort, active ? rest : rest.concat(ids), status);
       });
     }
 
-    function updateUrl(selected, query) {
+    function updateUrl(selected, query, status) {
       const params = new URLSearchParams(location.search);
       params.delete("tag");
       selected.forEach((id) => params.append("tag", id));
       if (query) params.set("q", query);
       else params.delete("q");
+      if (status) params.set("status", status);
+      else params.delete("status");
       history.replaceState(null, "", "?" + params.toString());
     }
 
-    function applyAll(selected, query) {
+    function applyAll(selected, query, status) {
       currentQuery = query;
-      updateUrl(selected, query);
-      applyVisibility(selected, query);
-      updateChipState(selected);
-      updateLinks(selected);
+      updateUrl(selected, query, status);
+      applyVisibility(selected, query, status);
+      updateChipState(selected, status);
+      updateLinks(selected, status);
     }
 
     window.toggleTagFilter = function (event, el) {
@@ -209,21 +257,27 @@
       const selected = selectedIds();
       const active = ids.some((id) => selected.has(id));
       ids.forEach((id) => (active ? selected.delete(id) : selected.add(id)));
-      applyAll(selected, currentQuery);
+      applyAll(selected, currentQuery, currentStatus());
+      return false;
+    };
+
+    window.toggleStatusFilter = function (event, el) {
+      event.preventDefault();
+      const next = currentStatus() === el.dataset.status ? "" : el.dataset.status;
+      applyAll(selectedIds(), currentQuery, next);
       return false;
     };
 
     window.clearTagFilters = function (event) {
       event.preventDefault();
-      applyAll(new Set(), currentQuery);
+      applyAll(new Set(), currentQuery, currentStatus());
       return false;
     };
 
     window.liveSearch = function (input) {
-      applyAll(selectedIds(), input.value);
+      applyAll(selectedIds(), input.value, currentStatus());
       return false;
     };
   })();
 </script>
-{% endif %}
 {% endblock %}

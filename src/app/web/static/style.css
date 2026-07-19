@@ -137,6 +137,13 @@ button.x:hover { color: var(--danger); opacity: 1; }
 .tile .who { font-size: .88rem; }
 .tile .artists { display: flex; flex-wrap: wrap; gap: .3rem; }
 .tile .when { margin-top: auto; font-size: .8rem; }
+/* One status pill per card, pinned to the bottom so a grid of tiles reads as
+   a column of statuses. `.pill` and its p-ok/p-danger/p-quiet tones are
+   defined once, further down with the Home tokens, and shared. */
+.tile .tile-status { margin-top: .35rem; }
+/* The round-status facet reuses the sort list's shape -- it is the same kind
+   of control (one choice, narrows the grid), just a different axis. */
+.sorts.facets a.on { color: var(--ink); font-weight: 600; }
 
 .sentence { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; font-size: .9rem; margin-top: .5rem; }
 .sentence select { padding: .25rem .4rem; }

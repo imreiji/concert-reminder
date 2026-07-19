@@ -45,6 +45,7 @@ from app.db.models import (
 )
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
+from app.domain.timezones import utc_to_jst
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, TagKind
 
 
@@ -1084,6 +1085,160 @@ async def my_deadline_rows(
             starts_at_utc=live_days[0].starts_at_utc if live_days else None,
         ))
     return rows
+
+
+# ── Discover status ───────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class DiscoverStatus:
+    """One catalogue card's single status pill, plus the two derived values
+    the Discover page sorts and facets on.
+
+    `status` is the round-status FACET and is event-only -- it never depends
+    on the viewer, so a signed-out visitor gets the same value. `text`/`tone`
+    are the pill, which DOES merge the viewer's standing over the event state:
+    the standing replaces the countdown rather than sitting beside it, and the
+    tone says who owes the next move -- "ok" you are covered, "danger" you owe
+    an action, "quiet" you have no standing. The tone names match style.css's
+    p-ok / p-danger / p-quiet classes directly.
+
+    `at_utc` is the moment `text` refers to, or None when it refers to none
+    (Secured, All rounds closed). The template renders it as a dual-time
+    title so the pill's own short form stays a countdown, not a bare date.
+    """
+
+    status: str          # facet: "open" | "soon" | "none"
+    text: str
+    tone: str            # "ok" | "danger" | "quiet"
+    at_utc: datetime | None = None
+    next_deadline: datetime | None = None
+
+
+def _humanize_until(then: datetime, now: datetime) -> str:
+    """"4d" / "3h" / "12m" -- the coarsest unit that is still non-zero. The
+    pill is scanned, not read, so one unit beats two.
+
+    Rounded to nearest, not truncated: a deadline 3 days and 23 hours out is
+    "4d" to anyone reading it, and truncation would call it "3d" -- an error
+    in the alarming direction on a countdown, and one that flips the moment
+    the page is refreshed."""
+    minutes = max(int((then - now).total_seconds()) // 60, 0)
+    if minutes >= 1440:
+        return f"{int(minutes / 1440 + 0.5)}d"
+    if minutes >= 60:
+        return f"{int(minutes / 60 + 0.5)}h"
+    return f"{max(minutes, 1)}m"
+
+
+def _day_month(when: datetime) -> str:
+    """"22 Jul", in JST like every other date this app shows. strftime("%-d")
+    is not portable to Windows, which the owner develops on."""
+    jst = utc_to_jst(when)
+    return f"{jst.day} {jst.strftime('%b')}"
+
+
+async def discover_statuses(
+    session: AsyncSession,
+    concerts: list[Concert],
+    user_id: int | None = None,
+    now: datetime | None = None,
+) -> dict[int, DiscoverStatus]:
+    """One DiscoverStatus per concert id, for concerts ALREADY loaded by the
+    caller with `days` and `rounds` eager-loaded.
+
+    Deliberately not board_cards: that function answers "where do I stand on
+    the concerts I track" and drops everything else on the floor, while
+    Discover shows the whole catalogue -- including concerts with no outcome,
+    no subscription and no open round, which are exactly the rows board_cards
+    filters out.
+
+    `user_id` None means signed out: no outcome query runs at all and every
+    pill is the event state alone. Signed in, outcomes for every round on the
+    page load in ONE query -- the per-concert shape is the obvious one and
+    turns a catalogue page into N+1.
+    """
+    now = now or _now()
+
+    outcomes: dict[int, LotteryOutcome] = {}
+    if user_id is not None:
+        all_round_ids = [r.id for c in concerts for r in c.rounds]
+        if all_round_ids:
+            outcomes = {
+                o.round_id: o.outcome
+                for o in (await session.execute(
+                    select(RoundOutcome).where(
+                        RoundOutcome.user_id == user_id,
+                        RoundOutcome.round_id.in_(all_round_ids),
+                    )
+                )).scalars()
+            }
+
+    out: dict[int, DiscoverStatus] = {}
+    for concert in concerts:
+        cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
+        rounds = [r for r in concert.rounds if not is_round_cancelled(r, cancelled_day_ids)]
+        open_rounds = [r for r in rounds if _round_is_open(r, now)]
+        opening_soon = [
+            r for r in rounds if r.opens_at_utc is not None and r.opens_at_utc > now
+        ]
+        status = "open" if open_rounds else ("soon" if opening_soon else "none")
+
+        # has_open_round=False makes column_for a pure STANDING computation:
+        # it returns APPLIED/WON/SECURED when the user has one and None when
+        # they do not, instead of falling back to Column.OPEN. Reusing it here
+        # is what keeps the pill's precedence identical to the board's.
+        card_outcomes = {r.id: outcomes[r.id] for r in rounds if r.id in outcomes}
+        standing = column_for(list(card_outcomes.values()), has_open_round=False)
+
+        if standing is Column.SECURED:
+            out[concert.id] = DiscoverStatus(
+                status, "Secured", "ok", None, _next_deadline(rounds, now)
+            )
+            continue
+        if standing is Column.WON:
+            won = [r for r in rounds if card_outcomes.get(r.id) is LotteryOutcome.WON]
+            due = min(
+                (r.payment_deadline_at_utc for r in won if r.payment_deadline_at_utc), default=None
+            )
+            out[concert.id] = DiscoverStatus(
+                status,
+                f"Won — pay by {_day_month(due)}" if due else "Won — payment due",
+                "danger", due, _next_deadline(rounds, now),
+            )
+            continue
+        if standing is Column.APPLIED:
+            applied = next(r for r in rounds if card_outcomes.get(r.id) is LotteryOutcome.APPLIED)
+            out[concert.id] = DiscoverStatus(
+                status, f"{LABEL_BY_ROUND_KIND[applied.kind]} · Applied", "ok",
+                None, _next_deadline(rounds, now),
+            )
+            continue
+
+        # No standing: the event's own state, always neutral.
+        if open_rounds:
+            closing = sorted(
+                (r for r in open_rounds if r.closes_at_utc),
+                key=lambda r: r.closes_at_utc,
+            )
+            r = closing[0] if closing else open_rounds[0]
+            text = (
+                f"{LABEL_BY_ROUND_KIND[r.kind]} · Closes in {_humanize_until(r.closes_at_utc, now)}"
+                if r.closes_at_utc else f"{LABEL_BY_ROUND_KIND[r.kind]} · Open now"
+            )
+            at = r.closes_at_utc
+        elif opening_soon:
+            r = min(opening_soon, key=lambda r: r.opens_at_utc)
+            at = r.opens_at_utc
+            text = f"{LABEL_BY_ROUND_KIND[r.kind]} · Opens in {_humanize_until(at, now)}"
+        else:
+            # Covers both "every round has closed" and "no rounds entered
+            # yet" -- from a browser's point of view they are the same thing:
+            # there is nothing here you can act on.
+            text, at = "All rounds closed", None
+        out[concert.id] = DiscoverStatus(status, text, "quiet", at, _next_deadline(rounds, now))
+
+    return out
 
 
 # ── Personal calendar feed ────────────────────────────────────────────────
