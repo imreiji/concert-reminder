@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db.models import (
@@ -42,6 +43,7 @@ from app.db.models import (
     TagSubscription,
     User,
 )
+from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, TagKind
 
@@ -734,14 +736,28 @@ class UpcomingDeadline:
 
 
 async def upcoming_deadlines(
-    session: AsyncSession, now: datetime | None = None, limit: int = 10
+    session: AsyncSession, now: datetime | None = None, limit: int = 10,
+    concert_ids: set[int] | None = None,
 ) -> list[UpcomingDeadline]:
     """Global (not reminder-rule-scoped, not per-user) chronological
     deadline list for the index page. Reuses is_round_cancelled the same
-    way sync_rule/notify_newly_cancelled_legs already do."""
+    way sync_rule/notify_newly_cancelled_legs already do.
+
+    `concert_ids` narrows the source rows to those concerts (None = every
+    concert). The narrowing happens BEFORE the sort and the limit, which is
+    the whole reason it lives here rather than in the caller: filtering an
+    already-truncated global list would silently return fewer than `limit`
+    rows. my_upcoming_deadlines is the per-user caller."""
     now = now or _now()
-    days = list((await session.execute(select(ConcertDay))).scalars())
-    rounds = list((await session.execute(select(Round))).scalars())
+    day_q = select(ConcertDay)
+    round_q = select(Round)
+    if concert_ids is not None:
+        if not concert_ids:
+            return []
+        day_q = day_q.where(ConcertDay.concert_id.in_(concert_ids))
+        round_q = round_q.where(Round.concert_id.in_(concert_ids))
+    days = list((await session.execute(day_q)).scalars())
+    rounds = list((await session.execute(round_q)).scalars())
     cancelled_day_ids = {d.id for d in days if d.cancelled}
     concert_ids = {d.concert_id for d in days} | {r.concert_id for r in rounds}
     concerts = {
@@ -782,6 +798,193 @@ async def upcoming_deadlines(
 
     out.sort(key=lambda e: e.at_utc)
     return out[:limit]
+
+
+# ── Personal board ("where do I stand") ──────────────────────────────────
+
+
+async def tracked_concert_ids(session: AsyncSession, user_id: int) -> set[int]:
+    """Concerts this user is deemed to be following.
+
+    INTERIM DEFINITION: "tracked" = carries any tag the user has a
+    TagSubscription for, derived at query time. There is deliberately no
+    per-concert opt-in or opt-out yet -- the real `ConcertSubscription`
+    table (plus per-leg opt-out) is branch 4 of the Home/Discover project
+    and replaces this function's body wholesale. Until then the
+    OPEN_COLUMN_LIMIT cap in board_cards is what keeps an over-broad match
+    tolerable; do not add a half-version of pruning here, it would have to
+    be migrated later.
+    """
+    res = await session.execute(
+        select(ConcertTag.concert_id)
+        .join(TagSubscription, TagSubscription.tag_id == ConcertTag.tag_id)
+        .where(TagSubscription.user_id == user_id)
+        .distinct()
+    )
+    return set(res.scalars())
+
+
+@dataclass(frozen=True)
+class Rung:
+    """One step of a concert's round ladder as this user experienced it.
+
+    `state` is presentation-ready: "lost" | "won" | "paid" | "applied" render
+    the recorded outcome, and rounds with no outcome fall back to where they
+    sit in time -- "live" (open right now) or "todo" (not open yet, or open
+    with nothing recorded and already closed). `detail` is the one moment
+    worth showing next to the rung: the payment deadline once you have won,
+    otherwise the close (falling back to the open). Templates render it with
+    fmt_dual; the dataclass stays timezone-agnostic.
+    """
+
+    round_id: int
+    label: str
+    state: str
+    detail: datetime | None = None
+
+
+@dataclass(frozen=True)
+class BoardCard:
+    """One concert on the board, in exactly one column."""
+
+    concert: Concert
+    column: Column
+    rungs: list[Rung]
+    next_deadline: datetime | None
+    outcome_by_round: dict[int, LotteryOutcome]
+
+
+def _round_is_open(round_: Round, now: datetime) -> bool:
+    """Open = you could act on it right now. A round with only a close set is
+    open until it closes (plenty of catalogue rows have no explicit open); a
+    round with neither timestamp is never open, since there is no window."""
+    if round_.opens_at_utc is None and round_.closes_at_utc is None:
+        return False
+    if round_.opens_at_utc is not None and round_.opens_at_utc > now:
+        return False
+    return round_.closes_at_utc is None or round_.closes_at_utc > now
+
+
+def _rung_state(outcome: LotteryOutcome | None, is_open: bool) -> str:
+    if outcome in (
+        LotteryOutcome.LOST, LotteryOutcome.WON, LotteryOutcome.PAID, LotteryOutcome.APPLIED
+    ):
+        return outcome.value
+    return "live" if is_open else "todo"
+
+
+def _next_deadline(rounds: list[Round], now: datetime) -> datetime | None:
+    """The soonest future moment across a concert's rounds, over all four
+    anchors -- what "closes next" and the open-column ordering both key on."""
+    future = [
+        ts
+        for r in rounds
+        for ts in (r.opens_at_utc, r.closes_at_utc, r.results_at_utc, r.payment_deadline_at_utc)
+        if ts is not None and ts > now
+    ]
+    return min(future) if future else None
+
+
+async def board_cards(
+    session: AsyncSession, user_id: int, now: datetime | None = None
+) -> tuple[dict[Column, list[BoardCard]], int]:
+    """This user's campaigns, bucketed into the four board columns.
+
+    Returns (columns, open_total). `open_total` is the PRE-cap size of the
+    open column, so a template can render "+N more" -- columns[Column.OPEN]
+    itself is truncated to OPEN_COLUMN_LIMIT, soonest deadline first.
+    """
+    now = now or _now()
+    columns: dict[Column, list[BoardCard]] = {c: [] for c in Column}
+
+    ids = await tracked_concert_ids(session, user_id)
+    if not ids:
+        return columns, 0
+
+    concerts = list((await session.execute(
+        select(Concert)
+        .where(Concert.id.in_(ids))
+        .options(selectinload(Concert.days), selectinload(Concert.rounds))
+    )).scalars())
+
+    # One outcome query for every round on the board, not one per concert --
+    # the per-concert shape is the obvious one and turns the board into N+1.
+    all_round_ids = [r.id for c in concerts for r in c.rounds]
+    outcomes: dict[int, LotteryOutcome] = {
+        o.round_id: o.outcome
+        for o in (await session.execute(
+            select(RoundOutcome).where(
+                RoundOutcome.user_id == user_id, RoundOutcome.round_id.in_(all_round_ids)
+            )
+        )).scalars()
+    } if all_round_ids else {}
+
+    for concert in concerts:
+        cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
+        live_rounds = [
+            r for r in concert.rounds if not is_round_cancelled(r, cancelled_day_ids)
+        ]
+        # Ladder order: when a round opens, falling back to when it closes.
+        # Rounds with neither timestamp sort last, in id order, rather than
+        # blowing up the comparison.
+        live_rounds.sort(
+            key=lambda r: (
+                r.opens_at_utc is None and r.closes_at_utc is None,
+                r.opens_at_utc or r.closes_at_utc or now,
+                r.id,
+            )
+        )
+
+        card_outcomes = {r.id: outcomes[r.id] for r in live_rounds if r.id in outcomes}
+        column = column_for(
+            list(card_outcomes.values()),
+            has_open_round=any(_round_is_open(r, now) for r in live_rounds),
+        )
+        if column is None:
+            continue
+
+        rungs = [
+            Rung(
+                round_id=r.id,
+                label=r.label,
+                state=_rung_state(card_outcomes.get(r.id), _round_is_open(r, now)),
+                detail=(
+                    r.payment_deadline_at_utc
+                    if card_outcomes.get(r.id) is LotteryOutcome.WON
+                    and r.payment_deadline_at_utc is not None
+                    else r.closes_at_utc or r.opens_at_utc
+                ),
+            )
+            for r in live_rounds
+        ]
+        columns[column].append(BoardCard(
+            concert=concert,
+            column=column,
+            rungs=rungs,
+            next_deadline=_next_deadline(live_rounds, now),
+            outcome_by_round=card_outcomes,
+        ))
+
+    # Soonest first everywhere; a card with no future deadline sorts last.
+    for cards in columns.values():
+        cards.sort(key=lambda c: (c.next_deadline is None, c.next_deadline or now, c.concert.id))
+
+    open_total = len(columns[Column.OPEN])
+    columns[Column.OPEN] = columns[Column.OPEN][:OPEN_COLUMN_LIMIT]
+    return columns, open_total
+
+
+async def my_upcoming_deadlines(
+    session: AsyncSession, user_id: int, now: datetime | None = None, limit: int = 10
+) -> list[UpcomingDeadline]:
+    """The index page's deadline list, narrowed to concerts this user tracks.
+
+    Delegates to upcoming_deadlines with an id filter rather than filtering
+    its result: that keeps the cancelled-leg rule (is_round_cancelled) in one
+    place, and keeps the limit meaningful (see upcoming_deadlines' docstring).
+    """
+    ids = await tracked_concert_ids(session, user_id)
+    return await upcoming_deadlines(session, now=now, limit=limit, concert_ids=ids)
 
 
 # ── Personal calendar feed ────────────────────────────────────────────────
