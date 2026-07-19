@@ -245,6 +245,43 @@ async def test_commit_tolerates_blank_trailing_rows(client):
     assert await _all(client.db, Round) == []
 
 
+def test_preview_carries_source_url_as_a_hidden_field(client):
+    """The commit POST is a fresh request, so the only way it learns which
+    page the draft came from is a hidden field on the preview form."""
+    login_as(client, EDITOR_ID, "reiji")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert f'name="source_url" value="{GRADUATION_URL}"' in r.text
+
+
+async def test_commit_persists_source_url(client):
+    """import_preview already computes and displays the source URL; without
+    this the attribution was dropped on the floor at commit time, even though
+    the manual create/edit path stores it."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={"title": "Hasunosora 103rd Class Graduation Concert",
+              "source_url": GRADUATION_URL},
+    )
+    assert r.status_code == 303
+    concerts = await _all(client.db, Concert)
+    assert [c.source_url for c in concerts] == [GRADUATION_URL]
+
+
+async def test_commit_rejects_tampered_source_url(client):
+    """_check_host pinned the *fetch* to ramen.events, but the URL round-trips
+    through the client in a hidden field before coming back on the commit
+    POST, so it is attacker-controlled and must be re-validated here."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={"title": "Tampered", "source_url": "javascript:alert(1)"},
+    )
+    assert r.status_code == 422
+    assert await _all(client.db, Concert) == []
+
+
 def test_commit_requires_editor(client):
     login_as(client, FAN_ID, "fan")
     r = client.post("/concerts/import/commit", data={"title": "X"})
