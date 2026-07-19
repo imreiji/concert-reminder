@@ -171,17 +171,22 @@ says which file to create, so a misconfigured cron fails loudly in
 **One-time migration (server currently has an edited `backup.sh`):** the old
 script carried a hardcoded `BUCKET=`, so servers set up before this change have
 a locally-modified tracked file that will conflict on the next `git pull`.
-Capture the value BEFORE discarding the edit - once it is checked out, the real
-bucket name is gone:
+`git checkout --` destroys the only record of the bucket name, so the env file
+is written FIRST and the value is read straight out of the old script rather
+than retyped. Ordered this way the whole block is safe to paste at once:
 ```bash
 cd ~/app
-grep '^BUCKET=' deploy/backup.sh     # note the real value FIRST
-git checkout -- deploy/backup.sh     # then discard the in-place edit
-git pull
-sudo tee /etc/default/dekimasen-backup <<< 'BACKUP_BUCKET="s3://...the value you noted..."'
+OLD_BUCKET=$(grep '^BUCKET=' deploy/backup.sh | cut -d'"' -f2)
+echo "$OLD_BUCKET"                   # sanity-check: should read s3://...
+sudo tee /etc/default/dekimasen-backup <<< "BACKUP_BUCKET=\"$OLD_BUCKET\""
 sudo chmod 600 /etc/default/dekimasen-backup
+git checkout -- deploy/backup.sh     # safe now: the value is saved
+git pull
 ~/app/deploy/backup.sh               # confirm: "backup ok: <date>"
 ```
+If `echo "$OLD_BUCKET"` prints nothing, stop - the script was already migrated
+(or edited by hand in some other shape) and checking it out would lose nothing,
+but the env file would be written empty and the next backup would fail.
 The crontab line does not change: `backup.sh` sources
 `/etc/default/dekimasen-backup` itself, so there is no half-migrated state
 where the script is updated but cron still runs it without a bucket.
