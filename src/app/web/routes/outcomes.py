@@ -67,8 +67,12 @@ templates = None  # injected by web/app.py, same as the other route modules
 
 # The concert page's own URL. event_id is restricted to this charset at
 # creation (EVENT_ID_RE in routes/concerts.py), so anything that matches here
-# is a plausible handle -- and it is still only used to LOOK UP a concert, so
-# a bogus one resolves to None and falls through to Home.
+# is a plausible handle. A handle that matches but names no concert makes the
+# lookup below raise 404 -- AFTER record_round_outcome has committed, so the
+# press is recorded and only the re-render is lost. Left as-is deliberately:
+# reaching it means the header named a concert page that does not exist, which
+# a reader cannot do (that page 404s), so a quiet fallback to Home would only
+# hide a forged or stale header behind a screen that looks like it worked.
 _CONCERT_PATH = re.compile(r"^/concerts/([A-Za-z0-9_-]{1,100})/?$")
 
 

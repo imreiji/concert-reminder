@@ -88,7 +88,6 @@ button:hover { opacity: .88; }
 button.danger { background: var(--danger); border-color: var(--danger); }
 button.x { background: none; border: none; color: var(--dim); font-size: 1.1rem; padding: 0 .3rem; }
 button.x:hover { color: var(--danger); opacity: 1; }
-.concert-head p { margin-top: -.6rem; }
 
 /* Links that act like buttons (nav actions, page-level actions) get the
    same visual treatment as real <button>s -- filled for the primary
@@ -309,11 +308,6 @@ details.fold > summary {
 .danger-row p { margin: .15rem 0 0; max-width: 44rem; }
 .danger-row-actions { margin-left: auto; display: flex; gap: .5rem; flex-wrap: wrap; }
 
-.header-tags { margin: .2rem 0 .4rem; }
-
-/* Performances: one section per day/leg, its rounds table nested right under it */
-.perf-detail { margin: 1.2rem 0; padding-top: 1.2rem; border-top: 1px solid var(--line); }
-.perf-detail:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 .leg-heading { margin: 0 0 .2rem; font-size: 1rem; color: var(--dim); }
 .tile .kind-tag { color: var(--dim); font-size: .8em; }
 
@@ -325,15 +319,6 @@ h3.leg-heading.past { text-decoration: line-through; }
 h3.leg-heading.cancelled { text-decoration: line-through; }
 .badge.cancelled { color: var(--danger); }
 
-/* Round table */
-.table-scroll { overflow-x: auto; margin: .4rem 0 1rem; }
-table.rounds { border-collapse: collapse; width: 100%; font-size: .9rem; }
-table.rounds th {
-  text-align: left; font-weight: 600; color: var(--dim); font-size: .8rem;
-  padding: .3rem .6rem; border-bottom: 1px solid var(--line);
-}
-table.rounds td { padding: .5rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-table.rounds tr.round-row.past td { opacity: .65; }
 .countdown { display: inline-block; }
 
 /* Header meta grid ("dt"/"dd" summary), mirrors the reference site's layout */
