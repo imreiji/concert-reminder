@@ -288,11 +288,11 @@ async def test_region_filter_selects_all_venues_in_region(client):
     )
     client.post("/concerts", data={"title": "Untagged", "event_id": "untagged"})
 
-    r = client.get("/")
+    r = client.get("/discover")
     assert "Regions" in r.text
     assert "Kanto" in r.text
 
-    r = client.get("/?sort=event&tag=1&tag=2")
+    r = client.get("/discover?sort=event&tag=1&tag=2")
     assert "At Hall A" in r.text
     assert "At Hall B" in r.text
     assert "Untagged" in r.text  # still in the DOM for client-side filtering...

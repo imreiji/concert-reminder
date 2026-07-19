@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not user %}
+  {# Signed out Home is the hero and nothing else -- the same gate the old
+     index had -- plus a door out to the public catalogue. #}
+  <section class="hero">
+    <h1>Never say できませんでした again.</h1>
+    <p>Lottery rounds, serial-code sales, stream tickets — every concert deadline, one reminder ahead. Sign in with Discord to get started.</p>
+    <p><a class="btn quiet" href="/discover">Browse concerts →</a></p>
+  </section>
+{% else %}
+
+{# 1. Closes next -- ONE item, the nearest thing you can still act on. The
+   list is block 3; this is the answer to "what closes next" on its own. #}
+{% if closes_next %}
+{% set d = closes_next.deadline %}
+<div class="next">
+  <div>
+    <div class="label">Closes next</div>
+    <div class="what">
+      <a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a> — {{ d.label }}
+    </div>
+    <div class="when">{{ deadline_label(d.anchor) | capitalize }} {{ dual(d.at_utc, tz) }}</div>
+  </div>
+  <div class="countdown">
+    <span class="big" data-countdown data-iso="{{ d.at_utc.isoformat() }}"></span>
+  </div>
+</div>
+{% endif %}
+
+{# 2. Your campaigns #}
+<section>
+  <div class="head">
+    <h2>Your campaigns</h2>
+    <span class="note">
+      <strong>{{ open_total }} open</strong> ·
+      {{ columns["applied"] | length }} awaiting results ·
+      {{ columns["won"] | length }} payment due ·
+      {{ columns["secured"] | length }} secured
+    </span>
+  </div>
+  {% if open_total or columns["applied"] or columns["won"] or columns["secured"] %}
+    {% include "_board.html" %}
+  {% else %}
+    <p class="dim">Nothing on your board yet. <a href="/discover">Find concerts to follow →</a></p>
+  {% endif %}
+</section>
+
+{# 3. Coming up -- the capture surface. #}
+<section>
+  <div class="head">
+    <h2>Coming up</h2>
+    <span class="note">All times JST and yours, always both</span>
+  </div>
+  {% include "_deadline_rows.html" %}
+</section>
+
+{# 4. Discovery teaser -- discovery still exists, it just stops being the
+   front door. #}
+<div class="teaser">
+  <div>
+    <div class="eyebrow">Not tracking these yet</div>
+    <h2>Discover</h2>
+    <p>
+      {{ catalogue_count }} concert{{ "" if catalogue_count == 1 else "s" }} in the catalogue.
+      Browse by franchise, group, artist or region — or search everything.
+    </p>
+  </div>
+  <a class="btn" href="/discover">Open discover →</a>
+</div>
+
+{# The follow-up to "Not applying". The narrow action already posted; the
+   wider one is a SECOND deliberate press, never a side effect of the first. #}
+<dialog class="prune" id="pruneDlg">
+  <div class="dh">Not applying to this round
+    <button type="button" data-close aria-label="Close">×</button></div>
+  <p>
+    Done — you won't be reminded about this round. Later rounds for
+    <b id="pruneName">this concert</b> will still reach you.
+  </p>
+  <div class="da">
+    <button class="btn quiet" type="button" data-close>That's right</button>
+    <a class="btn" id="pruneLink" href="/">Manage this concert →</a>
+  </div>
+</dialog>
+
+<script>
+  // The dialog opens only AFTER the narrow write succeeded, so it can state
+  // what happened rather than ask permission for it.
+  //
+  // The concert title arrives via dataset and is written with textContent:
+  // it is user-controlled, and the browser HTML-decodes an inline on*
+  // attribute before parsing it as JS, so Jinja's escaping would not protect
+  // an interpolated handler (invariant 7).
+  (function () {
+    var dlg = document.getElementById("pruneDlg");
+    document.body.addEventListener("htmx:afterRequest", function (e) {
+      var el = e.detail.elt;
+      if (!el || !el.dataset || !el.dataset.pruneTitle) return;
+      if (!e.detail.successful) return;
+      document.getElementById("pruneName").textContent = el.dataset.pruneTitle;
+      document.getElementById("pruneLink").href = el.dataset.pruneUrl || "/";
+      dlg.showModal();
+    });
+    dlg.addEventListener("click", function (e) {
+      if (e.target.closest("[data-close]")) dlg.close();
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -991,6 +991,94 @@ async def my_upcoming_deadlines(
     return await upcoming_deadlines(session, now=now, limit=limit, concert_ids=ids)
 
 
+# How many "Coming up" rows Home shows. It lives here, next to the function
+# that uses it as a default, because TWO callers render the same fragment:
+# GET / builds it first, and POST /rounds/{id}/outcome swaps it back in after
+# a capture action. If those two disagreed on the count, recording an outcome
+# would silently lengthen or shorten the list. One constant, one default, no
+# literals at either call site.
+DEADLINE_ROWS_LIMIT = 10
+
+
+@dataclass(frozen=True)
+class DeadlineRow:
+    """One "Coming up" row: the deadline itself, this user's standing on it,
+    and the little bit of concert context the row shows underneath the title.
+
+    `outcome` is what decides which capture buttons the row offers, so it is
+    resolved here rather than in the template -- and it is None both for a
+    round nobody has acted on and for a row with no round at all (an
+    EVENT_START row derived from a ConcertDay). The template distinguishes
+    those two by `deadline.round_id`, which is the only thing that can be
+    posted to.
+    """
+
+    deadline: UpcomingDeadline
+    outcome: LotteryOutcome | None
+    venue: str | None = None
+    starts_at_utc: datetime | None = None
+
+
+async def my_deadline_rows(
+    session: AsyncSession,
+    user_id: int,
+    now: datetime | None = None,
+    limit: int = DEADLINE_ROWS_LIMIT,
+) -> list[DeadlineRow]:
+    """`my_upcoming_deadlines`, decorated with everything a Home row renders.
+
+    Two extra reads, both batched over the already-truncated row set rather
+    than per row: this user's RoundOutcome for the rounds on show, and the
+    concerts those rows belong to (for the venue and first live date shown
+    under the title).
+    """
+    now = now or _now()
+    deadlines = await my_upcoming_deadlines(session, user_id, now=now, limit=limit)
+    if not deadlines:
+        return []
+
+    round_ids = {d.round_id for d in deadlines if d.round_id is not None}
+    outcomes: dict[int, LotteryOutcome] = {
+        o.round_id: o.outcome
+        for o in (await session.execute(
+            select(RoundOutcome).where(
+                RoundOutcome.user_id == user_id, RoundOutcome.round_id.in_(round_ids)
+            )
+        )).scalars()
+    } if round_ids else {}
+
+    event_ids = {d.event_id for d in deadlines}
+    concerts = {
+        c.event_id: c
+        for c in (await session.execute(
+            select(Concert)
+            .where(Concert.event_id.in_(event_ids))
+            .options(selectinload(Concert.days), selectinload(Concert.tags))
+        )).scalars()
+    }
+
+    rows = []
+    for d in deadlines:
+        concert = concerts.get(d.event_id)
+        live_days = sorted(
+            (day for day in concert.days if not day.cancelled), key=lambda day: day.starts_at_utc
+        ) if concert else []
+        venue_tags = [t.name for t in concert.tags if t.kind is TagKind.VENUE] if concert else []
+        rows.append(DeadlineRow(
+            deadline=d,
+            outcome=outcomes.get(d.round_id) if d.round_id is not None else None,
+            # Same display rule as the tile macro: >1 venue tag collapses to
+            # "Multiple", one wins outright, and the free-text venue is only a
+            # fallback when there is no VENUE tag at all.
+            venue=(
+                "Multiple" if len(venue_tags) > 1
+                else (venue_tags[0] if venue_tags else (concert.venue if concert else None))
+            ),
+            starts_at_utc=live_days[0].starts_at_utc if live_days else None,
+        ))
+    return rows
+
+
 # ── Personal calendar feed ────────────────────────────────────────────────
 
 

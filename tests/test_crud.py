@@ -107,7 +107,8 @@ def test_editor_creates_concert_and_it_lists(client):
     login_as(client, EDITOR_ID, "reiji")
     r = client.post("/concerts", data={"title": "Hasunosora 5th", "event_id": "hasunosora-5th"})
     assert r.status_code == 303
-    r = client.get("/")
+    # The catalogue lives on /discover now; / is the personal Home.
+    r = client.get("/discover")
     assert "Hasunosora 5th" in r.text
 
 

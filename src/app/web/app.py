@@ -73,7 +73,7 @@ def region_sidebar_links(venue_tags: list[Tag], selected: list[int], sort: str) 
         active = any(i in selected for i in rtag_ids)
         others = [i for i in selected if i not in rtag_ids]
         href_ids = others if active else others + rtag_ids
-        href = f"/?sort={sort}" + "".join(f"&tag={i}" for i in href_ids)
+        href = f"/discover?sort={sort}" + "".join(f"&tag={i}" for i in href_ids)
         links.append({
             "name": region_name, "count": len(rtag_ids), "active": active,
             "href": href, "ids": rtag_ids,
@@ -175,7 +175,55 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/", response_class=HTMLResponse)
-    async def index(
+    async def home(
+        request: Request,
+        user: auth.SessionUser | None = Depends(auth.current_user),
+        session: AsyncSession = Depends(get_session),
+    ):
+        """"Where do I stand" -- four blocks: Closes next, the campaign board,
+        Coming up, and a teaser out to Discover. Signed out it is the hero
+        alone, which is what the old index already did.
+
+        A thin shell: every query below is a single service call, and the only
+        logic here is picking which row is "closes next". Note the deliberate
+        ABSENCE of a limit argument on my_deadline_rows -- POST
+        /rounds/{id}/outcome re-renders the same fragment and also omits it, so
+        both take DEADLINE_ROWS_LIMIT and the htmx swap can never change the
+        number of rows on the page."""
+        from sqlalchemy import func as sa_func
+
+        from app.db.service import board_cards, my_deadline_rows
+
+        ctx = {"user": user, "tz": settings.default_timezone, "tz_auto": True}
+        if user:
+            db_user = await session.get(User, user.id)
+            if db_user:
+                ctx["tz"], ctx["tz_auto"] = db_user.timezone, db_user.tz_auto
+            columns, open_total = await board_cards(session, user.id)
+            rows = await my_deadline_rows(session, user.id)
+            # Column is a StrEnum, but an Enum member does not hash equal to
+            # its value -- so a template doing columns["open"] would silently
+            # miss. Re-key to plain strings at the boundary.
+            ctx |= {
+                "columns": {col.value: cards for col, cards in columns.items()},
+                "open_total": open_total,
+                "rows": rows,
+                # The nearest thing the user can actually act on: a row with a
+                # round behind it. Falls back to the soonest row of any kind
+                # (an event start) so the block is never empty when the list
+                # is not.
+                "closes_next": next(
+                    (r for r in rows if r.deadline.round_id is not None),
+                    rows[0] if rows else None,
+                ),
+                "catalogue_count": (
+                    await session.execute(select(sa_func.count()).select_from(Concert))
+                ).scalar_one(),
+            }
+        return templates.TemplateResponse(request, "home.html", ctx)
+
+    @app.get("/discover", response_class=HTMLResponse)
+    async def discover(
         request: Request,
         user: auth.SessionUser | None = Depends(auth.current_user),
         session: AsyncSession = Depends(get_session),

@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.models import Round, User
-from app.db.service import ensure_user, my_upcoming_deadlines, record_round_outcome
+from app.db.service import ensure_user, my_deadline_rows, record_round_outcome
 from app.db.session import get_session
 from app.domain.types import LotteryOutcome
 from app.web.auth import SessionUser, require_user
@@ -52,9 +52,12 @@ async def record_outcome(
     await record_round_outcome(session, user.id, round_id, outcome)
     await session.commit()
 
-    deadlines = await my_upcoming_deadlines(session, user.id)
+    # No explicit limit here, and none on Home either: both take
+    # my_deadline_rows' DEADLINE_ROWS_LIMIT default, which is the only thing
+    # keeping this swap from silently changing how many rows the page shows.
+    rows = await my_deadline_rows(session, user.id)
     db_user = await session.get(User, user.id)
     tz = db_user.timezone if db_user else settings.default_timezone
     return templates.TemplateResponse(
-        request, "_deadline_rows.html", {"user": user, "deadlines": deadlines, "tz": tz},
+        request, "_deadline_rows.html", {"user": user, "rows": rows, "tz": tz},
     )

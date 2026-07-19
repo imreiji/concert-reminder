@@ -440,10 +440,10 @@ def test_index_filters_by_tag(client):
     })
     client.post("/concerts", data={"title": "Gakumas Live", "event_id": "gakumas-live"})
 
-    everything = client.get("/").text
+    everything = client.get("/discover").text
     assert "Hasu Live" in everything and "Gakumas Live" in everything
 
-    filtered = client.get("/?tag=1").text
+    filtered = client.get("/discover?tag=1").text
     # Client-side filtering: every tile is always in the DOM (tagged with its
     # own tag ids) so JS can toggle visibility instantly with no round trip --
     # the non-matching tile is still present, just server-marked hidden for
@@ -460,7 +460,7 @@ def test_index_search_filters_by_title(client):
     client.post("/concerts", data={"title": "Hasu Live", "event_id": "hasu-live"})
     client.post("/concerts", data={"title": "Gakumas Live", "event_id": "gakumas-live"})
 
-    filtered = client.get("/?q=hasu").text
+    filtered = client.get("/discover?q=hasu").text
     assert "Hasu Live" in filtered and "Gakumas Live" in filtered
     hasu_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Hasu Live")):]
     gakumas_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Gakumas Live")):]
@@ -474,7 +474,7 @@ def test_index_search_is_case_insensitive_and_matches_title_en(client):
         "/concerts",
         data={"title": "はすのそら 5th", "event_id": "c", "title_en": "Hasunosora 5th"},
     )
-    r = client.get("/?q=HASUNOSORA").text
+    r = client.get("/discover?q=HASUNOSORA").text
     tile = r[r.index('<a class="tile"'):]
     assert 'style="display:none"' not in tile.split("</a>", 1)[0]
 
@@ -490,19 +490,19 @@ def test_index_search_combines_with_tag_filter_as_and(client):
     client.post("/concerts", data={"title": "Hasu Anniversary", "event_id": "hasu-anni"})
 
     # matches the search text but NOT the tag -> hidden
-    r = client.get("/?tag=1&q=anniversary").text
+    r = client.get("/discover?tag=1&q=anniversary").text
     anni_tile = r[r.rindex('<a class="tile"', 0, r.index("Hasu Anniversary")):]
     assert 'style="display:none"' in anni_tile.split("</a>", 1)[0]
 
     # matches both -> shown
-    r = client.get("/?tag=1&q=live").text
+    r = client.get("/discover?tag=1&q=live").text
     live_tile = r[r.rindex('<a class="tile"', 0, r.index("Hasu Live")):]
     assert 'style="display:none"' not in live_tile.split("</a>", 1)[0]
 
 
 def test_index_search_box_prefills_from_query_param(client):
     login_as(client, EDITOR_ID, "reiji")
-    r = client.get("/?q=hasunosora")
+    r = client.get("/discover?q=hasunosora")
     assert 'id="concert-search" value="hasunosora"' in r.text
 
 
@@ -514,7 +514,7 @@ def test_index_search_matches_artist_tag_name(client):
     })
     client.post("/concerts", data={"title": "Other Show", "event_id": "other-show"})
 
-    filtered = client.get("/?q=kozue").text
+    filtered = client.get("/discover?q=kozue").text
     some_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Some Show")):]
     other_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Other Show")):]
     assert 'style="display:none"' not in some_tile.split("</a>", 1)[0]
@@ -527,7 +527,7 @@ def test_index_search_matches_group_tag_name(client):
     client.post("/concerts", data={
         "title": "Some Show", "event_id": "some-show", "group_tags": [1],
     })
-    filtered = client.get("/?q=liella").text
+    filtered = client.get("/discover?q=liella").text
     tile = filtered[filtered.index('<a class="tile"'):]
     assert 'style="display:none"' not in tile.split("</a>", 1)[0]
 
@@ -538,7 +538,7 @@ def test_index_search_matches_franchise_tag_name(client):
     client.post("/concerts", data={
         "title": "Some Show", "event_id": "some-show", "franchise_tags": [1],
     })
-    filtered = client.get("/?q=gakumas").text
+    filtered = client.get("/discover?q=gakumas").text
     tile = filtered[filtered.index('<a class="tile"'):]
     assert 'style="display:none"' not in tile.split("</a>", 1)[0]
 
@@ -549,7 +549,7 @@ def test_index_search_matches_venue_tag_name(client):
     client.post("/concerts", data={
         "title": "Some Show", "event_id": "some-show", "venue_tags": [1],
     })
-    filtered = client.get("/?q=yokohama").text
+    filtered = client.get("/discover?q=yokohama").text
     tile = filtered[filtered.index('<a class="tile"'):]
     assert 'style="display:none"' not in tile.split("</a>", 1)[0]
 
@@ -570,7 +570,7 @@ async def test_index_search_falls_back_to_free_text_venue_when_no_venue_tag(clie
         concert.venue = "Nippon Budokan"
         await s.commit()
 
-    filtered = client.get("/?q=budokan").text
+    filtered = client.get("/discover?q=budokan").text
     tile = filtered[filtered.index('<a class="tile"'):]
     assert 'style="display:none"' not in tile.split("</a>", 1)[0]
 
@@ -597,13 +597,13 @@ async def test_index_search_ignores_free_text_venue_when_venue_tag_exists(client
         concert.venue = "Stale Old Name"
         await s.commit()
 
-    stale_filtered = client.get("/?q=stale").text
+    stale_filtered = client.get("/discover?q=stale").text
     stale_tile = stale_filtered[stale_filtered.index('<a class="tile"'):]
     assert 'style="display:none"' in stale_tile.split("</a>", 1)[0]
 
     # proves search actually works for this concert (not just silently
     # broken) -- it still finds it by the VENUE tag's real name
-    tag_name_filtered = client.get("/?q=yokohama").text
+    tag_name_filtered = client.get("/discover?q=yokohama").text
     tag_name_tile = tag_name_filtered[tag_name_filtered.index('<a class="tile"'):]
     assert 'style="display:none"' not in tag_name_tile.split("</a>", 1)[0]
 
@@ -621,9 +621,9 @@ def test_index_sorts_by_earliest_event_day(client):
         "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
     })
 
-    by_event = client.get("/?sort=event").text
+    by_event = client.get("/discover?sort=event").text
     assert by_event.index("BBB Sooner Show") < by_event.index("AAA Later Show")
-    by_added = client.get("/?sort=added").text
+    by_added = client.get("/discover?sort=added").text
     assert by_added.index("BBB Sooner Show") < by_added.index("AAA Later Show")  # newest first
 
 
@@ -760,7 +760,7 @@ async def test_multiple_venues_attach_and_join(client):
         assert await tag_ids_on(s, 1) == {1, 2}
         c = (await s.execute(select(Concert))).scalar_one()
         assert c.venue == "Yokohama Arena, K-Arena"
-    assert "Multiple" in client.get("/").text  # tile shows Multiple, not the join
+    assert "Multiple" in client.get("/discover").text  # tile shows Multiple, not the join
 
 
 async def test_index_hides_concert_whose_only_leg_is_cancelled(client):
@@ -787,7 +787,7 @@ async def test_index_hides_concert_whose_only_leg_is_cancelled(client):
             "day_cancelled": ["true"],
         },
     )
-    r = client.get("/").text
+    r = client.get("/discover").text
     assert "All Cancelled" not in r
     assert "Still Here" in r
     # still reachable directly by event_id even though hidden from the index
@@ -800,7 +800,7 @@ async def test_index_keeps_concert_with_zero_days_visible(client):
     EXISTING legs are all cancelled gets hidden."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title": "No Dates Yet", "event_id": "no-dates-yet"})
-    assert "No Dates Yet" in client.get("/").text
+    assert "No Dates Yet" in client.get("/discover").text
 
 
 async def test_index_open_upcoming_bucket_shown_first(client):
@@ -819,7 +819,7 @@ async def test_index_open_upcoming_bucket_shown_first(client):
     )
     client.post("/concerts", data={"title": "No Open Round", "event_id": "no-open-round"})
 
-    r = client.get("/").text
+    r = client.get("/discover").text
     assert "Open &amp; upcoming" in r
     open_heading_pos = r.index("Open &amp; upcoming")
     upcoming_heading_pos = r.index(">Upcoming<")
@@ -843,7 +843,7 @@ async def test_index_round_with_only_results_date_is_not_open(client):
             "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    r = client.get("/").text
+    r = client.get("/discover").text
     assert "Open &amp; upcoming" not in r
 
 
@@ -890,7 +890,7 @@ async def test_index_sort_key_ignores_cancelled_leg_date(client):
             "day_cancelled": ["true", "false"],
         },
     )
-    r = client.get("/?sort=event").text
+    r = client.get("/discover?sort=event").text
     # Mixed Legs Show's only LIVE date is September, after Between Show's
     # July date -- if the sort key still used the cancelled June date,
     # Mixed Legs would incorrectly sort before Between Show.
@@ -909,7 +909,7 @@ async def test_index_shows_chronological_deadline_list(client):
             "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    r = client.get("/").text
+    r = client.get("/discover").text
     assert "Deadline Show" in r
     assert "最速先行" in r
     assert "closes" in r
@@ -946,7 +946,7 @@ async def test_index_deadline_list_excludes_cancelled_round(client):
             "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
         },
     )
-    r = client.get("/").text
+    r = client.get("/discover").text
     assert "R1" not in r
 
 
@@ -985,7 +985,7 @@ async def test_index_deadline_list_carries_tag_and_search_attributes(client):
         await attach_tag(s, concert.id, tag)
         await s.commit()
 
-    r = client.get("/").text
+    r = client.get("/discover").text
     li_start = r.index("<li", r.index("deadline-list"))
     li_end = r.index("</li>", li_start)
     li_html = r[li_start:li_end]
