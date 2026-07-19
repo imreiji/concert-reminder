@@ -11,6 +11,7 @@ from datetime import datetime
 from app.db.service import DueReminder
 from app.domain.timezones import fmt_dual
 from app.domain.types import Anchor, LotteryOutcome
+from app.domain.urls import UnsafeURLError, clean_url
 
 KIND_EMOJI = {
     "lottery_round": "🎟️",
@@ -46,6 +47,26 @@ def relative_phrase(anchor_time: datetime, fire_at: datetime) -> str:
         days = round(hours / 24)
         unit = f"{days} day{'s' if days != 1 else ''}"
     return f"in {unit}" if seconds > 0 else f"{unit} ago"
+
+
+def safe_button_url(raw: str | None) -> str | None:
+    """An http(s) URL fit for a Discord link button, or None to omit it.
+
+    URLs are validated on save now, but rows written before that landed can
+    still hold e.g. `javascript:...`. Discord's API rejects a non-http(s)
+    button URL with an HTTPException, which the scheduler classes as a
+    TRANSIENT_FAILURE -- so the queue row would never be marked sent and
+    would retry every tick forever. Losing one button beats wedging the
+    queue, so a bad URL just drops the button and the DM still goes out.
+
+    domain/urls raises rather than returning a flag, and web/forms' 422
+    wrapper is the wrong translation here (and would drag FastAPI into the
+    bot layer), so this is the bot's own boundary translation.
+    """
+    try:
+        return clean_url(raw)
+    except UnsafeURLError:
+        return None
 
 
 def format_reminder(item: DueReminder) -> str:
@@ -156,9 +177,10 @@ def build_reminder_message(item: DueReminder) -> tuple:
         embed.description = f"**{subject}**"
 
     view = discord.ui.View(timeout=None)
-    if item.url:
+    ticket_url = safe_button_url(item.url)
+    if ticket_url:
         link_label = "Apply here" if item.anchor is Anchor.CLOSES else "Ticket page"
-        view.add_item(discord.ui.Button(label=link_label, url=item.url))
+        view.add_item(discord.ui.Button(label=link_label, url=ticket_url))
     view.add_item(discord.ui.Button(
         label="Open on dekimasen.app", url=f"{settings.base_url}"
     ))

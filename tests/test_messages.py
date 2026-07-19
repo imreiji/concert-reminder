@@ -210,6 +210,43 @@ def test_build_reminder_message_closes_reminder_uses_remind_later_not_snooze():
     assert "Ticket page" not in labels
 
 
+def test_build_reminder_message_drops_button_for_non_http_url_but_still_sends():
+    """Rows predating URL validation on save can still hold a `javascript:`
+    link. Discord's API rejects a non-http(s) button URL with an HTTPException
+    the scheduler classes as TRANSIENT_FAILURE, so the row would never be
+    marked sent and would retry every tick forever. Drop the button, keep the
+    DM -- one missing link beats a wedged queue."""
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.CLOSES, fire_at_utc=dt(6, 22),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25), url="javascript:alert(1)",
+    )
+    embed, view = build_reminder_message(item)
+    urls = [getattr(c, "url", None) for c in view.children]
+    assert not any(u and u.startswith("javascript:") for u in urls)
+    labels = {getattr(c, "label", None) for c in view.children}
+    assert "Apply here" not in labels
+    # The DM itself still goes out, with everything that doesn't depend on
+    # that URL: the embed, the site link, and the outcome/snooze buttons.
+    assert embed.title and "Hasunosora 5th" in embed.title
+    assert "Open on dekimasen.app" in labels
+    custom_ids = [getattr(c, "custom_id", None) for c in view.children]
+    assert any(cid and cid.startswith("dk:applied:") for cid in custom_ids)
+
+
+def test_build_reminder_message_keeps_button_for_ordinary_http_url():
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.CLOSES, fire_at_utc=dt(6, 22),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25), url="https://example.com/apply",
+    )
+    _, view = build_reminder_message(item)
+    urls = [getattr(c, "url", None) for c in view.children]
+    assert "https://example.com/apply" in urls
+
+
 def test_build_reminder_message_other_anchors_keep_plain_snooze():
     item = DueReminder(
         queue_id=1, discord_id=42, user_timezone="America/Moncton",
