@@ -2,17 +2,28 @@
 {% block title %}{{ concert.title }} — dekimasen.app{% endblock %}
 {% block content %}
 <article class="concert">
-  <header class="concert-head">
-    <h1>{{ concert.title }}{% if concert.kind %} <span class="dim kind-tag">{{ concert.kind.value.replace("_", " ") }}</span>{% endif %}</h1>
-    {% if date_range %}
-    <p class="dim {% if concert_past %}past{% endif %}">
-      {% if date_range[0] == date_range[1] %}{{ dual(date_range[0], tz) }}
-      {% else %}{{ jst(date_range[0]).strftime('%Y-%m-%d') }} – {{ jst(date_range[1]).strftime('%Y-%m-%d') }} JST{% endif %}
-    </p>
+  {#- Four kinds of tag, four different jobs on this page. Same selectattr
+      shape the tile macro in discover.html uses, so the lineage rule
+      ("F · G", group only -> G, neither -> nothing) cannot drift between
+      the tile you clicked and the page it opened. -#}
+  {% set cf = concert.tags | selectattr("kind.value", "equalto", "franchise") | list %}
+  {% set cg = concert.tags | selectattr("kind.value", "equalto", "group") | list %}
+  {% set ca = concert.tags | selectattr("kind.value", "equalto", "artist") | list %}
+  {% set cv = concert.tags | selectattr("kind.value", "equalto", "venue") | list %}
+  <header class="chead">
+    {#- Lineage leads, because the group is what a reader recognises while
+        the title is often a long subtitle. The date range and the venue that
+        used to sit here are GONE on purpose: a tour's legs have different
+        dates and different cities, so any single header summary disagrees
+        with the sections below it. Both live on the leg now. -#}
+    {% if cf or cg %}
+    <p class="lineage">{% if cf %}{{ cf | map(attribute="name") | join(", ") }}{% endif %}{% if cf and cg %} · {% endif %}{% if cg %}<b>{{ cg | map(attribute="name") | join(", ") }}</b>{% endif %}</p>
     {% endif %}
-    {% if concert.tags %}
-    <p class="taglist header-tags">
-      {% for t in concert.tags %}<span class="chip kind-{{ t.kind.value }}">{{ t.name }}</span>{% endfor %}
+    <h1>{{ display_title }}{% if concert.kind %} <span class="dim kind-tag">{{ concert.kind.value.replace("_", " ") }}</span>{% endif %}</h1>
+    {% if cf or cv %}
+    <p class="othertags">
+      <span class="lbl">Tags</span>
+      {% for t in cf + cv %}<span class="chip kind-{{ t.kind.value }}">{{ t.name }}</span>{% endfor %}
     </p>
     {% endif %}
     {% if concert.title_en or concert.organizer or concert.categories or concert.performers_text %}
@@ -24,18 +35,53 @@
     </dl>
     {% endif %}
     {% if concert.notes %}<p class="dim">{{ concert.notes }}</p>{% endif %}
+    {#- Each link names its destination. "source" said nothing; the source is
+        ramen.events, which PR #39 made actually populate on import. -#}
     {% if concert.eventernote_url or concert.official_url or concert.source_url %}
-    <p class="dim tiny">
+    <p class="links">
+      <span class="lbl2">Links</span>
       {% if concert.eventernote_url %}<a href="{{ concert.eventernote_url }}" target="_blank" rel="noopener">eventernote</a>{% endif %}
       {% if concert.official_url %}{% if concert.eventernote_url %} · {% endif %}<a href="{{ concert.official_url }}" target="_blank" rel="noopener">official site</a>{% endif %}
-      {% if concert.source_url %}{% if concert.eventernote_url or concert.official_url %} · {% endif %}<a href="{{ concert.source_url }}" target="_blank" rel="noopener">source</a>{% endif %}
+      {% if concert.source_url %}{% if concert.eventernote_url or concert.official_url %} · {% endif %}<a href="{{ concert.source_url }}" target="_blank" rel="noopener">ramen.events</a>{% endif %}
     </p>
     {% endif %}
-    <p class="actions">
+    {#- Editing is something you do to a SPECIFIC concert, so it belongs here
+        rather than in the site nav -- and both controls are editor-only. -#}
+    {% if user.is_editor %}
+    <p class="bar2">
+      <a class="btn quiet" href="/concerts/{{ concert.event_id }}/edit">Edit event</a>
       <a class="btn quiet" href="/concerts/{{ concert.event_id }}/export.yaml">Export YAML</a>
-      {% if user.is_editor %}<a class="btn quiet" href="/concerts/{{ concert.event_id }}/edit">Edit concert</a>{% endif %}
     </p>
+    {% endif %}
   </header>
+
+  {#- Performers get their own labelled block rather than sharing a chip row
+      with franchise and venue: they are the reason someone is on this page,
+      and a nine-member group buried among other chips is unreadable.
+
+      The label states the SOURCE, which quietly explains group expansion on
+      the one page an editor might wonder about it. What is listed is the
+      MATERIALISED membership (invariant 3) -- the members captured when the
+      group tag was attached, minus whatever an editor pruned -- so it can
+      legitimately differ from the group's membership today. Do not "fix"
+      that by reading current members.
+
+      Plain chips: eventernote links on performers need `eventernote_url` on
+      tags, which is branch 3. -#}
+  {% if cg or ca %}
+  <div class="performers">
+    <div class="plabel">Performing
+      <span>{% if cg and ca %}— {{ ca | length }} member{{ "" if ca | length == 1 else "s" }}, from the {{ cg | map(attribute="name") | join(", ") }} group tag{{ "" if cg | length == 1 else "s" }}
+      {%- elif cg %}— from the {{ cg | map(attribute="name") | join(", ") }} group tag{{ "" if cg | length == 1 else "s" }}
+      {%- else %}— {{ ca | length }} performer{{ "" if ca | length == 1 else "s" }}{% endif %}</span>
+    </div>
+    <div class="chips">
+      {% for g in cg %}<span class="chip grp">{{ g.name }}</span>{% endfor %}
+      {% for a in ca %}<span class="chip">{{ a.name }}</span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  <!-- /performers -->
 
   <section>
     <h2>Performances &amp; deadlines</h2>

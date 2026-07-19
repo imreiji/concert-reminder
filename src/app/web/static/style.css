@@ -432,3 +432,49 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   .row .title-c { grid-column: 1 / -1; }
   .row .acts { grid-column: 1 / -1; justify-content: flex-start; margin-top: .25rem; }
 }
+
+/* -- Concert page ---------------------------------------------------------
+   Same token vocabulary as Home; nothing new is invented here. The page has
+   no header date range and no header venue on purpose -- both belong to a
+   leg, which is the only place they are reliably true. */
+.chead { margin-top: 1.5rem; display: grid; gap: .55rem; }
+.chead h1 { margin: 0; font-size: 1.7rem; font-weight: 650; text-wrap: balance; }
+/* Franchise + group lead, per the tile display rule ("F · G"). The group is
+   what someone recognises first -- the title is often a long subtitle. */
+.chead .lineage {
+  margin: 0; font-size: .78rem; letter-spacing: .1em; text-transform: uppercase;
+  font-weight: 700; color: var(--dim);
+}
+.chead .lineage b { color: var(--accent); font-weight: 700; }
+.chead .othertags, .chead .links, .chead .bar2 {
+  margin: 0; display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap;
+}
+.chead .othertags .lbl, .chead .links .lbl2 {
+  font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--dim); font-weight: 650;
+}
+.chead .links { font-size: .8125rem; color: var(--dim); }
+.chead .links a { color: var(--accent); text-decoration: none; }
+.chead .links a:hover { text-decoration: underline; }
+.chead .bar2 { align-items: center; margin-top: .3rem; }
+
+/* Performers are the reason someone is on this page; a nine-member group
+   mixed into a generic chip row is unreadable. The label names the source
+   because these are the members MATERIALISED at attach time (invariant 3),
+   which can legitimately differ from the group's membership today. */
+.performers {
+  margin-top: 1.1rem; padding: .85rem .95rem; border: 1px solid var(--line);
+  border-radius: 3px; background: var(--raise);
+}
+.performers .plabel {
+  font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--dim); font-weight: 650; margin-bottom: .5rem;
+  display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap;
+}
+.performers .plabel span { letter-spacing: 0; text-transform: none; font-weight: 500; }
+.performers .chips { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+.performers .chip {
+  background: var(--chip); border-color: transparent;
+  display: inline-flex; align-items: center; line-height: 1.5; padding: .22rem .6rem;
+}
+.performers .chip.grp { background: var(--accent); color: #fff; font-weight: 650; }

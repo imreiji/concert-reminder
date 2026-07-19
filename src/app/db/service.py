@@ -1709,12 +1709,10 @@ async def active_concerts_missing_member(
     """Concerts tagged with `group_id` that don't already carry `member_id`
     and have at least one live (non-cancelled) leg whose date hasn't
     passed -- the set the Tags page's retroactive-apply confirmation
-    offers to bulk-attach an artist to. "Active" reuses the same
-    live-leg-date-range logic concert_date_range()/concert_past already use
-    on the concert detail page (routes/concerts.py), reimplemented directly
-    here rather than imported from web/routes/ -- this module sits below
-    routes in this project's dependency direction, so importing the other
-    way would invert it for a few lines of straightforward logic."""
+    offers to bulk-attach an artist to. "Active" means the concert still has
+    a live leg in the future -- the same live-leg reading the concert page's
+    leg sections use, expressed here as SQL rather than shared with them,
+    because this module sits below web/routes/ in the dependency direction."""
     now = now or _now()
     res = await session.execute(
         select(Concert)

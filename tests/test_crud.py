@@ -1214,44 +1214,11 @@ async def test_round_tied_to_cancelled_day_still_renders_not_vanishes(client):
     assert "No rounds yet for this performance." not in r.text
 
 
-async def test_concert_date_range_excludes_cancelled_legs(client):
-    login_as(client, EDITOR_ID, "reiji")
-    client.post(
-        "/concerts",
-        data={
-            "title": "C", "event_id": "c",
-            "day_label": ["Day 1", "Day 2"],
-            "day_starts_at": ["2099-08-01T18:00", "2099-09-01T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
-        },
-    )
-    async with client.db() as s:
-        days = sorted(
-            (await s.execute(select(ConcertDay))).scalars(), key=lambda d: d.label
-        )
-        day1_id = days[0].id  # the earlier date -- will be cancelled
-
-    client.post(
-        "/concerts/c/edit",
-        data={
-            "title": "C", "event_id": "c",
-            "day_id": [str(day1_id), str(days[1].id)],
-            "day_label": ["Day 1", "Day 2"],
-            "day_starts_at": ["2099-08-01T18:00", "2099-09-01T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
-            "day_cancelled": ["true", "false"],
-        },
-    )
-    r = client.get("/concerts/c")
-    assert r.status_code == 200
-    # the header date-range summary should reflect Day 2 (Sept), not the
-    # cancelled Day 1 (Aug) -- both dates would otherwise appear as the
-    # range. Scoped to the header block: the per-leg list below it still
-    # (correctly) shows the cancelled day's own date -- a cancelled day is
-    # flagged, never deleted, so its row keeps rendering with a "Cancelled"
-    # badge. Only the header's date-range *summary* excludes it.
-    header = r.text.split('<header class="concert-head">')[1].split("</header>")[0]
-    assert "2099-08-01" not in header
-    assert "2099-09-01" in header
+# `test_concert_date_range_excludes_cancelled_legs` lived here. It pinned the
+# concert header's single date-range summary, which is gone: a tour's legs
+# have different dates and different cities, so ANY single header summary
+# disagrees with the sections under it. Dates now live on the leg, cancelled
+# legs included (dimmed and badged, never hidden -- invariant 2). The
+# replacement contract is in tests/test_concert_page.py:
+# `test_the_header_carries_no_date_range_and_no_single_venue` and
+# `test_a_cancelled_leg_is_dimmed_but_keeps_its_own_date_and_rounds`.

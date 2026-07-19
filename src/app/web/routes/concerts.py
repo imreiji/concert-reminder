@@ -280,6 +280,33 @@ def group_rounds_by_day(concert: Concert) -> tuple[dict[int, list[Round]], list[
     return by_day, general
 
 
+# Separators an editor might put between a group name and the rest of a
+# title. Trimmed after the group is removed so "Aqours 9th LoveLive!" and
+# "Aqours - 9th LoveLive!" both leave "9th LoveLive!" rather than a stray dash.
+_TITLE_SEPARATORS = " \t·・:：-–—~〜|/"
+
+
+def title_without_lineage(title: str, group_names: list[str]) -> str:
+    """The concert title with a leading group name removed, because the
+    concert page's lineage line already carries it -- "Aqours · Aqours 9th
+    LoveLive!" reads as a stutter, and the half a reader actually needs is
+    the subtitle.
+
+    Only a LEADING match is stripped, and only when something is left over: a
+    concert whose whole title IS the group name has nothing else to show, and
+    a group named mid-title is usually part of a real phrase rather than a
+    prefix ("Aqours" in "...featuring Aqours").
+    """
+    for name in group_names:
+        if not name:
+            continue
+        if len(title) > len(name) and title[: len(name)].casefold() == name.casefold():
+            rest = title[len(name):].lstrip(_TITLE_SEPARATORS)
+            if rest:
+                return rest
+    return title
+
+
 def find_venue_tag(venue_tags: list[Tag], name: str | None) -> Tag | None:
     """Resolve a day's free-text venue against real VENUE tags by exact,
     case-insensitive name match -- same free-text-to-structured pattern as
@@ -308,17 +335,6 @@ def is_round_past(round_: Round, now: datetime) -> bool:
 
 def is_day_past(day: ConcertDay, now: datetime) -> bool:
     return day.starts_at_utc < now
-
-
-def concert_date_range(days: list[ConcertDay]) -> tuple[datetime, datetime] | None:
-    """Earliest and latest day.starts_at_utc among LIVE (non-cancelled)
-    legs, for the detail page header's date-range summary. None when there
-    are no days yet, or every existing day is cancelled."""
-    live_days = [d for d in days if not d.cancelled]
-    if not live_days:
-        return None
-    starts = [d.starts_at_utc for d in live_days]
-    return min(starts), max(starts)
 
 
 # ── Reminder-rule fragment (htmx swap target) ────────────────────────────
@@ -566,8 +582,11 @@ async def concert_detail(
     day_venue_tags = {d.id: find_venue_tag(venue_tags, d.venue) for d in concert.days}
     past_round_ids = {r.id for r in concert.rounds if is_round_past(r, now)}
     past_day_ids = {d.id for d in concert.days if is_day_past(d, now)}
-    date_range = concert_date_range(concert.days)
-    concert_past = bool(date_range) and date_range[1] < now
+    # The lineage line above the title carries the group, so the title itself
+    # does not repeat it (see title_without_lineage).
+    display_title = title_without_lineage(
+        concert.title, [t.name for t in concert.tags if t.kind is TagKind.GROUP]
+    )
     # Editor-only, and only fetched for editors -- viewers have no use for
     # who-changed-what, and it's one extra query worth skipping for them.
     audit_log = await concert_audit_log(session, concert.id) if user.is_editor else []
@@ -579,7 +598,7 @@ async def concert_detail(
          "rounds_by_day": by_day, "general_rounds": general,
          "day_venue_tags": day_venue_tags, "past_round_ids": past_round_ids,
          "past_day_ids": past_day_ids, "now": now,
-         "date_range": date_range, "concert_past": concert_past,
+         "display_title": display_title,
          "audit_log": audit_log},
     )
 
