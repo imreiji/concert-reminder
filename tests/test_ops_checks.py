@@ -107,7 +107,21 @@ def test_a_raising_check_becomes_a_failure_not_a_crash():
 
     result = ops.safe_run("exploder", boom)
     assert result.ok is False
-    assert "kaboom" in result.detail
+    assert "RuntimeError" in result.detail
+
+
+def test_a_raising_check_does_not_leak_its_message():
+    """/healthz is public so UptimeRobot can poll it. str() on a SQLAlchemy
+    error carries the full statement and column names, which would publish
+    schema internals to anonymous callers exactly when something breaks."""
+
+    def boom():
+        raise RuntimeError("SELECT secret FROM users WHERE token = 'hunter2'")
+
+    result = ops.safe_run("exploder", boom)
+    assert "hunter2" not in result.detail
+    assert "SELECT" not in result.detail
+    assert result.detail == "check raised: RuntimeError"
 
 
 def test_dms_check_is_reported_but_never_alerting():

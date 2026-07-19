@@ -54,6 +54,14 @@ class RegistryEntry:
     needs_session: bool = False
 
 
+def _redacted(e: Exception) -> str:
+    """Exception TYPE only -- /healthz is public so UptimeRobot can poll it, and
+    str(e) on a SQLAlchemy error carries the full statement and column names.
+    That would publish schema internals to anonymous callers at exactly the
+    moment something is broken. The full traceback goes to the log above."""
+    return f"check raised: {type(e).__name__}"
+
+
 def safe_run(name: str, fn: Callable[[], CheckResult]) -> CheckResult:
     """A check that cannot run IS a problem -- report it as failing rather than
     letting it propagate. This runs inside the scheduler tick, whose real job
@@ -62,7 +70,7 @@ def safe_run(name: str, fn: Callable[[], CheckResult]) -> CheckResult:
         return fn()
     except Exception as e:  # noqa: BLE001 - deliberately broad, see docstring
         log.exception("health check %s raised", name)
-        return CheckResult(name, False, f"check raised: {e}")
+        return CheckResult(name, False, _redacted(e))
 
 
 def check_backup() -> CheckResult:
@@ -156,7 +164,7 @@ async def _safe_run_async(name, fn, session) -> CheckResult:
         return await fn(session)
     except Exception as e:  # noqa: BLE001 - see safe_run
         log.exception("health check %s raised", name)
-        return CheckResult(name, False, f"check raised: {e}")
+        return CheckResult(name, False, _redacted(e))
 
 
 async def run_checks(session) -> list[CheckResult]:
