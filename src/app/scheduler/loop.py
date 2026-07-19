@@ -126,6 +126,16 @@ async def _send_notification(bot, note, ctx) -> DeliveryOutcome:
 
 async def tick(bot) -> int:
     """One scheduler pass. Returns how many messages were delivered."""
+    # Counted BEFORE any delivery work, not after it. reminder_loop catches
+    # tick exceptions and retries forever, so a tick that raises every minute
+    # (a DB lock, a due_reminders regression, an HTTPException escaping a send)
+    # would otherwise leave the counter frozen and health evaluation would never
+    # run again -- silence in exactly the scenario that most needs an alert.
+    # heartbeat.beat() fires before tick(), so scheduler_ok stays true too and
+    # the uptime monitor would not notice either.
+    global _tick_count
+    _tick_count += 1
+
     now = datetime.now(UTC)
     delivered = 0
     sem = asyncio.Semaphore(SEND_CONCURRENCY)
@@ -174,8 +184,7 @@ async def tick(bot) -> int:
         # tick would send every one of them again. Monitoring must never be
         # able to cause duplicate reminders, so it commits separately and its
         # failures are logged, not raised.
-        global _tick_count
-        _tick_count += 1
+        #
         # Every 5th tick (~5 min): disk stats and file reads do not need
         # per-minute resolution, and the slower cadence damps flapping.
         if _tick_count % HEALTH_EVERY_N_TICKS == 0:
