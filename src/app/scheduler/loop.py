@@ -41,6 +41,7 @@ from app.db.service import (
     DueReminder,
     due_notifications,
     due_reminders,
+    evaluate_and_alert,
     leg_cancelled_context,
     mark_notification_sent,
     mark_sent,
@@ -48,6 +49,7 @@ from app.db.service import (
     record_dm_outcome,
 )
 from app.db.session import SessionMaker
+from app.ops import run_checks
 from app.scheduler import heartbeat
 
 log = logging.getLogger(__name__)
@@ -55,6 +57,8 @@ log = logging.getLogger(__name__)
 TICK_SECONDS = 60
 SEND_CONCURRENCY = 5  # bounded in-flight Discord calls; discord.py's own
                       # rate limiter is the real backstop beyond this.
+HEALTH_EVERY_N_TICKS = 5
+_tick_count = 0
 
 
 class DeliveryOutcome(Enum):
@@ -161,6 +165,26 @@ async def tick(bot) -> int:
                 )
 
         await session.commit()
+
+        # Health evaluation runs AFTER the delivery commit and swallows its own
+        # errors. Both halves matter. By this point the tick has already put
+        # DMs on the wire -- an irreversible side effect -- and recorded them
+        # as sent; an exception raised before the commit would roll that
+        # bookkeeping back while the messages stayed delivered, and the next
+        # tick would send every one of them again. Monitoring must never be
+        # able to cause duplicate reminders, so it commits separately and its
+        # failures are logged, not raised.
+        global _tick_count
+        _tick_count += 1
+        # Every 5th tick (~5 min): disk stats and file reads do not need
+        # per-minute resolution, and the slower cadence damps flapping.
+        if _tick_count % HEALTH_EVERY_N_TICKS == 0:
+            try:
+                await evaluate_and_alert(session, await run_checks(session), now)
+                await session.commit()
+            except Exception:
+                log.exception("health evaluation failed; reminder delivery was unaffected")
+                await session.rollback()
     return delivered
 
 
