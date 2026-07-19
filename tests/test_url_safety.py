@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, Tag
+from app.db.models import Base, Concert, Round, Tag
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.domain.urls import UnsafeUrlError, clean_url
@@ -203,3 +203,55 @@ async def test_round_url_rejects_javascript_url(client):
     assert r.status_code == 422
     async with client.db() as s:
         assert (await s.execute(select(Concert))).scalars().first() is None
+
+
+async def test_import_commit_rejects_javascript_round_url(client):
+    # The import commit route builds its rounds through the same
+    # build_round -> apply_round_fields path as manual entry. This pins that
+    # it really does: bypassing the chokepoint here would write the concert
+    # and its round with a javascript: href.
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/concerts/import/commit", data={
+        "title": "Imported", "source_url": "https://ramen.events/e/1",
+        "round_label": ["R1"], "round_kind": ["lottery_round"],
+        "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+        "round_results_at": [""], "round_payment_at": [""],
+        "round_url": ["javascript:alert(1)"],
+    })
+    assert r.status_code == 422
+    async with client.db() as s:
+        assert (await s.execute(select(Concert))).scalars().first() is None
+        assert (await s.execute(select(Round))).scalars().first() is None
+
+
+async def test_edit_page_inplace_round_url_rejects_javascript_url(client):
+    # Updating an EXISTING round takes apply_round_fields' other caller (the
+    # id-preserving reconciliation branch), not build_round. Same chokepoint,
+    # different entry -- so it needs its own guard.
+    login_as(client, EDITOR_ID, "reiji")
+    assert client.post("/concerts", data={
+        "title": "C", "event_id": "c",
+        "round_label": ["R1"], "round_kind": ["lottery_round"],
+        "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+        "round_results_at": [""], "round_payment_at": [""],
+        "round_label_en": [""], "round_url": ["https://example.com/lottery"],
+        "round_notes": [""], "round_leg": [""],
+    }).status_code == 303
+
+    async with client.db() as s:
+        round_id = (await s.execute(select(Round))).scalars().one().id
+
+    r = client.post("/concerts/c/edit", data={
+        "event_id": "c", "title": "C",
+        "round_id": [str(round_id)],
+        "round_label": ["R1"], "round_label_en": [""], "round_kind": ["lottery_round"],
+        "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+        "round_results_at": [""], "round_payment_at": [""],
+        "round_url": ["javascript:alert(1)"],
+        "round_notes": [""], "round_leg": [""],
+    })
+    assert r.status_code == 422
+    async with client.db() as s:
+        round_ = (await s.execute(select(Round))).scalars().one()
+        assert round_.id == round_id  # updated in place, not recreated
+        assert round_.url == "https://example.com/lottery"  # unchanged

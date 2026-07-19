@@ -86,6 +86,13 @@ def test_https_accepts_strong_secret():
     assert s.session_secret == STRONG
 
 
+def test_uppercase_https_still_triggers_the_check():
+    # The validator lowercases before matching precisely so a BASE_URL typed
+    # as HTTPS:// cannot skip the production gate.
+    with pytest.raises(ValueError, match="SESSION_SECRET"):
+        make_web("HTTPS://dekimasen.app", "change-me")
+
+
 def test_error_names_the_generation_command():
     with pytest.raises(ValueError) as exc:
         make_web("https://dekimasen.app", "change-me")
