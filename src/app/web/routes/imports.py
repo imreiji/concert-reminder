@@ -25,11 +25,11 @@ from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import RoundKind
 from app.web.auth import SessionUser, require_editor
+from app.web.forms import form_url
 from app.web.routes.concerts import (
     build_day,
     build_round,
     create_concert_row,
-    form_url,
     generate_event_id,
 )
 

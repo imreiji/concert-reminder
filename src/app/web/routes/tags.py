@@ -23,7 +23,7 @@ from app.db.service import ensure_user, find_tag_by_name, group_members
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web.auth import SessionUser, require_editor, require_user
-from app.web.routes.concerts import form_url
+from app.web.forms import form_url
 
 router = APIRouter()
 

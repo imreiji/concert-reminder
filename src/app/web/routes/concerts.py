@@ -48,8 +48,8 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.domain.types import Anchor, ConcertKind, RoundKind, TagKind
-from app.domain.urls import UnsafeUrlError, clean_url
 from app.web.auth import SessionUser, require_editor, require_user
+from app.web.forms import form_url
 
 router = APIRouter()
 
@@ -74,16 +74,6 @@ def parse_jst(value: str | None) -> datetime | None:
     except ValueError as e:
         raise HTTPException(status_code=422, detail=f"bad datetime: {value!r}") from e
     return jst_to_utc(naive)
-
-
-def form_url(value: str | None) -> str | None:
-    """domain.urls.clean_url at the HTTP boundary -- the one place a bad
-    scheme becomes a 422. Shared with routes/tags.py; an editor who pastes
-    a junk URL is told so rather than having it silently dropped."""
-    try:
-        return clean_url(value)
-    except UnsafeUrlError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 async def get_concert(session: AsyncSession, concert_id: int) -> Concert:
