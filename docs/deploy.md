@@ -97,6 +97,17 @@ journalctl -u concert-reminder -f            # bot online + scheduler running
 ```
 Then in a browser: sign in with Discord, confirm the editor badge.
 
+Caddyfile changes are not picked up by `git pull` alone - the live config is
+a copy:
+```bash
+sudo cp ~/app/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+curl -sI https://dekimasen.app/ | grep -i 'x-frame\|x-content-type\|referrer'
+```
+That last line should show `X-Frame-Options: DENY`, `X-Content-Type-Options:
+nosniff`, `Referrer-Policy: same-origin`. If they are missing, the copy step
+was skipped.
+
 ## 8. Hardening (do these, they take 10 minutes)
 
 - **Lock the origin to Cloudflare**: edit the Lightsail firewall so 80/443
