@@ -7,6 +7,9 @@ set -euo pipefail
 
 DB=/home/ubuntu/app/app.db
 ENV_FILE=/etc/default/dekimasen-backup
+# Read by the app's `backup` health check. Keep in sync with the
+# backup_marker_path setting in src/app/config.py.
+MARKER=/home/ubuntu/.dekimasen-backup-ok
 
 # The bucket is server-local config, so it lives outside the repo: editing it
 # into this tracked file makes every future `git pull` conflict here, and the
@@ -59,4 +62,12 @@ trap 'rm -f "/tmp/app-$STAMP.db" "/tmp/app-$STAMP.db.gz"' EXIT
 sqlite3 "$DB" ".backup /tmp/app-$STAMP.db"
 gzip -f "/tmp/app-$STAMP.db"
 aws s3 cp "/tmp/app-$STAMP.db.gz" "$BUCKET/app-$STAMP.db.gz" --only-show-errors
+
+# Success marker for the app's health check. The IAM user is PutObject-only by
+# design, so the app cannot ask S3 whether this landed - this file is the only
+# local evidence a backup ran. Written only after the upload succeeds, so a
+# failed run leaves it stale rather than lying. set -e means we never reach
+# here on failure.
+date -u +%Y-%m-%dT%H:%M:%S+00:00 > "$MARKER"
+
 echo "backup ok: $STAMP"

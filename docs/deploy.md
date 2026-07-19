@@ -173,6 +173,24 @@ With no bucket configured the script exits non-zero on line 1 of real work and
 says which file to create, so a misconfigured cron fails loudly in
 `~/backup.log` rather than silently backing up nothing.
 
+**Health check.** On success `backup.sh` writes a UTC timestamp to
+`/home/ubuntu/.dekimasen-backup-ok`. `/healthz` reports it as the `backup`
+check, and the scheduler DMs everyone in `ADMIN_WHITELIST` when it goes stale
+(36h) or recovers. Only a successful `aws s3 cp` updates it, so a failed run
+leaves it stale rather than lying.
+
+The app cannot verify the object actually reached S3 - the IAM user above is
+PutObject-only by design, with no `ListBucket` - so this marker proves the
+script succeeded, which is close to but not the same as the backup existing.
+Do not widen the IAM policy to close that gap: the check is worth less than
+the property that a compromised server cannot read or delete your backups.
+
+Right after this first deploys, the check reports "no backup recorded yet"
+until 09:00 UTC writes the first marker. That is expected and does not alert -
+there is a startup grace. To exercise it immediately, run
+`~/app/deploy/backup.sh` by hand and confirm `/healthz` flips
+`checks.backup.ok` to true.
+
 **One-time migration (server currently has an edited `backup.sh`):** the old
 script carried a hardcoded `BUCKET=`, so servers set up before this change have
 a locally-modified tracked file that will conflict on the next `git pull`.
