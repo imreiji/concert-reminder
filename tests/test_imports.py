@@ -243,6 +243,37 @@ def test_commit_requires_editor(client):
     assert r.status_code == 403
 
 
+async def test_commit_records_source_url(client):
+    """The whole point of importing: keep the link back to where it came from."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit", data={"title": "Sourced Concert", "source_url": GRADUATION_URL}
+    )
+    assert r.status_code == 303
+    concerts = await _all(client.db, Concert)
+    assert [c.source_url for c in concerts] == [GRADUATION_URL]
+
+
+async def test_commit_rejects_tampered_source_url(client):
+    """source_url reaches commit through a hidden field, so it is client-
+    controlled by the time we see it -- _check_host on preview proves nothing
+    here. Same 422 the manual form gives, and nothing is written."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={"title": "Evil Concert", "source_url": "javascript:alert(1)"},
+    )
+    assert r.status_code == 422
+    assert await _all(client.db, Concert) == []
+
+
+def test_preview_carries_source_url_into_the_commit_form(client):
+    login_as(client, EDITOR_ID, "reiji")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert f'name="source_url" value="{GRADUATION_URL}"' in r.text
+
+
 # ── fetch_ramen_html hardening: redirect host re-check, size cap ─────────
 # These call fetch_ramen_html directly (no route/DB involved) using
 # httpx.MockTransport, so the redirect-following and streaming logic itself

@@ -25,7 +25,13 @@ from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import RoundKind
 from app.web.auth import SessionUser, require_editor
-from app.web.routes.concerts import build_day, build_round, create_concert_row, generate_event_id
+from app.web.routes.concerts import (
+    build_day,
+    build_round,
+    create_concert_row,
+    form_url,
+    generate_event_id,
+)
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/concerts/import")
@@ -153,6 +159,7 @@ async def import_commit(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
+    source_url: str = Form(default=""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
@@ -171,10 +178,16 @@ async def import_commit(
     -- create_concert_row + add_day + add_round combined into one commit.
     event_id isn't a field the import form collects, so it's auto-suggested
     from the title (slugified, de-duplicated) -- editable afterward via the
-    edit page."""
+    edit page.
+
+    source_url rides along in a hidden field so the saved concert keeps its
+    link back to ramen.events. _check_host vetted it on preview, but it has
+    been through the client since, so it gets the same form_url treatment as
+    every other editor-submitted link."""
     event_id = await generate_event_id(session, title)
     concert = await create_concert_row(
-        session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags
+        session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
+        source_url=form_url(source_url),
     )
 
     for label, starts_at in zip(day_label, day_starts_at, strict=True):

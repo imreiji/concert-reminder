@@ -12,6 +12,9 @@
 {% endif %}
 
 <form class="stack" method="post" action="/concerts/import/commit" id="new-concert">
+  {# Carries the imported page's URL through to the commit, so the saved
+     concert keeps its attribution link. Re-validated server-side. #}
+  <input type="hidden" name="source_url" value="{{ source_url }}">
   <label>Title <input name="title" required maxlength="200" value="{{ parsed.title }}"></label>
   {% set venue_hint = parsed.venue_name %}
   {% include "_tag_picker_fields.html" %}

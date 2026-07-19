@@ -387,6 +387,7 @@ async def create_concert_row(
     artist_tags: list[int],
     venue_tags: list[int],
     kind: ConcertKind | None = None,
+    source_url: str | None = None,
 ) -> Concert:
     """Tag-driven creation supporting collab events: MULTIPLE franchises,
     MULTIPLE groups, explicit artist list (auto-populated client-side from
@@ -408,6 +409,7 @@ async def create_concert_row(
         kind=kind,
         franchise=", ".join(t.name for t in f_tags) or None,  # denormalized display
         venue=", ".join(t.name for t in v_tags) or None,
+        source_url=source_url,
         created_by=user.id,
     )
     session.add(concert)
