@@ -98,6 +98,28 @@ async def list_editors(session: AsyncSession) -> list[dict]:
     return editors
 
 
+async def delete_user(session: AsyncSession, discord_id: int) -> bool:
+    """Erase a user (GDPR "right to be forgotten"). Returns False if unknown.
+
+    Deliberately a single DELETE: the schema does the rest. Everything
+    personal (sessions, rules, presets + their items, tag subscriptions,
+    notifications, round outcomes) hangs off ondelete=CASCADE and vanishes;
+    the shared catalogue this user authored (concerts, tags, audit rows)
+    hangs off ondelete=SET NULL and survives with an anonymised author --
+    one person leaving must not delete community content everyone else
+    depends on. Requires PRAGMA foreign_keys=ON, which production sets.
+
+    No route or UI calls this: erasure is a manual, owner-initiated
+    operation for now.
+    """
+    user = await session.get(User, discord_id)
+    if user is None:
+        return False
+    await session.delete(user)
+    await session.flush()
+    return True
+
+
 async def record_dm_outcome(session: AsyncSession, discord_id: int, blocked: bool) -> None:
     """Persist whether the most recent attempted DM to this user succeeded
     or hit discord.Forbidden -- the sitewide "DMs blocked" banner reads
