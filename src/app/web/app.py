@@ -144,8 +144,6 @@ def create_app() -> FastAPI:
             db_user = await session.get(User, user.id)
             if db_user:
                 tz, tz_auto = db_user.timezone, db_user.tz_auto
-        import json as _json
-
         from app.db.service import tag_picker_context
         from app.domain.types import ConcertKind as _CK
         from app.domain.types import TagKind as _TK
@@ -180,8 +178,8 @@ def create_app() -> FastAPI:
                 "all_tags": tags,
                 "by_kind": picker["by_kind"],
                 "region_links": region_links,
-                "groups_json": _json.dumps(picker["groups_json"]),
-                "tag_names_json": _json.dumps(picker["tag_names_json"]),
+                "groups_json": picker["groups_json"],
+                "tag_names_json": picker["tag_names_json"],
                 "selected_tags": selected_tags,
                 "visible_concert_ids": visible_concert_ids,
                 "query": q,

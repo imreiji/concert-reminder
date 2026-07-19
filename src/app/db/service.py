@@ -523,9 +523,12 @@ async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
 
 async def tag_picker_context(session: AsyncSession) -> dict:
     """Data the shared tag-picker partial needs: tags grouped by kind, plus
-    the two JSON blobs its client-side script reads (group->members for
+    the two structures its client-side script reads (group->members for
     auto-populating artists, and id->name for rendering selected chips).
-    Shared by the new-concert form and the URL-import draft form."""
+    Shared by the new-concert form and the URL-import draft form.
+
+    The *_json keys are raw dicts despite the name -- the template serializes
+    them with `| tojson`, which must be handed the object, not a string."""
     tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
     by_kind: dict[str, list[Tag]] = {}
     for t in tags:
