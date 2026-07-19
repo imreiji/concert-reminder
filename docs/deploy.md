@@ -157,7 +157,9 @@ not read, list, or delete them.
 sudo apt-get install -y awscli
 aws configure          # paste the access key id + secret; region e.g. ca-central-1; output json
 # The bucket is server-local config and is NOT stored in the repo - backup.sh
-# reads BACKUP_BUCKET, and sources this file itself if it exists:
+# reads BACKUP_BUCKET out of this file itself if it exists. The file is
+# PARSED, not sourced - only a BACKUP_BUCKET= line means anything, and shell
+# syntax in it will not run:
 sudo tee /etc/default/dekimasen-backup <<< 'BACKUP_BUCKET="s3://YOUR-BUCKET-NAME/dekimasen"'
 # chown as well as chmod: sudo tee leaves it root-owned, and cron runs
 # backup.sh as ubuntu, which then cannot read it.
