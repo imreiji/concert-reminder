@@ -27,6 +27,7 @@ from bs4 import BeautifulSoup
 from bs4 import Tag as BS4Tag
 
 from app.domain.types import RoundKind
+from app.domain.urls import UnsafeUrlError, clean_url
 
 DAY_LINE = re.compile(
     r"^(?P<label>Day\s+\d+|When):\s*"
@@ -95,12 +96,22 @@ def _parse_datetime(value: str) -> datetime:
     return datetime.strptime(value.strip(), "%Y-%m-%d %H:%M")
 
 
-def _official_url(content: BS4Tag) -> str | None:
+def _official_url(content: BS4Tag, warnings: list[str]) -> str | None:
+    """The scraped href is remote, third-party markup -- a `javascript:` one
+    would end up in an href on our own pages. Drop it rather than raise: the
+    rest of the parse is still useful, the import preview is reviewed by a
+    human before anything is written, and the warning tells that human what
+    was thrown away."""
     first_p = content.find("p")
     if first_p and "official website" in first_p.get_text().lower():
         link = first_p.find("a")
         if link and link.get("href"):
-            return link["href"]
+            try:
+                return clean_url(link["href"])
+            except UnsafeUrlError:
+                warnings.append(
+                    f"ignored an unsafe official-website link: {link['href']!r}"
+                )
     return None
 
 
@@ -176,7 +187,7 @@ def parse_ramen_event(html: str, source_url: str) -> ParsedConcert:
 
     warnings: list[str] = []
     days, venue = _parse_basic_info(content, warnings)
-    fallback_url = _official_url(content) or source_url
+    fallback_url = _official_url(content, warnings) or source_url
     rounds = _parse_rounds(content, fallback_url, warnings)
 
     return ParsedConcert(

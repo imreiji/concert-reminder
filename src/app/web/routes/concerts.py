@@ -49,6 +49,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.domain.types import Anchor, ConcertKind, RoundKind, TagKind
+from app.domain.urls import UnsafeUrlError, clean_url
 from app.web.auth import SessionUser, require_editor, require_user
 
 router = APIRouter()
@@ -74,6 +75,16 @@ def parse_jst(value: str | None) -> datetime | None:
     except ValueError as e:
         raise HTTPException(status_code=422, detail=f"bad datetime: {value!r}") from e
     return jst_to_utc(naive)
+
+
+def form_url(value: str | None) -> str | None:
+    """domain.urls.clean_url at the HTTP boundary -- the one place a bad
+    scheme becomes a 422. Shared with routes/tags.py; an editor who pastes
+    a junk URL is told so rather than having it silently dropped."""
+    try:
+        return clean_url(value)
+    except UnsafeUrlError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 async def get_concert(session: AsyncSession, concert_id: int) -> Concert:
@@ -204,7 +215,7 @@ def apply_round_fields(
     round_.closes_at_utc = closes
     round_.results_at_utc = results
     round_.payment_deadline_at_utc = payment
-    round_.url = url.strip() or None
+    round_.url = form_url(url)
     round_.applies_to = applies_to or None
     round_.label_en = label_en.strip() or None
     round_.notes = notes.strip() or None
@@ -484,9 +495,9 @@ async def create_concert(
     concert.title_en = title_en.strip() or None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
-    concert.eventernote_url = eventernote_url.strip() or None
-    concert.official_url = official_url.strip() or None
-    concert.source_url = source_url.strip() or None
+    concert.eventernote_url = form_url(eventernote_url)
+    concert.official_url = form_url(official_url)
+    concert.source_url = form_url(source_url)
     concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
 
@@ -666,9 +677,9 @@ async def edit_concert(
     concert.kind = ConcertKind(kind) if kind else None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
-    concert.eventernote_url = eventernote_url.strip() or None
-    concert.official_url = official_url.strip() or None
-    concert.source_url = source_url.strip() or None
+    concert.eventernote_url = form_url(eventernote_url)
+    concert.official_url = form_url(official_url)
+    concert.source_url = form_url(source_url)
     concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
 
