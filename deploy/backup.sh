@@ -6,7 +6,24 @@
 set -euo pipefail
 
 DB=/home/ubuntu/app/app.db
-BUCKET="s3://YOUR-BUCKET-NAME/dekimasen"   # <-- edit me
+ENV_FILE=/etc/default/dekimasen-backup
+
+# The bucket is server-local config, so it lives outside the repo: editing it
+# into this tracked file makes every future `git pull` conflict here, and the
+# obvious "keep mine" resolution silently keeps the OLD script.
+# Sourced by the script rather than by the cron line, so the crontab entry
+# never has to change. An already-exported BACKUP_BUCKET wins over the file,
+# so a one-off `BACKUP_BUCKET=s3://scratch ./backup.sh` behaves as written.
+if [[ -f "$ENV_FILE" ]]; then
+  bucket_from_env="${BACKUP_BUCKET:-}"
+  # shellcheck source=/dev/null
+  . "$ENV_FILE"
+  if [[ -n "$bucket_from_env" ]]; then
+    BACKUP_BUCKET="$bucket_from_env"
+  fi
+fi
+
+BUCKET="${BACKUP_BUCKET:?backup.sh: BACKUP_BUCKET is not set - create $ENV_FILE containing BACKUP_BUCKET=\"s3://your-bucket/dekimasen\" (see docs/deploy.md)}"
 STAMP=$(date -u +%F)
 
 # The snapshot is the entire user database in the clear. Under the default
@@ -22,11 +39,6 @@ umask 077
 # Installed AFTER STAMP is set, and with quoted literal paths rather than a
 # glob - with STAMP empty, /tmp/app-.db* would match unrelated files.
 trap 'rm -f "/tmp/app-$STAMP.db" "/tmp/app-$STAMP.db.gz"' EXIT
-
-if [[ "$BUCKET" == *YOUR-BUCKET-NAME* ]]; then
-  echo "backup.sh: edit BUCKET first" >&2
-  exit 1
-fi
 
 # .backup takes a consistent snapshot even while the app is writing (WAL-safe).
 sqlite3 "$DB" ".backup /tmp/app-$STAMP.db"
