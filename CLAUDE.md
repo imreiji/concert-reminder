@@ -32,8 +32,11 @@ and a per-concert edit history have shipped since).
 - `src/app/domain/` — pure logic, NO I/O, no discord/fastapi/sqlalchemy
   imports. Reminder math in `reminders.py`, JST↔UTC conversion in
   `timezones.py`, ramen.events HTML parsing in `ingest.py` (takes an HTML
-  string, returns a draft — no httpx call itself), and `.ics`/YAML export
-  formatting in `ics_export.py`/`yaml_export.py`.
+  string, returns a draft — no httpx call itself), `.ics`/YAML export
+  formatting in `ics_export.py`/`yaml_export.py`, and URL scheme validation
+  in `urls.py` (`clean_url`: strips whitespace/control characters, then
+  allows only `http`/`https` with a real host; everything else, including
+  `javascript:` and scheme-evasion tricks, raises `UnsafeUrlError`).
 - `src/app/db/` — models, session, and `service.py` (all business logic that
   touches the DB; discord-free so it's testable).
 - `src/app/bot/` — thin shell: cogs, embed builders (`messages.py`),
@@ -105,6 +108,15 @@ and a per-concert edit history have shipped since).
    URLs use the editor-chosen, unique `event_id` string instead. `"new"` and
    `"import"` are reserved and rejected as `event_id` values so they can
    never collide with the `/concerts/new` and `/concerts/import` routes.
+7. **URL fields**: every editor-supplied URL must go through `form_url`
+   (`web/forms.py`) at the route boundary: it wraps `domain.urls.clean_url`
+   and turns a bad scheme into a 422 rather than a silent drop. Stored URLs
+   land in `href` attributes, so a `javascript:` value that slips past
+   executes in-origin for whoever clicks it. Add a new URL form field and
+   you must add a `form_url` call; skip it and you have reintroduced the
+   vulnerability. Same rule for tag names rendered into the picker's inline
+   `<script>`: `| tojson`, never `| safe`, and the context values stay raw
+   Python objects (never pre-`json.dumps`'d).
 
 ## Migrations (SQLite gotchas — these have bitten before)
 
