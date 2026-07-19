@@ -6,7 +6,18 @@ All settings come from environment variables (or a local .env file).
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Minimum length for a real session secret. token_hex(32) yields 64 chars, so
+# this only rejects things nobody would have generated on purpose.
+MIN_SESSION_SECRET_LEN = 32
+
+SESSION_SECRET_HELP = (
+    "SESSION_SECRET is unsafe (the shipped placeholder, blank, or under "
+    f"{MIN_SESSION_SECRET_LEN} characters) but BASE_URL is https, which means this is a real "
+    'deployment. Generate one: python -c "import secrets; print(secrets.token_hex(32))"'
+)
 
 
 class Settings(BaseSettings):
@@ -38,6 +49,23 @@ class Settings(BaseSettings):
 
     # Defaults
     default_timezone: str = "America/Moncton"
+
+    @model_validator(mode="after")
+    def _reject_weak_session_secret(self) -> "Settings":
+        """Fail startup rather than sign real session cookies with a secret
+        that is public in this repo. Gated on an https BASE_URL because local
+        dev (http://localhost:8000, the documented web-only mode) is expected
+        to run straight from a fresh clone with the placeholder in place --
+        making this unconditional would break that workflow."""
+        secret = self.session_secret.strip()
+        unsafe = (
+            not secret
+            or secret == "change-me"
+            or len(self.session_secret) < MIN_SESSION_SECRET_LEN
+        )
+        if unsafe and self.base_url.lower().startswith("https"):
+            raise ValueError(SESSION_SECRET_HELP)
+        return self
 
     @property
     def editor_ids(self) -> frozenset[int]:

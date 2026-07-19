@@ -79,6 +79,11 @@ DEFAULT_TIMEZONE=America/Moncton
 Note the **four** slashes in DATABASE_URL: absolute path, so the DB location
 doesn't depend on the service's working directory.
 
+SESSION_SECRET is validated at startup: with an https BASE_URL, a blank,
+placeholder, or under-32-character secret is fatal. `alembic/env.py` imports
+the app config, so a bad `.env` now fails at `alembic upgrade head` - one step
+earlier in the deploy ritual than the service restart.
+
 ## 6. Discord OAuth redirect
 
 Developer Portal -> your app -> OAuth2 -> Redirects -> **add**
