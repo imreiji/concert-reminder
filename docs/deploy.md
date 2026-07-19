@@ -168,6 +168,16 @@ cd ~/app && git pull && uv sync && uv run alembic upgrade head \
   && sudo systemctl restart concert-reminder
 ```
 
+If the pull touched `deploy/Caddyfile`, `git pull` alone changes nothing -
+Caddy reads `/etc/caddy/Caddyfile`, not the repo copy:
+```bash
+sudo cp ~/app/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+curl -sI https://dekimasen.app/ | grep -i -E 'x-frame-options|x-content-type|referrer-policy'
+```
+That last line is the check that the security response headers (X-Frame-Options
+DENY, nosniff, Referrer-Policy same-origin) are actually being served.
+
 ## Disaster recovery
 
 New box -> steps 1-2 -> restore latest `app-*.db.gz` from S3 to `~/app/app.db`
