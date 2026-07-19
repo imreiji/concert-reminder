@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 372 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 430 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -48,8 +48,10 @@ labels/emoji and the ramen.events import heuristics have shipped since).
 - `src/app/domain/` — pure logic, NO I/O, no discord/fastapi/sqlalchemy
   imports. Reminder math in `reminders.py`, JST↔UTC conversion in
   `timezones.py`, ramen.events HTML parsing in `ingest.py` (takes an HTML
-  string, returns a draft — no httpx call itself), and `.ics`/YAML export
-  formatting in `ics_export.py`/`yaml_export.py`.
+  string, returns a draft — no httpx call itself), `.ics`/YAML export
+  formatting in `ics_export.py`/`yaml_export.py`, and editor-supplied URL
+  scheme validation in `urls.py` (`clean_url` normalizes an http(s) URL or
+  raises `UnsafeURLError`; see invariant 7).
 - `src/app/db/` — models, session, and `service.py` (all business logic that
   touches the DB; discord-free so it's testable).
 - `src/app/bot/` — thin shell: cogs, embed builders (`messages.py`),
@@ -66,6 +68,9 @@ labels/emoji and the ramen.events import heuristics have shipped since).
   `routes/reminders.py` (split out of `concerts.py`; renders via
   `concerts.render_rules_fragment`), and the `/me/timezone*` routes live in
   `routes/preferences.py` with the other per-user preference routes.
+  `web/forms.py` holds the HTTP-boundary wrappers around domain validators
+  (currently `form_url`) -- its own module so routes/concerts.py,
+  routes/tags.py and routes/imports.py can all import it cheaply.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
 - `routes/calendar.py` — the personal calendar-feed subscription
   (`POST /me/calendar-feed` mints the token, `GET /calendar/{token}.ics` is
@@ -159,6 +164,26 @@ deleting them.
    URLs use the editor-chosen, unique `event_id` string instead. `"new"` and
    `"import"` are reserved and rejected as `event_id` values so they can
    never collide with the `/concerts/new` and `/concerts/import` routes.
+7. **Injection boundaries** -- three rules, each cheap to follow and silent
+   when broken:
+   - **URLs**: every editor-supplied URL goes through `form_url`
+     (`web/forms.py`) at the route boundary; it wraps `domain.urls.clean_url`
+     and turns a bad scheme into a 422. Stored URLs land in `href`
+     attributes, so a `javascript:` value that slips past executes
+     in-origin. The bot layer uses `clean_url` directly, via
+     `safe_button_url` in `bot/messages.py` -- never `form_url`, which
+     would drag fastapi into the bot.
+   - **Inline `<script>` data**: tag names and anything else user-controlled
+     that reaches the picker's inline script use `| tojson`, never `| safe`,
+     and the context value stays a raw Python object. Hand `tojson` the
+     output of `json.dumps` and it double-encodes into a quoted string --
+     the picker silently breaks while the escaping tests still pass.
+   - **Inline `on*` handlers**: never interpolate user-controlled text into
+     one. The browser HTML-decodes the attribute before parsing it as JS, so
+     Jinja's `&#39;` escaping does not protect you. Put the value in a
+     `data-` attribute and read it via `dataset`. Use `data-tag-name` /
+     `data-preset-name`, not `data-name`: that one collides with the shared
+     `filterChips()` selector in `base.html`.
 
 ## Migrations (SQLite gotchas — these have bitten before)
 
