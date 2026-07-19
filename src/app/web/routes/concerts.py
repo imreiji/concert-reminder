@@ -24,7 +24,6 @@ the source material. Conversion to UTC happens here, at the boundary,
 via domain.timezones.jst_to_utc. Nowhere else.
 """
 
-import json
 import re
 from datetime import UTC, datetime
 
@@ -51,6 +50,7 @@ from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.domain.types import Anchor, ConcertKind, RoundKind, TagKind
 from app.web.auth import SessionUser, require_editor, require_user
+from app.web.forms import form_url
 
 router = APIRouter()
 
@@ -209,7 +209,7 @@ def apply_round_fields(
     round_.closes_at_utc = closes
     round_.results_at_utc = results
     round_.payment_deadline_at_utc = payment
-    round_.url = url.strip() or None
+    round_.url = form_url(url)
     round_.applies_to = applies_to or None
     round_.label_en = label_en.strip() or None
     round_.notes = notes.strip() or None
@@ -384,6 +384,7 @@ async def create_concert_row(
     artist_tags: list[int],
     venue_tags: list[int],
     kind: ConcertKind | None = None,
+    source_url: str | None = None,
 ) -> Concert:
     """Tag-driven creation supporting collab events: MULTIPLE franchises,
     MULTIPLE groups, explicit artist list (auto-populated client-side from
@@ -405,6 +406,10 @@ async def create_concert_row(
         kind=kind,
         franchise=", ".join(t.name for t in f_tags) or None,  # denormalized display
         venue=", ".join(t.name for t in v_tags) or None,
+        # Optional so create_concert, which assigns its own richer field set
+        # (including source_url) right after this returns, is unaffected.
+        # Callers pass an already-form_url-validated value.
+        source_url=source_url,
         created_by=user.id,
     )
     session.add(concert)
@@ -436,9 +441,10 @@ async def new_concert_form(
         {
             "user": user, "kinds": list(RoundKind), "concert_kinds": list(ConcertKind),
             "by_kind": picker["by_kind"],
-            "groups_json": json.dumps(picker["groups_json"]),
-            "tag_names_json": json.dumps(picker["tag_names_json"]),
-            "initial_selected_json": "{}",
+            # Raw dicts, never json.dumps -- the template applies `| tojson`.
+            "groups": picker["groups"],
+            "tag_names": picker["tag_names"],
+            "initial_selected": {},
         },
     )
 
@@ -492,9 +498,9 @@ async def create_concert(
     concert.title_en = title_en.strip() or None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
-    concert.eventernote_url = eventernote_url.strip() or None
-    concert.official_url = official_url.strip() or None
-    concert.source_url = source_url.strip() or None
+    concert.eventernote_url = form_url(eventernote_url)
+    concert.official_url = form_url(official_url)
+    concert.source_url = form_url(source_url)
     concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
 
@@ -620,9 +626,10 @@ async def edit_concert_form(
             "user": user, "concert": concert, "kinds": list(RoundKind),
             "concert_kinds": list(ConcertKind),
             "by_kind": picker["by_kind"],
-            "groups_json": json.dumps(picker["groups_json"]),
-            "tag_names_json": json.dumps(picker["tag_names_json"]),
-            "initial_selected_json": json.dumps(initial_selected),
+            # Raw dicts, never json.dumps -- the template applies `| tojson`.
+            "groups": picker["groups"],
+            "tag_names": picker["tag_names"],
+            "initial_selected": initial_selected,
             "rounds_with_leg": rounds_with_leg,
         },
     )
@@ -682,9 +689,9 @@ async def edit_concert(
     concert.kind = ConcertKind(kind) if kind else None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
-    concert.eventernote_url = eventernote_url.strip() or None
-    concert.official_url = official_url.strip() or None
-    concert.source_url = source_url.strip() or None
+    concert.eventernote_url = form_url(eventernote_url)
+    concert.official_url = form_url(official_url)
+    concert.source_url = form_url(source_url)
     concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
 

@@ -124,3 +124,36 @@ def test_missing_venue_and_days_warns():
     assert parsed.venue_name is None
     assert "no performance days found -- fill in manually" in parsed.warnings
     assert "no venue found -- fill in manually" in parsed.warnings
+
+
+def test_unsafe_official_url_is_dropped_with_a_warning():
+    """A remote page's <a href> is attacker-controlled text. A javascript:
+    href would otherwise become fallback_url and then every round's url,
+    so drop it (falling back to source_url) and say so in the preview."""
+    html = """
+    <html><body><article>
+      <h1 class="gh-article-title">Some Concert</h1>
+      <section class="gh-content">
+        <p>Official website: <a href="javascript:alert(1)">here</a></p>
+      </section>
+    </article></body></html>
+    """
+    source = "https://ramen.events/some-concert/"
+    parsed = parse_ramen_event(html, source)
+    assert any("unsafe" in w.lower() for w in parsed.warnings)
+    assert "javascript" not in "".join(parsed.warnings).lower()
+
+
+def test_safe_official_url_is_kept():
+    html = """
+    <html><body><article>
+      <h1 class="gh-article-title">Some Concert</h1>
+      <section class="gh-content">
+        <p>Official website: <a href="https://example.com/e">here</a></p>
+        <h3>Day 1 Lottery #1</h3>
+        <ul><li>Apply within: 2026-10-14 12:00 to 2026-11-08 23:59</li></ul>
+      </section>
+    </article></body></html>
+    """
+    parsed = parse_ramen_event(html, "https://ramen.events/some-concert/")
+    assert parsed.rounds[0].url == "https://example.com/e"

@@ -102,7 +102,8 @@ to a tag subscription so new events set themselves up.</p>
     {% if p.is_default %}<span class="badge" title="The Discord 'Set my reminders' button applies this preset">★ Default</span>
     {% else %}<form method="post" action="/presets/{{ p.id }}/default"><button class="quiet" title="Make this the preset the Discord button applies">☆ Make default</button></form>{% endif %}
     <form method="post" action="/presets/{{ p.id }}/delete"
-          onsubmit="return confirm('Delete preset {{ p.name }}?')"><button class="x" title="delete preset">×</button></form>
+          data-preset-name="{{ p.name }}"
+          onsubmit="return confirmDeletePreset(this)"><button class="x" title="delete preset">×</button></form>
   </div>
   <ul class="rows items">
     {% for i in p.items %}

@@ -1,5 +1,8 @@
 """Whitelist parsing — the access-control logic must be bulletproof."""
 
+import pytest
+from pydantic import ValidationError
+
 from app.config import Settings
 
 
@@ -56,3 +59,52 @@ def test_is_admin():
     s = make_admin("42")
     assert s.is_admin(42)
     assert not s.is_admin(43)
+
+
+# ── Session-secret startup validation ────────────────────────────────────
+#
+# These construct Settings() directly with _env_file=None: going through the
+# lru_cache'd get_settings() (or the module-level `settings` singleton) would
+# make the results depend on import order and on whoever primed the cache.
+
+GOOD = "a" * 32
+
+
+def make_settings(base_url: str, session_secret: str) -> Settings:
+    return Settings(base_url=base_url, session_secret=session_secret, _env_file=None)
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "change-me",
+        "",
+        "   ",
+        "x" * 31,
+        # Padding is not entropy: the length gate measures the stripped
+        # value, so 20 spaces + 12 characters is still too short.
+        " " * 20 + "x" * 12,
+    ],
+)
+def test_https_rejects_unsafe_secret(secret):
+    with pytest.raises(ValidationError) as exc:
+        make_settings("https://dekimasen.app", secret)
+    # The message must tell the operator exactly how to fix it.
+    assert "secrets.token_hex(32)" in str(exc.value)
+
+
+def test_https_accepts_strong_secret():
+    s = make_settings("https://dekimasen.app", GOOD)
+    assert s.session_secret == GOOD
+
+
+def test_https_scheme_check_is_case_insensitive():
+    with pytest.raises(ValidationError):
+        make_settings("HTTPS://dekimasen.app", "change-me")
+
+
+def test_local_http_dev_keeps_the_default_secret():
+    """CLAUDE.md documents web-only local dev as a first-class workflow;
+    the check must not fire there or a fresh clone can't be run at all."""
+    s = make_settings("http://localhost:8000", "change-me")
+    assert s.session_secret == "change-me"

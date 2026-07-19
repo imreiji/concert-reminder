@@ -955,6 +955,26 @@ async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
     return list(res.scalars())
 
 
+async def resolve_group_member(
+    session: AsyncSession, group_id: int, member_id: int
+) -> tuple[Tag, Tag] | None:
+    """Both tags plus proof that `member_id` really is a member of the GROUP
+    tag `group_id` -- None if any part of that doesn't hold.
+
+    Retroactive-apply bulk-attaches a tag to every active concert carrying
+    another tag, queueing a notification per subscriber, so an unvalidated
+    (group, member) pair would let any arbitrary pairing fan out a large DM
+    wave. This only decides which pairs may be asked about; it does not
+    change what gets attached (see the Group Tag Expansion invariant)."""
+    group = await session.get(Tag, group_id)
+    member = await session.get(Tag, member_id)
+    if group is None or member is None or group.kind is not TagKind.GROUP:
+        return None
+    if await session.get(TagMember, (group_id, member_id)) is None:
+        return None
+    return group, member
+
+
 async def active_concerts_missing_member(
     session: AsyncSession, group_id: int, member_id: int, now: datetime | None = None
 ) -> list[Concert]:
@@ -992,8 +1012,11 @@ async def active_concerts_missing_member(
 
 async def tag_picker_context(session: AsyncSession) -> dict:
     """Data the shared tag-picker partial needs: tags grouped by kind, plus
-    the two JSON blobs its client-side script reads (group->members for
+    the two lookup maps its client-side script reads (group->members for
     auto-populating artists, and id->name for rendering selected chips).
+    Returns plain dicts, NOT pre-serialized JSON -- the template hands them
+    to Jinja's `| tojson`, which must serialize the object itself so it can
+    escape `<`/`>`/`&` out of the surrounding <script> block.
     Shared by the new-concert form and the URL-import draft form."""
     tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
     by_kind: dict[str, list[Tag]] = {}
@@ -1007,7 +1030,7 @@ async def tag_picker_context(session: AsyncSession) -> dict:
             "members": [{"id": m.id, "name": m.name} for m in await group_members(session, g.id)],
         }
     tag_names = {t.id: t.name for t in tags}
-    return {"by_kind": by_kind, "groups_json": groups_data, "tag_names_json": tag_names}
+    return {"by_kind": by_kind, "groups": groups_data, "tag_names": tag_names}
 
 
 async def _is_attached(session: AsyncSession, concert_id: int, tag_id: int) -> bool:

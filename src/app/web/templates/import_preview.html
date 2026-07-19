@@ -12,6 +12,9 @@
 {% endif %}
 
 <form class="stack" method="post" action="/concerts/import/commit" id="new-concert">
+  {# Commit is a separate request; this is how it learns where the draft came
+     from. Re-validated server-side on POST -- it round-trips via the client. #}
+  <input type="hidden" name="source_url" value="{{ source_url }}">
   <label>Title <input name="title" required maxlength="200" value="{{ parsed.title }}"></label>
   {% set venue_hint = parsed.venue_name %}
   {% include "_tag_picker_fields.html" %}

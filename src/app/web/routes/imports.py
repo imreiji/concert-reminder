@@ -12,7 +12,6 @@ only the editor's final submit on that draft writes anything.
 """
 
 import asyncio
-import json
 import logging
 from urllib.parse import urljoin, urlparse
 
@@ -26,6 +25,7 @@ from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import RoundKind
 from app.web.auth import SessionUser, require_editor
+from app.web.forms import form_url
 from app.web.routes.concerts import build_day, build_round, create_concert_row, generate_event_id
 
 log = logging.getLogger(__name__)
@@ -141,9 +141,10 @@ async def import_preview(
             "user": user, "parsed": parsed, "source_url": url,
             "fmt": _fmt, "kinds": list(RoundKind),
             "by_kind": picker["by_kind"],
-            "groups_json": json.dumps(picker["groups_json"]),
-            "tag_names_json": json.dumps(picker["tag_names_json"]),
-            "initial_selected_json": "{}",
+            # Raw dicts, never json.dumps -- the template applies `| tojson`.
+            "groups": picker["groups"],
+            "tag_names": picker["tag_names"],
+            "initial_selected": {},
         },
     )
 
@@ -154,6 +155,7 @@ async def import_commit(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
+    source_url: str = Form(default=""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
@@ -173,9 +175,16 @@ async def import_commit(
     event_id isn't a field the import form collects, so it's auto-suggested
     from the title (slugified, de-duplicated) -- editable afterward via the
     edit page."""
+    # _check_host pinned the *fetch* to ramen.events, but this value reached
+    # the browser as a hidden field on the preview form and came back on this
+    # request, so it is client-supplied like any other field. Validated before
+    # anything is written, so a tampered value persists nothing.
+    checked_source_url = form_url(source_url)
+
     event_id = await generate_event_id(session, title)
     concert = await create_concert_row(
-        session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags
+        session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
+        source_url=checked_source_url,
     )
 
     for label, starts_at in zip(day_label, day_starts_at, strict=True):

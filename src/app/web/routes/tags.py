@@ -26,10 +26,12 @@ from app.db.service import (
     find_tag_by_name,
     group_members,
     handle_newly_tagged,
+    resolve_group_member,
 )
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web.auth import SessionUser, require_editor, require_user
+from app.web.forms import form_url
 
 router = APIRouter()
 
@@ -93,7 +95,7 @@ async def create_tag(
     await ensure_user(session, user.id, user.username)
     session.add(Tag(
         name=name, kind=kind, created_by=user.id, parent_id=parent.id if parent else None,
-        location_url=location_url.strip() or None, region=region.strip() or None,
+        location_url=form_url(location_url), region=region.strip() or None,
     ))
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
@@ -104,7 +106,9 @@ async def edit_tag(
     tag_id: int,
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
-    name: str = Form(""),
+    # max_length matches create_tag's: a rename must not be able to produce a
+    # name the creation form would have rejected.
+    name: str = Form("", max_length=100),
     location_url: str = Form(""),
     region: str = Form(""),
 ):
@@ -122,7 +126,7 @@ async def edit_tag(
         if existing is not None and existing.id != tag.id:
             raise HTTPException(status_code=409, detail=f"tag {name!r} already exists")
         tag.name = name
-    tag.location_url = location_url.strip() or None
+    tag.location_url = form_url(location_url)
     tag.region = region.strip() or None
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
@@ -182,10 +186,10 @@ async def retroactive_apply_form(
     already has the group tag but not this member individually. Always an
     explicit, editor-confirmed action -- never automatic (see the Group Tag
     Expansion invariant in CLAUDE.md)."""
-    group = await session.get(Tag, group_id)
-    member = await session.get(Tag, member_id)
-    if group is None or member is None:
+    pair = await resolve_group_member(session, group_id, member_id)
+    if pair is None:
         raise HTTPException(status_code=404)
+    group, member = pair
     concerts = await active_concerts_missing_member(session, group_id, member_id)
     return templates.TemplateResponse(
         request,
@@ -201,9 +205,13 @@ async def retroactive_apply(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
 ):
-    member = await session.get(Tag, member_id)
-    if member is None:
+    # Same relationship check as the GET: the confirmation page is only a
+    # promise about which pair it displays, not enforcement of the one it
+    # submits.
+    pair = await resolve_group_member(session, group_id, member_id)
+    if pair is None:
         raise HTTPException(status_code=404)
+    _, member = pair
     concerts = await active_concerts_missing_member(session, group_id, member_id)
     for concert in concerts:
         newly = await attach_tag(session, concert.id, member)

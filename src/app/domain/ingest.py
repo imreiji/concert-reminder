@@ -27,6 +27,7 @@ from bs4 import BeautifulSoup
 from bs4 import Tag as BS4Tag
 
 from app.domain.types import RoundKind
+from app.domain.urls import UnsafeURLError, clean_url
 
 DAY_LINE = re.compile(
     r"^(?P<label>Day\s+\d+|When):\s*"
@@ -97,12 +98,22 @@ def _parse_datetime(value: str) -> datetime:
     return datetime.strptime(value.strip(), "%Y-%m-%d %H:%M")
 
 
-def _official_url(content: BS4Tag) -> str | None:
+def _official_url(content: BS4Tag, warnings: list[str]) -> str | None:
     first_p = content.find("p")
     if first_p and "official website" in first_p.get_text().lower():
         link = first_p.find("a")
         if link and link.get("href"):
-            return link["href"]
+            # A remote page's href is attacker-controlled. Drop anything
+            # that isn't http(s) rather than letting it reach the preview
+            # form (and from there every round's url) -- the warning is
+            # enough for the human reviewing the draft, and the attacker's
+            # string never gets echoed back into the page.
+            try:
+                return clean_url(link["href"])
+            except UnsafeURLError:
+                warnings.append(
+                    "the page's official-website link used an unsafe scheme -- dropped"
+                )
     return None
 
 
@@ -178,7 +189,7 @@ def parse_ramen_event(html: str, source_url: str) -> ParsedConcert:
 
     warnings: list[str] = []
     days, venue = _parse_basic_info(content, warnings)
-    fallback_url = _official_url(content) or source_url
+    fallback_url = _official_url(content, warnings) or source_url
     rounds = _parse_rounds(content, fallback_url, warnings)
 
     return ParsedConcert(

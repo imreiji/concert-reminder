@@ -79,6 +79,11 @@ DEFAULT_TIMEZONE=America/Moncton
 Note the **four** slashes in DATABASE_URL: absolute path, so the DB location
 doesn't depend on the service's working directory.
 
+SESSION_SECRET is validated at startup: with an https BASE_URL, a blank,
+placeholder, or under-32-character secret is fatal. `alembic/env.py` imports
+the app config, so a bad `.env` now fails at `alembic upgrade head` - one step
+earlier in the deploy ritual than the service restart.
+
 ## 6. Discord OAuth redirect
 
 Developer Portal -> your app -> OAuth2 -> Redirects -> **add**
@@ -91,6 +96,17 @@ curl -s https://dekimasen.app/healthz        # {"ok":true,"bot_enabled":true}
 journalctl -u concert-reminder -f            # bot online + scheduler running
 ```
 Then in a browser: sign in with Discord, confirm the editor badge.
+
+Caddyfile changes are not picked up by `git pull` alone - the live config is
+a copy:
+```bash
+sudo cp ~/app/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+curl -sI https://dekimasen.app/ | grep -i 'x-frame\|x-content-type\|referrer'
+```
+That last line should show `X-Frame-Options: DENY`, `X-Content-Type-Options:
+nosniff`, `Referrer-Policy: same-origin`. If they are missing, the copy step
+was skipped.
 
 ## 8. Hardening (do these, they take 10 minutes)
 

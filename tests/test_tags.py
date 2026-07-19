@@ -8,6 +8,8 @@ notifications will rely on, so they get exhaustive coverage:
   4. detach + re-attach of the group DOES re-expand (it's "newly added" again)
 """
 
+import re
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -325,6 +327,10 @@ def test_confirmation_page_handles_nothing_eligible_gracefully(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Liella", "kind": "group"})
     client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    # Establish the membership first: the route only serves pairs that really
+    # are (group, member). Nothing is eligible, so add_member goes back to
+    # /tags -- but the page still has to render if revisited directly.
+    client.post("/tags/1/members", data={"member_tag_id": 2})
     r = client.get("/tags/1/members/2/retroactive-apply")
     assert r.status_code == 200
     assert "Nothing to apply" in r.text
@@ -352,6 +358,68 @@ async def test_apply_to_all_attaches_tag_and_notifies_subscriber(client):
         assert any(ct.tag_id == 2 for ct in concert_tags)  # Sumire attached
         notes = (await s.execute(select(Notification))).scalars().all()
         assert any(n.user_id == VIEWER_ID for n in notes)
+
+
+# ── Retroactive-apply relationship validation ────────────────────────────
+#
+# The route's own UI promises "add this group member to its concerts". Without
+# these checks an editor could POST any (group_id, member_id) pair -- e.g. a
+# venue tag against every active concert carrying a franchise tag -- and
+# bulk-attach it in one request, fanning out a Notification per subscriber.
+
+
+def test_mismatched_pair_404s_on_get_and_post_and_attaches_nothing(client):
+    """Group 1 and artist 3 are real tags, but 3 is not a member of 1."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={"name": "Unrelated", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+
+    assert client.get("/tags/1/members/3/retroactive-apply").status_code == 404
+    assert client.post("/tags/1/members/3/retroactive-apply").status_code == 404
+
+    r = client.get("/concerts/liella-live")
+    assert "Unrelated" not in r.text
+
+
+def test_missing_group_404s(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    assert client.get("/tags/999/members/1/retroactive-apply").status_code == 404
+    assert client.post("/tags/999/members/1/retroactive-apply").status_code == 404
+
+
+async def test_non_group_group_id_404s(client):
+    """A TagMember row alone isn't enough -- the 'group' must be a GROUP tag.
+    Inserted directly because add_member itself refuses a non-group parent."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    async with client.db() as s:
+        s.add(TagMember(group_tag_id=1, member_tag_id=2))
+        await s.commit()
+
+    assert client.get("/tags/1/members/2/retroactive-apply").status_code == 404
+    assert client.post("/tags/1/members/2/retroactive-apply").status_code == 404
+
+
+async def test_legitimate_add_member_then_apply_still_works(client):
+    """The real flow: add_member creates the TagMember row and redirects here,
+    so the strict check must pass end to end and still attach."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+
+    redirect = client.post("/tags/1/members", data={"member_tag_id": 2})
+    target = redirect.headers["location"]
+    assert client.get(target).status_code == 200
+    assert client.post(target).status_code == 303
+
+    async with client.db() as s:
+        concert_tags = (await s.execute(select(ConcertTag))).scalars().all()
+        assert any(ct.tag_id == 2 for ct in concert_tags)
 
 
 def test_confirmation_page_requires_editor(client):
@@ -925,3 +993,37 @@ async def test_index_deadline_list_carries_tag_and_search_attributes(client):
     assert 'data-search="tagged deadline show test artist"' in li_html
 
 
+# ── Inline confirm() handler injection ───────────────────────────────────
+
+# The browser HTML-decodes an attribute value BEFORE parsing it as JS, so
+# Jinja's &#39; escaping is undone by the time confirm()'s argument is read:
+# a name interpolated straight into onsubmit is executable regardless.
+HANDLER_PAYLOAD = "'); alert(1); //"
+_ON_ATTR_RE = re.compile(r"\son[a-z]+\s*=\s*\"([^\"]*)\"")
+
+
+def test_delete_confirm_does_not_execute_a_hostile_tag_name(client):
+    login_as(client, EDITOR_ID, "reiji")
+    assert client.post("/tags", data={"name": HANDLER_PAYLOAD, "kind": "artist"}).status_code == 303
+    html = client.get("/tags").text
+    for attr in _ON_ATTR_RE.findall(html):
+        assert "alert(1)" not in attr, f"payload sits raw in an inline handler: {attr}"
+
+
+def test_delete_confirm_still_names_the_tag_and_deletes_it(client):
+    """The data-attribute refactor must not change what the editor sees."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "artist"})
+    html = client.get("/tags").text
+    assert 'data-tag-name="Hasunosora"' in html  # the confirm() reads this
+    assert 'action="/tags/1/delete"' in html
+    assert client.post("/tags/1/delete").status_code == 303
+    assert "Hasunosora" not in client.get("/tags").text
+
+
+def test_rename_longer_than_the_creation_cap_is_rejected(client):
+    """create_tag caps name at 100; the rename route must match it."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "artist"})
+    assert client.post("/tags/1/edit", data={"name": "x" * 101}).status_code == 422
+    assert client.post("/tags/1/edit", data={"name": "x" * 100}).status_code == 303
