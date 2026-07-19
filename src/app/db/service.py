@@ -908,7 +908,14 @@ async def board_cards(
     concerts = list((await session.execute(
         select(Concert)
         .where(Concert.id.in_(ids))
-        .options(selectinload(Concert.days), selectinload(Concert.rounds))
+        .options(
+            selectinload(Concert.days),
+            selectinload(Concert.rounds),
+            # The card renders an artist/group eyebrow, so tags must be loaded
+            # HERE -- a lazy load inside async template rendering raises
+            # MissingGreenlet, not a warning.
+            selectinload(Concert.tags),
+        )
     )).scalars())
 
     # One outcome query for every round on the board, not one per concert --

@@ -315,6 +315,11 @@ table.rounds tr.round-row.past td { opacity: .65; }
   transition: transform 160ms ease, border-color 160ms ease;
 }
 .board .card:hover { transform: translateY(-1px); border-color: var(--dim); }
+/* The eyebrow: franchise/group above the title, or artist chips when that is
+   all the concert has. Pulled tight against the title so it reads as a label
+   for it rather than as a second line of content. */
+.board .card .who { font-size: .75rem; color: var(--dim); margin-bottom: -.25rem; }
+.board .card .artists { display: flex; flex-wrap: wrap; gap: .25rem; }
 .board .card .title { font-weight: 600; line-height: 1.35; }
 .board .card .venue { font-size: .8125rem; color: var(--dim); }
 .board .card .foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }

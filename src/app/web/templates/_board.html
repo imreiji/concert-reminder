@@ -4,9 +4,17 @@
    instead (see _deadline_rows.html for why). A card links to its concert and
    does nothing else.
 
-   Only `concert.days` and `concert.rounds` are eager-loaded by
-   service.board_cards, so this template must never touch `concert.tags` --
-   a lazy load inside async rendering raises MissingGreenlet, not a warning. #}
+   service.board_cards eager-loads `concert.days`, `concert.rounds` and
+   `concert.tags` -- those three and nothing else. Touch any other
+   relationship here and the lazy load raises MissingGreenlet inside async
+   rendering, which is a 500, not a warning.
+
+   Keep the outer <div id="board">: POST /rounds/{id}/outcome re-renders this
+   partial with oob=true and htmx swaps it out of band, which is what makes a
+   card move columns without a reload. The empty state lives INSIDE that div
+   on purpose -- if the container only existed when the board was non-empty,
+   the first outcome recorded on an empty board would have nothing to swap
+   into. #}
 
 {% set COLUMNS = [
   ("open", "Open now", "d-open"),
@@ -32,6 +40,8 @@
   </span>
 {% endmacro %}
 
+<div id="board"{% if oob %} hx-swap-oob="true"{% endif %}>
+{% if open_total or columns["applied"] or columns["won"] or columns["secured"] %}
 <div class="board">
   {% for key, heading, dot in COLUMNS %}
   {% set cards = columns.get(key, []) %}
@@ -43,6 +53,21 @@
     {% for card in cards %}
     <a class="card" data-column="{{ key }}" data-event-id="{{ card.concert.event_id }}"
        href="/concerts/{{ card.concert.event_id }}">
+      {#- Same display rules as a discover tile: franchise+group -> "F · G",
+          group only -> G, artists only -> artist chips. -#}
+      {% set ctags = card.concert.tags %}
+      {% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
+      {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
+      {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
+      {#- A franchise alone is not an eyebrow: it only ever qualifies a group,
+          so there is nothing to show without one. -#}
+      {% if cg or ca %}
+      <span class="who">
+        {%- if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
+        {%- elif cg %}{{ cg | map(attribute="name") | join(", ") }}
+        {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>{% endif -%}
+      </span>
+      {% endif %}
       <span class="title">{{ card.concert.title }}</span>
       {% set live_days = card.concert.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
       <span class="venue">
@@ -73,4 +98,8 @@
     {% if not cards %}<p class="dim tiny">Nothing here yet.</p>{% endif %}
   </div>
   {% endfor %}
+</div>
+{% else %}
+<p class="dim">Nothing on your board yet. <a href="/discover">Find concerts to follow →</a></p>
+{% endif %}
 </div>
