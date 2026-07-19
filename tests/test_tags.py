@@ -327,6 +327,10 @@ def test_confirmation_page_handles_nothing_eligible_gracefully(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Liella", "kind": "group"})
     client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    # Establish the membership first: the route only serves pairs that really
+    # are (group, member). Nothing is eligible, so add_member goes back to
+    # /tags -- but the page still has to render if revisited directly.
+    client.post("/tags/1/members", data={"member_tag_id": 2})
     r = client.get("/tags/1/members/2/retroactive-apply")
     assert r.status_code == 200
     assert "Nothing to apply" in r.text
@@ -354,6 +358,68 @@ async def test_apply_to_all_attaches_tag_and_notifies_subscriber(client):
         assert any(ct.tag_id == 2 for ct in concert_tags)  # Sumire attached
         notes = (await s.execute(select(Notification))).scalars().all()
         assert any(n.user_id == VIEWER_ID for n in notes)
+
+
+# ── Retroactive-apply relationship validation ────────────────────────────
+#
+# The route's own UI promises "add this group member to its concerts". Without
+# these checks an editor could POST any (group_id, member_id) pair -- e.g. a
+# venue tag against every active concert carrying a franchise tag -- and
+# bulk-attach it in one request, fanning out a Notification per subscriber.
+
+
+def test_mismatched_pair_404s_on_get_and_post_and_attaches_nothing(client):
+    """Group 1 and artist 3 are real tags, but 3 is not a member of 1."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={"name": "Unrelated", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+
+    assert client.get("/tags/1/members/3/retroactive-apply").status_code == 404
+    assert client.post("/tags/1/members/3/retroactive-apply").status_code == 404
+
+    r = client.get("/concerts/liella-live")
+    assert "Unrelated" not in r.text
+
+
+def test_missing_group_404s(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    assert client.get("/tags/999/members/1/retroactive-apply").status_code == 404
+    assert client.post("/tags/999/members/1/retroactive-apply").status_code == 404
+
+
+async def test_non_group_group_id_404s(client):
+    """A TagMember row alone isn't enough -- the 'group' must be a GROUP tag.
+    Inserted directly because add_member itself refuses a non-group parent."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    async with client.db() as s:
+        s.add(TagMember(group_tag_id=1, member_tag_id=2))
+        await s.commit()
+
+    assert client.get("/tags/1/members/2/retroactive-apply").status_code == 404
+    assert client.post("/tags/1/members/2/retroactive-apply").status_code == 404
+
+
+async def test_legitimate_add_member_then_apply_still_works(client):
+    """The real flow: add_member creates the TagMember row and redirects here,
+    so the strict check must pass end to end and still attach."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+
+    redirect = client.post("/tags/1/members", data={"member_tag_id": 2})
+    target = redirect.headers["location"]
+    assert client.get(target).status_code == 200
+    assert client.post(target).status_code == 303
+
+    async with client.db() as s:
+        concert_tags = (await s.execute(select(ConcertTag))).scalars().all()
+        assert any(ct.tag_id == 2 for ct in concert_tags)
 
 
 def test_confirmation_page_requires_editor(client):
