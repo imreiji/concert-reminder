@@ -71,6 +71,20 @@ labels/emoji and the ramen.events import heuristics have shipped since).
   `web/forms.py` holds the HTTP-boundary wrappers around domain validators
   (currently `form_url`) -- its own module so routes/concerts.py,
   routes/tags.py and routes/imports.py can all import it cheaply.
+  `routes/discover.py` is the public catalogue and `routes/outcomes.py` is
+  the web half of lottery-outcome capture (`POST /rounds/{id}/outcome`) --
+  it shares `record_round_outcome` with the DM buttons rather than writing
+  its own path (a second writer would desync the queue, invariant 2) and
+  returns THREE top-level fragments: the deadline rows as the hx-target,
+  plus `#board` and `#board-summary` out-of-band, since one recorded outcome
+  changes all three. Don't wrap that response -- htmx only honours OOB
+  elements at the top level.
+- `src/app/domain/board.py` -- pure column precedence for Home's campaign
+  board. `column_for(outcomes, has_open_round)` returns the ONE column a
+  concert shows in; PAID > WON > APPLIED > open, deliberately, because money
+  you owe outranks a round you could still enter. LOST and NOT_APPLIED place
+  nothing (neither is an end state). `service.board_cards` gathers its
+  inputs and `OPEN_COLUMN_LIMIT` caps the open column.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
 - `routes/calendar.py` — the personal calendar-feed subscription
   (`POST /me/calendar-feed` mints the token, `GET /calendar/{token}.ics` is
@@ -246,8 +260,13 @@ deleting them.
 - **Home vs Discover** -- the old combined index is split in two by the
   question each page answers. `/` (`home.html`, the handler in `web/app.py`)
   is Home: "where do I stand", personal and login-gated, four blocks in order
-  -- Closes next, the campaign board, Coming up, a Discover teaser. Signed
-  out it is the hero alone. `/discover` (`routes/discover.py` +
+  -- Up next, the campaign board, Coming up, a Discover teaser. Signed
+  out it is the hero alone. The first block is headed "Up next", NOT "Closes
+  next": it picks the soonest row with a round behind it whatever anchor that
+  row carries, so the header must stay moment-agnostic while the body names
+  the moment. Narrowing the pick to `Anchor.CLOSES` to justify the old header
+  was considered and rejected -- an opening round or a results announcement
+  genuinely needs attention, and filtering would hide real urgency. `/discover` (`routes/discover.py` +
   `discover.html`) is the catalogue: "what's on", and it is **public** --
   `current_user`, not `require_user`, the only content page in the app an
   anonymous visitor can reach. Header nav is Home / Discover / Tags and
@@ -259,6 +278,20 @@ deleting them.
   where the same button is ambiguous -- applied to which round? A destructive
   control sitting inside something you are scanning to read is also a mode
   error. Do not "improve" the board by adding buttons to it.
+  Two gates govern WHICH buttons a row offers, both resolved in
+  `service.my_deadline_rows` (round timing is not presentation) and both
+  load-bearing because `upcoming_deadlines` emits one row per future ANCHOR,
+  so a single round can produce three or four rows. `can_capture` -- the
+  round has opened -- because you cannot have applied to a round that has
+  not opened, and recording APPLIED is irreversible (`record_round_outcome`
+  refuses to overwrite a starting state). `can_report_result` -- outcome is
+  APPLIED and the results time (or, failing that, the close) has passed --
+  which is the web's ONLY exit from APPLIED: WON/LOST are also DM buttons,
+  but a `dm_blocked` user or a `bot_enabled=False` deploy has no DM to
+  press, and without them the board's four columns are reachable as two.
+  PAID stays offered only from WON. Never "fix" this by relaxing
+  `record_round_outcome`'s sequence rule -- the gates belong on the read
+  side.
 - Discover carries **one** status pill per card, merging the event's round
   state with the viewer's standing (`service.discover_statuses`). The
   standing REPLACES the countdown rather than sitting beside it, and the tone
