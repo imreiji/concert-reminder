@@ -96,6 +96,13 @@ Checks in scope:
 | `scheduler` | loop ticking | existing `scheduler/heartbeat.py` |
 | `dms` | count of users with `dm_blocked_since` set | DB |
 
+`dms` is **reported but never alerted on** (`alerting=False` in the registry). A
+user blocking the bot is their choice, not an outage; paging the owner about
+someone else's privacy setting is the kind of noise that trains an operator to
+ignore alerts. It stays visible in `/healthz` for when the owner goes looking.
+The registry entry therefore carries an `alerting` flag, so "report this" and
+"wake me for this" are separate decisions from the start.
+
 Deliberately excluded: TLS cert expiry (15-year Cloudflare Origin cert, not a
 real risk), memory (swap is configured; noisy), and anything needing new AWS
 permissions. The failure mode of health surfaces is monitoring everything until
