@@ -11,7 +11,7 @@ rejected ideas move to the bottom sections instead of being deleted.
 ### 1. Real per-concert tracking (ConcertSubscription)
 
 Impact: high - effort: medium. Raised: 2026-07-19 (Home/Discover split,
-branch review).
+branch review). Scope widened 2026-07-19 (concert page and editor).
 
 "Tracked" is currently derived at query time: a concert is tracked if it
 carries any tag the user has a TagSubscription for
@@ -28,7 +28,11 @@ deliberately not half-built earlier, since a partial version would have to
 be migrated.
 
 Ranked first now because Home made it load-bearing; before the split it was
-one input to a catalogue page among several.
+one input to a catalogue page among several. The concert page and editor
+branch (2026-07-19) then added a second page waiting on it: that page shows
+no follow state at all, because the **Following toggle** and the **per-leg
+opt-out** both need this table and were held out of scope deliberately
+rather than faked. So the table now blocks three surfaces, not one.
 
 ### 2. Minute-level reminder offsets
 
@@ -47,10 +51,29 @@ first-served sales are exactly the case where "remind me 5 minutes before
 it opens" beats "remind me 3 hours before", so this is no longer
 speculative - it just has no user complaints behind it yet.
 
-### 3. Collapse a round's multiple "Coming up" rows into one
+### 3. Upgrade rounds and their qualifying-round set
+
+Impact: medium - effort: medium. Raised: 2026-07-19 (concert page and
+editor, out-of-scope list).
+
+Some rounds only exist for people who already got something out of an
+earlier one - an upgrade or a seat-improvement round whose entry condition
+is "won round 1". The model has no way to say that: `Round` carries no
+relationship to another round, so the editor cannot express the dependency
+and the reminder planner cannot act on it. Today an upgrade round pings
+everyone tracking the concert, including people who never applied to the
+qualifying round and cannot enter this one.
+
+`RoundOutcome` already knows who won what, so the suppression half is a
+short extension of `_apply_outcome_suppression` (invariant 2's per-user
+pass) once the qualifying set exists. The cost is the schema and the editor
+UI for it, not the logic. Held out of the concert page and editor branch
+deliberately rather than half-built.
+
+### 4. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
-branch review).
+branch review). Re-ranked 2026-07-19.
 
 `upcoming_deadlines` emits one row per future anchor, so a single round
 with opens/closes/results/payment ahead of it takes up to four of Home's
@@ -62,22 +85,97 @@ purely the row budget. Deferred rather than done because collapsing
 changes the shape of the fragment that `POST /rounds/{id}/outcome` swaps
 back in via htmx, and the no-buttons gate already removed the harm.
 
-### 4. Let a user record won/lost on a round with nothing left ahead of it
+Kept at medium rather than raised, but it is now cheaper than it was: the
+concert page's per-leg round rows (2026-07-19) already render one row per
+ROUND with a single primary anchor chosen by `_primary_anchor`, so the
+collapsed shape exists and has tests behind it. What remains is deciding
+whether Home wants the same rule and re-pointing the htmx swap at it.
 
-Impact: low - effort: small. Raised: 2026-07-19 (Home/Discover split,
+### 5. Let the creation form express a multi-leg round in one pass
+
+Impact: low - effort: small. Raised: 2026-07-19 (concert page and editor,
 branch review).
 
-Capture lives on "Coming up" rows, and a row exists only while the round
-has at least one FUTURE anchor. So a round whose results have passed and
-which carries no payment deadline drops off Home entirely, and a user
-sitting on APPLIED for it has no web-side way to say how it went - the
-card stays in the Applied column. The 2026-07-19 fix (offering "I won" /
-"I lost" once the result moment arrives) covers every round that still has
-something ahead of it, which is the common shape; this is the tail. Wants
-either a capture surface on the concert page itself or a short grace
-window that keeps a just-resolved round on the list.
+The edit page now assigns legs with real ids via toggle chips, so a round
+covering several legs says so directly. Creation cannot: the form renders
+before any `ConcertDay` exists, so there is nothing to put an id on, and
+its leg control is a single-value `<select>` matched server-side by
+`resolve_round_leg`. That helper returns EVERY day matching the string, so
+a multi-leg round is expressible in principle - but only when two legs
+happen to share the one label-or-city text it matched on, and labels are
+normally distinct per leg. In practice a genuinely multi-leg round has to
+be created, then edited.
+
+Low impact because the follow-up edit is one click from the redirect
+creation already lands on, and multi-leg rounds are the minority shape.
+The fix is a client-side version of the same chip control the editor uses,
+keyed on `day_key` (which already exists) instead of on ids.
+
+### 6. Eventernote links on performer chips
+
+Impact: low - effort: small. Raised: 2026-07-19 (concert page and editor,
+out-of-scope list).
+
+The redesigned concert page leads with lineage and performers, and every
+performer is a chip - but the chips are inert, because linking one out to
+its eventernote page needs an `eventernote_url` column on `Tag` that does
+not exist yet. Concerts already carry one; tags do not. Small and
+self-contained, and it makes the page's new headline block do more than
+name people.
 
 ## Shipped
+
+### Concert page and editor redesign (2026-07-19)
+
+Shipped as: two surfaces rebuilt around the same fact, that a round belongs
+to a set of LEGS. The concert page (`templates/concert_detail.html` +
+`_round_rows.html`) now leads with lineage and performers rather than a
+metadata header, and replaces the single rounds table with one round-row
+group per leg plus an all-legs group, grouped by `service.concert_round_rows`
+(cancelled legs included, a round covering every live leg deliberately
+landing in the all-legs group rather than being repeated under each). Rounds
+on that page carry capture buttons via the `_capture_actions.html` macro
+shared with Home's rows, so `POST /rounds/{id}/outcome` now answers two
+surfaces - it reads which one from `HX-Current-URL` and sends the concert
+page its own rounds region instead of Home's three fragments.
+
+The editor (`templates/concert_edit.html`) puts rounds first, folds the rest,
+turns cancelled into a per-leg toggle, and moves duplicate/delete into a
+danger row that states what duplicate copies (invariant 3: the pruned tag
+set, `expand=False`, no rounds or legs).
+
+The data-loss fix underneath: the editor used to express `applies_to` as one
+free-text string per round, matched server-side against each day's city or
+label, and pre-filled that box from `applies_to[0]` alone - so opening a
+two-leg round and saving it untouched silently narrowed it to one leg. Legs
+are now toggle chips submitting real ids, encoded as ONE `round_legs` field
+per round row (a flat repeated field could not say which row an id belonged
+to). A leg added in the same save has no id yet, so its chip carries the
+row's client-generated `day_key`, resolved after the flush.
+
+Branch review on 2026-07-19 then closed a second, larger copy of the same
+bug before merge: `round_legs` was end-padded unconditionally, so a browser
+still holding the pre-deploy edit page - which posts the old `round_leg`
+field and no `round_legs` at all - would have had one Save wipe `applies_to`
+on every round of the concert. A whole-array omission now preserves each
+round's existing legs; a partial array raises rather than sliding every
+later row's selection by one.
+
+### Web-side won/lost for a round with nothing left ahead of it (2026-07-19)
+
+Was proposed on 2026-07-19 (Home/Discover split review) and shipped the same
+day by the concert page above, which took the first of the two options it
+named: a capture surface on the concert page itself, rather than a grace
+window on Home.
+
+The gap was that capture lived only on Home's "Coming up" rows, and a row
+exists only while the round has a FUTURE anchor - so a round whose results
+had passed with no payment deadline behind it dropped off Home entirely,
+stranding anyone sitting on APPLIED with no web-side way to say how it went.
+The concert page lists EVERY round of the concert regardless of timing and
+runs the same `capture_gates`, so `can_report_result` is true there exactly
+when it should be. Nothing was relaxed in `record_round_outcome` to get it
+(the gates stay on the read side), and no second write path was added.
 
 ### Home and Discover split (2026-07-19)
 
