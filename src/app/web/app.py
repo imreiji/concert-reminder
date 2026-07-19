@@ -24,6 +24,7 @@ from app.web.routes import calendar as calendar_routes
 from app.web.routes import concerts as concert_routes
 from app.web.routes import imports as import_routes
 from app.web.routes import preferences as pref_routes
+from app.web.routes import privacy as privacy_routes
 from app.web.routes import reminders as reminder_routes
 from app.web.routes import tags as tag_routes
 from app.web.routes import welcome as welcome_routes
@@ -141,6 +142,10 @@ def create_app() -> FastAPI:
     app.include_router(welcome_routes.router)
     # no templates: pure .ics responses
     app.include_router(calendar_routes.router)
+    # /privacy is a literal, unique path -- order-independent, unlike the
+    # imports/concerts pair above.
+    privacy_routes.templates = templates
+    app.include_router(privacy_routes.router)
 
     @app.get("/healthz")
     async def healthz() -> dict:

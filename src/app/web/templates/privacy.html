@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Privacy policy — dekimasen.app{% endblock %}
+{% block content %}
+<article class="prose">
+  <h1>Privacy policy</h1>
+  <p class="dim">Last updated: {{ last_updated }}</p>
+
+  <p>
+    dekimasen.app tracks deadlines for Japanese concerts and sends you a
+    Discord DM before the ones you care about close. To do that it has to
+    store a small amount of information about you. This page says exactly
+    what, why, and for how long, in plain language.
+  </p>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li>
+      <strong>Your Discord account basics</strong> — your Discord user ID,
+      your display name, and your avatar hash. We ask Discord for the
+      <code>identify</code> scope only, which is the minimum available.
+    </li>
+    <li>
+      <strong>Your timezone</strong> — either the one you picked, or the one
+      your browser reported, so deadlines show in your local time alongside
+      JST.
+    </li>
+    <li>
+      <strong>Your reminder settings</strong> — the reminder rules you
+      create, your reminder presets, the tags you subscribe to, and any
+      lottery outcomes you record (applied, won, lost, paid), which the app
+      uses to stop reminding you about rounds you are done with.
+    </li>
+    <li>
+      <strong>Pending and sent reminders</strong> — the queue of reminders
+      scheduled for you, and whether each has been delivered.
+    </li>
+    <li>
+      <strong>Login sessions</strong> — a random session token per login.
+      Only its SHA-256 hash is stored, never the token itself.
+    </li>
+    <li>
+      <strong>A calendar feed token</strong>, if you generate one. Also
+      stored only as a SHA-256 hash. Anyone holding the raw feed URL can
+      read your upcoming deadlines, so treat it as a password; if you lose
+      it or want to revoke it, generate a new one and the old URL stops
+      working.
+    </li>
+    <li>
+      <strong>Whether your DMs are reachable</strong> — a single flag, set
+      when Discord refuses a DM, so the site can tell you why reminders
+      stopped arriving.
+    </li>
+    <li>
+      <strong>What you contributed</strong> — if you have editor rights,
+      the concerts, tags, and edits you made are recorded with you as the
+      author.
+    </li>
+  </ul>
+
+  <h2>What we do not collect</h2>
+  <ul>
+    <li>No email address. Discord login never hands us one.</li>
+    <li>No IP addresses in the database.</li>
+    <li>
+      No message content. The bot uses no privileged intents, so it cannot
+      read your messages, your server list, or your friends.
+    </li>
+    <li>No analytics, no third-party trackers, no advertising.</li>
+  </ul>
+
+  <h2>Why we collect it</h2>
+  <p>
+    Solely to send you the concert-deadline reminders you asked for, and to
+    show your own settings back to you. There is no other use. Nothing here
+    is profiled, scored, or used to make automated decisions about you.
+  </p>
+
+  <h2>Sharing</h2>
+  <p>
+    We share nothing. Your data is not sold, rented, or given to third parties. The
+    only outbound traffic carrying anything about you is the Discord API
+    call that delivers your DM, which is the service you signed up for.
+  </p>
+
+  <h2>How long we keep it</h2>
+  <p>
+    Your data is kept while your account exists. The database is backed up
+    nightly to a private, non-public storage bucket (encrypted at rest by
+    the storage provider), and those backups expire automatically after 30
+    days. So after a deletion, your data is gone from the live site
+    immediately but can persist in backups for up to 30 more days. We would
+    rather say that than claim instant erasure.
+  </p>
+
+  <h2>Cookies</h2>
+  <p>
+    One cookie: your login session. It is strictly necessary — without it
+    you cannot stay signed in. There are no analytics or tracking cookies,
+    which is why you are not being asked to click through a consent banner.
+  </p>
+
+  <h2>Your rights</h2>
+  <p>
+    You can ask for a copy of your data, ask for it to be corrected, or ask
+    for it to be deleted. Just get in touch:
+  </p>
+  {% if contact_discord or contact_email %}
+  <ul>
+    {% if contact_discord %}<li>Discord: {{ contact_discord }}</li>{% endif %}
+    {% if contact_email %}
+    <li>
+      Email:
+      {% if contact_email_is_linkable %}
+      <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
+      {% else %}
+      {{ contact_email }}
+      {% endif %}
+    </li>
+    {% endif %}
+  </ul>
+  {% else %}
+  <p class="dim">
+    This deployment has not published contact details yet. If you reached
+    this page from a running site, contact whoever operates it.
+  </p>
+  {% endif %}
+  <p>
+    Deleting your account removes everything personal listed above: your
+    account row, your sessions, your reminder rules, presets and preset
+    items, your tag subscriptions, your recorded lottery outcomes, your
+    queued reminders, and your pending notifications. What stays is the
+    shared catalogue — concerts, tags, and edit history you contributed —
+    with the author field blanked out, so the events everyone else is
+    following do not disappear because one person left.
+  </p>
+
+  <h2>Changes to this policy</h2>
+  <p>
+    If this policy changes, the date at the top of this page changes with
+    it. There is no mailing list to notify, since we do not have your email
+    address.
+  </p>
+</article>
+{% endblock %}

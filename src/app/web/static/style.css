@@ -19,6 +19,12 @@ a.home { display: flex; gap: .6rem; align-items: baseline; text-decoration: none
 .wordmark { color: var(--dim); font-size: .85rem; }
 main { max-width: 72rem; width: 100%; margin: 2rem auto; padding: 0 1.5rem; flex: 1; }
 footer { text-align: center; color: var(--dim); font-size: .75rem; padding: 1.5rem; }
+footer a { color: inherit; }
+
+/* Long-form text pages (privacy policy). main is 72rem for data-dense
+   grids; prose needs a much narrower column to stay readable. */
+.prose { max-width: 42rem; }
+.prose li { margin-bottom: .5rem; }
 
 nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; font-size: .9rem; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; }

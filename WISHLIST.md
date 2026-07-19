@@ -24,6 +24,21 @@ get their own flag or handling.
 
 ## Shipped
 
+### Public privacy policy page (2026-07-19)
+
+Shipped as: `GET /privacy`, a public (deliberately no `require_user`)
+long-form policy page in `web/routes/privacy.py` + `templates/privacy.html`,
+linked from the `base.html` footer. Required by Discord's Developer Terms
+for any app collecting user data, and mandatory at bot verification /
+100+ guilds; also covers the GDPR transparency obligation. Content is
+written against the actual schema rather than boilerplate, and documents
+the erasure semantics the `1384cadd692e` migration enables (personal data
+deleted, contributed catalogue kept with the author anonymised). The
+operator's contact handle and email come from two new blank-by-default
+settings (`PRIVACY_CONTACT_DISCORD` / `PRIVACY_CONTACT_EMAIL`) so real
+contact details never enter the repo; the page renders with both, one, or
+neither configured.
+
 ### First-run guided setup (2026-07-18)
 
 Shipped as: a `/welcome` wizard route that sequences new logins through
