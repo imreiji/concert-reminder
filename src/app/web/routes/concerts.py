@@ -251,6 +251,13 @@ def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
     returns EVERY hit, so a multi-leg round can be created correctly; it was
     only the edit page's read-back that narrowed one to its first id.
 
+    "Correctly" is narrower than it sounds, though: the creation form's leg
+    control is a single-value <select> whose option value prefers the day's
+    label, and labels are normally distinct per leg. So a round covering two
+    legs can only come out of creation when both legs happen to share the one
+    label-or-city string this matches on. In practice a genuinely multi-leg
+    round still needs a follow-up edit, where the chips can say so directly.
+
     Matches a day's city or label, case-insensitively, exact match (not
     substring -- avoids "Day 1" matching "Day 10"). Blank or no match ->
     None (round shown in the all-legs group)."""
@@ -867,11 +874,22 @@ async def edit_concert(
     await session.refresh(concert, ["rounds"])
     existing_rounds = {r.id: r for r in concert.rounds}
     kept_round_ids: set[int] = set()
-    # round_legs is newer than the other round_* fields; a submitter that omits
-    # it entirely means "no legs selected" for every row, matching
-    # apply_round_fields' own default -- pad rather than let a whole-array
-    # omission trip the strict zip below.
-    round_legs = round_legs + [""] * (len(round_label) - len(round_legs))
+    # round_legs is newer than the other round_* fields, so a submitter can
+    # legitimately omit it ENTIRELY: a browser still holding the pre-deploy
+    # edit page posts the old free-text `round_leg`, which this signature no
+    # longer accepts, and no `round_legs` at all. That omission means "this
+    # submitter has nothing to say about legs" -- every round keeps the
+    # applies_to it already had. Reading it as "no legs selected" instead
+    # (which is what a blank-filled pad says) let one innocent Save wipe the
+    # leg assignment off every round of the concert.
+    #
+    # A short-but-NONEMPTY array gets no padding, exactly as day_key above:
+    # end-padding one slides every later row's selection back a row and
+    # assigns rounds to the wrong legs, silently, which is worse than a 500.
+    # The strict zip below raises on it instead.
+    legs_omitted = not round_legs
+    if legs_omitted:
+        round_legs = [""] * len(round_label)
     for (
         rid, label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url, notes_, legs
     ) in zip(
@@ -882,11 +900,17 @@ async def edit_concert(
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue
-        applies_to = parse_round_legs(legs, valid_day_ids, key_to_day_id)
         rid = rid.strip()
-        if rid.isdigit() and int(rid) in existing_rounds:
+        existing = existing_rounds.get(int(rid)) if rid.isdigit() else None
+        if legs_omitted and existing is not None:
+            # Fed back through parse_round_legs rather than assigned straight
+            # across, so an id whose leg THIS submit deleted still drops --
+            # preserving the selection must not preserve a dangling reference.
+            legs = " ".join(str(i) for i in existing.applies_to or [])
+        applies_to = parse_round_legs(legs, valid_day_ids, key_to_day_id)
+        if existing is not None:
             round_ = apply_round_fields(
-                existing_rounds[int(rid)], label, kind_, opens_at, closes_at, results_at,
+                existing, label, kind_, opens_at, closes_at, results_at,
                 payment_at, url, applies_to, label_en, notes_,
             )
             kept_round_ids.add(round_.id)

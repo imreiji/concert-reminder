@@ -524,6 +524,98 @@ async def test_the_edit_page_gives_every_leg_row_a_key(client, db):
     assert f'name="day_key" value="{day2}"' in body
 
 
+async def test_a_duplicate_day_key_gives_the_leg_to_the_first_row(client, db):
+    """Two rows claiming one key is the single way the key map could collide.
+    First row wins (setdefault), so a later row cannot silently steal a
+    reference a round already made."""
+    await make_editor(db)
+    login(client)
+    (day1,), (round_id,) = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False)],
+        rounds=[("Keyed round", [])],
+    )
+
+    resubmit(
+        client,
+        "tour",
+        days=[
+            (day1, "Day 1", "Kanagawa", False),
+            ("", "Day 2", "Osaka", False, "dupe"),
+            ("", "Day 3", "Fukuoka", False, "dupe"),
+        ],
+        rounds=[(round_id, "Keyed round", "dupe")],
+    )
+    assert await applies_to(db, round_id) == [await _day_id_by_city(db, "Osaka")]
+
+
+# ── round_legs padding: the two halves of a short array ──────────────────
+
+
+async def test_a_stale_page_omitting_round_legs_leaves_every_round_alone(client, db):
+    """The reachable data-loss window this padding rule exists to close.
+
+    An editor whose browser still holds the PRE-deploy edit page submits the
+    old `round_leg` free-text field and no `round_legs` at all. FastAPI drops
+    the unknown field, so the route sees a wholly-omitted array. Filling it
+    with blanks would make one innocent Save wipe `applies_to` on every round
+    of the concert — so a whole-array omission must mean "this submitter has
+    nothing to say about legs", not "no legs anywhere".
+    """
+    await make_editor(db)
+    login(client)
+    (day1, day2), (r1, r2, r3) = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False), ("Day 2", "Osaka", False)],
+        rounds=[("First leg", [0]), ("Both legs", [0, 1]), ("All legs", [])],
+    )
+
+    r = resubmit(
+        client,
+        "tour",
+        days=[(day1, "Day 1", "Kanagawa", False), (day2, "Day 2", "Osaka", False)],
+        rounds=[(r1, "First leg", ""), (r2, "Both legs", ""), (r3, "All legs", "")],
+        # An empty list is encoded as no field at all — exactly what the stale
+        # page sends. `round_leg` (singular) is what it sends INSTEAD.
+        extra={"round_legs": [], "round_leg": ["Kanagawa", "", ""]},
+    )
+    assert r.status_code == 303
+    assert await applies_to(db, r1) == [day1]
+    assert set(await applies_to(db, r2)) == {day1, day2}
+    assert await applies_to(db, r3) is None
+
+
+async def test_a_partial_round_legs_array_raises_instead_of_shifting_legs(client, db):
+    """The other half. A short-but-nonempty array cannot be end-padded: doing
+    so slides every later row's selection by one, silently assigning rounds to
+    the wrong legs — the exact failure this whole encoding exists to prevent.
+    Loud is better, so the strict zip is allowed to raise, and nothing commits.
+    """
+    await make_editor(db)
+    login(client)
+    (day1, day2), (r1, r2, r3) = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False), ("Day 2", "Osaka", False)],
+        rounds=[("First leg", [0]), ("Second leg", [1]), ("All legs", [])],
+    )
+
+    with pytest.raises(ValueError):
+        resubmit(
+            client,
+            "tour",
+            days=[(day1, "Day 1", "Kanagawa", False), (day2, "Day 2", "Osaka", False)],
+            rounds=[(r1, "First leg", ""), (r2, "Second leg", ""), (r3, "All legs", "")],
+            # Two entries for three round rows.
+            extra={"round_legs": [str(day1), str(day2)]},
+        )
+
+    # Nothing committed, so the assignments are exactly as seeded — in
+    # particular r2 did NOT inherit r1's selection.
+    assert await applies_to(db, r1) == [day1]
+    assert await applies_to(db, r2) == [day2]
+    assert await applies_to(db, r3) is None
+
+
 # ── the restructured page ────────────────────────────────────────────────
 
 
