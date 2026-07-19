@@ -230,6 +230,39 @@ cd ~/app && git pull && uv sync && uv run alembic upgrade head \
 Then verify with section 7: `git log --oneline -1` (right commit), `/healthz`
 (app alive), and the `curl -sI` header check if you touched the Caddyfile.
 
+### If the pull brings a migration
+
+Check before running the ritual above: `git log -p --stat -1 -- alembic/versions/`.
+If a new revision appeared, use this instead - the one-liner runs migrations
+against a live writer, which is fine for adding a column and NOT fine for a
+table rebuild (SQLite migrates in batch mode, and a rebuild against a running
+app has already failed here once, leaving an `_alembic_tmp_*` table behind).
+
+```bash
+sudo systemctl stop concert-reminder
+sqlite3 ~/app/app.db ".backup /home/ubuntu/pre-migration.db"
+ls -lh /home/ubuntu/pre-migration.db     # STOP if this is missing or zero
+cd ~/app && git pull && uv sync
+uv run alembic upgrade head
+sudo systemctl start concert-reminder
+sqlite3 ~/app/app.db "PRAGMA foreign_key_check;"   # want no output
+```
+
+The backup line is a gate, not a suggestion: `alembic upgrade head` rewrites
+whole tables, and the nightly S3 backup can be up to 24h stale (or broken -
+check `~/backup.log`).
+
+**If a migration fails partway**, it will usually have rolled back cleanly -
+confirm with `sqlite3 ~/app/app.db "SELECT * FROM alembic_version;"`. If that
+still shows the OLD revision, the data is intact and only debris is left:
+
+```bash
+sqlite3 ~/app/app.db "SELECT name FROM sqlite_master WHERE name LIKE '_alembic_tmp%';"
+sqlite3 ~/app/app.db "DROP TABLE _alembic_tmp_<whatever_it_named>;"
+```
+Then fix the migration and re-run. If `alembic_version` has ADVANCED but the
+schema looks wrong, do not improvise - restore `pre-migration.db` instead.
+
 ## Disaster recovery
 
 New box -> steps 1-2 -> restore latest `app-*.db.gz` from S3 to `~/app/app.db`
