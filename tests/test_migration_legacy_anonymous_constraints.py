@@ -146,7 +146,10 @@ def legacy_migrated(tmp_path, monkeypatch):
     con.close()
 
     cfg = _alembic_config(monkeypatch, db_path)
-    command.upgrade(cfg, "head")  # the assertion: this must not raise
+    # Pinned to MIGRATION_REVISION, not "head": this file tests ONE migration
+    # against a legacy-shaped DB, and the revision assertion below is about that
+    # migration. "head" silently retargets it as soon as a later revision lands.
+    command.upgrade(cfg, MIGRATION_REVISION)  # the assertion: this must not raise
 
     con = sqlite3.connect(db_path)
     con.execute("PRAGMA foreign_keys=ON")

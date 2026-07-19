@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -467,3 +468,21 @@ class ReminderQueue(Base):
     )
     fire_at_utc: Mapped[datetime] = mapped_column(UTCDateTime)
     sent_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class OpsCheckState(Base):
+    """Last confirmed result per operational check, so alerting survives
+    restarts. In-memory state would re-announce every problem on every deploy.
+
+    Mirrors domain.health.StoredState, which is a plain dataclass -- domain/
+    cannot import sqlalchemy, so ops.py converts between the two.
+    """
+
+    __tablename__ = "ops_check_state"
+
+    name: Mapped[str] = mapped_column(String(40), primary_key=True)
+    ok: Mapped[bool | None] = mapped_column(Boolean)
+    changed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    pending_ok: Mapped[bool | None] = mapped_column(Boolean)
+    pending_since: Mapped[datetime | None] = mapped_column(UTCDateTime)

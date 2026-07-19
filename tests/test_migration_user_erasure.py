@@ -18,6 +18,10 @@ from app.config import settings
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PRE_MIGRATION_REVISION = "e8a1c9d2f7b5"  # head immediately before this change
+# Pin the target rather than using "head": this file tests ONE migration, and
+# `downgrade -1` below must reverse THAT migration. Upgrading to "head" silently
+# retargets both as soon as any later revision lands.
+MIGRATION_REVISION = "1384cadd692e"  # user erasure: author FKs -> SET NULL
 
 AUTHORED = {
     "concerts": "created_by",
@@ -78,7 +82,7 @@ def migrated(tmp_path, monkeypatch):
     _seed(con)
     con.close()
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, MIGRATION_REVISION)
     con = sqlite3.connect(db_path)
     con.execute("PRAGMA foreign_keys=ON")
     yield con, cfg, db_path
