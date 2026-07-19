@@ -206,6 +206,47 @@ async def test_health_runs_only_every_nth_tick(maker, monkeypatch):
     assert len(calls) == 1
 
 
+async def test_tick_counter_advances_even_when_delivery_raises(maker, monkeypatch):
+    """The counter gates health evaluation, so it must not depend on the tick
+    succeeding. reminder_loop swallows tick exceptions and retries forever: a
+    tick that raises every minute would otherwise freeze the counter, health
+    would never run again, and -- since heartbeat.beat() fires before tick() --
+    scheduler_ok would stay true and the uptime monitor would stay quiet too.
+    Silence in exactly the scenario that most needs an alert.
+    """
+    import app.scheduler.loop as loop_mod
+
+    async def boom(*_a, **_kw):
+        raise RuntimeError("due_reminders exploded")
+
+    monkeypatch.setattr(loop_mod, "SessionMaker", maker)
+    monkeypatch.setattr(loop_mod, "due_reminders", boom)
+    monkeypatch.setattr(loop_mod, "_tick_count", 0)
+
+    for _ in range(3):
+        with pytest.raises(RuntimeError):
+            await loop_mod.tick(_FakeBot())
+
+    assert loop_mod._tick_count == 3
+
+
+async def test_a_failing_alert_does_not_consume_the_nag_clock(session, monkeypatch):
+    """In web-only mode the DM is suppressed, so last_notified_at must stay
+    untouched. Advancing it would make the alert look already-sent, and the
+    first 24h of alerts would vanish on a server that gains a DISCORD_TOKEN
+    later."""
+    from app.db import service
+
+    monkeypatch.setattr(service.settings, "discord_token", "")
+    await _run(session, False, NOW)
+    await _run(session, False, NOW + timedelta(minutes=5))  # would have alerted
+    assert (await session.get(OpsCheckState, "backup")).last_notified_at is None
+
+    # Bot comes online: the very next confirmed-failing pass must alert.
+    monkeypatch.setattr(service.settings, "discord_token", "x")
+    assert await _run(session, False, NOW + timedelta(minutes=10)) == 1
+
+
 async def test_nothing_queues_when_bot_disabled(session, monkeypatch):
     """A laptop's disk is not an operational signal. This also proves the
     _admins fixture's discord_token patch reaches `bot_enabled` at all: flip it

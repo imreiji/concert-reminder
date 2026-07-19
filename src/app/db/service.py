@@ -1253,33 +1253,45 @@ async def evaluate_and_alert(session: AsyncSession, results, now: datetime) -> i
 
     for result in results:
         row = await session.get(OpsCheckState, result.name)
+        # Keyword arguments in BOTH directions, deliberately: StoredState has
+        # two bool|None fields and three datetime|None ones, so a positional
+        # copy that drifts out of dataclass order swaps changed_at with
+        # last_notified_at silently -- same type, no error, wrong nag timing.
         stored = (
             StoredState(
-                row.ok,
-                row.changed_at,
-                row.last_notified_at,
-                row.pending_ok,
-                row.pending_since,
+                ok=row.ok,
+                changed_at=row.changed_at,
+                last_notified_at=row.last_notified_at,
+                pending_ok=row.pending_ok,
+                pending_since=row.pending_since,
             )
             if row is not None
             else None
         )
         decision = should_alert(stored, result.ok, now)
 
+        would_notify = decision.notify and result.name in alerting
+        # A laptop's disk is not an operational signal; without this, every
+        # local dev run would accumulate junk notifications. Evaluated BEFORE
+        # the state write, because last_notified_at is the 24h nag clock:
+        # advancing it for an alert that was never sent silently swallows the
+        # first day of alerts on a server where DISCORD_TOKEN is added later.
+        suppressed = would_notify and not settings.bot_enabled
+
         if row is None:
             row = OpsCheckState(name=result.name)
             session.add(row)
         row.ok = decision.state.ok
         row.changed_at = decision.state.changed_at
-        row.last_notified_at = decision.state.last_notified_at
+        row.last_notified_at = (
+            (stored.last_notified_at if stored is not None else None)
+            if suppressed
+            else decision.state.last_notified_at
+        )
         row.pending_ok = decision.state.pending_ok
         row.pending_since = decision.state.pending_since
 
-        if not decision.notify or result.name not in alerting:
-            continue
-        # A laptop's disk is not an operational signal; without this, every
-        # local dev run would accumulate junk notifications.
-        if not settings.bot_enabled:
+        if not would_notify or suppressed:
             continue
 
         status = "recovered" if result.ok else "FAILING"
