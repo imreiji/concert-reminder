@@ -13,6 +13,41 @@
 dekimasen.app, www.dekimasen.app {
     tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
 
+    # Security response headers.
+    #
+    # Caddy runs directives in its own fixed order, not file order, and
+    # `header` sorts ahead of `redir` - so these are set on the www->apex
+    # 301 as well as on every proxied response. Nothing here reaches the
+    # app, so app code never has to care.
+    #
+    # X-Frame-Options is the one that earns its keep: the app has no CSRF
+    # token by design (SameSite=Lax cookies only). Lax still sends the
+    # session cookie on a same-site click, so a framed page that tricks a
+    # logged-in editor into clicking a delete/edit button would work.
+    # DENY removes the framing half of that attack.
+    #
+    # Referrer-Policy: the personal calendar-feed token is handed back in a
+    # query string - POST /me/calendar-feed redirects to
+    # /preferences?feed_token=<raw token> (or /welcome?feed_token=... from
+    # the onboarding wizard), and that raw token is the only credential the
+    # feed has. Those pages load htmx from unpkg.com and may link out, so
+    # same-origin guarantees no Referer carrying that URL ever leaves the
+    # site, rather than trusting each browser's default policy.
+    #
+    # Deliberately NOT set here:
+    #   - Strict-Transport-Security: .app is HSTS-preloaded at the TLD
+    #     level, so browsers already refuse plaintext to this domain. An
+    #     extra header adds nothing and a bad max-age/includeSubDomains is
+    #     painful to walk back. Do not "helpfully" add it.
+    #   - Content-Security-Policy: base.html pulls htmx from unpkg.com and
+    #     the templates use inline <script>. A correct policy needs its own
+    #     change with page-by-page verification, not a guess here.
+    header {
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+    }
+
     @www host www.dekimasen.app
     redir @www https://dekimasen.app{uri} permanent
 
