@@ -18,9 +18,15 @@ ALLOWED_SCHEMES = frozenset({"http", "https"})
 # Browsers ignore ASCII whitespace and control characters when resolving a
 # URL's scheme, so `java\tscript:`, `\njavascript:` and ` javascript:` all
 # navigate to the same script URI a bare `javascript:` would. Stripping the
-# whole \x00-\x20 range before parsing means we validate exactly the string
-# the browser will act on -- a plain .strip() would not.
-_CONTROL_CHARS = {c: None for c in range(0x21)}
+# whole \x00-\x20 range from both ends before parsing means we validate
+# exactly the string the browser will act on -- a plain .strip() would not.
+#
+# Space (0x20) is only special at the ends, though: a browser percent-encodes
+# an *interior* space rather than deleting it, so an interior space must
+# survive untouched -- only \x00-\x1F (true control characters) are deleted
+# from the middle of the string.
+_EDGE_CHARS = "".join(chr(c) for c in range(0x21))
+_INTERIOR_CONTROL_CHARS = {c: None for c in range(0x20)}
 
 
 class UnsafeUrlError(ValueError):
@@ -31,12 +37,13 @@ def clean_url(raw: str | None) -> str | None:
     """Normalize a submitted URL, or raise if it isn't http(s).
 
     Returns None for empty/blank input (the columns are all nullable), and
-    otherwise the normalized string -- which is byte-identical to the input
-    for any real URL, since valid URLs contain no raw control characters.
+    otherwise the normalized string -- byte-identical to the input for any
+    real URL, since valid URLs contain no raw control characters and no
+    leading/trailing whitespace, and an interior space is left alone.
     """
     if raw is None:
         return None
-    value = raw.translate(_CONTROL_CHARS)
+    value = raw.strip(_EDGE_CHARS).translate(_INTERIOR_CONTROL_CHARS)
     if not value:
         return None
     parsed = urlparse(value)

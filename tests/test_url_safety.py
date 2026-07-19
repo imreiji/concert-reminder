@@ -41,6 +41,18 @@ def test_surrounding_whitespace_is_stripped():
     assert clean_url("  https://example.com  ") == "https://example.com"
 
 
+def test_leading_and_trailing_whitespace_trimmed_both_ends():
+    # Includes NUL/tab/newline, not just plain spaces, on both sides.
+    assert clean_url("\t\x00 https://example.com \r\n") == "https://example.com"
+
+
+def test_interior_space_is_preserved():
+    # A browser percent-encodes an internal space; it does not delete it.
+    # Deleting it here would silently store a different URL than the one
+    # a browser actually resolves.
+    assert clean_url("https://ex.com/a b") == "https://ex.com/a b"
+
+
 @pytest.mark.parametrize("raw", ["", "   ", "\t\n", None])
 def test_blank_becomes_none(raw):
     assert clean_url(raw) is None
@@ -143,11 +155,15 @@ async def test_concert_edit_rejects_javascript_url(client):
     }).status_code == 303
 
     r = client.post("/concerts/c/edit", data={
-        "new_event_id": "c", "title": "C", "official_url": "javascript:alert(1)",
+        "new_event_id": "c", "title": "Changed", "official_url": "javascript:alert(1)",
     })
     assert r.status_code == 422
     async with client.db() as s:
         concert = (await s.execute(select(Concert))).scalars().one()
+        # Proves rollback actually happened, not just that we posted the same
+        # value back: if the title had been mutated and committed before the
+        # URL check failed, this would catch it.
+        assert concert.title == "C"  # unchanged
         assert concert.official_url == "https://example.com"  # unchanged
 
 
