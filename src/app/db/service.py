@@ -18,6 +18,7 @@ Sync semantics (per rule):
 
 import hashlib
 import secrets
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -1302,6 +1303,69 @@ async def concert_round_rows(
             by_leg[leg_id].append(row)
 
     return [LegRounds(day=d, rounds=by_leg[d.id]) for d in days], all_legs
+
+
+def _needs_you(row: RoundRow, now: datetime) -> bool:
+    """Does this round still want something from this reader?
+
+    Two ways it can. You have live standing -- APPLIED (waiting on a result)
+    or WON (you owe a payment). Or you have no standing at all and the round
+    is open right now, so the decision is still yours to make.
+
+    Everything else is settled and says nothing useful in an urgency panel:
+    LOST and NOT_APPLIED are over, PAID is secured, and a round that closed
+    without you is a chance already gone. `can_capture` alone is not enough
+    for the no-standing case -- it only means the round has OPENED, and a
+    long-closed round would otherwise sit at the top of the page forever.
+    """
+    if row.outcome in (LotteryOutcome.APPLIED, LotteryOutcome.WON):
+        return True
+    if row.outcome is not None:
+        return False
+    closes = row.round_.closes_at_utc
+    return row.can_capture and (closes is None or closes > now)
+
+
+def _next_moment_key(row: RoundRow, now: datetime) -> tuple[int, float]:
+    """Sort key for "which of these wants me first": still-ahead moments in
+    chronological order, then rounds carrying no timestamp at all, then past
+    moments most-recent first. Same preference `_primary_anchor` applies
+    WITHIN a round, applied here ACROSS rounds so the two cannot disagree."""
+    at = row.primary_at_utc
+    if at is None:
+        return (1, 0.0)
+    if at > now:
+        return (0, at.timestamp())
+    return (2, -at.timestamp())
+
+
+def concert_next_moment(
+    rows: Iterable[RoundRow], now: datetime | None = None
+) -> RoundRow | None:
+    """The one round the concert page's "Next for you" block leads with, or
+    None when there is nothing worth leading with.
+
+    None is a real answer, not a failure: with no standing anywhere and
+    nothing open, an empty urgency panel is worse than no panel, so the page
+    omits the block entirely rather than rendering a heading over a blank.
+
+    Rounds are de-duplicated by id, because a round covering some-but-not-all
+    legs appears under each of those legs and must not compete with itself.
+    """
+    now = now or _now()
+    seen: set[int] = set()
+    best: RoundRow | None = None
+    best_key: tuple[int, float] | None = None
+    for row in rows:
+        if row.round_.id in seen:
+            continue
+        seen.add(row.round_.id)
+        if not _needs_you(row, now):
+            continue
+        key = _next_moment_key(row, now)
+        if best_key is None or key < best_key:
+            best, best_key = row, key
+    return best
 
 
 # ── Discover status ───────────────────────────────────────────────────────

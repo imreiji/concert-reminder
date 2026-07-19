@@ -478,3 +478,58 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   display: inline-flex; align-items: center; line-height: 1.5; padding: .22rem .6rem;
 }
 .performers .chip.grp { background: var(--accent); color: #fff; font-weight: 650; }
+
+/* "Next for you": the nearest moment on THIS concert that wants the reader.
+   Accent rather than the danger red Home's "Closes next" uses -- that one is
+   sitewide triage, this one is a single campaign's status. */
+.standing {
+  margin-top: 1.75rem; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 3px; background: var(--raise); box-shadow: var(--shadow);
+  padding: 1rem 1.15rem; display: grid; grid-template-columns: 1fr auto;
+  gap: 1rem; align-items: center;
+}
+.standing .l {
+  font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--accent); font-weight: 700;
+}
+.standing .w { font-size: 1.05rem; font-weight: 600; margin-top: .25rem; }
+.standing .s { color: var(--dim); font-size: .875rem; margin-top: .15rem; }
+
+/* One section per leg, each with its own date, doors and venue. A cancelled
+   leg is dimmed and badged, never hidden: invariant 2 keeps the row because
+   every round's applies_to points at it. */
+.leg { margin-top: 2.25rem; }
+.leghead {
+  display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
+  padding-bottom: .6rem; border-bottom: 1px solid var(--line);
+}
+.leghead h3.leg-heading { margin: 0; font-size: 1rem; font-weight: 650; color: var(--ink); }
+.leghead .lv { color: var(--dim); font-size: .8125rem; }
+.leghead .lvenue { display: block; }
+.leg.off .rnds, .leg.off .lv { opacity: .45; }
+
+/* The round row: your standing, what it is, when, what you can do. Replaces
+   a six-column table in a horizontal-scroll wrapper whose cells were mostly
+   empty -- one moment leads in bold and the rest are demoted beneath it. */
+.rnds { display: grid; }
+.rnd2 {
+  display: grid; grid-template-columns: 7rem 1fr 15rem 13rem; gap: 1rem;
+  align-items: center; padding: .75rem .1rem; border-bottom: 1px solid var(--line);
+}
+.rnd2.past { opacity: .55; }
+.rnd2 .nm { font-weight: 550; line-height: 1.3; }
+.rnd2 .nm em {
+  font-style: normal; display: block; font-size: .75rem;
+  color: var(--dim); font-weight: 400;
+}
+.rnd2 .dts { font-size: .8125rem; color: var(--dim); line-height: 1.4; }
+.rnd2 .dts b { display: block; color: var(--ink); font-weight: 600; }
+.rnd2 .dts .more { display: block; font-size: .75rem; }
+.rnd2 .acts { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; }
+.rnd2 .acts .ics { text-decoration: none; }
+
+@media (max-width: 900px) {
+  .rnd2 { grid-template-columns: 7rem 1fr; }
+  .rnd2 .dts, .rnd2 .acts { grid-column: 1 / -1; justify-content: flex-start; }
+  .standing { grid-template-columns: 1fr; }
+}

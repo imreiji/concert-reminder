@@ -37,9 +37,9 @@ from app.db.models import (
     TagMember,
     User,
 )
-from app.db.service import attach_tag, ensure_user
+from app.db.service import attach_tag, ensure_user, record_round_outcome
 from app.db.session import get_session
-from app.domain.types import RoundKind, TagKind
+from app.domain.types import LotteryOutcome, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -189,6 +189,13 @@ async def add_round(db, concert_id, label, *, applies_to=None, opens=None, close
         return r.id
 
 
+async def set_outcome(db, round_id, outcome, user_id=USER):
+    """Through the one service path, so the sequence rule applies here too."""
+    async with db() as s:
+        await record_round_outcome(s, user_id, round_id, outcome)
+        await s.commit()
+
+
 # ── header: lineage ──────────────────────────────────────────────────────
 
 
@@ -317,3 +324,273 @@ async def test_the_header_carries_no_date_range_and_no_single_venue(client):
     head = body.split('class="chead"', 1)[1].split("</header>", 1)[0]
     assert "Header Venue" not in head
     assert "Osaka-jo Hall" not in head
+
+
+# ── body: legs ───────────────────────────────────────────────────────────
+
+
+async def test_a_two_venue_concert_renders_two_different_venues(client):
+    """The reason the header venue had to go: on a tour the legs disagree
+    with any single summary, so each leg carries its own."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, venue="Osaka-jo Hall")
+    await add_day(client.db, cid, "Tokyo", days_ahead=31, venue="Tokyo Dome")
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert "Osaka-jo Hall" in body
+    assert "Tokyo Dome" in body
+
+
+async def test_a_cancelled_leg_is_dimmed_but_keeps_its_own_date_and_rounds(client):
+    """Invariant 2: a cancelled leg is flagged, never deleted, because
+    applies_to depends on the row still existing. So it renders -- dimmed and
+    badged -- with its rounds still visible."""
+    cid = await seed_concert(client.db)
+    dead = await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31)
+    await add_round(client.db, cid, "Osaka presale", applies_to=[dead])
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert "leg off" in body        # dimmed, not dropped
+    assert "Cancelled" in body      # and badged as such
+    assert "Osaka presale" in body  # its rounds are not hidden with it
+
+
+async def test_a_round_naming_only_cancelled_legs_sits_under_those_legs(client):
+    """The all-legs group is not "everything not leg-specific". A round that
+    names one cancelled leg is a fact about THAT leg, and belongs under it."""
+    cid = await seed_concert(client.db)
+    dead = await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31)
+    await add_round(client.db, cid, "Osaka only", applies_to=[dead])
+    login(client)
+
+    body = client.get("/concerts/np").text
+    # From the cancelled leg's own section to the start of the next one.
+    osaka = body.split("Osaka", 1)[1].split('class="leg"', 1)[0]
+    assert "Osaka only" in osaka
+    assert "All legs" not in body
+
+
+async def test_a_round_covering_every_live_leg_renders_once_in_the_all_legs_group(client):
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=30)
+    d2 = await add_day(client.db, cid, "Day 2", days_ahead=31)
+    await add_round(client.db, cid, "Fan club presale", applies_to=[d1, d2])
+    login(client)
+
+    body = client.get("/concerts/np").text
+    # Scoped past "Next for you", which legitimately names this round too --
+    # what must not happen is the round being repeated under BOTH legs.
+    legs = body.split("<!-- /standing -->", 1)[-1]
+    assert legs.count("Fan club presale") == 1
+    assert "All legs" in legs
+
+
+async def test_no_horizontal_scroll_table_wrapper_remains(client):
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=30)
+    await add_round(client.db, cid, "R1", applies_to=[d1])
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert "table-scroll" not in body
+    assert "<table" not in body
+
+
+# ── body: capture actions, reusing the shared rules ──────────────────────
+
+
+def round_block(body: str, label: str) -> str:
+    """Everything from a round's label to the end of its row."""
+    return body.split(label, 1)[1].split("<!-- /rnd -->", 1)[0]
+
+
+async def test_a_round_that_has_not_opened_offers_no_capture_actions(client):
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    await add_round(
+        client.db, cid, "Future round", applies_to=[d1],
+        opens=datetime.now(UTC) + timedelta(days=5),
+        closes=datetime.now(UTC) + timedelta(days=15),
+    )
+    login(client)
+
+    block = round_block(client.get("/concerts/np").text, "Future round")
+    assert "Not open yet" in block
+    assert "I have applied" not in block
+
+
+async def test_an_open_round_with_no_outcome_offers_both_capture_actions(client):
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    await add_round(
+        client.db, cid, "Open round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=15),
+    )
+    login(client)
+
+    block = round_block(client.get("/concerts/np").text, "Open round")
+    assert "I have applied" in block
+    assert "Not applying" in block
+
+
+async def test_applied_with_the_result_not_due_offers_nothing_to_do(client):
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    rid = await add_round(
+        client.db, cid, "Waiting round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=5),
+        closes=datetime.now(UTC) + timedelta(days=2),
+        results=datetime.now(UTC) + timedelta(days=9),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    login(client)
+
+    block = round_block(client.get("/concerts/np").text, "Waiting round")
+    assert "Nothing to do" in block
+    assert "I won" not in block
+
+
+async def test_applied_with_the_result_due_offers_won_and_lost(client):
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    rid = await add_round(
+        client.db, cid, "Decided round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+        results=datetime.now(UTC) - timedelta(hours=1),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    login(client)
+
+    block = round_block(client.get("/concerts/np").text, "Decided round")
+    assert "I won" in block
+    assert "I lost" in block
+
+
+async def test_a_won_round_offers_paid(client):
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    rid = await add_round(
+        client.db, cid, "Won round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+        payment=datetime.now(UTC) + timedelta(days=4),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    await set_outcome(client.db, rid, LotteryOutcome.WON)
+    login(client)
+
+    block = round_block(client.get("/concerts/np").text, "Won round")
+    assert ">Paid<" in block
+
+
+# ── body: "Next for you" ─────────────────────────────────────────────────
+
+
+async def test_next_for_you_is_absent_with_no_standing_and_nothing_open(client):
+    """An empty urgency panel is worse than no panel at all."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    await add_round(
+        client.db, cid, "Closed round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=30),
+        closes=datetime.now(UTC) - timedelta(days=10),
+    )
+    login(client)
+
+    assert "Next for you" not in client.get("/concerts/np").text
+
+
+async def test_next_for_you_names_the_round_that_is_open_now(client):
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    await add_round(
+        client.db, cid, "Lottery round 1", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=6),
+    )
+    login(client)
+
+    body = client.get("/concerts/np").text
+    standing = body.split("Next for you", 1)[1].split("<!-- /standing -->", 1)[0]
+    assert "Lottery round 1" in standing
+
+
+async def test_next_for_you_appears_on_standing_alone(client):
+    """Applied and waiting IS standing, even with nothing left to press."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    rid = await add_round(
+        client.db, cid, "Lottery round 1", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=1),
+        results=datetime.now(UTC) + timedelta(days=4),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    login(client)
+
+    assert "Next for you" in client.get("/concerts/np").text
+
+
+# ── capture posts back to THIS page's fragment ───────────────────────────
+
+
+async def test_recording_an_outcome_swaps_the_concert_pages_own_rounds(client):
+    """No new write path (invariant 2) -- the same POST /rounds/{id}/outcome
+    Home uses. It just has to answer with THIS page's fragment: replying with
+    Home's deadline rows would splice Home's content into the concert page,
+    and the out-of-band #board swap would silently hit nothing here.
+
+    The surface comes from HX-Current-URL, which htmx sends on every request,
+    so the shared `_capture_actions.html` macro needs no per-surface field."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    rid = await add_round(
+        client.db, cid, "Lottery round 1", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=6),
+    )
+    login(client)
+
+    r = client.post(
+        f"/rounds/{rid}/outcome",
+        data={"outcome": "applied"},
+        headers={"HX-Request": "true", "HX-Current-URL": "http://testserver/concerts/np"},
+    )
+    assert r.status_code == 200
+    assert 'id="concert-rounds"' in r.text     # the declared hx-target
+    assert "Lottery round 1" in r.text
+    assert 'id="deadline-rows"' not in r.text  # not Home's fragment
+    assert "hx-swap-oob" not in r.text         # nothing to swap out of band here
+    assert "Applied" in r.text                 # and the write really happened
+
+
+async def test_recording_without_htmx_returns_to_the_concert(client):
+    """The forms carry a real method/action, so a JS-less browser navigates
+    here. Sending it to Home would lose the reader's place -- the Referer is
+    the only thing that says where they were, and a missing one falls back to
+    Home exactly as before."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    rid = await add_round(
+        client.db, cid, "Lottery round 1", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=6),
+    )
+    login(client)
+
+    r = client.post(
+        f"/rounds/{rid}/outcome", data={"outcome": "applied"},
+        headers={"Referer": "http://testserver/concerts/np"},
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/concerts/np"
+
+    r = client.post(f"/rounds/{rid}/outcome", data={"outcome": "won"})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"

@@ -229,7 +229,7 @@ async def test_past_round_has_no_ics_link_and_is_marked_past(client):
     assert r.status_code == 200
     assert "/rounds/2/ics" in r.text  # future round: exportable
     assert "/rounds/1/ics" not in r.text  # past round: no export link
-    assert 'round-row past' in r.text
+    assert 'rnd2 past' in r.text  # the round row, dimmed rather than hidden
 
 
 async def test_past_day_marked_past(client):
@@ -268,7 +268,7 @@ async def test_leg_heading_links_to_matching_venue_tag(client):
     r = client.get("/concerts/c")
     assert r.status_code == 200
     assert 'href="https://maps.example/k-arena"' in r.text
-    assert "(Kanto)" in r.text
+    assert "· Kanto" in r.text
 
 
 async def test_region_filter_selects_all_venues_in_region(client):

@@ -36,6 +36,8 @@ from app.db.models import Concert, ConcertDay, ReminderRule, Round, Tag, User
 from app.db.service import (
     attach_tag,
     concert_audit_log,
+    concert_next_moment,
+    concert_round_rows,
     detach_tag,
     ensure_user,
     group_members,
@@ -560,6 +562,43 @@ async def create_concert(
     return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)
 
 
+async def concert_rounds_context(
+    session: AsyncSession, user_id: int, concert: Concert, now: datetime | None = None
+) -> dict:
+    """Everything `_round_rows.html` needs, as one dict.
+
+    Two callers render that fragment and they MUST agree: GET
+    /concerts/{event_id} builds it inside the page, and POST
+    /rounds/{id}/outcome swaps it back in after a capture action. Assembling
+    it in two places is how the swapped-in copy quietly starts disagreeing
+    with the one it replaced -- a leg missing its venue, or a round in the
+    wrong group.
+
+    Everything the fragment touches is loaded HERE, eagerly. A lazy load
+    during async template rendering raises MissingGreenlet, which is a 500,
+    and this project has already shipped that bug once (Concert.tags).
+    """
+    now = now or datetime.now(UTC)
+    leg_groups, all_legs_rows = await concert_round_rows(session, user_id, concert, now=now)
+    # One query for every VENUE tag, then an in-memory match per leg -- the
+    # same free-text-to-structured resolution the old per-day subtitle used.
+    venue_tags = list(
+        (await session.execute(select(Tag).where(Tag.kind == TagKind.VENUE))).scalars()
+    )
+    return {
+        "concert": concert,
+        "now": now,
+        "leg_groups": leg_groups,
+        "all_legs_rows": all_legs_rows,
+        "day_venue_tags": {
+            g.day.id: find_venue_tag(venue_tags, g.day.venue) for g in leg_groups
+        },
+        "next_row": concert_next_moment(
+            [row for g in leg_groups for row in g.rounds] + all_legs_rows, now=now
+        ),
+    }
+
+
 @router.get("/concerts/{event_id}", response_class=HTMLResponse)
 async def concert_detail(
     request: Request,
@@ -574,14 +613,6 @@ async def concert_detail(
     from app.web.routes.preferences import my_presets
 
     presets = await my_presets(session, user.id)
-    venue_tags = list(
-        (await session.execute(select(Tag).where(Tag.kind == TagKind.VENUE))).scalars()
-    )
-    by_day, general = group_rounds_by_day(concert)
-    now = datetime.now(UTC)
-    day_venue_tags = {d.id: find_venue_tag(venue_tags, d.venue) for d in concert.days}
-    past_round_ids = {r.id for r in concert.rounds if is_round_past(r, now)}
-    past_day_ids = {d.id for d in concert.days if is_day_past(d, now)}
     # The lineage line above the title carries the group, so the title itself
     # does not repeat it (see title_without_lineage).
     display_title = title_without_lineage(
@@ -595,11 +626,9 @@ async def concert_detail(
         "concert_detail.html",
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
          "anchors": list(Anchor),
-         "rounds_by_day": by_day, "general_rounds": general,
-         "day_venue_tags": day_venue_tags, "past_round_ids": past_round_ids,
-         "past_day_ids": past_day_ids, "now": now,
          "display_title": display_title,
-         "audit_log": audit_log},
+         "audit_log": audit_log,
+         **await concert_rounds_context(session, user.id, concert)},
     )
 
 

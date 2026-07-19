@@ -518,12 +518,16 @@ async def test_detail_page_groups_rounds_by_leg(client):
     )
     r = client.get("/concerts/two-legs")
     assert r.status_code == 200
-    day1_pos = r.text.index('leg-heading">Day 1<')
-    round1_pos = r.text.index("Day 1 round")
-    day2_pos = r.text.index('leg-heading">Day 2<')
-    round2_pos = r.text.index("Day 2 round")
-    general_heading_pos = r.text.index('leg-heading">General<')
-    general_round_pos = r.text.index("General round")
+    # Scoped past "Next for you", which names whichever round wants the reader
+    # first and so legitimately mentions one of these before its leg.
+    body = r.text.split("<!-- /standing -->", 1)[-1]
+    day1_pos = body.index('leg-heading">Day 1<')
+    round1_pos = body.index("Day 1 round")
+    day2_pos = body.index('leg-heading">Day 2<')
+    round2_pos = body.index("Day 2 round")
+    # The untied round lands in the all-legs group, which renders last.
+    general_heading_pos = body.index('leg-heading">All legs<')
+    general_round_pos = body.index("General round")
     assert day1_pos < round1_pos < day2_pos < round2_pos < general_heading_pos < general_round_pos
 
 
@@ -543,15 +547,18 @@ async def test_round_with_no_day_association_shown_as_general_only(client):
         },
     )
     r = client.get("/concerts/c")
-    assert "General" in r.text
+    assert "All legs" in r.text
     assert "Untied round" in r.text
+    # ...and specifically NOT under Day 1's own section.
+    day1 = r.text.split('leg-heading">Day 1<', 1)[1].split("<h3", 1)[0]
+    assert "Untied round" not in day1
 
 
 async def test_detail_page_nests_performances_and_their_rounds_together(client):
-    """Each performance gets one integrated section (heading + venue/time
-    info + its rounds table right underneath), including a performance with
-    no rounds yet at all -- previously that day was entirely absent from the
-    separate rounds section."""
+    """Each leg gets one integrated section (heading + venue/time info + its
+    rounds right underneath), including a leg with no rounds yet at all --
+    previously that day was entirely absent from the separate rounds
+    section."""
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
@@ -569,14 +576,14 @@ async def test_detail_page_nests_performances_and_their_rounds_together(client):
     )
     r = client.get("/concerts/c")
     assert r.status_code == 200
-    # both performances get their own integrated section...
-    assert r.text.count('class="perf-detail"') == 2
-    # ...Day 1's includes its round table...
+    # both legs get their own integrated section...
+    assert r.text.count('class="leg-heading') == 2
+    # ...Day 1's includes its rounds...
     day1_section = r.text[r.text.index('leg-heading">Day 1<'):r.text.index('leg-heading">Day 2<')]
     assert "Day 1 round" in day1_section
     # ...Day 2 has none yet, but still gets its section with a placeholder
     day2_section = r.text[r.text.index('leg-heading">Day 2<'):]
-    assert "No rounds yet for this performance." in day2_section
+    assert "No rounds yet for this leg." in day2_section
 
 
 # ── YAML export ───────────────────────────────────────────────────────────
@@ -1163,8 +1170,8 @@ async def test_detail_page_shows_cancelled_badge_on_cancelled_leg_only(client):
     )
     r = client.get("/concerts/c")
     assert r.status_code == 200
-    day1_section = r.text[r.text.index('">Day 1'):r.text.index('">Day 2')]
-    day2_section = r.text[r.text.index('">Day 2'):]
+    day1_section = r.text[r.text.index('leg-heading">Day 1'):r.text.index('leg-heading">Day 2')]
+    day2_section = r.text[r.text.index('leg-heading">Day 2'):]
     assert "Cancelled" in day1_section
     assert "Cancelled" not in day2_section
 

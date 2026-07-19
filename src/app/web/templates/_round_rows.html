@@ -1,0 +1,135 @@
+{# The concert page's body: "Next for you", then one section per leg, then
+   the all-legs group.
+
+   Its own partial because POST /rounds/{id}/outcome swaps it back in after a
+   capture action; keep the outer <div id="concert-rounds">, that is the htmx
+   target for an outerHTML swap. The route builds this context in ONE place
+   (`concert_rounds_context`) so the swapped-in copy cannot drift from the one
+   it replaced.
+
+   Why the WHOLE region swaps rather than the single round row that was
+   pressed: two things on this page derive from outcomes, not one. "Next for
+   you" is chosen from every round's standing, so recording an outcome can
+   change which round it names -- or remove it entirely. And a round covering
+   some-but-not-all legs renders under EACH of those legs, so a per-row swap
+   would leave its twin showing the old pill. A target that only sometimes
+   covers what changed is worse than one that always does.
+
+   WHICH capture button shows when is not decided here -- `_capture_actions.html`
+   owns that, shared with Home's "Coming up" rows. #}
+
+{% from "_capture_actions.html" import capture_actions %}
+
+{% macro status_pill(outcome) -%}
+  {%- if outcome is none -%}<span class="pill p-quiet">Not applied</span>
+  {%- elif outcome.value == "applied" -%}<span class="pill p-ok">Applied</span>
+  {%- elif outcome.value == "won" -%}<span class="pill p-danger">Won</span>
+  {%- elif outcome.value == "paid" -%}<span class="pill p-ok">Secured</span>
+  {%- elif outcome.value == "lost" -%}<span class="pill p-quiet">Lost</span>
+  {%- else -%}<span class="pill p-quiet">Not applying</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{# One round: where you stand, what it is, when, and what you can do about
+   it. The date column leads with the one moment that matters next -- bold,
+   from `primary_anchor` -- and demotes the rest underneath, which is the
+   whole point of replacing the six-column table: most of those cells were
+   empty, and the one you needed was not the one you read first.
+
+   Every moment renders dual (JST + your timezone) including the demoted
+   ones. A bare JST date is not the same day everywhere. #}
+{% macro round_row(row, tz) %}
+{% set r = row.round_ %}
+{# `primary_at_utc` is the NEXT moment ahead of now, or the last one behind
+   it when they have all passed -- so "in the past" is exactly "the leading
+   moment is behind us". #}
+{% set past = row.primary_at_utc is not none and row.primary_at_utc <= now %}
+{# Anchor is a StrEnum, so `deadline_label("closes")` resolves the same entry
+   `deadline_label(Anchor.CLOSES)` does -- no second label table needed here. #}
+{% set lead = row.primary_anchor.value if row.primary_anchor else none %}
+<div class="rnd2{% if past %} past{% endif %}">
+  <span>{{ status_pill(row.outcome) }}</span>
+  <span class="nm">{{ r.label }}<em>{% if r.label_en %}{{ r.label_en }} · {% endif %}{{ round_kind_label(r.kind) }}</em></span>
+  <span class="dts">
+    {% if row.primary_anchor %}<b>{{ deadline_label(row.primary_anchor) | capitalize }} {{ dual(row.primary_at_utc, tz) }}</b>{% endif %}
+    {% for anchor, ts in [
+         ("opens", r.opens_at_utc), ("closes", r.closes_at_utc),
+         ("results", r.results_at_utc), ("payment", r.payment_deadline_at_utc)] %}
+      {% if ts is not none and anchor != lead %}
+      <span class="more">{{ deadline_label(anchor) | capitalize }} {{ dual(ts, tz) }}</span>
+      {% endif %}
+    {% endfor %}
+    {% if r.notes %}<span class="more">{{ r.notes }}</span>{% endif %}
+  </span>
+  <span class="acts">
+    {% if not past and row.primary_at_utc %}<a class="ics" href="/rounds/{{ r.id }}/ics" title="Add to calendar">📅</a>{% endif %}
+    {% if r.url %}<a class="ics" href="{{ r.url }}" target="_blank" rel="noopener" title="Round page">🔗</a>{% endif %}
+    {{ capture_actions(row, r.id, "#concert-rounds") }}
+  </span>
+</div>
+<!-- /rnd -->
+{% endmacro %}
+
+{% macro rounds_or_note(rows, tz, note) %}
+<div class="rnds">
+  {% for row in rows %}{{ round_row(row, tz) }}{% else %}<p class="dim tiny">{{ note }}</p>{% endfor %}
+</div>
+{% endmacro %}
+
+<div class="crounds" id="concert-rounds">
+  {# "Next for you" -- the nearest moment on THIS concert that still wants
+     something from the reader. Absent entirely when they have no standing
+     and nothing is open: a heading over a blank is worse than no block. #}
+  {% if next_row %}
+  <div class="standing">
+    <div>
+      <div class="l">Next for you</div>
+      <div class="w">{{ next_row.round_.label }}{% if next_row.primary_anchor %} — {{ deadline_label(next_row.primary_anchor) }}{% endif %}</div>
+      <div class="s">{% if next_row.primary_at_utc %}{{ dual(next_row.primary_at_utc, tz) }}{% else %}No date announced yet{% endif %}</div>
+    </div>
+    {{ status_pill(next_row.outcome) }}
+  </div>
+  <!-- /standing -->
+  {% endif %}
+
+  {# One section per leg, each carrying its OWN date, doors and venue -- the
+     only place those are reliably true, which is why the header no longer
+     summarises them.
+
+     A cancelled leg is dimmed and badged, never hidden: invariant 2 keeps
+     the row alive because every round's applies_to points at it, and hiding
+     it would take its rounds down with it. #}
+  {% for group in leg_groups %}
+  {% set day = group.day %}
+  {% set vtag = day_venue_tags.get(day.id) %}
+  <div class="leg{% if day.cancelled %} off{% endif %}">
+    <div class="leghead">
+      {# A leg whose date has passed is struck through on the heading only --
+         putting `past` on the section would strike its rounds too, and a
+         finished show's rounds still record what you did. #}
+      <h3 class="leg-heading{% if day.starts_at_utc < now %} past{% endif %}">{{ day.label }}{% if day.cancelled %} <span class="badge cancelled">Cancelled</span>{% endif %}</h3>
+      <span class="lv">
+        {{ dual(day.starts_at_utc, tz) }}{% if day.doors_at_utc %} · doors {{ dual(day.doors_at_utc, tz) }}{% endif %}
+        <span class="lvenue">{% if vtag %}📍 {% if vtag.location_url %}<a href="{{ vtag.location_url }}" target="_blank" rel="noopener">{{ vtag.name }}</a>{% else %}{{ vtag.name }}{% endif %}{% if vtag.region %} · {{ vtag.region }}{% endif %}{% elif day.venue %}📍 {{ day.venue }}{% endif %}{% if day.venue_address %} — {{ day.venue_address }}{% endif %}{% if day.city %} · {{ day.city }}{% endif %}</span>
+      </span>
+    </div>
+    {{ rounds_or_note(group.rounds, tz, "No rounds yet for this leg.") }}
+  </div>
+  {% endfor %}
+
+  {# Last, and only when it has something in it. This group is NOT "everything
+     not leg-specific": a round naming only cancelled legs sits under those
+     legs. What lands here is a round tied to no leg at all, or one covering
+     every live leg -- where repeating it under each would bury the rounds
+     that really are leg-specific. #}
+  {% if all_legs_rows %}
+  <div class="leg">
+    <div class="leghead"><h3 class="leg-heading">{% if leg_groups %}All legs{% else %}Rounds{% endif %}</h3></div>
+    {{ rounds_or_note(all_legs_rows, tz, "") }}
+  </div>
+  {% endif %}
+
+  {% if not leg_groups and not all_legs_rows %}
+  <p class="dim">No performances yet.</p>
+  {% endif %}
+</div>
