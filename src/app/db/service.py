@@ -992,8 +992,11 @@ async def active_concerts_missing_member(
 
 async def tag_picker_context(session: AsyncSession) -> dict:
     """Data the shared tag-picker partial needs: tags grouped by kind, plus
-    the two JSON blobs its client-side script reads (group->members for
+    the two lookup maps its client-side script reads (group->members for
     auto-populating artists, and id->name for rendering selected chips).
+    Returns plain dicts, NOT pre-serialized JSON -- the template hands them
+    to Jinja's `| tojson`, which must serialize the object itself so it can
+    escape `<`/`>`/`&` out of the surrounding <script> block.
     Shared by the new-concert form and the URL-import draft form."""
     tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
     by_kind: dict[str, list[Tag]] = {}
@@ -1007,7 +1010,7 @@ async def tag_picker_context(session: AsyncSession) -> dict:
             "members": [{"id": m.id, "name": m.name} for m in await group_members(session, g.id)],
         }
     tag_names = {t.id: t.name for t in tags}
-    return {"by_kind": by_kind, "groups_json": groups_data, "tag_names_json": tag_names}
+    return {"by_kind": by_kind, "groups": groups_data, "tag_names": tag_names}
 
 
 async def _is_attached(session: AsyncSession, concert_id: int, tag_id: int) -> bool:

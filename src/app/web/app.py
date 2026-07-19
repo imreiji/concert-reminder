@@ -216,15 +216,13 @@ def create_app() -> FastAPI:
             db_user = await session.get(User, user.id)
             if db_user:
                 tz, tz_auto = db_user.timezone, db_user.tz_auto
-        import json as _json
-
         from app.db.service import tag_picker_context
         from app.domain.types import ConcertKind as _CK
         from app.domain.types import TagKind as _TK
 
-        picker = await tag_picker_context(session) if user else {
-            "by_kind": grouped_tags(tags), "groups_json": {}, "tag_names_json": {},
-        }
+        # index.html only ever reads by_kind (it has no tag picker), so the
+        # anonymous fallback supplies just that.
+        picker = await tag_picker_context(session) if user else {"by_kind": grouped_tags(tags)}
         region_links = region_sidebar_links(picker["by_kind"].get("venue", []), tag, sort)
         selected_tags = set(tag)
         query = q.strip().lower()
@@ -251,8 +249,6 @@ def create_app() -> FastAPI:
                 "all_tags": tags,
                 "by_kind": picker["by_kind"],
                 "region_links": region_links,
-                "groups_json": _json.dumps(picker["groups_json"]),
-                "tag_names_json": _json.dumps(picker["tag_names_json"]),
                 "selected_tags": selected_tags,
                 "visible_concert_ids": visible_concert_ids,
                 "open_concert_ids": open_concert_ids,

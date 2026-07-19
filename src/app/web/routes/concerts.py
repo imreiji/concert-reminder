@@ -24,7 +24,6 @@ the source material. Conversion to UTC happens here, at the boundary,
 via domain.timezones.jst_to_utc. Nowhere else.
 """
 
-import json
 import re
 from datetime import UTC, datetime
 
@@ -442,9 +441,10 @@ async def new_concert_form(
         {
             "user": user, "kinds": list(RoundKind), "concert_kinds": list(ConcertKind),
             "by_kind": picker["by_kind"],
-            "groups_json": json.dumps(picker["groups_json"]),
-            "tag_names_json": json.dumps(picker["tag_names_json"]),
-            "initial_selected_json": "{}",
+            # Raw dicts, never json.dumps -- the template applies `| tojson`.
+            "groups": picker["groups"],
+            "tag_names": picker["tag_names"],
+            "initial_selected": {},
         },
     )
 
@@ -626,9 +626,10 @@ async def edit_concert_form(
             "user": user, "concert": concert, "kinds": list(RoundKind),
             "concert_kinds": list(ConcertKind),
             "by_kind": picker["by_kind"],
-            "groups_json": json.dumps(picker["groups_json"]),
-            "tag_names_json": json.dumps(picker["tag_names_json"]),
-            "initial_selected_json": json.dumps(initial_selected),
+            # Raw dicts, never json.dumps -- the template applies `| tojson`.
+            "groups": picker["groups"],
+            "tag_names": picker["tag_names"],
+            "initial_selected": initial_selected,
             "rounds_with_leg": rounds_with_leg,
         },
     )
