@@ -1068,6 +1068,30 @@ def _result_moment(round_: Round) -> datetime | None:
     return round_.results_at_utc or round_.closes_at_utc
 
 
+def capture_gates(
+    round_: Round | None, outcome: LotteryOutcome | None, now: datetime
+) -> tuple[bool, bool]:
+    """The two gates on WHICH capture buttons a row may offer, as ONE
+    definition shared by every surface that offers them (Home's "Coming up"
+    rows and the concert page's per-leg round rows).
+
+    They are shared rather than re-derived because the template rules keyed
+    off them are shared too (`_capture_actions.html`): a second copy here
+    would let one surface start offering "I have applied" on a round the
+    other still calls unopened, and nothing would fail.
+
+    `round_` is None for a row with no round behind it at all (an EVENT_START
+    row derived from a ConcertDay), where neither gate can ever open."""
+    can_capture = round_ is not None and _round_has_opened(round_, now)
+    moment = _result_moment(round_) if round_ is not None else None
+    can_report_result = (
+        can_capture
+        and outcome is LotteryOutcome.APPLIED
+        and (moment is None or moment <= now)
+    )
+    return can_capture, can_report_result
+
+
 async def my_deadline_rows(
     session: AsyncSession,
     user_id: int,
@@ -1128,18 +1152,12 @@ async def my_deadline_rows(
         venue_tags = [t.name for t in concert.tags if t.kind is TagKind.VENUE] if concert else []
         round_ = rounds.get(d.round_id) if d.round_id is not None else None
         outcome = outcomes.get(d.round_id) if d.round_id is not None else None
-        # An EVENT_START row has no round, so neither gate can ever open.
-        can_capture = round_ is not None and _round_has_opened(round_, now)
-        moment = _result_moment(round_) if round_ is not None else None
+        can_capture, can_report_result = capture_gates(round_, outcome, now)
         rows.append(DeadlineRow(
             deadline=d,
             outcome=outcome,
             can_capture=can_capture,
-            can_report_result=(
-                can_capture
-                and outcome is LotteryOutcome.APPLIED
-                and (moment is None or moment <= now)
-            ),
+            can_report_result=can_report_result,
             # Same display rule as the tile macro: >1 venue tag collapses to
             # "Multiple", one wins outright, and the free-text venue is only a
             # fallback when there is no VENUE tag at all.
@@ -1150,6 +1168,140 @@ async def my_deadline_rows(
             starts_at_utc=live_days[0].starts_at_utc if live_days else None,
         ))
     return rows
+
+
+# ── Concert page: rounds grouped by leg ───────────────────────────────────
+
+
+@dataclass(frozen=True)
+class RoundRow:
+    """One round as the concert page renders it: the round itself, the
+    viewer's standing on it, and the same two capture gates a Home row
+    carries -- resolved here, from `capture_gates`, so both surfaces cannot
+    disagree about which buttons a round may offer.
+
+    `primary_anchor`/`primary_at_utc` are the one moment the row leads with.
+    A round can carry four timestamps and the row shows them all, but only
+    one is bold, and picking it is a timing rule rather than presentation.
+    """
+
+    round_: Round
+    outcome: LotteryOutcome | None
+    can_capture: bool
+    can_report_result: bool
+    primary_anchor: Anchor | None = None
+    primary_at_utc: datetime | None = None
+
+
+@dataclass(frozen=True)
+class LegRounds:
+    """One leg and the rounds that apply to it. Cancelled legs get a group
+    like any other -- invariant 2 keeps the row alive and the page dims it
+    rather than hiding it, so dropping it here would lose its rounds."""
+
+    day: ConcertDay
+    rounds: list[RoundRow]
+
+
+def _primary_anchor(round_: Round, now: datetime) -> tuple[Anchor | None, datetime | None]:
+    """The next moment on this round still ahead of `now`; failing that, the
+    last one behind it. The fallback matters because a concert page shows
+    finished rounds too -- leading a closed round with nothing would render a
+    blank where every other row has a date."""
+    moments = [
+        (anchor, ts)
+        for anchor, ts in (
+            (Anchor.OPENS, round_.opens_at_utc),
+            (Anchor.CLOSES, round_.closes_at_utc),
+            (Anchor.RESULTS, round_.results_at_utc),
+            (Anchor.PAYMENT, round_.payment_deadline_at_utc),
+        )
+        if ts is not None
+    ]
+    if not moments:
+        return None, None
+    moments.sort(key=lambda m: m[1])
+    ahead = [m for m in moments if m[1] > now]
+    return ahead[0] if ahead else moments[-1]
+
+
+async def concert_round_rows(
+    session: AsyncSession,
+    user_id: int | None,
+    concert: Concert,
+    now: datetime | None = None,
+) -> tuple[list[LegRounds], list[RoundRow]]:
+    """Every round on `concert`, grouped for the concert page: one group per
+    leg (in date order, cancelled legs included), plus the all-legs group.
+
+    A round belongs to a leg when that leg's id is in its `applies_to`. Two
+    cases skip the per-leg groups and land in the all-legs list instead: an
+    empty/None `applies_to` (never tied to a leg in the first place), and an
+    `applies_to` covering every LIVE leg -- "applies to all of them" is not a
+    per-leg fact, and repeating the same round under each leg would bury the
+    ones that really are leg-specific. A round covering some but not all legs
+    is a real fact about each, so it appears under each of them.
+
+    `user_id` is None for a caller with no standing to show; the rows still
+    render, just with `outcome` None throughout. Outcomes load in ONE query
+    for the whole concert, not one per round.
+    """
+    now = now or _now()
+    days = list((await session.execute(
+        select(ConcertDay)
+        .where(ConcertDay.concert_id == concert.id)
+        .order_by(ConcertDay.starts_at_utc, ConcertDay.id)
+    )).scalars())
+    rounds = list((await session.execute(
+        select(Round)
+        .where(Round.concert_id == concert.id)
+        # Same ordering the board uses: soonest close first, undated last.
+        .order_by(Round.closes_at_utc.is_(None), Round.closes_at_utc,
+                  Round.opens_at_utc, Round.id)
+    )).scalars())
+    if not rounds and not days:
+        return [], []
+
+    outcomes: dict[int, LotteryOutcome] = {}
+    if user_id is not None and rounds:
+        outcomes = {
+            o.round_id: o.outcome
+            for o in (await session.execute(
+                select(RoundOutcome).where(
+                    RoundOutcome.user_id == user_id,
+                    RoundOutcome.round_id.in_([r.id for r in rounds]),
+                )
+            )).scalars()
+        }
+
+    day_ids = {d.id for d in days}
+    live_leg_ids = {d.id for d in days if not d.cancelled}
+    by_leg: dict[int, list[RoundRow]] = {d.id: [] for d in days}
+    all_legs: list[RoundRow] = []
+
+    for r in rounds:
+        outcome = outcomes.get(r.id)
+        can_capture, can_report_result = capture_gates(r, outcome, now)
+        anchor, at_utc = _primary_anchor(r, now)
+        row = RoundRow(
+            round_=r, outcome=outcome,
+            can_capture=can_capture, can_report_result=can_report_result,
+            primary_anchor=anchor, primary_at_utc=at_utc,
+        )
+        # Ids for legs that no longer exist are dropped rather than trusted:
+        # applies_to is plain JSON with no FK behind it, so a deleted leg can
+        # leave one dangling.
+        targets = {i for i in (r.applies_to or []) if i in day_ids}
+        # `live_leg_ids and` guards the vacuous case: with every leg
+        # cancelled, "covers every live leg" would be true of every round and
+        # the per-leg groups would all empty out.
+        if not targets or (live_leg_ids and live_leg_ids <= targets):
+            all_legs.append(row)
+            continue
+        for leg_id in targets:
+            by_leg[leg_id].append(row)
+
+    return [LegRounds(day=d, rounds=by_leg[d.id]) for d in days], all_legs
 
 
 # ── Discover status ───────────────────────────────────────────────────────

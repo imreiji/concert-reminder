@@ -9,7 +9,12 @@
    round on ONE leg, where "I have applied" has a single meaning. A board card
    is a whole campaign with a multi-rung ladder, so the same button there would
    be ambiguous -- and a destructive control inside something being scanned to
-   read is a mode error. Decided deliberately; don't move them. #}
+   read is a mode error. Decided deliberately; don't move them.
+
+   WHICH button shows when is not decided here -- `_capture_actions.html`
+   owns that, shared with the concert page's round rows. #}
+
+{% from "_capture_actions.html" import capture_actions %}
 
 {% macro status_pill(outcome) -%}
   {%- if outcome is none -%}<span class="pill p-quiet">Not applied</span>
@@ -44,57 +49,9 @@
          there is nothing to record against -- render no form at all rather
          than one that would post to /rounds/None/outcome. #}
       {% if d.round_id %}
-        {# `upcoming_deadlines` emits one row per FUTURE anchor, so one round
-           can produce three or four rows here. Gating on row.can_capture
-           (the round has opened) stops every one of them from offering an
-           independent "I have applied" against a round nobody could have
-           entered yet -- an irreversible write, since record_round_outcome
-           refuses to overwrite a starting state. #}
-        {% if not row.can_capture %}
-        <span class="done">Not open yet</span>
-        {% elif row.outcome is none %}
-        <form hx-post="/rounds/{{ d.round_id }}/outcome" hx-target="#deadline-rows"
-              hx-swap="outerHTML" method="post" action="/rounds/{{ d.round_id }}/outcome">
-          <input type="hidden" name="outcome" value="applied">
-          <button class="act yes" type="submit">I have applied</button>
-        </form>
-        {# data-prune-title, not data-name: base.html's shared filterChips()
-           selector claims [data-name] globally. The title is user-controlled
-           text and reaches the dialog through dataset, never through an
-           inline on* handler (invariant 7). #}
-        <form hx-post="/rounds/{{ d.round_id }}/outcome" hx-target="#deadline-rows"
-              hx-swap="outerHTML" method="post" action="/rounds/{{ d.round_id }}/outcome"
-              data-prune-title="{{ d.concert_title }}" data-prune-url="/concerts/{{ d.event_id }}">
-          <input type="hidden" name="outcome" value="not_applied">
-          <button class="act no" type="submit">Not applying</button>
-        </form>
-        {% elif row.can_report_result %}
-        {# The web's only exit from APPLIED. WON/LOST live on the DM buttons
-           too, but a dm_blocked user -- or a deploy with bot_enabled=False --
-           has no DM to press, and record_round_outcome will not overwrite a
-           starting state, so without these the row read "Nothing to do"
-           forever and the card never left the Applied column. WON/LOST can be
-           set regardless of current state, so this needs no service change. #}
-        <form hx-post="/rounds/{{ d.round_id }}/outcome" hx-target="#deadline-rows"
-              hx-swap="outerHTML" method="post" action="/rounds/{{ d.round_id }}/outcome">
-          <input type="hidden" name="outcome" value="won">
-          <button class="act yes" type="submit">I won</button>
-        </form>
-        <form hx-post="/rounds/{{ d.round_id }}/outcome" hx-target="#deadline-rows"
-              hx-swap="outerHTML" method="post" action="/rounds/{{ d.round_id }}/outcome">
-          <input type="hidden" name="outcome" value="lost">
-          <button class="act no" type="submit">I lost</button>
-        </form>
-        {# PAID stays reachable only from WON, matching the service rule. #}
-        {% elif row.outcome.value == "won" %}
-        <form hx-post="/rounds/{{ d.round_id }}/outcome" hx-target="#deadline-rows"
-              hx-swap="outerHTML" method="post" action="/rounds/{{ d.round_id }}/outcome">
-          <input type="hidden" name="outcome" value="paid">
-          <button class="act yes" type="submit">Paid</button>
-        </form>
-        {% else %}
-        <span class="done">Nothing to do</span>
-        {% endif %}
+        {{ capture_actions(row, d.round_id, "#deadline-rows",
+                           prune_title=d.concert_title,
+                           prune_url="/concerts/" ~ d.event_id) }}
       {% endif %}
     </span>
   </div>
