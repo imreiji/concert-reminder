@@ -18,6 +18,7 @@ from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual, utc_to_jst
 from app.domain.types import TagKind
+from app.ops import run_checks
 from app.scheduler import heartbeat
 from app.web import auth
 from app.web.routes import calendar as calendar_routes
@@ -151,13 +152,22 @@ def create_app() -> FastAPI:
     app.include_router(terms_routes.router)
 
     @app.get("/healthz")
-    async def healthz() -> dict:
+    async def healthz(session: AsyncSession = Depends(get_session)) -> dict:
         scheduler_ok, last_tick = heartbeat.status()
+        # run_checks never raises: every check is wrapped, so a broken check
+        # degrades to ok=false rather than 500ing the endpoint the uptime
+        # monitor is watching.
+        results = await run_checks(session)
         return {
-            "ok": scheduler_ok,  # overall health follows the scheduler on purpose
+            # `ok` deliberately still follows the scheduler ALONE. UptimeRobot
+            # keyword-matches '"ok":true'; folding degraded checks in here would
+            # silently redefine an existing external alert. The detail lives in
+            # `checks`, and the scheduler DMs on state change.
+            "ok": scheduler_ok,
             "bot_enabled": settings.bot_enabled,
             "scheduler_ok": scheduler_ok,
             "scheduler_last_tick": last_tick,
+            "checks": {r.name: {"ok": r.ok, "detail": r.detail} for r in results},
         }
 
     @app.get("/", response_class=HTMLResponse)

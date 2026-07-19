@@ -41,6 +41,7 @@ from app.db.service import (
     DueReminder,
     due_notifications,
     due_reminders,
+    evaluate_and_alert,
     leg_cancelled_context,
     mark_notification_sent,
     mark_sent,
@@ -48,6 +49,7 @@ from app.db.service import (
     record_dm_outcome,
 )
 from app.db.session import SessionMaker
+from app.ops import run_checks
 from app.scheduler import heartbeat
 
 log = logging.getLogger(__name__)
@@ -55,6 +57,8 @@ log = logging.getLogger(__name__)
 TICK_SECONDS = 60
 SEND_CONCURRENCY = 5  # bounded in-flight Discord calls; discord.py's own
                       # rate limiter is the real backstop beyond this.
+HEALTH_EVERY_N_TICKS = 5
+_tick_count = 0
 
 
 class DeliveryOutcome(Enum):
@@ -122,6 +126,16 @@ async def _send_notification(bot, note, ctx) -> DeliveryOutcome:
 
 async def tick(bot) -> int:
     """One scheduler pass. Returns how many messages were delivered."""
+    # Counted BEFORE any delivery work, not after it. reminder_loop catches
+    # tick exceptions and retries forever, so a tick that raises every minute
+    # (a DB lock, a due_reminders regression, an HTTPException escaping a send)
+    # would otherwise leave the counter frozen and health evaluation would never
+    # run again -- silence in exactly the scenario that most needs an alert.
+    # heartbeat.beat() fires before tick(), so scheduler_ok stays true too and
+    # the uptime monitor would not notice either.
+    global _tick_count
+    _tick_count += 1
+
     now = datetime.now(UTC)
     delivered = 0
     sem = asyncio.Semaphore(SEND_CONCURRENCY)
@@ -161,6 +175,25 @@ async def tick(bot) -> int:
                 )
 
         await session.commit()
+
+        # Health evaluation runs AFTER the delivery commit and swallows its own
+        # errors. Both halves matter. By this point the tick has already put
+        # DMs on the wire -- an irreversible side effect -- and recorded them
+        # as sent; an exception raised before the commit would roll that
+        # bookkeeping back while the messages stayed delivered, and the next
+        # tick would send every one of them again. Monitoring must never be
+        # able to cause duplicate reminders, so it commits separately and its
+        # failures are logged, not raised.
+        #
+        # Every 5th tick (~5 min): disk stats and file reads do not need
+        # per-minute resolution, and the slower cadence damps flapping.
+        if _tick_count % HEALTH_EVERY_N_TICKS == 0:
+            try:
+                await evaluate_and_alert(session, await run_checks(session), now)
+                await session.commit()
+            except Exception:
+                log.exception("health evaluation failed; reminder delivery was unaffected")
+                await session.rollback()
     return delivered
 
 
