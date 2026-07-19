@@ -21,7 +21,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -891,18 +891,24 @@ def _next_deadline(rounds: list[Round], now: datetime) -> datetime | None:
 
 
 async def board_cards(
-    session: AsyncSession, user_id: int, now: datetime | None = None
+    session: AsyncSession, user_id: int, now: datetime | None = None,
+    concert_ids: set[int] | None = None,
 ) -> tuple[dict[Column, list[BoardCard]], int]:
     """This user's campaigns, bucketed into the four board columns.
 
     Returns (columns, open_total). `open_total` is the PRE-cap size of the
     open column, so a template can render "+N more" -- columns[Column.OPEN]
     itself is truncated to OPEN_COLUMN_LIMIT, soonest deadline first.
+
+    `concert_ids` lets Home resolve `tracked_concert_ids` once and share it
+    with `my_deadline_rows`; None resolves it here.
     """
     now = now or _now()
     columns: dict[Column, list[BoardCard]] = {c: [] for c in Column}
 
-    ids = await tracked_concert_ids(session, user_id)
+    ids = concert_ids if concert_ids is not None else await tracked_concert_ids(
+        session, user_id
+    )
     if not ids:
         return columns, 0
 
@@ -987,15 +993,21 @@ async def board_cards(
 
 
 async def my_upcoming_deadlines(
-    session: AsyncSession, user_id: int, now: datetime | None = None, limit: int = 10
+    session: AsyncSession, user_id: int, now: datetime | None = None, limit: int = 10,
+    concert_ids: set[int] | None = None,
 ) -> list[UpcomingDeadline]:
     """The index page's deadline list, narrowed to concerts this user tracks.
 
     Delegates to upcoming_deadlines with an id filter rather than filtering
     its result: that keeps the cancelled-leg rule (is_round_cancelled) in one
     place, and keeps the limit meaningful (see upcoming_deadlines' docstring).
+
+    `concert_ids` lets a caller that already resolved `tracked_concert_ids`
+    (Home renders the board from the same set) pass it in; None resolves it.
     """
-    ids = await tracked_concert_ids(session, user_id)
+    ids = concert_ids if concert_ids is not None else await tracked_concert_ids(
+        session, user_id
+    )
     return await upcoming_deadlines(session, now=now, limit=limit, concert_ids=ids)
 
 
@@ -1019,12 +1031,41 @@ class DeadlineRow:
     EVENT_START row derived from a ConcertDay). The template distinguishes
     those two by `deadline.round_id`, which is the only thing that can be
     posted to.
+
+    `can_capture` and `can_report_result` are the two gates on WHICH buttons
+    the row may offer, resolved here for the same reason: they are round
+    timing rules, not presentation. They matter because `upcoming_deadlines`
+    emits one row per future ANCHOR, so a single round can produce three or
+    four rows and each one would otherwise carry its own independent capture
+    buttons -- including on a round that has not opened yet, where recording
+    APPLIED is both false and irreversible (`record_round_outcome` refuses to
+    overwrite a starting state).
     """
 
     deadline: UpcomingDeadline
     outcome: LotteryOutcome | None
     venue: str | None = None
     starts_at_utc: datetime | None = None
+    # Is this row's round something you could have acted on at all yet?
+    can_capture: bool = False
+    # Has this round's result become knowable, so "I won"/"I lost" are real
+    # answers rather than guesses?
+    can_report_result: bool = False
+
+
+def _round_has_opened(round_: Round, now: datetime) -> bool:
+    """You cannot have applied to a round that has not opened. A round with no
+    open time at all counts as opened -- plenty of catalogue rows only carry a
+    close, and those are actionable now."""
+    return round_.opens_at_utc is None or round_.opens_at_utc <= now
+
+
+def _result_moment(round_: Round) -> datetime | None:
+    """When this round's outcome becomes knowable: the announced results time
+    if there is one, otherwise the close (results follow applications
+    closing). None means the round carries neither, so there is nothing left
+    to wait for."""
+    return round_.results_at_utc or round_.closes_at_utc
 
 
 async def my_deadline_rows(
@@ -1032,16 +1073,23 @@ async def my_deadline_rows(
     user_id: int,
     now: datetime | None = None,
     limit: int = DEADLINE_ROWS_LIMIT,
+    concert_ids: set[int] | None = None,
 ) -> list[DeadlineRow]:
     """`my_upcoming_deadlines`, decorated with everything a Home row renders.
 
-    Two extra reads, both batched over the already-truncated row set rather
-    than per row: this user's RoundOutcome for the rounds on show, and the
-    concerts those rows belong to (for the venue and first live date shown
-    under the title).
+    Three extra reads, all batched over the already-truncated row set rather
+    than per row: this user's RoundOutcome for the rounds on show, the rounds
+    themselves (for the two capture gates), and the concerts those rows belong
+    to (for the venue and first live date shown under the title).
+
+    `concert_ids` is the caller's already-computed `tracked_concert_ids`, so a
+    page rendering both the board and these rows resolves it once instead of
+    twice; None means resolve it here.
     """
     now = now or _now()
-    deadlines = await my_upcoming_deadlines(session, user_id, now=now, limit=limit)
+    deadlines = await my_upcoming_deadlines(
+        session, user_id, now=now, limit=limit, concert_ids=concert_ids
+    )
     if not deadlines:
         return []
 
@@ -1052,6 +1100,12 @@ async def my_deadline_rows(
             select(RoundOutcome).where(
                 RoundOutcome.user_id == user_id, RoundOutcome.round_id.in_(round_ids)
             )
+        )).scalars()
+    } if round_ids else {}
+    rounds: dict[int, Round] = {
+        r.id: r
+        for r in (await session.execute(
+            select(Round).where(Round.id.in_(round_ids))
         )).scalars()
     } if round_ids else {}
 
@@ -1072,9 +1126,20 @@ async def my_deadline_rows(
             (day for day in concert.days if not day.cancelled), key=lambda day: day.starts_at_utc
         ) if concert else []
         venue_tags = [t.name for t in concert.tags if t.kind is TagKind.VENUE] if concert else []
+        round_ = rounds.get(d.round_id) if d.round_id is not None else None
+        outcome = outcomes.get(d.round_id) if d.round_id is not None else None
+        # An EVENT_START row has no round, so neither gate can ever open.
+        can_capture = round_ is not None and _round_has_opened(round_, now)
+        moment = _result_moment(round_) if round_ is not None else None
         rows.append(DeadlineRow(
             deadline=d,
-            outcome=outcomes.get(d.round_id) if d.round_id is not None else None,
+            outcome=outcome,
+            can_capture=can_capture,
+            can_report_result=(
+                can_capture
+                and outcome is LotteryOutcome.APPLIED
+                and (moment is None or moment <= now)
+            ),
             # Same display rule as the tile macro: >1 venue tag collapses to
             # "Multiple", one wins outright, and the free-text venue is only a
             # fallback when there is no VENUE tag at all.
@@ -1088,6 +1153,37 @@ async def my_deadline_rows(
 
 
 # ── Discover status ───────────────────────────────────────────────────────
+
+
+def discoverable_concert_criterion():
+    """What /discover actually shows, as a SQL criterion.
+
+    Hide a concert whose every existing leg is cancelled -- it has no valid
+    dates left (still reachable directly at /concerts/{event_id}). A concert
+    with NO days at all (a fresh draft) keeps showing, sorted last.
+
+    One definition, two callers: the /discover query itself and Home's
+    teaser count, which used to count every Concert row and so advertised
+    more than the link led to.
+
+    .correlate(Concert) is required: /discover's "event" sort also outerjoins
+    ConcertDay onto the same statement, and without it SQLAlchemy's
+    auto-correlation sees ConcertDay in both places and correlates it away
+    from these subqueries too, leaving them with zero FROM clauses."""
+    has_any_day = exists().where(ConcertDay.concert_id == Concert.id).correlate(Concert)
+    has_live_day = (
+        exists()
+        .where(ConcertDay.concert_id == Concert.id, ConcertDay.cancelled.is_(False))
+        .correlate(Concert)
+    )
+    return ~has_any_day | has_live_day
+
+
+async def discoverable_concert_count(session: AsyncSession) -> int:
+    """How many concerts /discover would list -- what Home's teaser counts."""
+    return (await session.execute(
+        select(func.count()).select_from(Concert).where(discoverable_concert_criterion())
+    )).scalar_one()
 
 
 @dataclass(frozen=True)

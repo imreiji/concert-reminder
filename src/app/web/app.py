@@ -6,12 +6,11 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.db.models import Concert, User
+from app.db.models import User
 from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual, utc_to_jst
@@ -113,19 +112,22 @@ def create_app() -> FastAPI:
         user: auth.SessionUser | None = Depends(auth.current_user),
         session: AsyncSession = Depends(get_session),
     ):
-        """"Where do I stand" -- four blocks: Closes next, the campaign board,
+        """"Where do I stand" -- four blocks: Up next, the campaign board,
         Coming up, and a teaser out to Discover. Signed out it is the hero
         alone, which is what the old index already did.
 
         A thin shell: every query below is a single service call, and the only
-        logic here is picking which row is "closes next". Note the deliberate
+        logic here is picking which row is "up next". Note the deliberate
         ABSENCE of a limit argument on my_deadline_rows -- POST
         /rounds/{id}/outcome re-renders the same fragment and also omits it, so
         both take DEADLINE_ROWS_LIMIT and the htmx swap can never change the
         number of rows on the page."""
-        from sqlalchemy import func as sa_func
-
-        from app.db.service import board_cards, my_deadline_rows
+        from app.db.service import (
+            board_cards,
+            discoverable_concert_count,
+            my_deadline_rows,
+            tracked_concert_ids,
+        )
 
         ctx = {
             "user": user, "tz": settings.default_timezone, "tz_auto": True,
@@ -135,8 +137,12 @@ def create_app() -> FastAPI:
             db_user = await session.get(User, user.id)
             if db_user:
                 ctx["tz"], ctx["tz_auto"] = db_user.timezone, db_user.tz_auto
-            columns, open_total = await board_cards(session, user.id)
-            rows = await my_deadline_rows(session, user.id)
+            # Resolved ONCE and handed to both: the board and the deadline
+            # rows are two views of the same tracked set, and each used to
+            # re-derive it with its own query on every render.
+            tracked = await tracked_concert_ids(session, user.id)
+            columns, open_total = await board_cards(session, user.id, concert_ids=tracked)
+            rows = await my_deadline_rows(session, user.id, concert_ids=tracked)
             # Column is a StrEnum, but an Enum member does not hash equal to
             # its value -- so a template doing columns["open"] would silently
             # miss. Re-key to plain strings at the boundary.
@@ -144,17 +150,19 @@ def create_app() -> FastAPI:
                 "columns": {col.value: cards for col, cards in columns.items()},
                 "open_total": open_total,
                 "rows": rows,
-                # The nearest thing the user can actually act on: a row with a
-                # round behind it. Falls back to the soonest row of any kind
-                # (an event start) so the block is never empty when the list
-                # is not.
-                "closes_next": next(
+                # The nearest thing that needs the user's attention: a row
+                # with a round behind it, whatever anchor that row carries.
+                # Falls back to the soonest row of any kind (an event start)
+                # so the block is never empty when the list is not. The
+                # template heads it "Up next", not "Closes next" -- see
+                # home.html for why narrowing this to Anchor.CLOSES would be
+                # the wrong repair.
+                "up_next": next(
                     (r for r in rows if r.deadline.round_id is not None),
                     rows[0] if rows else None,
                 ),
-                "catalogue_count": (
-                    await session.execute(select(sa_func.count()).select_from(Concert))
-                ).scalar_one(),
+                # What /discover would actually LIST, not every Concert row.
+                "catalogue_count": await discoverable_concert_count(session),
             }
         return templates.TemplateResponse(request, "home.html", ctx)
 

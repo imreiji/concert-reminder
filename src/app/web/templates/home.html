@@ -10,13 +10,22 @@
   </section>
 {% else %}
 
-{# 1. Closes next -- ONE item, the nearest thing you can still act on. The
-   list is block 3; this is the answer to "what closes next" on its own. #}
-{% if closes_next %}
-{% set d = closes_next.deadline %}
+{# 1. Up next -- ONE item, the nearest thing that needs your attention. The
+   list is block 3; this is that list's head, on its own.
+
+   The header is deliberately moment-AGNOSTIC. It used to read "Closes next"
+   while the body underneath it said "Opens ...", because the row picked is
+   the soonest one with a round behind it, whatever anchor that row carries
+   -- and the rows[0] fallback can even be an event start. Narrowing the pick
+   to Anchor.CLOSES was the wrong repair: an opening round or a results
+   announcement genuinely needs your attention, and hiding it would hide real
+   urgency. So the header stays honest and the body (below) always names
+   which kind of moment this is. #}
+{% if up_next %}
+{% set d = up_next.deadline %}
 <div class="next">
   <div>
-    <div class="label">Closes next</div>
+    <div class="label">Up next</div>
     <div class="what">
       <a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a> — {{ d.label }}
     </div>
@@ -58,6 +67,8 @@
     <h2>Discover</h2>
     <p>
       {{ catalogue_count }} concert{{ "" if catalogue_count == 1 else "s" }} in the catalogue.
+      {#- The count is what /discover would LIST, not every Concert row:
+          a concert whose every leg is cancelled is hidden there. -#}
       Browse by franchise, group, artist or region — or search everything.
     </p>
   </div>

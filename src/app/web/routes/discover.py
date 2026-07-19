@@ -24,13 +24,17 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import exists, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db.models import Concert, ConcertDay, Tag, User
-from app.db.service import discover_statuses, upcoming_deadlines
+from app.db.service import (
+    discover_statuses,
+    discoverable_concert_criterion,
+    upcoming_deadlines,
+)
 from app.db.session import get_session
 from app.domain.types import ConcertKind, TagKind
 from app.web.auth import SessionUser, current_user
@@ -131,21 +135,10 @@ async def discover(
     stmt = select(Concert).options(
         selectinload(Concert.days), selectinload(Concert.rounds), selectinload(Concert.tags)
     )
-    # Hide a concert whose every existing leg is cancelled -- it has no valid
-    # dates left. Still reachable directly via /concerts/{event_id}. A concert
-    # with NO days at all (e.g. a fresh draft) keeps showing up, sorted last.
-    # .correlate(Concert) is required: the "event" sort branch below also
-    # outerjoins ConcertDay onto this same statement, so without an explicit
-    # correlate() SQLAlchemy's auto-correlation sees ConcertDay in both places
-    # and "correlates it away" from these subqueries too, leaving them with
-    # zero FROM clauses.
-    has_any_day = exists().where(ConcertDay.concert_id == Concert.id).correlate(Concert)
-    has_live_day = (
-        exists()
-        .where(ConcertDay.concert_id == Concert.id, ConcertDay.cancelled.is_(False))
-        .correlate(Concert)
-    )
-    stmt = stmt.where(~has_any_day | has_live_day)
+    # What this page shows lives in ONE place (service.discoverable_concert_criterion),
+    # because Home's "N concerts in the catalogue" teaser has to count exactly
+    # what this link leads to -- it used to count every Concert row instead.
+    stmt = stmt.where(discoverable_concert_criterion())
     # No server-side tag filtering: every concert renders into the DOM tagged
     # with its tag ids, and JS toggles tile visibility -- tag filtering was the
     # slowest part of this page when it round-tripped the server on every click.

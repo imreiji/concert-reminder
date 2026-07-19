@@ -33,7 +33,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.models import Round, User
-from app.db.service import board_cards, ensure_user, my_deadline_rows, record_round_outcome
+from app.db.service import (
+    board_cards,
+    ensure_user,
+    my_deadline_rows,
+    record_round_outcome,
+    tracked_concert_ids,
+)
 from app.db.session import get_session
 from app.domain.types import LotteryOutcome
 from app.web.auth import SessionUser, require_user
@@ -71,14 +77,19 @@ async def record_outcome(
     # No explicit limit here, and none on Home either: both take
     # my_deadline_rows' DEADLINE_ROWS_LIMIT default, which is the only thing
     # keeping this swap from silently changing how many rows the page shows.
-    rows = await my_deadline_rows(session, user.id)
+    #
+    # tracked_concert_ids is resolved ONCE and shared by both queries below,
+    # exactly as GET / does -- the rows and the board are two views of the
+    # same tracked set.
+    tracked = await tracked_concert_ids(session, user.id)
+    rows = await my_deadline_rows(session, user.id, concert_ids=tracked)
     db_user = await session.get(User, user.id)
     tz = db_user.timezone if db_user else settings.default_timezone
 
     # Column is a StrEnum, and an Enum member does not hash equal to its
     # value, so a template doing columns["open"] would silently miss. Re-key
     # at the boundary, exactly as GET / does.
-    columns, open_total = await board_cards(session, user.id)
+    columns, open_total = await board_cards(session, user.id, concert_ids=tracked)
     ctx = {
         "user": user,
         "rows": rows,
