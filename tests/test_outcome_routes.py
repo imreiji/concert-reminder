@@ -107,7 +107,15 @@ async def outcome_for(db, user_id: int, round_id: int) -> LotteryOutcome | None:
 
 
 def post_outcome(client, round_id: int, outcome: str):
-    return client.post(f"/rounds/{round_id}/outcome", data={"outcome": outcome})
+    """Posts as htmx does. Without the HX-Request header the route redirects
+    to Home instead of rendering fragments (the JS-disabled fallback), so the
+    header is what keeps these tests on the 200-and-a-fragment path they are
+    asserting about. The redirect itself is covered in test_home.py."""
+    return client.post(
+        f"/rounds/{round_id}/outcome",
+        data={"outcome": outcome},
+        headers={"HX-Request": "true"},
+    )
 
 
 async def test_i_have_applied_records_applied(client):

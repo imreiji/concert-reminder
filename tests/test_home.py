@@ -39,6 +39,9 @@ from app.web.app import create_app
 
 USER = 4242
 
+# What htmx puts on every request it makes; the outcome route branches on it.
+HX = {"HX-Request": "true"}
+
 
 @pytest_asyncio.fixture()
 async def db():
@@ -341,9 +344,112 @@ async def test_home_and_the_outcome_fragment_render_the_same_row_count(client):
     home_rows = client.get("/").text.count('class="row"')
     assert home_rows == DEADLINE_ROWS_LIMIT
 
-    fragment = client.post(f"/rounds/{round_id}/outcome", data={"outcome": "applied"})
+    fragment = client.post(
+        f"/rounds/{round_id}/outcome", data={"outcome": "applied"}, headers=HX,
+    )
     assert fragment.status_code == 200
     assert fragment.text.count('class="row"') == home_rows
+
+
+# ── the board moves when you record an outcome ───────────────────────────
+
+
+async def test_outcome_response_carries_both_the_rows_and_an_oob_board(client):
+    """The whole point of the swap: the Coming up row AND the board card both
+    update from ONE response. A response with only the rows looks like it
+    worked while the card sits in its old column until a reload -- which is
+    exactly how this shipped."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live")
+        return (await seed.open_round(c, "FC lottery")).id
+
+    round_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{round_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    assert r.status_code == 200
+    # the primary swap: the Coming up fragment
+    assert 'id="deadline-rows"' in r.text
+    # the out-of-band swap: the board, targeting the container id Home renders
+    assert 'id="board"' in r.text
+    assert 'hx-swap-oob="true"' in r.text
+
+
+async def test_recording_an_outcome_moves_the_card_between_columns(client):
+    """Not just "a board came back" -- the card must actually be in its NEW
+    column. A test asserting only the presence of the fragment would let the
+    column logic regress silently."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live")
+        return (await seed.open_round(c, "FC lottery")).id
+
+    round_id = await seeded(client.db, build)
+    login(client)
+
+    before = client.get("/").text
+    assert 'data-column="open" data-event-id="aqours-live"' in before
+
+    r = client.post(f"/rounds/{round_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    assert 'data-column="applied" data-event-id="aqours-live"' in r.text
+    assert 'data-column="open" data-event-id="aqours-live"' not in r.text
+    # and the same board comes back on a full reload, so the swap is not a lie
+    assert 'data-column="applied" data-event-id="aqours-live"' in client.get("/").text
+
+
+async def test_the_board_summary_counts_are_swapped_too(client):
+    """The "N open · N awaiting results" line sits outside the board, so it
+    needs its own OOB fragment -- otherwise the card moves and the counts
+    above it stay stale."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live")
+        return (await seed.open_round(c, "FC lottery")).id
+
+    round_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{round_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    assert 'id="board-summary"' in r.text
+    assert "<strong>0 open</strong>" in r.text
+    assert "1 awaiting results" in r.text
+
+
+async def test_without_htmx_the_outcome_post_redirects_back_to_home(client):
+    """JS disabled: the form is a real POST with a real action, so it must end
+    at a whole page rather than a bare fragment rendered as the document."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live")
+        return (await seed.open_round(c, "FC lottery")).id
+
+    round_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{round_id}/outcome", data={"outcome": "applied"})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"
+    # the write still happened -- the fallback is presentation only
+    assert 'data-column="applied" data-event-id="aqours-live"' in client.get("/").text
+
+
+# ── the card eyebrow ─────────────────────────────────────────────────────
+
+
+async def test_board_card_shows_the_artist_eyebrow(client):
+    """board_cards must eager-load Concert.tags: touching concert.tags in a
+    template with a lazy relationship raises MissingGreenlet under async
+    rendering rather than warning."""
+    async def build(seed):
+        # Title deliberately shares no substring with the seeded ARTIST tag
+        # ("Aqours"), so finding the tag name on the card can only mean the
+        # eyebrow rendered it.
+        c = await seed.concert("ninth-live", title="9th LoveLive")
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    card = html.split('data-event-id="ninth-live"')[1].split("</a>")[0]
+    assert "Aqours" in card
 
 
 # ── the follow-up dialog ─────────────────────────────────────────────────

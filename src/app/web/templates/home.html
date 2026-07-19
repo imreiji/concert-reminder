@@ -32,18 +32,13 @@
 <section>
   <div class="head">
     <h2>Your campaigns</h2>
-    <span class="note">
-      <strong>{{ open_total }} open</strong> ·
-      {{ columns["applied"] | length }} awaiting results ·
-      {{ columns["won"] | length }} payment due ·
-      {{ columns["secured"] | length }} secured
-    </span>
+    {% include "_board_summary.html" %}
   </div>
-  {% if open_total or columns["applied"] or columns["won"] or columns["secured"] %}
-    {% include "_board.html" %}
-  {% else %}
-    <p class="dim">Nothing on your board yet. <a href="/discover">Find concerts to follow →</a></p>
-  {% endif %}
+  {# Both partials are included unconditionally -- they carry their own empty
+     state. POST /rounds/{id}/outcome re-renders these same two files with
+     oob=true, so the board and its tally are single-sourced and a recorded
+     outcome moves the card without a reload. #}
+  {% include "_board.html" %}
 </section>
 
 {# 3. Coming up -- the capture surface. #}
