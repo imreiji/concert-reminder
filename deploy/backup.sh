@@ -16,8 +16,9 @@ STAMP=$(date -u +%F)
 # .db and the .gz mode 600.
 umask 077
 
-# Cleanup on EXIT, not just the happy path: set -e means a failed aws s3 cp
-# would otherwise leave an unencrypted copy of the database in /tmp forever.
+# This trap is the only cleanup: it fires on success AND on failure, whereas
+# an rm at the end of the happy path would not - set -e means a failed aws
+# s3 cp leaves an unencrypted copy of the database in /tmp forever.
 # Installed AFTER STAMP is set, and with quoted literal paths rather than a
 # glob - with STAMP empty, /tmp/app-.db* would match unrelated files.
 trap 'rm -f "/tmp/app-$STAMP.db" "/tmp/app-$STAMP.db.gz"' EXIT
@@ -31,5 +32,4 @@ fi
 sqlite3 "$DB" ".backup /tmp/app-$STAMP.db"
 gzip -f "/tmp/app-$STAMP.db"
 aws s3 cp "/tmp/app-$STAMP.db.gz" "$BUCKET/app-$STAMP.db.gz" --only-show-errors
-rm -f "/tmp/app-$STAMP.db.gz"
 echo "backup ok: $STAMP"

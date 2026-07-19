@@ -993,8 +993,6 @@ async def test_index_deadline_list_carries_tag_and_search_attributes(client):
     assert 'data-search="tagged deadline show test artist"' in li_html
 
 
-
-
 # ── Inline confirm() handler injection ───────────────────────────────────
 
 # The browser HTML-decodes an attribute value BEFORE parsing it as JS, so

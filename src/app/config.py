@@ -61,7 +61,7 @@ class Settings(BaseSettings):
         unsafe = (
             not secret
             or secret == "change-me"
-            or len(self.session_secret) < MIN_SESSION_SECRET_LEN
+            or len(secret) < MIN_SESSION_SECRET_LEN
         )
         if unsafe and self.base_url.lower().startswith("https"):
             raise ValueError(SESSION_SECRET_HELP)

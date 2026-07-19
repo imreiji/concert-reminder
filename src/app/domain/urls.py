@@ -33,7 +33,9 @@ def clean_url(raw: str | None) -> str | None:
     """Normalize an editor-supplied URL, or raise UnsafeURLError.
 
     Returns None for empty/blank input (callers store NULL), otherwise the
-    trimmed URL unchanged.
+    URL with C0 controls trimmed from both ends and deleted from the
+    interior -- so the value returned can differ from the input by more
+    than whitespace trimming (see the module comment above).
     """
     if raw is None:
         return None

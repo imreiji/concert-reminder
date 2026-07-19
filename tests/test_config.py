@@ -74,7 +74,18 @@ def make_settings(base_url: str, session_secret: str) -> Settings:
     return Settings(base_url=base_url, session_secret=session_secret, _env_file=None)
 
 
-@pytest.mark.parametrize("secret", ["change-me", "", "   ", "x" * 31])
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "change-me",
+        "",
+        "   ",
+        "x" * 31,
+        # Padding is not entropy: the length gate measures the stripped
+        # value, so 20 spaces + 12 characters is still too short.
+        " " * 20 + "x" * 12,
+    ],
+)
 def test_https_rejects_unsafe_secret(secret):
     with pytest.raises(ValidationError) as exc:
         make_settings("https://dekimasen.app", secret)

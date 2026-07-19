@@ -116,7 +116,7 @@ def create_app() -> FastAPI:
         SessionMiddleware,
         secret_key=settings.session_secret,
         same_site="lax",
-        https_only=settings.base_url.startswith("https"),
+        https_only=settings.base_url.lower().startswith("https"),
         max_age=60 * 60 * 24 * 30,
     )
     app.mount("/static", StaticFiles(directory=_here / "static"), name="static")
