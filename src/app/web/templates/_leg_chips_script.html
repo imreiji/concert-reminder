@@ -1,0 +1,38 @@
+{#- Toggling for the edit page's round-to-leg chips (_round_leg_chips.html),
+    plus addRow() for both repeatable-row "+ Add" buttons.
+
+    The chips are rendered server-side from the concert's real legs, so
+    unlike the creation page's _leg_picker_script.html there is nothing to
+    keep in sync with the day rows -- a leg added in this session has no id
+    yet, and so cannot be assigned a round until it has been saved once.
+
+    The hidden input is the single source of truth for a row. A chip only
+    ever adds or removes its OWN id, so ids the chips do not render (a
+    cancelled leg) survive the round trip.
+
+    Delegated listener, not an inline onclick: leg names are user-controlled
+    and the browser HTML-decodes an on* attribute before parsing it as JS,
+    so Jinja's escaping would not protect an interpolated one (invariant 7).
+    -#}
+<script>
+  function addRow(listId, templateId) {
+    const tpl = document.getElementById(templateId);
+    document.getElementById(listId).appendChild(tpl.content.cloneNode(true));
+  }
+
+  document.getElementById("round-rows")?.addEventListener("click", (e) => {
+    const chip = e.target.closest("[data-leg-id]");
+    if (!chip) return;
+    const box = chip.closest("[data-leg-chips]");
+    const field = box?.querySelector('input[name="round_legs"]');
+    if (!field) return;
+    const id = chip.dataset.legId;
+    const ids = field.value.split(/[\s,]+/).filter(Boolean);
+    const at = ids.indexOf(id);
+    const on = at === -1;
+    if (on) ids.push(id); else ids.splice(at, 1);
+    field.value = ids.join(" ");
+    chip.classList.toggle("on", on);
+    chip.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+</script>

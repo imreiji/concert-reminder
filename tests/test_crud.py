@@ -797,10 +797,11 @@ async def test_edit_page_shows_new_round_kind_labels(client):
     assert "Overseas tour package" in r.text
 
 
-async def test_edit_page_leg_select_carries_the_resolved_leg_as_data_initial(client):
-    """The leg field is a <select> populated client-side from the current
-    performance rows; the server can only hand it the round's current
-    resolved leg via a data attribute for JS to honor on first sync."""
+async def test_edit_page_preselects_the_rounds_real_leg_ids(client):
+    """The leg field is a toggle chip per leg over a hidden id list, filled
+    from the round's real applies_to -- no text matching in either
+    direction, so a round covering several legs cannot collapse to one on
+    save. The full contract lives in tests/test_editor_legs.py."""
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
@@ -814,9 +815,12 @@ async def test_edit_page_leg_select_carries_the_resolved_leg_as_data_initial(cli
             "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
         },
     )
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
     r = client.get("/concerts/c/edit")
     assert r.status_code == 200
-    assert 'class="round-leg-select" data-initial="Day 1"' in r.text
+    assert f'name="round_legs" value="{day_id}"' in r.text
+    assert f'data-leg-id="{day_id}"' in r.text
 
 
 def test_edit_page_is_editor_only(client):
@@ -1212,7 +1216,7 @@ async def test_round_tied_to_cancelled_day_still_renders_not_vanishes(client):
             "round_id": [str(round_id)], "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+            "round_url": [""], "round_notes": [""], "round_legs": [str(day_id)],
         },
     )
     r = client.get("/concerts/c")

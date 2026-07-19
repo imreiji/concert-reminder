@@ -943,7 +943,7 @@ async def test_index_deadline_list_excludes_cancelled_round(client):
             "round_id": [str(round_id)], "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+            "round_url": [""], "round_notes": [""], "round_legs": [str(day_id)],
         },
     )
     r = client.get("/discover").text

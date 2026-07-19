@@ -223,6 +223,14 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .row-item input, .row-item select { flex: 1 1 auto; min-width: 8rem; }
 .import-error { color: var(--danger); }
 
+/* A round row's applies_to: one toggle chip per leg. Basis 100% so the
+   chips get their own line rather than competing with the row's inputs --
+   which leg(s) a round covers is a different question from when it opens. */
+.leg-chips {
+  flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem;
+}
+.leg-chips input[type="hidden"] { flex: 0 0 auto; min-width: 0; }
+
 .header-tags { margin: .2rem 0 .4rem; }
 
 /* Performances: one section per day/leg, its rounds table nested right under it */

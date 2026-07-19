@@ -240,11 +240,20 @@ def build_round(
 
 
 def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
-    """Free-text leg matching for the creation/edit forms, where repeatable
-    performance rows are matched to rounds by typed text rather than a
-    picker. Matches a day's city or label, case-insensitively, exact match
-    (not substring -- avoids "Day 1" matching "Day 10"). Blank or no match
-    -> None (round shown under "General")."""
+    """Free-text leg matching for the CREATION form only -- the edit page
+    uses real ids via parse_round_legs above, and nothing here should grow
+    back toward text matching.
+
+    Creation is the one place ids cannot work: the form renders before any
+    ConcertDay exists, so there is nothing to put on a chip. The days are
+    flushed first and their typed labels resolved after (see
+    create_concert). That is safe in a way the edit page was not -- matching
+    returns EVERY hit, so a multi-leg round can be created correctly; it was
+    only the edit page's read-back that narrowed one to its first id.
+
+    Matches a day's city or label, case-insensitively, exact match (not
+    substring -- avoids "Day 1" matching "Day 10"). Blank or no match ->
+    None (round shown in the all-legs group)."""
     leg = leg.strip().lower()
     if not leg:
         return None
@@ -252,19 +261,34 @@ def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
     return matches or None
 
 
-def round_leg_display(round_: Round, days_by_id: dict[int, ConcertDay]) -> str:
-    """Inverse of resolve_round_leg, for pre-filling the edit page's leg
-    <select> from a round's real applies_to day ids. Label-first, falling
-    back to city -- must match the same preference the leg dropdown's
-    options use client-side (_leg_picker_script.html's legOptionFor), or
-    this value won't match any of that dropdown's option values and the
-    round's current leg would silently fail to pre-select."""
-    if not round_.applies_to:
-        return ""
-    day = days_by_id.get(round_.applies_to[0])
-    if day is None:
-        return ""
-    return day.label or day.city
+def parse_round_legs(value: str, valid_day_ids: set[int]) -> list[int] | None:
+    """One round row's leg selection, as submitted by the edit page's chips:
+    a space-separated list of ConcertDay ids.
+
+    ONE form field per round row, not one field per selected id. The round_*
+    fields are parallel repeatable lists zipped positionally (see
+    edit_concert), so a flat repeated field could not say which row an id
+    belonged to -- ids would silently slide between rounds, which is a
+    quieter version of the very data loss this encoding exists to fix.
+
+    Ids are filtered against the days that actually survived this submit, so
+    a leg the editor deleted in the same save leaves no dangling reference.
+    Ids the chips never showed (a cancelled leg -- chips are live legs only)
+    ride along in the hidden value untouched and come back through here
+    intact: a cancelled ConcertDay is flagged, never deleted (invariant 2),
+    so it is still in valid_day_ids.
+
+    Empty -> None, not [], matching apply_round_fields and what
+    concert_round_rows reads to put a round in the all-legs group.
+    """
+    ids: list[int] = []
+    for token in value.replace(",", " ").split():
+        if not token.isdigit():
+            continue
+        day_id = int(token)
+        if day_id in valid_day_ids and day_id not in ids:
+            ids.append(day_id)
+    return ids or None
 
 
 def group_rounds_by_day(concert: Concert) -> tuple[dict[int, list[Round]], list[Round]]:
@@ -645,7 +669,6 @@ async def edit_concert_form(
     concert = await get_concert_by_event_id(session, event_id)
     await session.refresh(concert, ["days", "rounds", "tags"])
     picker = await tag_picker_context(session)
-    days_by_id = {d.id: d for d in concert.days}
 
     # artist_excluded: members of an already-attached group that AREN'T
     # currently on the concert (previously pruned). Without this, the
@@ -666,7 +689,20 @@ async def edit_concert_form(
         "artist_excluded": [str(i) for i in excluded_ids],
         "venue": [str(t.id) for t in concert.tags if t.kind is TagKind.VENUE],
     }
-    rounds_with_leg = [(r, round_leg_display(r, days_by_id)) for r in concert.rounds]
+    # Each round row renders one toggle chip per LIVE leg, pre-selected from
+    # the round's real applies_to -- no text matching in either direction.
+    # Cancelled legs get no chip (there is nothing useful to newly assign a
+    # round to), but an id already pointing at one still round-trips: the
+    # hidden field below carries the round's WHOLE applies_to, and
+    # parse_round_legs keeps every id whose day still exists.
+    legs = sorted(
+        (d for d in concert.days if not d.cancelled),
+        key=lambda d: (d.starts_at_utc, d.id),
+    )
+    rounds_with_legs = [
+        (r, " ".join(str(i) for i in (r.applies_to or [])), set(r.applies_to or []))
+        for r in concert.rounds
+    ]
     return templates.TemplateResponse(
         request,
         "concert_edit.html",
@@ -678,7 +714,8 @@ async def edit_concert_form(
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
             "initial_selected": initial_selected,
-            "rounds_with_leg": rounds_with_leg,
+            "legs": legs,
+            "rounds_with_legs": rounds_with_legs,
         },
     )
 
@@ -721,7 +758,7 @@ async def edit_concert(
     round_payment_at: list[str] = Form(default=[]),
     round_url: list[str] = Form(default=[]),
     round_notes: list[str] = Form(default=[]),
-    round_leg: list[str] = Form(default=[]),
+    round_legs: list[str] = Form(default=[]),
 ):
     """Atomic update: scalars assigned directly; tags/days/rounds
     RECONCILED (not blindly recreated) against what's submitted, so rows
@@ -772,7 +809,7 @@ async def edit_concert(
     # day_cancelled entirely means "not cancelled" for every row.
     day_cancelled = day_cancelled + ["false"] * (len(day_label) - len(day_cancelled))
     kept_day_ids: set[int] = set()
-    days_for_leg_matching: list[ConcertDay] = []
+    submitted_days: list[ConcertDay] = []
     for did, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
         day_id, day_label, day_starts_at, day_city, day_venue, day_venue_address, day_doors_at,
         day_cancelled, strict=True,
@@ -791,30 +828,40 @@ async def edit_concert(
                 concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled
             )
             session.add(day)
-        days_for_leg_matching.append(day)
+        submitted_days.append(day)
     for did, day in existing_days.items():
         if did not in kept_day_ids:
             await session.delete(day)
-    await session.flush()  # new/kept days have real ids, needed for leg-matching below
+    await session.flush()  # new/kept days have real ids, needed by parse_round_legs below
     newly_cancelled_day_ids = {
-        d.id for d in days_for_leg_matching if d.cancelled
+        d.id for d in submitted_days if d.cancelled
     } - before_cancelled_day_ids
+    # The legs a round may legitimately point at after this submit. A day the
+    # editor dropped is gone from here, so its id cannot survive in any
+    # applies_to; a cancelled one is still here (invariant 2), so an id
+    # pointing at it does.
+    valid_day_ids = {d.id for d in submitted_days}
 
     # -- Rounds: same id-preserving reconciliation.
     await session.refresh(concert, ["rounds"])
     existing_rounds = {r.id: r for r in concert.rounds}
     kept_round_ids: set[int] = set()
+    # round_legs is newer than the other round_* fields; a submitter that omits
+    # it entirely means "no legs selected" for every row, matching
+    # apply_round_fields' own default -- pad rather than let a whole-array
+    # omission trip the strict zip below.
+    round_legs = round_legs + [""] * (len(round_label) - len(round_legs))
     for (
-        rid, label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url, notes_, leg
+        rid, label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url, notes_, legs
     ) in zip(
         round_id, round_label, round_label_en, round_kind, round_opens_at, round_closes_at,
-        round_results_at, round_payment_at, round_url, round_notes, round_leg,
+        round_results_at, round_payment_at, round_url, round_notes, round_legs,
         strict=True,
     ):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue
-        applies_to = resolve_round_leg(days_for_leg_matching, leg)
+        applies_to = parse_round_legs(legs, valid_day_ids)
         rid = rid.strip()
         if rid.isdigit() and int(rid) in existing_rounds:
             round_ = apply_round_fields(

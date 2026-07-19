@@ -59,7 +59,7 @@
 
   <h2>Lottery rounds <small class="dim">(times are JST)</small></h2>
   <div id="round-rows" class="row-list">
-    {% for r, leg in rounds_with_leg %}
+    {% for r, leg_value, leg_ids in rounds_with_legs %}
     <div class="row-item">
       <input type="hidden" name="round_id" value="{{ r.id }}">
       <input name="round_label" required maxlength="200" placeholder="1次先行抽選" value="{{ r.label }}">
@@ -67,7 +67,7 @@
       <select name="round_kind">{% for k in kinds %}
         <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ round_kind_label(k) }}</option>
       {% endfor %}</select>
-      <select name="round_leg" class="round-leg-select" data-initial="{{ leg }}"></select>
+      {% with value = leg_value, selected = leg_ids %}{% include "_round_leg_chips.html" %}{% endwith %}
       <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"
         value="{{ jst(r.opens_at_utc).strftime('%Y-%m-%dT%H:%M') if r.opens_at_utc else '' }}"></label>
       <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"
@@ -127,7 +127,7 @@
     <select name="round_kind">{% for k in kinds %}
       <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
     {% endfor %}</select>
-    <select name="round_leg" class="round-leg-select"></select>
+    {% with value = "", selected = none %}{% include "_round_leg_chips.html" %}{% endwith %}
     <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"></label>
     <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"></label>
     <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
@@ -137,5 +137,5 @@
     <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
   </div>
 </template>
-{% include "_leg_picker_script.html" %}
+{% include "_leg_chips_script.html" %}
 {% endblock %}
