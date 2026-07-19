@@ -243,16 +243,41 @@ deleting them.
 - VENUE tags filter by `region` (sidebar groups venues into regions like
   "Kanto"/"Kansai"/"Other"; toggling a region (de)selects every venue tag id
   in it) — filtering by one exact venue was explicitly ruled out as unhelpful.
-- The index page's tag filter and its free-text search box (matches title,
-  title_en, every attached tag's name, and a free-text-venue fallback when no
-  VENUE tag exists, all case-insensitive) combine as AND, not OR — both narrow the same
-  tile set together, AND the "Coming up soon" chronological deadline-list
-  section below the tile grids (each `<li>` carries the same `data-tags`/
-  `data-search` attributes a tile does). Same client-side-first pattern as
-  tag filtering: every tile (and deadline-list row) carries a `data-search`
-  attribute so typing re-filters instantly with no round trip; the search
-  `<input>` still sits in a real GET `<form>` so it degrades to a normal
-  server-side search with JS disabled.
+- **Home vs Discover** -- the old combined index is split in two by the
+  question each page answers. `/` (`home.html`, the handler in `web/app.py`)
+  is Home: "where do I stand", personal and login-gated, four blocks in order
+  -- Closes next, the campaign board, Coming up, a Discover teaser. Signed
+  out it is the hero alone. `/discover` (`routes/discover.py` +
+  `discover.html`) is the catalogue: "what's on", and it is **public** --
+  `current_user`, not `require_user`, the only content page in the app an
+  anonymous visitor can reach. Header nav is Home / Discover / Tags and
+  nothing else; the active item carries `aria-current="page"`, which is also
+  what the CSS styles off.
+- **Capture actions live on Coming up rows, never on board cards.** A
+  deadline row is exactly ONE round on ONE leg, where "I have applied" has a
+  single meaning. A board card is a whole campaign with a multi-rung ladder,
+  where the same button is ambiguous -- applied to which round? A destructive
+  control sitting inside something you are scanning to read is also a mode
+  error. Do not "improve" the board by adding buttons to it.
+- Discover carries **one** status pill per card, merging the event's round
+  state with the viewer's standing (`service.discover_statuses`). The
+  standing REPLACES the countdown rather than sitting beside it, and the tone
+  says who owes the next move: ok = you are covered, danger = you owe an
+  action, quiet = you have no standing. Signed out there is no standing to
+  merge, so the pill is the event state alone.
+- Discover's three filters -- the tag/region chips, the free-text search box
+  (matches title, title_en, every attached tag's name, and a free-text-venue
+  fallback when no VENUE tag exists, all case-insensitive), and the
+  round-status facet (Open now / Opening soon / Not tracking) -- combine as
+  AND, not OR: all three narrow the same tile set together, plus the "Coming
+  up soon" deadline list below the grids (each `<li>` carries the same
+  `data-tags`/`data-search` attributes a tile does; it has no `data-status`,
+  so the facet never hides a row). All three follow one contract: the initial
+  state is computed server-side so there is no flash of wrongly shown tiles,
+  every subsequent change is client-side off `data-tags`/`data-search`/
+  `data-status` with no round trip, and each control stays a real `<a href>`
+  or a real GET `<form>` so it degrades to slower server-side filtering with
+  JS disabled. Add a fourth filter the same way.
 
 ## Deploy
 

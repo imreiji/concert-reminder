@@ -11,6 +11,21 @@
 <body data-tz="{{ tz or '' }}" data-tz-auto="{{ '1' if tz_auto else '0' }}">
   <header class="site">
     <a class="home" href="/"><span class="mark">できません</span><span class="wordmark">dekimasen.app</span></a>
+    {# Three items, and nothing else goes in here: Home is where you stand,
+       Discover is what's on, Tags is the vocabulary both are organised by.
+       `nav_page` is set by each page's route; the pages that don't set it
+       (a concert, preferences, the legal pages) simply mark nothing, which
+       is honest -- none of them IS one of these three.
+
+       Discover renders signed out too, because it is public: it is the one
+       piece of content the header can offer an anonymous visitor. #}
+    {% set nav_items = [("/", "Home", "home"), ("/discover", "Discover", "discover")]
+       + ([("/tags", "Tags", "tags")] if user else []) %}
+    <nav class="main">
+      {% for href, label, key in nav_items %}
+      <a href="{{ href }}"{% if nav_page == key %} aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
     <nav class="auth">
       {% if user %}
         <img class="avatar" src="{{ user.avatar_url }}" alt="">

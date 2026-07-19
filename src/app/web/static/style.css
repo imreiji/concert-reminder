@@ -26,6 +26,15 @@ footer a { color: inherit; }
 .prose { max-width: 42rem; }
 .prose li { margin-bottom: .5rem; }
 
+/* The three-item primary nav. The active item is marked with
+   aria-current="page" -- the styling hangs off that attribute rather than a
+   class, so it can never say one thing to a screen reader and another to the
+   eye. */
+nav.main { display: flex; gap: 1rem; font-size: .9rem; margin-left: 1.5rem; }
+nav.main a { color: var(--dim); text-decoration: none; }
+nav.main a:hover { color: var(--ink); }
+nav.main a[aria-current="page"] { color: var(--ink); font-weight: 600; }
+
 nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; font-size: .9rem; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; }
 .badge { color: var(--ok); font-style: normal; font-size: .8em; border: 1px solid currentColor; padding: 0 .3em; border-radius: 4px; }
