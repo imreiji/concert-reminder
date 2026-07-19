@@ -149,7 +149,7 @@ def create_app() -> FastAPI:
         from app.domain.types import TagKind as _TK
 
         picker = await tag_picker_context(session) if user else {
-            "by_kind": grouped_tags(tags), "groups_json": {}, "tag_names_json": {},
+            "by_kind": grouped_tags(tags), "groups": {}, "tag_names": {},
         }
         region_links = region_sidebar_links(picker["by_kind"].get("venue", []), tag, sort)
         selected_tags = set(tag)
@@ -178,8 +178,8 @@ def create_app() -> FastAPI:
                 "all_tags": tags,
                 "by_kind": picker["by_kind"],
                 "region_links": region_links,
-                "groups_json": picker["groups_json"],
-                "tag_names_json": picker["tag_names_json"],
+                "groups": picker["groups"],
+                "tag_names": picker["tag_names"],
                 "selected_tags": selected_tags,
                 "visible_concert_ids": visible_concert_ids,
                 "query": q,

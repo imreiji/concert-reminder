@@ -1,11 +1,11 @@
 {#- Pairs with _tag_picker_fields.html: the picker <dialog>s + the vanilla-JS
     client-side staging (selection stays in the DOM until the form's one real
     POST fires). Include right after the </form> that has id="new-concert".
-    Caller provides by_kind, groups_json, tag_names_json, and
-    initial_selected_json -- all as raw Python objects, NOT json.dumps'd
-    strings (see the tojson note below). initial_selected_json is string tag
-    ids per kind plus artist_excluded: {} for a blank creation form, the
-    concert's current tags for the edit page. -#}
+    Caller provides by_kind, groups, tag_names, and initial_selected -- all
+    as raw Python objects, NOT json.dumps'd strings (see the tojson note
+    below). initial_selected is string tag ids per kind plus
+    artist_excluded: {} for a blank creation form, the concert's current
+    tags for the edit page. -#}
 {% for kindname in ["franchise", "group", "artist", "venue"] %}
 <dialog id="picker-{{ kindname }}" class="picker">
   <div class="picker-head">
@@ -30,9 +30,9 @@
       markup. tojson escapes < > & ' to \uXXXX -- valid JSON, inert in HTML.
       It serializes the PYTHON object, so callers must pass raw dicts here,
       not pre-dumped strings (a string would become a quoted JS literal). -#}
-  const NC_GROUPS = {{ groups_json | tojson }};
-  const TAG_NAMES = {{ tag_names_json | tojson }};
-  const INITIAL_SELECTED = {{ initial_selected_json | tojson }};
+  const NC_GROUPS = {{ groups | tojson }};
+  const TAG_NAMES = {{ tag_names | tojson }};
+  const INITIAL_SELECTED = {{ initial_selected | tojson }};
   // selection state: sets of tag ids (strings)
   const sel = {
     franchise: new Set(INITIAL_SELECTED.franchise || []),

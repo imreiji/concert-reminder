@@ -431,9 +431,9 @@ async def new_concert_form(
         {
             "user": user, "kinds": list(RoundKind), "concert_kinds": list(ConcertKind),
             "by_kind": picker["by_kind"],
-            "groups_json": picker["groups_json"],
-            "tag_names_json": picker["tag_names_json"],
-            "initial_selected_json": {},
+            "groups": picker["groups"],
+            "tag_names": picker["tag_names"],
+            "initial_selected": {},
         },
     )
 
@@ -607,9 +607,9 @@ async def edit_concert_form(
             "user": user, "concert": concert, "kinds": list(RoundKind),
             "concert_kinds": list(ConcertKind),
             "by_kind": picker["by_kind"],
-            "groups_json": picker["groups_json"],
-            "tag_names_json": picker["tag_names_json"],
-            "initial_selected_json": initial_selected,
+            "groups": picker["groups"],
+            "tag_names": picker["tag_names"],
+            "initial_selected": initial_selected,
             "rounds_with_leg": rounds_with_leg,
         },
     )

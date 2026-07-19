@@ -146,9 +146,9 @@ async def import_preview(
             "user": user, "parsed": parsed, "source_url": url,
             "fmt": _fmt, "kinds": list(RoundKind),
             "by_kind": picker["by_kind"],
-            "groups_json": picker["groups_json"],
-            "tag_names_json": picker["tag_names_json"],
-            "initial_selected_json": {},
+            "groups": picker["groups"],
+            "tag_names": picker["tag_names"],
+            "initial_selected": {},
         },
     )
 

@@ -527,8 +527,8 @@ async def tag_picker_context(session: AsyncSession) -> dict:
     auto-populating artists, and id->name for rendering selected chips).
     Shared by the new-concert form and the URL-import draft form.
 
-    The *_json keys are raw dicts despite the name -- the template serializes
-    them with `| tojson`, which must be handed the object, not a string."""
+    Every value is a raw Python object: the template serializes them with
+    `| tojson`, which must be handed the object, not a pre-dumped string."""
     tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
     by_kind: dict[str, list[Tag]] = {}
     for t in tags:
@@ -541,7 +541,7 @@ async def tag_picker_context(session: AsyncSession) -> dict:
             "members": [{"id": m.id, "name": m.name} for m in await group_members(session, g.id)],
         }
     tag_names = {t.id: t.name for t in tags}
-    return {"by_kind": by_kind, "groups_json": groups_data, "tag_names_json": tag_names}
+    return {"by_kind": by_kind, "groups": groups_data, "tag_names": tag_names}
 
 
 async def _is_attached(session: AsyncSession, concert_id: int, tag_id: int) -> bool:
