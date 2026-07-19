@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     # Defaults
     default_timezone: str = "America/Moncton"
 
+    # Privacy policy contacts (GET /privacy). Deployment config, never
+    # committed -- same rule as every other secret-ish value here. Either,
+    # both, or neither may be set; the page renders whichever are present
+    # and falls back to a neutral line when none are.
+    privacy_contact_discord: str = ""
+    privacy_contact_email: str = ""
+
     @model_validator(mode="after")
     def _reject_weak_session_secret(self) -> "Settings":
         """Fail startup rather than sign real session cookies with a secret
