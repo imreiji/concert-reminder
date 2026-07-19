@@ -24,6 +24,23 @@ get their own flag or handling.
 
 ## Shipped
 
+### Public terms of service page (2026-07-19)
+
+Shipped as: `GET /terms`, the counterpart to `/privacy` — same shape
+(`web/routes/terms.py` + `templates/terms.html`, `current_user` not
+`require_user` so Discord's reviewers can read it signed out), filling the
+Terms of Service URL field the Developer Portal offers alongside the
+Privacy Policy URL. The clause that actually matters is the disclaimer of
+warranty: the service tracks real ticketing deadlines and cannot promise a
+DM arrives, arrives on time, or that the date is right, so it says so
+plainly and puts confirmation with the official source on the user. Also
+covers non-affiliation (the app is entirely about other people's events),
+Discord's own minimum age rather than a number, acceptable use, editor
+contributions staying in the shared catalogue after erasure (matching the
+privacy policy and `delete_user`), availability/shutdown, and New Brunswick
+governing law. Contacts reuse the existing `PRIVACY_CONTACT_*` settings via
+a new shared `web/contact.py`; the two pages cross-link.
+
 ### Public privacy policy page (2026-07-19)
 
 Shipped as: `GET /privacy`, a public (deliberately no `require_user`)
