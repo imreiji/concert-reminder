@@ -1,0 +1,16 @@
+{# The one-line tally above the board.
+
+   Its own partial for the same reason _board.html is one: POST
+   /rounds/{id}/outcome swaps the board out of band, and this line sits
+   OUTSIDE the board container (it lives in the section head, beside the
+   heading), so it needs a second out-of-band fragment of its own. Leave it
+   behind and the card moves columns while the counts above it stay stale --
+   the same half-working failure the swap exists to fix.
+
+   Keep the id="board-summary"; that is the htmx OOB target. #}
+<span class="note" id="board-summary"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <strong>{{ open_total }} open</strong> ·
+  {{ columns["applied"] | length }} awaiting results ·
+  {{ columns["won"] | length }} payment due ·
+  {{ columns["secured"] | length }} secured
+</span>

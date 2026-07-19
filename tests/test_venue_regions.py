@@ -20,8 +20,9 @@ from app.db.models import Base, ConcertDay, Round, Tag
 from app.db.session import get_session
 from app.domain.types import RoundKind, TagKind
 from app.web import auth
-from app.web.app import create_app, region_sidebar_links
+from app.web.app import create_app
 from app.web.routes.concerts import find_venue_tag, is_day_past, is_round_past
+from app.web.routes.discover import region_sidebar_links
 
 EDITOR_ID, VIEWER_ID = 42, 777
 
@@ -288,11 +289,11 @@ async def test_region_filter_selects_all_venues_in_region(client):
     )
     client.post("/concerts", data={"title": "Untagged", "event_id": "untagged"})
 
-    r = client.get("/")
+    r = client.get("/discover")
     assert "Regions" in r.text
     assert "Kanto" in r.text
 
-    r = client.get("/?sort=event&tag=1&tag=2")
+    r = client.get("/discover?sort=event&tag=1&tag=2")
     assert "At Hall A" in r.text
     assert "At Hall B" in r.text
     assert "Untagged" in r.text  # still in the DOM for client-side filtering...

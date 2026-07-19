@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not user %}
+  {# Signed out Home is the hero and nothing else -- the same gate the old
+     index had -- plus a door out to the public catalogue. #}
+  <section class="hero">
+    <h1>Never say できませんでした again.</h1>
+    <p>Lottery rounds, serial-code sales, stream tickets — every concert deadline, one reminder ahead. Sign in with Discord to get started.</p>
+    <p><a class="btn quiet" href="/discover">Browse concerts →</a></p>
+  </section>
+{% else %}
+
+{# 1. Up next -- ONE item, the nearest thing that needs your attention. The
+   list is block 3; this is that list's head, on its own.
+
+   The header is deliberately moment-AGNOSTIC. It used to read "Closes next"
+   while the body underneath it said "Opens ...", because the row picked is
+   the soonest one with a round behind it, whatever anchor that row carries
+   -- and the rows[0] fallback can even be an event start. Narrowing the pick
+   to Anchor.CLOSES was the wrong repair: an opening round or a results
+   announcement genuinely needs your attention, and hiding it would hide real
+   urgency. So the header stays honest and the body (below) always names
+   which kind of moment this is. #}
+{% if up_next %}
+{% set d = up_next.deadline %}
+<div class="next">
+  <div>
+    <div class="label">Up next</div>
+    <div class="what">
+      <a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a> — {{ d.label }}
+    </div>
+    <div class="when">{{ deadline_label(d.anchor) | capitalize }} {{ dual(d.at_utc, tz) }}</div>
+  </div>
+  <div class="countdown">
+    <span class="big" data-countdown data-iso="{{ d.at_utc.isoformat() }}"></span>
+  </div>
+</div>
+{% endif %}
+
+{# 2. Your campaigns #}
+<section>
+  <div class="head">
+    <h2>Your campaigns</h2>
+    {% include "_board_summary.html" %}
+  </div>
+  {# Both partials are included unconditionally -- they carry their own empty
+     state. POST /rounds/{id}/outcome re-renders these same two files with
+     oob=true, so the board and its tally are single-sourced and a recorded
+     outcome moves the card without a reload. #}
+  {% include "_board.html" %}
+</section>
+
+{# 3. Coming up -- the capture surface. #}
+<section>
+  <div class="head">
+    <h2>Coming up</h2>
+    <span class="note">All times JST and yours, always both</span>
+  </div>
+  {% include "_deadline_rows.html" %}
+</section>
+
+{# 4. Discovery teaser -- discovery still exists, it just stops being the
+   front door. #}
+<div class="teaser">
+  <div>
+    <div class="eyebrow">Not tracking these yet</div>
+    <h2>Discover</h2>
+    <p>
+      {{ catalogue_count }} concert{{ "" if catalogue_count == 1 else "s" }} in the catalogue.
+      {#- The count is what /discover would LIST, not every Concert row:
+          a concert whose every leg is cancelled is hidden there. -#}
+      Browse by franchise, group, artist or region — or search everything.
+    </p>
+  </div>
+  <a class="btn" href="/discover">Open discover →</a>
+</div>
+
+{# The follow-up to "Not applying". The narrow action already posted; the
+   wider one is a SECOND deliberate press, never a side effect of the first. #}
+<dialog class="prune" id="pruneDlg">
+  <div class="dh">Not applying to this round
+    <button type="button" data-close aria-label="Close">×</button></div>
+  <p>
+    Done — you won't be reminded about this round. Later rounds for
+    <b id="pruneName">this concert</b> will still reach you.
+  </p>
+  <div class="da">
+    <button class="btn quiet" type="button" data-close>That's right</button>
+    <a class="btn" id="pruneLink" href="/">Manage this concert →</a>
+  </div>
+</dialog>
+
+<script>
+  // The dialog opens only AFTER the narrow write succeeded, so it can state
+  // what happened rather than ask permission for it.
+  //
+  // The concert title arrives via dataset and is written with textContent:
+  // it is user-controlled, and the browser HTML-decodes an inline on*
+  // attribute before parsing it as JS, so Jinja's escaping would not protect
+  // an interpolated handler (invariant 7).
+  (function () {
+    var dlg = document.getElementById("pruneDlg");
+    document.body.addEventListener("htmx:afterRequest", function (e) {
+      var el = e.detail.elt;
+      if (!el || !el.dataset || !el.dataset.pruneTitle) return;
+      if (!e.detail.successful) return;
+      document.getElementById("pruneName").textContent = el.dataset.pruneTitle;
+      document.getElementById("pruneLink").href = el.dataset.pruneUrl || "/";
+      dlg.showModal();
+    });
+    dlg.addEventListener("click", function (e) {
+      if (e.target.closest("[data-close]")) dlg.close();
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,105 @@
+{# "Your campaigns" -- the four-column board.
+
+   Read-only on purpose: every capture action lives on a Coming up row
+   instead (see _deadline_rows.html for why). A card links to its concert and
+   does nothing else.
+
+   service.board_cards eager-loads `concert.days`, `concert.rounds` and
+   `concert.tags` -- those three and nothing else. Touch any other
+   relationship here and the lazy load raises MissingGreenlet inside async
+   rendering, which is a 500, not a warning.
+
+   Keep the outer <div id="board">: POST /rounds/{id}/outcome re-renders this
+   partial with oob=true and htmx swaps it out of band, which is what makes a
+   card move columns without a reload. The empty state lives INSIDE that div
+   on purpose -- if the container only existed when the board was non-empty,
+   the first outcome recorded on an empty board would have nothing to swap
+   into. #}
+
+{% set COLUMNS = [
+  ("open", "Open now", "d-open"),
+  ("applied", "Applied", "d-applied"),
+  ("won", "Won — pay", "d-won"),
+  ("secured", "Secured", "d-secured"),
+] %}
+
+{% macro rung(r, i) %}
+  {%- set marks = {
+    "lost": ("m-lost", "×", "lost"),
+    "applied": ("m-wait", "?", "applied"),
+    "won": ("m-live", "✓", "won"),
+    "paid": ("m-live", "✓", "paid"),
+    "live": ("m-live", i|string, "open"),
+    "todo": ("m-todo", i|string, ""),
+  } -%}
+  {%- set m = marks.get(r.state, ("m-todo", i|string, "")) -%}
+  <span class="rung {% if r.state == 'lost' %}is-done{% elif r.state == 'todo' %}is-todo{% endif %}">
+    <span class="rmark {{ m[0] }}">{{ m[1] }}</span>
+    <span class="name">{{ r.label }}</span>
+    <span class="stat">{{ m[2] }}</span>
+  </span>
+{% endmacro %}
+
+<div id="board"{% if oob %} hx-swap-oob="true"{% endif %}>
+{% if open_total or columns["applied"] or columns["won"] or columns["secured"] %}
+<div class="board">
+  {% for key, heading, dot in COLUMNS %}
+  {% set cards = columns.get(key, []) %}
+  <div class="col">
+    <div class="col-head">
+      <span class="dot {{ dot }}"></span> {{ heading }}
+      <span class="count">{{ open_total if key == "open" else cards | length }}</span>
+    </div>
+    {% for card in cards %}
+    <a class="card" data-column="{{ key }}" data-event-id="{{ card.concert.event_id }}"
+       href="/concerts/{{ card.concert.event_id }}">
+      {#- Same display rules as a discover tile: franchise+group -> "F · G",
+          group only -> G, artists only -> artist chips. -#}
+      {% set ctags = card.concert.tags %}
+      {% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
+      {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
+      {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
+      {#- A franchise alone is not an eyebrow: it only ever qualifies a group,
+          so there is nothing to show without one. -#}
+      {% if cg or ca %}
+      <span class="who">
+        {%- if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
+        {%- elif cg %}{{ cg | map(attribute="name") | join(", ") }}
+        {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>{% endif -%}
+      </span>
+      {% endif %}
+      <span class="title">{{ card.concert.title }}</span>
+      {% set live_days = card.concert.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
+      <span class="venue">
+        {%- if card.concert.venue %}📍 {{ card.concert.venue }}{% endif -%}
+        {%- if card.concert.venue and live_days %} · {% endif -%}
+        {%- if live_days %}{{ jst(live_days[0].starts_at_utc).strftime("%Y-%m-%d") }} JST{% endif -%}
+      </span>
+      {% if card.rungs %}
+      <span class="ladder">
+        {% for r in card.rungs %}{{ rung(r, loop.index) }}{% endfor %}
+      </span>
+      {% endif %}
+      {% if card.next_deadline %}
+      <span class="foot">
+        <span class="pill {{ 'p-danger' if key == 'won' else 'p-off' }}"
+              data-countdown data-iso="{{ card.next_deadline.isoformat() }}"></span>
+        <span class="clock">{{ dual(card.next_deadline, tz) }}</span>
+      </span>
+      {% endif %}
+    </a>
+    {% endfor %}
+    {# The remainder comes from board_cards' PRE-cap open count, so a user
+       following a large franchise is told the truth about what the cap hid
+       rather than being shown a silently shortened column. #}
+    {% if key == "open" and open_total > cards | length %}
+    <a class="more" href="/discover">+{{ open_total - (cards | length) }} more →</a>
+    {% endif %}
+    {% if not cards %}<p class="dim tiny">Nothing here yet.</p>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="dim">Nothing on your board yet. <a href="/discover">Find concerts to follow →</a></p>
+{% endif %}
+</div>
