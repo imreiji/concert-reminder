@@ -25,7 +25,24 @@ declared hx-target; the other two ride along as out-of-band swaps of
 so there is one source for each. Returning the row alone (which is what
 shipped) is the worst outcome available: the press looks like it worked while
 the card sits in its old column until a reload.
+
+TWO surfaces now press these buttons: Home's rows and the concert page's
+per-leg round rows, which share the `_capture_actions.html` macro. They need
+different answers -- sending Home's fragments back to the concert page would
+splice Home's content into it, and the `#board` out-of-band swap would hit
+nothing there, which htmx treats as a silent no-op.
+
+Which surface asked is read from `HX-Current-URL` (htmx sends it on every
+request) rather than from a hidden field, so the shared macro stays free of
+per-surface plumbing and a future third surface needs no change to it. The
+JS-less path has no such header and falls back to `Referer`; when even that
+is missing it redirects to Home exactly as it always did -- the write is
+already committed either way, so the worst case is landing on the wrong page,
+never a lost press.
 """
+
+import re
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -48,6 +65,32 @@ router = APIRouter()
 
 templates = None  # injected by web/app.py, same as the other route modules
 
+# The concert page's own URL. event_id is restricted to this charset at
+# creation (EVENT_ID_RE in routes/concerts.py), so anything that matches here
+# is a plausible handle. A handle that matches but names no concert makes the
+# lookup below raise 404 -- AFTER record_round_outcome has committed, so the
+# press is recorded and only the re-render is lost. Left as-is deliberately:
+# reaching it means the header named a concert page that does not exist, which
+# a reader cannot do (that page 404s), so a quiet fallback to Home would only
+# hide a forged or stale header behind a screen that looks like it worked.
+_CONCERT_PATH = re.compile(r"^/concerts/([A-Za-z0-9_-]{1,100})/?$")
+
+
+def _concert_event_id(request: Request) -> str | None:
+    """Which concert page this press came from, or None for anywhere else.
+
+    HX-Current-URL first because htmx always sends it and it is the only one
+    of the two that survives a referrer policy; Referer second so the JS-less
+    form post still returns the reader to where they were."""
+    for raw in (request.headers.get("HX-Current-URL"), request.headers.get("Referer")):
+        if not raw:
+            continue
+        path = urlsplit(raw).path
+        m = _CONCERT_PATH.match(path)
+        if m:
+            return m.group(1)
+    return None
+
 
 @router.post("/rounds/{round_id}/outcome", response_class=HTMLResponse)
 async def record_outcome(
@@ -67,12 +110,33 @@ async def record_outcome(
     await record_round_outcome(session, user.id, round_id, outcome)
     await session.commit()
 
+    event_id = _concert_event_id(request)
+
     # No JS: the forms carry a real method/action, so the browser navigates
     # here and would render a bare fragment as the whole document. Send it
-    # back to Home instead -- the write is already committed, so nothing is
-    # lost. 303 so a reload does not re-POST.
+    # back where it came from instead -- the write is already committed, so
+    # nothing is lost. 303 so a reload does not re-POST.
     if request.headers.get("HX-Request") != "true":
-        return RedirectResponse("/", status_code=303)
+        return RedirectResponse(f"/concerts/{event_id}" if event_id else "/", status_code=303)
+
+    # Pressed on a concert page: answer with THAT page's rounds region and
+    # nothing else. There is no board and no deadline-rows list there for the
+    # out-of-band swaps below to land on.
+    if event_id is not None:
+        from app.web.routes.concerts import concert_rounds_context, get_concert_by_event_id
+
+        # No relationship refresh: `concert_rounds_context` queries the days
+        # and rounds it needs directly, and the fragment touches no attribute
+        # of `concert` itself -- so there is nothing here to lazy-load into a
+        # MissingGreenlet during async rendering.
+        concert = await get_concert_by_event_id(session, event_id)
+        db_user = await session.get(User, user.id)
+        return HTMLResponse(templates.get_template("_round_rows.html").render(
+            request=request,
+            user=user,
+            tz=db_user.timezone if db_user else settings.default_timezone,
+            **await concert_rounds_context(session, user.id, concert),
+        ))
 
     # No explicit limit here, and none on Home either: both take
     # my_deadline_rows' DEADLINE_ROWS_LIMIT default, which is the only thing

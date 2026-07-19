@@ -36,6 +36,8 @@ from app.db.models import Concert, ConcertDay, ReminderRule, Round, Tag, User
 from app.db.service import (
     attach_tag,
     concert_audit_log,
+    concert_next_moment,
+    concert_round_rows,
     detach_tag,
     ensure_user,
     group_members,
@@ -238,11 +240,27 @@ def build_round(
 
 
 def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
-    """Free-text leg matching for the creation/edit forms, where repeatable
-    performance rows are matched to rounds by typed text rather than a
-    picker. Matches a day's city or label, case-insensitively, exact match
-    (not substring -- avoids "Day 1" matching "Day 10"). Blank or no match
-    -> None (round shown under "General")."""
+    """Free-text leg matching for the CREATION form only -- the edit page
+    uses real ids via parse_round_legs above, and nothing here should grow
+    back toward text matching.
+
+    Creation is the one place ids cannot work: the form renders before any
+    ConcertDay exists, so there is nothing to put on a chip. The days are
+    flushed first and their typed labels resolved after (see
+    create_concert). That is safe in a way the edit page was not -- matching
+    returns EVERY hit, so a multi-leg round can be created correctly; it was
+    only the edit page's read-back that narrowed one to its first id.
+
+    "Correctly" is narrower than it sounds, though: the creation form's leg
+    control is a single-value <select> whose option value prefers the day's
+    label, and labels are normally distinct per leg. So a round covering two
+    legs can only come out of creation when both legs happen to share the one
+    label-or-city string this matches on. In practice a genuinely multi-leg
+    round still needs a follow-up edit, where the chips can say so directly.
+
+    Matches a day's city or label, case-insensitively, exact match (not
+    substring -- avoids "Day 1" matching "Day 10"). Blank or no match ->
+    None (round shown in the all-legs group)."""
     leg = leg.strip().lower()
     if not leg:
         return None
@@ -250,34 +268,79 @@ def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
     return matches or None
 
 
-def round_leg_display(round_: Round, days_by_id: dict[int, ConcertDay]) -> str:
-    """Inverse of resolve_round_leg, for pre-filling the edit page's leg
-    <select> from a round's real applies_to day ids. Label-first, falling
-    back to city -- must match the same preference the leg dropdown's
-    options use client-side (_leg_picker_script.html's legOptionFor), or
-    this value won't match any of that dropdown's option values and the
-    round's current leg would silently fail to pre-select."""
-    if not round_.applies_to:
-        return ""
-    day = days_by_id.get(round_.applies_to[0])
-    if day is None:
-        return ""
-    return day.label or day.city
+def parse_round_legs(
+    value: str, valid_day_ids: set[int], key_to_day_id: dict[str, int] | None = None
+) -> list[int] | None:
+    """One round row's leg selection, as submitted by the edit page's chips:
+    a space-separated list of ConcertDay ids and/or `day_key`s.
 
+    ONE form field per round row, not one field per selected id. The round_*
+    fields are parallel repeatable lists zipped positionally (see
+    edit_concert), so a flat repeated field could not say which row an id
+    belonged to -- ids would silently slide between rounds, which is a
+    quieter version of the very data loss this encoding exists to fix.
 
-def group_rounds_by_day(concert: Concert) -> tuple[dict[int, list[Round]], list[Round]]:
-    """Rounds grouped by the ConcertDay(s) they apply to ("legs"), plus a
-    'general' bucket for rounds with no day association."""
-    by_day: dict[int, list[Round]] = {d.id: [] for d in concert.days}
-    general: list[Round] = []
-    for r in concert.rounds:
-        if r.applies_to:
-            for day_id in r.applies_to:
-                if day_id in by_day:
-                    by_day[day_id].append(r)
+    Ids are filtered against the days that actually survived this submit, so
+    a leg the editor deleted in the same save leaves no dangling reference.
+    Ids the chips never showed (a cancelled leg -- chips are live legs only)
+    ride along in the hidden value untouched and come back through here
+    intact: a cancelled ConcertDay is flagged, never deleted (invariant 2),
+    so it is still in valid_day_ids.
+
+    A leg the editor ADDED in this same submit has no id yet, so its chip
+    carries the row's `day_key` instead -- a client-generated string, unique
+    within the page. `key_to_day_id` maps those to the ids the flush just
+    handed out. A saved leg's key is simply its own id, so the numeric path
+    below is the whole story for every row that already existed; only a
+    brand-new row depends on the key map at all.
+
+    An unrecognised token -- a key for a row the editor removed again, an id
+    for a deleted leg -- is dropped rather than guessed at. Resolving it to
+    "some nearby leg" would be the silent mis-assignment this whole encoding
+    exists to make impossible.
+
+    Empty -> None, not [], matching apply_round_fields and what
+    concert_round_rows reads to put a round in the all-legs group.
+    """
+    key_to_day_id = key_to_day_id or {}
+    ids: list[int] = []
+    for token in value.replace(",", " ").split():
+        if token.isdigit() and int(token) in valid_day_ids:
+            day_id = int(token)
+        elif token in key_to_day_id:
+            day_id = key_to_day_id[token]
         else:
-            general.append(r)
-    return by_day, general
+            continue
+        if day_id not in ids:
+            ids.append(day_id)
+    return ids or None
+
+
+# Separators an editor might put between a group name and the rest of a
+# title. Trimmed after the group is removed so "Aqours 9th LoveLive!" and
+# "Aqours - 9th LoveLive!" both leave "9th LoveLive!" rather than a stray dash.
+_TITLE_SEPARATORS = " \t·・:：-–—~〜|/"
+
+
+def title_without_lineage(title: str, group_names: list[str]) -> str:
+    """The concert title with a leading group name removed, because the
+    concert page's lineage line already carries it -- "Aqours · Aqours 9th
+    LoveLive!" reads as a stutter, and the half a reader actually needs is
+    the subtitle.
+
+    Only a LEADING match is stripped, and only when something is left over: a
+    concert whose whole title IS the group name has nothing else to show, and
+    a group named mid-title is usually part of a real phrase rather than a
+    prefix ("Aqours" in "...featuring Aqours").
+    """
+    for name in group_names:
+        if not name:
+            continue
+        if len(title) > len(name) and title[: len(name)].casefold() == name.casefold():
+            rest = title[len(name):].lstrip(_TITLE_SEPARATORS)
+            if rest:
+                return rest
+    return title
 
 
 def find_venue_tag(venue_tags: list[Tag], name: str | None) -> Tag | None:
@@ -292,33 +355,6 @@ def find_venue_tag(venue_tags: list[Tag], name: str | None) -> Tag | None:
         if t.name.strip().lower() == name:
             return t
     return None
-
-
-def is_round_past(round_: Round, now: datetime) -> bool:
-    """A round is past once every timestamp it has set has already
-    happened; a round with no timestamps set at all can't be "past"."""
-    timestamps = [
-        t for t in (
-            round_.opens_at_utc, round_.closes_at_utc,
-            round_.results_at_utc, round_.payment_deadline_at_utc,
-        ) if t is not None
-    ]
-    return bool(timestamps) and all(t < now for t in timestamps)
-
-
-def is_day_past(day: ConcertDay, now: datetime) -> bool:
-    return day.starts_at_utc < now
-
-
-def concert_date_range(days: list[ConcertDay]) -> tuple[datetime, datetime] | None:
-    """Earliest and latest day.starts_at_utc among LIVE (non-cancelled)
-    legs, for the detail page header's date-range summary. None when there
-    are no days yet, or every existing day is cancelled."""
-    live_days = [d for d in days if not d.cancelled]
-    if not live_days:
-        return None
-    starts = [d.starts_at_utc for d in live_days]
-    return min(starts), max(starts)
 
 
 # ── Reminder-rule fragment (htmx swap target) ────────────────────────────
@@ -544,6 +580,43 @@ async def create_concert(
     return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)
 
 
+async def concert_rounds_context(
+    session: AsyncSession, user_id: int, concert: Concert, now: datetime | None = None
+) -> dict:
+    """Everything `_round_rows.html` needs, as one dict.
+
+    Two callers render that fragment and they MUST agree: GET
+    /concerts/{event_id} builds it inside the page, and POST
+    /rounds/{id}/outcome swaps it back in after a capture action. Assembling
+    it in two places is how the swapped-in copy quietly starts disagreeing
+    with the one it replaced -- a leg missing its venue, or a round in the
+    wrong group.
+
+    Everything the fragment touches is loaded HERE, eagerly. A lazy load
+    during async template rendering raises MissingGreenlet, which is a 500,
+    and this project has already shipped that bug once (Concert.tags).
+    """
+    now = now or datetime.now(UTC)
+    leg_groups, all_legs_rows = await concert_round_rows(session, user_id, concert, now=now)
+    # One query for every VENUE tag, then an in-memory match per leg -- the
+    # same free-text-to-structured resolution the old per-day subtitle used.
+    venue_tags = list(
+        (await session.execute(select(Tag).where(Tag.kind == TagKind.VENUE))).scalars()
+    )
+    return {
+        "concert": concert,
+        "now": now,
+        "leg_groups": leg_groups,
+        "all_legs_rows": all_legs_rows,
+        "day_venue_tags": {
+            g.day.id: find_venue_tag(venue_tags, g.day.venue) for g in leg_groups
+        },
+        "next_row": concert_next_moment(
+            [row for g in leg_groups for row in g.rounds] + all_legs_rows, now=now
+        ),
+    }
+
+
 @router.get("/concerts/{event_id}", response_class=HTMLResponse)
 async def concert_detail(
     request: Request,
@@ -558,16 +631,11 @@ async def concert_detail(
     from app.web.routes.preferences import my_presets
 
     presets = await my_presets(session, user.id)
-    venue_tags = list(
-        (await session.execute(select(Tag).where(Tag.kind == TagKind.VENUE))).scalars()
+    # The lineage line above the title carries the group, so the title itself
+    # does not repeat it (see title_without_lineage).
+    display_title = title_without_lineage(
+        concert.title, [t.name for t in concert.tags if t.kind is TagKind.GROUP]
     )
-    by_day, general = group_rounds_by_day(concert)
-    now = datetime.now(UTC)
-    day_venue_tags = {d.id: find_venue_tag(venue_tags, d.venue) for d in concert.days}
-    past_round_ids = {r.id for r in concert.rounds if is_round_past(r, now)}
-    past_day_ids = {d.id for d in concert.days if is_day_past(d, now)}
-    date_range = concert_date_range(concert.days)
-    concert_past = bool(date_range) and date_range[1] < now
     # Editor-only, and only fetched for editors -- viewers have no use for
     # who-changed-what, and it's one extra query worth skipping for them.
     audit_log = await concert_audit_log(session, concert.id) if user.is_editor else []
@@ -576,11 +644,9 @@ async def concert_detail(
         "concert_detail.html",
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
          "anchors": list(Anchor),
-         "rounds_by_day": by_day, "general_rounds": general,
-         "day_venue_tags": day_venue_tags, "past_round_ids": past_round_ids,
-         "past_day_ids": past_day_ids, "now": now,
-         "date_range": date_range, "concert_past": concert_past,
-         "audit_log": audit_log},
+         "display_title": display_title,
+         "audit_log": audit_log,
+         **await concert_rounds_context(session, user.id, concert)},
     )
 
 
@@ -597,7 +663,6 @@ async def edit_concert_form(
     concert = await get_concert_by_event_id(session, event_id)
     await session.refresh(concert, ["days", "rounds", "tags"])
     picker = await tag_picker_context(session)
-    days_by_id = {d.id: d for d in concert.days}
 
     # artist_excluded: members of an already-attached group that AREN'T
     # currently on the concert (previously pruned). Without this, the
@@ -618,7 +683,30 @@ async def edit_concert_form(
         "artist_excluded": [str(i) for i in excluded_ids],
         "venue": [str(t.id) for t in concert.tags if t.kind is TagKind.VENUE],
     }
-    rounds_with_leg = [(r, round_leg_display(r, days_by_id)) for r in concert.rounds]
+    # Each round row renders one toggle chip per LIVE leg, pre-selected from
+    # the round's real applies_to -- no text matching in either direction.
+    # Cancelled legs get no chip (there is nothing useful to newly assign a
+    # round to), but an id already pointing at one still round-trips: the
+    # hidden field below carries the round's WHOLE applies_to, and
+    # parse_round_legs keeps every id whose day still exists.
+    legs = sorted(
+        (d for d in concert.days if not d.cancelled),
+        key=lambda d: (d.starts_at_utc, d.id),
+    )
+    rounds_with_legs = [
+        (r, " ".join(str(i) for i in (r.applies_to or [])), set(r.applies_to or []))
+        for r in concert.rounds
+    ]
+    # The folds each summarise their own contents, so a closed one still says
+    # what is inside it. Assembled here rather than in the template because
+    # the tag summary is a per-kind ordering the template has no business
+    # re-deriving, and audit_log needs a query.
+    tag_summary = [
+        t.name
+        for kind in (TagKind.FRANCHISE, TagKind.GROUP, TagKind.ARTIST, TagKind.VENUE)
+        for t in concert.tags
+        if t.kind is kind
+    ]
     return templates.TemplateResponse(
         request,
         "concert_edit.html",
@@ -630,7 +718,11 @@ async def edit_concert_form(
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
             "initial_selected": initial_selected,
-            "rounds_with_leg": rounds_with_leg,
+            "legs": legs,
+            "rounds_with_legs": rounds_with_legs,
+            "tag_summary": tag_summary,
+            "audit_log": await concert_audit_log(session, concert.id),
+            "tz": await user_tz(session, user.id),
         },
     )
 
@@ -656,6 +748,7 @@ async def edit_concert(
     artist_tags: list[int] = Form(default=[]),
     venue_tags: list[int] = Form(default=[]),
     day_id: list[str] = Form(default=[]),
+    day_key: list[str] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
     day_city: list[str] = Form(default=[]),
@@ -673,7 +766,7 @@ async def edit_concert(
     round_payment_at: list[str] = Form(default=[]),
     round_url: list[str] = Form(default=[]),
     round_notes: list[str] = Form(default=[]),
-    round_leg: list[str] = Form(default=[]),
+    round_legs: list[str] = Form(default=[]),
 ):
     """Atomic update: scalars assigned directly; tags/days/rounds
     RECONCILED (not blindly recreated) against what's submitted, so rows
@@ -723,14 +816,25 @@ async def edit_concert(
     # See create_concert's identical comment: a submitter that omits
     # day_cancelled entirely means "not cancelled" for every row.
     day_cancelled = day_cancelled + ["false"] * (len(day_label) - len(day_cancelled))
+    # day_key is padded only when omitted ENTIRELY (an older submitter, or a
+    # test that predates it). A partially-supplied array is left alone so the
+    # strict zip below raises instead of end-padding it into misalignment --
+    # a key that slid one row would assign a round to the wrong leg, silently,
+    # which is worse than a 500.
+    if not day_key:
+        day_key = [""] * len(day_label)
     kept_day_ids: set[int] = set()
-    days_for_leg_matching: list[ConcertDay] = []
-    for did, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
-        day_id, day_label, day_starts_at, day_city, day_venue, day_venue_address, day_doors_at,
-        day_cancelled, strict=True,
+    submitted_days: list[ConcertDay] = []
+    # key -> the id that key's row actually got. Built INSIDE the loop below,
+    # from the same tuple that produced the ConcertDay, so a key can never be
+    # paired with another row's day; the ids are filled in after the flush.
+    key_rows: list[tuple[str, ConcertDay]] = []
+    for key, did, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
+        day_key, day_id, day_label, day_starts_at, day_city, day_venue, day_venue_address,
+        day_doors_at, day_cancelled, strict=True,
     ):
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
-            continue  # blank trailing row from the repeatable UI
+            continue  # blank trailing row from the repeatable UI -- key and all
         did = did.strip()
         if did.isdigit() and int(did) in existing_days:
             day = apply_day_fields(
@@ -743,34 +847,70 @@ async def edit_concert(
                 concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled
             )
             session.add(day)
-        days_for_leg_matching.append(day)
+        submitted_days.append(day)
+        if key.strip():
+            key_rows.append((key.strip(), day))
     for did, day in existing_days.items():
         if did not in kept_day_ids:
             await session.delete(day)
-    await session.flush()  # new/kept days have real ids, needed for leg-matching below
+    await session.flush()  # new/kept days have real ids, needed by parse_round_legs below
     newly_cancelled_day_ids = {
-        d.id for d in days_for_leg_matching if d.cancelled
+        d.id for d in submitted_days if d.cancelled
     } - before_cancelled_day_ids
+    # The legs a round may legitimately point at after this submit. A day the
+    # editor dropped is gone from here, so its id cannot survive in any
+    # applies_to; a cancelled one is still here (invariant 2), so an id
+    # pointing at it does.
+    valid_day_ids = {d.id for d in submitted_days}
+    # Resolved only now, because a row added in this submit had no id until
+    # the flush above. A duplicate key would be the one way two rows could
+    # collide, so the first row claiming a key keeps it rather than a later
+    # one silently stealing the reference.
+    key_to_day_id: dict[str, int] = {}
+    for key, day in key_rows:
+        key_to_day_id.setdefault(key, day.id)
 
     # -- Rounds: same id-preserving reconciliation.
     await session.refresh(concert, ["rounds"])
     existing_rounds = {r.id: r for r in concert.rounds}
     kept_round_ids: set[int] = set()
+    # round_legs is newer than the other round_* fields, so a submitter can
+    # legitimately omit it ENTIRELY: a browser still holding the pre-deploy
+    # edit page posts the old free-text `round_leg`, which this signature no
+    # longer accepts, and no `round_legs` at all. That omission means "this
+    # submitter has nothing to say about legs" -- every round keeps the
+    # applies_to it already had. Reading it as "no legs selected" instead
+    # (which is what a blank-filled pad says) let one innocent Save wipe the
+    # leg assignment off every round of the concert.
+    #
+    # A short-but-NONEMPTY array gets no padding, exactly as day_key above:
+    # end-padding one slides every later row's selection back a row and
+    # assigns rounds to the wrong legs, silently, which is worse than a 500.
+    # The strict zip below raises on it instead.
+    legs_omitted = not round_legs
+    if legs_omitted:
+        round_legs = [""] * len(round_label)
     for (
-        rid, label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url, notes_, leg
+        rid, label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url, notes_, legs
     ) in zip(
         round_id, round_label, round_label_en, round_kind, round_opens_at, round_closes_at,
-        round_results_at, round_payment_at, round_url, round_notes, round_leg,
+        round_results_at, round_payment_at, round_url, round_notes, round_legs,
         strict=True,
     ):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue
-        applies_to = resolve_round_leg(days_for_leg_matching, leg)
         rid = rid.strip()
-        if rid.isdigit() and int(rid) in existing_rounds:
+        existing = existing_rounds.get(int(rid)) if rid.isdigit() else None
+        if legs_omitted and existing is not None:
+            # Fed back through parse_round_legs rather than assigned straight
+            # across, so an id whose leg THIS submit deleted still drops --
+            # preserving the selection must not preserve a dangling reference.
+            legs = " ".join(str(i) for i in existing.applies_to or [])
+        applies_to = parse_round_legs(legs, valid_day_ids, key_to_day_id)
+        if existing is not None:
             round_ = apply_round_fields(
-                existing_rounds[int(rid)], label, kind_, opens_at, closes_at, results_at,
+                existing, label, kind_, opens_at, closes_at, results_at,
                 payment_at, url, applies_to, label_en, notes_,
             )
             kept_round_ids.add(round_.id)

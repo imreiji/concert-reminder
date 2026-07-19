@@ -1,0 +1,34 @@
+{#- One round row's `applies_to`, as toggle chips.
+
+    The hidden input is what actually submits: a space-separated list of leg
+    references, ONE field per round row so the parallel round_* lists stay
+    positionally aligned (see parse_round_legs in routes/concerts.py).
+    Toggling a chip adds or removes only that chip's own reference, so any
+    reference the chips do not show -- a cancelled leg, which gets no chip --
+    stays in the value and round-trips untouched.
+
+    A reference is a `day_key`: for a saved leg that IS its ConcertDay id,
+    which is what these chips render; for a leg added in the browser it is a
+    generated string, and _leg_chips_script.html appends that chip client
+    side. The server resolves both after the days are flushed.
+
+    `value` is the round's whole applies_to; `selected` the same as a set.
+    Both blank for a fresh row in the <template>.
+
+    Leg names are user-controlled, so they go in text content and a
+    data-leg-id, never an inline on* handler (invariant 7); the toggle is a
+    delegated listener in _leg_chips_script.html, and the client-side chips
+    are built with textContent rather than innerHTML for the same reason.
+    `data-leg-id` rather than `data-name`, which collides with base.html's
+    filterChips(). -#}
+<div class="leg-chips" data-leg-chips>
+  <span class="dim tiny">Applies to</span>
+  <input type="hidden" name="round_legs" value="{{ value | default('', true) }}">
+  <span class="dim tiny" data-no-legs {% if legs %}hidden{% endif %}>Add a leg to assign this round to it.</span>
+  {% for d in legs %}
+  <button type="button" class="chip{% if selected and d.id in selected %} on{% endif %}"
+          data-leg-id="{{ d.id }}"
+          aria-pressed="{{ 'true' if selected and d.id in selected else 'false' }}"
+    >{{ d.label or d.city or jst(d.starts_at_utc).strftime('%b %d') }}</button>
+  {% endfor %}
+</div>

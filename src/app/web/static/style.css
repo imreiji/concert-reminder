@@ -88,7 +88,6 @@ button:hover { opacity: .88; }
 button.danger { background: var(--danger); border-color: var(--danger); }
 button.x { background: none; border: none; color: var(--dim); font-size: 1.1rem; padding: 0 .3rem; }
 button.x:hover { color: var(--danger); opacity: 1; }
-.concert-head p { margin-top: -.6rem; }
 
 /* Links that act like buttons (nav actions, page-level actions) get the
    same visual treatment as real <button>s -- filled for the primary
@@ -223,11 +222,92 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .row-item input, .row-item select { flex: 1 1 auto; min-width: 8rem; }
 .import-error { color: var(--danger); }
 
-.header-tags { margin: .2rem 0 .4rem; }
+/* A round row's applies_to: one toggle chip per leg. Basis 100% so the
+   chips get their own line rather than competing with the row's inputs --
+   which leg(s) a round covers is a different question from when it opens. */
+.leg-chips {
+  flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem;
+}
+.leg-chips input[type="hidden"] { flex: 0 0 auto; min-width: 0; }
 
-/* Performances: one section per day/leg, its rounds table nested right under it */
-.perf-detail { margin: 1.2rem 0; padding-top: 1.2rem; border-top: 1px solid var(--line); }
-.perf-detail:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+/* ── Concert editor ─────────────────────────────────────────────────────
+   Rounds and legs lead the page; details, tags and history fold away. The
+   form is wider than .stack.wide's reading measure because a round row is
+   four datetimes side by side, not prose. */
+.editor { max-width: 60rem; }
+.editor .ebar {
+  display: flex; flex-wrap: wrap; gap: .5rem .8rem; align-items: flex-end;
+  padding-bottom: .9rem; border-bottom: 1px solid var(--line);
+}
+.editor .ebar label { display: grid; gap: .2rem; font-size: .85rem; color: var(--dim); }
+.editor .ebar label.grow { flex: 1 1 22rem; min-width: 0; }
+.section-head { margin-top: 1.4rem; }
+.section-head h2 { margin: 0; }
+.section-head p { margin: .15rem 0 0; }
+.section-sub { margin: 1.4rem 0 .2rem; }
+.editor-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .7rem 0 .4rem;
+}
+.editor-actions .dim { margin-right: auto; }
+
+/* One round: name and kind on top, then which legs it covers, then its
+   four timestamps. The leg question comes before the times because it is
+   the one the old form could not express at all. */
+.redit {
+  display: grid; gap: .5rem; padding: .7rem .8rem;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--raise);
+}
+.redit + .redit { margin-top: .5rem; }
+.redit-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.redit-top input, .redit-top select { flex: 1 1 auto; min-width: 8rem; }
+.redit-name { flex: 2 1 14rem; font-weight: 600; }
+.redit-times, .redit-extra {
+  display: grid; gap: .4rem .6rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.redit-times label { display: grid; gap: .2rem; font-size: .8rem; color: var(--dim); }
+
+/* One leg. Cancelled is a toggle on the leg itself rather than a <select>
+   among its fields -- it is a fact about the show, not another attribute. */
+.eleg {
+  display: grid; gap: .5rem; padding: .7rem .8rem;
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.eleg + .eleg { margin-top: .5rem; }
+.eleg.cancelled { opacity: .6; }
+.eleg-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.eleg-top > input { flex: 1 1 auto; min-width: 8rem; }
+.eleg-fields {
+  display: grid; gap: .4rem .6rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.eleg-fields label { display: grid; gap: .2rem; font-size: .8rem; color: var(--dim); }
+.cancel-toggle { flex: 0 0 auto; }
+.cancel-toggle .chip.on { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* Folds. The summary states its contents, so a closed fold still says what
+   is in it rather than only naming itself. */
+details.fold {
+  margin-top: .9rem; border: 1px solid var(--line); border-radius: 8px;
+}
+details.fold > summary {
+  cursor: pointer; padding: .6rem .8rem; font-weight: 600;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem;
+}
+.fold-hint { margin-left: auto; font-weight: 400; color: var(--dim); font-size: .82rem; }
+.fold-body { padding: 0 .8rem .8rem; display: grid; gap: .5rem; }
+.fold-body label { display: grid; gap: .2rem; font-size: .85rem; color: var(--dim); }
+
+/* Neither of these is an edit, and one is not undoable -- so they sit apart
+   from the form, below the save button, and say what they do. */
+.danger-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .8rem;
+  margin-top: 2rem; padding: .8rem 1rem;
+  border: 1px solid var(--danger); border-radius: 8px;
+}
+.danger-row p { margin: .15rem 0 0; max-width: 44rem; }
+.danger-row-actions { margin-left: auto; display: flex; gap: .5rem; flex-wrap: wrap; }
+
 .leg-heading { margin: 0 0 .2rem; font-size: 1rem; color: var(--dim); }
 .tile .kind-tag { color: var(--dim); font-size: .8em; }
 
@@ -239,15 +319,6 @@ h3.leg-heading.past { text-decoration: line-through; }
 h3.leg-heading.cancelled { text-decoration: line-through; }
 .badge.cancelled { color: var(--danger); }
 
-/* Round table */
-.table-scroll { overflow-x: auto; margin: .4rem 0 1rem; }
-table.rounds { border-collapse: collapse; width: 100%; font-size: .9rem; }
-table.rounds th {
-  text-align: left; font-weight: 600; color: var(--dim); font-size: .8rem;
-  padding: .3rem .6rem; border-bottom: 1px solid var(--line);
-}
-table.rounds td { padding: .5rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-table.rounds tr.round-row.past td { opacity: .65; }
 .countdown { display: inline-block; }
 
 /* Header meta grid ("dt"/"dd" summary), mirrors the reference site's layout */
@@ -431,4 +502,105 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   .deadline-rows .row > :nth-child(2) { grid-row: 1; text-align: right; }
   .row .title-c { grid-column: 1 / -1; }
   .row .acts { grid-column: 1 / -1; justify-content: flex-start; margin-top: .25rem; }
+}
+
+/* -- Concert page ---------------------------------------------------------
+   Same token vocabulary as Home; nothing new is invented here. The page has
+   no header date range and no header venue on purpose -- both belong to a
+   leg, which is the only place they are reliably true. */
+.chead { margin-top: 1.5rem; display: grid; gap: .55rem; }
+.chead h1 { margin: 0; font-size: 1.7rem; font-weight: 650; text-wrap: balance; }
+/* Franchise + group lead, per the tile display rule ("F · G"). The group is
+   what someone recognises first -- the title is often a long subtitle. */
+.chead .lineage {
+  margin: 0; font-size: .78rem; letter-spacing: .1em; text-transform: uppercase;
+  font-weight: 700; color: var(--dim);
+}
+.chead .lineage b { color: var(--accent); font-weight: 700; }
+.chead .othertags, .chead .links, .chead .bar2 {
+  margin: 0; display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap;
+}
+.chead .othertags .lbl, .chead .links .lbl2 {
+  font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--dim); font-weight: 650;
+}
+.chead .links { font-size: .8125rem; color: var(--dim); }
+.chead .links a { color: var(--accent); text-decoration: none; }
+.chead .links a:hover { text-decoration: underline; }
+.chead .bar2 { align-items: center; margin-top: .3rem; }
+
+/* Performers are the reason someone is on this page; a nine-member group
+   mixed into a generic chip row is unreadable. The label names the source
+   because these are the members MATERIALISED at attach time (invariant 3),
+   which can legitimately differ from the group's membership today. */
+.performers {
+  margin-top: 1.1rem; padding: .85rem .95rem; border: 1px solid var(--line);
+  border-radius: 3px; background: var(--raise);
+}
+.performers .plabel {
+  font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--dim); font-weight: 650; margin-bottom: .5rem;
+  display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap;
+}
+.performers .plabel span { letter-spacing: 0; text-transform: none; font-weight: 500; }
+.performers .chips { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+.performers .chip {
+  background: var(--chip); border-color: transparent;
+  display: inline-flex; align-items: center; line-height: 1.5; padding: .22rem .6rem;
+}
+.performers .chip.grp { background: var(--accent); color: #fff; font-weight: 650; }
+
+/* "Next for you": the nearest moment on THIS concert that wants the reader.
+   Accent rather than the danger red Home's "Closes next" uses -- that one is
+   sitewide triage, this one is a single campaign's status. */
+.standing {
+  margin-top: 1.75rem; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 3px; background: var(--raise); box-shadow: var(--shadow);
+  padding: 1rem 1.15rem; display: grid; grid-template-columns: 1fr auto;
+  gap: 1rem; align-items: center;
+}
+.standing .l {
+  font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--accent); font-weight: 700;
+}
+.standing .w { font-size: 1.05rem; font-weight: 600; margin-top: .25rem; }
+.standing .s { color: var(--dim); font-size: .875rem; margin-top: .15rem; }
+
+/* One section per leg, each with its own date, doors and venue. A cancelled
+   leg is dimmed and badged, never hidden: invariant 2 keeps the row because
+   every round's applies_to points at it. */
+.leg { margin-top: 2.25rem; }
+.leghead {
+  display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
+  padding-bottom: .6rem; border-bottom: 1px solid var(--line);
+}
+.leghead h3.leg-heading { margin: 0; font-size: 1rem; font-weight: 650; color: var(--ink); }
+.leghead .lv { color: var(--dim); font-size: .8125rem; }
+.leghead .lvenue { display: block; }
+.leg.off .rnds, .leg.off .lv { opacity: .45; }
+
+/* The round row: your standing, what it is, when, what you can do. Replaces
+   a six-column table in a horizontal-scroll wrapper whose cells were mostly
+   empty -- one moment leads in bold and the rest are demoted beneath it. */
+.rnds { display: grid; }
+.rnd2 {
+  display: grid; grid-template-columns: 7rem 1fr 15rem 13rem; gap: 1rem;
+  align-items: center; padding: .75rem .1rem; border-bottom: 1px solid var(--line);
+}
+.rnd2.past { opacity: .55; }
+.rnd2 .nm { font-weight: 550; line-height: 1.3; }
+.rnd2 .nm em {
+  font-style: normal; display: block; font-size: .75rem;
+  color: var(--dim); font-weight: 400;
+}
+.rnd2 .dts { font-size: .8125rem; color: var(--dim); line-height: 1.4; }
+.rnd2 .dts b { display: block; color: var(--ink); font-weight: 600; }
+.rnd2 .dts .more { display: block; font-size: .75rem; }
+.rnd2 .acts { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; }
+.rnd2 .acts .ics { text-decoration: none; }
+
+@media (max-width: 900px) {
+  .rnd2 { grid-template-columns: 7rem 1fr; }
+  .rnd2 .dts, .rnd2 .acts { grid-column: 1 / -1; justify-content: flex-start; }
+  .standing { grid-template-columns: 1fr; }
 }

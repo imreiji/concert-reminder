@@ -518,12 +518,16 @@ async def test_detail_page_groups_rounds_by_leg(client):
     )
     r = client.get("/concerts/two-legs")
     assert r.status_code == 200
-    day1_pos = r.text.index('leg-heading">Day 1<')
-    round1_pos = r.text.index("Day 1 round")
-    day2_pos = r.text.index('leg-heading">Day 2<')
-    round2_pos = r.text.index("Day 2 round")
-    general_heading_pos = r.text.index('leg-heading">General<')
-    general_round_pos = r.text.index("General round")
+    # Scoped past "Next for you", which names whichever round wants the reader
+    # first and so legitimately mentions one of these before its leg.
+    body = r.text.split("<!-- /standing -->", 1)[-1]
+    day1_pos = body.index('leg-heading">Day 1<')
+    round1_pos = body.index("Day 1 round")
+    day2_pos = body.index('leg-heading">Day 2<')
+    round2_pos = body.index("Day 2 round")
+    # The untied round lands in the all-legs group, which renders last.
+    general_heading_pos = body.index('leg-heading">All legs<')
+    general_round_pos = body.index("General round")
     assert day1_pos < round1_pos < day2_pos < round2_pos < general_heading_pos < general_round_pos
 
 
@@ -543,15 +547,18 @@ async def test_round_with_no_day_association_shown_as_general_only(client):
         },
     )
     r = client.get("/concerts/c")
-    assert "General" in r.text
+    assert "All legs" in r.text
     assert "Untied round" in r.text
+    # ...and specifically NOT under Day 1's own section.
+    day1 = r.text.split('leg-heading">Day 1<', 1)[1].split("<h3", 1)[0]
+    assert "Untied round" not in day1
 
 
 async def test_detail_page_nests_performances_and_their_rounds_together(client):
-    """Each performance gets one integrated section (heading + venue/time
-    info + its rounds table right underneath), including a performance with
-    no rounds yet at all -- previously that day was entirely absent from the
-    separate rounds section."""
+    """Each leg gets one integrated section (heading + venue/time info + its
+    rounds right underneath), including a leg with no rounds yet at all --
+    previously that day was entirely absent from the separate rounds
+    section."""
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
@@ -569,14 +576,14 @@ async def test_detail_page_nests_performances_and_their_rounds_together(client):
     )
     r = client.get("/concerts/c")
     assert r.status_code == 200
-    # both performances get their own integrated section...
-    assert r.text.count('class="perf-detail"') == 2
-    # ...Day 1's includes its round table...
+    # both legs get their own integrated section...
+    assert r.text.count('class="leg-heading') == 2
+    # ...Day 1's includes its rounds...
     day1_section = r.text[r.text.index('leg-heading">Day 1<'):r.text.index('leg-heading">Day 2<')]
     assert "Day 1 round" in day1_section
     # ...Day 2 has none yet, but still gets its section with a placeholder
     day2_section = r.text[r.text.index('leg-heading">Day 2<'):]
-    assert "No rounds yet for this performance." in day2_section
+    assert "No rounds yet for this leg." in day2_section
 
 
 # ── YAML export ───────────────────────────────────────────────────────────
@@ -790,10 +797,11 @@ async def test_edit_page_shows_new_round_kind_labels(client):
     assert "Overseas tour package" in r.text
 
 
-async def test_edit_page_leg_select_carries_the_resolved_leg_as_data_initial(client):
-    """The leg field is a <select> populated client-side from the current
-    performance rows; the server can only hand it the round's current
-    resolved leg via a data attribute for JS to honor on first sync."""
+async def test_edit_page_preselects_the_rounds_real_leg_ids(client):
+    """The leg field is a toggle chip per leg over a hidden id list, filled
+    from the round's real applies_to -- no text matching in either
+    direction, so a round covering several legs cannot collapse to one on
+    save. The full contract lives in tests/test_editor_legs.py."""
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
@@ -807,9 +815,12 @@ async def test_edit_page_leg_select_carries_the_resolved_leg_as_data_initial(cli
             "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
         },
     )
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
     r = client.get("/concerts/c/edit")
     assert r.status_code == 200
-    assert 'class="round-leg-select" data-initial="Day 1"' in r.text
+    assert f'name="round_legs" value="{day_id}"' in r.text
+    assert f'data-leg-id="{day_id}"' in r.text
 
 
 def test_edit_page_is_editor_only(client):
@@ -1043,7 +1054,9 @@ async def test_edit_page_defaults_new_day_rows_to_not_cancelled(client):
         assert day.cancelled is False
 
 
-async def test_edit_page_prefills_day_cancelled_select(client):
+async def test_edit_page_prefills_the_cancelled_toggle(client):
+    """Cancelled is a toggle on the leg itself, not a <select> among its
+    fields; the hidden input behind it carries the state."""
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
@@ -1066,7 +1079,9 @@ async def test_edit_page_prefills_day_cancelled_select(client):
     )
     r = client.get("/concerts/c/edit")
     assert r.status_code == 200
-    assert '<option value="true" selected>Cancelled</option>' in r.text
+    assert 'name="day_cancelled" value="true"' in r.text
+    assert 'data-cancel-toggle' in r.text
+    assert 'aria-pressed="true"' in r.text
 
 
 async def test_cancelling_the_only_leg_clears_its_reminders_and_notifies(client):
@@ -1163,8 +1178,8 @@ async def test_detail_page_shows_cancelled_badge_on_cancelled_leg_only(client):
     )
     r = client.get("/concerts/c")
     assert r.status_code == 200
-    day1_section = r.text[r.text.index('">Day 1'):r.text.index('">Day 2')]
-    day2_section = r.text[r.text.index('">Day 2'):]
+    day1_section = r.text[r.text.index('leg-heading">Day 1'):r.text.index('leg-heading">Day 2')]
+    day2_section = r.text[r.text.index('leg-heading">Day 2'):]
     assert "Cancelled" in day1_section
     assert "Cancelled" not in day2_section
 
@@ -1172,8 +1187,8 @@ async def test_detail_page_shows_cancelled_badge_on_cancelled_leg_only(client):
 async def test_round_tied_to_cancelled_day_still_renders_not_vanishes(client):
     """Regression guard for the exact bug this whole design was built to
     avoid (see the spec's "bug this design has to avoid" section):
-    group_rounds_by_day() looks up round.applies_to ids in a dict keyed by
-    concert.days ids. If a cancelled day were ever DELETED rather than just
+    concert_round_rows() (db/service.py) groups round.applies_to ids against
+    concert.days. If a cancelled day were ever DELETED rather than just
     flagged, a round referencing it would silently disappear from the page
     entirely -- not fall back to "General", just vanish. Marking (not
     deleting) the day keeps it in concert.days, so the round still resolves
@@ -1205,7 +1220,7 @@ async def test_round_tied_to_cancelled_day_still_renders_not_vanishes(client):
             "round_id": [str(round_id)], "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+            "round_url": [""], "round_notes": [""], "round_legs": [str(day_id)],
         },
     )
     r = client.get("/concerts/c")
@@ -1214,44 +1229,11 @@ async def test_round_tied_to_cancelled_day_still_renders_not_vanishes(client):
     assert "No rounds yet for this performance." not in r.text
 
 
-async def test_concert_date_range_excludes_cancelled_legs(client):
-    login_as(client, EDITOR_ID, "reiji")
-    client.post(
-        "/concerts",
-        data={
-            "title": "C", "event_id": "c",
-            "day_label": ["Day 1", "Day 2"],
-            "day_starts_at": ["2099-08-01T18:00", "2099-09-01T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
-        },
-    )
-    async with client.db() as s:
-        days = sorted(
-            (await s.execute(select(ConcertDay))).scalars(), key=lambda d: d.label
-        )
-        day1_id = days[0].id  # the earlier date -- will be cancelled
-
-    client.post(
-        "/concerts/c/edit",
-        data={
-            "title": "C", "event_id": "c",
-            "day_id": [str(day1_id), str(days[1].id)],
-            "day_label": ["Day 1", "Day 2"],
-            "day_starts_at": ["2099-08-01T18:00", "2099-09-01T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
-            "day_cancelled": ["true", "false"],
-        },
-    )
-    r = client.get("/concerts/c")
-    assert r.status_code == 200
-    # the header date-range summary should reflect Day 2 (Sept), not the
-    # cancelled Day 1 (Aug) -- both dates would otherwise appear as the
-    # range. Scoped to the header block: the per-leg list below it still
-    # (correctly) shows the cancelled day's own date -- a cancelled day is
-    # flagged, never deleted, so its row keeps rendering with a "Cancelled"
-    # badge. Only the header's date-range *summary* excludes it.
-    header = r.text.split('<header class="concert-head">')[1].split("</header>")[0]
-    assert "2099-08-01" not in header
-    assert "2099-09-01" in header
+# `test_concert_date_range_excludes_cancelled_legs` lived here. It pinned the
+# concert header's single date-range summary, which is gone: a tour's legs
+# have different dates and different cities, so ANY single header summary
+# disagrees with the sections under it. Dates now live on the leg, cancelled
+# legs included (dimmed and badged, never hidden -- invariant 2). The
+# replacement contract is in tests/test_concert_page.py:
+# `test_the_header_carries_no_date_range_and_no_single_venue` and
+# `test_a_cancelled_leg_is_dimmed_but_keeps_its_own_date_and_rounds`.

@@ -132,8 +132,8 @@ deleting them.
    successful DM delivery marks a row sent; discord.Forbidden drops it;
    transient errors retry next tick. Never break these semantics.
    A cancelled `ConcertDay` is never deleted, only flagged —
-   `group_rounds_by_day()` and every `applies_to` consumer rely on the day
-   row still existing. Rounds have no status of their own; a round counts
+   `db/service.py`'s `concert_round_rows()` and every `applies_to` consumer
+   rely on the day row still existing. Rounds have no status of their own; a round counts
    as cancelled when every day in its `applies_to` is cancelled.
    `RoundOutcome` (per-user, per-round lottery progress) layers a second,
    per-user suppression pass onto the same `sync_rule` candidate-list

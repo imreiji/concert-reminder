@@ -1,0 +1,70 @@
+{# The capture buttons for ONE round on ONE row -- the single definition of
+   "which button shows when", shared by Home's "Coming up" rows
+   (`_deadline_rows.html`) and the concert page's per-leg round rows.
+
+   It lives in its own file because two copies of these rules is how they
+   drift: the gates behind them (`can_capture` / `can_report_result`) already
+   come from one place in the service layer (`capture_gates`), and splitting
+   the markup that reads them would put the two halves back out of step.
+
+   `row` is anything carrying `.outcome`, `.can_capture` and
+   `.can_report_result` -- a DeadlineRow or a RoundRow. `target` is the htmx
+   selector the POST swaps, which differs per surface, so the caller supplies
+   it. `prune_title`/`prune_url` feed Home's follow-up dialog; a caller
+   without one omits them and the attributes simply do not render.
+
+   The caller is responsible for only invoking this where there IS a round: a
+   deadline row derived from a ConcertDay has nothing to post against. #}
+
+{% macro capture_actions(row, round_id, target, prune_title=None, prune_url=None) -%}
+{# `upcoming_deadlines` emits one row per FUTURE anchor, so one round can
+   produce three or four rows. Gating on row.can_capture (the round has
+   opened) stops every one of them from offering an independent "I have
+   applied" against a round nobody could have entered yet -- an irreversible
+   write, since record_round_outcome refuses to overwrite a starting state. #}
+{% if not row.can_capture %}
+<span class="done">Not open yet</span>
+{% elif row.outcome is none %}
+<form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
+      hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome">
+  <input type="hidden" name="outcome" value="applied">
+  <button class="act yes" type="submit">I have applied</button>
+</form>
+{# data-prune-title, not data-name: base.html's shared filterChips() selector
+   claims [data-name] globally. The title is user-controlled text and reaches
+   the dialog through dataset, never through an inline on* handler
+   (invariant 7). #}
+<form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
+      hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome"
+      {% if prune_title %}data-prune-title="{{ prune_title }}" data-prune-url="{{ prune_url }}"{% endif %}>
+  <input type="hidden" name="outcome" value="not_applied">
+  <button class="act no" type="submit">Not applying</button>
+</form>
+{% elif row.can_report_result %}
+{# The web's only exit from APPLIED. WON/LOST live on the DM buttons too, but
+   a dm_blocked user -- or a deploy with bot_enabled=False -- has no DM to
+   press, and record_round_outcome will not overwrite a starting state, so
+   without these the row read "Nothing to do" forever and the card never left
+   the Applied column. WON/LOST can be set regardless of current state, so
+   this needs no service change. #}
+<form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
+      hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome">
+  <input type="hidden" name="outcome" value="won">
+  <button class="act yes" type="submit">I won</button>
+</form>
+<form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
+      hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome">
+  <input type="hidden" name="outcome" value="lost">
+  <button class="act no" type="submit">I lost</button>
+</form>
+{# PAID stays reachable only from WON, matching the service rule. #}
+{% elif row.outcome.value == "won" %}
+<form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
+      hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome">
+  <input type="hidden" name="outcome" value="paid">
+  <button class="act yes" type="submit">Paid</button>
+</form>
+{% else %}
+<span class="done">Nothing to do</span>
+{% endif %}
+{%- endmacro %}
