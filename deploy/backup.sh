@@ -11,23 +11,30 @@ ENV_FILE=/etc/default/dekimasen-backup
 # The bucket is server-local config, so it lives outside the repo: editing it
 # into this tracked file makes every future `git pull` conflict here, and the
 # obvious "keep mine" resolution silently keeps the OLD script.
-# Sourced by the script rather than by the cron line, so the crontab entry
-# never has to change. An already-exported BACKUP_BUCKET wins over the file,
-# so a one-off `BACKUP_BUCKET=s3://scratch ./backup.sh` behaves as written.
+# Read here rather than by the cron line, so the crontab entry never has to
+# change. An already-exported BACKUP_BUCKET wins over the file, so a one-off
+# `BACKUP_BUCKET=s3://scratch ./backup.sh` behaves as written.
+#
+# Parsed, NOT sourced. Sourcing runs the file as shell: a stray `sudo tee`
+# with no input once captured pasted terminal lines into this file, and the
+# resulting `~/app/deploy/backup.sh` line made the script source-and-re-exec
+# itself until the box ran out of processes. One string is not worth arbitrary
+# execution; a garbled file now just yields an empty value and trips the
+# guard below.
 if [[ -e "$ENV_FILE" ]]; then
   # Checked separately from -e: cron runs this as the app user, so an env file
-  # left owned by root (mode 600) exists but cannot be sourced. Bare `.` then
-  # dies with "Permission denied" and no hint at the fix.
+  # left owned by root (mode 600) exists but cannot be read. Without this the
+  # failure is a bare "Permission denied" naming no fix.
   if [[ ! -r "$ENV_FILE" ]]; then
     echo "backup.sh: $ENV_FILE is not readable by $(id -un) - fix with:" >&2
     echo "  sudo chown $(id -un) $ENV_FILE" >&2
     exit 1
   fi
-  bucket_from_env="${BACKUP_BUCKET:-}"
-  # shellcheck source=/dev/null
-  . "$ENV_FILE"
-  if [[ -n "$bucket_from_env" ]]; then
-    BACKUP_BUCKET="$bucket_from_env"
+  if [[ -z "${BACKUP_BUCKET:-}" ]]; then
+    # Last assignment wins, matching what sourcing would have done.
+    BACKUP_BUCKET=$(sed -n 's/^[[:space:]]*BACKUP_BUCKET=//p' "$ENV_FILE" | tail -n 1)
+    BACKUP_BUCKET=${BACKUP_BUCKET%\"} ; BACKUP_BUCKET=${BACKUP_BUCKET#\"}
+    BACKUP_BUCKET=${BACKUP_BUCKET%\'} ; BACKUP_BUCKET=${BACKUP_BUCKET#\'}
   fi
 fi
 
