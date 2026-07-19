@@ -4,10 +4,12 @@ Each check returns a CheckResult. Two consumers iterate the same registry --
 /healthz (pull) and the scheduler (push) -- so adding a signal later is one
 function here and it appears in both places.
 
-`alerting` separates "report this" from "wake me for this". The dms check is
-reported but never alerted on: a user blocking the bot is their choice, not an
-outage, and paging about someone else's privacy setting is the noise that
-trains an operator to ignore alerts.
+`alerting` separates "report this" from "wake me for this". Two checks are
+reported but never alerted on: `dms`, because a user blocking the bot is their
+choice rather than an outage, and paging about someone else's privacy setting
+is the noise that trains an operator to ignore alerts; and `scheduler`, because
+it cannot say anything true about itself from inside its own tick (see the
+comment on its registry entry).
 """
 
 import logging
@@ -21,7 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.engine import make_url
 
 from app.config import settings
-from app.db.models import User
+from app.db.models import OpsCheckState, User
 from app.domain.health import BACKUP_MAX_AGE, backup_is_stale, disk_is_low
 from app.scheduler import heartbeat
 
@@ -45,6 +47,11 @@ class RegistryEntry:
     name: str
     run: Callable[[], CheckResult]
     alerting: bool
+    # A DB-bound check: `run` is an async callable taking the session instead of
+    # a plain sync one. run_checks dispatches on this flag rather than on the
+    # name, so a test can swap in a sync stub for any check without the
+    # dispatcher second-guessing it.
+    needs_session: bool = False
 
 
 def safe_run(name: str, fn: Callable[[], CheckResult]) -> CheckResult:
@@ -91,10 +98,23 @@ def _db_directory() -> Path:
     return Path(database).parent
 
 
-def check_disk() -> CheckResult:
+async def check_disk(session) -> CheckResult:
+    """DB-bound only because of hysteresis.
+
+    `disk_is_low` trips at 10%/1GB but clears at 15%/1.5GB, which means it has
+    to know whether the disk is ALREADY considered low. The only durable record
+    of that is the confirmed verdict the alert machine persists in
+    OpsCheckState -- so the read happens here, and domain/health.py stays pure.
+    Using the CONFIRMED state (not the raw previous observation) is deliberate:
+    it is the same value should_alert reasons about, so the two cannot disagree.
+    """
     usage = shutil.disk_usage(_db_directory())
+    row = await session.get(OpsCheckState, "disk")
+    currently_low = row is not None and row.ok is False
     detail = f"{usage.free / 1_000_000_000:.1f}GB free"
-    return CheckResult("disk", not disk_is_low(usage.free, usage.total), detail)
+    return CheckResult(
+        "disk", not disk_is_low(usage.free, usage.total, currently_low), detail
+    )
 
 
 def check_scheduler() -> CheckResult:
@@ -102,21 +122,33 @@ def check_scheduler() -> CheckResult:
     return CheckResult("scheduler", ok, f"last tick {last_tick}")
 
 
-REGISTRY: list[RegistryEntry] = [
-    RegistryEntry("backup", check_backup, alerting=True),
-    RegistryEntry("disk", check_disk, alerting=True),
-    RegistryEntry("scheduler", check_scheduler, alerting=True),
-    # dms is DB-bound, so run_checks handles it separately; the placeholder
-    # keeps it in registry order and carries its `alerting` flag.
-    RegistryEntry("dms", lambda: CheckResult("dms", True, ""), alerting=False),
-]
-
-
 async def check_dms(session) -> CheckResult:
     blocked = await session.scalar(
         select(func.count()).select_from(User).where(User.dm_blocked_since.is_not(None))
     )
-    return CheckResult("dms", True, f"{blocked} users have DMs closed")
+    # The count stays OUT of the detail: /healthz is public (UptimeRobot polls
+    # it anonymously) and this is the one check whose number is derived from the
+    # user table rather than being an infrastructure fact. Logged instead, where
+    # only the owner can see it.
+    log.debug("dms check: %s users have DMs closed", blocked)
+    return CheckResult("dms", True, "dm-block state tracked")
+
+
+REGISTRY: list[RegistryEntry] = [
+    RegistryEntry("backup", check_backup, alerting=True),
+    RegistryEntry("disk", check_disk, alerting=True, needs_session=True),
+    # Reported, never alerted on. heartbeat.beat() fires immediately BEFORE
+    # tick(), so when this runs inside the tick the last beat is always seconds
+    # old -- structurally always ok=True. The only outcome it could ever produce
+    # from in here is a false alarm: a tick that legitimately runs long (a big
+    # due batch at SEND_CONCURRENCY=5) twice over would DM "scheduler FAILING"
+    # about a scheduler that is merely busy. The scheduler cannot meaningfully
+    # report its own liveness from inside itself; this check is only meaningful
+    # on the /healthz PULL path, where UptimeRobot is what actually catches
+    # scheduler death.
+    RegistryEntry("scheduler", check_scheduler, alerting=False),
+    RegistryEntry("dms", check_dms, alerting=False, needs_session=True),
+]
 
 
 async def _safe_run_async(name, fn, session) -> CheckResult:
@@ -131,8 +163,8 @@ async def run_checks(session) -> list[CheckResult]:
     """Every check, in registry order. Never raises."""
     results = []
     for entry in REGISTRY:
-        if entry.name == "dms":
-            results.append(await _safe_run_async("dms", check_dms, session))
+        if entry.needs_session:
+            results.append(await _safe_run_async(entry.name, entry.run, session))
         else:
             results.append(safe_run(entry.name, entry.run))
     return results

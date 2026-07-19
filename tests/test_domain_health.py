@@ -39,6 +39,40 @@ def test_disk_ok_when_both_satisfied():
     assert disk_is_low(free_bytes=5_000_000_000, total_bytes=20_000_000_000) is False
 
 
+def test_disk_hysteresis_holds_low_between_the_two_thresholds():
+    """12% free on a 20GB disk: past the 10% trip, short of the 15% clear."""
+    between = dict(free_bytes=2_400_000_000, total_bytes=20_000_000_000)
+    assert disk_is_low(**between, currently_low=False) is False
+    assert disk_is_low(**between, currently_low=True) is True
+
+
+def test_disk_hysteresis_clears_once_headroom_is_real():
+    assert disk_is_low(
+        free_bytes=3_200_000_000, total_bytes=20_000_000_000, currently_low=True
+    ) is False
+
+
+def test_disk_hysteresis_also_applies_to_the_absolute_floor():
+    """1.2GB free on an 8GB disk: 15% clears both ratio thresholds, so only
+    the byte floor is in play -- over the 1GB trip, under the 1.5GB clear."""
+    between = dict(free_bytes=1_200_000_000, total_bytes=8_000_000_000)
+    assert disk_is_low(**between, currently_low=False) is False
+    assert disk_is_low(**between, currently_low=True) is True
+
+
+def test_an_oscillating_check_would_alert_in_neither_direction():
+    """Why hysteresis exists at all. F,T,F,T against a healthy confirmed state
+    never produces two agreeing observations, so should_alert's anti-flap rule
+    keeps the confirmed state pinned and nothing ever fires. Documented as a
+    property of the machine so nobody 'fixes' the thresholds back."""
+    state = should_alert(None, observed_ok=True, now=NOW).state
+    for i, observed in enumerate([False, True, False, True, False, True]):
+        decision = should_alert(state, observed, NOW + timedelta(minutes=5 * (i + 1)))
+        assert decision.notify is False
+        state = decision.state
+    assert state.ok is True  # never moved, despite three failing sightings
+
+
 def test_first_observation_healthy_is_adopted_silently():
     d = should_alert(None, observed_ok=True, now=NOW)
     assert d.notify is False

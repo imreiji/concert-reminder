@@ -15,6 +15,14 @@ REALERT_AFTER = timedelta(hours=24)
 # alone breaks if the disk is ever resized. Trip on whichever comes first.
 MIN_FREE_RATIO = 0.10
 MIN_FREE_BYTES = 1_000_000_000
+# Hysteresis. A single hard edge at 10%/1GB is exactly the value that
+# oscillates -- SQLite's WAL and the nightly gzipped backup churn across it --
+# and an oscillating check alerts in NEITHER direction: should_alert needs two
+# consecutive agreeing observations, and F,T,F,T never supplies them, so the
+# check goes quiet precisely when the disk is most interesting. Once low, stay
+# low until there is real headroom back.
+CLEAR_FREE_RATIO = 0.15
+CLEAR_FREE_BYTES = 1_500_000_000
 
 
 @dataclass(frozen=True)
@@ -52,12 +60,23 @@ def backup_is_stale(
 def disk_is_low(
     free_bytes: int,
     total_bytes: int,
+    currently_low: bool = False,
     min_free_ratio: float = MIN_FREE_RATIO,
     min_free_bytes: int = MIN_FREE_BYTES,
+    clear_free_ratio: float = CLEAR_FREE_RATIO,
+    clear_free_bytes: int = CLEAR_FREE_BYTES,
 ) -> bool:
+    """Trip at 10%/1GB; once tripped, clear only at 15%/1.5GB.
+
+    `currently_low` is the caller's last CONFIRMED verdict for this check --
+    the state lives in the DB, so ops.py reads it and passes it in rather than
+    this module reaching for it (domain stays pure).
+    """
     if total_bytes <= 0:
         return True  # cannot reason about it; treat as a problem worth seeing
-    return (free_bytes / total_bytes) < min_free_ratio or free_bytes < min_free_bytes
+    ratio_floor = clear_free_ratio if currently_low else min_free_ratio
+    bytes_floor = clear_free_bytes if currently_low else min_free_bytes
+    return (free_bytes / total_bytes) < ratio_floor or free_bytes < bytes_floor
 
 
 def should_alert(

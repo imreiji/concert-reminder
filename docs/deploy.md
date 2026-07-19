@@ -239,6 +239,14 @@ UptimeRobot (free): Add monitor -> type **Keyword** -> URL
 **not exists** -> interval 5 min. This alerts on full outages AND on a dead
 scheduler behind a live website.
 
+UptimeRobot is the ONLY thing that catches scheduler death. The in-process
+checks DM the admin whitelist on a confirmed change for `backup` and `disk`,
+but deliberately never for `scheduler`: that check runs inside the tick, and
+the tick beats the heartbeat immediately before running, so from in there the
+last beat is always seconds old. It can never observe its own death - only
+false-alarm about a tick that is legitimately running long. It stays on
+`/healthz`, where an outside caller can see the truth.
+
 ## Updating (every deploy after the first)
 
 ```bash
