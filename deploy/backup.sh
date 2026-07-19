@@ -14,7 +14,15 @@ ENV_FILE=/etc/default/dekimasen-backup
 # Sourced by the script rather than by the cron line, so the crontab entry
 # never has to change. An already-exported BACKUP_BUCKET wins over the file,
 # so a one-off `BACKUP_BUCKET=s3://scratch ./backup.sh` behaves as written.
-if [[ -f "$ENV_FILE" ]]; then
+if [[ -e "$ENV_FILE" ]]; then
+  # Checked separately from -e: cron runs this as the app user, so an env file
+  # left owned by root (mode 600) exists but cannot be sourced. Bare `.` then
+  # dies with "Permission denied" and no hint at the fix.
+  if [[ ! -r "$ENV_FILE" ]]; then
+    echo "backup.sh: $ENV_FILE is not readable by $(id -un) - fix with:" >&2
+    echo "  sudo chown $(id -un) $ENV_FILE" >&2
+    exit 1
+  fi
   bucket_from_env="${BACKUP_BUCKET:-}"
   # shellcheck source=/dev/null
   . "$ENV_FILE"

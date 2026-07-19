@@ -159,6 +159,9 @@ aws configure          # paste the access key id + secret; region e.g. ca-centra
 # The bucket is server-local config and is NOT stored in the repo - backup.sh
 # reads BACKUP_BUCKET, and sources this file itself if it exists:
 sudo tee /etc/default/dekimasen-backup <<< 'BACKUP_BUCKET="s3://YOUR-BUCKET-NAME/dekimasen"'
+# chown as well as chmod: sudo tee leaves it root-owned, and cron runs
+# backup.sh as ubuntu, which then cannot read it.
+sudo chown ubuntu:ubuntu /etc/default/dekimasen-backup
 sudo chmod 600 /etc/default/dekimasen-backup
 ~/app/deploy/backup.sh         # test run -> "backup ok: <date>"
 crontab -e                     # add:
@@ -179,6 +182,7 @@ cd ~/app
 OLD_BUCKET=$(grep '^BUCKET=' deploy/backup.sh | cut -d'"' -f2)
 echo "$OLD_BUCKET"                   # sanity-check: should read s3://...
 sudo tee /etc/default/dekimasen-backup <<< "BACKUP_BUCKET=\"$OLD_BUCKET\""
+sudo chown ubuntu:ubuntu /etc/default/dekimasen-backup   # cron runs as ubuntu
 sudo chmod 600 /etc/default/dekimasen-backup
 git checkout -- deploy/backup.sh     # safe now: the value is saved
 git pull
