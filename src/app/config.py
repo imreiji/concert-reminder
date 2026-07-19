@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # Storage
     database_url: str = "sqlite+aiosqlite:///./app.db"
 
+    # Written by deploy/backup.sh after a successful upload. The app cannot ask
+    # S3 whether a backup landed -- the IAM user is PutObject-only by design --
+    # so this marker is the only local evidence a backup ran.
+    backup_marker_path: str = "/home/ubuntu/.dekimasen-backup-ok"
+
     # Defaults
     default_timezone: str = "America/Moncton"
 
