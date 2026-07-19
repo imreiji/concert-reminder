@@ -34,7 +34,7 @@
     <div class="row-item">
       <input name="round_label" value="{{ r.label }}" maxlength="200" placeholder="最速先行 Round 1">
       <select name="round_kind">{% for k in kinds %}
-        <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
+        <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ round_kind_label(k) }}</option>
       {% endfor %}</select>
       <label>Opens (JST) <input type="datetime-local" name="round_opens_at" value="{{ fmt(r.opens_at_jst) }}"></label>
       <label>Closes (JST) <input type="datetime-local" name="round_closes_at" value="{{ fmt(r.closes_at_jst) }}"></label>
@@ -62,7 +62,7 @@
   <div class="row-item">
     <input name="round_label" maxlength="200" placeholder="最速先行 Round 1">
     <select name="round_kind">{% for k in kinds %}
-      <option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>
+      <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
     {% endfor %}</select>
     <label>Opens (JST) <input type="datetime-local" name="round_opens_at"></label>
     <label>Closes (JST) <input type="datetime-local" name="round_closes_at"></label>

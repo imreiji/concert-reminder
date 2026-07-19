@@ -61,7 +61,7 @@
     <input name="round_label" required maxlength="200" placeholder="1次先行抽選">
     <input name="round_label_en" maxlength="200" placeholder="1st-round advance lottery">
     <select name="round_kind">{% for k in kinds %}
-      <option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>
+      <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
     {% endfor %}</select>
     <select name="round_leg" class="round-leg-select"></select>
     <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"></label>

@@ -5,7 +5,7 @@
   <tr class="round-row{% if past %} past{% endif %}">
     <td>
       <strong>{{ r.label }}</strong>{% if r.label_en %} <span class="dim">({{ r.label_en }})</span>{% endif %}
-      <em class="kind">{{ r.kind.value.replace("_", " ") }}</em>
+      <em class="kind">{{ round_kind_label(r.kind) }}</em>
       {% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">link</a>{% endif %}
       {% if r.notes %}<div class="dim tiny">{{ r.notes }}</div>{% endif %}
     </td>

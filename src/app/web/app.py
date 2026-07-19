@@ -14,7 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.db.models import Concert, ConcertDay, Tag, User
-from app.db.service import LABEL_BY_ANCHOR
+from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual, utc_to_jst
 from app.domain.types import TagKind
@@ -33,6 +33,7 @@ templates = Jinja2Templates(directory=_here / "templates")
 templates.env.globals["dual"] = fmt_dual        # {{ dual(dt, tz) }}
 templates.env.globals["jst"] = utc_to_jst       # {{ jst(dt).strftime(...) }}
 templates.env.globals["deadline_label"] = lambda anchor: LABEL_BY_ANCHOR[anchor]
+templates.env.globals["round_kind_label"] = lambda kind: LABEL_BY_ROUND_KIND[kind]
 
 COMMON_TIMEZONES = [
     "America/Moncton", "America/Halifax", "America/Toronto", "America/Vancouver",

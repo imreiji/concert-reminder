@@ -759,3 +759,26 @@ async def test_due_reminder_carries_round_id_and_outcome(session):
     (due,) = await due_reminders(session, dt(6, 22))
     assert due.round_id == round_.id
     assert due.outcome == LotteryOutcome.APPLIED
+
+
+# ── LABEL_BY_ROUND_KIND ─────────────────────────────────────────────────
+
+
+def test_label_by_round_kind_covers_every_kind():
+    from app.db.service import LABEL_BY_ROUND_KIND
+
+    assert set(LABEL_BY_ROUND_KIND) == set(RoundKind)
+
+
+def test_label_by_round_kind_exact_text():
+    from app.db.service import LABEL_BY_ROUND_KIND
+
+    assert LABEL_BY_ROUND_KIND[RoundKind.LOTTERY_ROUND] == "Lottery round"
+    assert LABEL_BY_ROUND_KIND[RoundKind.ELIGIBILITY_ITEM_SALE] == "Eligibility item sale"
+    assert LABEL_BY_ROUND_KIND[RoundKind.STREAM_TICKET_SALE] == "Stream ticket sale"
+    assert LABEL_BY_ROUND_KIND[RoundKind.GENERAL_SALE] == "General sale"
+    assert LABEL_BY_ROUND_KIND[RoundKind.RESULT_ANNOUNCEMENT] == "Result announcement"
+    assert LABEL_BY_ROUND_KIND[RoundKind.PAYMENT_DEADLINE] == "Payment deadline"
+    assert LABEL_BY_ROUND_KIND[RoundKind.OTHER] == "Other"
+    assert LABEL_BY_ROUND_KIND[RoundKind.FCFS_SALE] == "First come, first served"
+    assert LABEL_BY_ROUND_KIND[RoundKind.TOUR_PACKAGE] == "Overseas tour package"

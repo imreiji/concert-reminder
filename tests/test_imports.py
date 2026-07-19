@@ -151,6 +151,14 @@ def test_preview_renders_parsed_draft(client):
     assert 'value="2026-10-14T12:00"' in r.text  # round opens prefilled
 
 
+def test_preview_shows_new_round_kind_labels(client):
+    login_as(client, EDITOR_ID, "reiji")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert "First come, first served" in r.text
+    assert "Overseas tour package" in r.text
+
+
 def test_preview_of_event_with_no_rounds_shows_warning(client):
     login_as(client, EDITOR_ID, "reiji")
     mock_fetch(client, load("ramen_welcoming_concert.html"))

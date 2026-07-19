@@ -645,6 +645,13 @@ def test_new_concert_page_is_editor_only(client):
     assert "function syncLegOptions" in r.text
 
 
+def test_new_concert_page_shows_new_round_kind_labels(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/concerts/new")
+    assert "First come, first served" in r.text
+    assert "Overseas tour package" in r.text
+
+
 async def test_rich_create_builds_concert_days_and_rounds_atomically(client):
     login_as(client, EDITOR_ID, "reiji")
     r = client.post(
@@ -772,6 +779,14 @@ async def test_edit_page_prefills_every_field(client):
     assert 'value="Org"' in r.text
     assert 'value="Day 1"' in r.text
     assert 'value="R1"' in r.text
+
+
+async def test_edit_page_shows_new_round_kind_labels(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "c"})
+    r = client.get("/concerts/c/edit")
+    assert "First come, first served" in r.text
+    assert "Overseas tour package" in r.text
 
 
 async def test_edit_page_leg_select_carries_the_resolved_leg_as_data_initial(client):

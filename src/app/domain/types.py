@@ -24,9 +24,20 @@ class RoundKind(enum.StrEnum):
     LOTTERY_ROUND = "lottery_round"                  # 先行抽選 round (最速/1次/2次...)
     ELIGIBILITY_ITEM_SALE = "eligibility_item_sale"  # serial-code item on sale (CD/BD)
     STREAM_TICKET_SALE = "stream_ticket_sale"        # 配信チケット, often per concert day
-    GENERAL_SALE = "general_sale"                    # 一般発売, first-come-first-served
+    # 一般発売: a free-to-enter lottery round requiring no serial code --
+    # NOT first-come-first-served (see FCFS_SALE for that).
+    GENERAL_SALE = "general_sale"
     RESULT_ANNOUNCEMENT = "result_announcement"      # 当落発表 (usually a single moment)
     PAYMENT_DEADLINE = "payment_deadline"            # 入金期限 after winning
+    # True first-come-first-served: buy outright the instant it opens, no
+    # application/lottery step. Per the guide, always the last round for a
+    # concert and not guaranteed to happen (only if lottery rounds leave
+    # tickets unsold).
+    FCFS_SALE = "fcfs_sale"
+    # The overseas tour package ("gaijin pack") lottery track: a hotel +
+    # ticket bundle sold via its own lottery, structurally separate from
+    # the eplus serial-code system. Not guaranteed to exist per concert.
+    TOUR_PACKAGE = "tour_package"
     OTHER = "other"                                  # future franchise inventions
 
 

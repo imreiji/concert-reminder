@@ -44,6 +44,55 @@ def test_format_round_reminder():
     assert "https://example.com/tickets" in msg
 
 
+def test_general_sale_uses_ticket_emoji_not_running_emoji():
+    item = DueReminder(
+        queue_id=3,
+        discord_id=42,
+        user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th",
+        anchor=Anchor.CLOSES,
+        fire_at_utc=dt(6, 22, 14),
+        round_label="General sale",
+        round_kind="general_sale",
+        anchor_time_utc=dt(6, 25, 14),
+    )
+    msg = format_reminder(item)
+    assert "🎫" in msg
+    assert "🏃" not in msg
+
+
+def test_fcfs_sale_gets_its_own_emoji():
+    item = DueReminder(
+        queue_id=4,
+        discord_id=42,
+        user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th",
+        anchor=Anchor.OPENS,
+        fire_at_utc=dt(6, 22, 14),
+        round_label="FCFS sale",
+        round_kind="fcfs_sale",
+        anchor_time_utc=dt(6, 25, 14),
+    )
+    msg = format_reminder(item)
+    assert "🏁" in msg
+
+
+def test_tour_package_gets_its_own_emoji():
+    item = DueReminder(
+        queue_id=5,
+        discord_id=42,
+        user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th",
+        anchor=Anchor.CLOSES,
+        fire_at_utc=dt(6, 22, 14),
+        round_label="Overseas tour package",
+        round_kind="tour_package",
+        anchor_time_utc=dt(6, 25, 14),
+    )
+    msg = format_reminder(item)
+    assert "✈️" in msg
+
+
 def test_format_day_reminder_without_round():
     item = DueReminder(
         queue_id=2,
