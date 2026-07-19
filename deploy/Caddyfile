@@ -16,5 +16,32 @@ dekimasen.app, www.dekimasen.app {
     @www host www.dekimasen.app
     redir @www https://dekimasen.app{uri} permanent
 
+    # Security response headers. Caddy sorts directives by its own order, not
+    # by the order written here: `header` runs ahead of both `redir` and
+    # `reverse_proxy`, so these apply to the proxied responses AND to the
+    # www -> apex redirect. Position in this file is therefore cosmetic.
+    header {
+        # The app has no CSRF token by design (SameSite=Lax cookies - see
+        # CLAUDE.md invariant 5). SameSite=Lax still sends cookies on a
+        # same-site click, so it does NOT stop a clickjacked click on a
+        # delete/edit button. DENY is what actually closes that hole.
+        X-Frame-Options DENY
+
+        X-Content-Type-Options nosniff
+
+        # The calendar-feed token is minted into a URL query string:
+        # POST /me/calendar-feed redirects to /preferences?feed_token=<raw>
+        # (web/routes/calendar.py). While that page is open its full URL is
+        # the Referer for outbound subresource requests - htmx from unpkg.com
+        # today, any third-party asset tomorrow. same-origin keeps the
+        # Referer (and the token in it) from leaving dekimasen.app.
+        Referrer-Policy same-origin
+
+        # No Strict-Transport-Security on purpose: .app is HSTS-preloaded at
+        # the TLD level, so browsers already refuse plaintext to this domain.
+        # An origin-side HSTS header adds nothing and is easy to get wrong
+        # (max-age/includeSubDomains mistakes are hard to undo). Leave it out.
+    }
+
     reverse_proxy 127.0.0.1:8000
 }
