@@ -1054,7 +1054,9 @@ async def test_edit_page_defaults_new_day_rows_to_not_cancelled(client):
         assert day.cancelled is False
 
 
-async def test_edit_page_prefills_day_cancelled_select(client):
+async def test_edit_page_prefills_the_cancelled_toggle(client):
+    """Cancelled is a toggle on the leg itself, not a <select> among its
+    fields; the hidden input behind it carries the state."""
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
@@ -1077,7 +1079,9 @@ async def test_edit_page_prefills_day_cancelled_select(client):
     )
     r = client.get("/concerts/c/edit")
     assert r.status_code == 200
-    assert '<option value="true" selected>Cancelled</option>' in r.text
+    assert 'name="day_cancelled" value="true"' in r.text
+    assert 'data-cancel-toggle' in r.text
+    assert 'aria-pressed="true"' in r.text
 
 
 async def test_cancelling_the_only_leg_clears_its_reminders_and_notifies(client):
@@ -1183,8 +1187,8 @@ async def test_detail_page_shows_cancelled_badge_on_cancelled_leg_only(client):
 async def test_round_tied_to_cancelled_day_still_renders_not_vanishes(client):
     """Regression guard for the exact bug this whole design was built to
     avoid (see the spec's "bug this design has to avoid" section):
-    group_rounds_by_day() looks up round.applies_to ids in a dict keyed by
-    concert.days ids. If a cancelled day were ever DELETED rather than just
+    concert_round_rows() (db/service.py) groups round.applies_to ids against
+    concert.days. If a cancelled day were ever DELETED rather than just
     flagged, a round referencing it would silently disappear from the page
     entirely -- not fall back to "General", just vanish. Marking (not
     deleting) the day keeps it in concert.days, so the round still resolves

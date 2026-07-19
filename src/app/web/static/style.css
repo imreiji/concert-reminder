@@ -231,6 +231,84 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 }
 .leg-chips input[type="hidden"] { flex: 0 0 auto; min-width: 0; }
 
+/* ── Concert editor ─────────────────────────────────────────────────────
+   Rounds and legs lead the page; details, tags and history fold away. The
+   form is wider than .stack.wide's reading measure because a round row is
+   four datetimes side by side, not prose. */
+.editor { max-width: 60rem; }
+.editor .ebar {
+  display: flex; flex-wrap: wrap; gap: .5rem .8rem; align-items: flex-end;
+  padding-bottom: .9rem; border-bottom: 1px solid var(--line);
+}
+.editor .ebar label { display: grid; gap: .2rem; font-size: .85rem; color: var(--dim); }
+.editor .ebar label.grow { flex: 1 1 22rem; min-width: 0; }
+.section-head { margin-top: 1.4rem; }
+.section-head h2 { margin: 0; }
+.section-head p { margin: .15rem 0 0; }
+.section-sub { margin: 1.4rem 0 .2rem; }
+.editor-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .7rem 0 .4rem;
+}
+.editor-actions .dim { margin-right: auto; }
+
+/* One round: name and kind on top, then which legs it covers, then its
+   four timestamps. The leg question comes before the times because it is
+   the one the old form could not express at all. */
+.redit {
+  display: grid; gap: .5rem; padding: .7rem .8rem;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--raise);
+}
+.redit + .redit { margin-top: .5rem; }
+.redit-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.redit-top input, .redit-top select { flex: 1 1 auto; min-width: 8rem; }
+.redit-name { flex: 2 1 14rem; font-weight: 600; }
+.redit-times, .redit-extra {
+  display: grid; gap: .4rem .6rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.redit-times label { display: grid; gap: .2rem; font-size: .8rem; color: var(--dim); }
+
+/* One leg. Cancelled is a toggle on the leg itself rather than a <select>
+   among its fields -- it is a fact about the show, not another attribute. */
+.eleg {
+  display: grid; gap: .5rem; padding: .7rem .8rem;
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.eleg + .eleg { margin-top: .5rem; }
+.eleg.cancelled { opacity: .6; }
+.eleg-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.eleg-top > input { flex: 1 1 auto; min-width: 8rem; }
+.eleg-fields {
+  display: grid; gap: .4rem .6rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.eleg-fields label { display: grid; gap: .2rem; font-size: .8rem; color: var(--dim); }
+.cancel-toggle { flex: 0 0 auto; }
+.cancel-toggle .chip.on { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* Folds. The summary states its contents, so a closed fold still says what
+   is in it rather than only naming itself. */
+details.fold {
+  margin-top: .9rem; border: 1px solid var(--line); border-radius: 8px;
+}
+details.fold > summary {
+  cursor: pointer; padding: .6rem .8rem; font-weight: 600;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem;
+}
+.fold-hint { margin-left: auto; font-weight: 400; color: var(--dim); font-size: .82rem; }
+.fold-body { padding: 0 .8rem .8rem; display: grid; gap: .5rem; }
+.fold-body label { display: grid; gap: .2rem; font-size: .85rem; color: var(--dim); }
+
+/* Neither of these is an edit, and one is not undoable -- so they sit apart
+   from the form, below the save button, and say what they do. */
+.danger-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .8rem;
+  margin-top: 2rem; padding: .8rem 1rem;
+  border: 1px solid var(--danger); border-radius: 8px;
+}
+.danger-row p { margin: .15rem 0 0; max-width: 44rem; }
+.danger-row-actions { margin-left: auto; display: flex; gap: .5rem; flex-wrap: wrap; }
+
 .header-tags { margin: .2rem 0 .4rem; }
 
 /* Performances: one section per day/leg, its rounds table nested right under it */

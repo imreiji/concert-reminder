@@ -1,8 +1,8 @@
 """Venue tags (region + location link), the round table's past-marking,
 .ics export, and the sidebar's region filter.
 
-Pure-function helpers (find_venue_tag / is_round_past / is_day_past) are
-exercised directly against plain constructed ORM objects, no DB needed.
+Pure-function helpers (find_venue_tag, region_sidebar_links) are exercised
+directly against plain constructed ORM objects, no DB needed.
 Everything that touches routes/templates goes through the same
 client+db+login_as fixture pattern as test_crud.py.
 """
@@ -16,12 +16,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, ConcertDay, Round, Tag
+from app.db.models import Base, Tag
 from app.db.session import get_session
-from app.domain.types import RoundKind, TagKind
+from app.domain.types import TagKind
 from app.web import auth
 from app.web.app import create_app
-from app.web.routes.concerts import find_venue_tag, is_day_past, is_round_past
+from app.web.routes.concerts import find_venue_tag
 from app.web.routes.discover import region_sidebar_links
 
 EDITOR_ID, VIEWER_ID = 42, 777
@@ -52,34 +52,6 @@ def test_find_venue_tag_blank_or_none_returns_none():
     venue = Tag(name="K Arena Yokohama", kind=TagKind.VENUE, created_by=EDITOR_ID)
     assert find_venue_tag([venue], "") is None
     assert find_venue_tag([venue], None) is None
-
-
-# ── is_round_past / is_day_past ──────────────────────────────────────────
-
-
-def test_round_with_all_timestamps_past_is_past():
-    r = Round(concert_id=1, kind=RoundKind.OTHER, label="R", closes_at_utc=dt(1, 1))
-    assert is_round_past(r, NOW) is True
-
-
-def test_round_with_any_future_timestamp_is_not_past():
-    r = Round(
-        concert_id=1, kind=RoundKind.OTHER, label="R",
-        opens_at_utc=dt(1, 1), closes_at_utc=dt(12, 1),
-    )
-    assert is_round_past(r, NOW) is False
-
-
-def test_round_with_no_timestamps_is_not_past():
-    r = Round(concert_id=1, kind=RoundKind.OTHER, label="R")
-    assert is_round_past(r, NOW) is False
-
-
-def test_day_past_when_starts_at_before_now():
-    d = ConcertDay(concert_id=1, label="Day 1", starts_at_utc=dt(1, 1))
-    assert is_day_past(d, NOW) is True
-    d2 = ConcertDay(concert_id=1, label="Day 2", starts_at_utc=dt(12, 1))
-    assert is_day_past(d2, NOW) is False
 
 
 # ── region_sidebar_links ─────────────────────────────────────────────────

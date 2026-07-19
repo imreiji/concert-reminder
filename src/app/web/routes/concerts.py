@@ -261,9 +261,11 @@ def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
     return matches or None
 
 
-def parse_round_legs(value: str, valid_day_ids: set[int]) -> list[int] | None:
+def parse_round_legs(
+    value: str, valid_day_ids: set[int], key_to_day_id: dict[str, int] | None = None
+) -> list[int] | None:
     """One round row's leg selection, as submitted by the edit page's chips:
-    a space-separated list of ConcertDay ids.
+    a space-separated list of ConcertDay ids and/or `day_key`s.
 
     ONE form field per round row, not one field per selected id. The round_*
     fields are parallel repeatable lists zipped positionally (see
@@ -278,32 +280,33 @@ def parse_round_legs(value: str, valid_day_ids: set[int]) -> list[int] | None:
     intact: a cancelled ConcertDay is flagged, never deleted (invariant 2),
     so it is still in valid_day_ids.
 
+    A leg the editor ADDED in this same submit has no id yet, so its chip
+    carries the row's `day_key` instead -- a client-generated string, unique
+    within the page. `key_to_day_id` maps those to the ids the flush just
+    handed out. A saved leg's key is simply its own id, so the numeric path
+    below is the whole story for every row that already existed; only a
+    brand-new row depends on the key map at all.
+
+    An unrecognised token -- a key for a row the editor removed again, an id
+    for a deleted leg -- is dropped rather than guessed at. Resolving it to
+    "some nearby leg" would be the silent mis-assignment this whole encoding
+    exists to make impossible.
+
     Empty -> None, not [], matching apply_round_fields and what
     concert_round_rows reads to put a round in the all-legs group.
     """
+    key_to_day_id = key_to_day_id or {}
     ids: list[int] = []
     for token in value.replace(",", " ").split():
-        if not token.isdigit():
+        if token.isdigit() and int(token) in valid_day_ids:
+            day_id = int(token)
+        elif token in key_to_day_id:
+            day_id = key_to_day_id[token]
+        else:
             continue
-        day_id = int(token)
-        if day_id in valid_day_ids and day_id not in ids:
+        if day_id not in ids:
             ids.append(day_id)
     return ids or None
-
-
-def group_rounds_by_day(concert: Concert) -> tuple[dict[int, list[Round]], list[Round]]:
-    """Rounds grouped by the ConcertDay(s) they apply to ("legs"), plus a
-    'general' bucket for rounds with no day association."""
-    by_day: dict[int, list[Round]] = {d.id: [] for d in concert.days}
-    general: list[Round] = []
-    for r in concert.rounds:
-        if r.applies_to:
-            for day_id in r.applies_to:
-                if day_id in by_day:
-                    by_day[day_id].append(r)
-        else:
-            general.append(r)
-    return by_day, general
 
 
 # Separators an editor might put between a group name and the rest of a
@@ -345,22 +348,6 @@ def find_venue_tag(venue_tags: list[Tag], name: str | None) -> Tag | None:
         if t.name.strip().lower() == name:
             return t
     return None
-
-
-def is_round_past(round_: Round, now: datetime) -> bool:
-    """A round is past once every timestamp it has set has already
-    happened; a round with no timestamps set at all can't be "past"."""
-    timestamps = [
-        t for t in (
-            round_.opens_at_utc, round_.closes_at_utc,
-            round_.results_at_utc, round_.payment_deadline_at_utc,
-        ) if t is not None
-    ]
-    return bool(timestamps) and all(t < now for t in timestamps)
-
-
-def is_day_past(day: ConcertDay, now: datetime) -> bool:
-    return day.starts_at_utc < now
 
 
 # ── Reminder-rule fragment (htmx swap target) ────────────────────────────
@@ -703,6 +690,16 @@ async def edit_concert_form(
         (r, " ".join(str(i) for i in (r.applies_to or [])), set(r.applies_to or []))
         for r in concert.rounds
     ]
+    # The folds each summarise their own contents, so a closed one still says
+    # what is inside it. Assembled here rather than in the template because
+    # the tag summary is a per-kind ordering the template has no business
+    # re-deriving, and audit_log needs a query.
+    tag_summary = [
+        t.name
+        for kind in (TagKind.FRANCHISE, TagKind.GROUP, TagKind.ARTIST, TagKind.VENUE)
+        for t in concert.tags
+        if t.kind is kind
+    ]
     return templates.TemplateResponse(
         request,
         "concert_edit.html",
@@ -716,6 +713,9 @@ async def edit_concert_form(
             "initial_selected": initial_selected,
             "legs": legs,
             "rounds_with_legs": rounds_with_legs,
+            "tag_summary": tag_summary,
+            "audit_log": await concert_audit_log(session, concert.id),
+            "tz": await user_tz(session, user.id),
         },
     )
 
@@ -741,6 +741,7 @@ async def edit_concert(
     artist_tags: list[int] = Form(default=[]),
     venue_tags: list[int] = Form(default=[]),
     day_id: list[str] = Form(default=[]),
+    day_key: list[str] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
     day_city: list[str] = Form(default=[]),
@@ -808,14 +809,25 @@ async def edit_concert(
     # See create_concert's identical comment: a submitter that omits
     # day_cancelled entirely means "not cancelled" for every row.
     day_cancelled = day_cancelled + ["false"] * (len(day_label) - len(day_cancelled))
+    # day_key is padded only when omitted ENTIRELY (an older submitter, or a
+    # test that predates it). A partially-supplied array is left alone so the
+    # strict zip below raises instead of end-padding it into misalignment --
+    # a key that slid one row would assign a round to the wrong leg, silently,
+    # which is worse than a 500.
+    if not day_key:
+        day_key = [""] * len(day_label)
     kept_day_ids: set[int] = set()
     submitted_days: list[ConcertDay] = []
-    for did, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
-        day_id, day_label, day_starts_at, day_city, day_venue, day_venue_address, day_doors_at,
-        day_cancelled, strict=True,
+    # key -> the id that key's row actually got. Built INSIDE the loop below,
+    # from the same tuple that produced the ConcertDay, so a key can never be
+    # paired with another row's day; the ids are filled in after the flush.
+    key_rows: list[tuple[str, ConcertDay]] = []
+    for key, did, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
+        day_key, day_id, day_label, day_starts_at, day_city, day_venue, day_venue_address,
+        day_doors_at, day_cancelled, strict=True,
     ):
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
-            continue  # blank trailing row from the repeatable UI
+            continue  # blank trailing row from the repeatable UI -- key and all
         did = did.strip()
         if did.isdigit() and int(did) in existing_days:
             day = apply_day_fields(
@@ -829,6 +841,8 @@ async def edit_concert(
             )
             session.add(day)
         submitted_days.append(day)
+        if key.strip():
+            key_rows.append((key.strip(), day))
     for did, day in existing_days.items():
         if did not in kept_day_ids:
             await session.delete(day)
@@ -841,6 +855,13 @@ async def edit_concert(
     # applies_to; a cancelled one is still here (invariant 2), so an id
     # pointing at it does.
     valid_day_ids = {d.id for d in submitted_days}
+    # Resolved only now, because a row added in this submit had no id until
+    # the flush above. A duplicate key would be the one way two rows could
+    # collide, so the first row claiming a key keeps it rather than a later
+    # one silently stealing the reference.
+    key_to_day_id: dict[str, int] = {}
+    for key, day in key_rows:
+        key_to_day_id.setdefault(key, day.id)
 
     # -- Rounds: same id-preserving reconciliation.
     await session.refresh(concert, ["rounds"])
@@ -861,7 +882,7 @@ async def edit_concert(
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue
-        applies_to = parse_round_legs(legs, valid_day_ids)
+        applies_to = parse_round_legs(legs, valid_day_ids, key_to_day_id)
         rid = rid.strip()
         if rid.isdigit() and int(rid) in existing_rounds:
             round_ = apply_round_fields(

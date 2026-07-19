@@ -127,19 +127,22 @@ async def seed(db, *, legs, rounds, event_id="tour"):
         return day_ids, round_ids
 
 
-def resubmit(client, event_id, *, days, rounds):
+def resubmit(client, event_id, *, days, rounds, title="Tour", extra=None):
     """POST the edit form back with every field the editor's form carries.
 
-    `days` is a list of (id, label, city, cancelled); `rounds` a list of
-    (id, label, legs-string) — the last being exactly what the hidden
-    `round_legs` input holds for that row.
+    `days` is a list of (id, label, city, cancelled) with an optional 5th
+    element, the row's `day_key`; `rounds` a list of (id, label, legs-string)
+    — the last being exactly what the hidden `round_legs` input holds for
+    that row.
+
+    A saved leg's key IS its id, which is why it defaults to `id` here: the
+    key list only has to carry identity for rows that do not have one yet.
     """
-    return client.post(
-        f"/concerts/{event_id}/edit",
-        data={
-            "title": "Tour",
+    data = {
+            "title": title,
             "event_id": event_id,
             "day_id": [str(d[0]) for d in days],
+            "day_key": [str(d[4]) if len(d) > 4 else str(d[0]) for d in days],
             "day_label": [d[1] for d in days],
             "day_city": [d[2] for d in days],
             "day_starts_at": [
@@ -160,8 +163,9 @@ def resubmit(client, event_id, *, days, rounds):
             "round_url": [""] * len(rounds),
             "round_notes": [""] * len(rounds),
             "round_legs": [r[2] for r in rounds],
-        },
-    )
+    }
+    data.update(extra or {})
+    return client.post(f"/concerts/{event_id}/edit", data=data)
 
 
 async def applies_to(db, round_id):
@@ -369,3 +373,319 @@ async def test_a_concert_with_no_legs_still_edits(client, db):
     r = resubmit(client, "tour", days=[], rounds=[(round_id, "Only round", "")])
     assert r.status_code == 303
     assert await applies_to(db, round_id) is None
+
+
+# ── day_key: assigning a round to a leg that does not exist yet ──────────
+#
+# Chips carry ids, and a leg added in the browser has none until it is
+# written — which made "add a leg and put a round on it" a two-save
+# workflow. `day_key` closes that: every day row submits a stable client-side
+# identifier (a saved leg's key IS its id; a new row gets a generated one),
+# chips reference keys, and the server resolves keys to real ids after the
+# days are flushed.
+#
+# The danger this introduces is a key sliding between rows, which would
+# assign a round to the WRONG leg — silently, which is worse than the
+# two-save limitation it replaces. The tests below are sized for that: every
+# round picks a different leg, so any shift shows up.
+
+
+async def _day_id_by_city(db, city):
+    async with db() as s:
+        res = await s.execute(select(ConcertDay).where(ConcertDay.city == city))
+        return res.scalar_one().id
+
+
+async def test_three_rounds_land_on_three_different_legs_one_of_them_brand_new(
+    client, db
+):
+    """The whole point of day_key, and the shape that would expose a slide.
+
+    Three legs — the third added in this very submit, so it has no id yet —
+    and three rounds, each picking exactly one and a different one. A key
+    that drifted by a row would still produce three well-formed assignments;
+    only checking each round individually catches it.
+    """
+    await make_editor(db)
+    login(client)
+    (day1, day2), (r1, r2, r3) = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False), ("Day 2", "Osaka", False)],
+        rounds=[("First leg", [0]), ("Second leg", [1]), ("Third leg", [])],
+    )
+
+    r = resubmit(
+        client,
+        "tour",
+        days=[
+            (day1, "Day 1", "Kanagawa", False),
+            (day2, "Day 2", "Osaka", False),
+            ("", "Day 3", "Fukuoka", False, "new-2"),  # no id yet
+        ],
+        rounds=[
+            (r1, "First leg", str(day1)),
+            (r2, "Second leg", str(day2)),
+            (r3, "Third leg", "new-2"),
+        ],
+    )
+    assert r.status_code == 303
+
+    day3 = await _day_id_by_city(db, "Fukuoka")
+    assert day3 not in (day1, day2)
+    assert await applies_to(db, r1) == [day1]
+    assert await applies_to(db, r2) == [day2]
+    assert await applies_to(db, r3) == [day3]
+
+
+async def test_a_new_leg_key_and_a_saved_leg_id_can_share_one_round(client, db):
+    """A round spanning an existing leg and one created in the same save —
+    the two resolution paths meeting inside a single applies_to."""
+    await make_editor(db)
+    login(client)
+    (day1,), (round_id,) = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False)],
+        rounds=[("Both legs", [0])],
+    )
+
+    resubmit(
+        client,
+        "tour",
+        days=[
+            (day1, "Day 1", "Kanagawa", False),
+            ("", "Day 2", "Osaka", False, "new-7"),
+        ],
+        rounds=[(round_id, "Both legs", f"{day1} new-7")],
+    )
+    day2 = await _day_id_by_city(db, "Osaka")
+    assert set(await applies_to(db, round_id)) == {day1, day2}
+
+
+async def test_a_key_for_a_row_that_was_removed_resolves_to_nothing(client, db):
+    """A leg row deleted client-side after a round was pointed at it leaves
+    its key in the round's hidden value. Nothing submitted claims that key,
+    so it must resolve to nothing rather than to some other row's leg."""
+    await make_editor(db)
+    login(client)
+    (day1,), (round_id,) = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False)],
+        rounds=[("First leg", [0])],
+    )
+
+    resubmit(
+        client,
+        "tour",
+        days=[(day1, "Day 1", "Kanagawa", False)],
+        rounds=[(round_id, "First leg", f"{day1} new-3")],
+    )
+    assert await applies_to(db, round_id) == [day1]
+
+
+async def test_a_blank_leg_row_does_not_consume_the_next_rows_key(client, db):
+    """Blank trailing rows are skipped, and the skip must take the row's key
+    with it — a key list that kept marching while the day list stopped is
+    exactly how one would slide."""
+    await make_editor(db)
+    login(client)
+    (day1,), (round_id,) = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False)],
+        rounds=[("Second leg", [])],
+    )
+
+    resubmit(
+        client,
+        "tour",
+        days=[
+            (day1, "Day 1", "Kanagawa", False),
+            ("", "", "", False, "new-blank"),  # entirely blank row: skipped
+            ("", "Day 2", "Osaka", False, "new-real"),
+        ],
+        rounds=[(round_id, "Second leg", "new-real")],
+    )
+    day2 = await _day_id_by_city(db, "Osaka")
+    assert await applies_to(db, round_id) == [day2]
+
+
+async def test_the_edit_page_gives_every_leg_row_a_key(client, db):
+    """A saved leg's key is its own id, so the chips and the day rows agree
+    without the two lists having to be read together."""
+    await make_editor(db)
+    login(client)
+    (day1, day2), _ = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False), ("Day 2", "Osaka", False)],
+        rounds=[("Only round", [0])],
+    )
+
+    body = client.get("/concerts/tour/edit").text
+    assert f'name="day_key" value="{day1}"' in body
+    assert f'name="day_key" value="{day2}"' in body
+
+
+# ── the restructured page ────────────────────────────────────────────────
+
+
+async def test_rounds_come_before_the_folds(client, db):
+    """The common edit is "a new round was announced". Adding one must not
+    mean scrolling past twenty fields nobody is touching."""
+    await make_editor(db)
+    login(client)
+    await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False)],
+        rounds=[("Only round", [0])],
+    )
+
+    body = client.get("/concerts/tour/edit").text
+    assert body.index("Add a round") < body.index("Details and links")
+    assert body.index("Add a round") < body.index("Edit history")
+
+
+async def test_the_folds_render_summaries_of_what_they_hold(client, db):
+    """A fold that does not say what is inside it is just a hidden field."""
+    await make_editor(db)
+    login(client)
+    await seed(db, legs=[("Day 1", "Kanagawa", False)], rounds=[("R", [0])])
+    # give the concert something for each summary to report
+    resubmit(
+        client,
+        "tour",
+        days=[(1, "Day 1", "Kanagawa", False)],
+        rounds=[(1, "R", "1")],
+        title="Tour renamed",
+    )
+
+    body = client.get("/concerts/tour/edit").text
+    for summary in ("Details and links", "Tags", "Edit history"):
+        assert summary in body
+    assert body.count('<details class="fold"') == 3
+    # every fold states its contents rather than just naming itself
+    assert body.count('class="fold-hint"') == 3
+    # the history summary counts the edit the resubmit above just made
+    assert "1 change" in body
+
+
+async def test_the_danger_row_says_what_duplicate_copies(client, db):
+    """Invariant 3: duplicate re-attaches the already-pruned tag set with
+    expand=False, and copies no rounds or legs. The button has to say so."""
+    await make_editor(db)
+    login(client)
+    await seed(db, legs=[], rounds=[("R", [])])
+
+    body = client.get("/concerts/tour/edit").text
+    assert 'class="danger-row"' in body
+    assert "/concerts/tour/duplicate" in body
+    assert "/concerts/tour/delete" in body
+    assert "not rounds or legs" in body
+
+
+# ── cancelled: a leg toggle, not a buried <select> ───────────────────────
+
+
+async def test_the_cancelled_toggle_round_trips(client, db):
+    await make_editor(db)
+    login(client)
+    (day1, day2), _ = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False), ("Day 2", "Osaka", False)],
+        rounds=[("R", [0])],
+    )
+
+    body = client.get("/concerts/tour/edit").text
+    # a toggle backed by a hidden field, not a <select> among the day fields
+    assert 'name="day_cancelled" value="false"' in body
+    assert 'data-cancel-toggle' in body
+    assert '<option value="true"' not in body
+
+    days = [(day1, "Day 1", "Kanagawa", False), (day2, "Day 2", "Osaka", True)]
+    resubmit(client, "tour", days=days, rounds=[(1, "R", str(day1))])
+    async with db() as s:
+        assert (await s.get(ConcertDay, day1)).cancelled is False
+        assert (await s.get(ConcertDay, day2)).cancelled is True
+
+    # and back again
+    days = [(day1, "Day 1", "Kanagawa", False), (day2, "Day 2", "Osaka", False)]
+    resubmit(client, "tour", days=days, rounds=[(1, "R", str(day1))])
+    async with db() as s:
+        assert (await s.get(ConcertDay, day2)).cancelled is False
+
+    body = client.get("/concerts/tour/edit").text
+    assert 'aria-pressed="false"' in body
+
+
+# ── the invariants the restructure must not disturb ──────────────────────
+
+
+async def test_duplicate_from_the_danger_row_still_copies_tags_unexpanded(client, db):
+    """Invariant 3 in the restructured page: the danger row's Duplicate posts
+    to the same route, which re-attaches the source's already-pruned tag set
+    with expand=False and copies no days or rounds."""
+    from app.db.models import Tag
+    from app.db.service import attach_tag
+    from app.domain.types import TagKind
+
+    await make_editor(db)
+    login(client)
+    await seed(db, legs=[("Day 1", "Kanagawa", False)], rounds=[("R", [0])])
+    async with db() as s:
+        group = Tag(name="Aqours", kind=TagKind.GROUP)
+        member = Tag(name="伊波杏樹", kind=TagKind.ARTIST)
+        pruned = Tag(name="Left the group", kind=TagKind.ARTIST)
+        s.add_all([group, member, pruned])
+        await s.flush()
+        from app.db.models import TagMember
+
+        s.add_all([
+            TagMember(group_tag_id=group.id, member_tag_id=member.id),
+            TagMember(group_tag_id=group.id, member_tag_id=pruned.id),
+        ])
+        concert = (await s.execute(select(Concert))).scalar_one()
+        await attach_tag(s, concert.id, group, expand=False)
+        await attach_tag(s, concert.id, member, expand=False)
+        await s.commit()
+
+    r = client.post("/concerts/tour/duplicate")
+    assert r.status_code == 303
+    async with db() as s:
+        clone = (
+            await s.execute(select(Concert).where(Concert.event_id != "tour"))
+        ).scalar_one()
+        await s.refresh(clone, ["tags", "days", "rounds"])
+        names = {t.name for t in clone.tags}
+        assert "Aqours" in names and "伊波杏樹" in names
+        assert "Left the group" not in names  # expand=False, not re-expanded
+        assert clone.days == [] and clone.rounds == []
+
+
+async def test_saving_the_restructured_form_still_records_a_real_diff(client, db):
+    """`edit_concert` snapshots BEFORE mutating and records AFTER. Reversed,
+    every diff reads as unchanged — and the restructure moved the fields the
+    diff is built from into a fold, which is exactly when that would slip."""
+    from app.db.models import ConcertAudit
+
+    await make_editor(db)
+    login(client)
+    (day1,), (round_id,) = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False)],
+        rounds=[("R", [0])],
+    )
+
+    resubmit(
+        client,
+        "tour",
+        days=[(day1, "Day 1", "Kanagawa", False)],
+        rounds=[(round_id, "R", str(day1))],
+        title="Tour, renamed",
+        extra={"organizer": "Aqours", "notes": "moved to a bigger hall"},
+    )
+
+    async with db() as s:
+        audits = (await s.execute(select(ConcertAudit))).scalars().all()
+    assert len(audits) == 1
+    changes = {c["field"]: (c["before"], c["after"]) for c in audits[0].changes}
+    assert changes["title"] == ("Tour", "Tour, renamed")
+    assert changes["organizer"] == (None, "Aqours")
+    assert changes["notes"] == (None, "moved to a bigger hall")

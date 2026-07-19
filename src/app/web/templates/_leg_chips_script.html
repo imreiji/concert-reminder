@@ -1,38 +1,137 @@
-{#- Toggling for the edit page's round-to-leg chips (_round_leg_chips.html),
-    plus addRow() for both repeatable-row "+ Add" buttons.
+{#- The edit page's client half: round-to-leg chips, the cancelled toggle,
+    and addRow() for both repeatable-row "+ Add" buttons.
 
-    The chips are rendered server-side from the concert's real legs, so
-    unlike the creation page's _leg_picker_script.html there is nothing to
-    keep in sync with the day rows -- a leg added in this session has no id
-    yet, and so cannot be assigned a round until it has been saved once.
+    A round's leg chips are keyed by `day_key`, not by ConcertDay id, which
+    is what lets a leg added in this session be assigned a round before it
+    has ever been saved. A saved leg's key IS its id (the server renders it
+    that way), so the two schemes are the same thing for every row that
+    already exists -- the generated keys only ever describe rows the server
+    has not seen yet.
 
-    The hidden input is the single source of truth for a row. A chip only
-    ever adds or removes its OWN id, so ids the chips do not render (a
-    cancelled leg) survive the round trip.
+    The hidden round_legs input stays the single source of truth for a row.
+    Re-rendering rebuilds the BUTTONS from the day rows currently in the DOM
+    and never touches that value, so a reference the chips cannot show (a
+    cancelled leg) survives untouched -- and the toggle only ever adds or
+    removes its own key.
 
-    Delegated listener, not an inline onclick: leg names are user-controlled
+    Delegated listeners, not inline onclick: leg names are user-controlled
     and the browser HTML-decodes an on* attribute before parsing it as JS,
     so Jinja's escaping would not protect an interpolated one (invariant 7).
+    Client-built chips set .textContent for the same reason.
     -#}
 <script>
-  function addRow(listId, templateId) {
-    const tpl = document.getElementById(templateId);
-    document.getElementById(listId).appendChild(tpl.content.cloneNode(true));
-  }
+  (function () {
+    // Unique per page load, so a generated key can never be mistaken for a
+    // ConcertDay id (those are digits) nor collide across rows.
+    const KEY_PREFIX = "new-" + Math.random().toString(36).slice(2, 8) + "-";
+    let keyCounter = 0;
 
-  document.getElementById("round-rows")?.addEventListener("click", (e) => {
-    const chip = e.target.closest("[data-leg-id]");
-    if (!chip) return;
-    const box = chip.closest("[data-leg-chips]");
-    const field = box?.querySelector('input[name="round_legs"]');
-    if (!field) return;
-    const id = chip.dataset.legId;
-    const ids = field.value.split(/[\s,]+/).filter(Boolean);
-    const at = ids.indexOf(id);
-    const on = at === -1;
-    if (on) ids.push(id); else ids.splice(at, 1);
-    field.value = ids.join(" ");
-    chip.classList.toggle("on", on);
-    chip.setAttribute("aria-pressed", on ? "true" : "false");
-  });
+    const dayRows = () => Array.from(document.querySelectorAll("#day-rows .eleg"));
+
+    function fieldValue(row, name) {
+      const el = row.querySelector('[name="' + name + '"]');
+      return el ? el.value.trim() : "";
+    }
+
+    // Live legs only: a cancelled one gets no chip, exactly as the
+    // server-rendered pass does.
+    function legsInDom() {
+      return dayRows()
+        .filter((row) => fieldValue(row, "day_cancelled") !== "true")
+        .map((row) => ({
+          key: fieldValue(row, "day_key"),
+          label:
+            fieldValue(row, "day_label") ||
+            fieldValue(row, "day_city") ||
+            fieldValue(row, "day_venue") ||
+            "New leg",
+        }))
+        .filter((leg) => leg.key);
+    }
+
+    function renderChips(box) {
+      const field = box.querySelector('input[name="round_legs"]');
+      if (!field) return;
+      const chosen = new Set(field.value.split(/[\s,]+/).filter(Boolean));
+      box.querySelectorAll("[data-leg-id]").forEach((c) => c.remove());
+      const legs = legsInDom();
+      const empty = box.querySelector("[data-no-legs]");
+      if (empty) empty.hidden = legs.length > 0;
+      for (const leg of legs) {
+        const on = chosen.has(leg.key);
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = on ? "chip on" : "chip";
+        chip.dataset.legId = leg.key;
+        chip.setAttribute("aria-pressed", on ? "true" : "false");
+        chip.textContent = leg.label;
+        box.appendChild(chip);
+      }
+    }
+
+    const renderAllChips = () =>
+      document.querySelectorAll("#round-rows [data-leg-chips]").forEach(renderChips);
+
+    window.addRow = function (listId, templateId) {
+      const tpl = document.getElementById(templateId);
+      const frag = tpl.content.cloneNode(true);
+      const row = frag.firstElementChild;
+      const keyField = row.querySelector('input[name="day_key"]');
+      if (keyField) keyField.value = KEY_PREFIX + ++keyCounter;
+      const list = document.getElementById(listId);
+      list.querySelectorAll("[data-no-rounds], [data-no-legs-row]").forEach((n) => n.remove());
+      list.appendChild(frag);
+      renderAllChips();
+      const first = row.querySelector("input:not([type=hidden])");
+      if (first) first.focus();
+    };
+
+    const rounds = document.getElementById("round-rows");
+    rounds?.addEventListener("click", (e) => {
+      const remove = e.target.closest("[data-remove-round]");
+      if (remove) {
+        remove.closest(".redit").remove();
+        return;
+      }
+      const chip = e.target.closest("[data-leg-id]");
+      if (!chip) return;
+      const field = chip.closest("[data-leg-chips]")?.querySelector('input[name="round_legs"]');
+      if (!field) return;
+      const key = chip.dataset.legId;
+      const keys = field.value.split(/[\s,]+/).filter(Boolean);
+      const at = keys.indexOf(key);
+      const on = at === -1;
+      if (on) keys.push(key);
+      else keys.splice(at, 1);
+      field.value = keys.join(" ");
+      chip.classList.toggle("on", on);
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+
+    const days = document.getElementById("day-rows");
+    days?.addEventListener("click", (e) => {
+      const remove = e.target.closest("[data-remove-leg]");
+      if (remove) {
+        remove.closest(".eleg").remove();
+        renderAllChips();
+        return;
+      }
+      // Cancelled is a toggle on the leg itself rather than a <select> buried
+      // among its fields. A checkbox would not do: an unticked one submits
+      // nothing, and every day_* field is zipped positionally server-side.
+      const btn = e.target.closest("[data-cancel-toggle]");
+      if (!btn) return;
+      const card = btn.closest(".eleg");
+      const field = card?.querySelector('input[name="day_cancelled"]');
+      if (!field) return;
+      const on = field.value !== "true";
+      field.value = on ? "true" : "false";
+      btn.classList.toggle("on", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      card.classList.toggle("cancelled", on);
+      renderAllChips();
+    });
+    // A leg's chip label follows whatever the editor is typing into it.
+    days?.addEventListener("input", renderAllChips);
+  })();
 </script>
