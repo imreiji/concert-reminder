@@ -96,7 +96,12 @@ class User(Base):
     onboarding_step: Mapped[int] = mapped_column(default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
-    rules: Mapped[list["ReminderRule"]] = relationship(back_populates="user")
+    # passive_deletes: reminder_rules.user_id is NOT NULL with ondelete=CASCADE,
+    # so let the DB delete the children. Without this the ORM tries to UPDATE
+    # them to user_id=NULL first and deleting a user fails (see delete_user).
+    rules: Mapped[list["ReminderRule"]] = relationship(
+        back_populates="user", passive_deletes=True
+    )
 
 
 class WebSession(Base):
@@ -141,10 +146,15 @@ class Concert(Base):
     franchise: Mapped[str | None] = mapped_column(String(100))  # "Hasunosora", "Gakumas"...
     venue: Mapped[str | None] = mapped_column(String(200))
     notes: Mapped[str | None] = mapped_column(Text)
-    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.discord_id"))
+    # SET NULL, not CASCADE: erasing the editor who filed a concert must not
+    # delete the shared catalogue entry everyone else follows. NULL = the
+    # author was deleted (GDPR erasure) -- see service.delete_user.
+    created_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
-    creator: Mapped["User"] = relationship()  # also fixes ORM insert ordering (FK alone doesn't)
+    creator: Mapped["User | None"] = relationship()  # also fixes ORM insert ordering
     days: Mapped[list["ConcertDay"]] = relationship(
         back_populates="concert", cascade="all, delete-orphan", order_by="ConcertDay.starts_at_utc"
     )
@@ -170,11 +180,15 @@ class ConcertAudit(Base):
     concert_id: Mapped[int] = mapped_column(
         ForeignKey("concerts.id", ondelete="CASCADE"), index=True
     )
-    edited_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.discord_id"))
+    # SET NULL on erasure (see Concert.created_by): the edit itself stays in
+    # the history, its author anonymised.
+    edited_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="SET NULL")
+    )
     edited_at_utc: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
     changes: Mapped[list] = mapped_column(JSON)
 
-    editor: Mapped["User"] = relationship()
+    editor: Mapped["User | None"] = relationship()
 
 
 class Tag(Base):
@@ -202,7 +216,11 @@ class Tag(Base):
     # of one-by-one ("Kanto", "Kansai", etc.)
     location_url: Mapped[str | None] = mapped_column(String(500))
     region: Mapped[str | None] = mapped_column(String(100))
-    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.discord_id"))
+    # SET NULL on erasure (see Concert.created_by): tags are shared taxonomy,
+    # not personal data -- they outlive the account that first added them.
+    created_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
     members: Mapped[list["Tag"]] = relationship(
