@@ -51,6 +51,7 @@ from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.domain.types import Anchor, ConcertKind, RoundKind, TagKind
 from app.web.auth import SessionUser, require_editor, require_user
+from app.web.forms import form_url
 
 router = APIRouter()
 
@@ -209,7 +210,7 @@ def apply_round_fields(
     round_.closes_at_utc = closes
     round_.results_at_utc = results
     round_.payment_deadline_at_utc = payment
-    round_.url = url.strip() or None
+    round_.url = form_url(url)
     round_.applies_to = applies_to or None
     round_.label_en = label_en.strip() or None
     round_.notes = notes.strip() or None
@@ -492,9 +493,9 @@ async def create_concert(
     concert.title_en = title_en.strip() or None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
-    concert.eventernote_url = eventernote_url.strip() or None
-    concert.official_url = official_url.strip() or None
-    concert.source_url = source_url.strip() or None
+    concert.eventernote_url = form_url(eventernote_url)
+    concert.official_url = form_url(official_url)
+    concert.source_url = form_url(source_url)
     concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
 
@@ -682,9 +683,9 @@ async def edit_concert(
     concert.kind = ConcertKind(kind) if kind else None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
-    concert.eventernote_url = eventernote_url.strip() or None
-    concert.official_url = official_url.strip() or None
-    concert.source_url = source_url.strip() or None
+    concert.eventernote_url = form_url(eventernote_url)
+    concert.official_url = form_url(official_url)
+    concert.source_url = form_url(source_url)
     concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
 

@@ -30,6 +30,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web.auth import SessionUser, require_editor, require_user
+from app.web.forms import form_url
 
 router = APIRouter()
 
@@ -93,7 +94,7 @@ async def create_tag(
     await ensure_user(session, user.id, user.username)
     session.add(Tag(
         name=name, kind=kind, created_by=user.id, parent_id=parent.id if parent else None,
-        location_url=location_url.strip() or None, region=region.strip() or None,
+        location_url=form_url(location_url), region=region.strip() or None,
     ))
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
@@ -122,7 +123,7 @@ async def edit_tag(
         if existing is not None and existing.id != tag.id:
             raise HTTPException(status_code=409, detail=f"tag {name!r} already exists")
         tag.name = name
-    tag.location_url = location_url.strip() or None
+    tag.location_url = form_url(location_url)
     tag.region = region.strip() or None
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
