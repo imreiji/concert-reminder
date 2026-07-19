@@ -24,6 +24,7 @@ from app.web import auth
 from app.web.routes import calendar as calendar_routes
 from app.web.routes import concerts as concert_routes
 from app.web.routes import imports as import_routes
+from app.web.routes import outcomes as outcome_routes
 from app.web.routes import preferences as pref_routes
 from app.web.routes import privacy as privacy_routes
 from app.web.routes import reminders as reminder_routes
@@ -138,6 +139,9 @@ def create_app() -> FastAPI:
     app.include_router(reminder_routes.router)
     tag_routes.templates = templates
     app.include_router(tag_routes.router)
+    # /rounds/{id}/outcome is a literal, unique prefix -- order-independent.
+    outcome_routes.templates = templates
+    app.include_router(outcome_routes.router)
     pref_routes.templates = templates
     app.include_router(pref_routes.router)
     welcome_routes.templates = templates

@@ -1,0 +1,19 @@
+{# The "Coming up" list, as its own partial so POST /rounds/{id}/outcome can
+   swap it back in after a capture action.
+
+   MINIMAL ON PURPOSE: task 5 of the Home/Discover split replaces the body of
+   this list with the five-column table (Your status / Closes / Concert / What
+   happens / actions). Until then it mirrors index.html's existing row shape so
+   the fragment renders something honest. Keep the outer <ul id="deadline-list">
+   -- that is the htmx swap target, and index.html's client-side filter selects
+   on it too. #}
+<ul class="rows" id="deadline-list">
+  {% for d in deadlines %}
+  <li{% if d.round_id %} data-round-id="{{ d.round_id }}"{% endif %}>
+    <span><a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a> — {{ d.label }}
+      <span class="dim tiny">{{ deadline_label(d.anchor) }}</span>
+    </span>
+    <span class="dim tiny">{{ dual(d.at_utc, tz) }}</span>
+  </li>
+  {% endfor %}
+</ul>

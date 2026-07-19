@@ -733,6 +733,10 @@ class UpcomingDeadline:
     anchor: Anchor
     at_utc: datetime
     url: str | None = None
+    # Which round this row came from, so a Home "Coming up" row knows where to
+    # POST an outcome. Optional because EVENT_START rows are derived from a
+    # ConcertDay and have no round at all -- there is nothing to record against.
+    round_id: int | None = None
 
 
 async def upcoming_deadlines(
@@ -793,7 +797,7 @@ async def upcoming_deadlines(
                 continue
             out.append(UpcomingDeadline(
                 concert_title=concert.title, event_id=concert.event_id, label=r.label,
-                anchor=anchor, at_utc=ts, url=r.url,
+                anchor=anchor, at_utc=ts, url=r.url, round_id=r.id,
             ))
 
     out.sort(key=lambda e: e.at_utc)
