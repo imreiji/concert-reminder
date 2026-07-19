@@ -92,6 +92,10 @@ Developer Portal -> your app -> OAuth2 -> Redirects -> **add**
 ## 7. Verify
 
 ```bash
+git log --oneline -1                         # confirm the server is on the commit
+                                             # you just deployed - a pull that
+                                             # failed partway leaves the box on
+                                             # the OLD commit, still healthy
 curl -s https://dekimasen.app/healthz        # {"ok":true,"bot_enabled":true}
 journalctl -u concert-reminder -f            # bot online + scheduler running
 ```
@@ -100,6 +104,11 @@ Then in a browser: sign in with Discord, confirm the editor badge.
 Caddyfile changes are not picked up by `git pull` alone - the live config is
 a copy:
 ```bash
+caddy validate --config ~/app/deploy/Caddyfile     # validate the REPO copy,
+                                                   # i.e. the change you are about
+                                                   # to deploy - validating
+                                                   # /etc/caddy/Caddyfile instead
+                                                   # passes even if you skip the cp
 sudo cp ~/app/deploy/Caddyfile /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 curl -sI https://dekimasen.app/ | grep -i 'x-frame\|x-content-type\|referrer'
@@ -147,11 +156,35 @@ not read, list, or delete them.
 ```bash
 sudo apt-get install -y awscli
 aws configure          # paste the access key id + secret; region e.g. ca-central-1; output json
-nano ~/app/deploy/backup.sh    # set BUCKET
+# The bucket is server-local config and is NOT stored in the repo - backup.sh
+# reads BACKUP_BUCKET, and sources this file itself if it exists:
+sudo tee /etc/default/dekimasen-backup <<< 'BACKUP_BUCKET="s3://YOUR-BUCKET-NAME/dekimasen"'
+sudo chmod 600 /etc/default/dekimasen-backup
 ~/app/deploy/backup.sh         # test run -> "backup ok: <date>"
 crontab -e                     # add:
 # 0 9 * * * /home/ubuntu/app/deploy/backup.sh >> /home/ubuntu/backup.log 2>&1
 ```
+With no bucket configured the script exits non-zero on line 1 of real work and
+says which file to create, so a misconfigured cron fails loudly in
+`~/backup.log` rather than silently backing up nothing.
+
+**One-time migration (server currently has an edited `backup.sh`):** the old
+script carried a hardcoded `BUCKET=`, so servers set up before this change have
+a locally-modified tracked file that will conflict on the next `git pull`.
+Capture the value BEFORE discarding the edit - once it is checked out, the real
+bucket name is gone:
+```bash
+cd ~/app
+grep '^BUCKET=' deploy/backup.sh     # note the real value FIRST
+git checkout -- deploy/backup.sh     # then discard the in-place edit
+git pull
+sudo tee /etc/default/dekimasen-backup <<< 'BACKUP_BUCKET="s3://...the value you noted..."'
+sudo chmod 600 /etc/default/dekimasen-backup
+~/app/deploy/backup.sh               # confirm: "backup ok: <date>"
+```
+The crontab line does not change: `backup.sh` sources
+`/etc/default/dekimasen-backup` itself, so there is no half-migrated state
+where the script is updated but cron still runs it without a bucket.
 
 **Restore drill (do this once now so it isn't theory):**
 ```bash
@@ -183,6 +216,8 @@ scheduler behind a live website.
 cd ~/app && git pull && uv sync && uv run alembic upgrade head \
   && sudo systemctl restart concert-reminder
 ```
+Then verify with section 7: `git log --oneline -1` (right commit), `/healthz`
+(app alive), and the `curl -sI` header check if you touched the Caddyfile.
 
 ## Disaster recovery
 
