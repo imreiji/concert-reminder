@@ -54,7 +54,8 @@
       {% for a in audit_log %}
       <li>
         <div>
-          <strong>{{ a.editor.username if a.editor else a.edited_by }}</strong>
+          {# edited_by is NULL once that account is erased (ondelete=SET NULL) #}
+          <strong>{{ a.editor.username if a.editor else (a.edited_by or "Deleted user") }}</strong>
           <span class="dim tiny">{{ dual(a.edited_at_utc, tz) }}</span>
           <ul class="dim tiny audit-changes">
             {% for c in a.changes %}
