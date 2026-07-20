@@ -27,6 +27,7 @@ from app.db.service import (
     group_members,
     handle_newly_tagged,
     resolve_group_member,
+    tag_directory_context,
 )
 from app.db.session import get_session
 from app.domain.types import TagKind
@@ -52,6 +53,7 @@ async def tag_directory(
     session: AsyncSession = Depends(get_session),
 ):
     tags = await all_tags(session)
+    ctx = await tag_directory_context(session)
     groups = [t for t in tags if t.kind is TagKind.GROUP]
     members = {t.id: await group_members(session, t.id) for t in groups}
     grouped_artist_ids = {m.id for ms in members.values() for m in ms}
@@ -68,6 +70,7 @@ async def tag_directory(
             ],
             "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
             "venues": [t for t in tags if t.kind is TagKind.VENUE],
+            **ctx,
         },
     )
 

@@ -9,6 +9,7 @@ notifications will rely on, so they get exhaustive coverage:
 """
 
 import re
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -18,8 +19,18 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, ConcertTag, Round, Tag, TagMember, User
-from app.db.service import attach_tag, detach_tag
+from app.db.models import (
+    Base,
+    Concert,
+    ConcertDay,
+    ConcertTag,
+    Round,
+    Tag,
+    TagMember,
+    TagSubscription,
+    User,
+)
+from app.db.service import attach_tag, detach_tag, tag_directory_context
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web import auth
@@ -203,6 +214,127 @@ async def test_edit_tag_without_name_field_leaves_name_unchanged(client):
         tag = await s.get(Tag, 1)
         assert tag.name == "K Arena"
         assert tag.region == "Kanto"
+
+
+# ── tag_directory_context: counts and groupings (Task 2) ─────────────────
+
+FUTURE = datetime(2099, 8, 1, 18, 0, tzinfo=UTC)
+
+
+async def test_tag_counts_concerts_followers_members(db):
+    async with db() as s:
+        s.add_all([
+            User(discord_id=EDITOR_ID, username="reiji"),
+            User(discord_id=VIEWER_ID, username="viewer"),
+        ])
+        await s.flush()
+        group = Tag(name="Aqours", kind=TagKind.GROUP, created_by=EDITOR_ID)
+        m1 = Tag(name="M1", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        m2 = Tag(name="M2", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        m3 = Tag(name="M3", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        c1 = Concert(title="C1", event_id="c1", created_by=EDITOR_ID)
+        c2 = Concert(title="C2", event_id="c2", created_by=EDITOR_ID)
+        s.add_all([group, m1, m2, m3, c1, c2])
+        await s.flush()
+        s.add_all([
+            TagMember(group_tag_id=group.id, member_tag_id=m1.id),
+            TagMember(group_tag_id=group.id, member_tag_id=m2.id),
+            TagMember(group_tag_id=group.id, member_tag_id=m3.id),
+            ConcertTag(concert_id=c1.id, tag_id=group.id),
+            ConcertTag(concert_id=c2.id, tag_id=group.id),
+            TagSubscription(user_id=VIEWER_ID, tag_id=group.id),
+        ])
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        counts = ctx["counts"][group.id]
+        assert counts.concerts == 2
+        assert counts.followers == 1
+        assert counts.members == 3
+
+
+async def test_tag_upcoming_excludes_cancelled_only_futures(db):
+    """A tag on two concerts: one with a live future day, one whose only
+    future day is cancelled -> upcoming == 1."""
+    async with db() as s:
+        s.add(User(discord_id=EDITOR_ID, username="reiji"))
+        await s.flush()
+        tag = Tag(name="LoveLive", kind=TagKind.FRANCHISE, created_by=EDITOR_ID)
+        live = Concert(title="Live", event_id="live", created_by=EDITOR_ID)
+        dead = Concert(title="Dead", event_id="dead", created_by=EDITOR_ID)
+        s.add_all([tag, live, dead])
+        await s.flush()
+        s.add_all([
+            ConcertDay(concert_id=live.id, label="D1", starts_at_utc=FUTURE),
+            ConcertDay(concert_id=dead.id, label="D1", starts_at_utc=FUTURE, cancelled=True),
+            ConcertTag(concert_id=live.id, tag_id=tag.id),
+            ConcertTag(concert_id=dead.id, tag_id=tag.id),
+        ])
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        assert ctx["counts"][tag.id].concerts == 2
+        assert ctx["counts"][tag.id].upcoming == 1
+
+
+async def test_venue_regions_sorted_with_no_region_last(db):
+    async with db() as s:
+        s.add(User(discord_id=EDITOR_ID, username="reiji"))
+        await s.flush()
+        s.add_all([
+            Tag(name="Osaka Hall", kind=TagKind.VENUE, created_by=EDITOR_ID, region="Kansai"),
+            Tag(name="Saitama SA", kind=TagKind.VENUE, created_by=EDITOR_ID, region="Kanto"),
+            Tag(name="Somewhere", kind=TagKind.VENUE, created_by=EDITOR_ID),
+        ])
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        region_names = [name for name, _ in ctx["venue_regions"]]
+        # alphabetical (Kansai < Kanto), with the "No region" bucket forced last
+        assert region_names == ["Kansai", "Kanto", "No region"]
+
+
+async def test_ungrouped_performers_excludes_group_members(db):
+    async with db() as s:
+        s.add(User(discord_id=EDITOR_ID, username="reiji"))
+        await s.flush()
+        group = Tag(name="Aqours", kind=TagKind.GROUP, created_by=EDITOR_ID)
+        member = Tag(name="Member", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        solo = Tag(name="Solo", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        s.add_all([group, member, solo])
+        await s.flush()
+        s.add(TagMember(group_tag_id=group.id, member_tag_id=member.id))
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        names = {t.name for t in ctx["ungrouped_performers"]}
+        assert names == {"Solo"}
+
+
+async def test_eligible_members_counts_match_active_concerts_missing_member(db):
+    """A group with a live concert that carries the group but not the member
+    yields one eligible member with count 1."""
+    async with db() as s:
+        s.add(User(discord_id=EDITOR_ID, username="reiji"))
+        await s.flush()
+        group = Tag(name="Liella", kind=TagKind.GROUP, created_by=EDITOR_ID)
+        member = Tag(name="Sumire", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        concert = Concert(title="Liella Live", event_id="liella-live", created_by=EDITOR_ID)
+        s.add_all([group, member, concert])
+        await s.flush()
+        s.add_all([
+            TagMember(group_tag_id=group.id, member_tag_id=member.id),
+            ConcertDay(concert_id=concert.id, label="D1", starts_at_utc=FUTURE),
+            ConcertTag(concert_id=concert.id, tag_id=group.id),
+        ])
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        eligible = ctx["eligible_members"][group.id]
+        assert len(eligible) == 1
+        elig_member, n = eligible[0]
+        assert elig_member.id == member.id
+        assert n == 1
 
 
 # ── eventernote_url column (Task 1) ──────────────────────────────────────

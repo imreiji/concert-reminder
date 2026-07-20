@@ -1931,6 +1931,150 @@ async def active_concerts_missing_member(
     return out
 
 
+@dataclass(frozen=True)
+class TagCounts:
+    """Everything a tag chip and its dialog display about what the tag costs
+    to change: how many concerts carry it, how many users follow it, how many
+    members it has (groups only), and how many of its concerts are still
+    upcoming (>=1 non-cancelled leg not yet past)."""
+
+    concerts: int = 0
+    followers: int = 0
+    members: int = 0
+    upcoming: int = 0
+
+
+async def tag_directory_context(session: AsyncSession, now: datetime | None = None) -> dict:
+    """Every count and grouping the Tags directory page needs, in one pass --
+    the route stays assembly-only. No N+1: concert/follower/member counts come
+    from three GROUP BY aggregates, and the per-concert "active" reading
+    (>=1 non-cancelled leg not yet past -- the same live-leg definition
+    active_concerts_missing_member uses) is computed once over all days.
+
+    Returns a dict with:
+      counts             -- {tag_id: TagCounts}
+      franchise_families -- [(franchise Tag, [(group Tag, [member Tag, ...]), ...]), ...]
+                            in franchise name order; groups in name order
+      no_franchise_groups-- [(group Tag, [member Tag, ...]), ...] for parentless groups
+      venue_regions      -- [(region_name, [venue Tag, ...]), ...] alpha, "No region" last
+      ungrouped_performers -- ARTIST tags that are no group's member, name order
+      summary            -- {concerts, franchises, groups, performers, venues}
+      eligible_members   -- {group_id: [(member Tag, n_eligible_concerts), ...]}
+    """
+    now = now or _now()
+    tags = list((await session.execute(select(Tag).order_by(Tag.name))).scalars())
+    by_id = {t.id: t for t in tags}
+
+    # ── three GROUP BY aggregates ──
+    concert_rows = (await session.execute(
+        select(ConcertTag.tag_id, func.count()).group_by(ConcertTag.tag_id)
+    )).all()
+    concerts_by_tag = dict(concert_rows)
+    follower_rows = (await session.execute(
+        select(TagSubscription.tag_id, func.count()).group_by(TagSubscription.tag_id)
+    )).all()
+    followers_by_tag = dict(follower_rows)
+    member_rows = (await session.execute(
+        select(TagMember.group_tag_id, func.count()).group_by(TagMember.group_tag_id)
+    )).all()
+    members_by_group = dict(member_rows)
+
+    # ── the active/upcoming reading, computed once over all days ──
+    day_rows = (await session.execute(
+        select(ConcertDay.concert_id, ConcertDay.starts_at_utc, ConcertDay.cancelled)
+    )).all()
+    live_future_concert_ids: set[int] = set()
+    for concert_id, starts_at, cancelled in day_rows:
+        if not cancelled and starts_at >= now:
+            live_future_concert_ids.add(concert_id)
+    all_concert_tag_rows = (await session.execute(
+        select(ConcertTag.concert_id, ConcertTag.tag_id)
+    )).all()
+    upcoming_by_tag: dict[int, int] = {}
+    for concert_id, tag_id in all_concert_tag_rows:
+        if concert_id in live_future_concert_ids:
+            upcoming_by_tag[tag_id] = upcoming_by_tag.get(tag_id, 0) + 1
+
+    counts = {
+        t.id: TagCounts(
+            concerts=concerts_by_tag.get(t.id, 0),
+            followers=followers_by_tag.get(t.id, 0),
+            members=members_by_group.get(t.id, 0),
+            upcoming=upcoming_by_tag.get(t.id, 0),
+        )
+        for t in tags
+    }
+
+    # ── membership map (group_id -> [member Tag, ...] in name order) ──
+    tag_member_rows = (await session.execute(
+        select(TagMember.group_tag_id, TagMember.member_tag_id)
+    )).all()
+    members_of: dict[int, list[Tag]] = {}
+    grouped_member_ids: set[int] = set()
+    for group_id, member_id in tag_member_rows:
+        member = by_id.get(member_id)
+        if member is not None:
+            members_of.setdefault(group_id, []).append(member)
+            grouped_member_ids.add(member_id)
+    for members in members_of.values():
+        members.sort(key=lambda m: m.name)
+
+    franchises = [t for t in tags if t.kind is TagKind.FRANCHISE]
+    groups = [t for t in tags if t.kind is TagKind.GROUP]
+    artists = [t for t in tags if t.kind is TagKind.ARTIST]
+    venues = [t for t in tags if t.kind is TagKind.VENUE]
+
+    def group_with_members(g: Tag) -> tuple[Tag, list[Tag]]:
+        return g, members_of.get(g.id, [])
+
+    franchise_families = [
+        (f, [group_with_members(g) for g in groups if g.parent_id == f.id])
+        for f in franchises
+    ]
+    no_franchise_groups = [group_with_members(g) for g in groups if g.parent_id is None]
+
+    # ── venues by region, "No region" last ──
+    by_region: dict[str, list[Tag]] = {}
+    for v in venues:
+        by_region.setdefault(v.region or "No region", []).append(v)
+    venue_regions = [
+        (name, by_region[name])
+        for name in sorted(by_region, key=lambda r: (r == "No region", r))
+    ]
+
+    ungrouped_performers = [a for a in artists if a.id not in grouped_member_ids]
+
+    # ── eligible members per group (powers the apply-to-existing links) ──
+    eligible_members: dict[int, list[tuple[Tag, int]]] = {}
+    for g in groups:
+        entries: list[tuple[Tag, int]] = []
+        for member in members_of.get(g.id, []):
+            concerts = await active_concerts_missing_member(session, g.id, member.id, now)
+            if concerts:
+                entries.append((member, len(concerts)))
+        eligible_members[g.id] = entries
+
+    summary = {
+        "concerts": (await session.execute(
+            select(func.count()).select_from(Concert)
+        )).scalar_one(),
+        "franchises": len(franchises),
+        "groups": len(groups),
+        "performers": len(artists),
+        "venues": len(venues),
+    }
+
+    return {
+        "counts": counts,
+        "franchise_families": franchise_families,
+        "no_franchise_groups": no_franchise_groups,
+        "venue_regions": venue_regions,
+        "ungrouped_performers": ungrouped_performers,
+        "summary": summary,
+        "eligible_members": eligible_members,
+    }
+
+
 async def tag_picker_context(session: AsyncSession) -> dict:
     """Data the shared tag-picker partial needs: tags grouped by kind, plus
     the two lookup maps its client-side script reads (group->members for
