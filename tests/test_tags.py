@@ -9,17 +9,28 @@ notifications will rely on, so they get exhaustive coverage:
 """
 
 import re
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
+from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, ConcertTag, Round, Tag, TagMember, User
-from app.db.service import attach_tag, detach_tag
+from app.db.models import (
+    Base,
+    Concert,
+    ConcertDay,
+    ConcertTag,
+    Round,
+    Tag,
+    TagMember,
+    TagSubscription,
+    User,
+)
+from app.db.service import attach_tag, detach_tag, tag_directory_context
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web import auth
@@ -151,10 +162,26 @@ def test_tag_creation_is_editor_only(client):
     assert client.post("/tags", data={"name": "X", "kind": "artist"}).status_code == 303
 
 
-def test_duplicate_tag_names_rejected_case_insensitively(client):
+def test_creating_same_name_same_kind_still_409s(client):
+    """Kind-scoped duplicate rule (resolved with the owner): a second tag of
+    the SAME name AND SAME kind is a real duplicate and stays blocked."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
-    assert client.post("/tags", data={"name": "hasunosora", "kind": "artist"}).status_code == 409
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    assert client.post("/tags", data={"name": "aqours", "kind": "group"}).status_code == 409
+
+
+async def test_creating_same_name_tag_now_succeeds(client):
+    """Replaces test_duplicate_tag_names_rejected_case_insensitively: same
+    name with a DIFFERENT kind is now allowed (warn in the UI, don't block)."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    r = client.post("/tags", data={"name": "aqours", "kind": "venue"})
+    assert r.status_code == 303
+    async with client.db() as s:
+        rows = (await s.execute(
+            select(Tag).where(func.lower(Tag.name) == "aqours")
+        )).scalars().all()
+        assert len(rows) == 2
 
 
 def test_groups_cannot_contain_groups(client):
@@ -205,6 +232,171 @@ async def test_edit_tag_without_name_field_leaves_name_unchanged(client):
         assert tag.region == "Kanto"
 
 
+# ── tag_directory_context: counts and groupings (Task 2) ─────────────────
+
+FUTURE = datetime(2099, 8, 1, 18, 0, tzinfo=UTC)
+
+
+async def test_tag_counts_concerts_followers_members(db):
+    async with db() as s:
+        s.add_all([
+            User(discord_id=EDITOR_ID, username="reiji"),
+            User(discord_id=VIEWER_ID, username="viewer"),
+        ])
+        await s.flush()
+        group = Tag(name="Aqours", kind=TagKind.GROUP, created_by=EDITOR_ID)
+        m1 = Tag(name="M1", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        m2 = Tag(name="M2", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        m3 = Tag(name="M3", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        c1 = Concert(title="C1", event_id="c1", created_by=EDITOR_ID)
+        c2 = Concert(title="C2", event_id="c2", created_by=EDITOR_ID)
+        s.add_all([group, m1, m2, m3, c1, c2])
+        await s.flush()
+        s.add_all([
+            TagMember(group_tag_id=group.id, member_tag_id=m1.id),
+            TagMember(group_tag_id=group.id, member_tag_id=m2.id),
+            TagMember(group_tag_id=group.id, member_tag_id=m3.id),
+            ConcertTag(concert_id=c1.id, tag_id=group.id),
+            ConcertTag(concert_id=c2.id, tag_id=group.id),
+            TagSubscription(user_id=VIEWER_ID, tag_id=group.id),
+        ])
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        counts = ctx["counts"][group.id]
+        assert counts.concerts == 2
+        assert counts.followers == 1
+        assert counts.members == 3
+
+
+async def test_tag_upcoming_excludes_cancelled_only_futures(db):
+    """A tag on two concerts: one with a live future day, one whose only
+    future day is cancelled -> upcoming == 1."""
+    async with db() as s:
+        s.add(User(discord_id=EDITOR_ID, username="reiji"))
+        await s.flush()
+        tag = Tag(name="LoveLive", kind=TagKind.FRANCHISE, created_by=EDITOR_ID)
+        live = Concert(title="Live", event_id="live", created_by=EDITOR_ID)
+        dead = Concert(title="Dead", event_id="dead", created_by=EDITOR_ID)
+        s.add_all([tag, live, dead])
+        await s.flush()
+        s.add_all([
+            ConcertDay(concert_id=live.id, label="D1", starts_at_utc=FUTURE),
+            ConcertDay(concert_id=dead.id, label="D1", starts_at_utc=FUTURE, cancelled=True),
+            ConcertTag(concert_id=live.id, tag_id=tag.id),
+            ConcertTag(concert_id=dead.id, tag_id=tag.id),
+        ])
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        assert ctx["counts"][tag.id].concerts == 2
+        assert ctx["counts"][tag.id].upcoming == 1
+
+
+async def test_venue_regions_sorted_with_no_region_last(db):
+    async with db() as s:
+        s.add(User(discord_id=EDITOR_ID, username="reiji"))
+        await s.flush()
+        s.add_all([
+            Tag(name="Osaka Hall", kind=TagKind.VENUE, created_by=EDITOR_ID, region="Kansai"),
+            Tag(name="Saitama SA", kind=TagKind.VENUE, created_by=EDITOR_ID, region="Kanto"),
+            Tag(name="Somewhere", kind=TagKind.VENUE, created_by=EDITOR_ID),
+        ])
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        region_names = [name for name, _ in ctx["venue_regions"]]
+        # alphabetical (Kansai < Kanto), with the "No region" bucket forced last
+        assert region_names == ["Kansai", "Kanto", "No region"]
+
+
+async def test_ungrouped_performers_excludes_group_members(db):
+    async with db() as s:
+        s.add(User(discord_id=EDITOR_ID, username="reiji"))
+        await s.flush()
+        group = Tag(name="Aqours", kind=TagKind.GROUP, created_by=EDITOR_ID)
+        member = Tag(name="Member", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        solo = Tag(name="Solo", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        s.add_all([group, member, solo])
+        await s.flush()
+        s.add(TagMember(group_tag_id=group.id, member_tag_id=member.id))
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        names = {t.name for t in ctx["ungrouped_performers"]}
+        assert names == {"Solo"}
+
+
+async def test_eligible_members_counts_match_active_concerts_missing_member(db):
+    """A group with a live concert that carries the group but not the member
+    yields one eligible member with count 1."""
+    async with db() as s:
+        s.add(User(discord_id=EDITOR_ID, username="reiji"))
+        await s.flush()
+        group = Tag(name="Liella", kind=TagKind.GROUP, created_by=EDITOR_ID)
+        member = Tag(name="Sumire", kind=TagKind.ARTIST, created_by=EDITOR_ID)
+        concert = Concert(title="Liella Live", event_id="liella-live", created_by=EDITOR_ID)
+        s.add_all([group, member, concert])
+        await s.flush()
+        s.add_all([
+            TagMember(group_tag_id=group.id, member_tag_id=member.id),
+            ConcertDay(concert_id=concert.id, label="D1", starts_at_utc=FUTURE),
+            ConcertTag(concert_id=concert.id, tag_id=group.id),
+        ])
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        eligible = ctx["eligible_members"][group.id]
+        assert len(eligible) == 1
+        elig_member, n = eligible[0]
+        assert elig_member.id == member.id
+        assert n == 1
+
+
+# ── eventernote_url column (Task 1) ──────────────────────────────────────
+
+
+async def test_eventernote_url_round_trips_on_create_and_edit(client):
+    """POST /tags stores an eventernote_url; POST /tags/{id}/edit replaces it;
+    clearing the field nulls it."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Kozue Otomune", "kind": "artist",
+        "eventernote_url": "https://www.eventernote.com/actors/1234",
+    })
+    async with client.db() as s:
+        tag = await s.get(Tag, 1)
+        assert tag.eventernote_url == "https://www.eventernote.com/actors/1234"
+
+    client.post("/tags/1/edit", data={
+        "name": "Kozue Otomune",
+        "eventernote_url": "https://www.eventernote.com/actors/5678",
+    })
+    async with client.db() as s:
+        tag = await s.get(Tag, 1)
+        assert tag.eventernote_url == "https://www.eventernote.com/actors/5678"
+
+    client.post("/tags/1/edit", data={"name": "Kozue Otomune", "eventernote_url": ""})
+    async with client.db() as s:
+        tag = await s.get(Tag, 1)
+        assert tag.eventernote_url is None
+
+
+def test_eventernote_url_rejects_unsafe_scheme(client):
+    """javascript: through create AND through edit both 422 (form_url)."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/tags", data={
+        "name": "Kozue", "kind": "artist", "eventernote_url": "javascript:alert(1)",
+    })
+    assert r.status_code == 422
+    # a clean tag to aim the edit at
+    client.post("/tags", data={"name": "Kaho", "kind": "artist"})
+    r = client.post("/tags/1/edit", data={
+        "name": "Kaho", "eventernote_url": "javascript:alert(1)",
+    })
+    assert r.status_code == 422
+
+
 # ── Tags page rendering: search, hierarchy, unified dialogs ──────────────
 
 
@@ -224,10 +416,9 @@ def test_tags_page_renders_hierarchy_and_search_box(client):
     # every tag gets its own dialog
     assert 'id="tag-dialog-1"' in r.text  # Hasunosora
     assert 'id="tag-dialog-2"' in r.text  # Liella
-    assert 'dialog.picker' not in r.text  # sanity: that's a CSS selector, not markup
-    assert 'class="picker"' in r.text
-    # hierarchy container must have sub-box class for group/member styling
-    assert 'class="tags-page sub-box"' in r.text
+    assert 'class="tagdlg"' in r.text
+    # the filter scope container the search box targets
+    assert 'class="tags-page"' in r.text
 
 
 def test_tags_page_solo_artist_bucket(client):
@@ -235,8 +426,168 @@ def test_tags_page_solo_artist_bucket(client):
     client.post("/tags", data={"name": "Solo Artist", "kind": "artist"})
     r = client.get("/tags")
     assert r.status_code == 200
-    assert "Solo artists" in r.text
+    assert "Performers with no group" in r.text
     assert "Solo Artist" in r.text
+
+
+# ── Tags page structure: sections, counted chips, unused state (Task 3) ───
+
+
+def test_tags_page_chips_carry_concert_counts(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/concerts", data={"title": "Show", "event_id": "show", "franchise_tags": [1]})
+    r = client.get("/tags")
+    assert r.status_code == 200
+    # the count sits on the chip, right after the name
+    assert 'Hasunosora<span class="n2">1</span>' in r.text
+
+
+def test_tags_page_zero_concert_tag_renders_unused(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    r = client.get("/tags")
+    assert "tchip k-franchise unused" in r.text
+    assert 'Hasunosora<span class="n2">0</span>' in r.text
+
+
+def test_tags_page_member_chips_have_no_count(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    client.post("/tags", data={"name": "MemberChip", "kind": "artist"})
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    r = client.get("/tags")
+    # a member chip ends immediately after its name -- no <span class="n2">
+    assert "MemberChip</button>" in r.text
+
+
+def test_tags_page_groups_venues_by_region_with_no_region_last(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Kanto Hall", "kind": "venue", "region": "Kanto"})
+    client.post("/tags", data={"name": "Mystery Venue", "kind": "venue"})
+    r = client.get("/tags")
+    assert "Kanto</span>" in r.text and "No region</span>" in r.text
+    # the "No region" bucket sorts last
+    assert r.text.index("Kanto</span>") < r.text.index("No region</span>")
+    assert r.text.index("Kanto Hall") < r.text.index("Mystery Venue")
+
+
+def test_tags_page_parentless_group_renders_under_no_franchise(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Orphan Group", "kind": "group"})
+    r = client.get("/tags")
+    assert "No franchise" in r.text
+    assert r.text.index("No franchise") < r.text.index("Orphan Group")
+
+
+def test_tags_page_summary_line_counts_kinds(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "F1", "kind": "franchise"})
+    client.post("/tags", data={"name": "F2", "kind": "franchise"})
+    client.post("/tags", data={"name": "G1", "kind": "group"})
+    client.post("/tags", data={"name": "A1", "kind": "artist"})
+    client.post("/tags", data={"name": "A2", "kind": "artist"})
+    client.post("/tags", data={"name": "A3", "kind": "artist"})
+    client.post("/tags", data={"name": "V1", "kind": "venue"})
+    client.post("/concerts", data={"title": "Show", "event_id": "show"})
+    r = client.get("/tags")
+    assert "1 concert" in r.text
+    assert "2 franchises" in r.text
+    assert "1 group" in r.text
+    assert "3 performers" in r.text
+    assert "1 venue" in r.text
+
+
+# ── Per-tag edit dialog: usage strip, kind fields, apply action (Task 4) ──
+
+
+def test_tag_dialog_shows_usage_counts(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    client.post("/concerts", data={"title": "Show", "event_id": "show", "group_tags": [1]})
+    login_as(client, VIEWER_ID, "viewer")
+    client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/tags")
+    assert r.status_code == 200
+    dlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    assert '<div class="usage">' in dlg
+    assert '<div class="l3">concerts</div>' in dlg
+    assert '<div class="l3">followers</div>' in dlg
+    # concerts=1 and followers=1 are wired from counts, not hardcoded
+    assert dlg.count('<div class="n3">1</div>') >= 2
+
+
+def test_group_dialog_shows_members_stat_and_artist_dialog_does_not(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    client.post("/tags", data={"name": "Solo", "kind": "artist"})
+    r = client.get("/tags")
+    gdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    adlg = r.text.split('id="tag-dialog-2"')[1].split("</dialog>")[0]
+    assert '<div class="l3">members</div>' in gdlg
+    assert '<div class="l3">members</div>' not in adlg
+
+
+def test_group_dialog_offers_apply_link_only_when_concerts_eligible(client):
+    login_as(client, EDITOR_ID, "reiji")
+    # eligible: group tagged onto a live concert, then a member added
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    # not eligible: a group with a member but no concerts
+    client.post("/tags", data={"name": "Empty", "kind": "group"})
+    client.post("/tags", data={"name": "Lonely", "kind": "artist"})
+    client.post("/tags/3/members", data={"member_tag_id": 4})
+
+    r = client.get("/tags")
+    gdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    assert "/tags/1/members/2/retroactive-apply" in gdlg
+    assert "Apply Sumire to 1 upcoming concert" in gdlg
+
+    edlg = r.text.split('id="tag-dialog-3"')[1].split("</dialog>")[0]
+    assert "upgradebox" in edlg  # the invariant explanation still renders
+    assert "retroactive-apply" not in edlg  # but with no apply link
+
+
+def test_venue_dialog_region_datalist_lists_existing_regions(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Kanto Hall", "kind": "venue", "region": "Kanto"})
+    client.post("/tags", data={"name": "Kansai Hall", "kind": "venue", "region": "Kansai"})
+    client.post("/tags", data={"name": "Mystery Hall", "kind": "venue"})
+    r = client.get("/tags")
+    vdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    assert "<datalist" in vdlg
+    assert '<option value="Kanto">' in vdlg
+    assert '<option value="Kansai">' in vdlg
+    # the synthetic "No region" bucket is never offered as a real region
+    assert '<option value="No region">' not in vdlg
+
+
+def test_artist_dialog_has_eventernote_field_and_venue_dialog_does_not(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Solo", "kind": "artist"})
+    client.post("/tags", data={"name": "Hall", "kind": "venue"})
+    r = client.get("/tags")
+    adlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    vdlg = r.text.split('id="tag-dialog-2"')[1].split("</dialog>")[0]
+    assert 'name="eventernote_url"' in adlg
+    assert 'name="location_url"' not in adlg
+    assert 'name="location_url"' in vdlg
+    assert 'name="eventernote_url"' not in vdlg
+
+
+def test_delete_form_uses_data_tag_name_not_inline_interpolation(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Trouble", "kind": "franchise"})
+    r = client.get("/tags")
+    dlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    assert 'data-tag-name="Trouble"' in dlg
+    assert "confirmDeleteTag(this)" in dlg
+    # the name must never be interpolated into an on* handler
+    assert "Delete tag Trouble" not in r.text
+    assert 'confirm("Delete tag Trouble' not in r.text
 
 
 def test_tags_page_viewer_sees_no_edit_dialogs(client):
@@ -264,14 +615,71 @@ def test_tags_page_renders_one_dialog_even_for_artist_in_multiple_groups(client)
     assert r.text.count('id="tag-dialog-3"') == 1
 
 
-def test_new_tag_form_includes_parent_visibility_script(client):
-    """The kind/parent select-hiding is JS-only, client-side behavior --
-    not server-testable via HTTP. This just confirms the toggle script and
-    its target elements are actually present in the rendered page."""
+def test_new_tag_dialog_has_kind_switching_script(client):
+    """The per-kind field-hiding is JS-only, client-side behaviour -- not
+    server-testable via HTTP. This confirms the new-tag dialog's kind picker,
+    its switching function, and the duplicate-warning box are all present."""
     login_as(client, EDITOR_ID, "reiji")
     r = client.get("/tags")
-    assert "new-tag-kind" in r.text and "new-tag-parent" in r.text
-    assert "syncParentVisibility" in r.text
+    assert 'id="kindPick"' in r.text
+    assert "setTagKind" in r.text
+    assert 'id="new-tag-dupe"' in r.text
+
+
+# ── New-tag dialog and warn-not-block duplicates (Task 5) ────────────────
+
+
+def test_new_tag_dialog_fields_are_conditional_on_kind(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/tags")
+    body = r.text
+    # kind pill picker: four kinds, performer submits as artist
+    assert 'data-kind="franchise"' in body
+    assert 'data-kind="group"' in body
+    assert 'data-kind="artist"' in body
+    assert 'data-kind="venue"' in body
+    # conditional field groups keyed by kind class
+    assert "kf k-group" in body        # parent franchise + eventernote
+    assert "kf k-venue" in body        # region + map url
+    assert "kf k-franchise" in body    # the "nothing else to set" note
+    assert 'name="eventernote_url"' in body
+    # the region consequence note
+    assert "No region" in body
+
+
+def test_dupe_payload_is_tojson_not_double_encoded(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "X</script><script>alert(1)", "kind": "artist"})
+    r = client.get("/tags")
+    # the raw breakout sequence must never appear unescaped
+    assert "</script><script>alert(1)" not in r.text
+    # tojson escapes < and > to < / > in the inline payload
+    assert "\\u003c/script\\u003e\\u003cscript\\u003ealert(1)" in r.text
+
+
+def test_rename_to_existing_name_still_409s(client):
+    """Rename collision is name-only (global across kinds) and unchanged --
+    only CREATE became kind-scoped."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    client.post("/tags", data={"name": "Hall", "kind": "venue"})
+    r = client.post("/tags/2/edit", data={"name": "aqours"})
+    assert r.status_code == 409
+
+
+def test_new_tag_dialog_replaces_details_form(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/tags")
+    # the old inline <details> create form is gone
+    assert 'id="new-tag-form"' not in r.text
+    assert "syncParentVisibility" not in r.text
+    # replaced by the dialog + its opener button, editor-only
+    assert 'id="new-tag-dialog"' in r.text
+    assert "+ New tag" in r.text
+    login_as(client, VIEWER_ID, "viewer")
+    r2 = client.get("/tags")
+    assert "+ New tag" not in r2.text
+    assert 'id="new-tag-dialog"' not in r2.text
 
 
 # ── Retroactive-apply confirmation flow ──────────────────────────────────

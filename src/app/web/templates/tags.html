@@ -1,59 +1,71 @@
 {% extends "base.html" %}
 {% block title %}tags — dekimasen.app{% endblock %}
 {% block content %}
-<h1>Tags</h1>
-<p class="dim">Franchises, artists, venues, and groups. Group tags contain artist tags:
-attaching a group to a concert adds all its members, which editors can then prune.</p>
+<div class="tags-head">
+  <h1>Tags</h1>
+  <span class="note dim"><strong>{{ summary.concerts }} concert{{ '' if summary.concerts == 1 else 's' }}</strong>
+    across {{ summary.franchises }} franchise{{ '' if summary.franchises == 1 else 's' }},
+    {{ summary.groups }} group{{ '' if summary.groups == 1 else 's' }},
+    {{ summary.performers }} performer{{ '' if summary.performers == 1 else 's' }},
+    {{ summary.venues }} venue{{ '' if summary.venues == 1 else 's' }}</span>
+  {% if user.is_editor %}<button type="button" class="btn" id="newTagBtn"
+    onclick="document.getElementById('new-tag-dialog').showModal()">+ New tag</button>{% endif %}
+</div>
 
-{% if user.is_editor %}
-<details class="panel">
-  <summary>+ New tag</summary>
-  <form class="inline" method="post" action="/tags" id="new-tag-form">
-    <input name="name" required maxlength="100" placeholder="Kozue Otomune">
-    <select name="kind" id="new-tag-kind">{% for k in kinds %}<option value="{{ k.value }}">{{ k.value | capitalize }}</option>{% endfor %}</select>
-    <select name="parent_id" id="new-tag-parent" title="franchise (for group tags)">
-      <option value="0">— franchise (groups only) —</option>
-      {% for f in franchise_tags %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
-    </select>
-    <input name="location_url" type="url" placeholder="Location link (venues, optional)">
-    <input name="region" maxlength="100" placeholder="Region (venues, optional)">
-    <button>Create</button>
-  </form>
-</details>
-<script>
-  (function () {
-    var kindSel = document.getElementById("new-tag-kind");
-    var parentSel = document.getElementById("new-tag-parent");
-    function syncParentVisibility() {
-      parentSel.style.display = kindSel.value === "group" ? "" : "none";
-    }
-    kindSel.addEventListener("change", syncParentVisibility);
-    syncParentVisibility();
-  })();
-</script>
-{% endif %}
+<p class="dim">Following a tag subscribes you to every future concert carrying it, so counts
+here are what a rename or delete actually touches.</p>
 
 <input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.tags-page')">
 
+{#- Per-tag edit dialog. One dialog per tag, real <form>s posting to real
+    routes (the concept uses a single JS-populated dialog; we keep the shipped
+    mechanism). The usage strip and apply links read Task 2's directory context
+    (counts / eligible_members). The delete name crosses via data-tag-name, read
+    through dataset by confirmDeleteTag -- never interpolated into onsubmit. -#}
 {% macro tag_dialog(t) %}
-<dialog id="tag-dialog-{{ t.id }}" class="picker">
-  <div class="picker-head">
+{%- set c = counts[t.id] -%}
+{%- set is_group = t.kind.value == "group" -%}
+{%- set is_venue = t.kind.value == "venue" -%}
+{%- set is_artist = t.kind.value == "artist" -%}
+{%- set kind_label = "performer" if is_artist else t.kind.value -%}
+<dialog id="tag-dialog-{{ t.id }}" class="tagdlg">
+  <div class="dh">
     <h3>{{ t.name }}</h3>
+    <span class="pill p-quiet">{{ kind_label }}</span>
     <button type="button" class="x" onclick="document.getElementById('tag-dialog-{{ t.id }}').close()">×</button>
   </div>
-  <div class="picker-body">
-    <form method="post" action="/tags/{{ t.id }}/edit" class="stack">
-      <label>Name <input name="name" required maxlength="100" value="{{ t.name }}"></label>
-      {% if t.kind.value == "venue" %}
-      <label>Location link <input name="location_url" type="url" value="{{ t.location_url or '' }}"></label>
-      <label>Region <input name="region" maxlength="100" value="{{ t.region or '' }}"></label>
+  <div class="db">
+    <div class="usage">
+      <div><div class="n3">{{ c.concerts }}</div><div class="l3">concerts</div></div>
+      <div><div class="n3">{{ c.followers }}</div><div class="l3">followers</div></div>
+      {% if is_group %}<div><div class="n3">{{ c.members }}</div><div class="l3">members</div></div>{% endif %}
+      <div><div class="n3">{{ c.upcoming }}</div><div class="l3">upcoming</div></div>
+    </div>
+
+    <form id="tag-edit-{{ t.id }}" method="post" action="/tags/{{ t.id }}/edit" class="stack">
+      <label class="fld"><span>Name</span><input name="name" required maxlength="100" value="{{ t.name }}"></label>
+      {% if is_group or is_artist %}
+      <label class="fld"><span>eventernote URL</span>
+        <input name="eventernote_url" type="url" value="{{ t.eventernote_url or '' }}"
+               placeholder="https://www.eventernote.com/actors/…"></label>
       {% endif %}
-      <button>Save</button>
+      {% if is_venue %}
+      <label class="fld"><span>Location link</span>
+        <input name="location_url" type="url" value="{{ t.location_url or '' }}"></label>
+      <label class="fld"><span>Region</span>
+        <input name="region" maxlength="100" value="{{ t.region or '' }}" list="regions-{{ t.id }}"></label>
+      <datalist id="regions-{{ t.id }}">
+        {%- set region_names = [] -%}
+        {%- for rn, _vs in venue_regions -%}{%- if rn != "No region" -%}{% set _ = region_names.append(rn) %}{%- endif -%}{%- endfor -%}
+        {% for rn in region_names %}<option value="{{ rn }}"></option>{% endfor %}
+      </datalist>
+      {% endif %}
     </form>
-    {% if t.kind.value == "group" %}
-    <div>
-      <strong>Members</strong>
-      <div class="taglist">
+
+    {% if is_group %}
+    <div class="fld">
+      <span>Members</span>
+      <div class="memb">
         {% for m in members.get(t.id, []) %}
         <span class="chip">{{ m.name }}
           <form class="chip-x" method="post" action="/tags/{{ t.id }}/members/{{ m.id }}/delete">
@@ -72,62 +84,214 @@ attaching a group to a concert adds all its members, which editors can then prun
       </form>
       {% endif %}
     </div>
+
+    <div class="upgradebox">
+      <div class="u1"><b>Apply to existing concerts.</b> Adding a member does not touch
+        concerts that already carry this group — expansion is materialised at the moment
+        you attach it. Use this to push a new member onto active events.</div>
+      {% for m, n in eligible_members.get(t.id, []) %}
+      <a href="/tags/{{ t.id }}/members/{{ m.id }}/retroactive-apply">Apply {{ m.name }} to {{ n }} upcoming concert{{ '' if n == 1 else 's' }}</a>
+      {% endfor %}
+    </div>
     {% endif %}
+  </div>
+  <div class="df">
+    <button class="btn" form="tag-edit-{{ t.id }}">Save</button>
+    <button class="btn quiet" type="button" onclick="document.getElementById('tag-dialog-{{ t.id }}').close()">Cancel</button>
     <form method="post" action="/tags/{{ t.id }}/delete"
           data-tag-name="{{ t.name }}" onsubmit="return confirmDeleteTag(this)">
-      <button class="danger">Delete tag</button>
+      <button class="btn warn">Delete tag</button>
     </form>
   </div>
 </dialog>
 {% endmacro %}
 
-{% macro tag_chip(t) %}
-<button type="button" class="chip kind-{{ t.kind.value }}" data-name="{{ t.name | lower }}"
-        {% if user.is_editor %}onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()"{% endif %}>{{ t.name }}</button>
+{#- A tag chip. `count` is the concert count (None for member chips, which
+    carry no count and never show the unused state). Editors get a button that
+    opens the tag's dialog; everyone else gets a plain span. `data-name` is the
+    search-filter hook (filterChips) -- its one sanctioned job on this page. -#}
+{% macro tag_chip(t, count) %}
+{%- set kcls = {"franchise": " k-franchise", "group": " k-group", "venue": " k-venue"}.get(t.kind.value, "") -%}
+{%- set unused = count is not none and count == 0 -%}
+{%- if user.is_editor -%}
+<button type="button" class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}"
+        onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ t.name }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+{%- else -%}
+<span class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}">{{ t.name }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</span>
+{%- endif -%}
 {% endmacro %}
 
-<div class="tags-page sub-box">
-  {% if franchises %}
-  <details open class="tag-section">
-    <summary>Franchises</summary>
-    {% for f in franchises %}
-    <details open class="tag-section">
-      <summary>{{ tag_chip(f) }}</summary>
-      {% for g in groups if g.parent_id == f.id %}
-      <div class="group-row">
-        {{ tag_chip(g) }}
-        <span class="member-chips">{% for m in members.get(g.id, []) %}{{ tag_chip(m) }}{% endfor %}</span>
+{% macro group_row(g, mems) %}
+<div class="grow2">
+  <span>{{ tag_chip(g, counts[g.id].concerts) }}</span>
+  <span class="memb">{% for m in mems %}{{ tag_chip(m, none) }}{% else %}<em class="dim">no members yet</em>{% endfor %}</span>
+</div>
+{% endmacro %}
+
+<div class="tags-page">
+  <div class="tsec">
+    <h3>Franchises and groups <span>— click any tag to edit</span></h3>
+    {% for f, group_pairs in franchise_families %}
+    <div class="fam">
+      <div class="famhead">{{ tag_chip(f, counts[f.id].concerts) }}</div>
+      {% for g, mems in group_pairs %}{{ group_row(g, mems) }}{% endfor %}
+    </div>
+    {% endfor %}
+    {% if no_franchise_groups %}
+    <div class="fam">
+      <div class="famhead"><span class="eyebrow">No franchise</span></div>
+      {% for g, mems in no_franchise_groups %}{{ group_row(g, mems) }}{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if venue_regions %}
+  <div class="tsec">
+    <h3>Venues <span>— grouped by the region used in the Discover sidebar</span></h3>
+    {% for region_name, region_venues in venue_regions %}
+    <div class="fam">
+      <div class="famhead"><span class="eyebrow region-label">{{ region_name }}</span>
+        {% for v in region_venues %}{{ tag_chip(v, counts[v.id].concerts) }}{% endfor %}
       </div>
-      {% endfor %}
-    </details>
+    </div>
     {% endfor %}
-  </details>
+  </div>
   {% endif %}
 
-  {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
-  {% if orphan_groups %}
-  <details open class="tag-section">
-    <summary>Other groups</summary>
-    {% for g in orphan_groups %}
-    <div class="group-row">{{ tag_chip(g) }}
-      <span class="member-chips">{% for m in members.get(g.id, []) %}{{ tag_chip(m) }}{% endfor %}</span></div>
-    {% endfor %}
-  </details>
-  {% endif %}
-
-  {% if solo_artists %}
-  <details open class="tag-section">
-    <summary>Solo artists</summary>
-    <div class="taglist">{% for a in solo_artists %}{{ tag_chip(a) }}{% endfor %}</div>
-  </details>
-  {% endif %}
-
-  {% if venues %}
-  <details open class="tag-section">
-    <summary>Venues</summary>
-    <div class="taglist">{% for v in venues %}{{ tag_chip(v) }}{% endfor %}</div>
-  </details>
+  {% if ungrouped_performers %}
+  <div class="tsec">
+    <h3>Performers with no group <span>— solo artists, or members not yet attached</span></h3>
+    <div class="fam">
+      <div class="famhead">{% for a in ungrouped_performers %}{{ tag_chip(a, counts[a.id].concerts) }}{% endfor %}</div>
+    </div>
+  </div>
   {% endif %}
 </div>
-{% if user.is_editor %}{% for t in all_tags %}{{ tag_dialog(t) }}{% endfor %}{% endif %}
+{% if user.is_editor %}{% for t in all_tags %}{{ tag_dialog(t) }}{% endfor %}
+
+{#- New-tag dialog. One real <form> posting to /tags; the kind pill picker
+    writes a hidden `kind` input. Fields the chosen kind does not use are
+    hidden AND disabled by setTagKind so a kind switch can never submit a stale
+    value. The dupe payload rides in via `| tojson` (never | safe, never
+    pre-serialised) and the warning is advisory only -- Create stays enabled. -#}
+<dialog id="new-tag-dialog" class="tagdlg">
+  <div class="dh">
+    <h3>New tag</h3>
+    <button type="button" class="x" onclick="document.getElementById('new-tag-dialog').close()">×</button>
+  </div>
+  <form method="post" action="/tags" class="db">
+    <input type="hidden" name="kind" id="new-tag-kind" value="group">
+    <div class="fld">
+      <span>Kind</span>
+      <div class="kindpick" id="kindPick">
+        <button type="button" data-kind="franchise" aria-pressed="false">Franchise</button>
+        <button type="button" data-kind="group" aria-pressed="true">Group</button>
+        <button type="button" data-kind="artist" aria-pressed="false">Performer</button>
+        <button type="button" data-kind="venue" aria-pressed="false">Venue</button>
+      </div>
+      <span class="dim" id="kindHint">A group contains performers. Attaching it to a concert adds its members.</span>
+    </div>
+
+    <label class="fld"><span>Name</span>
+      <input name="name" id="new-tag-name" required maxlength="100"
+             placeholder="As it is written on the official site"></label>
+
+    <div class="dupe" id="new-tag-dupe">
+      <span>⚠</span>
+      <span><b>Already exists.</b> <span class="dupe-msg"></span></span>
+    </div>
+
+    <div class="fld kf k-group">
+      <span>Parent franchise</span>
+      <select name="parent_id">
+        <option value="0">— none —</option>
+        {% for f in franchise_tags %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div class="fld kf k-group k-artist">
+      <span>eventernote URL <span class="plain">(optional)</span></span>
+      <input name="eventernote_url" type="url" placeholder="https://www.eventernote.com/actors/…">
+    </div>
+
+    <div class="fld kf k-venue">
+      <span>Region</span>
+      <input name="region" maxlength="100" list="new-tag-regions">
+      <datalist id="new-tag-regions">
+        {%- set region_names = [] -%}
+        {%- for rn, _vs in venue_regions -%}{%- if rn != "No region" -%}{% set _ = region_names.append(rn) %}{%- endif -%}{%- endfor -%}
+        {% for rn in region_names %}<option value="{{ rn }}"></option>{% endfor %}
+      </datalist>
+      <span class="dim">Discover groups venues by region. Without one it lands in “No region” and drops out of region filtering.</span>
+    </div>
+
+    <div class="fld kf k-venue">
+      <span>Map or venue URL <span class="plain">(optional)</span></span>
+      <input name="location_url" type="url" placeholder="https://…">
+    </div>
+
+    <div class="fld kf k-franchise">
+      <span class="plain">A franchise is just a parent for groups — nothing else to set.</span>
+    </div>
+
+    <div class="df" style="padding-left:0; padding-right:0; border-top:0;">
+      <button class="btn">Create tag</button>
+      <button class="btn quiet" type="button" onclick="document.getElementById('new-tag-dialog').close()">Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  (function () {
+    const dlg = document.getElementById("new-tag-dialog");
+    if (!dlg) return;
+    const TAG_DUPES = {{ tag_dupe_data | tojson }};
+    const KIND_HINTS = {
+      franchise: "A franchise is the top level. Groups hang off it.",
+      group: "A group contains performers. Attaching it to a concert adds its members.",
+      artist: "A single performer. Can belong to a group, or stand alone.",
+      venue: "A place. Discover filters venues by region, not individually.",
+    };
+    const kindInput = document.getElementById("new-tag-kind");
+    const nameInput = document.getElementById("new-tag-name");
+    const dupe = document.getElementById("new-tag-dupe");
+    function checkDupe(kind) {
+      const name = nameInput.value.trim().toLowerCase();
+      const hit = name && TAG_DUPES.find(function (d) {
+        return d.kind === kind && d.name.toLowerCase() === name;
+      });
+      if (hit) {
+        dupe.querySelector(".dupe-msg").textContent =
+          "A " + kind + " tag with this name is on " + hit.concerts +
+          " concert" + (hit.concerts === 1 ? "" : "s") + " with " + hit.followers +
+          " follower" + (hit.followers === 1 ? "" : "s") +
+          ". Adding a second one splits them — there is no merge yet.";
+      }
+      dupe.classList.toggle("show", !!hit);
+    }
+    function setTagKind(kind) {
+      kindInput.value = kind;
+      document.querySelectorAll("#kindPick button").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b.dataset.kind === kind));
+      });
+      document.querySelectorAll("#new-tag-dialog .kf").forEach(function (f) {
+        const show = f.classList.contains("k-" + kind);
+        f.style.display = show ? "" : "none";
+        f.querySelectorAll("input, select").forEach(function (el) { el.disabled = !show; });
+      });
+      document.getElementById("kindHint").textContent = KIND_HINTS[kind];
+      checkDupe(kind);
+    }
+    document.getElementById("kindPick").addEventListener("click", function (e) {
+      const b = e.target.closest("button[data-kind]");
+      if (b) setTagKind(b.dataset.kind);
+    });
+    nameInput.addEventListener("input", function () { checkDupe(kindInput.value); });
+    document.getElementById("newTagBtn").addEventListener("click", function () {
+      setTagKind(kindInput.value || "group");
+    });
+    setTagKind("group");
+  })();
+</script>
+{% endif %}
 {% endblock %}

@@ -24,9 +24,11 @@ from app.db.service import (
     attach_tag,
     ensure_user,
     find_tag_by_name,
+    find_tag_by_name_and_kind,
     group_members,
     handle_newly_tagged,
     resolve_group_member,
+    tag_directory_context,
 )
 from app.db.session import get_session
 from app.domain.types import TagKind
@@ -52,9 +54,23 @@ async def tag_directory(
     session: AsyncSession = Depends(get_session),
 ):
     tags = await all_tags(session)
+    ctx = await tag_directory_context(session)
     groups = [t for t in tags if t.kind is TagKind.GROUP]
     members = {t.id: await group_members(session, t.id) for t in groups}
     grouped_artist_ids = {m.id for ms in members.values() for m in ms}
+    counts = ctx["counts"]
+    # Raw Python payload for the new-tag dialog's duplicate warning; the
+    # template embeds it via `| tojson` (never json.dumps first, never | safe)
+    # so it escapes cleanly into the inline <script>.
+    tag_dupe_data = [
+        {
+            "name": t.name,
+            "kind": t.kind.value,
+            "concerts": counts[t.id].concerts,
+            "followers": counts[t.id].followers,
+        }
+        for t in tags
+    ]
     return templates.TemplateResponse(
         request,
         "tags.html",
@@ -68,6 +84,8 @@ async def tag_directory(
             ],
             "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
             "venues": [t for t in tags if t.kind is TagKind.VENUE],
+            "tag_dupe_data": tag_dupe_data,
+            **ctx,
         },
     )
 
@@ -81,10 +99,16 @@ async def create_tag(
     parent_id: int = Form(0),
     location_url: str = Form(""),
     region: str = Form(""),
+    eventernote_url: str = Form(""),
 ):
     name = name.strip()
-    if await find_tag_by_name(session, name) is not None:
-        raise HTTPException(status_code=409, detail=f"tag {name!r} already exists")
+    # Kind-scoped duplicate rule (resolved with the owner): block only a tag of
+    # the same name AND same kind; same name across kinds is allowed and the
+    # dialog warns about it client-side. Rename keeps its name-only collision.
+    if await find_tag_by_name_and_kind(session, name, kind) is not None:
+        raise HTTPException(
+            status_code=409, detail=f"a {kind.value} tag named {name!r} already exists"
+        )
     parent = None
     if parent_id:
         parent = await session.get(Tag, parent_id)
@@ -96,6 +120,7 @@ async def create_tag(
     session.add(Tag(
         name=name, kind=kind, created_by=user.id, parent_id=parent.id if parent else None,
         location_url=form_url(location_url), region=region.strip() or None,
+        eventernote_url=form_url(eventernote_url),
     ))
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
@@ -111,12 +136,13 @@ async def edit_tag(
     name: str = Form("", max_length=100),
     location_url: str = Form(""),
     region: str = Form(""),
+    eventernote_url: str = Form(""),
 ):
-    """Rename (any kind) plus venue-only location_url/region -- not
-    kind-restricted on the latter two, harmless to set on others.
-    `name` is optional so callers that never send it (there were none
-    before this feature; kept optional in case any external client still
-    doesn't) leave the tag's name untouched."""
+    """Rename (any kind) plus venue-only location_url/region and the
+    artist/group eventernote_url -- not kind-restricted on those, harmless
+    to set on others. `name` is optional so callers that never send it
+    (there were none before this feature; kept optional in case any external
+    client still doesn't) leave the tag's name untouched."""
     tag = await session.get(Tag, tag_id)
     if tag is None:
         raise HTTPException(status_code=404)
@@ -128,6 +154,7 @@ async def edit_tag(
         tag.name = name
     tag.location_url = form_url(location_url)
     tag.region = region.strip() or None
+    tag.eventernote_url = form_url(eventernote_url)
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
 

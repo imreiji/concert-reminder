@@ -278,6 +278,50 @@ async def test_no_performers_panel_when_the_concert_has_neither_group_nor_artist
     assert 'class="performers"' not in client.get("/concerts/np").text
 
 
+async def _set_eventernote_url(db, tag_id, url):
+    async with db() as s:
+        t = await s.get(Tag, tag_id)
+        t.eventernote_url = url
+        await s.commit()
+
+
+def _performers_panel(client):
+    body = client.get("/concerts/np").text
+    return body.split('class="performers"', 1)[1].split("<!-- /performers -->", 1)[0]
+
+
+async def test_performer_chip_links_to_eventernote_when_set(client):
+    cid = await seed_concert(client.db)
+    tid = await add_tag(client.db, cid, "Solo Star", TagKind.ARTIST)
+    await _set_eventernote_url(client.db, tid, "https://www.eventernote.com/actors/1234")
+    login(client)
+
+    panel = _performers_panel(client)
+    assert '<a class="chip" href="https://www.eventernote.com/actors/1234"' in panel
+    assert "Solo Star" in panel
+
+
+async def test_performer_chip_without_url_is_a_span_not_a_link(client):
+    cid = await seed_concert(client.db)
+    await add_tag(client.db, cid, "No Link Star", TagKind.ARTIST)
+    login(client)
+
+    panel = _performers_panel(client)
+    assert '<span class="chip">No Link Star</span>' in panel
+    assert "No Link Star</a>" not in panel  # never a dead link
+
+
+async def test_group_chip_links_to_eventernote_when_set(client):
+    cid = await seed_concert(client.db)
+    gid, _ = await add_group_with_members(client.db, cid, "Aqours", ["M1", "M2"])
+    await _set_eventernote_url(client.db, gid, "https://www.eventernote.com/actors/999")
+    login(client)
+
+    panel = _performers_panel(client)
+    assert '<a class="chip grp" href="https://www.eventernote.com/actors/999"' in panel
+    assert "Aqours" in panel
+
+
 # ── header: links and actions ────────────────────────────────────────────
 
 

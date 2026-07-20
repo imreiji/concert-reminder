@@ -73,8 +73,9 @@
       legitimately differ from the group's membership today. Do not "fix"
       that by reading current members.
 
-      Plain chips: eventernote links on performers need `eventernote_url` on
-      tags, which is branch 3. -#}
+      A performer chip whose tag carries an `eventernote_url` links out to it;
+      one without stays a plain span, never a dead link. The group chip follows
+      the same rule. -#}
   {% if cg or ca %}
   <div class="performers">
     <div class="plabel">Performing
@@ -83,8 +84,8 @@
       {%- else %}— {{ ca | length }} performer{{ "" if ca | length == 1 else "s" }}{% endif %}</span>
     </div>
     <div class="chips">
-      {% for g in cg %}<span class="chip grp">{{ g.name }}</span>{% endfor %}
-      {% for a in ca %}<span class="chip">{{ a.name }}</span>{% endfor %}
+      {% for g in cg %}{% if g.eventernote_url %}<a class="chip grp" href="{{ g.eventernote_url }}" target="_blank" rel="noopener">{{ g.name }}</a>{% else %}<span class="chip grp">{{ g.name }}</span>{% endif %}{% endfor %}
+      {% for a in ca %}{% if a.eventernote_url %}<a class="chip" href="{{ a.eventernote_url }}" target="_blank" rel="noopener">{{ a.name }}</a>{% else %}<span class="chip">{{ a.name }}</span>{% endif %}{% endfor %}
     </div>
   </div>
   {% endif %}
