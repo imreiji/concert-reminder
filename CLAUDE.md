@@ -198,6 +198,24 @@ deleting them.
      `data-` attribute and read it via `dataset`. Use `data-tag-name` /
      `data-preset-name`, not `data-name`: that one collides with the shared
      `filterChips()` selector in `base.html`.
+8. **Concert subscriptions are OVERRIDES, not records.** Whether a user
+   "tracks" a concert is derived, and `tracked_concert_ids` is the single
+   place that derivation lives -- do not add a second. The rule: a concert is
+   tracked when a followed tag matches AND no `opted_out` row exists, OR a
+   `subscribed` row exists. **No row is the common case** and means "follow
+   the tag-derived default" -- so `ConcertSubscription` and `LegOptOut` are
+   never backfilled; they hold only explicit user edits, exactly as group-tag
+   expansion (invariant 3) materializes members lazily and persists only
+   prunes. A prune STICKS across unfollow/re-follow of the tag (removed stays
+   removed); Preferences surfaces the otherwise-invisible pruned count. Any
+   write to a subscription or leg opt-out re-syncs that user's rules via
+   `reinstate_user_rules`, the same resync `record_round_outcome` runs -- skip
+   it and a pruned concert keeps reminding. An opt-out suppresses informational
+   reminders only; it never deletes a `RoundOutcome`, so opting out of a won
+   ticket forfeits the reminder, not the record (the UI gates that with a heavy
+   confirmation naming the loss). Per-leg opt-out suppresses a round only when
+   EVERY leg in its `applies_to` is opted out -- the per-user analogue of the
+   every-leg cancellation rule, folded into `_apply_outcome_suppression`.
 
 ## Migrations (SQLite gotchas — these have bitten before)
 
