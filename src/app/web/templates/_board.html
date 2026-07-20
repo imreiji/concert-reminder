@@ -17,19 +17,19 @@
    into. #}
 
 {% set COLUMNS = [
-  ("open", "Open now", "d-open"),
-  ("applied", "Applied", "d-applied"),
-  ("won", "Won — pay", "d-won"),
-  ("secured", "Secured", "d-secured"),
+  ("open", _("Open now"), "d-open"),
+  ("applied", _("Applied"), "d-applied"),
+  ("won", _("Won — pay"), "d-won"),
+  ("secured", _("Secured"), "d-secured"),
 ] %}
 
 {% macro rung(r, i) %}
   {%- set marks = {
-    "lost": ("m-lost", "×", "lost"),
-    "applied": ("m-wait", "?", "applied"),
-    "won": ("m-live", "✓", "won"),
-    "paid": ("m-live", "✓", "paid"),
-    "live": ("m-live", i|string, "open"),
+    "lost": ("m-lost", "×", _("lost")),
+    "applied": ("m-wait", "?", _("applied")),
+    "won": ("m-live", "✓", _("won")),
+    "paid": ("m-live", "✓", _("paid")),
+    "live": ("m-live", i|string, _("open")),
     "todo": ("m-todo", i|string, ""),
   } -%}
   {%- set m = marks.get(r.state, ("m-todo", i|string, "")) -%}
@@ -95,13 +95,13 @@
        following a large franchise is told the truth about what the cap hid
        rather than being shown a silently shortened column. #}
     {% if key == "open" and open_total > cards | length %}
-    <a class="more" href="/discover">+{{ open_total - (cards | length) }} more →</a>
+    <a class="more" href="/discover">{% trans n=open_total - (cards | length) %}+{{ n }} more →{% endtrans %}</a>
     {% endif %}
-    {% if not cards %}<p class="dim tiny">Nothing here yet.</p>{% endif %}
+    {% if not cards %}<p class="dim tiny">{{ _("Nothing here yet.") }}</p>{% endif %}
   </div>
   {% endfor %}
 </div>
 {% else %}
-<p class="dim">Nothing on your board yet. <a href="/discover">Find concerts to follow →</a></p>
+<p class="dim">{{ _("Nothing on your board yet.") }} <a href="/discover">{{ _("Find concerts to follow →") }}</a></p>
 {% endif %}
 </div>

@@ -30,12 +30,12 @@
    applied" against a round nobody could have entered yet -- an irreversible
    write, since record_round_outcome refuses to overwrite a starting state. #}
 {% if not row.can_capture %}
-<span class="done">Not open yet</span>
+<span class="done">{{ _("Not open yet") }}</span>
 {% elif row.outcome is none %}
 <form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
       hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome">
   <input type="hidden" name="outcome" value="applied">
-  <button class="act yes" type="submit">{{ "Entered upgrade" if is_upgrade else "I have applied" }}</button>
+  <button class="act yes" type="submit">{{ _("Entered upgrade") if is_upgrade else _("I have applied") }}</button>
 </form>
 {# data-prune-title, not data-name: base.html's shared filterChips() selector
    claims [data-name] globally. The title is user-controlled text and reaches
@@ -45,7 +45,7 @@
       hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome"
       {% if prune_title %}data-prune-title="{{ prune_title }}" data-prune-url="{{ prune_url }}"{% endif %}>
   <input type="hidden" name="outcome" value="not_applied">
-  <button class="act no" type="submit">{{ "Skipping" if is_upgrade else "Not applying" }}</button>
+  <button class="act no" type="submit">{{ _("Skipping") if is_upgrade else _("Not applying") }}</button>
 </form>
 {% elif row.can_report_result %}
 {# The web's only exit from APPLIED. WON/LOST live on the DM buttons too, but
@@ -57,21 +57,21 @@
 <form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
       hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome">
   <input type="hidden" name="outcome" value="won">
-  <button class="act yes" type="submit">I won</button>
+  <button class="act yes" type="submit">{{ _("I won") }}</button>
 </form>
 <form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
       hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome">
   <input type="hidden" name="outcome" value="lost">
-  <button class="act no" type="submit">I lost</button>
+  <button class="act no" type="submit">{{ _("I lost") }}</button>
 </form>
 {# PAID stays reachable only from WON, matching the service rule. #}
 {% elif row.outcome.value == "won" %}
 <form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
       hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome">
   <input type="hidden" name="outcome" value="paid">
-  <button class="act yes" type="submit">Paid</button>
+  <button class="act yes" type="submit">{{ _("Paid") }}</button>
 </form>
 {% else %}
-<span class="done">Nothing to do</span>
+<span class="done">{{ _("Nothing to do") }}</span>
 {% endif %}
 {%- endmacro %}

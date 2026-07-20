@@ -21,12 +21,12 @@
 {% from "_capture_actions.html" import capture_actions %}
 
 {% macro status_pill(outcome) -%}
-  {%- if outcome is none -%}<span class="pill p-quiet">Not applied</span>
-  {%- elif outcome.value == "applied" -%}<span class="pill p-ok">Applied</span>
-  {%- elif outcome.value == "won" -%}<span class="pill p-danger">Won</span>
-  {%- elif outcome.value == "paid" -%}<span class="pill p-ok">Secured</span>
-  {%- elif outcome.value == "lost" -%}<span class="pill p-quiet">Lost</span>
-  {%- else -%}<span class="pill p-quiet">Not applying</span>
+  {%- if outcome is none -%}<span class="pill p-quiet">{{ _("Not applied") }}</span>
+  {%- elif outcome.value == "applied" -%}<span class="pill p-ok">{{ _("Applied") }}</span>
+  {%- elif outcome.value == "won" -%}<span class="pill p-danger">{{ _("Won") }}</span>
+  {%- elif outcome.value == "paid" -%}<span class="pill p-ok">{{ _("Secured") }}</span>
+  {%- elif outcome.value == "lost" -%}<span class="pill p-quiet">{{ _("Lost") }}</span>
+  {%- else -%}<span class="pill p-quiet">{{ _("Not applying") }}</span>
   {%- endif -%}
 {%- endmacro %}
 
@@ -67,14 +67,14 @@
     {% if r.notes %}<span class="more">{{ r.notes }}</span>{% endif %}
   </span>
   <span class="acts">
-    {% if not past and row.primary_at_utc %}<a class="ics" href="/rounds/{{ r.id }}/ics" title="Add to calendar">📅</a>{% endif %}
-    {% if r.url %}<a class="ics" href="{{ r.url }}" target="_blank" rel="noopener" title="Round page">🔗</a>{% endif %}
+    {% if not past and row.primary_at_utc %}<a class="ics" href="/rounds/{{ r.id }}/ics" title="{{ _('Add to calendar') }}">📅</a>{% endif %}
+    {% if r.url %}<a class="ics" href="{{ r.url }}" target="_blank" rel="noopener" title="{{ _('Round page') }}">🔗</a>{% endif %}
     {# An upgrade round the signed-in reader cannot enter shows what they need
        to hold, not capture buttons. `qualifier_labels` is user-controlled
        text; it reaches the page as plain text content (auto-escaped), never an
        inline on* handler -- invariant 7. #}
     {% if row.upgrade_locked %}
-    <span class="done">Requires a ticket from{% if row.qualifier_labels %}: {{ row.qualifier_labels | join(", ") }}{% else %} an earlier round{% endif %}</span>
+    <span class="done">{% if row.qualifier_labels %}{% trans names=row.qualifier_labels | join(", ") %}Requires a ticket from: {{ names }}{% endtrans %}{% else %}{{ _("Requires a ticket from an earlier round") }}{% endif %}</span>
     {% else %}
     {{ capture_actions(row, r.id, "#concert-rounds", is_upgrade=(r.kind.value == "upgrade")) }}
     {% endif %}
@@ -96,9 +96,9 @@
   {% if next_row %}
   <div class="standing">
     <div>
-      <div class="l">Next for you</div>
+      <div class="l">{{ _("Next for you") }}</div>
       <div class="w">{{ next_row.round_.label }}{% if next_row.primary_anchor %} — {{ deadline_label(next_row.primary_anchor) }}{% endif %}</div>
-      <div class="s num">{% if next_row.primary_at_utc %}{% set sl = dual_lines(next_row.primary_at_utc, tz) %}{{ sl[0] }} {{ sl[1] }}{% else %}No date announced yet{% endif %}</div>
+      <div class="s num">{% if next_row.primary_at_utc %}{% set sl = dual_lines(next_row.primary_at_utc, tz) %}{{ sl[0] }} {{ sl[1] }}{% else %}{{ _("No date announced yet") }}{% endif %}</div>
     </div>
     {{ status_pill(next_row.outcome) }}
   </div>
@@ -124,9 +124,9 @@
       {# A leg whose date has passed is struck through on the heading only --
          putting `past` on the section would strike its rounds too, and a
          finished show's rounds still record what you did. #}
-      <h3 class="leg-heading{% if day.starts_at_utc < now %} past{% endif %}">{{ day.label }}{% if day.cancelled %} <span class="badge cancelled">Cancelled</span>{% elif skipped %} <span class="badge cancelled">Not going</span>{% endif %}</h3>
+      <h3 class="leg-heading{% if day.starts_at_utc < now %} past{% endif %}">{{ day.label }}{% if day.cancelled %} <span class="badge cancelled">{{ _("Cancelled") }}</span>{% elif skipped %} <span class="badge cancelled">{{ _("Not going") }}</span>{% endif %}</h3>
       <span class="lv">
-        {{ dual(day.starts_at_utc, tz) }}{% if day.doors_at_utc %} · doors {{ dual(day.doors_at_utc, tz) }}{% endif %}
+        {{ dual(day.starts_at_utc, tz) }}{% if day.doors_at_utc %} · {% trans when=dual(day.doors_at_utc, tz) %}doors {{ when }}{% endtrans %}{% endif %}
         <span class="lvenue">{% if vtag %}📍 {% if vtag.location_url %}<a href="{{ vtag.location_url }}" target="_blank" rel="noopener">{{ vtag.name }}</a>{% else %}{{ vtag.name }}{% endif %}{% if vtag.region %} · {{ vtag.region }}{% endif %}{% elif day.venue %}📍 {{ day.venue }}{% endif %}{% if day.venue_address %} — {{ day.venue_address }}{% endif %}{% if day.city %} · {{ day.city }}{% endif %}</span>
       </span>
       {# The per-leg opt-out. Not editor-gated (personal), and not tied to
@@ -137,11 +137,11 @@
             hx-target="#concert-rounds" hx-swap="outerHTML"
             method="post" action="/concerts/{{ concert.event_id }}/legs/{{ day.id }}/opt-out">
         <input type="hidden" name="opted_out" value="{{ "false" if skipped else "true" }}">
-        <button class="chip{% if skipped %} on{% endif %}" type="submit">{{ "Going again" if skipped else "Not going to this day" }}</button>
+        <button class="chip{% if skipped %} on{% endif %}" type="submit">{{ _("Going again") if skipped else _("Not going to this day") }}</button>
       </form>
       {% endif %}
     </div>
-    {{ rounds_or_note(group.rounds, tz, "No rounds yet for this leg.") }}
+    {{ rounds_or_note(group.rounds, tz, _("No rounds yet for this leg.")) }}
   </div>
   {% endfor %}
 
@@ -152,12 +152,12 @@
      that really are leg-specific. #}
   {% if all_legs_rows %}
   <div class="leg">
-    <div class="leghead"><h3 class="leg-heading">{% if leg_groups %}All legs{% else %}Rounds{% endif %}</h3></div>
+    <div class="leghead"><h3 class="leg-heading">{% if leg_groups %}{{ _("All legs") }}{% else %}{{ _("Rounds") }}{% endif %}</h3></div>
     {{ rounds_or_note(all_legs_rows, tz, "") }}
   </div>
   {% endif %}
 
   {% if not leg_groups and not all_legs_rows %}
-  <p class="dim">No performances yet.</p>
+  <p class="dim">{{ _("No performances yet.") }}</p>
   {% endif %}
 </div>

@@ -54,6 +54,7 @@ from app.domain.timezones import utc_to_jst
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
 from app.domain.upgrades import is_upgrade_eligible
 from app.i18n import N_
+from app.i18n import gettext as _
 
 
 def _now() -> datetime:
@@ -1514,7 +1515,7 @@ async def my_deadline_rows(
             # "Multiple", one wins outright, and the free-text venue is only a
             # fallback when there is no VENUE tag at all.
             venue=(
-                "Multiple" if len(venue_tags) > 1
+                _("Multiple") if len(venue_tags) > 1
                 else (venue_tags[0] if venue_tags else (concert.venue if concert else None))
             ),
             starts_at_utc=live_days[0].starts_at_utc if live_days else None,
@@ -2365,7 +2366,8 @@ async def discover_statuses(
             due = won_up.payment_deadline_at_utc
             out[concert.id] = DiscoverStatus(
                 status,
-                f"Upgrade won — pay by {_day_month(due)}" if due else "Upgrade won — payment due",
+                _("Upgrade won — pay by {day}").format(day=_day_month(due))
+                if due else _("Upgrade won — payment due"),
                 "danger", due, _next_deadline(rounds, now),
             )
             continue
@@ -2384,17 +2386,19 @@ async def discover_statuses(
             None,
         )
         if applied_up:
-            upgrade_text, upgrade_tone = "Upgrade · Applied", "accent"
+            upgrade_text, upgrade_tone = _("Upgrade · Applied"), "accent"
         elif open_up is not None:
             upgrade_text = (
-                f"Upgrade · Closes in {_humanize_until(open_up.closes_at_utc, now)}"
-                if open_up.closes_at_utc else "Upgrade · Open now"
+                _("Upgrade · Closes in {n}").format(
+                    n=_humanize_until(open_up.closes_at_utc, now)
+                )
+                if open_up.closes_at_utc else _("Upgrade · Open now")
             )
             upgrade_tone = "accent"
 
         if standing is Column.SECURED:
             out[concert.id] = DiscoverStatus(
-                status, "Secured", "ok", None, _next_deadline(rounds, now),
+                status, _("Secured"), "ok", None, _next_deadline(rounds, now),
                 upgrade_text, upgrade_tone,
             )
             continue
@@ -2405,7 +2409,8 @@ async def discover_statuses(
             )
             out[concert.id] = DiscoverStatus(
                 status,
-                f"Won — pay by {_day_month(due)}" if due else "Won — payment due",
+                _("Won — pay by {day}").format(day=_day_month(due))
+                if due else _("Won — payment due"),
                 "danger", due, _next_deadline(rounds, now),
                 upgrade_text, upgrade_tone,
             )
@@ -2413,8 +2418,9 @@ async def discover_statuses(
         if standing is Column.APPLIED:
             applied = next(r for r in rounds if card_outcomes.get(r.id) is LotteryOutcome.APPLIED)
             out[concert.id] = DiscoverStatus(
-                status, f"{LABEL_BY_ROUND_KIND[applied.kind]} · Applied", "ok",
-                None, _next_deadline(rounds, now), upgrade_text, upgrade_tone,
+                status,
+                _("{kind} · Applied").format(kind=_(LABEL_BY_ROUND_KIND[applied.kind])),
+                "ok", None, _next_deadline(rounds, now), upgrade_text, upgrade_tone,
             )
             continue
 
@@ -2433,19 +2439,25 @@ async def discover_statuses(
             )
             r = closing[0] if closing else pool[0]
             text = (
-                f"{LABEL_BY_ROUND_KIND[r.kind]} · Closes in {_humanize_until(r.closes_at_utc, now)}"
-                if r.closes_at_utc else f"{LABEL_BY_ROUND_KIND[r.kind]} · Open now"
+                _("{kind} · Closes in {n}").format(
+                    kind=_(LABEL_BY_ROUND_KIND[r.kind]),
+                    n=_humanize_until(r.closes_at_utc, now),
+                )
+                if r.closes_at_utc
+                else _("{kind} · Open now").format(kind=_(LABEL_BY_ROUND_KIND[r.kind]))
             )
             at = r.closes_at_utc
         elif opening_soon:
             r = min(opening_soon, key=lambda r: r.opens_at_utc)
             at = r.opens_at_utc
-            text = f"{LABEL_BY_ROUND_KIND[r.kind]} · Opens in {_humanize_until(at, now)}"
+            text = _("{kind} · Opens in {n}").format(
+                kind=_(LABEL_BY_ROUND_KIND[r.kind]), n=_humanize_until(at, now)
+            )
         else:
             # Covers both "every round has closed" and "no rounds entered
             # yet" -- from a browser's point of view they are the same thing:
             # there is nothing here you can act on.
-            text, at = "All rounds closed", None
+            text, at = _("All rounds closed"), None
         out[concert.id] = DiscoverStatus(
             status, text, "quiet", at, _next_deadline(rounds, now),
             upgrade_text, upgrade_tone,

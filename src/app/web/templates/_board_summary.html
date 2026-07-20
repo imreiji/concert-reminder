@@ -9,8 +9,8 @@
 
    Keep the id="board-summary"; that is the htmx OOB target. #}
 <span class="note" id="board-summary"{% if oob %} hx-swap-oob="true"{% endif %}>
-  <strong>{{ open_total }} open</strong> ·
-  {{ columns["applied"] | length }} awaiting results ·
-  {{ columns["won"] | length }} payment due ·
-  {{ columns["secured"] | length }} secured
+  <strong>{% trans n=open_total %}{{ n }} open{% endtrans %}</strong> ·
+  {% trans n=columns["applied"] | length %}{{ n }} awaiting results{% endtrans %} ·
+  {% trans n=columns["won"] | length %}{{ n }} payment due{% endtrans %} ·
+  {% trans n=columns["secured"] | length %}{{ n }} secured{% endtrans %}
 </span>
