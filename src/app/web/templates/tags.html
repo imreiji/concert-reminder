@@ -1,9 +1,17 @@
 {% extends "base.html" %}
 {% block title %}tags — dekimasen.app{% endblock %}
 {% block content %}
-<h1>Tags</h1>
-<p class="dim">Franchises, artists, venues, and groups. Group tags contain artist tags:
-attaching a group to a concert adds all its members, which editors can then prune.</p>
+<div class="tags-head">
+  <h1>Tags</h1>
+  <span class="note dim"><strong>{{ summary.concerts }} concert{{ '' if summary.concerts == 1 else 's' }}</strong>
+    across {{ summary.franchises }} franchise{{ '' if summary.franchises == 1 else 's' }},
+    {{ summary.groups }} group{{ '' if summary.groups == 1 else 's' }},
+    {{ summary.performers }} performer{{ '' if summary.performers == 1 else 's' }},
+    {{ summary.venues }} venue{{ '' if summary.venues == 1 else 's' }}</span>
+</div>
+
+<p class="dim">Following a tag subscribes you to every future concert carrying it, so counts
+here are what a rename or delete actually touches.</p>
 
 {% if user.is_editor %}
 <details class="panel">
@@ -81,52 +89,65 @@ attaching a group to a concert adds all its members, which editors can then prun
 </dialog>
 {% endmacro %}
 
-{% macro tag_chip(t) %}
-<button type="button" class="chip kind-{{ t.kind.value }}" data-name="{{ t.name | lower }}"
-        {% if user.is_editor %}onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()"{% endif %}>{{ t.name }}</button>
+{#- A tag chip. `count` is the concert count (None for member chips, which
+    carry no count and never show the unused state). Editors get a button that
+    opens the tag's dialog; everyone else gets a plain span. `data-name` is the
+    search-filter hook (filterChips) -- its one sanctioned job on this page. -#}
+{% macro tag_chip(t, count) %}
+{%- set kcls = {"franchise": " k-franchise", "group": " k-group", "venue": " k-venue"}.get(t.kind.value, "") -%}
+{%- set unused = count is not none and count == 0 -%}
+{%- if user.is_editor -%}
+<button type="button" class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}"
+        onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ t.name }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+{%- else -%}
+<span class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}">{{ t.name }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</span>
+{%- endif -%}
 {% endmacro %}
 
-<div class="tags-page sub-box">
-  {% if franchises %}
-  <details open class="tag-section">
-    <summary>Franchises</summary>
-    {% for f in franchises %}
-    <details open class="tag-section">
-      <summary>{{ tag_chip(f) }}</summary>
-      {% for g in groups if g.parent_id == f.id %}
-      <div class="group-row">
-        {{ tag_chip(g) }}
-        <span class="member-chips">{% for m in members.get(g.id, []) %}{{ tag_chip(m) }}{% endfor %}</span>
+{% macro group_row(g, mems) %}
+<div class="grow2">
+  <span>{{ tag_chip(g, counts[g.id].concerts) }}</span>
+  <span class="memb">{% for m in mems %}{{ tag_chip(m, none) }}{% else %}<em class="dim">no members yet</em>{% endfor %}</span>
+</div>
+{% endmacro %}
+
+<div class="tags-page">
+  <div class="tsec">
+    <h3>Franchises and groups <span>— click any tag to edit</span></h3>
+    {% for f, group_pairs in franchise_families %}
+    <div class="fam">
+      <div class="famhead">{{ tag_chip(f, counts[f.id].concerts) }}</div>
+      {% for g, mems in group_pairs %}{{ group_row(g, mems) }}{% endfor %}
+    </div>
+    {% endfor %}
+    {% if no_franchise_groups %}
+    <div class="fam">
+      <div class="famhead"><span class="eyebrow">No franchise</span></div>
+      {% for g, mems in no_franchise_groups %}{{ group_row(g, mems) }}{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if venue_regions %}
+  <div class="tsec">
+    <h3>Venues <span>— grouped by the region used in the Discover sidebar</span></h3>
+    {% for region_name, region_venues in venue_regions %}
+    <div class="fam">
+      <div class="famhead"><span class="eyebrow region-label">{{ region_name }}</span>
+        {% for v in region_venues %}{{ tag_chip(v, counts[v.id].concerts) }}{% endfor %}
       </div>
-      {% endfor %}
-    </details>
+    </div>
     {% endfor %}
-  </details>
+  </div>
   {% endif %}
 
-  {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
-  {% if orphan_groups %}
-  <details open class="tag-section">
-    <summary>Other groups</summary>
-    {% for g in orphan_groups %}
-    <div class="group-row">{{ tag_chip(g) }}
-      <span class="member-chips">{% for m in members.get(g.id, []) %}{{ tag_chip(m) }}{% endfor %}</span></div>
-    {% endfor %}
-  </details>
-  {% endif %}
-
-  {% if solo_artists %}
-  <details open class="tag-section">
-    <summary>Solo artists</summary>
-    <div class="taglist">{% for a in solo_artists %}{{ tag_chip(a) }}{% endfor %}</div>
-  </details>
-  {% endif %}
-
-  {% if venues %}
-  <details open class="tag-section">
-    <summary>Venues</summary>
-    <div class="taglist">{% for v in venues %}{{ tag_chip(v) }}{% endfor %}</div>
-  </details>
+  {% if ungrouped_performers %}
+  <div class="tsec">
+    <h3>Performers with no group <span>— solo artists, or members not yet attached</span></h3>
+    <div class="fam">
+      <div class="famhead">{% for a in ungrouped_performers %}{{ tag_chip(a, counts[a.id].concerts) }}{% endfor %}</div>
+    </div>
+  </div>
   {% endif %}
 </div>
 {% if user.is_editor %}{% for t in all_tags %}{{ tag_dialog(t) }}{% endfor %}{% endif %}

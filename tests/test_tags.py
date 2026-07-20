@@ -402,8 +402,8 @@ def test_tags_page_renders_hierarchy_and_search_box(client):
     assert 'id="tag-dialog-2"' in r.text  # Liella
     assert 'dialog.picker' not in r.text  # sanity: that's a CSS selector, not markup
     assert 'class="picker"' in r.text
-    # hierarchy container must have sub-box class for group/member styling
-    assert 'class="tags-page sub-box"' in r.text
+    # the filter scope container the search box targets
+    assert 'class="tags-page"' in r.text
 
 
 def test_tags_page_solo_artist_bucket(client):
@@ -411,8 +411,76 @@ def test_tags_page_solo_artist_bucket(client):
     client.post("/tags", data={"name": "Solo Artist", "kind": "artist"})
     r = client.get("/tags")
     assert r.status_code == 200
-    assert "Solo artists" in r.text
+    assert "Performers with no group" in r.text
     assert "Solo Artist" in r.text
+
+
+# ── Tags page structure: sections, counted chips, unused state (Task 3) ───
+
+
+def test_tags_page_chips_carry_concert_counts(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/concerts", data={"title": "Show", "event_id": "show", "franchise_tags": [1]})
+    r = client.get("/tags")
+    assert r.status_code == 200
+    # the count sits on the chip, right after the name
+    assert 'Hasunosora<span class="n2">1</span>' in r.text
+
+
+def test_tags_page_zero_concert_tag_renders_unused(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    r = client.get("/tags")
+    assert "tchip k-franchise unused" in r.text
+    assert 'Hasunosora<span class="n2">0</span>' in r.text
+
+
+def test_tags_page_member_chips_have_no_count(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    client.post("/tags", data={"name": "MemberChip", "kind": "artist"})
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    r = client.get("/tags")
+    # a member chip ends immediately after its name -- no <span class="n2">
+    assert "MemberChip</button>" in r.text
+
+
+def test_tags_page_groups_venues_by_region_with_no_region_last(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Kanto Hall", "kind": "venue", "region": "Kanto"})
+    client.post("/tags", data={"name": "Mystery Venue", "kind": "venue"})
+    r = client.get("/tags")
+    assert "Kanto</span>" in r.text and "No region</span>" in r.text
+    # the "No region" bucket sorts last
+    assert r.text.index("Kanto</span>") < r.text.index("No region</span>")
+    assert r.text.index("Kanto Hall") < r.text.index("Mystery Venue")
+
+
+def test_tags_page_parentless_group_renders_under_no_franchise(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Orphan Group", "kind": "group"})
+    r = client.get("/tags")
+    assert "No franchise" in r.text
+    assert r.text.index("No franchise") < r.text.index("Orphan Group")
+
+
+def test_tags_page_summary_line_counts_kinds(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "F1", "kind": "franchise"})
+    client.post("/tags", data={"name": "F2", "kind": "franchise"})
+    client.post("/tags", data={"name": "G1", "kind": "group"})
+    client.post("/tags", data={"name": "A1", "kind": "artist"})
+    client.post("/tags", data={"name": "A2", "kind": "artist"})
+    client.post("/tags", data={"name": "A3", "kind": "artist"})
+    client.post("/tags", data={"name": "V1", "kind": "venue"})
+    client.post("/concerts", data={"title": "Show", "event_id": "show"})
+    r = client.get("/tags")
+    assert "1 concert" in r.text
+    assert "2 franchises" in r.text
+    assert "1 group" in r.text
+    assert "3 performers" in r.text
+    assert "1 venue" in r.text
 
 
 def test_tags_page_viewer_sees_no_edit_dialogs(client):

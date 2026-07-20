@@ -612,3 +612,124 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .prefs-section:last-child { border-bottom: none; }
 .prefs-section > h2 { margin-top: 0; }
 @media (max-width: 760px) { .prefs-rail { position: static; flex-direction: row; flex-wrap: wrap; gap: .8rem; } }
+/* ── Tags page redesign: counted chips, regioned sections, tag dialogs ──
+   Ported from the refactor concept. A few wash tints the base palette does
+   not carry yet are declared here rather than at the top, so the block is
+   self-contained. */
+:root {
+  --raise: #fffefb; --chip-bg: #efede6;
+  --accent-wash: #eceaf7; --ok-wash: #e8f2ec; --off-wash: #f7eede;
+}
+
+.tags-head { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
+.tags-head .note { font-size: .85rem; }
+.tags-head .note strong { color: var(--ink); font-weight: 600; }
+.tags-head .btn { margin-left: auto; }
+
+.tsec { margin-top: 2rem; }
+.tsec > h3 {
+  margin: 0 0 .75rem; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--dim); font-weight: 650; padding-bottom: .5rem; border-bottom: 1px solid var(--line);
+  display: flex; align-items: baseline; gap: .5rem;
+}
+.tsec > h3 span { letter-spacing: 0; text-transform: none; font-weight: 500; }
+
+.fam { padding: .8rem 0; border-bottom: 1px solid var(--line); display: grid; gap: .5rem; }
+.fam:last-child { border-bottom: 0; }
+.famhead { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.grow2 {
+  display: grid; grid-template-columns: 11rem 1fr; gap: .75rem;
+  align-items: start; padding-left: 1rem;
+}
+.grow2 + .grow2 { margin-top: .35rem; }
+.memb { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; }
+.eyebrow {
+  font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--dim); font-weight: 650;
+}
+.region-label { width: 6rem; flex: none; }
+
+.tchip {
+  font: inherit; font-size: .8rem; padding: .22rem .6rem; border-radius: 999px;
+  border: 1px solid transparent; background: var(--chip-bg); color: var(--ink);
+  cursor: pointer; display: inline-flex; align-items: center; gap: .4rem;
+}
+.tchip:hover { border-color: var(--dim); opacity: 1; }
+.tchip .n2 { font-size: .72em; color: var(--dim); font-variant-numeric: tabular-nums; }
+.tchip.k-franchise { background: var(--accent-wash); color: var(--accent); font-weight: 650; }
+.tchip.k-group { background: var(--ok-wash); color: var(--ok); font-weight: 600; }
+.tchip.k-venue { background: var(--off-wash); color: var(--off); }
+.tchip.unused { opacity: .55; border-style: dashed; border-color: var(--line); }
+span.tchip { cursor: default; }
+
+/* ── per-tag edit dialog + new-tag dialog ── */
+dialog.tagdlg {
+  border: 1px solid var(--line); border-radius: 8px; background: var(--raise);
+  color: var(--ink); padding: 0; width: min(34rem, 92vw);
+}
+dialog.tagdlg::backdrop { background: rgba(27, 27, 32, .45); }
+dialog.tagdlg .dh {
+  display: flex; align-items: center; gap: .6rem; padding: .9rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+dialog.tagdlg .dh h3 { margin: 0; font-size: 1rem; }
+dialog.tagdlg .dh .x { margin-left: auto; }
+dialog.tagdlg .db { padding: 1rem; display: grid; gap: .9rem; }
+dialog.tagdlg .df {
+  padding: .8rem 1rem; border-top: 1px solid var(--line);
+  display: flex; gap: .5rem; flex-wrap: wrap; align-items: center;
+}
+dialog.tagdlg .fld { display: grid; gap: .25rem; }
+dialog.tagdlg .fld > span {
+  font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--dim); font-weight: 650;
+}
+dialog.tagdlg .fld .plain { text-transform: none; letter-spacing: 0; font-weight: 400; }
+dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
+
+.usage {
+  display: flex; gap: 1.5rem; padding: .6rem .75rem; border-radius: 6px;
+  background: var(--paper); border: 1px solid var(--line);
+}
+.usage div { text-align: center; }
+.usage .n3 { font-size: 1.1rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.usage .l3 {
+  font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--dim); font-weight: 650;
+}
+
+.pill {
+  font-size: .68rem; font-weight: 650; letter-spacing: .04em;
+  padding: .15rem .45rem; border-radius: 4px; border: 1px solid currentColor;
+}
+.pill.p-quiet { color: var(--dim); }
+
+.kindpick { display: flex; gap: .35rem; flex-wrap: wrap; }
+.kindpick button {
+  font: inherit; font-size: .82rem; padding: .35rem .7rem; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--chip-bg); color: var(--dim);
+  cursor: pointer; font-weight: 600;
+}
+.kindpick button[aria-pressed="true"] {
+  background: var(--ink); border-color: var(--ink); color: var(--paper);
+}
+
+.dupe {
+  display: none; gap: .5rem; align-items: flex-start; padding: .6rem .7rem;
+  border-radius: 6px; background: var(--off-wash); border: 1px solid var(--off);
+  color: var(--off); font-size: .8125rem;
+}
+.dupe.show { display: flex; }
+.dupe b { font-weight: 700; }
+
+.upgradebox {
+  border-left: 3px solid var(--accent); background: var(--accent-wash);
+  padding: .6rem .75rem; border-radius: 6px; display: grid; gap: .45rem;
+}
+.upgradebox .u1 { font-size: .8125rem; }
+.upgradebox .u1 b { font-weight: 650; }
+.upgradebox a { color: var(--accent); font-size: .8125rem; justify-self: start; }
+
+.btn.warn { background: none; color: var(--danger); border-color: var(--danger); }
+.btn.warn:hover { opacity: .88; }
+.df .btn.warn { margin-left: auto; }
