@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}preferences — dekimasen.app{% endblock %}
+{% block title %}{{ _("preferences") }} — dekimasen.app{% endblock %}
 {% block content %}
 {# Preferences on the demo's vocabulary (`.plyt`/`.prail`/`.psec`/`.subrow`/
    `.swb`/`.presetcard`/`.ruleline`/`.statline`/`.danger`). The rail is an
@@ -8,35 +8,35 @@
    Order, as in the concept: Following, Reminders, Time, Delivery, Account,
    Editors (admin only). #}
 <div class="head" style="margin-top:1.5rem">
-  <h1 style="margin:0;font-size:1.35rem">Preferences</h1>
+  <h1 style="margin:0;font-size:1.35rem">{{ _("Preferences") }}</h1>
 </div>
 
 <div class="plyt">
   <nav class="prail">
-    <a class="on" href="#p-follow">Following</a>
-    <a href="#p-remind">Reminders</a>
-    <a href="#p-time">Time</a>
-    <a href="#p-deliver">Delivery</a>
-    <a href="#p-account">Account</a>
-    {% if user.is_admin %}<a href="#p-admin">Editors</a>{% endif %}
+    <a class="on" href="#p-follow">{{ _("Following") }}</a>
+    <a href="#p-remind">{{ _("Reminders") }}</a>
+    <a href="#p-time">{{ _("Time") }}</a>
+    <a href="#p-deliver">{{ _("Delivery") }}</a>
+    <a href="#p-account">{{ _("Account") }}</a>
+    {% if user.is_admin %}<a href="#p-admin">{{ _("Editors") }}</a>{% endif %}
   </nav>
 
   <div>
 
   {# ── Following ─────────────────────────────────────────────────────── #}
   <section class="psec" id="p-follow">
-    <h3>Following</h3>
+    <h3>{{ _("Following") }}</h3>
     <p class="blurb">
-      Following a tag subscribes you to <b>every future concert</b> carrying it.
+      {% trans %}Following a tag subscribes you to <b>every future concert</b> carrying it.
       Notify sends a DM when a new one appears; Auto-apply adds your default
       preset to it. Drop individual concerts from the concert page or a
-      reminder DM.
+      reminder DM.{% endtrans %}
     </p>
 
     <div class="statline" style="margin-bottom:1rem">
-      <span class="pill p-ok">{{ subs | length }} tags followed</span>
-      <span class="clock">{{ tracked_count }} tracked &middot; {{ upcoming_count }} upcoming
-        &middot; {{ pruned_concerts | length }} you pruned</span>
+      <span class="pill p-ok">{% trans sub_count=subs | length %}{{ sub_count }} tags followed{% endtrans %}</span>
+      <span class="clock">{% trans tracked=tracked_count, upcoming=upcoming_count, pruned=pruned_concerts | length %}{{ tracked }} tracked &middot; {{ upcoming }} upcoming
+        &middot; {{ pruned }} you pruned{% endtrans %}</span>
     </div>
 
     {# One subrow per followed tag. The two `.swb` toggles map to the stored
@@ -47,32 +47,32 @@
     {% set counts = tag_counts.get(tag.id, (0, 0)) %}
     <div class="subrow">
       <span class="nm3"><span class="tchip k-{{ tag.kind.value }}">{{ tag.name }}</span></span>
-      <span class="cnt"><b>{{ counts[0] }}</b> concert{{ "" if counts[0] == 1 else "s" }}
-        &middot; {{ counts[1] }} upcoming</span>
+      <span class="cnt">{% trans count=counts[0] %}<b>{{ count }}</b> concert{% pluralize %}<b>{{ count }}</b> concerts{% endtrans %}
+        &middot; {% trans upcoming=counts[1] %}{{ upcoming }} upcoming{% endtrans %}</span>
       <span class="sw">
         <form method="post" action="/subscriptions/{{ sub.id }}/notify" style="display:contents">
           <button class="swb" type="submit" aria-pressed="{{ 'true' if sub.notify else 'false' }}"
-                  title="DM me when a new matching concert appears">Notify</button>
+                  title="{{ _('DM me when a new matching concert appears') }}">{{ _("Notify") }}</button>
         </form>
         <form method="post" action="/subscriptions/{{ sub.id }}/auto-apply" style="display:contents">
           <button class="swb" type="submit"
                   aria-pressed="{{ 'true' if sub.preset_id else 'false' }}"
-                  title="Add my default preset to new matching concerts">Auto-apply</button>
+                  title="{{ _('Add my default preset to new matching concerts') }}">{{ _("Auto-apply") }}</button>
         </form>
         <form method="post" action="/subscriptions/{{ sub.id }}/delete" style="display:contents">
-          <button class="act no" type="submit" title="Stop following this tag">Unfollow</button>
+          <button class="act no" type="submit" title="{{ _('Stop following this tag') }}">{{ _("Unfollow") }}</button>
         </form>
       </span>
     </div>
     {% else %}
-    <p class="clock" style="display:block">You are not following any tags yet.</p>
+    <p class="clock" style="display:block">{{ _("You are not following any tags yet.") }}</p>
     {% endfor %}
 
     {% if pruned_concerts %}
     <div style="margin-top:1.25rem">
-      <div class="ruleline" style="margin-bottom:.4rem"><b>Pruned concerts</b></div>
-      <p class="clock" style="display:block;margin:0 0 .5rem">You skipped these individually.
-        Restoring one returns it to whatever its tags say by default.</p>
+      <div class="ruleline" style="margin-bottom:.4rem"><b>{{ _("Pruned concerts") }}</b></div>
+      <p class="clock" style="display:block;margin:0 0 .5rem">{% trans %}You skipped these individually.
+        Restoring one returns it to whatever its tags say by default.{% endtrans %}</p>
       {% for c in pruned_concerts %}
       <div class="subrow">
         <span class="nm3"><a href="/concerts/{{ c.event_id }}">{{ c.title }}</a>
@@ -84,7 +84,7 @@
         <span class="sw">
           <form method="post" action="/concerts/{{ c.event_id }}/subscription" style="display:contents">
             <input type="hidden" name="state" value="default">
-            <button class="swb" type="submit" title="Restore to the tag default">Restore</button>
+            <button class="swb" type="submit" title="{{ _('Restore to the tag default') }}">{{ _("Restore") }}</button>
           </form>
         </span>
       </div>
@@ -97,28 +97,28 @@
        "add another". The picker filters on data-name (base.html filterChips),
        which is deliberate here -- it is a chip filter, not a delete confirm. #}
     <details class="fold" style="margin-top:1.25rem">
-      <summary>Follow another tag</summary>
+      <summary>{{ _("Follow another tag") }}</summary>
       <div class="fold-body">
         <div class="sub-defaults">
-          <span class="clock">When I follow a tag:</span>
+          <span class="clock">{{ _("When I follow a tag:") }}</span>
           <form id="sub-defaults" class="inline">
-            <label>Apply preset
+            <label>{{ _("Apply preset") }}
               <select id="sub-preset">
-                <option value="0">None</option>
+                <option value="0">{{ _("None") }}</option>
                 {% for p in presets %}<option value="{{ p.id }}" {% if loop.first %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
               </select></label>
-            <label><input type="checkbox" id="sub-notify" checked> DM me on new events</label>
+            <label><input type="checkbox" id="sub-notify" checked> {{ _("DM me on new events") }}</label>
           </form>
         </div>
 
-        <input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.sub-box')">
+        <input class="tag-search" type="search" placeholder="{{ _('Search tags…') }}" oninput="filterChips(this, '.sub-box')">
 
         {% macro subchip(t) -%}
           {%- set sub = sub_by_tag.get(t.id) -%}
           {%- if sub -%}
           <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete">
             <button class="chip kind-{{ t.kind.value }} on" data-name="{{ t.name | lower }}"
-              title="Following{% if sub.preset_id %} · preset linked{% endif %}{% if sub.notify %} · 🔔{% endif %} — click to unfollow">{{ t.name }} ✓</button>
+              title="{{ _('Following') }}{% if sub.preset_id %} · {{ _('preset linked') }}{% endif %}{% if sub.notify %} · 🔔{% endif %} {{ _('— click to unfollow') }}">{{ t.name }} ✓</button>
           </form>
           {%- else -%}
           <form class="chipform" method="post" action="/subscriptions">
@@ -144,7 +144,7 @@
           {% endfor %}
           {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
           {% if orphan_groups %}
-          <details open class="tag-section"><summary>Other groups</summary>
+          <details open class="tag-section"><summary>{{ _("Other groups") }}</summary>
             {% for g in orphan_groups %}
             <div class="group-row">{{ subchip(g) }}
               <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span></div>
@@ -152,12 +152,12 @@
           </details>
           {% endif %}
           {% if solo_artists %}
-          <details open class="tag-section"><summary>Solo artists</summary>
+          <details open class="tag-section"><summary>{{ _("Solo artists") }}</summary>
             <div class="taglist">{% for a in solo_artists %}{{ subchip(a) }}{% endfor %}</div>
           </details>
           {% endif %}
           {% if venues %}
-          <details class="tag-section"><summary>Venues</summary>
+          <details class="tag-section"><summary>{{ _("Venues") }}</summary>
             <div class="taglist">{% for v in venues %}{{ subchip(v) }}{% endfor %}</div>
           </details>
           {% endif %}
@@ -178,23 +178,23 @@
 
   {# ── Reminders (presets) ───────────────────────────────────────────── #}
   <section class="psec" id="p-remind">
-    <h3>Reminders</h3>
+    <h3>{{ _("Reminders") }}</h3>
     <p class="blurb">
-      A preset is a set of reminder rules applied to concerts you follow. Rules
-      on an individual concert override these.
+      {% trans %}A preset is a set of reminder rules applied to concerts you follow. Rules
+      on an individual concert override these.{% endtrans %}
     </p>
 
     {% macro sentence_fields(days_val, hours_val, dir_val, anchor_val) -%}
-      <span>Remind me</span>
+      <span>{{ _("Remind me") }}</span>
       <select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == days_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
-      <span>day(s)</span>
+      <span>{{ _("day(s)") }}</span>
       <select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}" {% if n == hours_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
-      <span>hour(s)</span>
+      <span>{{ _("hour(s)") }}</span>
       <select name="direction">
-        <option value="before" {% if dir_val == "before" %}selected{% endif %}>before</option>
-        <option value="after" {% if dir_val == "after" %}selected{% endif %}>after</option>
+        <option value="before" {% if dir_val == "before" %}selected{% endif %}>{{ _("before") }}</option>
+        <option value="after" {% if dir_val == "after" %}selected{% endif %}>{{ _("after") }}</option>
       </select>
-      <span>each</span>
+      <span>{{ _("each") }}</span>
       <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ a.value.replace("_"," ") | capitalize }}</option>{% endfor %}</select>
     {%- endmacro %}
 
@@ -203,14 +203,14 @@
       <div class="ph">
         <form class="inline rename" method="post" action="/presets/{{ p.id }}/rename" style="display:contents">
           <input class="nm4" name="name" value="{{ p.name }}" maxlength="100" required>
-          <button class="act" type="submit" title="Rename">Rename</button>
+          <button class="act" type="submit" title="{{ _('Rename') }}">{{ _("Rename") }}</button>
         </form>
-        {% if p.is_default %}<span class="pill p-ok" title="The Discord 'Set my reminders' button applies this preset">Default</span>{% endif %}
+        {% if p.is_default %}<span class="pill p-ok" title="{{ _("The Discord 'Set my reminders' button applies this preset") }}">{{ _("Default") }}</span>{% endif %}
         <span class="sp">
-          {% if not p.is_default %}<form method="post" action="/presets/{{ p.id }}/default" style="display:contents"><button class="act" type="submit" title="Make this the preset the Discord button applies">Make default</button></form>{% endif %}
+          {% if not p.is_default %}<form method="post" action="/presets/{{ p.id }}/default" style="display:contents"><button class="act" type="submit" title="{{ _('Make this the preset the Discord button applies') }}">{{ _("Make default") }}</button></form>{% endif %}
           <form method="post" action="/presets/{{ p.id }}/delete"
                 data-preset-name="{{ p.name }}" style="display:contents"
-                onsubmit="return confirmDeletePreset(this)"><button class="act no" type="submit" title="Delete preset">Delete</button></form>
+                onsubmit="return confirmDeletePreset(this)"><button class="act no" type="submit" title="{{ _('Delete preset') }}">{{ _("Delete") }}</button></form>
         </span>
       </div>
       {% for i in p.items %}
@@ -219,17 +219,17 @@
           {{ sentence_fields(i.offset_days | abs, i.offset_hours | abs,
                              "after" if (i.offset_days > 0 or i.offset_hours > 0) else "before",
                              i.anchor.value) }}
-          <button class="act" type="submit">Save</button>
+          <button class="act" type="submit">{{ _("Save") }}</button>
         </form>
-        <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete" style="display:contents"><button class="act no" type="submit" title="Remove rule">Remove</button></form>
+        <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete" style="display:contents"><button class="act no" type="submit" title="{{ _('Remove rule') }}">{{ _("Remove") }}</button></form>
       </div>
       {% endfor %}
       <details class="fold">
-        <summary>Add a rule</summary>
+        <summary>{{ _("Add a rule") }}</summary>
         <div class="fold-body">
           <form class="sentence inline" method="post" action="/presets/{{ p.id }}/items">
             {{ sentence_fields(3, 0, "before", "closes") }}
-            <button class="act" type="submit">Add rule</button>
+            <button class="act" type="submit">{{ _("Add rule") }}</button>
           </form>
         </div>
       </details>
@@ -237,15 +237,15 @@
     {% endfor %}
 
     <div class="bar">
-      <span class="tally">Presets apply to future concerts. Existing ones keep the rules they already have.</span>
+      <span class="tally">{{ _("Presets apply to future concerts. Existing ones keep the rules they already have.") }}</span>
       <details class="fold" {% if not presets %}open{% endif %}>
-        <summary>New preset</summary>
+        <summary>{{ _("New preset") }}</summary>
         <div class="fold-body">
           <form class="stack" method="post" action="/presets">
-            <label>Name <input name="name" required maxlength="100" placeholder="standard lottery coverage"></label>
+            <label>{{ _("Name") }} <input name="name" required maxlength="100" placeholder="{{ _('standard lottery coverage') }}"></label>
             <div class="sentence inline">{{ sentence_fields(3, 0, "before", "closes") }}</div>
-            <button class="act" type="submit">Create preset</button>
-            <span class="clock" style="display:block">Created with this first rule — add more after.</span>
+            <button class="act" type="submit">{{ _("Create preset") }}</button>
+            <span class="clock" style="display:block">{{ _("Created with this first rule — add more after.") }}</span>
           </form>
         </div>
       </details>
@@ -254,32 +254,32 @@
 
   {# ── Time & language (timezone + display language) ──────────────────── #}
   <section class="psec" id="p-time">
-    <h3>Time & language</h3>
-    <p class="blurb">Every deadline shows JST first, then yours. This sets the second one.</p>
+    <h3>{{ _("Time & language") }}</h3>
+    <p class="blurb">{{ _("Every deadline shows JST first, then yours. This sets the second one.") }}</p>
 
     <div class="grid2" style="max-width:34rem">
       {# Primary control: pick a zone and Save. Saving pins it manual. #}
       <form class="fld inline" method="post" action="/me/timezone">
-        <span>Your timezone</span>
+        <span>{{ _("Your timezone") }}</span>
         <select name="timezone">
-          <optgroup label="Common">
+          <optgroup label="{{ _('Common') }}">
             {% for t in common_timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
           </optgroup>
-          <optgroup label="All zones (IANA)">
+          <optgroup label="{{ _('All zones (IANA)') }}">
             {% for t in all_timezones %}<option value="{{ t }}" {% if t == tz and t not in common_timezones %}selected{% endif %}>{{ t }}</option>{% endfor %}
           </optgroup>
         </select>
-        <button class="act" type="submit">Save</button>
+        <button class="act" type="submit">{{ _("Save") }}</button>
       </form>
 
       {# Detection mode: "Follow my browser" re-arms auto-detect (reset route);
          "Keep what I picked" pins the current zone manual. Both reuse the
          existing timezone routes -- the paired hidden forms below are what the
          select actually submits. No user-authored text in any handler. #}
-      <label class="fld"><span>Detection</span>
-        <select id="tz-detect" aria-label="Timezone detection mode">
-          <option value="follow" {% if tz_auto %}selected{% endif %}>Follow my browser</option>
-          <option value="keep" {% if not tz_auto %}selected{% endif %}>Keep what I picked</option>
+      <label class="fld"><span>{{ _("Detection") }}</span>
+        <select id="tz-detect" aria-label="{{ _('Timezone detection mode') }}">
+          <option value="follow" {% if tz_auto %}selected{% endif %}>{{ _("Follow my browser") }}</option>
+          <option value="keep" {% if not tz_auto %}selected{% endif %}>{{ _("Keep what I picked") }}</option>
         </select></label>
     </div>
     <form id="tz-follow" method="post" action="/me/timezone/reset" hidden></form>
@@ -288,15 +288,15 @@
     </form>
 
     <p class="clock" style="margin-top:.6rem; display:block">
-      {% if tz_auto %}Detected <b>{{ tz }}</b> from your browser.{% else %}Using <b>{{ tz }}</b>.{% endif %}
-      Right now that reads <span class="num">{{ tz_preview }}</span>.
+      {% if tz_auto %}{% trans tz=tz %}Detected <b>{{ tz }}</b> from your browser.{% endtrans %}{% else %}{% trans tz=tz %}Using <b>{{ tz }}</b>.{% endtrans %}{% endif %}
+      {% trans tz_preview=tz_preview %}Right now that reads <span class="num">{{ tz_preview }}</span>.{% endtrans %}
     </p>
 
     {# Display language: same three-form pattern as the header switcher, laid
        out as a labelled row matching the timezone row above. Language NAMES
        stay in their own language -- never translated. #}
     <div class="fld inline" style="margin-top:1rem">
-      <span>Language</span>
+      <span>{{ _("Language") }}</span>
       <div class="langrow">
         {% for code, label in [("en", "English"), ("zh", "中文"), ("ja", "日本語")] %}
         <form method="post" action="/language">
@@ -311,23 +311,23 @@
 
   {# ── Delivery (Discord DMs + calendar feed) ────────────────────────── #}
   <section class="psec" id="p-deliver">
-    <h3>Delivery</h3>
-    <p class="blurb">Where reminders actually arrive.</p>
+    <h3>{{ _("Delivery") }}</h3>
+    <p class="blurb">{{ _("Where reminders actually arrive.") }}</p>
 
     {# DM status pill. No stored last-delivered timestamp exists, so no date is
        shown (omitted rather than fabricated). #}
     <div class="statline" style="margin-bottom:.9rem">
       {% if user.dm_blocked %}
-      <span class="pill p-danger">Discord DMs blocked</span>
-      <span class="clock">Check your Discord privacy settings to allow DMs from server members.</span>
+      <span class="pill p-danger">{{ _("Discord DMs blocked") }}</span>
+      <span class="clock">{{ _("Check your Discord privacy settings to allow DMs from server members.") }}</span>
       {% else %}
-      <span class="pill p-ok">Discord DMs reaching you</span>
+      <span class="pill p-ok">{{ _("Discord DMs reaching you") }}</span>
       {% endif %}
       {% if bot_enabled %}
-      <button class="act" type="button" hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">Send a test DM</button>
+      <button class="act" type="button" hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">{{ _("Send a test DM") }}</button>
       <span id="dm-test-result" class="clock"></span>
       {% else %}
-      <span class="clock">Bot not running here (dev mode) — DMs can't be tested.</span>
+      <span class="clock">{{ _("Bot not running here (dev mode) — DMs can't be tested.") }}</span>
       {% endif %}
     </div>
 
@@ -335,50 +335,50 @@
        date is shown. #}
     <div class="statline">
       {% if has_calendar_feed or feed_url %}
-      <span class="pill p-ok">Calendar feed active</span>
-      <span class="clock">Subscribe by URL in Google or Apple Calendar.</span>
+      <span class="pill p-ok">{{ _("Calendar feed active") }}</span>
+      <span class="clock">{{ _("Subscribe by URL in Google or Apple Calendar.") }}</span>
       {% else %}
-      <span class="pill p-quiet">No calendar feed</span>
+      <span class="pill p-quiet">{{ _("No calendar feed") }}</span>
       {% endif %}
     </div>
 
     {% if feed_url %}
     <div class="presetcard" style="margin-top:.8rem">
-      <div class="ruleline"><b>Your feed link is ready — save it now, it won't be shown again.</b></div>
+      <div class="ruleline"><b>{{ _("Your feed link is ready — save it now, it won't be shown again.") }}</b></div>
       <p class="inline" style="margin:0"><code class="feed-url">{{ feed_url }}</code>
         <button type="button" class="act" data-copy="{{ feed_url }}"
-                onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy link</button></p>
-      <span class="clock">Google Calendar: Settings &rarr; Add calendar &rarr; From URL.
-        Apple Calendar: File &rarr; New Calendar Subscription.</span>
+                onclick="navigator.clipboard.writeText(this.dataset.copy)">{{ _("Copy link") }}</button></p>
+      <span class="clock">{% trans %}Google Calendar: Settings &rarr; Add calendar &rarr; From URL.
+        Apple Calendar: File &rarr; New Calendar Subscription.{% endtrans %}</span>
     </div>
     {% elif has_calendar_feed %}
     <form class="inline" method="post" action="/me/calendar-feed" style="margin-top:.6rem">
       <button class="act no" type="submit"
-              onclick="return confirm('This invalidates your current feed link — your calendar app will need the new one.')">Generate a new one</button>
+              onclick="return confirm('This invalidates your current feed link — your calendar app will need the new one.')">{{ _("Generate a new one") }}</button>
     </form>
     {% else %}
-    <form method="post" action="/me/calendar-feed" style="margin-top:.6rem"><button class="act" type="submit">Generate feed link</button></form>
+    <form method="post" action="/me/calendar-feed" style="margin-top:.6rem"><button class="act" type="submit">{{ _("Generate feed link") }}</button></form>
     {% endif %}
     <p class="clock" style="margin-top:.6rem; display:block">
-      Generating a new link revokes the old one immediately. Anyone still
-      subscribed to it stops receiving updates.
+      {% trans %}Generating a new link revokes the old one immediately. Anyone still
+      subscribed to it stops receiving updates.{% endtrans %}
     </p>
   </section>
 
   {# ── Account ───────────────────────────────────────────────────────── #}
   <section class="psec" id="p-account">
-    <h3>Account</h3>
-    <p class="blurb">Signed in with Discord as <b>{{ user.username }}</b>.</p>
+    <h3>{{ _("Account") }}</h3>
+    <p class="blurb">{% trans username=user.username %}Signed in with Discord as <b>{{ username }}</b>.{% endtrans %}</p>
 
     {# Non-destructive item: the danger card frame with a neutral border. #}
     <div class="danger" style="border-color: var(--line); margin-top:0">
       <div>
-        <div class="t2">Re-run first-time setup</div>
-        <div class="s2">Walks you back through your concerts so you can prune the ones you
+        <div class="t2">{{ _("Re-run first-time setup") }}</div>
+        <div class="s2">{% trans %}Walks you back through your concerts so you can prune the ones you
           are not going for and mark what you have already applied to. Nothing is reset —
-          your existing choices are the starting point.</div>
+          your existing choices are the starting point.{% endtrans %}</div>
       </div>
-      <span class="sp"><a class="btn" href="/setup">Run setup</a></span>
+      <span class="sp"><a class="btn" href="/setup">{{ _("Run setup") }}</a></span>
     </div>
 
     {# Destructive item: full danger frame. The button opens a heavy
@@ -389,24 +389,24 @@
        user-controlled text in on* handlers) holds. #}
     <div class="danger" style="margin-top:1rem">
       <div>
-        <div class="t2">Delete my account</div>
-        <div class="s2">Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed.</div>
+        <div class="t2">{{ _("Delete my account") }}</div>
+        <div class="s2">{{ _("Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed.") }}</div>
       </div>
       <span class="sp">
         <button class="btn warn" type="button"
-                onclick="document.getElementById('deleteAccountConfirm').showModal()">Delete account</button>
+                onclick="document.getElementById('deleteAccountConfirm').showModal()">{{ _("Delete account") }}</button>
       </span>
     </div>
     <dialog id="deleteAccountConfirm" class="prune">
-      <div class="dh">Delete your account?
-        <button type="button" class="x" aria-label="Close"
+      <div class="dh">{{ _("Delete your account?") }}
+        <button type="button" class="x" aria-label="{{ _('Close') }}"
                 onclick="document.getElementById('deleteAccountConfirm').close()">×</button></div>
-      <p>Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed. This cannot be undone.</p>
+      <p>{{ _("Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed. This cannot be undone.") }}</p>
       <div class="da">
         <button class="btn quiet" type="button"
-                onclick="document.getElementById('deleteAccountConfirm').close()">Keep my account</button>
+                onclick="document.getElementById('deleteAccountConfirm').close()">{{ _("Keep my account") }}</button>
         <form method="post" action="/me/delete" style="display:contents">
-          <button class="btn danger" type="submit">Delete my account</button>
+          <button class="btn danger" type="submit">{{ _("Delete my account") }}</button>
         </form>
       </div>
     </dialog>
@@ -415,26 +415,26 @@
   {# ── Editors (admin only) ──────────────────────────────────────────── #}
   {% if user.is_admin %}
   <section class="psec" id="p-admin">
-    <h3>Editors <span class="pill p-quiet">admin only</span></h3>
-    <p class="blurb">Discord users allowed to create and edit concerts, rounds and tags.
+    <h3>{{ _("Editors") }} <span class="pill p-quiet">{{ _("admin only") }}</span></h3>
+    <p class="blurb">{% trans %}Discord users allowed to create and edit concerts, rounds and tags.
       Env-managed editors (<code>EDITOR_WHITELIST</code>) can't be removed here — edit
-      <code>.env</code> instead.</p>
+      <code>.env</code> instead.{% endtrans %}</p>
     {% for e in editors %}
     <div class="subrow" style="grid-template-columns: 1fr auto">
-      <span class="nm3">{{ e.username or e.id }} <span class="clock">({{ e.id }})</span>{% if e.env %} <span class="pill p-quiet">from env</span>{% endif %}</span>
+      <span class="nm3">{{ e.username or e.id }} <span class="clock">({{ e.id }})</span>{% if e.env %} <span class="pill p-quiet">{{ _("from env") }}</span>{% endif %}</span>
       <span class="sw">
-        {% if e.env %}<span class="clock">cannot be removed here</span>
-        {% else %}<form method="post" action="/admin/editors/{{ e.id }}/remove" style="display:contents"><button class="act no" type="submit" title="Remove editor">Remove</button></form>{% endif %}
+        {% if e.env %}<span class="clock">{{ _("cannot be removed here") }}</span>
+        {% else %}<form method="post" action="/admin/editors/{{ e.id }}/remove" style="display:contents"><button class="act no" type="submit" title="{{ _('Remove editor') }}">{{ _("Remove") }}</button></form>{% endif %}
       </span>
     </div>
     {% else %}
-    <p class="clock" style="display:block">No editors yet.</p>
+    <p class="clock" style="display:block">{{ _("No editors yet.") }}</p>
     {% endfor %}
     <div class="bar">
-      <span class="tally">Whitelisted editors live in the server env and cannot be removed from here.</span>
+      <span class="tally">{{ _("Whitelisted editors live in the server env and cannot be removed from here.") }}</span>
       <form class="inline" method="post" action="/admin/editors">
-        <input name="discord_id" type="number" inputmode="numeric" placeholder="Discord user ID" required>
-        <button class="act" type="submit">Add an editor</button>
+        <input name="discord_id" type="number" inputmode="numeric" placeholder="{{ _('Discord user ID') }}" required>
+        <button class="act" type="submit">{{ _("Add an editor") }}</button>
       </form>
     </div>
   </section>

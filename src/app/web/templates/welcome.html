@@ -1,29 +1,29 @@
 {% extends "base.html" %}
-{% block title %}welcome — dekimasen.app{% endblock %}
+{% block title %}{{ _("welcome") }} — dekimasen.app{% endblock %}
 {% block content %}
 
 {# Step tracker: the wizard's five steps as done/on/upcoming pills, matching
    the /setup flow this hands off into (setup.html uses the same .stepdot). #}
 <div class="steps">
-  {% set labels = ["Follow", "Reminders", "Timezone", "Test DM", "Calendar"] %}
+  {% set labels = [_("Follow"), _("Reminders"), _("Timezone"), _("Test DM"), _("Calendar")] %}
   {% for label in labels %}
   <span class="stepdot{% if loop.index0 < step %} done{% elif loop.index0 == step %} on{% endif %}">{{ label }}</span>
   {% endfor %}
   <form method="post" action="/welcome/skip-all" class="inline" style="margin-left:auto">
-    <button type="submit" class="btn quiet tiny">Skip setup entirely</button>
+    <button type="submit" class="btn quiet tiny">{{ _("Skip setup entirely") }}</button>
   </form>
 </div>
 
 {% if step == 0 %}
 <div class="lede">
-  <h1>Follow some artists</h1>
-  <p>Get a DM the moment a new event drops for anyone you follow. Pick a franchise to cover
+  <h1>{{ _("Follow some artists") }}</h1>
+  <p>{% trans %}Get a DM the moment a new event drops for anyone you follow. Pick a franchise to cover
     everyone under it, a group, or a single performer — you can change any of this later. Tap
-    to follow.</p>
+    to follow.{% endtrans %}</p>
 </div>
 
-<input class="tag-search" type="search" placeholder="Search franchises, groups, performers…"
-       aria-label="Search tags" oninput="filterChips(this, '.sub-box')">
+<input class="tag-search" type="search" placeholder="{{ _('Search franchises, groups, performers…') }}"
+       aria-label="{{ _('Search tags') }}" oninput="filterChips(this, '.sub-box')">
 
 {% macro subchip(t) -%}
   {%- set sub = sub_by_tag.get(t.id) -%}
@@ -31,7 +31,7 @@
   <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete">
     <input type="hidden" name="next" value="/welcome">
     <button class="chip kind-{{ t.kind.value }} on" data-name="{{ t.name | lower }}"
-      title="Following — click to unfollow">{{ t.name }} ✓</button>
+      title="{{ _('Following — click to unfollow') }}">{{ t.name }} ✓</button>
   </form>
   {%- else -%}
   <form class="chipform" method="post" action="/subscriptions">
@@ -58,7 +58,7 @@
   {% endfor %}
   {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
   {% if orphan_groups %}
-  <details open class="tag-section"><summary>Other groups</summary>
+  <details open class="tag-section"><summary>{{ _("Other groups") }}</summary>
     {% for g in orphan_groups %}
     <div class="group-row">{{ subchip(g) }}
       <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span></div>
@@ -66,12 +66,12 @@
   </details>
   {% endif %}
   {% if solo_artists %}
-  <details open class="tag-section"><summary>Solo artists</summary>
+  <details open class="tag-section"><summary>{{ _("Solo artists") }}</summary>
     <div class="taglist">{% for a in solo_artists %}{{ subchip(a) }}{% endfor %}</div>
   </details>
   {% endif %}
   {% if venues %}
-  <details class="tag-section"><summary>Venues</summary>
+  <details class="tag-section"><summary>{{ _("Venues") }}</summary>
     <div class="taglist">{% for v in venues %}{{ subchip(v) }}{% endfor %}</div>
   </details>
   {% endif %}
@@ -79,18 +79,19 @@
 
 <form method="post" action="/welcome/advance">
   <div class="bar">
-    <span class="tally"><b>{{ sub_by_tag | length }}</b> tag{{ "s" if sub_by_tag | length != 1 }} followed</span>
-    <button class="btn" type="submit">Continue</button>
+    {% set tag_count = sub_by_tag | length %}
+    <span class="tally">{% trans count=tag_count %}<b>{{ count }}</b> tag followed{% pluralize %}<b>{{ count }}</b> tags followed{% endtrans %}</span>
+    <button class="btn" type="submit">{{ _("Continue") }}</button>
   </div>
 </form>
 {% endif %}
 
 {% if step == 1 %}
 <div class="lede">
-  <h1>Pick a default reminder preset</h1>
-  <p>This is what fires when you tap "Set my reminders" on a concert, or press the Discord DM
+  <h1>{{ _("Pick a default reminder preset") }}</h1>
+  <p>{% trans %}This is what fires when you tap "Set my reminders" on a concert, or press the Discord DM
     button — a standard loadout you won't have to rebuild every time. Rules on a single concert
-    always override it.</p>
+    always override it.{% endtrans %}</p>
 </div>
 
 {# The fine-tune rows below are the source of truth; picking a card reseeds
@@ -101,70 +102,70 @@
   <div class="remcards" id="remCards">
     <button class="remcard" type="button" data-remcard="relaxed" aria-pressed="false">
       <span class="remtick">✓</span>
-      <span class="eyebrow">Light touch</span>
-      <span class="rem-label">Relaxed</span>
+      <span class="eyebrow">{{ _("Light touch") }}</span>
+      <span class="rem-label">{{ _("Relaxed") }}</span>
       <div class="rem-lines">
-        <div>Opens — when applications open</div>
-        <div>Closes — 1 day before</div>
-        <div>Results — when results come out</div>
-        <div>Payment — when payment is due</div>
+        <div>{{ _("Opens — when applications open") }}</div>
+        <div>{{ _("Closes — 1 day before") }}</div>
+        <div>{{ _("Results — when results come out") }}</div>
+        <div>{{ _("Payment — when payment is due") }}</div>
       </div>
     </button>
     <button class="remcard" type="button" data-remcard="standard" aria-pressed="true">
       <span class="remtick">✓</span>
-      <span class="eyebrow">Balanced</span>
+      <span class="eyebrow">{{ _("Balanced") }}</span>
       <div class="rem-labelrow">
-        <span class="rem-label">★ Standard</span>
-        <span class="pill p-ok">Recommended</span>
+        <span class="rem-label">★ {{ _("Standard") }}</span>
+        <span class="pill p-ok">{{ _("Recommended") }}</span>
       </div>
       <div class="rem-lines">
-        <div>Opens — when applications open</div>
-        <div>Closes — 3 days &amp; 1 day before</div>
-        <div>Results — when results come out</div>
-        <div>Payment — 1 day before</div>
+        <div>{{ _("Opens — when applications open") }}</div>
+        <div>{{ _("Closes — 3 days &amp; 1 day before") }}</div>
+        <div>{{ _("Results — when results come out") }}</div>
+        <div>{{ _("Payment — 1 day before") }}</div>
       </div>
     </button>
     <button class="remcard" type="button" data-remcard="onball" aria-pressed="false">
       <span class="remtick">✓</span>
-      <span class="eyebrow">Maximum coverage</span>
-      <span class="rem-label">On the ball</span>
+      <span class="eyebrow">{{ _("Maximum coverage") }}</span>
+      <span class="rem-label">{{ _("On the ball") }}</span>
       <div class="rem-lines">
-        <div>Opens — 1 day before &amp; when applications open</div>
-        <div>Closes — 5, 3 &amp; 1 days before</div>
-        <div>Results — when results come out</div>
-        <div>Payment — 3 &amp; 1 days before</div>
+        <div>{{ _("Opens — 1 day before &amp; when applications open") }}</div>
+        <div>{{ _("Closes — 5, 3 &amp; 1 days before") }}</div>
+        <div>{{ _("Results — when results come out") }}</div>
+        <div>{{ _("Payment — 3 &amp; 1 days before") }}</div>
       </div>
     </button>
   </div>
 
-  <p class="remnote">One reminder for each single moment — opens, results, payment — plus a
+  <p class="remnote">{% trans %}One reminder for each single moment — opens, results, payment — plus a
     couple of nudges before closes, since that's the one with an action to take. Fine-tune any of
-    these below, or later in Preferences.</p>
+    these below, or later in Preferences.{% endtrans %}</p>
 
   {% macro remrow(days, hours, direction, anchor) -%}
     {%- set offval = days ~ ":" ~ hours -%}
     {%- set moment = (days == 0 and hours == 0) -%}
     <div class="remrule" data-ruleid="server">
-      <span>Remind me</span>
-      <select name="offset" data-role="offset" aria-label="Offset">
+      <span>{{ _("Remind me") }}</span>
+      <select name="offset" data-role="offset" aria-label="{{ _('Offset') }}">
         {% for o in offset_options %}<option value="{{ o.value }}"{% if o.value == offval %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
       </select>
-      <select name="direction" data-role="direction" aria-label="Before or after"{% if moment %} hidden{% endif %}>
-        <option value="before"{% if direction == "before" %} selected{% endif %}>before</option>
-        <option value="after"{% if direction == "after" %} selected{% endif %}>after</option>
+      <select name="direction" data-role="direction" aria-label="{{ _('Before or after') }}"{% if moment %} hidden{% endif %}>
+        <option value="before"{% if direction == "before" %} selected{% endif %}>{{ _("before") }}</option>
+        <option value="after"{% if direction == "after" %} selected{% endif %}>{{ _("after") }}</option>
       </select>
-      <select name="anchor" data-role="anchor" aria-label="Anchor">
+      <select name="anchor" data-role="anchor" aria-label="{{ _('Anchor') }}">
         {% for a in anchor_order %}<option value="{{ a }}"{% if a == anchor %} selected{% endif %}>{{ anchor_moment[a] if moment else anchor_noun[a] }}</option>{% endfor %}
       </select>
       <span>.</span>
-      <button class="act" type="button" data-remove="server" aria-label="Remove this reminder">×</button>
+      <button class="act" type="button" data-remove="server" aria-label="{{ _('Remove this reminder') }}">×</button>
     </div>
   {%- endmacro %}
 
   <div class="remtune">
     <div class="remtune-head">
-      <h3>Fine-tune these reminders</h3>
-      <span class="note">Change any dropdown — each row stays a real sentence.</span>
+      <h3>{{ _("Fine-tune these reminders") }}</h3>
+      <span class="note">{{ _("Change any dropdown — each row stays a real sentence.") }}</span>
     </div>
     {# Standard rows rendered server-side: the list is populated with JS off,
        and the script rebuilds the identical rows on load, so there is no flash. #}
@@ -172,14 +173,14 @@
       {% for r in standard_rules %}{{ remrow(r[0], r[1], r[2], r[3]) }}{% endfor %}
     </div>
     <div class="remtune-add">
-      <button class="btn quiet" type="button" id="remAddRow">+ Add a reminder</button>
+      <button class="btn quiet" type="button" id="remAddRow">{{ _("+ Add a reminder") }}</button>
     </div>
   </div>
 
   <div class="bar">
-    <span class="tally">Rules on a single concert always override this.</span>
-    <button class="btn quiet" type="submit" formaction="/welcome/advance">Skip this step</button>
-    <button class="btn" type="submit" id="remSubmit">Create preset &amp; continue</button>
+    <span class="tally">{{ _("Rules on a single concert always override this.") }}</span>
+    <button class="btn quiet" type="submit" formaction="/welcome/advance">{{ _("Skip this step") }}</button>
+    <button class="btn" type="submit" id="remSubmit">{{ _("Create preset &amp; continue") }}</button>
   </div>
 </form>
 
@@ -349,13 +350,13 @@
 
 {% if step == 2 %}
 <div class="lede">
-  <h1>Confirm your timezone</h1>
-  <p>Deadlines always show JST first, then this timezone — so you never have to convert a
-    23:59 JST close in your head.</p>
+  <h1>{{ _("Confirm your timezone") }}</h1>
+  <p>{% trans %}Deadlines always show JST first, then this timezone — so you never have to convert a
+    23:59 JST close in your head.{% endtrans %}</p>
 </div>
 
-<p style="margin-top:1.25rem">Detected <strong>{{ tz }}</strong>{% if tz_auto %}
-  <span class="remnote">(auto-detected from your browser)</span>{% endif %}</p>
+<p style="margin-top:1.25rem">{% trans tz=tz %}Detected <strong>{{ tz }}</strong>{% endtrans %}{% if tz_auto %}
+  <span class="remnote">{{ _("(auto-detected from your browser)") }}</span>{% endif %}</p>
 
 {# Two selects, matching preferences.html's Time section: the zone picker
    (Save pins it manual) and a Detection mode that reuses the SAME timezone
@@ -366,21 +367,21 @@
 <div class="grid2" style="max-width:36rem; margin-top:.5rem">
   <form class="fld inline" method="post" action="/me/timezone">
     <input type="hidden" name="next" value="/welcome">
-    <span>Your timezone</span>
+    <span>{{ _("Your timezone") }}</span>
     <select name="timezone">
-      <optgroup label="Common">
+      <optgroup label="{{ _('Common') }}">
         {% for t in common_timezones %}<option value="{{ t }}"{% if t == tz %} selected{% endif %}>{{ t }}</option>{% endfor %}
       </optgroup>
-      <optgroup label="All zones (IANA)">
+      <optgroup label="{{ _('All zones (IANA)') }}">
         {% for t in all_timezones %}<option value="{{ t }}"{% if t == tz and t not in common_timezones %} selected{% endif %}>{{ t }}</option>{% endfor %}
       </optgroup>
     </select>
-    <button class="btn" type="submit">Use this timezone</button>
+    <button class="btn" type="submit">{{ _("Use this timezone") }}</button>
   </form>
-  <label class="fld"><span>Detection</span>
-    <select id="tz-detect" aria-label="Timezone detection mode">
-      <option value="follow" {% if tz_auto %}selected{% endif %}>Follow my browser</option>
-      <option value="keep" {% if not tz_auto %}selected{% endif %}>Keep what I picked</option>
+  <label class="fld"><span>{{ _("Detection") }}</span>
+    <select id="tz-detect" aria-label="{{ _('Timezone detection mode') }}">
+      <option value="follow" {% if tz_auto %}selected{% endif %}>{{ _("Follow my browser") }}</option>
+      <option value="keep" {% if not tz_auto %}selected{% endif %}>{{ _("Keep what I picked") }}</option>
     </select></label>
 </div>
 <form id="tz-follow" method="post" action="/me/timezone/reset" hidden>
@@ -409,7 +410,7 @@
    preferences.html's Time & language row, with next=/welcome so the wizard
    stays put. Language NAMES stay in their own language -- never translated. #}
 <div class="fld inline" style="margin-top:1rem">
-  <span>Language</span>
+  <span>{{ _("Language") }}</span>
   <div class="langrow">
     {% for code, label in [("en", "English"), ("zh", "中文"), ("ja", "日本語")] %}
     <form method="post" action="/language">
@@ -423,81 +424,81 @@
 
 {# A live JST/local sample so the dual render is visible before relying on it
    (invariant 1: JST first, both zones always). #}
-<p class="remnote" style="margin-top:.7rem">Right now that reads
-  <span class="num">{{ tz_preview }}</span> for you.</p>
+<p class="remnote" style="margin-top:.7rem">{% trans tz_preview=tz_preview %}Right now that reads
+  <span class="num">{{ tz_preview }}</span> for you.{% endtrans %}</p>
 
 <form method="post" action="/welcome/advance">
   <div class="bar">
-    <button class="btn" type="submit">Looks right, continue</button>
+    <button class="btn" type="submit">{{ _("Looks right, continue") }}</button>
   </div>
 </form>
 {% endif %}
 
 {% if step == 3 %}
 <div class="lede">
-  <h1>Send a test DM</h1>
-  <p>Confirm reminders can actually reach you on Discord before you rely on them. If your DMs
-    are closed, this is where you find out — not the night a lottery closes.</p>
+  <h1>{{ _("Send a test DM") }}</h1>
+  <p>{% trans %}Confirm reminders can actually reach you on Discord before you rely on them. If your DMs
+    are closed, this is where you find out — not the night a lottery closes.{% endtrans %}</p>
 </div>
 
 {% if bot_enabled %}
 <p class="inline" style="margin-top:1.25rem; display:flex; gap:.75rem; align-items:center; flex-wrap:wrap">
-  <button class="btn" hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">Send test DM</button>
+  <button class="btn" hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">{{ _("Send test DM") }}</button>
   <span id="dm-test-result" class="remnote"></span>
 </p>
 
 <div class="dmcard">
   <div class="bot">✦</div>
   <div>
-    <div class="bn">dekimasen <span class="bg">bot</span> <span class="ts">now</span></div>
+    <div class="bn">dekimasen <span class="bg">bot</span> <span class="ts">{{ _("now") }}</span></div>
     <div class="msg">
-      ✅ <b>Test reminder.</b> If you can read this, your deadline DMs will reach you — you'll
-      get messages like a presale closing in 3 days, with the time in JST and your own zone.
+      {% trans %}✅ <b>Test reminder.</b> If you can read this, your deadline DMs will reach you — you'll
+      get messages like a presale closing in 3 days, with the time in JST and your own zone.{% endtrans %}
     </div>
   </div>
 </div>
 {% else %}
-<p class="remnote" style="margin-top:1.25rem">The Discord bot isn't running in this environment
-  (dev mode), so DMs can't be tested here.</p>
+<p class="remnote" style="margin-top:1.25rem">{% trans %}The Discord bot isn't running in this environment
+  (dev mode), so DMs can't be tested here.{% endtrans %}</p>
 {% endif %}
 
 <form method="post" action="/welcome/advance">
   <div class="bar">
-    <button class="btn" type="submit">Continue</button>
+    <button class="btn" type="submit">{{ _("Continue") }}</button>
   </div>
 </form>
 {% endif %}
 
 {% if step == 4 %}
 <div class="lede">
-  <h1>Get your calendar feed</h1>
-  <p>Subscribe once in your phone or calendar app and every deadline you have a reminder for
-    stays in sync automatically — a belt to the DM's braces.</p>
+  <h1>{{ _("Get your calendar feed") }}</h1>
+  <p>{% trans %}Subscribe once in your phone or calendar app and every deadline you have a reminder for
+    stays in sync automatically — a belt to the DM's braces.{% endtrans %}</p>
 </div>
 
 {% if feed_url %}
 <div class="feedbox">
-  <div class="fl">✓ Your feed link is ready — save it now, it won't be shown again.</div>
+  <div class="fl">{% trans %}✓ Your feed link is ready — save it now, it won't be shown again.{% endtrans %}</div>
   <code>{{ feed_url }}</code>
   <div class="frow">
     <button type="button" class="btn quiet" data-copy="{{ feed_url }}"
-            onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy link</button>
-    <span class="remnote">Add it in Google Calendar, Apple Calendar, or Outlook.</span>
+            onclick="navigator.clipboard.writeText(this.dataset.copy)">{{ _("Copy link") }}</button>
+    <span class="remnote">{{ _("Add it in Google Calendar, Apple Calendar, or Outlook.") }}</span>
   </div>
 </div>
 {% elif has_calendar_feed %}
-<p class="remnote" style="margin-top:1.25rem">Your feed is active.</p>
+<p class="remnote" style="margin-top:1.25rem">{{ _("Your feed is active.") }}</p>
 {% else %}
 <form method="post" action="/me/calendar-feed" style="margin-top:1.25rem">
   <input type="hidden" name="next" value="/welcome">
-  <button class="btn" type="submit">Generate feed link</button>
+  <button class="btn" type="submit">{{ _("Generate feed link") }}</button>
 </form>
 {% endif %}
 
 <form method="post" action="/welcome/advance">
   <div class="bar">
-    <span class="tally">You're set — next we'll tidy up which concerts you're actually going for.</span>
-    <button class="btn" type="submit">Continue to my concerts</button>
+    <span class="tally">{{ _("You're set — next we'll tidy up which concerts you're actually going for.") }}</span>
+    <button class="btn" type="submit">{{ _("Continue to my concerts") }}</button>
   </div>
 </form>
 {% endif %}
