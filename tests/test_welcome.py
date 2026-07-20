@@ -114,6 +114,30 @@ async def test_skip_all_jumps_straight_to_done(client):
     assert await _onboarding_step(client, FAN_ID) == 5
 
 
+def test_final_advance_hands_off_to_setup(client):
+    """Crossing into done (step 4 -> 5) is the capture flow's entry: the last
+    Continue lands on /setup, not back on /welcome (which would bounce to /)."""
+    login_as(client, FAN_ID, "fan")
+    for _ in range(4):
+        client.post("/welcome/advance")  # 0 -> 1 -> 2 -> 3 -> 4
+    r = client.post("/welcome/advance")  # 4 -> 5 (done)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/setup"
+
+
+def test_earlier_advances_stay_on_welcome(client):
+    login_as(client, FAN_ID, "fan")
+    r = client.post("/welcome/advance")  # 0 -> 1, still mid-wizard
+    assert r.status_code == 303
+    assert r.headers["location"] == "/welcome"
+
+
+def test_skip_all_still_lands_on_index(client):
+    login_as(client, FAN_ID, "fan")
+    r = client.post("/welcome/skip-all")
+    assert r.headers["location"] == "/"
+
+
 async def test_step_0_subscribe_form_returns_to_welcome(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
