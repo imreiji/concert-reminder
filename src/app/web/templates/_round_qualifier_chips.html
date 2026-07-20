@@ -24,13 +24,13 @@
     (invariant 7). data-qualifier-id rather than data-name, which collides
     with base.html's filterChips(). -#}
 <div class="upgradebox" data-qualifier-box{% if kind_value != "upgrade" %} hidden{% endif %}>
-  <p class="u1"><b>Upgrade round.</b> Only people holding a ticket from a
-    qualifying round can enter.</p>
+  <p class="u1">{% trans %}<b>Upgrade round.</b> Only people holding a ticket from a
+    qualifying round can enter.{% endtrans %}</p>
   <div class="leg-chips" data-qualifier-chips>
-    <span class="eyebrow">Qualifies</span>
+    <span class="eyebrow">{{ _("Qualifies") }}</span>
     <input type="hidden" name="round_qualifiers" value="{{ value | default('', true) }}">
     {% set options = saved_rounds | rejectattr('id', 'equalto', self_id) | list %}
-    <span class="dim tiny" data-no-qualifiers {% if options %}hidden{% endif %}>Save the concert first, then a saved round can be picked here.</span>
+    <span class="dim tiny" data-no-qualifiers {% if options %}hidden{% endif %}>{{ _("Save the concert first, then a saved round can be picked here.") }}</span>
     {% for other in options %}
     <button type="button" class="chip{% if selected and other.id in selected %} on{% endif %}"
             data-qualifier-id="{{ other.id }}"
@@ -38,6 +38,6 @@
       >{{ other.label }}</button>
     {% endfor %}
   </div>
-  <span class="dim tiny">A round you just added becomes selectable here only
-    after you save.</span>
+  <span class="dim tiny">{% trans %}A round you just added becomes selectable here only
+    after you save.{% endtrans %}</span>
 </div>

@@ -1,19 +1,19 @@
 {#- Tag-picker form fields: franchise/group/artist/venue chip rows.
     Include INSIDE a <form id="new-concert">; pair with _tag_picker_script.html
     right after the form closes. Caller provides by_kind. -#}
-<label>Franchises</label>
+<label>{{ _("Franchises") }}</label>
 <div class="pickrow"><span class="taglist" id="sel-franchise"></span>
-  <button type="button" class="chip add" onclick="openPicker('franchise')">+ Add franchise</button></div>
+  <button type="button" class="chip add" onclick="openPicker('franchise')">{{ _("+ Add franchise") }}</button></div>
 
-<label>Groups</label>
+<label>{{ _("Groups") }}</label>
 <div class="pickrow"><span class="taglist" id="sel-group"></span>
-  <button type="button" class="chip add" onclick="openPicker('group')">+ Add group</button></div>
+  <button type="button" class="chip add" onclick="openPicker('group')">{{ _("+ Add group") }}</button></div>
 
-<label>Artists <span class="dim tiny">(auto-filled from groups — × anyone not performing)</span></label>
+<label>{{ _("Artists") }} <span class="dim tiny">{{ _("(auto-filled from groups — × anyone not performing)") }}</span></label>
 <div class="pickrow"><span class="taglist" id="sel-artist"></span>
-  <button type="button" class="chip add" onclick="openPicker('artist')">+ Add artist</button></div>
+  <button type="button" class="chip add" onclick="openPicker('artist')">{{ _("+ Add artist") }}</button></div>
 
-<label>Venues{% if venue_hint %} <span class="dim tiny">(suggested: {{ venue_hint }})</span>{% endif %}</label>
+<label>{{ _("Venues") }}{% if venue_hint %} <span class="dim tiny">{% trans venue=venue_hint %}(suggested: {{ venue }}){% endtrans %}</span>{% endif %}</label>
 <div class="pickrow"><span class="taglist" id="sel-venue"></span>
-  <button type="button" class="chip add" onclick="openPicker('venue')">+ Add venue</button></div>
-<p class="dim tiny">Missing a tag? Create it on the <a href="/tags">tags page</a> first — concerts are tag-driven.</p>
+  <button type="button" class="chip add" onclick="openPicker('venue')">{{ _("+ Add venue") }}</button></div>
+<p class="dim tiny">{% trans %}Missing a tag? Create it on the <a href="/tags">tags page</a> first — concerts are tag-driven.{% endtrans %}</p>

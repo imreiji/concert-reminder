@@ -1,37 +1,37 @@
 {% extends "base.html" %}
-{% block title %}import concert — dekimasen.app{% endblock %}
+{% block title %}{{ _("import concert") }} — dekimasen.app{% endblock %}
 {% block content %}
 
 <div class="lede">
-  <h1>Import from a URL</h1>
-  <p>Paste a <code>ramen.events</code> event page — it'll fetch the title, tags, performance
+  <h1>{{ _("Import from a URL") }}</h1>
+  <p>{% trans %}Paste a <code>ramen.events</code> event page — it'll fetch the title, tags, performance
     days and lottery rounds as a draft. Nothing is saved until you review and submit the
-    next page.</p>
+    next page.{% endtrans %}</p>
 </div>
 
 {% if error %}
 <div class="callout warn" style="margin-top:1.25rem; max-width:42rem">
   <span>&#9888;</span>
-  <span>Couldn't parse that page: {{ error }}. You can still
-    <a href="/">create the concert manually</a>.</span>
+  <span>{% trans error=error %}Couldn't parse that page: {{ error }}. You can still
+    <a href="/">create the concert manually</a>.{% endtrans %}</span>
 </div>
 {% endif %}
 
 <form class="stack" method="post" action="/concerts/import/preview"
       style="max-width:42rem; margin-top:1.75rem; display:grid; gap:1rem">
-  <label class="fld"><span>ramen.events URL</span>
+  <label class="fld"><span>{{ _("ramen.events URL") }}</span>
     <input type="url" name="url" required placeholder="https://ramen.events/..."
            pattern="https://ramen\.events/.*"></label>
-  <div><button class="btn" type="submit">Fetch draft</button></div>
+  <div><button class="btn" type="submit">{{ _("Fetch draft") }}</button></div>
 </form>
 
 <div class="callout" style="margin-top:1.75rem; max-width:42rem">
   <span>&#128274;</span>
-  <span>Only <b>https ramen.events</b> URLs are accepted. The fetch is size-capped and
-    re-checked on every redirect — an editor safety rail, not a general web fetcher.</span>
+  <span>{% trans %}Only <b>https ramen.events</b> URLs are accepted. The fetch is size-capped and
+    re-checked on every redirect — an editor safety rail, not a general web fetcher.{% endtrans %}</span>
 </div>
 
 <p class="clock" style="display:block; margin-top:1.5rem">
-  No ramen.events page? <a class="more" href="/">Create the concert manually</a> instead.
+  {% trans %}No ramen.events page? <a class="more" href="/">Create the concert manually</a> instead.{% endtrans %}
 </p>
 {% endblock %}
