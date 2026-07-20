@@ -1330,12 +1330,13 @@ async def test_index_deadline_list_excludes_cancelled_round(client):
         "/concerts",
         data={
             "title": "C", "event_id": "c",
+            "day_key": ["new-a"],
             "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+            "round_url": [""], "round_notes": [""], "round_legs": ["new-a"],
         },
     )
     async with client.db() as s:
