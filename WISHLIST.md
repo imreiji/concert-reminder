@@ -53,25 +53,52 @@ with an upgrade the row budget is tighter still - though only for a viewer
 eligible to enter it, since `my_deadline_rows` drops the upgrade's rows for
 everyone else.
 
-### 3. Let the creation form express a multi-leg round in one pass
+### 3. Minor demo-parity cosmetics
 
-Impact: low - effort: small. Raised: 2026-07-19 (concert page and editor,
-branch review).
+Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
+re-review).
 
-The edit page now assigns legs with real ids via toggle chips, so a round
-covering several legs says so directly. Creation cannot: the form renders
-before any `ConcertDay` exists, so there is nothing to put an id on, and
-its leg control is a single-value `<select>` matched server-side by
-`resolve_round_leg`. That helper returns EVERY day matching the string, so
-a multi-leg round is expressible in principle - but only when two legs
-happen to share the one label-or-city text it matched on, and labels are
-normally distinct per leg. In practice a genuinely multi-leg round has to
-be created, then edited.
+Cosmetic gaps the 2026-07-20 reconciliation left unbatched because they are
+pure polish, not correctness: Preferences' "Follow another tag" is a
+disclosure fold rather than the demo's footer `.bar` + button, and its
+second toggle reads "Auto-apply" where the demo says "Auto-apply preset";
+the Tags edit dialog lists every member instead of the demo's "+N more"
+truncation, and its new-tag dialog footer sits slightly detached (nested in
+a grid rather than a sibling of the body); Setup's pick tiles are
+keyboard-reachable now but use a visually-hidden checkbox where the demo
+uses a real `<button aria-pressed>`, and `.lede h1` lacks `text-wrap:
+balance`. The cheapest of the open items - one small pass closes all of it.
 
-Low impact because the follow-up edit is one click from the redirect
-creation already lands on, and multi-leg rounds are the minority shape.
-The fix is a client-side version of the same chip control the editor uses,
-keyed on `day_key` (which already exists) instead of on ids.
+### 4. Discover sort in the content head, plus the catalogue-count note
+
+Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
+re-review).
+
+The reconciliation gave Discover's sort and round-status controls the
+demo's pill chrome but left them in the sidebar; the demo puts the sort
+control in the content-column head. Also missing: the demo's per-filter
+result note above the grid ("Love Live! - 64 concerts"). The page-level
+catalogue count ("N concerts - M with a round still open") shipped in the
+reconciliation, but not this filtered one. Deferred rather than done because
+moving sort is a real DOM restructure and it is debatable whether the
+sidebar is actually worse.
+
+### 5. Editor page parity with the demo
+
+Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
+re-review).
+
+The editor got no dedicated reconciliation task; the token pass fixed its
+radius, chips and dark mode automatically and the consolidation swapped its
+"Applies to"/"Qualifies" labels to `.eyebrow`. What remains is mostly the
+demo's structure versus deliberate build choices rather than accidental
+drift: the demo nests rounds inside each leg card, while shipped keeps flat
+round and leg lists with chips (which is what lets a browser-added leg be
+targeted before it has an id); the demo shows round name/kind and leg fields
+as read-only summaries with Edit buttons, while shipped is always-open
+inputs; plus minor add-button order and a "1 upgrade" tally count. Lowest
+priority because a parity pass here would mostly re-litigate justified
+decisions.
 
 (The former "Eventernote links on performer chips" entry was dropped in the
 2026-07-19 revision pass: it already shipped inside the Tags page redesign,
@@ -79,6 +106,26 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Add-concert page refactor, incl. multi-leg rounds in one pass (2026-07-20)
+
+Shipped as: `concert_new.html` rebuilt on the editor's card/fold/chip
+language (identity-first - title, event id and the first performance open at
+the top, details and tags folded, since creation must fill the required
+spine before anything else), and - the correctness half - the create form's
+round-to-leg binding migrated off the single `round_leg` `<select>` +
+`resolve_round_leg` text-matcher onto the editor's leg chips. On the create
+form every leg is id-less until save, exactly the case the chips' `day_key`
+scheme was built for, so `create_concert` now mirrors `edit_concert`'s
+post-flush `key_to_day_id` / `parse_round_legs` (and `parse_round_qualifiers`
+for upgrade rounds) resolution, and a genuinely multi-leg round is
+expressible in one pass instead of having to be created then edited. This is
+the former "Let the creation form express a multi-leg round in one pass"
+proposal, shipped - and it closed the same data-loss shape on the create
+door that the editor redesign fixed on the edit door (the old select could
+only ever store one leg). Retired the now-dead `resolve_round_leg` and
+`_leg_picker_script.html` (create was their last caller). Invariants 1/3/6/7
+intact; no schema change.
 
 ### Demo reconciliation: theming and view parity (2026-07-20)
 
