@@ -80,6 +80,26 @@ performer chips - see its Shipped entry below.)
 
 ## Shipped
 
+### Demo reconciliation: theming and view parity (2026-07-20)
+
+Shipped as: the full design-token layer ported into `style.css` (the
+`*-wash` set, `--raise`, `--chip`, `--shadow`, ...) plus dark mode via both
+`prefers-color-scheme` (OS default) and a persisted `data-theme` header
+toggle stamped before first paint (no flash); a two-line dual-time render
+(`fmt_dual_lines`/the `dual_lines` Jinja global) replacing the flat
+one-line web format, with `fmt_day_month`/`day_month` kept separate for
+performance dates; and the per-view component gaps the six-branch UI/UX
+refactor had dropped against the frozen concept demo -- Home's peek grid,
+foot-note and board accents, the concert page's follow toggle and centered
+performer chips, Discover's chip counts and tile minichips, Tags' dialog
+shadow and button alignment, Setup's reveal-stat overflow fix, and a
+rebuilt Preferences on the demo's vocabulary. Also closed the one gap that
+was backend, not presentation: `POST /me/delete`, the self-serve GDPR
+erasure the demo showed but shipped as a manual-request placeholder, now
+wired to the existing `service.delete_user` behind a heavy confirmation.
+No behavior changed outside the delete route and the theme toggle itself;
+this was reconciliation against the demo, not new feature work.
+
 ### First-run capture flow (2026-07-19)
 
 Shipped as: a three-screen `/setup` flow run AFTER the `/welcome` wizard —

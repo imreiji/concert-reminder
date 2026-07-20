@@ -19,6 +19,7 @@ you already have.
 """
 
 import enum
+from datetime import datetime, timedelta
 
 from app.domain.types import LotteryOutcome
 
@@ -68,3 +69,34 @@ def column_for(
     if ranked:
         return max(ranked, key=lambda pair: pair[0])[1]
     return Column.OPEN if has_open_round else None
+
+
+# Countdown-pill urgency breakpoints, in time remaining until a card's next
+# deadline. Under the first is "danger" (red), under the second is "off"
+# (amber), beyond it fades to "quiet" (grey).
+_URGENT_WITHIN = timedelta(days=1)
+_SOON_WITHIN = timedelta(days=7)
+
+
+def pill_tone(column: Column, next_deadline: datetime | None, now: datetime) -> str:
+    """The CSS tone ("p-danger" | "p-off" | "p-quiet") for one board card's
+    countdown pill.
+
+    WON is pinned to "p-danger" no matter how many days remain: a won-but-
+    unpaid round is money you could still lose, the same "money owed
+    outranks everything" logic that gives WON its column precedence over a
+    round you could still enter (see the module docstring and column_for).
+    Every other column is driven purely by time left, so two OPEN cards with
+    different deadlines now read differently instead of sharing one fixed
+    tone.
+    """
+    if column is Column.WON:
+        return "p-danger"
+    if next_deadline is None:
+        return "p-quiet"
+    remaining = next_deadline - now
+    if remaining <= _URGENT_WITHIN:
+        return "p-danger"
+    if remaining <= _SOON_WITHIN:
+        return "p-off"
+    return "p-quiet"

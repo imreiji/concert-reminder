@@ -5,7 +5,15 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.domain.timezones import UTC, fmt_dual, jst_to_utc, utc_to_jst, utc_to_local
+from app.domain.timezones import (
+    UTC,
+    fmt_day_month,
+    fmt_dual,
+    fmt_dual_lines,
+    jst_to_utc,
+    utc_to_jst,
+    utc_to_local,
+)
 
 
 def test_jst_to_utc_is_minus_nine():
@@ -40,3 +48,25 @@ def test_fmt_dual_shows_both_zones():
     utc = jst_to_utc(datetime(2026, 8, 1, 19, 0))
     s = fmt_dual(utc, "America/Moncton")
     assert "19:00 JST" in s and "07:00" in s
+
+
+def test_fmt_dual_lines_two_line_shape():
+    # The demo's two-line render: a bold weekday+day+month line, then a
+    # HH:MM JST · HH:MM <user-zone> time line below it.
+    utc = jst_to_utc(datetime(2026, 8, 1, 19, 0))
+    date_line, time_line = fmt_dual_lines(utc, "America/Moncton")
+
+    # 2026-08-01 is a Saturday; the day carries no leading zero.
+    assert date_line == "Sat 1 Aug"
+
+    # Invariant 1: both zones ALWAYS present, JST first.
+    assert "19:00 JST" in time_line
+    assert "07:00" in time_line  # America/Moncton in summer is UTC-3
+    assert time_line.index("JST") < time_line.index("07:00")
+
+
+def test_fmt_day_month_has_no_year_weekday_or_zone():
+    # A PERFORMANCE date (a concert's start day) is a fact about the world,
+    # not a deadline -- it carries none of dual time's JST/local apparatus.
+    utc = jst_to_utc(datetime(2026, 10, 12, 19, 0))
+    assert fmt_day_month(utc) == "12 Oct"

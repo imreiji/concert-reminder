@@ -6,6 +6,8 @@
   POST /presets/{id}/items                   add an item to a preset
   POST /presets/{id}/items/{item_id}/delete
   POST /subscriptions                        subscribe to a tag (+preset, notify)
+  POST /subscriptions/{id}/notify            toggle the per-tag Notify flag
+  POST /subscriptions/{id}/auto-apply        toggle default-preset auto-apply
   POST /subscriptions/{id}/delete
   POST /concerts/{event_id}/presets/{pid}/apply   one-click apply (rules fragment swap)
   POST /me/timezone                          manual timezone choice
@@ -17,6 +19,7 @@ Everything here is per-user: routes verify ownership and 404 on other
 people's presets/subscriptions rather than admitting they exist.
 """
 
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import discord
@@ -30,17 +33,22 @@ from app.db.models import Concert, PresetItem, ReminderPreset, Tag, TagSubscript
 from app.db.service import (
     apply_preset,
     concert_subscription_states,
+    delete_user,
     ensure_user,
+    followed_tag_counts,
+    get_default_preset,
     group_members,
     list_editors,
     record_dm_outcome,
     set_default_preset,
     set_editor,
     tracked_concert_ids,
+    upcoming_concert_count,
 )
 from app.db.session import get_session
+from app.domain.timezones import fmt_dual_lines
 from app.domain.types import Anchor
-from app.web.auth import SessionUser, require_admin, require_user
+from app.web.auth import SessionUser, require_admin, require_user, revoke_session
 
 router = APIRouter()
 
@@ -128,7 +136,9 @@ async def preferences(
     # OPTED_OUT overrides surfaced as a review-and-restore list (spec
     # decision 1). concert_subscription_states is Task 2's read surface;
     # tracked_concert_ids is the single definition of "tracked".
-    tracked_count = len(await tracked_concert_ids(session, user.id))
+    tracked_ids = await tracked_concert_ids(session, user.id)
+    tracked_count = len(tracked_ids)
+    upcoming_count = await upcoming_concert_count(session, tracked_ids)
     overrides = await concert_subscription_states(session, user.id)
     from app.domain.types import SubscriptionState
     pruned_ids = [cid for cid, st in overrides.items() if st is SubscriptionState.OPTED_OUT]
@@ -137,6 +147,12 @@ async def preferences(
         pruned_concerts = list((await session.execute(
             select(Concert).where(Concert.id.in_(pruned_ids)).order_by(Concert.title)
         )).scalars())
+    # Per-followed-tag "N concerts, M upcoming" for the Following subrows.
+    tag_counts = await followed_tag_counts(session, user.id)
+
+    # A live JST/local sample for the Time section's preview line: the current
+    # instant read in both zones (invariant 1: JST first, both always present).
+    _, tz_preview = fmt_dual_lines(datetime.now(UTC), tz)
 
     return templates.TemplateResponse(
         request,
@@ -144,11 +160,12 @@ async def preferences(
         {"user": user, "presets": presets, "subs": subs, "sub_by_tag": sub_by_tag,
          "franchises": franchises, "groups": groups, "members": members,
          "solo_artists": solo_artists, "venues": venues,
-         "tz": tz, "tz_auto": tz_auto,
+         "tz": tz, "tz_auto": tz_auto, "tz_preview": tz_preview,
          "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
          "anchors": list(Anchor), "editors": editors,
-         "has_calendar_feed": has_calendar_feed,
-         "tracked_count": tracked_count, "pruned_concerts": pruned_concerts,
+         "has_calendar_feed": has_calendar_feed, "tag_counts": tag_counts,
+         "tracked_count": tracked_count, "upcoming_count": upcoming_count,
+         "pruned_concerts": pruned_concerts,
          "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
          "bot_enabled": settings.bot_enabled},
     )
@@ -314,6 +331,50 @@ async def subscribe(
     return RedirectResponse(_safe_next(next_url), status_code=303)
 
 
+async def _owned_subscription(
+    session: AsyncSession, user_id: int, sub_id: int
+) -> TagSubscription:
+    sub = await session.get(TagSubscription, sub_id)
+    if sub is None or sub.user_id != user_id:
+        raise HTTPException(status_code=404)
+    return sub
+
+
+@router.post("/subscriptions/{sub_id}/notify")
+async def toggle_subscription_notify(
+    sub_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Flip the per-tag Notify flag -- the demo's Notify `.swb`. Notify is
+    just the new-event DM notice, so this needs no rule resync (unlike a
+    per-concert override); it mirrors the existing /subscriptions upsert,
+    which likewise does not resync when it rewrites notify."""
+    sub = await _owned_subscription(session, user.id, sub_id)
+    sub.notify = not sub.notify
+    await session.commit()
+    return RedirectResponse("/preferences#p-follow", status_code=303)
+
+
+@router.post("/subscriptions/{sub_id}/auto-apply")
+async def toggle_subscription_autoapply(
+    sub_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """The demo's Auto-apply `.swb`: a preset either IS or ISN'T linked. On
+    links the user's default preset (nothing to link without one, so it stays
+    off); off clears preset_id. Same field the /subscriptions upsert sets."""
+    sub = await _owned_subscription(session, user.id, sub_id)
+    if sub.preset_id is not None:
+        sub.preset_id = None
+    else:
+        default = await get_default_preset(session, user.id)
+        sub.preset_id = default.id if default else None
+    await session.commit()
+    return RedirectResponse("/preferences#p-follow", status_code=303)
+
+
 @router.post("/subscriptions/{sub_id}/delete")
 async def unsubscribe(
     sub_id: int,
@@ -463,3 +524,31 @@ async def send_test_dm(
         return HTMLResponse("Still blocked — check your Discord privacy settings.")
     except discord.HTTPException:
         return HTMLResponse("Couldn't reach Discord, try again.")
+
+
+# ── Account deletion ─────────────────────────────────────────────────────
+
+
+@router.post("/me/delete")
+async def delete_account(
+    request: Request,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Self-serve GDPR erasure, scoped to the AUTHENTICATED CALLER ONLY.
+
+    The id comes from the session (require_user), never from request input, so
+    a logged-in user can only ever delete themselves. delete_user cascades away
+    everything personal and SET-NULLs the shared catalogue this user authored
+    -- their concerts/tags survive with the author blanked (see db/service.py).
+    Revoke the session through the same path logout uses (the cascade then
+    removes the row too), then land the now-signed-out visitor on Home.
+
+    The heavy confirmation lives client-side in the Account danger card (a
+    deliberate second action naming the loss); the route deliberately does NOT
+    require it to have run -- it just performs the erasure for the caller.
+    """
+    await revoke_session(request, session)
+    await delete_user(session, user.id)
+    await session.commit()
+    return RedirectResponse("/?deleted=1", status_code=303)

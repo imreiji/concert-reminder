@@ -22,7 +22,7 @@
     `data-leg-id` rather than `data-name`, which collides with base.html's
     filterChips(). -#}
 <div class="leg-chips" data-leg-chips>
-  <span class="dim tiny">Applies to</span>
+  <span class="eyebrow">Applies to</span>
   <input type="hidden" name="round_legs" value="{{ value | default('', true) }}">
   <span class="dim tiny" data-no-legs {% if legs %}hidden{% endif %}>Add a leg to assign this round to it.</span>
   {% for d in legs %}

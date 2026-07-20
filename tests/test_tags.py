@@ -10,6 +10,7 @@ notifications will rely on, so they get exhaustive coverage:
 
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -410,7 +411,7 @@ def test_tags_page_renders_hierarchy_and_search_box(client):
 
     r = client.get("/tags")
     assert r.status_code == 200
-    assert 'placeholder="Search tags…"' in r.text
+    assert 'placeholder="Search franchises, groups, performers, venues…"' in r.text
     assert "Hasunosora" in r.text and "Liella" in r.text
     assert "Kaho" in r.text and "K Arena" in r.text
     # every tag gets its own dialog
@@ -1435,3 +1436,80 @@ def test_rename_longer_than_the_creation_cap_is_rejected(client):
     client.post("/tags", data={"name": "Hasunosora", "kind": "artist"})
     assert client.post("/tags/1/edit", data={"name": "x" * 101}).status_code == 422
     assert client.post("/tags/1/edit", data={"name": "x" * 100}).status_code == 303
+
+
+# ── Task 6: Tags view gaps -- dialog shadow, delete alignment, control chrome ──
+
+STYLE = Path(__file__).resolve().parents[1] / "src/app/web/static/style.css"
+
+
+def css():
+    return STYLE.read_text(encoding="utf-8")
+
+
+def test_tagdlg_has_box_shadow():
+    """dialog.tagdlg was the one dialog in the app with no shadow -- port the
+    demo's box-shadow: var(--shadow) onto it, matching dialog.picker/.prune."""
+    text = css()
+    m = re.search(r"dialog\.tagdlg\s*\{([^}]*)\}", text)
+    assert m, "dialog.tagdlg rule not found"
+    assert "box-shadow: var(--shadow)" in m.group(1)
+
+
+def test_tagdlg_radius_matches_other_dialogs():
+    text = css()
+    m = re.search(r"dialog\.tagdlg\s*\{([^}]*)\}", text)
+    assert m
+    assert re.search(r"border-radius:\s*[34]px", m.group(1))
+
+
+def test_delete_button_alignment_targets_the_form_not_the_button():
+    """The Delete button in the edit-tag dialog footer is wrapped in its own
+    real <form> (a POST, unlike the demo's JS-only button) -- .df is a flex
+    row, so `.df .btn.warn { margin-left: auto }` targets the BUTTON while
+    the actual flex item is the FORM around it, which has no effect. The
+    auto-margin must land on the form itself."""
+    text = css()
+    assert re.search(r"\.df\s+form\s*\{[^}]*margin-left:\s*auto", text)
+
+
+def test_new_tag_dialog_footer_has_no_border_padding_override(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/tags")
+    new_dlg = r.text.split('id="new-tag-dialog"')[1].split("</dialog>")[0]
+    assert "border-top:0" not in new_dlg
+    assert "padding-left:0" not in new_dlg
+    assert '<div class="df">' in new_dlg
+
+
+def test_add_member_uses_the_add_chip_pill(client):
+    """"+ Add member" should carry the same chip silhouette as every other
+    "+ Add x" control in the app (the picker's .chip.add), not a bare
+    default-styled <button>."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    client.post("/tags", data={"name": "Chika", "kind": "artist"})
+    r = client.get("/tags")
+    gdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    assert 'class="chip add"' in gdlg
+    assert "+ Add member" in gdlg
+
+
+def test_retroactive_apply_styled_as_a_button(client):
+    """The retroactive-apply control keeps its GET-then-confirm navigation
+    (per-member, to retroactive_apply.html) but should read as a button
+    (.btn.quiet), not a bare underlined text link."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+
+    r = client.get("/tags")
+    gdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    assert "/tags/1/members/2/retroactive-apply" in gdlg
+    # anchor to the anchor itself -- the dialog's Cancel button also carries
+    # "btn quiet", so a bare substring check would pass without touching <a>
+    apply_link = gdlg[gdlg.index("<a ") : gdlg.index("</a>") + len("</a>")]
+    assert 'href="/tags/1/members/2/retroactive-apply"' in apply_link
+    assert "btn quiet" in apply_link.split(">", 1)[0]

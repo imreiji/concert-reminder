@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -307,7 +307,9 @@ async def test_performer_chip_without_url_is_a_span_not_a_link(client):
     login(client)
 
     panel = _performers_panel(client)
-    assert '<span class="chip">No Link Star</span>' in panel
+    # Dimmed (demo's .nolink) with a tooltip explaining why, but still never
+    # a dead <a>.
+    assert '<span class="chip nolink" title="No eventernote link yet">No Link Star</span>' in panel
     assert "No Link Star</a>" not in panel  # never a dead link
 
 
@@ -638,3 +640,143 @@ async def test_recording_without_htmx_returns_to_the_concert(client):
     r = client.post(f"/rounds/{rid}/outcome", data={"outcome": "won"})
     assert r.status_code == 303
     assert r.headers["location"] == "/"
+
+
+# ── Task 4: follow toggle CSS, performer-chip centring, reminders redesign ─
+
+
+def _read_style_css() -> str:
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    return (root / "src" / "app" / "web" / "static" / "style.css").read_text(encoding="utf-8")
+
+
+def test_style_gives_follow_a_green_pill_when_on_and_dim_outline_when_off():
+    """`.follow` shipped with zero CSS -- the button rendered as an unstyled
+    default. Pin the on/off treatment the demo specifies: a green "covered"
+    pill with a check glyph when on, a dim outline otherwise."""
+    css = _read_style_css()
+    assert ".follow" in css
+    assert ".follow.on" in css
+    assert "var(--ok-wash)" in css  # the green wash fill when following
+    assert "\\2713" in css  # the check glyph, added via content so no markup change was needed
+    # The unfollowed state stays dim/outlined, whether or not .quiet also
+    # applies to the same button.
+    assert ".follow:not(.on)" in css or ".btn.quiet.follow" in css
+
+
+def test_style_centers_performer_chip_names():
+    """The owner's explicit ask: performer chip labels must be centred, not
+    left-aligned like the default .chip."""
+    css = _read_style_css()
+    block = css.split(".performers .chip {", 1)[1].split("}", 1)[0]
+    assert "justify-content: center" in block
+    assert "text-align: center" in block
+
+
+def test_style_dims_a_performer_chip_with_no_eventernote_link():
+    css = _read_style_css()
+    assert ".performers .chip.nolink" in css
+    block = css.split(".performers .chip.nolink", 1)[1].split("}", 1)[0]
+    assert "opacity: .75" in block
+
+
+async def test_following_button_carries_the_reminder_caption(client):
+    """A followed concert's toggle explains what following means -- the
+    demo's "You will be reminded about every round below." caption, ported
+    into `_following_toggle.html` next to the button."""
+    await seed_concert(client.db)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    body = client.get("/concerts/np").text
+    toggle = body.split('id="following-toggle"', 1)[1].split("</div>", 1)[0]
+    assert "btn follow on" in toggle
+    assert "You will be reminded about every round below." in toggle
+
+
+async def test_unfollowed_toggle_carries_no_reminder_caption(client):
+    """The caption promises reminders; it would be false when not following,
+    so it only renders in the following branch."""
+    await seed_concert(client.db)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    toggle = body.split('id="following-toggle"', 1)[1].split("</div>", 1)[0]
+    assert "btn quiet follow" in toggle
+    assert "You will be reminded about every round below." not in toggle
+
+
+async def test_the_legacy_meta_grid_block_is_gone(client):
+    """The demo's header is lineage -> h1 -> tags -> links only; the old
+    title_en/organizer/categories/performers_text dl duplicated what the
+    performers panel below already shows."""
+    await seed_concert(
+        client.db,
+        title_en="EN Title", organizer="Some Org", categories="Live",
+        performers_text="Someone",
+    )
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert "meta-grid" not in body
+    assert "EN Title" not in body
+
+
+async def test_reminders_section_uses_the_row_based_layout(client):
+    """Demo shape: a `.rows`/`.row` list (not the old flex `<ul><li>`), each
+    row carrying a small "Remove" action -- same delete route, new markup."""
+    await seed_concert(client.db)
+    login(client)
+    client.post("/concerts/np/rules", data={"anchor": "closes", "days_before": 3})
+
+    body = client.get("/concerts/np").text
+    rules = body.split('id="rules"', 1)[1].split("</div>\n</article>", 1)[0]
+    assert '<div class="rows">' in rules
+    assert '<div class="row"' in rules
+    assert 'action="/rules/1/delete"' in rules
+    assert 'hx-post="/rules/1/delete"' in rules
+    assert 'hx-target="#rules"' in rules
+    assert ">Remove<" in rules
+
+
+async def test_add_a_reminder_is_a_reveal_not_an_always_open_form(client):
+    """The old fragment always showed a live number-input + <select>. The
+    redesign hides that behind an "Add a reminder" affordance -- ported here
+    as a native <details> disclosure (no JS at all, so invariant 7's on*
+    concerns don't even arise) rather than an always-visible form."""
+    await seed_concert(client.db)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    rules = body.split('id="rules"', 1)[1].split("</div>\n</article>", 1)[0]
+    assert "<details" in rules
+    assert "Add a reminder" in rules
+    # The add-rule form must be NESTED inside the reveal, not sitting bare
+    # alongside it.
+    details_at = rules.index("<details")
+    input_at = rules.index('name="days_before"')
+    assert details_at < input_at
+    # Same route/field names/htmx wiring as before -- presentation only.
+    assert 'action="/concerts/np/rules"' in rules
+    assert 'hx-post="/concerts/np/rules"' in rules
+    assert 'name="anchor"' in rules
+
+
+async def test_reminders_note_names_the_default_preset(client):
+    """Demo: "From your default preset — <name>"."""
+    await seed_concert(client.db)
+    login(client)
+    client.post("/presets", data={"name": "Standard"})
+    async with client.db() as s:
+        from app.db.models import ReminderPreset
+
+        preset = (await s.execute(select(ReminderPreset))).scalar_one()
+        preset.is_default = True
+        await s.commit()
+
+    body = client.get("/concerts/np").text
+    rules = body.split('id="rules"', 1)[1].split("</div>\n</article>", 1)[0]
+    assert "From your default preset" in rules
+    assert "Standard" in rules

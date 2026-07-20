@@ -15,7 +15,7 @@
 <p class="dim">Following a tag subscribes you to every future concert carrying it, so counts
 here are what a rename or delete actually touches.</p>
 
-<input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.tags-page')">
+<input class="tag-search" type="search" placeholder="Search franchises, groups, performers, venues…" oninput="filterChips(this, '.tags-page')">
 
 {#- Per-tag edit dialog. One dialog per tag, real <form>s posting to real
     routes (the concept uses a single JS-populated dialog; we keep the shipped
@@ -80,7 +80,7 @@ here are what a rename or delete actually touches.</p>
         <select name="member_tag_id">
           {% for a in artist_tags %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
         </select>
-        <button>Add member</button>
+        <button type="submit" class="chip add">+ Add member</button>
       </form>
       {% endif %}
     </div>
@@ -90,7 +90,7 @@ here are what a rename or delete actually touches.</p>
         concerts that already carry this group — expansion is materialised at the moment
         you attach it. Use this to push a new member onto active events.</div>
       {% for m, n in eligible_members.get(t.id, []) %}
-      <a href="/tags/{{ t.id }}/members/{{ m.id }}/retroactive-apply">Apply {{ m.name }} to {{ n }} upcoming concert{{ '' if n == 1 else 's' }}</a>
+      <a class="btn quiet" href="/tags/{{ t.id }}/members/{{ m.id }}/retroactive-apply">Apply {{ m.name }} to {{ n }} upcoming concert{{ '' if n == 1 else 's' }}</a>
       {% endfor %}
     </div>
     {% endif %}
@@ -234,7 +234,7 @@ here are what a rename or delete actually touches.</p>
       <span class="plain">A franchise is just a parent for groups — nothing else to set.</span>
     </div>
 
-    <div class="df" style="padding-left:0; padding-right:0; border-top:0;">
+    <div class="df">
       <button class="btn">Create tag</button>
       <button class="btn quiet" type="button" onclick="document.getElementById('new-tag-dialog').close()">Cancel</button>
     </div>

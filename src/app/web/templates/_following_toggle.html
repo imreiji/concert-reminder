@@ -25,6 +25,7 @@
   {% if holds_ticket %}
   <button type="button" class="btn follow on"
           onclick="document.getElementById('unfollowConfirm').showModal()">Following</button>
+  <span class="clock">You will be reminded about every round below.</span>
   <dialog id="unfollowConfirm" class="prune">
     <div class="dh">Opt out of this concert?
       <button type="button" class="x" aria-label="Close"
@@ -55,6 +56,7 @@
     <input type="hidden" name="state" value="opted_out">
     <button class="btn follow on" type="submit">Following</button>
   </form>
+  <span class="clock">You will be reminded about every round below.</span>
   {% endif %}
 {% else %}
   {% set next_state = "default" if sub_state and sub_state.value == "opted_out" else "subscribed" %}

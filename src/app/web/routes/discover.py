@@ -20,6 +20,7 @@ A thin shell: everything but the assembly of the template context lives in
 helpers below, which take plain objects and do no I/O.
 """
 
+from collections import Counter
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -32,7 +33,10 @@ from app.config import settings
 from app.db.models import Concert, ConcertDay, Tag, User
 from app.db.service import (
     discover_statuses,
+    discoverable_concert_count,
     discoverable_concert_criterion,
+    discoverable_open_round_count,
+    discoverable_tag_counts,
     upcoming_deadlines,
 )
 from app.db.session import get_session
@@ -187,6 +191,18 @@ async def discover(
         if db_user:
             tz, tz_auto = db_user.timezone, db_user.tz_auto
 
+    # Sidebar chip counts (demo `.chip .n`) and the round-status facet's own
+    # counts. The latter is a tally of `statuses` -- already built above for
+    # the tile pills -- so it costs nothing extra to compute.
+    tag_counts = await discoverable_tag_counts(session)
+    status_counts = Counter(st.status for st in statuses.values())
+    # Same two counts Home's teaser links out with (invariant: one definition
+    # in discoverable_concert_criterion) -- the summary line under the
+    # heading here, per the demo's "142 concerts · 38 with a round still
+    # open" `.note`.
+    catalogue_count = await discoverable_concert_count(session)
+    open_round_count = await discoverable_open_round_count(session, now)
+
     return templates.TemplateResponse(
         request,
         "discover.html",
@@ -197,6 +213,10 @@ async def discover(
             "open_concert_ids": {
                 cid for cid, st in statuses.items() if st.status == "open"
             },
+            "catalogue_count": catalogue_count,
+            "open_round_count": open_round_count,
+            "tag_counts": tag_counts,
+            "status_counts": status_counts,
             "by_kind": by_kind,
             "region_links": region_sidebar_links(by_kind.get("venue", []), tag, sort, facet),
             "selected_tags": selected_tags,

@@ -1,151 +1,188 @@
 {% extends "base.html" %}
 {% block title %}preferences — dekimasen.app{% endblock %}
 {% block content %}
-<h1>Preferences</h1>
+{# Preferences on the demo's vocabulary (`.plyt`/`.prail`/`.psec`/`.subrow`/
+   `.swb`/`.presetcard`/`.ruleline`/`.statline`/`.danger`). The rail is an
+   in-page anchor nav; every section carries the matching id and a scrollspy
+   (bottom script) keeps the `.on` rail link in step with the section in view.
+   Order, as in the concept: Following, Reminders, Time, Delivery, Account,
+   Editors (admin only). #}
+<div class="head" style="margin-top:1.5rem">
+  <h1 style="margin:0;font-size:1.35rem">Preferences</h1>
+</div>
 
-{# Left-rail layout, built ONCE here (later branches must not redesign it).
-   The rail is a plain in-page anchor nav; each section below carries the
-   matching id. Sections, in the concept's order: Following, Reminders, Time,
-   Delivery, Account, Editors (admin only). #}
-<div class="layout prefs">
-  <aside class="sidebar">
-    <nav class="sorts prefs-rail">
-      <a href="#following">Following</a>
-      <a href="#reminders">Reminders</a>
-      <a href="#time">Time</a>
-      <a href="#delivery">Delivery</a>
-      <a href="#account">Account</a>
-      {% if user.is_admin %}<a href="#editors">Editors</a>{% endif %}
-    </nav>
-  </aside>
+<div class="plyt">
+  <nav class="prail">
+    <a class="on" href="#p-follow">Following</a>
+    <a href="#p-remind">Reminders</a>
+    <a href="#p-time">Time</a>
+    <a href="#p-deliver">Delivery</a>
+    <a href="#p-account">Account</a>
+    {% if user.is_admin %}<a href="#p-admin">Editors</a>{% endif %}
+  </nav>
 
-  <div class="prefs-body">
+  <div>
 
   {# ── Following ─────────────────────────────────────────────────────── #}
-  <section id="following" class="prefs-section">
-    <h2>Following</h2>
-    <p class="dim">{{ tracked_count }} concert{{ "" if tracked_count == 1 else "s" }} · {{ pruned_concerts | length }} you pruned</p>
+  <section class="psec" id="p-follow">
+    <h3>Following</h3>
+    <p class="blurb">
+      Following a tag subscribes you to <b>every future concert</b> carrying it.
+      Notify sends a DM when a new one appears; Auto-apply adds your default
+      preset to it. Drop individual concerts from the concert page or a
+      reminder DM.
+    </p>
+
+    <div class="statline" style="margin-bottom:1rem">
+      <span class="pill p-ok">{{ subs | length }} tags followed</span>
+      <span class="clock">{{ tracked_count }} tracked &middot; {{ upcoming_count }} upcoming
+        &middot; {{ pruned_concerts | length }} you pruned</span>
+    </div>
+
+    {# One subrow per followed tag. The two `.swb` toggles map to the stored
+       fields: Notify -> TagSubscription.notify, Auto-apply -> whether a preset
+       is linked (preset_id). Each is a real POST form so it works with JS off;
+       aria-pressed reflects current state, the route flips it. #}
+    {% for sub, tag in subs %}
+    {% set counts = tag_counts.get(tag.id, (0, 0)) %}
+    <div class="subrow">
+      <span class="nm3"><span class="tchip k-{{ tag.kind.value }}">{{ tag.name }}</span></span>
+      <span class="cnt"><b>{{ counts[0] }}</b> concert{{ "" if counts[0] == 1 else "s" }}
+        &middot; {{ counts[1] }} upcoming</span>
+      <span class="sw">
+        <form method="post" action="/subscriptions/{{ sub.id }}/notify" style="display:contents">
+          <button class="swb" type="submit" aria-pressed="{{ 'true' if sub.notify else 'false' }}"
+                  title="DM me when a new matching concert appears">Notify</button>
+        </form>
+        <form method="post" action="/subscriptions/{{ sub.id }}/auto-apply" style="display:contents">
+          <button class="swb" type="submit"
+                  aria-pressed="{{ 'true' if sub.preset_id else 'false' }}"
+                  title="Add my default preset to new matching concerts">Auto-apply</button>
+        </form>
+        <form method="post" action="/subscriptions/{{ sub.id }}/delete" style="display:contents">
+          <button class="act no" type="submit" title="Stop following this tag">Unfollow</button>
+        </form>
+      </span>
+    </div>
+    {% else %}
+    <p class="clock" style="display:block">You are not following any tags yet.</p>
+    {% endfor %}
 
     {% if pruned_concerts %}
-    <div class="panel">
-      <strong>Pruned concerts</strong>
-      <p class="dim tiny">You skipped these individually. Restoring one returns it
-        to whatever its tags say by default.</p>
-      <ul class="rows">
-        {% for c in pruned_concerts %}
-        <li>
-          <span><a href="/concerts/{{ c.event_id }}">{{ c.title }}</a>
-            {% if c.title_en %}<span class="dim tiny">{{ c.title_en }}</span>{% endif %}</span>
-          {# Restore = clear the override (state=default) via the Task-4 route,
-             which calls clear_concert_subscription. A plain form so it works
-             with JS off; the Referer sends the user back here. #}
-          <form method="post" action="/concerts/{{ c.event_id }}/subscription">
+    <div style="margin-top:1.25rem">
+      <div class="ruleline" style="margin-bottom:.4rem"><b>Pruned concerts</b></div>
+      <p class="clock" style="display:block;margin:0 0 .5rem">You skipped these individually.
+        Restoring one returns it to whatever its tags say by default.</p>
+      {% for c in pruned_concerts %}
+      <div class="subrow">
+        <span class="nm3"><a href="/concerts/{{ c.event_id }}">{{ c.title }}</a>
+          {% if c.title_en %}<span class="clock">{{ c.title_en }}</span>{% endif %}</span>
+        <span class="cnt"></span>
+        {# Restore = clear the OPTED_OUT override (state=default) via the
+           subscription route, which calls clear_concert_subscription. A plain
+           form so it works with JS off; the Referer returns the user here. #}
+        <span class="sw">
+          <form method="post" action="/concerts/{{ c.event_id }}/subscription" style="display:contents">
             <input type="hidden" name="state" value="default">
-            <button class="quiet" title="Restore to the tag default">Restore</button>
+            <button class="swb" type="submit" title="Restore to the tag default">Restore</button>
           </form>
-        </li>
-        {% endfor %}
-      </ul>
+        </span>
+      </div>
+      {% endfor %}
     </div>
     {% endif %}
 
-    <p class="dim">Click a tag to follow it — new matching events auto-apply your chosen
-      preset and DM you. Click a followed tag to unfollow. Artists appear next to their group.</p>
+    {# The follow-more surface: the tag picker (chips). Kept as a disclosure so
+       the Following section leads with the subrows and the picker reads as
+       "add another". The picker filters on data-name (base.html filterChips),
+       which is deliberate here -- it is a chip filter, not a delete confirm. #}
+    <details class="fold" style="margin-top:1.25rem">
+      <summary>Follow another tag</summary>
+      <div class="fold-body">
+        <div class="sub-defaults">
+          <span class="clock">When I follow a tag:</span>
+          <form id="sub-defaults" class="inline">
+            <label>Apply preset
+              <select id="sub-preset">
+                <option value="0">None</option>
+                {% for p in presets %}<option value="{{ p.id }}" {% if loop.first %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+              </select></label>
+            <label><input type="checkbox" id="sub-notify" checked> DM me on new events</label>
+          </form>
+        </div>
 
-    <div class="panel sub-defaults">
-      <strong>When I subscribe:</strong>
-      <form id="sub-defaults" class="inline">
-        <label>Apply preset
-          <select id="sub-preset">
-            <option value="0">None</option>
-            {% for p in presets %}<option value="{{ p.id }}" {% if loop.first %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
-          </select></label>
-        <label><input type="checkbox" id="sub-notify" checked> DM me on new events</label>
-      </form>
-    </div>
+        <input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.sub-box')">
 
-    <input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.sub-box')">
+        {% macro subchip(t) -%}
+          {%- set sub = sub_by_tag.get(t.id) -%}
+          {%- if sub -%}
+          <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete">
+            <button class="chip kind-{{ t.kind.value }} on" data-name="{{ t.name | lower }}"
+              title="Following{% if sub.preset_id %} · preset linked{% endif %}{% if sub.notify %} · 🔔{% endif %} — click to unfollow">{{ t.name }} ✓</button>
+          </form>
+          {%- else -%}
+          <form class="chipform" method="post" action="/subscriptions">
+            <input type="hidden" name="tag_id" value="{{ t.id }}">
+            <input type="hidden" name="preset_id" value="0" class="sub-preset-field">
+            <input type="hidden" name="notify" value="" class="sub-notify-field">
+            <button class="chip kind-{{ t.kind.value }}" data-name="{{ t.name | lower }}">{{ t.name }}</button>
+          </form>
+          {%- endif -%}
+        {%- endmacro %}
 
-    {% macro subchip(t) -%}
-      {%- set sub = sub_by_tag.get(t.id) -%}
-      {%- if sub -%}
-      <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete">
-        <button class="chip kind-{{ t.kind.value }} on" data-name="{{ t.name | lower }}"
-          title="Following{% if sub.preset_id %} · preset linked{% endif %}{% if sub.notify %} · 🔔{% endif %} — click to unfollow">{{ t.name }} ✓</button>
-      </form>
-      {%- else -%}
-      <form class="chipform" method="post" action="/subscriptions">
-        <input type="hidden" name="tag_id" value="{{ t.id }}">
-        <input type="hidden" name="preset_id" value="0" class="sub-preset-field">
-        <input type="hidden" name="notify" value="" class="sub-notify-field">
-        <button class="chip kind-{{ t.kind.value }}" data-name="{{ t.name | lower }}">{{ t.name }}</button>
-      </form>
-      {%- endif -%}
-    {%- endmacro %}
-
-    <div class="sub-box">
-      {% for f in franchises %}
-        <details open class="tag-section">
-          <summary>{{ f.name }} {{ subchip(f) }}</summary>
-          {% for g in groups if g.parent_id == f.id %}
-            <div class="group-row">
-              {{ subchip(g) }}
-              <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span>
-            </div>
+        <div class="sub-box">
+          {% for f in franchises %}
+            <details open class="tag-section">
+              <summary>{{ f.name }} {{ subchip(f) }}</summary>
+              {% for g in groups if g.parent_id == f.id %}
+                <div class="group-row">
+                  {{ subchip(g) }}
+                  <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span>
+                </div>
+              {% endfor %}
+            </details>
           {% endfor %}
-        </details>
-      {% endfor %}
-      {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
-      {% if orphan_groups %}
-      <details open class="tag-section"><summary>Other groups</summary>
-        {% for g in orphan_groups %}
-        <div class="group-row">{{ subchip(g) }}
-          <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span></div>
-        {% endfor %}
-      </details>
-      {% endif %}
-      {% if solo_artists %}
-      <details open class="tag-section"><summary>Solo artists</summary>
-        <div class="taglist">{% for a in solo_artists %}{{ subchip(a) }}{% endfor %}</div>
-      </details>
-      {% endif %}
-      {% if venues %}
-      <details class="tag-section"><summary>Venues</summary>
-        <div class="taglist">{% for v in venues %}{{ subchip(v) }}{% endfor %}</div>
-      </details>
-      {% endif %}
-    </div>
+          {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
+          {% if orphan_groups %}
+          <details open class="tag-section"><summary>Other groups</summary>
+            {% for g in orphan_groups %}
+            <div class="group-row">{{ subchip(g) }}
+              <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span></div>
+            {% endfor %}
+          </details>
+          {% endif %}
+          {% if solo_artists %}
+          <details open class="tag-section"><summary>Solo artists</summary>
+            <div class="taglist">{% for a in solo_artists %}{{ subchip(a) }}{% endfor %}</div>
+          </details>
+          {% endif %}
+          {% if venues %}
+          <details class="tag-section"><summary>Venues</summary>
+            <div class="taglist">{% for v in venues %}{{ subchip(v) }}{% endfor %}</div>
+          </details>
+          {% endif %}
+        </div>
 
-    <script>
-      // stamp the subscribe-defaults into every subscribe form at submit time
-      document.querySelectorAll(".chipform").forEach(f => f.addEventListener("submit", () => {
-        const p = f.querySelector(".sub-preset-field");
-        const n = f.querySelector(".sub-notify-field");
-        if (p) p.value = document.getElementById("sub-preset").value;
-        if (n) n.value = document.getElementById("sub-notify").checked ? "true" : "";
-      }));
-    </script>
-
-    {% if subs %}
-    <h3>My tag subscriptions (details)</h3>
-    <ul class="rows">
-      {% for sub, tag in subs %}
-      <li>
-        <span><span class="chip kind-{{ tag.kind.value }}">{{ tag.name }}</span>
-          {% if sub.preset_id %}→ auto-applies a preset{% else %}<em class="dim">notice only</em>{% endif %}
-          {% if sub.notify %} · 🔔 DM{% endif %}</span>
-        <form method="post" action="/subscriptions/{{ sub.id }}/delete"><button class="x">×</button></form>
-      </li>
-      {% endfor %}
-    </ul>
-    {% endif %}
+        <script>
+          // Stamp the follow-defaults into every follow form at submit time.
+          document.querySelectorAll(".chipform").forEach(f => f.addEventListener("submit", () => {
+            const p = f.querySelector(".sub-preset-field");
+            const n = f.querySelector(".sub-notify-field");
+            if (p) p.value = document.getElementById("sub-preset").value;
+            if (n) n.value = document.getElementById("sub-notify").checked ? "true" : "";
+          }));
+        </script>
+      </div>
+    </details>
   </section>
 
   {# ── Reminders (presets) ───────────────────────────────────────────── #}
-  <section id="reminders" class="prefs-section">
-    <h2>Reminder presets</h2>
-    <p class="dim">Your standard loadout of reminders — apply to any concert in one click, or link
-      to a tag subscription so new events set themselves up.</p>
+  <section class="psec" id="p-remind">
+    <h3>Reminders</h3>
+    <p class="blurb">
+      A preset is a set of reminder rules applied to concerts you follow. Rules
+      on an individual concert override these.
+    </p>
 
     {% macro sentence_fields(days_val, hours_val, dir_val, anchor_val) -%}
       <span>Remind me</span>
@@ -162,156 +199,269 @@
     {%- endmacro %}
 
     {% for p in presets %}
-    <div class="panel">
-      <div class="preset-head">
-        <form class="inline rename" method="post" action="/presets/{{ p.id }}/rename">
-          <input name="name" value="{{ p.name }}" maxlength="100" required>
-          <button class="quiet" title="Rename">Rename</button>
+    <div class="presetcard">
+      <div class="ph">
+        <form class="inline rename" method="post" action="/presets/{{ p.id }}/rename" style="display:contents">
+          <input class="nm4" name="name" value="{{ p.name }}" maxlength="100" required>
+          <button class="act" type="submit" title="Rename">Rename</button>
         </form>
-        {% if p.is_default %}<span class="badge" title="The Discord 'Set my reminders' button applies this preset">★ Default</span>
-        {% else %}<form method="post" action="/presets/{{ p.id }}/default"><button class="quiet" title="Make this the preset the Discord button applies">☆ Make default</button></form>{% endif %}
-        <form method="post" action="/presets/{{ p.id }}/delete"
-              data-preset-name="{{ p.name }}"
-              onsubmit="return confirmDeletePreset(this)"><button class="x" title="delete preset">×</button></form>
+        {% if p.is_default %}<span class="pill p-ok" title="The Discord 'Set my reminders' button applies this preset">Default</span>{% endif %}
+        <span class="sp">
+          {% if not p.is_default %}<form method="post" action="/presets/{{ p.id }}/default" style="display:contents"><button class="act" type="submit" title="Make this the preset the Discord button applies">Make default</button></form>{% endif %}
+          <form method="post" action="/presets/{{ p.id }}/delete"
+                data-preset-name="{{ p.name }}" style="display:contents"
+                onsubmit="return confirmDeletePreset(this)"><button class="act no" type="submit" title="Delete preset">Delete</button></form>
+        </span>
       </div>
-      <ul class="rows items">
-        {% for i in p.items %}
-        <li>
-          <form class="sentence" method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/edit">
-            {{ sentence_fields(i.offset_days | abs, i.offset_hours | abs,
-                               "after" if (i.offset_days > 0 or i.offset_hours > 0) else "before",
-                               i.anchor.value) }}
-            <button class="quiet">Save</button>
-          </form>
-          <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete"><button class="x" title="remove">×</button></form>
-        </li>
-        {% endfor %}
-        <li class="add-row">
-          <form class="sentence" method="post" action="/presets/{{ p.id }}/items">
+      {% for i in p.items %}
+      <div class="ruleline">
+        <form class="sentence inline" method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/edit" style="display:contents">
+          {{ sentence_fields(i.offset_days | abs, i.offset_hours | abs,
+                             "after" if (i.offset_days > 0 or i.offset_hours > 0) else "before",
+                             i.anchor.value) }}
+          <button class="act" type="submit">Save</button>
+        </form>
+        <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete" style="display:contents"><button class="act no" type="submit" title="Remove rule">Remove</button></form>
+      </div>
+      {% endfor %}
+      <details class="fold">
+        <summary>Add a rule</summary>
+        <div class="fold-body">
+          <form class="sentence inline" method="post" action="/presets/{{ p.id }}/items">
             {{ sentence_fields(3, 0, "before", "closes") }}
-            <button>+ Add</button>
+            <button class="act" type="submit">Add rule</button>
           </form>
-        </li>
-      </ul>
+        </div>
+      </details>
     </div>
     {% endfor %}
 
-    <details class="panel" {% if not presets %}open{% endif %}>
-      <summary>+ New preset</summary>
-      <form class="stack" method="post" action="/presets">
-        <label>Name <input name="name" required maxlength="100" placeholder="standard lottery coverage"></label>
-        <div class="sentence">{{ sentence_fields(3, 0, "before", "closes") }}</div>
-        <button>Create preset</button>
-        <p class="dim tiny">The preset is created with this first reminder — add more items after.</p>
-      </form>
-    </details>
+    <div class="bar">
+      <span class="tally">Presets apply to future concerts. Existing ones keep the rules they already have.</span>
+      <details class="fold" {% if not presets %}open{% endif %}>
+        <summary>New preset</summary>
+        <div class="fold-body">
+          <form class="stack" method="post" action="/presets">
+            <label>Name <input name="name" required maxlength="100" placeholder="standard lottery coverage"></label>
+            <div class="sentence inline">{{ sentence_fields(3, 0, "before", "closes") }}</div>
+            <button class="act" type="submit">Create preset</button>
+            <span class="clock" style="display:block">Created with this first rule — add more after.</span>
+          </form>
+        </div>
+      </details>
+    </div>
   </section>
 
   {# ── Time (timezone) ───────────────────────────────────────────────── #}
-  <section id="time" class="prefs-section">
-    <h2>Time</h2>
-    <form class="inline" method="post" action="/me/timezone">
-      <select name="timezone">
-        <optgroup label="Common">
-          {% for t in common_timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
-        </optgroup>
-        <optgroup label="All zones (IANA)">
-          {% for t in all_timezones %}<option value="{{ t }}" {% if t == tz and t not in common_timezones %}selected{% endif %}>{{ t }}</option>{% endfor %}
-        </optgroup>
-      </select>
-      <button>Save</button>
-      {% if tz_auto %}<span class="dim" title="detected from your browser">Auto-detected</span>
-      {% else %}<button formaction="/me/timezone/reset" title="re-detect from browser">Reset to auto</button>{% endif %}
+  <section class="psec" id="p-time">
+    <h3>Time</h3>
+    <p class="blurb">Every deadline shows JST first, then yours. This sets the second one.</p>
+
+    <div class="grid2" style="max-width:34rem">
+      {# Primary control: pick a zone and Save. Saving pins it manual. #}
+      <form class="fld inline" method="post" action="/me/timezone">
+        <span>Your timezone</span>
+        <select name="timezone">
+          <optgroup label="Common">
+            {% for t in common_timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
+          </optgroup>
+          <optgroup label="All zones (IANA)">
+            {% for t in all_timezones %}<option value="{{ t }}" {% if t == tz and t not in common_timezones %}selected{% endif %}>{{ t }}</option>{% endfor %}
+          </optgroup>
+        </select>
+        <button class="act" type="submit">Save</button>
+      </form>
+
+      {# Detection mode: "Follow my browser" re-arms auto-detect (reset route);
+         "Keep what I picked" pins the current zone manual. Both reuse the
+         existing timezone routes -- the paired hidden forms below are what the
+         select actually submits. No user-authored text in any handler. #}
+      <label class="fld"><span>Detection</span>
+        <select id="tz-detect" aria-label="Timezone detection mode">
+          <option value="follow" {% if tz_auto %}selected{% endif %}>Follow my browser</option>
+          <option value="keep" {% if not tz_auto %}selected{% endif %}>Keep what I picked</option>
+        </select></label>
+    </div>
+    <form id="tz-follow" method="post" action="/me/timezone/reset" hidden></form>
+    <form id="tz-keep" method="post" action="/me/timezone" hidden>
+      <input type="hidden" name="timezone" value="{{ tz }}">
     </form>
-    <p class="dim tiny">Event times are always shown as JST plus this timezone.</p>
+
+    <p class="clock" style="margin-top:.6rem; display:block">
+      {% if tz_auto %}Detected <b>{{ tz }}</b> from your browser.{% else %}Using <b>{{ tz }}</b>.{% endif %}
+      Right now that reads <span class="num">{{ tz_preview }}</span>.
+    </p>
   </section>
 
   {# ── Delivery (Discord DMs + calendar feed) ────────────────────────── #}
-  <section id="delivery" class="prefs-section">
-    <h2>Delivery</h2>
+  <section class="psec" id="p-deliver">
+    <h3>Delivery</h3>
+    <p class="blurb">Where reminders actually arrive.</p>
 
-    <h3>Discord DMs</h3>
-    {% if user.dm_blocked %}
-    <p class="dim">Your last Discord DM couldn't be delivered — check your Discord privacy
-      settings to allow DMs from server members, then try again.</p>
-    {% endif %}
-    {% if bot_enabled %}
-    <p class="inline">
-      <button hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">Send test DM</button>
-      <span id="dm-test-result" class="dim"></span>
-    </p>
-    {% else %}
-    <p class="dim">The Discord bot isn't running in this environment (dev mode), so DMs can't be tested here.</p>
-    {% endif %}
+    {# DM status pill. No stored last-delivered timestamp exists, so no date is
+       shown (omitted rather than fabricated). #}
+    <div class="statline" style="margin-bottom:.9rem">
+      {% if user.dm_blocked %}
+      <span class="pill p-danger">Discord DMs blocked</span>
+      <span class="clock">Check your Discord privacy settings to allow DMs from server members.</span>
+      {% else %}
+      <span class="pill p-ok">Discord DMs reaching you</span>
+      {% endif %}
+      {% if bot_enabled %}
+      <button class="act" type="button" hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">Send a test DM</button>
+      <span id="dm-test-result" class="clock"></span>
+      {% else %}
+      <span class="clock">Bot not running here (dev mode) — DMs can't be tested.</span>
+      {% endif %}
+    </div>
 
-    <h3>Calendar feed</h3>
-    <p class="dim">Subscribe once in your phone/calendar app and every deadline you have a
-      reminder for stays in sync automatically — no more downloading a fresh .ics per round.</p>
+    {# Calendar status pill. Creation time is not stored, so no "Created …"
+       date is shown. #}
+    <div class="statline">
+      {% if has_calendar_feed or feed_url %}
+      <span class="pill p-ok">Calendar feed active</span>
+      <span class="clock">Subscribe by URL in Google or Apple Calendar.</span>
+      {% else %}
+      <span class="pill p-quiet">No calendar feed</span>
+      {% endif %}
+    </div>
+
     {% if feed_url %}
-    <div class="panel">
-      <p><strong>Your feed link is ready — save it now, it won't be shown again:</strong></p>
-      <p class="inline"><code class="feed-url">{{ feed_url }}</code>
-        <button type="button" class="quiet" data-copy="{{ feed_url }}"
-                onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy</button></p>
-      <p class="dim tiny">Paste this into your calendar app's "subscribe by URL" option (Google
-        Calendar: Settings → Add calendar → From URL. Apple Calendar: File → New Calendar Subscription).</p>
+    <div class="presetcard" style="margin-top:.8rem">
+      <div class="ruleline"><b>Your feed link is ready — save it now, it won't be shown again.</b></div>
+      <p class="inline" style="margin:0"><code class="feed-url">{{ feed_url }}</code>
+        <button type="button" class="act" data-copy="{{ feed_url }}"
+                onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy link</button></p>
+      <span class="clock">Google Calendar: Settings &rarr; Add calendar &rarr; From URL.
+        Apple Calendar: File &rarr; New Calendar Subscription.</span>
     </div>
     {% elif has_calendar_feed %}
-    <p class="dim">Your feed is active. <form class="inline" method="post" action="/me/calendar-feed">
-      <button class="quiet" onclick="return confirm('This invalidates your current feed link — your calendar app will need the new one.')">Regenerate link</button>
-    </form></p>
+    <form class="inline" method="post" action="/me/calendar-feed" style="margin-top:.6rem">
+      <button class="act no" type="submit"
+              onclick="return confirm('This invalidates your current feed link — your calendar app will need the new one.')">Generate a new one</button>
+    </form>
     {% else %}
-    <form method="post" action="/me/calendar-feed"><button>Generate feed link</button></form>
+    <form method="post" action="/me/calendar-feed" style="margin-top:.6rem"><button class="act" type="submit">Generate feed link</button></form>
     {% endif %}
+    <p class="clock" style="margin-top:.6rem; display:block">
+      Generating a new link revokes the old one immediately. Anyone still
+      subscribed to it stops receiving updates.
+    </p>
   </section>
 
   {# ── Account ───────────────────────────────────────────────────────── #}
-  <section id="account" class="prefs-section">
-    <h2>Account</h2>
+  <section class="psec" id="p-account">
+    <h3>Account</h3>
+    <p class="blurb">Signed in with Discord as <b>{{ user.username }}</b>.</p>
 
-    <h3>Setup</h3>
-    <p class="dim">Re-run the guided setup — pick tags to follow, a default preset, and confirm
-      your timezone.</p>
-    {# Branch 6 adds GET /setup; until it merges this link 404s. #}
-    <p><a class="btn quiet" href="/setup">Re-run setup</a></p>
+    {# Non-destructive item: the danger card frame with a neutral border. #}
+    <div class="danger" style="border-color: var(--line); margin-top:0">
+      <div>
+        <div class="t2">Re-run first-time setup</div>
+        <div class="s2">Walks you back through your concerts so you can prune the ones you
+          are not going for and mark what you have already applied to. Nothing is reset —
+          your existing choices are the starting point.</div>
+      </div>
+      <span class="sp"><a class="btn" href="/setup">Run setup</a></span>
+    </div>
 
-    <h3>Delete my account</h3>
-    <p class="dim">Deleting your account removes your personal data — sessions, reminders,
-      presets, tag subscriptions and notifications. Concerts and tags you contributed stay
-      in the shared catalogue with your name removed, so nobody else loses the events they
-      follow.</p>
-    {# Account deletion has no self-serve route yet: service.delete_user is a
-       manual, owner-initiated erasure with no UI binding (invariant: no route
-       calls it). Rather than invent a delete route in this layout task, this is
-       a documented placeholder pointing at the manual request path. #}
-    <p class="dim tiny">To request deletion, contact the site owner — erasure is handled
-      manually for now.</p>
+    {# Destructive item: full danger frame. The button opens a heavy
+       confirmation (dialog.prune -- the same pattern as the concert page's
+       WON/PAID opt-out) that names exactly what goes and what stays before the
+       POST fires. A deliberate second action, not a one-click. The dialog id in
+       the on* handlers is STATIC and the copy is static, so invariant 7 (no
+       user-controlled text in on* handlers) holds. #}
+    <div class="danger" style="margin-top:1rem">
+      <div>
+        <div class="t2">Delete my account</div>
+        <div class="s2">Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed.</div>
+      </div>
+      <span class="sp">
+        <button class="btn warn" type="button"
+                onclick="document.getElementById('deleteAccountConfirm').showModal()">Delete account</button>
+      </span>
+    </div>
+    <dialog id="deleteAccountConfirm" class="prune">
+      <div class="dh">Delete your account?
+        <button type="button" class="x" aria-label="Close"
+                onclick="document.getElementById('deleteAccountConfirm').close()">×</button></div>
+      <p>Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed. This cannot be undone.</p>
+      <div class="da">
+        <button class="btn quiet" type="button"
+                onclick="document.getElementById('deleteAccountConfirm').close()">Keep my account</button>
+        <form method="post" action="/me/delete" style="display:contents">
+          <button class="btn danger" type="submit">Delete my account</button>
+        </form>
+      </div>
+    </dialog>
   </section>
 
   {# ── Editors (admin only) ──────────────────────────────────────────── #}
   {% if user.is_admin %}
-  <section id="editors" class="prefs-section">
-    <h2>Editors</h2>
-    <p class="dim">Discord users allowed to create/edit concerts and tags.
-      Env-managed editors (<code>EDITOR_WHITELIST</code>) can't be removed here — edit <code>.env</code> instead.</p>
-    <ul class="rows">
-      {% for e in editors %}
-      <li>
-        <span>{{ e.username or e.id }} <span class="dim tiny">({{ e.id }})</span>{% if e.env %} <em class="badge">env</em>{% endif %}</span>
-        {% if not e.env %}
-        <form method="post" action="/admin/editors/{{ e.id }}/remove"><button class="x" title="remove editor">×</button></form>
-        {% endif %}
-      </li>
-      {% endfor %}
-      {% if not editors %}<li class="dim">No editors yet.</li>{% endif %}
-    </ul>
-    <form class="inline" method="post" action="/admin/editors">
-      <input name="discord_id" type="number" inputmode="numeric" placeholder="Discord user ID" required>
-      <button>+ Add editor</button>
-    </form>
+  <section class="psec" id="p-admin">
+    <h3>Editors <span class="pill p-quiet">admin only</span></h3>
+    <p class="blurb">Discord users allowed to create and edit concerts, rounds and tags.
+      Env-managed editors (<code>EDITOR_WHITELIST</code>) can't be removed here — edit
+      <code>.env</code> instead.</p>
+    {% for e in editors %}
+    <div class="subrow" style="grid-template-columns: 1fr auto">
+      <span class="nm3">{{ e.username or e.id }} <span class="clock">({{ e.id }})</span>{% if e.env %} <span class="pill p-quiet">from env</span>{% endif %}</span>
+      <span class="sw">
+        {% if e.env %}<span class="clock">cannot be removed here</span>
+        {% else %}<form method="post" action="/admin/editors/{{ e.id }}/remove" style="display:contents"><button class="act no" type="submit" title="Remove editor">Remove</button></form>{% endif %}
+      </span>
+    </div>
+    {% else %}
+    <p class="clock" style="display:block">No editors yet.</p>
+    {% endfor %}
+    <div class="bar">
+      <span class="tally">Whitelisted editors live in the server env and cannot be removed from here.</span>
+      <form class="inline" method="post" action="/admin/editors">
+        <input name="discord_id" type="number" inputmode="numeric" placeholder="Discord user ID" required>
+        <button class="act" type="submit">Add an editor</button>
+      </form>
+    </div>
   </section>
   {% endif %}
 
   </div>
 </div>
+
+<script>
+  // Scrollspy for the preferences rail: light the `.prail` link whose section
+  // is currently in view, and on click for immediate feedback. Pure
+  // addEventListener / IntersectionObserver -- no inline on* handlers
+  // (invariant 7), no framework.
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll(".prail a"));
+    if (!links.length) return;
+    var byId = {};
+    links.forEach(function (a) { byId[a.getAttribute("href").slice(1)] = a; });
+    function activate(id) {
+      links.forEach(function (a) { a.classList.remove("on"); });
+      if (byId[id]) byId[id].classList.add("on");
+    }
+    links.forEach(function (a) {
+      a.addEventListener("click", function () { activate(a.getAttribute("href").slice(1)); });
+    });
+    if ("IntersectionObserver" in window) {
+      var obs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { if (e.isIntersecting) activate(e.target.id); });
+      }, { rootMargin: "-40% 0px -55% 0px", threshold: 0 });
+      document.querySelectorAll(".psec").forEach(function (s) { obs.observe(s); });
+    }
+  })();
+
+  // The Time detection select submits one of the paired hidden forms. Values
+  // are fixed tokens, not user text, so this is safe to key off directly.
+  (function () {
+    var sel = document.getElementById("tz-detect");
+    if (!sel) return;
+    sel.addEventListener("change", function () {
+      var id = sel.value === "follow" ? "tz-follow" : "tz-keep";
+      var form = document.getElementById(id);
+      if (form) form.submit();
+    });
+  })();
+</script>
 {% endblock %}

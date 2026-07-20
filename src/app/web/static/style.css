@@ -1,18 +1,68 @@
-/* dekimasen.app — quiet, print-like, lets the data speak. */
+/* dekimasen.app -- quiet, print-like, lets the data speak.
+   The full token set is ported verbatim from the frozen concept demo
+   (docs/superpowers/demo/dekimasen-demo.html). Light values live on :root
+   AND on :root[data-theme="light"]; dark values live under BOTH the OS media
+   query (unset preference follows the system) and :root[data-theme="dark"]
+   (the header toggle stamps data-theme, which the attribute selector's higher
+   specificity lets win over the media query). */
 :root {
-  --ink: #1b1b20; --paper: #f7f6f2; --dim: #6d6d78;
-  --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e; --line: #dedbd2;
+  --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+  --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
   --accent: #4f46b8;
+  --ok-wash: #e8f2ec; --off-wash: #f7eede; --danger-wash: #f8e8e6;
+  --accent-wash: #eceaf7; --chip: #efede6;
+  --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+    --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+    --accent: #9a92f0;
+    --ok-wash: #1a2a22; --off-wash: #2c2418; --danger-wash: #2e1d1c;
+    --accent-wash: #23204a; --chip: #2a2830;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+  --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+  --accent: #9a92f0; --ok-wash: #1a2a22; --off-wash: #2c2418;
+  --danger-wash: #2e1d1c; --accent-wash: #23204a; --chip: #2a2830;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+}
+:root[data-theme="light"] {
+  --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+  --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+  --accent: #4f46b8; --ok-wash: #e8f2ec; --off-wash: #f7eede;
+  --danger-wash: #f8e8e6; --accent-wash: #eceaf7; --chip: #efede6;
+  --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
 }
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
-  font: 16px/1.6 system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font: 16px/1.6 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  -webkit-font-smoothing: antialiased;
   display: flex; min-height: 100vh; flex-direction: column;
 }
+.num { font-variant-numeric: tabular-nums; }
+/* Visually hidden but still focusable and still submits its value --
+   unlike the `hidden` attribute (or display:none), which drops an element
+   from the tab order entirely. Use for a real form control whose visual
+   stand-in is drawn elsewhere (e.g. the setup pick-tiles' checkbox). */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Sticky header: a full-bleed bar (border + raised ground) with an inner
+   .site-in that caps its width to the content column and lays the row out. */
 header.site {
-  display: flex; align-items: baseline; gap: .75rem;
-  padding: 1.1rem 2rem; border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line); background: var(--raise);
+  position: sticky; top: 0; z-index: 5;
+}
+.site-in {
+  max-width: 72rem; margin: 0 auto; padding: .85rem 1.5rem;
+  display: flex; align-items: center; gap: 1.5rem;
 }
 a.home { display: flex; gap: .6rem; align-items: baseline; text-decoration: none; color: inherit; }
 .mark { font-weight: 700; letter-spacing: .08em; }
@@ -30,10 +80,24 @@ footer a { color: inherit; }
    aria-current="page" -- the styling hangs off that attribute rather than a
    class, so it can never say one thing to a screen reader and another to the
    eye. */
-nav.main { display: flex; gap: 1rem; font-size: .9rem; margin-left: 1.5rem; }
-nav.main a { color: var(--dim); text-decoration: none; }
-nav.main a:hover { color: var(--ink); }
-nav.main a[aria-current="page"] { color: var(--ink); font-weight: 600; }
+/* Pills: a chip-washed hover and active ground. The active item hangs off
+   aria-current="page" so the eye and a screen reader are told the same thing. */
+nav.main { display: flex; gap: .25rem; font-size: .9rem; margin-left: .75rem; }
+nav.main a {
+  color: var(--dim); text-decoration: none; padding: .35rem .7rem;
+  border-radius: 3px; transition: color 150ms ease, background 150ms ease;
+}
+nav.main a:hover { color: var(--ink); background: var(--chip); }
+nav.main a[aria-current="page"] { color: var(--ink); background: var(--chip); font-weight: 550; }
+
+/* Quiet header toggle: same pill silhouette as the nav items. */
+.theme-toggle {
+  font: inherit; font-size: .9rem; cursor: pointer;
+  background: none; border: 0; color: var(--dim);
+  padding: .2rem .5rem; border-radius: 3px;
+  transition: color 150ms ease, background 150ms ease;
+}
+.theme-toggle:hover { color: var(--ink); background: var(--chip); }
 
 nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; font-size: .9rem; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; }
@@ -52,7 +116,7 @@ h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 2.2rem; }
 .concert-list { list-style: none; padding: 0; }
 .concert-list li { border-bottom: 1px solid var(--line); }
 .concert-list a { display: flex; gap: .6rem; align-items: baseline; padding: .8rem .2rem; text-decoration: none; color: inherit; }
-.concert-list a:hover { background: #fffdf8; }
+.concert-list a:hover { background: var(--raise); }
 
 .rows { list-style: none; padding: 0; margin: 0; }
 .rows > li { display: flex; align-items: flex-start; gap: .8rem; padding: .55rem .2rem; border-bottom: 1px solid var(--line); }
@@ -60,12 +124,12 @@ h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 2.2rem; }
 .audit-changes { list-style: none; padding: 0; margin: .2rem 0 0; }
 .kind { color: var(--accent); font-style: normal; font-size: .8em; }
 
-.panel { border: 1px dashed var(--line); border-radius: 8px; padding: .6rem .9rem; margin: 1rem 0; }
+.panel { border: 1px dashed var(--line); border-radius: 3px; padding: .6rem .9rem; margin: 1rem 0; }
 .panel summary, details.edit-round summary { cursor: pointer; color: var(--dim); }
 
 .banner-warn {
   border: 1px solid var(--off);
-  border-radius: 8px;
+  border-radius: 3px;
   padding: .6rem 1rem;
   margin: 0 auto 1rem;
   max-width: 60rem;
@@ -81,7 +145,7 @@ h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 2.2rem; }
 .inline { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; font-size: .9rem; }
 input, select, textarea, button {
   font: inherit; padding: .4rem .55rem; border: 1px solid var(--line);
-  border-radius: 6px; background: #fff; color: var(--ink);
+  border-radius: 3px; background: var(--raise); color: var(--ink);
 }
 button { cursor: pointer; background: var(--ink); color: var(--paper); border-color: var(--ink); }
 button:hover { opacity: .88; }
@@ -95,7 +159,7 @@ button.x:hover { color: var(--danger); opacity: 1; }
    plain inline text. */
 .btn {
   display: inline-flex; align-items: center; gap: .3rem;
-  padding: .35rem .8rem; border-radius: 6px; border: 1px solid var(--ink);
+  padding: .35rem .8rem; border-radius: 3px; border: 1px solid var(--ink);
   background: var(--ink); color: var(--paper); text-decoration: none;
   font-size: .85rem; line-height: 1.3;
 }
@@ -108,11 +172,13 @@ button.x:hover { color: var(--danger); opacity: 1; }
 .taglist { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 .chip {
   display: inline-flex; align-items: center; gap: .25rem;
-  border: 1px solid var(--line); border-radius: 999px;
+  border: 1px solid transparent; border-radius: 999px;
   padding: .1rem .6rem; font-size: .82rem; text-decoration: none; color: var(--ink);
-  background: #fff;
+  background: var(--chip);
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
 }
-.chip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip:hover { border-color: var(--dim); }
+.chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .chip.kind-group { border-style: double; border-width: 3px; }
 .chip.kind-franchise { border-color: var(--accent); }
 .chip.kind-venue { border-color: var(--off); }
@@ -132,26 +198,65 @@ button.x:hover { color: var(--danger); opacity: 1; }
 .tag-section { margin: .4rem 0; }
 .tag-section summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
 .tag-section .taglist { margin: .4rem 0 .6rem; }
-.tag-search { width: 100%; margin: .3rem 0 .6rem; }
+.tag-search { width: 100%; max-width: 26rem; margin: .3rem 0 .6rem; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1rem; }
 .tile {
   display: flex; flex-direction: column; gap: .35rem;
-  border: 1px solid var(--line); border-radius: 10px; padding: .9rem 1rem;
-  background: #fff; text-decoration: none; color: inherit;
+  border: 1px solid var(--line); border-radius: 3px; padding: .9rem 1rem;
+  background: var(--raise); text-decoration: none; color: inherit;
 }
 .tile:hover { border-color: var(--ink); }
+/* Performer leads as an eyebrow above the title (board/peek cards do the
+   same) -- pulled tight against the title so it reads as a label for it
+   rather than a second line of content. */
+.tile .eyebrow { margin-bottom: -.15rem; }
 .tile strong { font-size: 1.02rem; line-height: 1.35; }
-.tile .who { font-size: .88rem; }
 .tile .artists { display: flex; flex-wrap: wrap; gap: .3rem; }
 .tile .when { margin-top: auto; font-size: .8rem; }
-/* One status pill per card, pinned to the bottom so a grid of tiles reads as
-   a column of statuses. `.pill` and its p-ok/p-danger/p-quiet tones are
-   defined once, further down with the Home tokens, and shared. */
-.tile .tile-status { margin-top: .35rem; }
+/* Tag-row minichips: a quick franchise + region glance below the venue/date
+   line (demo .tagrow/.minichip). */
+.tagrow { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .1rem; }
+.minichip {
+  font-size: .7rem; padding: .1rem .4rem; border-radius: 999px;
+  background: var(--chip); color: var(--dim);
+}
+/* One status pill per card. The dotted top border is the demo's
+   `.status-line` divider, separating the pill from whatever sits above it
+   (venue/date, or the tagrow) without a heavier full border. `.pill` and its
+   p-ok/p-danger/p-quiet tones are defined once, further down with the Home
+   tokens, and shared. */
+.tile .status-line {
+  display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+  margin-top: .35rem; padding-top: .5rem; border-top: 1px dotted var(--line);
+}
 /* The round-status facet reuses the sort list's shape -- it is the same kind
    of control (one choice, narrows the grid), just a different axis. */
 .sorts.facets a.on { color: var(--ink); font-weight: 600; }
+/* Sort and round-status facet links get the demo's boxed/pill chrome
+   (`.sorts button`) while staying real <a href> elements -- JS-off must
+   still filter through a plain page load (see discover.html's script
+   comment on the client-side contract). */
+.discover-sorts a {
+  display: inline-block; font-size: .8125rem; padding: .3rem .6rem;
+  border-radius: 3px; border: 1px solid var(--line); background: var(--raise);
+  color: var(--dim); text-decoration: none;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.discover-sorts a:hover { border-color: var(--dim); }
+.discover-sorts a.on { color: var(--ink); border-color: var(--dim); font-weight: 600; }
+/* Per-chip usage counts (demo .chip .n, e.g. "Love Live! 64"). */
+.chip .n { color: var(--dim); font-size: .72em; margin-left: .25em; }
+.chip.on .n { color: rgba(255, 255, 255, .75); }
+/* The main concert search bar and the sidebar tag search share the same
+   input chrome the base `input, select, textarea, button` rule already
+   gives them; this only adds the demo's focus ring and drops the sidebar
+   search's implicit max-width so it reads as a full search bar, not a
+   cramped field. */
+.searchbar input[type=search] { max-width: none; }
+.searchbar input:focus-visible, .filter-search:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
 
 .sentence { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; font-size: .9rem; margin-top: .5rem; }
 .sentence select { padding: .25rem .4rem; }
@@ -171,7 +276,7 @@ button.chip { cursor: pointer; }
 button.quiet { background: none; color: var(--dim); border: 1px solid var(--line); }
 button.quiet:hover { color: var(--ink); border-color: var(--ink); opacity: 1; }
 .rename input { font-weight: 600; border: none; background: transparent; padding-left: 0; }
-.rename input:focus { background: #fff; border: 1px solid var(--line); }
+.rename input:focus { background: var(--raise); border: 1px solid var(--line); }
 .preset-head { gap: .6rem; }
 
 /* multi-pick creation form */
@@ -179,8 +284,8 @@ button.quiet:hover { color: var(--ink); border-color: var(--ink); opacity: 1; }
 .pickrow .taglist { gap: .4rem; }
 .pickrow .taglist:empty { display: none; }
 dialog.picker {
-  border: none; border-radius: 16px; padding: 0;
-  width: min(30rem, 92vw); background: #fff;
+  border: none; border-radius: 3px; padding: 0;
+  width: min(30rem, 92vw); background: var(--raise);
   box-shadow: 0 24px 64px rgba(27, 27, 32, .28);
 }
 dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
@@ -194,18 +299,18 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .picker-body { display: flex; flex-direction: column; gap: 1rem; padding: .75rem 1.5rem 1.5rem; }
 .picker-body input[type=search] {
   width: 100%; background: var(--paper); border: 1px solid transparent;
-  border-radius: 10px; padding: .6rem .9rem;
+  border-radius: 3px; padding: .6rem .9rem;
 }
-.picker-body input[type=search]:focus { outline: none; border-color: var(--line); background: #fff; }
+.picker-body input[type=search]:focus { outline: none; border-color: var(--line); background: var(--raise); }
 .picker-body .taglist { max-height: 44vh; overflow-y: auto; gap: .5rem; padding: .1rem; }
 .picker-body .chip { background: var(--paper); border-color: transparent; padding: .25rem .8rem; }
-.picker-body .chip:hover { border-color: var(--ink); background: #fff; }
+.picker-body .chip:hover { border-color: var(--ink); background: var(--raise); }
 .chip .x { margin-left: .1rem; }
-.chip.on .x { color: var(--paper); }
+.chip.on .x { color: #fff; }
 
 /* Add-buttons are chips, full stop: identical border, background, color, metrics. */
 .chip.add {
-  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  border: 1px solid var(--line); background: var(--raise); color: var(--ink);
   cursor: pointer; font-size: .82rem; border-radius: 999px; padding: .1rem .6rem;
   display: inline-flex; align-items: center; gap: .25rem;
 }
@@ -255,7 +360,7 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
    the one the old form could not express at all. */
 .redit {
   display: grid; gap: .5rem; padding: .7rem .8rem;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--raise);
+  border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
 }
 .redit + .redit { margin-top: .5rem; }
 .redit-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
@@ -271,7 +376,7 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
    among its fields -- it is a fact about the show, not another attribute. */
 .eleg {
   display: grid; gap: .5rem; padding: .7rem .8rem;
-  border: 1px solid var(--line); border-radius: 8px;
+  border: 1px solid var(--line); border-radius: 3px;
 }
 .eleg + .eleg { margin-top: .5rem; }
 .eleg.cancelled { opacity: .6; }
@@ -283,12 +388,16 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 }
 .eleg-fields label { display: grid; gap: .2rem; font-size: .8rem; color: var(--dim); }
 .cancel-toggle { flex: 0 0 auto; }
-.cancel-toggle .chip.on { background: var(--danger); border-color: var(--danger); color: #fff; }
+/* var(--raise), not a hardcoded #fff -- it flips near-white in light mode
+   and near-black in dark, staying legible on this --danger ground either
+   way (unlike the other #fff occurrences here, which sit on the accent
+   purple and stay white in both themes). */
+.cancel-toggle .chip.on { background: var(--danger); border-color: var(--danger); color: var(--raise); }
 
 /* Folds. The summary states its contents, so a closed fold still says what
    is in it rather than only naming itself. */
 details.fold {
-  margin-top: .9rem; border: 1px solid var(--line); border-radius: 8px;
+  margin-top: .9rem; border: 1px solid var(--line); border-radius: 3px;
 }
 details.fold > summary {
   cursor: pointer; padding: .6rem .8rem; font-weight: 600;
@@ -303,7 +412,7 @@ details.fold > summary {
 .danger-row {
   display: flex; flex-wrap: wrap; align-items: center; gap: .8rem;
   margin-top: 2rem; padding: .8rem 1rem;
-  border: 1px solid var(--danger); border-radius: 8px;
+  border: 1px solid var(--danger); border-radius: 3px;
 }
 .danger-row p { margin: .15rem 0 0; max-width: 44rem; }
 .danger-row-actions { margin-left: auto; display: flex; gap: .5rem; flex-wrap: wrap; }
@@ -321,26 +430,16 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 
 .countdown { display: inline-block; }
 
-/* Header meta grid ("dt"/"dd" summary), mirrors the reference site's layout */
-.meta-grid { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .8rem; margin: .4rem 0; font-size: .9rem; }
-.meta-grid dt { color: var(--dim); }
-.meta-grid dd { margin: 0; }
-
 .feed-url {
-  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 3px;
   padding: .3rem .5rem; word-break: break-all; font-size: .85rem;
 }
 
 /* -- Home ("where do I stand") -------------------------------------------
-   An evolution of the tokens above, not a replacement: --ink/--paper/--dim/
-   --ok/--off/--danger/--line/--accent all keep their meanings and these only
-   add the raised surface and the washes the status pills need. */
-:root {
-  --raise: #fffefb; --chip: #efede6;
-  --ok-wash: #e8f2ec; --off-wash: #f7eede; --danger-wash: #f8e8e6;
-  --accent-wash: #eceaf7;
-  --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
-}
+   --raise, --chip, the washes and --shadow now live in the global token set
+   at the top (both theme directions). A local :root here would re-declare the
+   light values AFTER the dark @media block and silently clobber dark mode, so
+   it is gone -- these rules just consume the tokens. */
 
 .eyebrow {
   font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
@@ -378,9 +477,14 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .next .what { font-size: 1.15rem; font-weight: 600; }
 .next .what a { color: inherit; text-decoration: none; }
 .next .what a:hover { text-decoration: underline; }
-.next .when { color: var(--dim); font-size: .875rem; margin-top: .2rem; }
+.next .when { color: var(--dim); font-size: .875rem; margin-top: .2rem; line-height: 1.35; }
+/* Two-line dual time: bold labelled weekday line over the JST/local line. */
+.next .when b { display: block; color: var(--ink); font-weight: 600; }
 .next .countdown { display: block; text-align: right; }
 .next .countdown .big { font-size: 1.75rem; font-weight: 650; line-height: 1.2; color: var(--danger); }
+.next .countdown .unit {
+  font-size: .75rem; color: var(--dim); letter-spacing: .08em; text-transform: uppercase;
+}
 
 /* The board */
 .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: .875rem; }
@@ -397,22 +501,31 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .col .more { font-size: .8125rem; color: var(--accent); text-decoration: none; font-weight: 550; }
 .col .more:hover { text-decoration: underline; }
 
-.board .card {
+/* .peek reuses the exact same card: Home's peek grid is a taste of the
+   catalogue rendered with the board's own card shape (see home.html). */
+.board .card, .peek .card {
   background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
   padding: .8rem .85rem; display: grid; gap: .45rem; box-shadow: var(--shadow);
   text-decoration: none; color: inherit;
   transition: transform 160ms ease, border-color 160ms ease;
 }
-.board .card:hover { transform: translateY(-1px); border-color: var(--dim); }
+.board .card:hover, .peek .card:hover { transform: translateY(-1px); border-color: var(--dim); }
+/* Money you could still lose gets a visible accent -- the same urgency the
+   pill communicates, echoed as a left border. Keys off data-column so no
+   extra class is needed on the card itself. */
+.board .card[data-column="won"] { border-left: 3px solid var(--accent); }
 /* The eyebrow: franchise/group above the title, or artist chips when that is
-   all the concert has. Pulled tight against the title so it reads as a label
-   for it rather than as a second line of content. */
-.board .card .who { font-size: .75rem; color: var(--dim); margin-bottom: -.25rem; }
-.board .card .artists { display: flex; flex-wrap: wrap; gap: .25rem; }
-.board .card .title { font-weight: 600; line-height: 1.35; }
-.board .card .venue { font-size: .8125rem; color: var(--dim); }
-.board .card .foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.board .card .clock { font-size: .75rem; color: var(--dim); }
+   all the concert has. Typography comes from the shared .eyebrow utility;
+   this just pulls it tight against the title so it reads as a label for it
+   rather than as a second line of content. */
+.board .card .eyebrow, .peek .card .eyebrow { margin-bottom: -.25rem; }
+.board .card .artists, .peek .card .artists { display: flex; flex-wrap: wrap; gap: .25rem; }
+.board .card .title, .peek .card .title { font-weight: 600; line-height: 1.35; }
+.board .card .venue, .peek .card .venue { font-size: .8125rem; color: var(--dim); }
+.board .card .foot, .peek .card .foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.board .card .clock { font-size: .75rem; color: var(--dim); line-height: 1.3; text-align: right; }
+/* Two-line dual time: bold weekday+day+month over the JST/local line. */
+.board .card .clock b { display: block; color: var(--ink); font-weight: 600; }
 
 .ladder { display: grid; margin-top: .3rem; }
 .rung {
@@ -447,7 +560,9 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .rowhead span:nth-child(5) { text-align: right; }
 .deadline-rows .row { align-items: center; padding: .65rem .1rem; }
 .deadline-rows .row:hover { background: var(--raise); }
-.row .when-c { font-size: .8125rem; color: var(--dim); }
+.row .when-c { font-size: .8125rem; color: var(--dim); line-height: 1.35; }
+/* Two-line dual time: bold weekday+day+month over a smaller JST/local line. */
+.row .when-c b { display: block; color: var(--ink); font-weight: 600; }
 .row .title-c { font-weight: 550; line-height: 1.35; }
 .row .title-c a { color: inherit; text-decoration: none; }
 .row .title-c a:hover { text-decoration: underline; }
@@ -487,13 +602,25 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .teaser h2 { margin: .3rem 0 .35rem; font-size: 1.1rem; font-weight: 650; }
 .teaser p { margin: 0; color: var(--dim); font-size: .875rem; max-width: 52ch; }
 
+.peek { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-top: 1.25rem; }
+.peek .card { gap: .3rem; }
+
+.foot-note {
+  margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+  color: var(--dim); font-size: .8125rem; max-width: 66ch;
+}
+.foot-note b { color: var(--ink); font-weight: 600; }
+
 @media (max-width: 1024px) {
   .rowhead, .deadline-rows .row { grid-template-columns: 6.5rem 12rem 1fr 14rem; }
   .rowhead span:nth-child(4), .row .act-c { display: none; }
 }
-@media (max-width: 960px) { .board { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 960px) {
+  .board { grid-template-columns: repeat(2, 1fr); }
+  .peek { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 600px) {
-  .board { grid-template-columns: 1fr; }
+  .board, .peek { grid-template-columns: 1fr; }
   .next, .teaser { grid-template-columns: 1fr; }
   .next .countdown { text-align: left; }
   .rowhead { display: none; }
@@ -531,6 +658,21 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .chead .links a:hover { text-decoration: underline; }
 .chead .bar2 { align-items: center; margin-top: .3rem; }
 
+/* Following toggle: shipped with .btn's box model (padding/radius/border)
+   already applied but zero rules of its own, so it rendered as a bare black
+   .btn regardless of state. A green "covered" pill with a check glyph when
+   on; the unfollowed state stays dim/outlined via .btn.quiet, restated here
+   too so the treatment holds even if .quiet is ever dropped from it. */
+.follow { gap: .45rem; }
+.follow.on {
+  border-color: var(--ok); background: var(--ok-wash); color: var(--ok);
+}
+.follow.on::before { content: "\2713"; font-weight: 700; }
+.follow.on:hover { opacity: .92; }
+.follow:not(.on) { border-color: var(--line); background: transparent; color: var(--dim); }
+/* The following-toggle's explanatory caption, next to the button. */
+.clock { font-size: .8125rem; color: var(--dim); }
+
 /* Performers are the reason someone is on this page; a nine-member group
    mixed into a generic chip row is unreadable. The label names the source
    because these are the members MATERIALISED at attach time (invariant 3),
@@ -548,9 +690,19 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .performers .chips { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
 .performers .chip {
   background: var(--chip); border-color: transparent;
-  display: inline-flex; align-items: center; line-height: 1.5; padding: .22rem .6rem;
+  display: inline-flex; align-items: center; justify-content: center; text-align: center;
+  line-height: 1.5; padding: .22rem .6rem;
 }
 .performers .chip.grp { background: var(--accent); color: #fff; font-weight: 650; }
+/* No eventernote link yet -- dimmed rather than a dead link (see the
+   markup: these render as a plain <span>, never an <a>). */
+.performers .chip.nolink { opacity: .75; }
+/* Linked performer chips get a hover/focus ground so they read as
+   clickable -- white-on-accent here is correct in both themes (accent
+   purple stays dark enough for white text in light and dark mode alike). */
+.performers a.chip { text-decoration: none; transition: background 150ms ease, color 150ms ease; }
+.performers a.chip:hover, .performers a.chip:focus-visible { background: var(--accent); color: #fff; }
+.performers a.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* "Next for you": the nearest moment on THIS concert that wants the reader.
    Accent rather than the danger red Home's "Closes next" uses -- that one is
@@ -607,25 +759,95 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   .standing { grid-template-columns: 1fr; }
 }
 
-/* Preferences: left-rail layout (built once here). */
-.prefs-rail { position: sticky; top: 1rem; }
-.prefs-rail a { padding: .15rem 0; font-size: .9rem; }
-.prefs-section { scroll-margin-top: 1rem; padding-bottom: 1.4rem; border-bottom: 1px solid var(--line); margin-bottom: 1.4rem; }
-.prefs-section:last-child { border-bottom: none; }
-.prefs-section > h2 { margin-top: 0; }
-@media (max-width: 760px) { .prefs-rail { position: static; flex-direction: row; flex-wrap: wrap; gap: .8rem; } }
-/* ── Tags page redesign: counted chips, regioned sections, tag dialogs ──
-   Ported from the refactor concept. A few wash tints the base palette does
-   not carry yet are declared here rather than at the top, so the block is
-   self-contained. */
-:root {
-  --raise: #fffefb; --chip-bg: #efede6;
-  --accent-wash: #eceaf7; --ok-wash: #e8f2ec; --off-wash: #f7eede;
+/* ── Preferences: the demo's left-rail vocabulary ──────────────────────
+   Ported from dekimasen-demo.html (.plyt/.prail/.psec/.subrow/.swb/
+   .presetcard/.ruleline/.statline). The rail is sticky with an active-section
+   indicator; the JS that toggles `.on` lives in preferences.html. Washes and
+   radii come from the global token layer. */
+.plyt { display: grid; grid-template-columns: 13rem 1fr; gap: 2.5rem; margin-top: 1.5rem; }
+.prail { align-content: start; display: grid; gap: .1rem; position: sticky; top: 4.5rem; }
+.prail a {
+  text-decoration: none; color: var(--dim); font-size: .875rem; font-weight: 550;
+  padding: .4rem .6rem; border-radius: 3px; border-left: 2px solid transparent;
 }
+.prail a:hover { color: var(--ink); background: var(--chip); }
+.prail a.on { color: var(--ink); border-left-color: var(--accent); background: var(--chip); }
+
+.psec { padding-bottom: 2.5rem; margin-bottom: 2.5rem; border-bottom: 1px solid var(--line); }
+.psec:last-child { border-bottom: 0; }
+.psec > h3 { margin: 0 0 .3rem; font-size: 1.05rem; font-weight: 650; letter-spacing: -.01em; }
+.psec > .blurb { margin: 0 0 1.1rem; color: var(--dim); font-size: .875rem; max-width: 62ch; }
+
+/* A subscription row states its consequence: following a tag subscribes you to
+   every future concert carrying it, so "16 concerts, 3 upcoming" is the number
+   that makes the toggles meaningful. */
+.subrow {
+  display: grid; grid-template-columns: 1fr 9rem 14rem; gap: 1rem; align-items: center;
+  padding: .6rem .1rem; border-bottom: 1px solid var(--line);
+}
+.subrow:first-of-type { border-top: 1px solid var(--line); }
+.subrow .nm3 { font-weight: 550; display: flex; align-items: center; gap: .5rem; }
+.subrow .cnt { font-size: .8125rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+.subrow .cnt b { color: var(--ink); font-weight: 600; }
+.subrow .sw { display: flex; gap: .35rem; justify-content: flex-end; }
+.swb {
+  font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
+  padding: .22rem .5rem; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--raise); color: var(--dim);
+}
+.swb[aria-pressed="true"] { color: var(--ok); border-color: var(--ok); background: var(--ok-wash); }
+.swb:hover { color: var(--ink); border-color: var(--dim); }
+.swb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.presetcard {
+  border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+  padding: .85rem .95rem; display: grid; gap: .5rem;
+}
+.presetcard + .presetcard { margin-top: .7rem; }
+.presetcard .ph { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.presetcard .ph input.nm4 { font-weight: 650; font: inherit; border: 1px solid transparent; background: transparent; padding: .1rem .2rem; }
+.presetcard .ph input.nm4:hover, .presetcard .ph input.nm4:focus { border-color: var(--line); background: var(--paper); }
+.presetcard .ph .sp { margin-left: auto; display: flex; gap: .35rem; }
+.ruleline { font-size: .8125rem; color: var(--dim); display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.ruleline b { color: var(--ink); font-weight: 600; }
+
+.statline { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; font-size: .875rem; }
+
+/* General field wrapper (the tag dialog scopes its own; Time needs a page one). */
+.fld { display: grid; gap: .25rem; }
+.fld > span { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+
+/* The danger-card frame (Account items). Shared with the reveal/other pages;
+   `button.danger` above is a different, button-only rule and does not collide. */
+.danger {
+  margin-top: 2.5rem; border: 1px solid var(--danger); border-radius: 3px;
+  padding: .9rem 1rem; display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+}
+.danger .t2 { font-weight: 600; font-size: .9rem; }
+.danger .s2 { color: var(--dim); font-size: .8125rem; max-width: 62ch; }
+.danger .sp { margin-left: auto; display: flex; gap: .5rem; }
+
+@media (max-width: 860px) {
+  .plyt { grid-template-columns: 1fr; gap: 1.25rem; }
+  .prail { position: static; grid-auto-flow: column; overflow-x: auto; }
+  .subrow { grid-template-columns: 1fr; gap: .3rem; }
+  .subrow .sw { justify-content: flex-start; }
+}
+/* ── Tags page redesign: counted chips, regioned sections, tag dialogs ──
+   Ported from the refactor concept. Its washes now come from the global token
+   set; only the legacy --chip-bg alias remains, pointed at the themed --chip so
+   these chips follow dark mode without re-declaring light values. */
+:root { --chip-bg: var(--chip); }
 
 .tags-head { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
 .tags-head .note { font-size: .85rem; }
 .tags-head .note strong { color: var(--ink); font-weight: 600; }
+/* Discover's count summary, next to the h1 -- same .note idiom (dim,
+   strong picks out the headline number) as .head .note and .tags-head
+   .note above, scoped to .toolbar since neither of those is an ancestor
+   here. */
+.toolbar .note { color: var(--dim); font-size: .85rem; }
+.toolbar .note strong { color: var(--ink); font-weight: 600; }
 .tags-head .btn { margin-left: auto; }
 
 .tsec { margin-top: 2rem; }
@@ -645,10 +867,6 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 }
 .grow2 + .grow2 { margin-top: .35rem; }
 .memb { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; }
-.eyebrow {
-  font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650;
-}
 .region-label { width: 6rem; flex: none; }
 
 .tchip {
@@ -666,8 +884,8 @@ span.tchip { cursor: default; }
 
 /* ── per-tag edit dialog + new-tag dialog ── */
 dialog.tagdlg {
-  border: 1px solid var(--line); border-radius: 8px; background: var(--raise);
-  color: var(--ink); padding: 0; width: min(34rem, 92vw);
+  border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+  color: var(--ink); padding: 0; width: min(34rem, 92vw); box-shadow: var(--shadow);
 }
 dialog.tagdlg::backdrop { background: rgba(27, 27, 32, .45); }
 dialog.tagdlg .dh {
@@ -690,7 +908,7 @@ dialog.tagdlg .fld .plain { text-transform: none; letter-spacing: 0; font-weight
 dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 
 .usage {
-  display: flex; gap: 1.5rem; padding: .6rem .75rem; border-radius: 6px;
+  display: flex; gap: 1.5rem; padding: .6rem .75rem; border-radius: 3px;
   background: var(--paper); border: 1px solid var(--line);
 }
 .usage div { text-align: center; }
@@ -699,12 +917,6 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
   color: var(--dim); font-weight: 650;
 }
-
-.pill {
-  font-size: .68rem; font-weight: 650; letter-spacing: .04em;
-  padding: .15rem .45rem; border-radius: 4px; border: 1px solid currentColor;
-}
-.pill.p-quiet { color: var(--dim); }
 
 .kindpick { display: flex; gap: .35rem; flex-wrap: wrap; }
 .kindpick button {
@@ -718,7 +930,7 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 
 .dupe {
   display: none; gap: .5rem; align-items: flex-start; padding: .6rem .7rem;
-  border-radius: 6px; background: var(--off-wash); border: 1px solid var(--off);
+  border-radius: 3px; background: var(--off-wash); border: 1px solid var(--off);
   color: var(--off); font-size: .8125rem;
 }
 .dupe.show { display: flex; }
@@ -726,15 +938,22 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 
 .upgradebox {
   border-left: 3px solid var(--accent); background: var(--accent-wash);
-  padding: .6rem .75rem; border-radius: 6px; display: grid; gap: .45rem;
+  padding: .6rem .75rem; border-radius: 3px; display: grid; gap: .45rem;
 }
 .upgradebox .u1 { font-size: .8125rem; }
 .upgradebox .u1 b { font-weight: 650; }
-.upgradebox a { color: var(--accent); font-size: .8125rem; justify-self: start; }
+/* Retroactive-apply reads as a button (.btn.quiet), not an underlined text
+   link -- .upgradebox is a grid, so the link still needs justify-self to
+   avoid stretching to the row's full width. */
+.upgradebox a.btn { justify-self: start; }
 
 .btn.warn { background: none; color: var(--danger); border-color: var(--danger); }
 .btn.warn:hover { opacity: .88; }
-.df .btn.warn { margin-left: auto; }
+/* Delete tag is a real POST, so it is wrapped in its own <form> (the demo's
+   button has no form -- it is JS-only). .df is a flex row, so the actual
+   flex item pushed right must be the FORM, not the button nested inside it;
+   margin-left: auto on the button alone has no effect. */
+.df form { margin-left: auto; }
 
 /* ── First-run capture flow (/setup) ─────────────────────────────────────
    Ported from the setup concept. Tile styling hangs off :has(input:checked)
@@ -744,7 +963,7 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .steps { display: flex; gap: .4rem; align-items: center; margin: 1.5rem 0 1.25rem; flex-wrap: wrap; }
 .stepdot {
   font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 650;
-  color: var(--dim); padding: .25rem .6rem; border-radius: 6px; border: 1px solid var(--line);
+  color: var(--dim); padding: .25rem .6rem; border-radius: 3px; border: 1px solid var(--line);
 }
 .stepdot.on { color: var(--ink); border-color: var(--ink); }
 .stepdot.done { color: var(--ok); border-color: var(--ok); }
@@ -759,13 +978,18 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 }
 .pick .tile {
   position: relative; text-align: left; font: inherit; color: inherit;
-  background: var(--raise); border: 1px solid var(--line); border-radius: 6px;
+  background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
   padding: .85rem .9rem .8rem; cursor: pointer; display: grid; gap: .35rem;
   box-shadow: var(--shadow); flex-direction: initial;
   transition: opacity 160ms ease, border-color 160ms ease,
               background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 .pick .tile:hover { transform: translateY(-1px); border-color: var(--dim); }
+/* Keyboard-operable: the checkbox is visually hidden (not display:none/
+   `hidden`, which drops it from the tab order entirely) so Tab still reaches
+   it and it still submits its name/value on toggle. The tile shows a visible
+   focus ring so a keyboard user can see which tile Tab landed on. */
+.pick .tile:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* ON: lit -- an accent-washed ground and a solid ok edge, so a kept tile
    reads as claimed rather than merely default. */
 .pick .tile:has(input:checked) { border-color: var(--ok); background: var(--ok-wash); }
@@ -781,7 +1005,9 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   border: 1.5px solid var(--line); color: transparent; background: transparent;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
-.pick .tile:has(input:checked) .tick { background: var(--ok); border-color: var(--ok); color: #fff; }
+/* var(--raise), not a hardcoded #fff -- see the .cancel-toggle .chip.on
+   comment above; this sits on the --ok ground, same reasoning. */
+.pick .tile:has(input:checked) .tick { background: var(--ok); border-color: var(--ok); color: var(--raise); }
 .pick .tile .who-t {
   font-size: .68rem; letter-spacing: .08em; text-transform: uppercase;
   color: var(--dim); font-weight: 650;
@@ -793,6 +1019,15 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   padding-top: .45rem; border-top: 1px dotted var(--line);
 }
 .pick .tile .rnd b { color: var(--ink); font-weight: 600; }
+/* The round's JST/local time on its own line under the labelled anchor. */
+.pick .tile .rnd .rt { display: block; color: var(--dim); }
+
+/* My reminders rows: each row sets grid-template-columns inline but never
+   display:grid, and .deadline-rows (the only other selector granting it) is
+   not an ancestor here -- so the label and Remove button stacked instead of
+   aligning left/right. Scoped to #rules rather than reusing .deadline-rows,
+   which drags in header-row assumptions this list does not have. */
+#rules .row { display: grid; align-items: center; gap: .5rem; }
 
 .bar {
   display: flex; align-items: center; gap: .75rem; margin-top: 1.5rem;
@@ -800,6 +1035,9 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 }
 .bar .tally { color: var(--dim); font-size: .875rem; margin-right: auto; }
 .bar .tally b { color: var(--ink); font-weight: 650; }
+/* "Add a reminder" reveal (My reminders, concert page): a details.fold sized
+   to sit inline in the bar rather than stacking with its usual block margin. */
+.bar details.fold { margin-top: 0; flex: 0 0 auto; }
 
 .reveal { text-align: center; padding: 3rem 0 1rem; }
 .reveal .eyebrow {
@@ -810,7 +1048,19 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .tallies { display: flex; gap: 2.5rem; justify-content: center; margin: 2rem 0; flex-wrap: wrap; }
 .tallies div { text-align: center; }
 .tallies .n { font-size: 1.8rem; font-weight: 650; letter-spacing: -.02em; }
+/* The next-deadline tile's dual JST+local clock (invariant 1), one size
+   down from `.n` so it never overflows the tile the way the full one-line
+   dual string used to. */
+.tallies .stat { font-size: .72rem; color: var(--dim); margin-top: .1rem; }
 .tallies .l {
   font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
   color: var(--dim); font-weight: 650;
 }
+
+/* The step tracker's escape link back to Preferences (demo's `.head .more`,
+   scoped here to `.steps` since the app has no matching `.head` wrapper). */
+.steps .more {
+  margin-left: auto; font-size: .8125rem; color: var(--accent);
+  text-decoration: none; font-weight: 550;
+}
+.steps .more:hover { text-decoration: underline; }

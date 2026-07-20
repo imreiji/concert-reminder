@@ -26,14 +26,6 @@
       {% for t in cf + cv %}<span class="chip kind-{{ t.kind.value }}">{{ t.name }}</span>{% endfor %}
     </p>
     {% endif %}
-    {% if concert.title_en or concert.organizer or concert.categories or concert.performers_text %}
-    <dl class="meta-grid">
-      {% if concert.title_en %}<dt>Title (EN)</dt><dd>{{ concert.title_en }}</dd>{% endif %}
-      {% if concert.organizer %}<dt>Artist / organizer</dt><dd>{{ concert.organizer }}</dd>{% endif %}
-      {% if concert.categories %}<dt>Categories</dt><dd>{{ concert.categories }}</dd>{% endif %}
-      {% if concert.performers_text %}<dt>Performers</dt><dd>{{ concert.performers_text.replace('\n', ', ') }}</dd>{% endif %}
-    </dl>
-    {% endif %}
     {% if concert.notes %}<p class="dim">{{ concert.notes }}</p>{% endif %}
     {#- Each link names its destination. "source" said nothing; the source is
         ramen.events, which PR #39 made actually populate on import. -#}
@@ -84,8 +76,8 @@
       {%- else %}— {{ ca | length }} performer{{ "" if ca | length == 1 else "s" }}{% endif %}</span>
     </div>
     <div class="chips">
-      {% for g in cg %}{% if g.eventernote_url %}<a class="chip grp" href="{{ g.eventernote_url }}" target="_blank" rel="noopener">{{ g.name }}</a>{% else %}<span class="chip grp">{{ g.name }}</span>{% endif %}{% endfor %}
-      {% for a in ca %}{% if a.eventernote_url %}<a class="chip" href="{{ a.eventernote_url }}" target="_blank" rel="noopener">{{ a.name }}</a>{% else %}<span class="chip">{{ a.name }}</span>{% endif %}{% endfor %}
+      {% for g in cg %}{% if g.eventernote_url %}<a class="chip grp" href="{{ g.eventernote_url }}" target="_blank" rel="noopener">{{ g.name }}</a>{% else %}<span class="chip grp nolink" title="No eventernote link yet">{{ g.name }}</span>{% endif %}{% endfor %}
+      {% for a in ca %}{% if a.eventernote_url %}<a class="chip" href="{{ a.eventernote_url }}" target="_blank" rel="noopener">{{ a.name }}</a>{% else %}<span class="chip nolink" title="No eventernote link yet">{{ a.name }}</span>{% endif %}{% endfor %}
     </div>
   </div>
   {% endif %}

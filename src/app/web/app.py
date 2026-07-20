@@ -13,7 +13,7 @@ from app.config import settings
 from app.db.models import User
 from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
 from app.db.session import get_session
-from app.domain.timezones import fmt_dual, utc_to_jst
+from app.domain.timezones import fmt_day_month, fmt_dual, fmt_dual_lines, utc_to_jst
 from app.ops import run_checks
 from app.scheduler import heartbeat
 from app.web import auth
@@ -34,7 +34,9 @@ from app.web.routes import welcome as welcome_routes
 _here = Path(__file__).parent
 templates = Jinja2Templates(directory=_here / "templates")
 templates.env.globals["dual"] = fmt_dual        # {{ dual(dt, tz) }}
+templates.env.globals["dual_lines"] = fmt_dual_lines  # dual_lines(dt, tz) -> (date, time)
 templates.env.globals["jst"] = utc_to_jst       # {{ jst(dt).strftime(...) }}
+templates.env.globals["day_month"] = fmt_day_month  # {{ day_month(dt) }} -> "12 Oct"
 templates.env.globals["deadline_label"] = lambda anchor: LABEL_BY_ANCHOR[anchor]
 templates.env.globals["round_kind_label"] = lambda kind: LABEL_BY_ROUND_KIND[kind]
 
@@ -135,7 +137,10 @@ def create_app() -> FastAPI:
         number of rows on the page."""
         from app.db.service import (
             board_cards,
+            discover_peek,
+            discover_statuses,
             discoverable_concert_count,
+            discoverable_open_round_count,
             my_deadline_rows,
             tracked_concert_ids,
         )
@@ -174,7 +179,15 @@ def create_app() -> FastAPI:
                 ),
                 # What /discover would actually LIST, not every Concert row.
                 "catalogue_count": await discoverable_concert_count(session),
+                # The teaser's "N with a round still open" clause.
+                "open_round_count": await discoverable_open_round_count(session),
             }
+            # The peek grid: a taste of the catalogue below the teaser,
+            # excluding what's already on the board above it. Same card shape
+            # /discover renders, via the same discover_statuses pill.
+            peek_concerts = await discover_peek(session, tracked, limit=4)
+            ctx["peek_concerts"] = peek_concerts
+            ctx["peek_statuses"] = await discover_statuses(session, peek_concerts, user.id)
         return templates.TemplateResponse(request, "home.html", ctx)
 
     return app

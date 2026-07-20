@@ -172,15 +172,23 @@ async def callback(
     return RedirectResponse("/welcome" if is_new_user else "/")
 
 
-@router.get("/logout")
-async def logout(request: Request, db: AsyncSession = Depends(get_session)) -> RedirectResponse:
+async def revoke_session(request: Request, db: AsyncSession) -> None:
+    """Drop the cookie's session pointer and mark its DB row revoked so a
+    replayed cookie is dead. Shared by logout and account deletion; the caller
+    commits. Safe when the row is already gone -- delete_user's cascade removes
+    the WebSession, and validate_web_session then simply returns None."""
     sid = request.session.pop("sid", None)
     request.session.pop("user", None)
     if sid:
         row = await validate_web_session(db, sid)
         if row is not None:
             row.revoked_at = datetime.now(UTC)  # server-side kill: replays are dead
-            await db.commit()
+
+
+@router.get("/logout")
+async def logout(request: Request, db: AsyncSession = Depends(get_session)) -> RedirectResponse:
+    await revoke_session(request, db)
+    await db.commit()
     return RedirectResponse("/")
 
 

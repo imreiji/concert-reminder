@@ -51,12 +51,17 @@
   <span>{{ status_pill(row.outcome) }}</span>
   <span class="nm">{{ r.label }}<em>{% if r.label_en %}{{ r.label_en }} · {% endif %}{{ round_kind_label(r.kind) }}</em></span>
   <span class="dts">
-    {% if row.primary_anchor %}<b>{{ deadline_label(row.primary_anchor) | capitalize }} {{ dual(row.primary_at_utc, tz) }}</b>{% endif %}
+    {# The leading moment as the demo's two lines: a bold weekday+day+month
+       (with its anchor label) over a smaller JST/local time line. #}
+    {% if row.primary_anchor %}{% set pl = dual_lines(row.primary_at_utc, tz) %}<b>{{ deadline_label(row.primary_anchor) | capitalize }} {{ pl[0] }}</b><span class="more">{{ pl[1] }}</span>{% endif %}
     {% for anchor, ts in [
          ("opens", r.opens_at_utc), ("closes", r.closes_at_utc),
          ("results", r.results_at_utc), ("payment", r.payment_deadline_at_utc)] %}
       {% if ts is not none and anchor != lead %}
-      <span class="more">{{ deadline_label(anchor) | capitalize }} {{ dual(ts, tz) }}</span>
+      {# Demoted moments stay one compact dual line each (JST first, invariant
+         1) rather than the flat ISO string the old fmt_dual produced. #}
+      {% set ml = dual_lines(ts, tz) %}
+      <span class="more">{{ deadline_label(anchor) | capitalize }} {{ ml[0] }} · {{ ml[1] }}</span>
       {% endif %}
     {% endfor %}
     {% if r.notes %}<span class="more">{{ r.notes }}</span>{% endif %}
@@ -93,7 +98,7 @@
     <div>
       <div class="l">Next for you</div>
       <div class="w">{{ next_row.round_.label }}{% if next_row.primary_anchor %} — {{ deadline_label(next_row.primary_anchor) }}{% endif %}</div>
-      <div class="s">{% if next_row.primary_at_utc %}{{ dual(next_row.primary_at_utc, tz) }}{% else %}No date announced yet{% endif %}</div>
+      <div class="s num">{% if next_row.primary_at_utc %}{% set sl = dual_lines(next_row.primary_at_utc, tz) %}{{ sl[0] }} {{ sl[1] }}{% else %}No date announced yet{% endif %}</div>
     </div>
     {{ status_pill(next_row.outcome) }}
   </div>
