@@ -249,6 +249,66 @@ async def test_commit_creates_concert_days_and_rounds(client):
     assert len(rounds) == 2
 
 
+async def test_commit_binds_a_round_to_multiple_legs(client):
+    """The preview's leg chips let one round apply to SEVERAL legs -- an
+    expression the old flat form had no field for. Each day carries a
+    client-side `day_key`; a round's `round_legs` value references those keys,
+    and import_commit resolves them to the real ConcertDay ids the flush hands
+    out, exactly like create_concert (key_to_day_id + parse_round_legs)."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "Two Leg Tour",
+            "day_key": ["d0", "d1"],
+            "day_label": ["Osaka", "Tokyo"],
+            "day_starts_at": ["2027-01-23T17:00", "2027-01-24T15:30"],
+            "round_label": ["Nationwide lottery"],
+            "round_kind": ["lottery_round"],
+            "round_opens_at": ["2026-10-14T12:00"],
+            "round_closes_at": ["2026-11-08T23:59"],
+            "round_results_at": [""],
+            "round_payment_at": [""],
+            "round_url": [""],
+            "round_legs": ["d0 d1"],
+        },
+    )
+    assert r.status_code == 303
+    days = await _all(client.db, ConcertDay)
+    rounds = await _all(client.db, Round)
+    assert len(rounds) == 1
+    assert rounds[0].applies_to is not None
+    assert set(rounds[0].applies_to) == {d.id for d in days}
+
+
+async def test_commit_round_with_no_legs_is_all_legs(client):
+    """A round whose chips select nothing binds to no specific leg --
+    applies_to stays None (the all-legs / "General" convention), matching
+    apply_round_fields and what concert_round_rows reads."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "Whole Event Round",
+            "day_key": ["d0"],
+            "day_label": ["Day 1"],
+            "day_starts_at": ["2027-01-23T17:00"],
+            "round_label": ["Fan club presale"],
+            "round_kind": ["lottery_round"],
+            "round_opens_at": ["2026-10-14T12:00"],
+            "round_closes_at": ["2026-11-08T23:59"],
+            "round_results_at": [""],
+            "round_payment_at": [""],
+            "round_url": [""],
+            "round_legs": [""],
+        },
+    )
+    assert r.status_code == 303
+    rounds = await _all(client.db, Round)
+    assert len(rounds) == 1
+    assert rounds[0].applies_to is None
+
+
 async def test_commit_tolerates_blank_trailing_rows(client):
     """The JS lets an editor add then not fill a row -- a fully blank row
     from the repeatable UI shouldn't become a junk day/round."""

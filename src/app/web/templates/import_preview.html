@@ -1,84 +1,190 @@
 {% extends "base.html" %}
 {% block title %}review import — dekimasen.app{% endblock %}
 {% block content %}
-<h1>Review draft</h1>
-<p class="dim">Parsed from <a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_url }}</a>.
-  Nothing is saved yet — edit anything below, then submit.</p>
+{#- The parsed draft on the editor's card/chip vocabulary, the SAME shape as
+    concert_new.html -- each parsed day an `.eleg` card, each parsed round a
+    `.redit` card whose leg chips say which days it covers. Pre-populated from
+    the ramen.events parse, but otherwise identical to manual creation, so the
+    one commit path (import_commit) binds legs exactly as create_concert does.
+
+    Parsed rounds carry no leg information, so each starts with NO chip
+    selected -- the all-legs / whole-event convention (applies_to None). Each
+    parsed day gets a stable `day_key` ("d0", "d1", ...) the round chips
+    reference; import_commit resolves those to real ids after the days flush. -#}
+<div class="lede">
+  <h1>Review draft</h1>
+  <p>Parsed from
+    <a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_url }}</a>.
+    Edit anything below, then create the concert.</p>
+</div>
+
+<div class="callout info">
+  <span>💾</span>
+  <span><b>Nothing is saved yet.</b> This is a draft in your browser. It becomes a real
+    concert only when you press <b>Create concert</b> at the bottom.</span>
+</div>
 
 {% if parsed.warnings %}
-<ul class="dim tiny">
-  {% for w in parsed.warnings %}<li>⚠ {{ w }}</li>{% endfor %}
-</ul>
+<div class="warnlist">
+  {% for w in parsed.warnings %}
+  <div class="callout warn"><span>⚠</span><span>{{ w }}</span></div>
+  {% endfor %}
+</div>
 {% endif %}
 
-<form class="stack" method="post" action="/concerts/import/commit" id="new-concert">
-  {# Commit is a separate request; this is how it learns where the draft came
-     from. Re-validated server-side on POST -- it round-trips via the client. #}
+<form class="stack wide editor" method="post" action="/concerts/import/commit" id="new-concert">
+  {#- Commit is a separate request; this hidden field is how it learns where
+      the draft came from. Re-validated server-side on POST (invariant 7) --
+      it round-trips through the client like any other field. -#}
   <input type="hidden" name="source_url" value="{{ source_url }}">
-  <label>Title <input name="title" required maxlength="200" value="{{ parsed.title }}"></label>
-  {% set venue_hint = parsed.venue_name %}
-  {% include "_tag_picker_fields.html" %}
 
-  <h2>Performance days</h2>
+  <div class="ebar">
+    <label class="grow">Title (JP) <input class="title-input" name="title" required
+      maxlength="200" value="{{ parsed.title }}"></label>
+  </div>
+
+  <div class="section-head">
+    <h2>Performance days</h2>
+    <p class="dim tiny">Each parsed day becomes a leg you can attach rounds to. Times are JST.</p>
+  </div>
+
+  <div class="editor-actions">
+    <button type="button" class="btn quiet" onclick="addRow('day-rows','day-row-template')">Add day</button>
+  </div>
+
   <div id="day-rows" class="row-list">
     {% for d in parsed.days %}
-    <div class="row-item">
-      <input name="day_label" value="{{ d.label }}" maxlength="100" placeholder="Day 1">
-      <label>Starts (JST) <input type="datetime-local" name="day_starts_at" value="{{ fmt(d.starts_at_jst) }}"></label>
-      <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+    <div class="eleg">
+      <input type="hidden" name="day_id" value="">
+      {#- The key a round's chips reference. Stable per parsed row; a leg the
+          editor adds in the browser gets a generated key instead. -#}
+      <input type="hidden" name="day_key" value="d{{ loop.index0 }}">
+      <div class="eleg-top">
+        <input name="day_label" maxlength="100" placeholder="Day 1" value="{{ d.label }}">
+        <input name="day_city" maxlength="100" placeholder="Leg / city (e.g. Kanagawa)">
+        <span class="cancel-toggle">
+          <input type="hidden" name="day_cancelled" value="false">
+          <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
+                  title="A cancelled leg is dimmed and badged, never deleted">Cancelled</button>
+        </span>
+        <button type="button" class="x" title="Remove this performance" data-remove-leg>×</button>
+      </div>
+      <div class="eleg-fields">
+        <input name="day_venue" maxlength="200" placeholder="Venue">
+        <input name="day_venue_address" maxlength="300" placeholder="Venue address">
+        <label>Doors (JST) <input type="datetime-local" name="day_doors_at"></label>
+        <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required
+          value="{{ fmt(d.starts_at_jst) }}"></label>
+      </div>
     </div>
+    {% else %}
+    <p class="dim tiny" data-no-legs-row>No days parsed — add the first one above.</p>
     {% endfor %}
   </div>
-  <button type="button" class="quiet" onclick="addRow('day-rows','day-row-template')">+ Add day</button>
 
-  <h2>Lottery / sale rounds</h2>
+  <div class="section-head">
+    <h2>Lottery / sale rounds</h2>
+    <p class="dim tiny">Tick the days each round applies to — leave none ticked
+      for a whole-event round. Times are JST.</p>
+  </div>
+
+  <div class="editor-actions">
+    <button type="button" class="btn" onclick="addRow('round-rows','round-row-template')">Add a round</button>
+  </div>
+
   <div id="round-rows" class="row-list">
     {% for r in parsed.rounds %}
-    <div class="row-item">
-      <input name="round_label" value="{{ r.label }}" maxlength="200" placeholder="最速先行 Round 1">
-      <select name="round_kind">{% for k in kinds %}
-        <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ round_kind_label(k) }}</option>
-      {% endfor %}</select>
-      <label>Opens (JST) <input type="datetime-local" name="round_opens_at" value="{{ fmt(r.opens_at_jst) }}"></label>
-      <label>Closes (JST) <input type="datetime-local" name="round_closes_at" value="{{ fmt(r.closes_at_jst) }}"></label>
-      <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
-      <label>Payment due (JST) <input type="datetime-local" name="round_payment_at"></label>
-      <input name="round_url" value="{{ r.url or '' }}" placeholder="https://ticket... (optional)">
-      <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+    <div class="redit">
+      <input type="hidden" name="round_id" value="">
+      <div class="redit-top">
+        <input class="redit-name" name="round_label" required maxlength="200"
+               placeholder="1次先行抽選" value="{{ r.label }}">
+        <input name="round_label_en" maxlength="200" placeholder="1st-round advance lottery">
+        <select name="round_kind">{% for k in kinds %}
+          <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ round_kind_label(k) }}</option>
+        {% endfor %}</select>
+        <button type="button" class="x" title="Remove this round" data-remove-round>×</button>
+      </div>
+      {#- No leg info from the parse, so nothing pre-selected (all-legs). The
+          chips are built for the parsed days via the shared partial. -#}
+      {% with value = "", selected = none %}{% include "_round_leg_chips.html" %}{% endwith %}
+      <div class="redit-times">
+        <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"
+          value="{{ fmt(r.opens_at_jst) }}"></label>
+        <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"
+          value="{{ fmt(r.closes_at_jst) }}"></label>
+        <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
+        <label>Payment deadline (JST) <input type="datetime-local" name="round_payment_at"></label>
+      </div>
+      <div class="redit-extra">
+        <input name="round_url" type="url" placeholder="Apply URL (optional)" value="{{ r.url or '' }}">
+        <input name="round_notes" maxlength="300" placeholder="Notes (optional)">
+      </div>
     </div>
+    {% else %}
+    <p class="dim tiny" data-no-rounds>No rounds yet — add the first one above.</p>
     {% endfor %}
   </div>
-  <button type="button" class="quiet" onclick="addRow('round-rows','round-row-template')">+ Add round</button>
 
-  <button>Create concert</button>
+  <details class="fold">
+    <summary>Tags
+      <span class="fold-hint">Franchise, group, artists, venue — parsed, editable</span></summary>
+    <div class="fold-body">
+      {% set venue_hint = parsed.venue_name %}
+      {% include "_tag_picker_fields.html" %}
+    </div>
+  </details>
+
+  <button class="btn">Create concert</button>
 </form>
 {% include "_tag_picker_script.html" %}
 
 <template id="day-row-template">
-  <div class="row-item">
-    <input name="day_label" maxlength="100" placeholder="Day 1">
-    <label>Starts (JST) <input type="datetime-local" name="day_starts_at"></label>
-    <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+  <div class="eleg">
+    <input type="hidden" name="day_id" value="">
+    <input type="hidden" name="day_key" value="">
+    <div class="eleg-top">
+      <input name="day_label" maxlength="100" placeholder="Day 1">
+      <input name="day_city" maxlength="100" placeholder="Leg / city (e.g. Kanagawa)">
+      <span class="cancel-toggle">
+        <input type="hidden" name="day_cancelled" value="false">
+        <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
+                title="A cancelled leg is dimmed and badged, never deleted">Cancelled</button>
+      </span>
+      <button type="button" class="x" title="Remove this performance" data-remove-leg>×</button>
+    </div>
+    <div class="eleg-fields">
+      <input name="day_venue" maxlength="200" placeholder="Venue">
+      <input name="day_venue_address" maxlength="300" placeholder="Venue address">
+      <label>Doors (JST) <input type="datetime-local" name="day_doors_at"></label>
+      <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required></label>
+    </div>
   </div>
 </template>
+
 <template id="round-row-template">
-  <div class="row-item">
-    <input name="round_label" maxlength="200" placeholder="最速先行 Round 1">
-    <select name="round_kind">{% for k in kinds %}
-      <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
-    {% endfor %}</select>
-    <label>Opens (JST) <input type="datetime-local" name="round_opens_at"></label>
-    <label>Closes (JST) <input type="datetime-local" name="round_closes_at"></label>
-    <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
-    <label>Payment due (JST) <input type="datetime-local" name="round_payment_at"></label>
-    <input name="round_url" placeholder="https://ticket... (optional)">
-    <button type="button" class="x" title="remove" onclick="this.closest('.row-item').remove()">×</button>
+  <div class="redit">
+    <input type="hidden" name="round_id" value="">
+    <div class="redit-top">
+      <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選">
+      <input name="round_label_en" maxlength="200" placeholder="1st-round advance lottery">
+      <select name="round_kind">{% for k in kinds %}
+        <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
+      {% endfor %}</select>
+      <button type="button" class="x" title="Remove this round" data-remove-round>×</button>
+    </div>
+    {% with value = "", selected = none %}{% include "_round_leg_chips.html" %}{% endwith %}
+    <div class="redit-times">
+      <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"></label>
+      <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"></label>
+      <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
+      <label>Payment deadline (JST) <input type="datetime-local" name="round_payment_at"></label>
+    </div>
+    <div class="redit-extra">
+      <input name="round_url" type="url" placeholder="Apply URL (optional)">
+      <input name="round_notes" maxlength="300" placeholder="Notes (optional)">
+    </div>
   </div>
 </template>
-<script>
-  function addRow(listId, templateId) {
-    const tpl = document.getElementById(templateId);
-    document.getElementById(listId).appendChild(tpl.content.cloneNode(true));
-  }
-</script>
+{% include "_leg_chips_script.html" %}
 {% endblock %}
