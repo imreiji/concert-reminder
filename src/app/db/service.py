@@ -186,10 +186,11 @@ async def _apply_outcome_suppression(
 ) -> list[Round]:
     """Drop rounds this user's outcomes make irrelevant, before the pure
     planner ever sees them -- same pattern as the cancelled-round
-    filtering sync_rule already does. Two passes: cross-round (every leg
+    filtering sync_rule already does. Three passes: cross-round (every leg
     a round covers is already secured via WON/PAID elsewhere on this
-    concert) then same-round (this rule's own anchor is moot given this
-    round's outcome)."""
+    concert), same-round (this rule's own anchor is moot given this
+    round's outcome), and per-leg opt-out (every leg a round covers has a
+    LegOptOut row for this user)."""
     if not rounds:
         return rounds
 
@@ -209,6 +210,19 @@ async def _apply_outcome_suppression(
         select(ConcertDay.id).where(ConcertDay.concert_id == concert_id)
     )).scalars())
 
+    # Per-user leg opt-out: this user's LegOptOut rows over this concert's
+    # days. A round drops only when EVERY leg it covers is opted out -- the
+    # per-user analogue of is_round_cancelled's every-leg (not any-leg)
+    # cancellation rule. Kept symmetric on purpose: a two-leg round with
+    # only one leg opted out survives, exactly as a two-leg round with only
+    # one leg cancelled survives.
+    opted_out_day_ids = set((await session.execute(
+        select(LegOptOut.concert_day_id).where(
+            LegOptOut.user_id == user_id,
+            LegOptOut.concert_day_id.in_(all_day_ids),
+        )
+    )).scalars()) if all_day_ids else set()
+
     # Per-round contribution, so each round's own outcome can be excluded
     # when checking IT for cross-round suppression -- "secured elsewhere"
     # must not let a round's own WON/PAID outcome suppress itself; a round
@@ -220,6 +234,15 @@ async def _apply_outcome_suppression(
 
     survivors = []
     for r in rounds:
+        # Leg opt-out: suppress only when the round names specific legs AND
+        # every one of them is opted out. An all-legs round (empty/None
+        # applies_to) is tied to no specific leg, so no set of leg opt-outs
+        # can cover it -- never suppressed, mirroring is_round_cancelled
+        # leaving empty applies_to alone. Uses raw applies_to, not the
+        # all_day_ids fallback the outcome passes use, precisely so the
+        # empty case falls through untouched.
+        if r.applies_to and all(d in opted_out_day_ids for d in r.applies_to):
+            continue
         applies = set(r.applies_to) if r.applies_to else all_day_ids
         secured_elsewhere: set[int] = set()
         for other_id, legs in secured_by.items():
