@@ -3,229 +3,315 @@
 {% block content %}
 <h1>Preferences</h1>
 
-<h2>Timezone</h2>
-<form class="inline" method="post" action="/me/timezone">
-  <select name="timezone">
-    <optgroup label="Common">
-      {% for t in common_timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
-    </optgroup>
-    <optgroup label="All zones (IANA)">
-      {% for t in all_timezones %}<option value="{{ t }}" {% if t == tz and t not in common_timezones %}selected{% endif %}>{{ t }}</option>{% endfor %}
-    </optgroup>
-  </select>
-  <button>Save</button>
-  {% if tz_auto %}<span class="dim" title="detected from your browser">Auto-detected</span>
-  {% else %}<button formaction="/me/timezone/reset" title="re-detect from browser">Reset to auto</button>{% endif %}
-</form>
-<p class="dim tiny">Event times are always shown as JST plus this timezone.</p>
+{# Left-rail layout, built ONCE here (later branches must not redesign it).
+   The rail is a plain in-page anchor nav; each section below carries the
+   matching id. Sections, in the concept's order: Following, Reminders, Time,
+   Delivery, Account, Editors (admin only). #}
+<div class="layout prefs">
+  <aside class="sidebar">
+    <nav class="sorts prefs-rail">
+      <a href="#following">Following</a>
+      <a href="#reminders">Reminders</a>
+      <a href="#time">Time</a>
+      <a href="#delivery">Delivery</a>
+      <a href="#account">Account</a>
+      {% if user.is_admin %}<a href="#editors">Editors</a>{% endif %}
+    </nav>
+  </aside>
 
-<h2>Discord DMs</h2>
-{% if user.dm_blocked %}
-<p class="dim">Your last Discord DM couldn't be delivered — check your Discord privacy
-  settings to allow DMs from server members, then try again.</p>
-{% endif %}
-{% if bot_enabled %}
-<p class="inline">
-  <button hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">Send test DM</button>
-  <span id="dm-test-result" class="dim"></span>
-</p>
-{% else %}
-<p class="dim">The Discord bot isn't running in this environment (dev mode), so DMs can't be tested here.</p>
-{% endif %}
+  <div class="prefs-body">
 
-<h2>Calendar feed</h2>
-<p class="dim">Subscribe once in your phone/calendar app and every deadline you have a
-  reminder for stays in sync automatically — no more downloading a fresh .ics per round.</p>
-{% if feed_url %}
-<div class="panel">
-  <p><strong>Your feed link is ready — save it now, it won't be shown again:</strong></p>
-  <p class="inline"><code class="feed-url">{{ feed_url }}</code>
-    <button type="button" class="quiet" data-copy="{{ feed_url }}"
-            onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy</button></p>
-  <p class="dim tiny">Paste this into your calendar app's "subscribe by URL" option (Google
-    Calendar: Settings → Add calendar → From URL. Apple Calendar: File → New Calendar Subscription).</p>
-</div>
-{% elif has_calendar_feed %}
-<p class="dim">Your feed is active. <form class="inline" method="post" action="/me/calendar-feed">
-  <button class="quiet" onclick="return confirm('This invalidates your current feed link — your calendar app will need the new one.')">Regenerate link</button>
-</form></p>
-{% else %}
-<form method="post" action="/me/calendar-feed"><button>Generate feed link</button></form>
-{% endif %}
+  {# ── Following ─────────────────────────────────────────────────────── #}
+  <section id="following" class="prefs-section">
+    <h2>Following</h2>
+    <p class="dim">{{ tracked_count }} concert{{ "" if tracked_count == 1 else "s" }} · {{ pruned_concerts | length }} you pruned</p>
 
-{% if user.is_admin %}
-<h2>Editors</h2>
-<p class="dim">Discord users allowed to create/edit concerts and tags.
-  Env-managed editors (<code>EDITOR_WHITELIST</code>) can't be removed here — edit <code>.env</code> instead.</p>
-<ul class="rows">
-  {% for e in editors %}
-  <li>
-    <span>{{ e.username or e.id }} <span class="dim tiny">({{ e.id }})</span>{% if e.env %} <em class="badge">env</em>{% endif %}</span>
-    {% if not e.env %}
-    <form method="post" action="/admin/editors/{{ e.id }}/remove"><button class="x" title="remove editor">×</button></form>
+    {% if pruned_concerts %}
+    <div class="panel">
+      <strong>Pruned concerts</strong>
+      <p class="dim tiny">You skipped these individually. Restoring one returns it
+        to whatever its tags say by default.</p>
+      <ul class="rows">
+        {% for c in pruned_concerts %}
+        <li>
+          <span><a href="/concerts/{{ c.event_id }}">{{ c.title }}</a>
+            {% if c.title_en %}<span class="dim tiny">{{ c.title_en }}</span>{% endif %}</span>
+          {# Restore = clear the override (state=default) via the Task-4 route,
+             which calls clear_concert_subscription. A plain form so it works
+             with JS off; the Referer sends the user back here. #}
+          <form method="post" action="/concerts/{{ c.event_id }}/subscription">
+            <input type="hidden" name="state" value="default">
+            <button class="quiet" title="Restore to the tag default">Restore</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
     {% endif %}
-  </li>
-  {% endfor %}
-  {% if not editors %}<li class="dim">No editors yet.</li>{% endif %}
-</ul>
-<form class="inline" method="post" action="/admin/editors">
-  <input name="discord_id" type="number" inputmode="numeric" placeholder="Discord user ID" required>
-  <button>+ Add editor</button>
-</form>
-{% endif %}
 
-<h2>Reminder presets</h2>
-<p class="dim">Your standard loadout of reminders — apply to any concert in one click, or link
-to a tag subscription so new events set themselves up.</p>
+    <p class="dim">Click a tag to follow it — new matching events auto-apply your chosen
+      preset and DM you. Click a followed tag to unfollow. Artists appear next to their group.</p>
 
-{% macro sentence_fields(days_val, hours_val, dir_val, anchor_val) -%}
-  <span>Remind me</span>
-  <select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == days_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
-  <span>day(s)</span>
-  <select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}" {% if n == hours_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
-  <span>hour(s)</span>
-  <select name="direction">
-    <option value="before" {% if dir_val == "before" %}selected{% endif %}>before</option>
-    <option value="after" {% if dir_val == "after" %}selected{% endif %}>after</option>
-  </select>
-  <span>each</span>
-  <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ a.value.replace("_"," ") | capitalize }}</option>{% endfor %}</select>
-{%- endmacro %}
-
-{% for p in presets %}
-<div class="panel">
-  <div class="preset-head">
-    <form class="inline rename" method="post" action="/presets/{{ p.id }}/rename">
-      <input name="name" value="{{ p.name }}" maxlength="100" required>
-      <button class="quiet" title="Rename">Rename</button>
-    </form>
-    {% if p.is_default %}<span class="badge" title="The Discord 'Set my reminders' button applies this preset">★ Default</span>
-    {% else %}<form method="post" action="/presets/{{ p.id }}/default"><button class="quiet" title="Make this the preset the Discord button applies">☆ Make default</button></form>{% endif %}
-    <form method="post" action="/presets/{{ p.id }}/delete"
-          data-preset-name="{{ p.name }}"
-          onsubmit="return confirmDeletePreset(this)"><button class="x" title="delete preset">×</button></form>
-  </div>
-  <ul class="rows items">
-    {% for i in p.items %}
-    <li>
-      <form class="sentence" method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/edit">
-        {{ sentence_fields(i.offset_days | abs, i.offset_hours | abs,
-                           "after" if (i.offset_days > 0 or i.offset_hours > 0) else "before",
-                           i.anchor.value) }}
-        <button class="quiet">Save</button>
+    <div class="panel sub-defaults">
+      <strong>When I subscribe:</strong>
+      <form id="sub-defaults" class="inline">
+        <label>Apply preset
+          <select id="sub-preset">
+            <option value="0">None</option>
+            {% for p in presets %}<option value="{{ p.id }}" {% if loop.first %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+          </select></label>
+        <label><input type="checkbox" id="sub-notify" checked> DM me on new events</label>
       </form>
-      <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete"><button class="x" title="remove">×</button></form>
-    </li>
-    {% endfor %}
-    <li class="add-row">
-      <form class="sentence" method="post" action="/presets/{{ p.id }}/items">
-        {{ sentence_fields(3, 0, "before", "closes") }}
-        <button>+ Add</button>
+    </div>
+
+    <input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.sub-box')">
+
+    {% macro subchip(t) -%}
+      {%- set sub = sub_by_tag.get(t.id) -%}
+      {%- if sub -%}
+      <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete">
+        <button class="chip kind-{{ t.kind.value }} on" data-name="{{ t.name | lower }}"
+          title="Following{% if sub.preset_id %} · preset linked{% endif %}{% if sub.notify %} · 🔔{% endif %} — click to unfollow">{{ t.name }} ✓</button>
       </form>
-    </li>
-  </ul>
-</div>
-{% endfor %}
+      {%- else -%}
+      <form class="chipform" method="post" action="/subscriptions">
+        <input type="hidden" name="tag_id" value="{{ t.id }}">
+        <input type="hidden" name="preset_id" value="0" class="sub-preset-field">
+        <input type="hidden" name="notify" value="" class="sub-notify-field">
+        <button class="chip kind-{{ t.kind.value }}" data-name="{{ t.name | lower }}">{{ t.name }}</button>
+      </form>
+      {%- endif -%}
+    {%- endmacro %}
 
-<details class="panel" {% if not presets %}open{% endif %}>
-  <summary>+ New preset</summary>
-  <form class="stack" method="post" action="/presets">
-    <label>Name <input name="name" required maxlength="100" placeholder="standard lottery coverage"></label>
-    <div class="sentence">{{ sentence_fields(3, 0, "before", "closes") }}</div>
-    <button>Create preset</button>
-    <p class="dim tiny">The preset is created with this first reminder — add more items after.</p>
-  </form>
-</details>
-
-<h2>Tag subscriptions</h2>
-<p class="dim">Click a tag to follow it — new matching events auto-apply your chosen preset and
-DM you. Click a followed tag to unfollow. Artists appear next to their group.</p>
-
-<div class="panel sub-defaults">
-  <strong>When I subscribe:</strong>
-  <form id="sub-defaults" class="inline">
-    <label>Apply preset
-      <select id="sub-preset">
-        <option value="0">None</option>
-        {% for p in presets %}<option value="{{ p.id }}" {% if loop.first %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
-      </select></label>
-    <label><input type="checkbox" id="sub-notify" checked> DM me on new events</label>
-  </form>
-</div>
-
-<input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.sub-box')">
-
-{% macro subchip(t) -%}
-  {%- set sub = sub_by_tag.get(t.id) -%}
-  {%- if sub -%}
-  <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete">
-    <button class="chip kind-{{ t.kind.value }} on" data-name="{{ t.name | lower }}"
-      title="Following{% if sub.preset_id %} · preset linked{% endif %}{% if sub.notify %} · 🔔{% endif %} — click to unfollow">{{ t.name }} ✓</button>
-  </form>
-  {%- else -%}
-  <form class="chipform" method="post" action="/subscriptions">
-    <input type="hidden" name="tag_id" value="{{ t.id }}">
-    <input type="hidden" name="preset_id" value="0" class="sub-preset-field">
-    <input type="hidden" name="notify" value="" class="sub-notify-field">
-    <button class="chip kind-{{ t.kind.value }}" data-name="{{ t.name | lower }}">{{ t.name }}</button>
-  </form>
-  {%- endif -%}
-{%- endmacro %}
-
-<div class="sub-box">
-  {% for f in franchises %}
-    <details open class="tag-section">
-      <summary>{{ f.name }} {{ subchip(f) }}</summary>
-      {% for g in groups if g.parent_id == f.id %}
-        <div class="group-row">
-          {{ subchip(g) }}
-          <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span>
-        </div>
+    <div class="sub-box">
+      {% for f in franchises %}
+        <details open class="tag-section">
+          <summary>{{ f.name }} {{ subchip(f) }}</summary>
+          {% for g in groups if g.parent_id == f.id %}
+            <div class="group-row">
+              {{ subchip(g) }}
+              <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span>
+            </div>
+          {% endfor %}
+        </details>
       {% endfor %}
-    </details>
-  {% endfor %}
-  {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
-  {% if orphan_groups %}
-  <details open class="tag-section"><summary>Other groups</summary>
-    {% for g in orphan_groups %}
-    <div class="group-row">{{ subchip(g) }}
-      <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span></div>
+      {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
+      {% if orphan_groups %}
+      <details open class="tag-section"><summary>Other groups</summary>
+        {% for g in orphan_groups %}
+        <div class="group-row">{{ subchip(g) }}
+          <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span></div>
+        {% endfor %}
+      </details>
+      {% endif %}
+      {% if solo_artists %}
+      <details open class="tag-section"><summary>Solo artists</summary>
+        <div class="taglist">{% for a in solo_artists %}{{ subchip(a) }}{% endfor %}</div>
+      </details>
+      {% endif %}
+      {% if venues %}
+      <details class="tag-section"><summary>Venues</summary>
+        <div class="taglist">{% for v in venues %}{{ subchip(v) }}{% endfor %}</div>
+      </details>
+      {% endif %}
+    </div>
+
+    <script>
+      // stamp the subscribe-defaults into every subscribe form at submit time
+      document.querySelectorAll(".chipform").forEach(f => f.addEventListener("submit", () => {
+        const p = f.querySelector(".sub-preset-field");
+        const n = f.querySelector(".sub-notify-field");
+        if (p) p.value = document.getElementById("sub-preset").value;
+        if (n) n.value = document.getElementById("sub-notify").checked ? "true" : "";
+      }));
+    </script>
+
+    {% if subs %}
+    <h3>My tag subscriptions (details)</h3>
+    <ul class="rows">
+      {% for sub, tag in subs %}
+      <li>
+        <span><span class="chip kind-{{ tag.kind.value }}">{{ tag.name }}</span>
+          {% if sub.preset_id %}→ auto-applies a preset{% else %}<em class="dim">notice only</em>{% endif %}
+          {% if sub.notify %} · 🔔 DM{% endif %}</span>
+        <form method="post" action="/subscriptions/{{ sub.id }}/delete"><button class="x">×</button></form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  {# ── Reminders (presets) ───────────────────────────────────────────── #}
+  <section id="reminders" class="prefs-section">
+    <h2>Reminder presets</h2>
+    <p class="dim">Your standard loadout of reminders — apply to any concert in one click, or link
+      to a tag subscription so new events set themselves up.</p>
+
+    {% macro sentence_fields(days_val, hours_val, dir_val, anchor_val) -%}
+      <span>Remind me</span>
+      <select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == days_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+      <span>day(s)</span>
+      <select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}" {% if n == hours_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+      <span>hour(s)</span>
+      <select name="direction">
+        <option value="before" {% if dir_val == "before" %}selected{% endif %}>before</option>
+        <option value="after" {% if dir_val == "after" %}selected{% endif %}>after</option>
+      </select>
+      <span>each</span>
+      <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ a.value.replace("_"," ") | capitalize }}</option>{% endfor %}</select>
+    {%- endmacro %}
+
+    {% for p in presets %}
+    <div class="panel">
+      <div class="preset-head">
+        <form class="inline rename" method="post" action="/presets/{{ p.id }}/rename">
+          <input name="name" value="{{ p.name }}" maxlength="100" required>
+          <button class="quiet" title="Rename">Rename</button>
+        </form>
+        {% if p.is_default %}<span class="badge" title="The Discord 'Set my reminders' button applies this preset">★ Default</span>
+        {% else %}<form method="post" action="/presets/{{ p.id }}/default"><button class="quiet" title="Make this the preset the Discord button applies">☆ Make default</button></form>{% endif %}
+        <form method="post" action="/presets/{{ p.id }}/delete"
+              data-preset-name="{{ p.name }}"
+              onsubmit="return confirmDeletePreset(this)"><button class="x" title="delete preset">×</button></form>
+      </div>
+      <ul class="rows items">
+        {% for i in p.items %}
+        <li>
+          <form class="sentence" method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/edit">
+            {{ sentence_fields(i.offset_days | abs, i.offset_hours | abs,
+                               "after" if (i.offset_days > 0 or i.offset_hours > 0) else "before",
+                               i.anchor.value) }}
+            <button class="quiet">Save</button>
+          </form>
+          <form method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/delete"><button class="x" title="remove">×</button></form>
+        </li>
+        {% endfor %}
+        <li class="add-row">
+          <form class="sentence" method="post" action="/presets/{{ p.id }}/items">
+            {{ sentence_fields(3, 0, "before", "closes") }}
+            <button>+ Add</button>
+          </form>
+        </li>
+      </ul>
+    </div>
     {% endfor %}
-  </details>
+
+    <details class="panel" {% if not presets %}open{% endif %}>
+      <summary>+ New preset</summary>
+      <form class="stack" method="post" action="/presets">
+        <label>Name <input name="name" required maxlength="100" placeholder="standard lottery coverage"></label>
+        <div class="sentence">{{ sentence_fields(3, 0, "before", "closes") }}</div>
+        <button>Create preset</button>
+        <p class="dim tiny">The preset is created with this first reminder — add more items after.</p>
+      </form>
+    </details>
+  </section>
+
+  {# ── Time (timezone) ───────────────────────────────────────────────── #}
+  <section id="time" class="prefs-section">
+    <h2>Time</h2>
+    <form class="inline" method="post" action="/me/timezone">
+      <select name="timezone">
+        <optgroup label="Common">
+          {% for t in common_timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
+        </optgroup>
+        <optgroup label="All zones (IANA)">
+          {% for t in all_timezones %}<option value="{{ t }}" {% if t == tz and t not in common_timezones %}selected{% endif %}>{{ t }}</option>{% endfor %}
+        </optgroup>
+      </select>
+      <button>Save</button>
+      {% if tz_auto %}<span class="dim" title="detected from your browser">Auto-detected</span>
+      {% else %}<button formaction="/me/timezone/reset" title="re-detect from browser">Reset to auto</button>{% endif %}
+    </form>
+    <p class="dim tiny">Event times are always shown as JST plus this timezone.</p>
+  </section>
+
+  {# ── Delivery (Discord DMs + calendar feed) ────────────────────────── #}
+  <section id="delivery" class="prefs-section">
+    <h2>Delivery</h2>
+
+    <h3>Discord DMs</h3>
+    {% if user.dm_blocked %}
+    <p class="dim">Your last Discord DM couldn't be delivered — check your Discord privacy
+      settings to allow DMs from server members, then try again.</p>
+    {% endif %}
+    {% if bot_enabled %}
+    <p class="inline">
+      <button hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">Send test DM</button>
+      <span id="dm-test-result" class="dim"></span>
+    </p>
+    {% else %}
+    <p class="dim">The Discord bot isn't running in this environment (dev mode), so DMs can't be tested here.</p>
+    {% endif %}
+
+    <h3>Calendar feed</h3>
+    <p class="dim">Subscribe once in your phone/calendar app and every deadline you have a
+      reminder for stays in sync automatically — no more downloading a fresh .ics per round.</p>
+    {% if feed_url %}
+    <div class="panel">
+      <p><strong>Your feed link is ready — save it now, it won't be shown again:</strong></p>
+      <p class="inline"><code class="feed-url">{{ feed_url }}</code>
+        <button type="button" class="quiet" data-copy="{{ feed_url }}"
+                onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy</button></p>
+      <p class="dim tiny">Paste this into your calendar app's "subscribe by URL" option (Google
+        Calendar: Settings → Add calendar → From URL. Apple Calendar: File → New Calendar Subscription).</p>
+    </div>
+    {% elif has_calendar_feed %}
+    <p class="dim">Your feed is active. <form class="inline" method="post" action="/me/calendar-feed">
+      <button class="quiet" onclick="return confirm('This invalidates your current feed link — your calendar app will need the new one.')">Regenerate link</button>
+    </form></p>
+    {% else %}
+    <form method="post" action="/me/calendar-feed"><button>Generate feed link</button></form>
+    {% endif %}
+  </section>
+
+  {# ── Account ───────────────────────────────────────────────────────── #}
+  <section id="account" class="prefs-section">
+    <h2>Account</h2>
+
+    <h3>Setup</h3>
+    <p class="dim">Re-run the guided setup — pick tags to follow, a default preset, and confirm
+      your timezone.</p>
+    {# Branch 6 adds GET /setup; until it merges this link 404s. #}
+    <p><a class="btn quiet" href="/setup">Re-run setup</a></p>
+
+    <h3>Delete my account</h3>
+    <p class="dim">Deleting your account removes your personal data — sessions, reminders,
+      presets, tag subscriptions and notifications. Concerts and tags you contributed stay
+      in the shared catalogue with your name removed, so nobody else loses the events they
+      follow.</p>
+    {# Account deletion has no self-serve route yet: service.delete_user is a
+       manual, owner-initiated erasure with no UI binding (invariant: no route
+       calls it). Rather than invent a delete route in this layout task, this is
+       a documented placeholder pointing at the manual request path. #}
+    <p class="dim tiny">To request deletion, contact the site owner — erasure is handled
+      manually for now.</p>
+  </section>
+
+  {# ── Editors (admin only) ──────────────────────────────────────────── #}
+  {% if user.is_admin %}
+  <section id="editors" class="prefs-section">
+    <h2>Editors</h2>
+    <p class="dim">Discord users allowed to create/edit concerts and tags.
+      Env-managed editors (<code>EDITOR_WHITELIST</code>) can't be removed here — edit <code>.env</code> instead.</p>
+    <ul class="rows">
+      {% for e in editors %}
+      <li>
+        <span>{{ e.username or e.id }} <span class="dim tiny">({{ e.id }})</span>{% if e.env %} <em class="badge">env</em>{% endif %}</span>
+        {% if not e.env %}
+        <form method="post" action="/admin/editors/{{ e.id }}/remove"><button class="x" title="remove editor">×</button></form>
+        {% endif %}
+      </li>
+      {% endfor %}
+      {% if not editors %}<li class="dim">No editors yet.</li>{% endif %}
+    </ul>
+    <form class="inline" method="post" action="/admin/editors">
+      <input name="discord_id" type="number" inputmode="numeric" placeholder="Discord user ID" required>
+      <button>+ Add editor</button>
+    </form>
+  </section>
   {% endif %}
-  {% if solo_artists %}
-  <details open class="tag-section"><summary>Solo artists</summary>
-    <div class="taglist">{% for a in solo_artists %}{{ subchip(a) }}{% endfor %}</div>
-  </details>
-  {% endif %}
-  {% if venues %}
-  <details class="tag-section"><summary>Venues</summary>
-    <div class="taglist">{% for v in venues %}{{ subchip(v) }}{% endfor %}</div>
-  </details>
-  {% endif %}
+
+  </div>
 </div>
-
-<script>
-  // stamp the subscribe-defaults into every subscribe form at submit time
-  document.querySelectorAll(".chipform").forEach(f => f.addEventListener("submit", () => {
-    const p = f.querySelector(".sub-preset-field");
-    const n = f.querySelector(".sub-notify-field");
-    if (p) p.value = document.getElementById("sub-preset").value;
-    if (n) n.value = document.getElementById("sub-notify").checked ? "true" : "";
-  }));
-</script>
-
-{% if subs %}
-<h3>My subscriptions (details)</h3>
-<ul class="rows">
-  {% for sub, tag in subs %}
-  <li>
-    <span><span class="chip kind-{{ tag.kind.value }}">{{ tag.name }}</span>
-      {% if sub.preset_id %}→ auto-applies a preset{% else %}<em class="dim">notice only</em>{% endif %}
-      {% if sub.notify %} · 🔔 DM{% endif %}</span>
-    <form method="post" action="/subscriptions/{{ sub.id }}/delete"><button class="x">×</button></form>
-  </li>
-  {% endfor %}
-</ul>
-{% endif %}
 {% endblock %}

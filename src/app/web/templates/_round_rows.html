@@ -102,16 +102,31 @@
   {% for group in leg_groups %}
   {% set day = group.day %}
   {% set vtag = day_venue_tags.get(day.id) %}
-  <div class="leg{% if day.cancelled %} off{% endif %}">
+  {# Subscriptions branch (Task 4): a leg this reader opted out of dims exactly
+     like a cancelled one (`off`), but keeps its own separate badge and toggle
+     -- opting out is per-user and reversible, cancellation is neither. #}
+  {% set skipped = day.id in (leg_opted_out or []) %}
+  <div class="leg{% if day.cancelled or skipped %} off{% endif %}">
     <div class="leghead">
       {# A leg whose date has passed is struck through on the heading only --
          putting `past` on the section would strike its rounds too, and a
          finished show's rounds still record what you did. #}
-      <h3 class="leg-heading{% if day.starts_at_utc < now %} past{% endif %}">{{ day.label }}{% if day.cancelled %} <span class="badge cancelled">Cancelled</span>{% endif %}</h3>
+      <h3 class="leg-heading{% if day.starts_at_utc < now %} past{% endif %}">{{ day.label }}{% if day.cancelled %} <span class="badge cancelled">Cancelled</span>{% elif skipped %} <span class="badge cancelled">Not going</span>{% endif %}</h3>
       <span class="lv">
         {{ dual(day.starts_at_utc, tz) }}{% if day.doors_at_utc %} · doors {{ dual(day.doors_at_utc, tz) }}{% endif %}
         <span class="lvenue">{% if vtag %}📍 {% if vtag.location_url %}<a href="{{ vtag.location_url }}" target="_blank" rel="noopener">{{ vtag.name }}</a>{% else %}{{ vtag.name }}{% endif %}{% if vtag.region %} · {{ vtag.region }}{% endif %}{% elif day.venue %}📍 {{ day.venue }}{% endif %}{% if day.venue_address %} — {{ day.venue_address }}{% endif %}{% if day.city %} · {{ day.city }}{% endif %}</span>
       </span>
+      {# The per-leg opt-out. Not editor-gated (personal), and not tied to
+         cancellation. Posts to the subscriptions router and swaps this whole
+         rounds region so the dim/badge update together. #}
+      {% if not day.cancelled %}
+      <form class="legskip" hx-post="/concerts/{{ concert.event_id }}/legs/{{ day.id }}/opt-out"
+            hx-target="#concert-rounds" hx-swap="outerHTML"
+            method="post" action="/concerts/{{ concert.event_id }}/legs/{{ day.id }}/opt-out">
+        <input type="hidden" name="opted_out" value="{{ "false" if skipped else "true" }}">
+        <button class="chip{% if skipped %} on{% endif %}" type="submit">{{ "Going again" if skipped else "Not going to this day" }}</button>
+      </form>
+      {% endif %}
     </div>
     {{ rounds_or_note(group.rounds, tz, "No rounds yet for this leg.") }}
   </div>

@@ -8,33 +8,8 @@ rejected ideas move to the bottom sections instead of being deleted.
 
 ## Proposed (highest impact first)
 
-### 1. Real per-concert tracking (ConcertSubscription)
 
-Impact: high - effort: medium. Raised: 2026-07-19 (Home/Discover split,
-branch review). Scope widened 2026-07-19 (concert page and editor).
-
-"Tracked" is currently derived at query time: a concert is tracked if it
-carries any tag the user has a TagSubscription for
-(`service.tracked_concert_ids`, which says so in its own docstring). That
-was always the interim definition, and shipping Home promoted it from an
-implementation detail to the thing that decides what the whole front page
-shows. It has no opt-out, so following one artist tag drags in every
-concert that artist touches, and no opt-in, so a concert you care about but
-whose tags you do not follow can never reach the board. The
-`OPEN_COLUMN_LIMIT` cap on the board's open column is the only thing making
-an over-broad match tolerable today. Wants a real `ConcertSubscription`
-table plus a per-leg opt-out, replacing that function's body wholesale -
-deliberately not half-built earlier, since a partial version would have to
-be migrated.
-
-Ranked first now because Home made it load-bearing; before the split it was
-one input to a catalogue page among several. The concert page and editor
-branch (2026-07-19) then added a second page waiting on it: that page shows
-no follow state at all, because the **Following toggle** and the **per-leg
-opt-out** both need this table and were held out of scope deliberately
-rather than faked. So the table now blocks three surfaces, not one.
-
-### 2. Minute-level reminder offsets
+### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -51,7 +26,7 @@ first-served sales are exactly the case where "remind me 5 minutes before
 it opens" beats "remind me 3 hours before", so this is no longer
 speculative - it just has no user complaints behind it yet.
 
-### 3. Upgrade rounds and their qualifying-round set
+### 2. Upgrade rounds and their qualifying-round set
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (concert page and
 editor, out-of-scope list).
@@ -70,7 +45,7 @@ pass) once the qualifying set exists. The cost is the schema and the editor
 UI for it, not the logic. Held out of the concert page and editor branch
 deliberately rather than half-built.
 
-### 4. Collapse a round's multiple "Coming up" rows into one
+### 3. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
 branch review). Re-ranked 2026-07-19.
@@ -91,7 +66,7 @@ ROUND with a single primary anchor chosen by `_primary_anchor`, so the
 collapsed shape exists and has tests behind it. What remains is deciding
 whether Home wants the same rule and re-pointing the htmx swap at it.
 
-### 5. Let the creation form express a multi-leg round in one pass
+### 4. Let the creation form express a multi-leg round in one pass
 
 Impact: low - effort: small. Raised: 2026-07-19 (concert page and editor,
 branch review).
@@ -111,7 +86,7 @@ creation already lands on, and multi-leg rounds are the minority shape.
 The fix is a client-side version of the same chip control the editor uses,
 keyed on `day_key` (which already exists) instead of on ids.
 
-### 6. Eventernote links on performer chips
+### 5. Eventernote links on performer chips
 
 Impact: low - effort: small. Raised: 2026-07-19 (concert page and editor,
 out-of-scope list).
@@ -124,6 +99,19 @@ self-contained, and it makes the page's new headline block do more than
 name people.
 
 ## Shipped
+
+### Concert subscriptions and per-leg opt-out (2026-07-19)
+
+Shipped as: `ConcertSubscription` (state `subscribed`/`opted_out`) and
+`LegOptOut`, both OVERRIDE tables -- no row means follow the tag-derived
+default, so no backfill (invariant 8). `tracked_concert_ids` now applies
+the override; per-leg opt-out folds into `_apply_outcome_suppression`;
+writes re-sync via `reinstate_user_rules`. The concert page's Following
+toggle and per-leg opt-out, Home's real "skip this concert", and a
+rebuilt Preferences (left rail, a Following section with the pruned count
+and restore) all became real instead of placeholders. Prunes stick across
+re-follow; opting out of a won ticket needs a heavy confirmation and never
+deletes the outcome.
 
 ### Concert page and editor redesign (2026-07-19)
 

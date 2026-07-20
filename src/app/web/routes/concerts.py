@@ -32,12 +32,22 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Concert, ConcertDay, ReminderRule, Round, Tag, User
+from app.db.models import (
+    Concert,
+    ConcertDay,
+    LegOptOut,
+    ReminderRule,
+    Round,
+    RoundOutcome,
+    Tag,
+    User,
+)
 from app.db.service import (
     attach_tag,
     concert_audit_log,
     concert_next_moment,
     concert_round_rows,
+    concert_subscription_states,
     detach_tag,
     ensure_user,
     group_members,
@@ -47,10 +57,11 @@ from app.db.service import (
     snapshot_concert,
     sync_concert,
     tag_picker_context,
+    tracked_concert_ids,
 )
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
-from app.domain.types import Anchor, ConcertKind, RoundKind, TagKind
+from app.domain.types import Anchor, ConcertKind, LotteryOutcome, RoundKind, TagKind
 from app.web.auth import SessionUser, require_editor, require_user
 from app.web.forms import form_url
 
@@ -603,6 +614,18 @@ async def concert_rounds_context(
     venue_tags = list(
         (await session.execute(select(Tag).where(Tag.kind == TagKind.VENUE))).scalars()
     )
+    # This user's per-leg opt-outs over THIS concert's days, so `_round_rows`
+    # can dim the legs they are not going to. Assembled here, the single place
+    # that fragment's context is built, so the copy POST
+    # /concerts/{event_id}/legs/{day_id}/opt-out swaps back in cannot drift
+    # from the one GET /concerts/{event_id} rendered (same reasoning as the
+    # outcome re-render).
+    day_ids = [g.day.id for g in leg_groups]
+    opted_out_day_ids = set((await session.execute(
+        select(LegOptOut.concert_day_id).where(
+            LegOptOut.user_id == user_id, LegOptOut.concert_day_id.in_(day_ids)
+        )
+    )).scalars()) if day_ids else set()
     return {
         "concert": concert,
         "now": now,
@@ -611,9 +634,57 @@ async def concert_rounds_context(
         "day_venue_tags": {
             g.day.id: find_venue_tag(venue_tags, g.day.venue) for g in leg_groups
         },
+        "leg_opted_out": opted_out_day_ids,
         "next_row": concert_next_moment(
             [row for g in leg_groups for row in g.rounds] + all_legs_rows, now=now
         ),
+    }
+
+
+async def following_toggle_context(
+    session: AsyncSession, user_id: int, concert: Concert
+) -> dict:
+    """Everything `_following_toggle.html` needs, built in ONE place so GET
+    /concerts/{event_id} and the POST /concerts/{event_id}/subscription
+    re-render agree on which button to show.
+
+    `following` drives whether the button offers to follow or unfollow;
+    `sub_state` distinguishes an OPTED_OUT prune (unfollow-clears-it) from a
+    no-row default (follow-subscribes). `won_payment_at_utc` is set when the
+    user holds a WON/PAID outcome anywhere on this concert -- the concert-page
+    opt-out button uses it to raise the heavy confirmation naming the ticket
+    it would forfeit (a client-side gate; the write still goes through)."""
+    tracked = await tracked_concert_ids(session, user_id)
+    states = await concert_subscription_states(session, user_id)
+    round_ids = list((await session.execute(
+        select(Round.id).where(Round.concert_id == concert.id)
+    )).scalars())
+    won_payment_at_utc = None
+    holds_ticket = False
+    if round_ids:
+        rows = list(await session.execute(
+            select(RoundOutcome.round_id, RoundOutcome.outcome).where(
+                RoundOutcome.user_id == user_id, RoundOutcome.round_id.in_(round_ids)
+            )
+        ))
+        won_round_ids = {
+            rid for rid, oc in rows if oc in (LotteryOutcome.WON, LotteryOutcome.PAID)
+        }
+        holds_ticket = bool(won_round_ids)
+        if won_round_ids:
+            payments = list((await session.execute(
+                select(Round.payment_deadline_at_utc).where(
+                    Round.id.in_(won_round_ids),
+                    Round.payment_deadline_at_utc.is_not(None),
+                )
+            )).scalars())
+            won_payment_at_utc = min(payments) if payments else None
+    return {
+        "concert": concert,
+        "following": concert.id in tracked,
+        "sub_state": states.get(concert.id),
+        "holds_ticket": holds_ticket,
+        "won_payment_at_utc": won_payment_at_utc,
     }
 
 
@@ -646,6 +717,7 @@ async def concert_detail(
          "anchors": list(Anchor),
          "display_title": display_title,
          "audit_log": audit_log,
+         **await following_toggle_context(session, user.id, concert),
          **await concert_rounds_context(session, user.id, concert)},
     )
 

@@ -15,6 +15,11 @@ from alembic.config import Config
 from app.config import settings
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Pin the target rather than using "head": this file tests ONE migration, and
+# `downgrade -1` below must reverse THAT migration. Once a later revision lands
+# on top (concert subscriptions did), "head" retargets and `downgrade -1` would
+# reverse the wrong migration. Same lesson as test_migration_user_erasure.py.
+MIGRATION_REVISION = "ce1a80bb66f4"  # ops_check_state: plain CREATE TABLE
 
 
 def _alembic_config(monkeypatch, db_path: Path) -> Config:
@@ -28,7 +33,7 @@ def _alembic_config(monkeypatch, db_path: Path) -> Config:
 def test_ops_check_state_table_is_created(tmp_path, monkeypatch):
     db = tmp_path / "t.db"
     cfg = _alembic_config(monkeypatch, db)
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, MIGRATION_REVISION)
 
     conn = sqlite3.connect(db)
     try:
@@ -47,7 +52,7 @@ def test_downgrade_drops_the_table(tmp_path, monkeypatch):
     """The deploy runbook's rollback path depends on this reversing cleanly."""
     db = tmp_path / "t.db"
     cfg = _alembic_config(monkeypatch, db)
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, MIGRATION_REVISION)
     command.downgrade(cfg, "-1")
 
     conn = sqlite3.connect(db)

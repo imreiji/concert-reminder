@@ -45,6 +45,13 @@
       {% if concert.source_url %}{% if concert.eventernote_url or concert.official_url %} · {% endif %}<a href="{{ concert.source_url }}" target="_blank" rel="noopener">ramen.events</a>{% endif %}
     </p>
     {% endif %}
+    {#- === Subscriptions branch (Task 4): Following toggle ===================
+        Its own action row so it stays clear of the performers panel below
+        (the eventernote-links branch's territory). The button + its heavy
+        WON/PAID confirmation live in _following_toggle.html; this page only
+        places them. Visible to every signed-in reader, unlike the editor bar. -#}
+    <p class="bar2">{% include "_following_toggle.html" %}</p>
+    {#- === end subscriptions branch ======================================== -#}
     {#- Editing is something you do to a SPECIFIC concert, so it belongs here
         rather than in the site nav -- and both controls are editor-only. -#}
     {% if user.is_editor %}

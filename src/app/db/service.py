@@ -31,7 +31,9 @@ from app.db.models import (
     Concert,
     ConcertAudit,
     ConcertDay,
+    ConcertSubscription,
     ConcertTag,
+    LegOptOut,
     Notification,
     OpsCheckState,
     ReminderPreset,
@@ -47,7 +49,7 @@ from app.db.models import (
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.timezones import utc_to_jst
-from app.domain.types import Anchor, LotteryOutcome, RoundKind, TagKind
+from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
 
 
 def _now() -> datetime:
@@ -184,10 +186,11 @@ async def _apply_outcome_suppression(
 ) -> list[Round]:
     """Drop rounds this user's outcomes make irrelevant, before the pure
     planner ever sees them -- same pattern as the cancelled-round
-    filtering sync_rule already does. Two passes: cross-round (every leg
+    filtering sync_rule already does. Three passes: cross-round (every leg
     a round covers is already secured via WON/PAID elsewhere on this
-    concert) then same-round (this rule's own anchor is moot given this
-    round's outcome)."""
+    concert), same-round (this rule's own anchor is moot given this
+    round's outcome), and per-leg opt-out (every leg a round covers has a
+    LegOptOut row for this user)."""
     if not rounds:
         return rounds
 
@@ -207,6 +210,19 @@ async def _apply_outcome_suppression(
         select(ConcertDay.id).where(ConcertDay.concert_id == concert_id)
     )).scalars())
 
+    # Per-user leg opt-out: this user's LegOptOut rows over this concert's
+    # days. A round drops only when EVERY leg it covers is opted out -- the
+    # per-user analogue of is_round_cancelled's every-leg (not any-leg)
+    # cancellation rule. Kept symmetric on purpose: a two-leg round with
+    # only one leg opted out survives, exactly as a two-leg round with only
+    # one leg cancelled survives.
+    opted_out_day_ids = set((await session.execute(
+        select(LegOptOut.concert_day_id).where(
+            LegOptOut.user_id == user_id,
+            LegOptOut.concert_day_id.in_(all_day_ids),
+        )
+    )).scalars()) if all_day_ids else set()
+
     # Per-round contribution, so each round's own outcome can be excluded
     # when checking IT for cross-round suppression -- "secured elsewhere"
     # must not let a round's own WON/PAID outcome suppress itself; a round
@@ -218,6 +234,15 @@ async def _apply_outcome_suppression(
 
     survivors = []
     for r in rounds:
+        # Leg opt-out: suppress only when the round names specific legs AND
+        # every one of them is opted out. An all-legs round (empty/None
+        # applies_to) is tied to no specific leg, so no set of leg opt-outs
+        # can cover it -- never suppressed, mirroring is_round_cancelled
+        # leaving empty applies_to alone. Uses raw applies_to, not the
+        # all_day_ids fallback the outcome passes use, precisely so the
+        # empty case falls through untouched.
+        if r.applies_to and all(d in opted_out_day_ids for d in r.applies_to):
+            continue
         applies = set(r.applies_to) if r.applies_to else all_day_ids
         secured_elsewhere: set[int] = set()
         for other_id, legs in secured_by.items():
@@ -234,6 +259,18 @@ async def _apply_outcome_suppression(
             continue
         survivors.append(r)
     return survivors
+
+
+async def _concert_opted_out(session: AsyncSession, user_id: int, concert_id: int) -> bool:
+    """Whether this user holds a concert-level OPTED_OUT override -- read by
+    sync_rule so a pruned concert plans (and thus keeps) no reminders."""
+    state = (await session.execute(
+        select(ConcertSubscription.state).where(
+            ConcertSubscription.user_id == user_id,
+            ConcertSubscription.concert_id == concert_id,
+        )
+    )).scalar_one_or_none()
+    return state is SubscriptionState.OPTED_OUT
 
 
 async def record_round_outcome(
@@ -382,6 +419,20 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
         cancelled_day_ids = {d.id for d in all_days if d.cancelled}
         live_rounds = [r for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)]
         days = [_day_info(d) for d in all_days if not d.cancelled]
+
+    # A concert-level OPTED_OUT override prunes the whole concert for this
+    # user: no rounds are live, so plan_for_rule yields nothing and the
+    # "no longer planned -> delete" pass below clears any queued reminders.
+    # This is the read-side half of set_concert_subscription's invariant-2
+    # resync -- it is what actually makes a pruned concert stop reminding.
+    # (Per-leg opt-out is a separate, finer pass -- Task 3.)
+    scope_concert_id = rule.concert_id if rule.round_id is None else (
+        round_.concert_id if round_ is not None else None
+    )
+    if scope_concert_id is not None and await _concert_opted_out(
+        session, rule.user_id, scope_concert_id
+    ):
+        live_rounds = []
 
     live_rounds = await _apply_outcome_suppression(session, rule.user_id, live_rounds, rule.anchor)
     rounds = [_round_info(r) for r in live_rounds]
@@ -812,22 +863,102 @@ async def upcoming_deadlines(
 async def tracked_concert_ids(session: AsyncSession, user_id: int) -> set[int]:
     """Concerts this user is deemed to be following.
 
-    INTERIM DEFINITION: "tracked" = carries any tag the user has a
-    TagSubscription for, derived at query time. There is deliberately no
-    per-concert opt-in or opt-out yet -- the real `ConcertSubscription`
-    table (plus per-leg opt-out) is branch 4 of the Home/Discover project
-    and replaces this function's body wholesale. Until then the
-    OPEN_COLUMN_LIMIT cap in board_cards is what keeps an over-broad match
-    tolerable; do not add a half-version of pruning here, it would have to
-    be migrated later.
+        tracked = (tag-matched ids  -  opted-out ids)  |  subscribed ids
+
+    A ConcertSubscription row is an *override* on the tag-derived default
+    (see the model): no row means "follow the tag default", an OPTED_OUT
+    row prunes a tag-matched concert, a SUBSCRIBED row forces one on even
+    with no matching tag. This is the SINGLE definition of "tracked" --
+    callers must not re-derive it anywhere else.
     """
-    res = await session.execute(
+    tag_matched = set((await session.execute(
         select(ConcertTag.concert_id)
         .join(TagSubscription, TagSubscription.tag_id == ConcertTag.tag_id)
         .where(TagSubscription.user_id == user_id)
         .distinct()
+    )).scalars())
+    overrides = await concert_subscription_states(session, user_id)
+    opted_out = {cid for cid, st in overrides.items() if st is SubscriptionState.OPTED_OUT}
+    subscribed = {cid for cid, st in overrides.items() if st is SubscriptionState.SUBSCRIBED}
+    return (tag_matched - opted_out) | subscribed
+
+
+async def concert_subscription_states(
+    session: AsyncSession, user_id: int
+) -> dict[int, SubscriptionState]:
+    """Every explicit per-concert override this user holds, keyed by concert
+    id. The read surface Preferences and setup need to show pruned concerts,
+    which `tracked_concert_ids` excludes by definition."""
+    res = await session.execute(
+        select(ConcertSubscription.concert_id, ConcertSubscription.state)
+        .where(ConcertSubscription.user_id == user_id)
     )
-    return set(res.scalars())
+    return {concert_id: state for concert_id, state in res}
+
+
+async def set_concert_subscription(
+    session: AsyncSession, user_id: int, concert_id: int, state: SubscriptionState
+) -> None:
+    """Upsert this user's per-concert override to `state`."""
+    existing = (await session.execute(
+        select(ConcertSubscription).where(
+            ConcertSubscription.user_id == user_id,
+            ConcertSubscription.concert_id == concert_id,
+        )
+    )).scalar_one_or_none()
+    if existing is None:
+        session.add(
+            ConcertSubscription(user_id=user_id, concert_id=concert_id, state=state)
+        )
+    else:
+        existing.state = state
+    await session.flush()
+    # Invariant 2: the override changes which reminders should exist for this
+    # concert, so re-sync this user's rules exactly as record_round_outcome
+    # does after an outcome write. An OPTED_OUT concert now plans nothing
+    # (sync_rule drops its rounds), so unsent queue rows are deleted; going
+    # back to SUBSCRIBED/default re-arms them. Skip the resync and a pruned
+    # concert keeps sending reminders -- the bug this branch fixes.
+    await reinstate_user_rules(session, user_id, concert_id)
+
+
+async def clear_concert_subscription(
+    session: AsyncSession, user_id: int, concert_id: int
+) -> None:
+    """Delete this user's override for the concert -- back to the tag
+    default. Branch 6's un-prune calls this."""
+    existing = (await session.execute(
+        select(ConcertSubscription).where(
+            ConcertSubscription.user_id == user_id,
+            ConcertSubscription.concert_id == concert_id,
+        )
+    )).scalar_one_or_none()
+    if existing is not None:
+        await session.delete(existing)
+    await session.flush()
+    # Same invariant-2 resync as set_concert_subscription: un-pruning must
+    # let this concert's reminders resume.
+    await reinstate_user_rules(session, user_id, concert_id)
+
+
+async def set_leg_opt_out(
+    session: AsyncSession, user_id: int, day_id: int, opted_out: bool
+) -> None:
+    """Toggle a per-leg opt-out by row presence: add a row when opting out,
+    delete it when opting back in. The suppression this drives is a
+    read-side planner pass added in Task 3 -- there is no concert-level
+    resync here."""
+    existing = (await session.execute(
+        select(LegOptOut).where(
+            LegOptOut.user_id == user_id,
+            LegOptOut.concert_day_id == day_id,
+        )
+    )).scalar_one_or_none()
+    if opted_out and existing is None:
+        session.add(LegOptOut(user_id=user_id, concert_day_id=day_id))
+    elif not opted_out and existing is not None:
+        await session.delete(existing)
+    await session.flush()
 
 
 @dataclass(frozen=True)
