@@ -136,6 +136,32 @@ performer chips - see its Shipped entry below.)
 
 ## Shipped
 
+### Onboarding and untouched-pages build (2026-07-20)
+
+Shipped as: the last user-facing surfaces the reconciliation never covered,
+built from the `dekimasen-onboarding-demo.html` concept, on the shipped design
+system. The signed-out home became a real landing page (hero, value prop, a
+"how it works", an illustrative campaign board, a live Discover taste with tag
+chips, and a Sign-in CTA) while the signed-in board stayed unchanged. The
+five-step `/welcome` wizard was rebuilt on the card/chip vocabulary and now
+flows seamlessly into `/setup`: its default-reminders step is the settled
+cards-plus-sentence-fine-tune design over all five anchors (Opens/Closes/
+Results/Payment/Show; default reminds once for Opens/Results/Payment, Closes
+gets a couple, nothing on Show), materialising a real `ReminderPreset` through a
+single new `create_preset_from_rules` service helper (no second write path), and
+the timezone step gained the browser-detection select reusing the existing
+`tz_auto` routes. Import preview was rebuilt in the day-card/round-card/leg-chip
+vocabulary with a Kind selector and an editable Details/links fold, and
+`import_commit` now binds a round to several legs via the same `round_legs`/
+`day_key`/`parse_round_legs` path as `create_concert` -- a multi-leg round at
+import, which the old flat form could not express at all. Import form,
+retroactive-apply, and the privacy/terms pages were reframed in the design
+system (routes, SSRF guard, and legal wording unchanged). Review caught and
+fixed an empty-default-preset bug (a wizard submit with no rules would have
+created a default that never reminds -- now rejected 422 server-side and blocked
+client-side). Real multi-language i18n was deliberately scoped out and logged as
+its own Proposed entry. No schema change.
+
 ### Add-concert page refactor, incl. multi-leg rounds in one pass (2026-07-20)
 
 Shipped as: `concert_new.html` rebuilt on the editor's card/fold/chip

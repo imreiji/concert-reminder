@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 889 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 897 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -140,6 +140,14 @@ the design system -- have shipped since).
   index reorg) committed one of each before code. Follow that pattern for
   substantial features. `docs/codebase-review-2026-07-17.md` records a
   full-codebase review and the fixes it drove.
+- `docs/superpowers/demo/` — the interactive concept demos that drove the UI,
+  and the **design source of truth** for it: `dekimasen-demo.html` (the
+  reconciliation reference for Home/Discover/concert/editor/tags/preferences/
+  setup) and `dekimasen-onboarding-demo.html` (the signed-out landing, the
+  new-user flow, import + import preview, retroactive-apply, legal). Review
+  UI/UX changes against the matching demo; when the shipped design
+  deliberately moves, update that demo so it stays the reference. Both are
+  self-contained single-file mockups on the same design tokens the app ships.
 
 ## Feature wishlist
 
