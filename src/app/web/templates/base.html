@@ -3,6 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {# No-flash theme stamp: runs synchronously before the stylesheet applies,
+     so a saved choice is on <html> before first paint. No saved value means
+     unset -- the CSS media query then follows the OS preference. #}
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("theme");
+        if (t === "dark" || t === "light")
+          document.documentElement.setAttribute("data-theme", t);
+      } catch (e) { /* private mode / disabled storage: fall back to OS */ }
+    })();
+  </script>
   <title>{% block title %}dekimasen.app{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
   <link rel="icon" href="/static/favicon.ico" sizes="any">
@@ -10,6 +22,7 @@
 </head>
 <body data-tz="{{ tz or '' }}" data-tz-auto="{{ '1' if tz_auto else '0' }}">
   <header class="site">
+    <div class="site-in">
     <a class="home" href="/"><span class="mark">できません</span><span class="wordmark">dekimasen.app</span></a>
     {# Three items, and nothing else goes in here: Home is where you stand,
        Discover is what's on, Tags is the vocabulary both are organised by.
@@ -27,6 +40,8 @@
       {% endfor %}
     </nav>
     <nav class="auth">
+      <button type="button" class="theme-toggle" data-theme-toggle
+              aria-label="Toggle dark mode" title="Toggle dark mode">◐</button>
       {% if user %}
         <img class="avatar" src="{{ user.avatar_url }}" alt="">
         <span>{{ user.username }}{% if user.is_admin %} <em class="badge">admin</em>{% elif user.is_editor %} <em class="badge">editor</em>{% endif %}</span>
@@ -37,6 +52,7 @@
         <a class="btn" href="/auth/login">Sign in with Discord</a>
       {% endif %}
     </nav>
+    </div>
   </header>
   {% if user and user.dm_blocked %}
   <div class="banner-warn">
@@ -52,6 +68,22 @@
     · <a href="/terms">Terms of service</a>
   </footer>
 <script>
+    // Theme toggle: flip light<->dark, stamp <html data-theme>, persist. An
+    // unset choice means "follow the OS", so the first click resolves the
+    // effective theme from the media query before inverting it.
+    (function () {
+      var btn = document.querySelector("[data-theme-toggle]");
+      if (!btn) return;
+      btn.addEventListener("click", function () {
+        var root = document.documentElement;
+        var cur = root.getAttribute("data-theme");
+        if (!cur)
+          cur = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        var next = cur === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem("theme", next); } catch (e) { /* storage off */ }
+      });
+    })();
     // shared: clicking the backdrop closes any dialog (Esc works natively)
     document.addEventListener("click", (e) => {
       if (e.target instanceof HTMLDialogElement && e.target.open) e.target.close();
