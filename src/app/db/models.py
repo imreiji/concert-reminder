@@ -29,7 +29,15 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.domain.types import Anchor, Channel, ConcertKind, LotteryOutcome, RoundKind, TagKind
+from app.domain.types import (
+    Anchor,
+    Channel,
+    ConcertKind,
+    LotteryOutcome,
+    RoundKind,
+    SubscriptionState,
+    TagKind,
+)
 
 
 class UTCDateTime(TypeDecorator):
@@ -330,6 +338,52 @@ class RoundOutcome(Base):
         Enum(LotteryOutcome, values_callable=lambda e: [m.value for m in e])
     )
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now, onupdate=_now)
+
+
+class ConcertSubscription(Base):
+    """A user's explicit per-concert override on the tag-derived default.
+
+    Overrides, not materialised records: NO row = follow the tag default
+    (today's behaviour, no backfill needed); a `subscribed` row forces the
+    concert onto the board even with no matching tag; an `opted_out` row
+    prunes it even though a tag matches. Rows exist only when a user acts, so
+    there is no write amplification and every existing board keeps working
+    through the same derivation. Consumed by `tracked_concert_ids`.
+    See specs/2026-07-19-concert-subscriptions-design.md.
+    """
+
+    __tablename__ = "concert_subscriptions"
+    __table_args__ = (Index("uq_concert_subscription", "user_id", "concert_id", unique=True),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
+    concert_id: Mapped[int] = mapped_column(ForeignKey("concerts.id", ondelete="CASCADE"))
+    state: Mapped[SubscriptionState] = mapped_column(
+        Enum(SubscriptionState, values_callable=lambda e: [m.value for m in e])
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+
+
+class LegOptOut(Base):
+    """A user's per-leg opt-out: presence of a row means opted out of that
+    ConcertDay, absence means the leg follows its concert (the default). One
+    level down from ConcertSubscription and needs no state column. Its rounds
+    are suppressed for this user in the same read-side pass cancellation and
+    outcomes use (invariant 2)."""
+
+    __tablename__ = "leg_opt_outs"
+    __table_args__ = (Index("uq_leg_opt_out", "user_id", "concert_day_id", unique=True),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
+    concert_day_id: Mapped[int] = mapped_column(
+        ForeignKey("concert_days.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
 
 class ReminderRule(Base):

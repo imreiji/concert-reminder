@@ -97,3 +97,19 @@ class LotteryOutcome(enum.StrEnum):
     WON = "won"
     LOST = "lost"
     PAID = "paid"
+
+
+class SubscriptionState(enum.StrEnum):
+    """A user's explicit per-concert override on the tag-derived default,
+    stored per (user, concert) in ConcertSubscription. The absence of a row
+    means "follow the tag default" (the pre-branch behaviour); a row is an
+    explicit opt-in or opt-out:
+
+    - SUBSCRIBED: track this concert even if no followed tag matches.
+    - OPTED_OUT: prune this concert even though a followed tag matches.
+
+    (A per-leg opt-out is the same idea one level down, but needs no state
+    column -- LegOptOut's presence alone means opted out.)"""
+
+    SUBSCRIBED = "subscribed"
+    OPTED_OUT = "opted_out"
