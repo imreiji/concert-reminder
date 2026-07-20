@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 430 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 803 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -26,7 +26,10 @@ tag subscriptions, a default preset, timezone confirmation, a test DM,
 the calendar feed for brand-new logins, a corrected first-come-first-served
 round kind (split out from the previously-conflated general-sale kind) and
 a new overseas tour package round kind, both reflected in round-kind
-labels/emoji and the ramen.events import heuristics have shipped since).
+labels/emoji and the ramen.events import heuristics, and a post-wizard
+first-run capture flow — prune tag-implied concerts, record existing
+applications, board reveal — at /setup, re-runnable from Preferences —
+have shipped since).
 
 ## Commands
 
@@ -86,6 +89,15 @@ labels/emoji and the ramen.events import heuristics have shipped since).
   nothing (neither is an end state). `service.board_cards` gathers its
   inputs and `OPEN_COLUMN_LIMIT` caps the open column.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
+- `routes/setup.py` — the first-run capture flow, run AFTER the `/welcome`
+  wizard. Three plain GETs (`/setup` prune tiles → `/setup/applications` →
+  `/setup/ready` reveal) plus two batch POSTs. NO capture-flow step state
+  exists anywhere: each screen renders current DB truth (tag-implied concerts
+  minus overrides, outcomes), which is what makes it tamper-safe and
+  re-runnable (Preferences' "Run first-time setup again" points here). Pruning
+  goes through the branch-4 `set/clear_concert_subscription` writers;
+  applications funnel EXCLUSIVELY through `record_round_outcome`. All logic is
+  in `db/service.py`'s `# First-run capture flow (/setup)` section.
 - `routes/calendar.py` — the personal calendar-feed subscription
   (`POST /me/calendar-feed` mints the token, `GET /calendar/{token}.ics` is
   the feed itself). The `.ics` route deliberately has NO `require_user` —

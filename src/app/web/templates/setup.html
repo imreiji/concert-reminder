@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}setup — dekimasen.app{% endblock %}
+{% block content %}
+
+<div class="steps">
+  <span class="stepdot{% if screen == 'prune' %} on{% elif screen != 'prune' %} done{% endif %}">Your concerts</span>
+  <span class="stepdot{% if screen == 'applications' %} on{% elif screen == 'ready' %} done{% endif %}">Applications</span>
+  <span class="stepdot{% if screen == 'ready' %} on{% endif %}">Ready</span>
+</div>
+
+{% if screen == "prune" %}
+  {% if tiles %}
+  <div class="lede">
+    <h1>We found {{ tiles | length }} upcoming concert{{ "s" if tiles | length != 1 }} for you</h1>
+    <p>
+      {% if because %}Because you follow {{ because | join(", ") }}. {% endif %}Most people
+      cannot get to every date — switch off the ones you are not going for and we will not
+      chase you about them. You can change any of this later.
+    </p>
+  </div>
+
+  <form method="post" action="/setup/prune" id="pruneForm">
+    <div class="pick">
+      {% for t in tiles %}
+      <label class="tile">
+        <input type="checkbox" name="keep" value="{{ t.concert.id }}"{% if t.kept %} checked{% endif %} hidden>
+        <input type="hidden" name="shown" value="{{ t.concert.id }}">
+        <span class="tick">&check;</span>
+        {% if t.because %}<span class="who-t">{{ t.because | join(" · ") }}</span>{% endif %}
+        <span class="t">{{ t.concert.title }}</span>
+        <span class="v">
+          {%- if t.venue %}📍 {{ t.venue }}{% endif -%}
+          {%- if t.venue and t.starts_at_utc %} · {% endif -%}
+          {%- if t.starts_at_utc %}{{ dual(t.starts_at_utc, tz) }}{% endif -%}
+        </span>
+        {% if t.next_round_label %}
+        <span class="rnd"><b>{{ t.next_round_label }}</b> {{ deadline_label(t.next_round_anchor) }} {{ dual(t.next_round_at_utc, tz) }}</span>
+        {% endif %}
+      </label>
+      {% endfor %}
+    </div>
+
+    <div class="bar">
+      <span class="tally"><b id="keepCount">{{ tiles | selectattr("kept") | list | length }}</b> of {{ tiles | length }} kept</span>
+      <button class="btn quiet" type="button" id="allOff">Turn all off</button>
+      <button class="btn" type="submit">Continue</button>
+    </div>
+  </form>
+
+  <script>
+    // Static, zero user-controlled text (invariant 7): keeps the "N of M
+    // kept" tally live and wires the "Turn all off" shortcut. Toggling a tile
+    // is pure CSS (:has(:checked)); this only maintains the count and the bulk
+    // action. Degrades cleanly -- without JS the tally is the server's initial
+    // count and every checkbox still submits.
+    (function () {
+      var form = document.getElementById("pruneForm");
+      if (!form) return;
+      var boxes = form.querySelectorAll('input[name="keep"]');
+      var count = document.getElementById("keepCount");
+      function sync() {
+        var n = 0;
+        boxes.forEach(function (b) { if (b.checked) n++; });
+        if (count) count.textContent = n;
+      }
+      form.addEventListener("change", sync);
+      var off = document.getElementById("allOff");
+      if (off) off.addEventListener("click", function () {
+        boxes.forEach(function (b) { b.checked = false; });
+        sync();
+      });
+    })();
+  </script>
+  {% else %}
+  <div class="lede">
+    <h1>No upcoming concerts yet</h1>
+    <p>
+      We didn't find any upcoming concerts for the tags you follow yet.
+      <a href="/discover">Browse what's on</a> to find some — or continue, and your board
+      will fill in as new events drop.
+    </p>
+  </div>
+  <form method="post" action="/setup/prune">
+    <div class="bar"><button class="btn" type="submit">Continue</button></div>
+  </form>
+  {% endif %}
+{% endif %}
+
+{% if screen == "applications" %}
+  {% if rows %}
+  <div class="lede">
+    <h1>Already applied to any of these?</h1>
+    <p>
+      Only the rounds you could still be in — open now, or closed and waiting on a result. A
+      past round you lost does not change what happens next, so we do not ask.
+    </p>
+  </div>
+
+  <form method="post" action="/setup/applications">
+    <div class="pick">
+      {% for row in rows %}
+      {% set eyebrow = (row.concert.tags | rejectattr("kind.value", "equalto", "venue")
+                        | map(attribute="name") | list) %}
+      <label class="tile">
+        <input type="checkbox" name="applied" value="{{ row.round_.id }}" hidden>
+        <span class="tick">&check;</span>
+        {% if eyebrow %}<span class="who-t">{{ eyebrow[0] }}</span>{% endif %}
+        <span class="t">{{ row.concert.title }}</span>
+        <span class="v">
+          {{- row.round_.label -}}
+          {%- if row.moment_utc %} · {{ dual(row.moment_utc, tz) }}{% endif -%}
+        </span>
+        <span class="rnd">{{ "Still open" if row.status == "open" else "Awaiting result" }}</span>
+      </label>
+      {% endfor %}
+    </div>
+
+    <div class="bar">
+      <span class="tally">Anything you skip, we will ask about by DM when its result lands.</span>
+      <a class="btn quiet" href="/setup">Back</a>
+      <button class="btn" type="submit">Finish</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="lede">
+    <h1>Nothing to ask right now</h1>
+    <p>
+      None of the concerts you are tracking has a round still waiting on you. We will ask by
+      DM the moment one does.
+    </p>
+  </div>
+  <form method="post" action="/setup/applications">
+    <div class="bar"><button class="btn" type="submit">Finish</button></div>
+  </form>
+  {% endif %}
+{% endif %}
+
+{% if screen == "ready" %}
+<div class="reveal">
+  <div class="eyebrow">Setup complete</div>
+  <div class="big">Your board is ready</div>
+  <div class="tallies">
+    <div><div class="n">{{ tallies.tracking }}</div><div class="l">tracking</div></div>
+    <div><div class="n">{{ tallies.applied }}</div><div class="l">applied</div></div>
+    <div><div class="n">{{ tallies.payment_due }}</div><div class="l">payment due</div></div>
+    <div>
+      <div class="n">{{ dual(tallies.next_deadline_utc, tz) if tallies.next_deadline_utc else "—" }}</div>
+      <div class="l">next deadline</div>
+    </div>
+  </div>
+  {% if tallies.payment_due > 0 and tallies.payment_concert %}
+  <p class="lede" style="margin: 0 auto 1.5rem; color: var(--dim);">
+    {{ tallies.payment_concert.title }} is waiting on a payment — the closest thing here to
+    losing a ticket you have already won.
+  </p>
+  {% endif %}
+  <a class="btn" href="/">Go to my board</a>
+</div>
+{% endif %}
+
+{% endblock %}

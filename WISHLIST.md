@@ -80,6 +80,27 @@ performer chips - see its Shipped entry below.)
 
 ## Shipped
 
+### First-run capture flow (2026-07-19)
+
+Shipped as: a three-screen `/setup` flow run AFTER the `/welcome` wizard —
+`GET /setup` prunes the concerts a user's tag subscriptions imply (tiles lit
+by default; switching one off writes a branch-4 `OPTED_OUT` override, and
+re-checking a pruned one CLEARS the override back to the tag default rather
+than writing an explicit subscribe), `GET /setup/applications` asks which
+still-live rounds — open now, or closed and awaiting a result — the user
+already applied to and records `APPLIED` through `record_round_outcome` only
+(no second write path), and `GET /setup/ready` reveals the board tallies
+(tracking / applied / payment due / next deadline). No new step state: every
+screen renders current DB truth, which makes the flow tamper-safe (nothing
+reads a step from user input) and re-runnable (Preferences' "Run first-time
+setup again" points at `GET /setup`). `POST /welcome/advance` now redirects
+into `/setup` when it crosses into done; `skip-all` still lands on `/`.
+Backed by `db/service.py`'s `setup_prune_tiles` / `setup_application_rows` /
+`setup_tallies` / `apply_prune_selection` / `record_setup_applications` and
+the `_round_asks_application` predicate (carrying the documented branch-5
+upgrade-round hook). Consumes branch 4's `ConcertSubscription` override model
+and adds no schema of its own. Closes the six-branch UI/UX refactor.
+
 ### Upgrade rounds and their qualifying-round set (2026-07-19)
 
 Shipped as: a new `RoundKind.UPGRADE` (label "Upgrade round", emoji) for the

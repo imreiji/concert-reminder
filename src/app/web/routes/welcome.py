@@ -87,6 +87,11 @@ async def advance(
     db_user = await ensure_user(session, user.id, user.username)
     db_user.onboarding_step = min(db_user.onboarding_step + 1, TOTAL_STEPS)
     await session.commit()
+    # Crossing into done hands off to the first-run capture flow -- the reveal
+    # at /setup/ready is the wizard's payoff. Earlier advances stay on the
+    # wizard. (skip-all still lands on /, skipping the capture flow too.)
+    if db_user.onboarding_step >= TOTAL_STEPS:
+        return RedirectResponse("/setup", status_code=303)
     return RedirectResponse("/welcome", status_code=303)
 
 

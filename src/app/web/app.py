@@ -25,6 +25,7 @@ from app.web.routes import outcomes as outcome_routes
 from app.web.routes import preferences as pref_routes
 from app.web.routes import privacy as privacy_routes
 from app.web.routes import reminders as reminder_routes
+from app.web.routes import setup as setup_routes
 from app.web.routes import subscriptions as subscription_routes
 from app.web.routes import tags as tag_routes
 from app.web.routes import terms as terms_routes
@@ -84,6 +85,10 @@ def create_app() -> FastAPI:
     app.include_router(pref_routes.router)
     welcome_routes.templates = templates
     app.include_router(welcome_routes.router)
+    # /setup* are literal, unique paths -- order-independent (the flow the
+    # wizard hands off to; also Preferences' "Run first-time setup again").
+    setup_routes.templates = templates
+    app.include_router(setup_routes.router)
     # no templates: pure .ics responses
     app.include_router(calendar_routes.router)
     # /privacy and /terms are literal, unique paths -- order-independent,
