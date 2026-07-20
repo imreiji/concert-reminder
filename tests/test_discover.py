@@ -11,7 +11,9 @@ than sitting beside it, and its colour says who owes the next move: ok = you
 are covered, danger = you owe an action, quiet = you have no standing.
 """
 
+import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -20,12 +22,14 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.db.models import Base, Concert, ConcertDay, Round, User
+from app.db.models import Base, Concert, ConcertDay, ConcertTag, Round, Tag, User
 from app.db.service import record_round_outcome
 from app.db.session import get_session
-from app.domain.types import LotteryOutcome, RoundKind
+from app.domain.types import LotteryOutcome, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
+
+STYLE_CSS = Path(__file__).resolve().parents[1] / "src" / "app" / "web" / "static" / "style.css"
 
 USER = 5151
 
@@ -398,3 +402,136 @@ async def test_next_deadline_sort_link_is_offered(client):
     login(client)
 
     assert 'data-sort="next"' in client.get("/discover").text
+
+
+# ── Task 5: chip counts, tile minichips, faceted chip chrome ───────────────
+
+
+async def test_sidebar_tag_chips_show_usage_counts(client):
+    """The demo's `.chip .n` -- a per-tag concert count, scoped to what
+    /discover actually lists (discoverable_tag_counts), not every Concert
+    row that ever carried the tag."""
+    async def build(seed):
+        c1 = await seed.concert("c1", title="Show One")
+        c2 = await seed.concert("c2", title="Show Two")
+        franchise = Tag(name="Love Live!", kind=TagKind.FRANCHISE, created_by=USER)
+        seed.s.add(franchise)
+        await seed.s.flush()
+        seed.s.add_all([
+            ConcertTag(concert_id=c1.id, tag_id=franchise.id),
+            ConcertTag(concert_id=c2.id, tag_id=franchise.id),
+        ])
+        await seed.s.flush()
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/discover").text
+    assert '>Love Live!<span class="n">2</span></a>' in html
+
+
+async def test_tile_shows_tagrow_minichips(client):
+    """Demo `.tagrow`/`.minichip`: franchise + region below the venue/date
+    line, derived from tags already attached to the concert -- no new
+    query needed for this part."""
+    async def build(seed):
+        c = await seed.concert("tagrow-one", title="Tagrow concert")
+        await seed.open_round(c)
+        franchise = Tag(name="Love Live!", kind=TagKind.FRANCHISE, created_by=USER)
+        venue = Tag(name="Yokohama Arena", kind=TagKind.VENUE, region="Kanto", created_by=USER)
+        seed.s.add_all([franchise, venue])
+        await seed.s.flush()
+        seed.s.add_all([
+            ConcertTag(concert_id=c.id, tag_id=franchise.id),
+            ConcertTag(concert_id=c.id, tag_id=venue.id),
+        ])
+        await seed.s.flush()
+
+    await seeded(client.db, build)
+    login(client)
+
+    tile = tile_for(client.get("/discover").text, "tagrow-one")
+    assert '<div class="tagrow">' in tile
+    assert '<span class="minichip">Love Live!</span>' in tile
+    assert '<span class="minichip">Kanto</span>' in tile
+
+
+async def test_tile_leads_with_eyebrow_performer_above_title(client):
+    """Tile ordering: the performer eyebrow renders BEFORE the title, not
+    after it (the old `.who` span sat below `<strong>`)."""
+    async def build(seed):
+        c = await seed.concert("eyebrow-one", title="Eyebrow concert")
+        group = Tag(name="Aqours", kind=TagKind.GROUP, created_by=USER)
+        seed.s.add(group)
+        await seed.s.flush()
+        seed.s.add(ConcertTag(concert_id=c.id, tag_id=group.id))
+        await seed.s.flush()
+
+    await seeded(client.db, build)
+    login(client)
+
+    tile = tile_for(client.get("/discover").text, "eyebrow-one")
+    assert 'class="eyebrow"' in tile
+    assert tile.index('class="eyebrow"') < tile.index("<strong>Eyebrow concert</strong>")
+
+
+async def test_sort_and_facet_navs_carry_pill_chrome_with_counts(client):
+    """Demo `.sorts button` chrome, ported onto the real <a href> links (JS-
+    off must keep filtering -- see discover.html's client-side-contract
+    comment), plus the facet's own counts tallied off `statuses`."""
+    async def build(seed):
+        await seed.open_round(await seed.concert("is-open"), "R1")
+        await seed.concert("is-none")
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/discover").text
+    assert 'class="sorts discover-sorts"' in html
+    assert 'class="sorts facets discover-sorts"' in html
+    assert 'Open now <span class="n">1</span>' in html
+    assert 'Not tracking <span class="n">1</span>' in html
+
+
+async def test_searchbar_and_filter_search_carry_demo_chrome_classes(client):
+    """Demo `.searchbar`/`.filter-search` -- the concert search form and the
+    sidebar tag search keep their real <input>/<form> shape, just with the
+    demo's classes added for styling."""
+    await seeded(client.db, lambda seed: seed.concert("c1"))
+    login(client)
+
+    html = client.get("/discover").text
+    assert 'class="search-form searchbar"' in html
+    assert 'class="tag-search filter-search"' in html
+
+
+async def test_tile_date_uses_day_month_format(client):
+    """Tile dates render '12 Oct', not '2026-10-12 JST' (day_month, not a
+    raw strftime of the stored date)."""
+    async def build(seed):
+        await seed.concert("dated-one", title="Dated concert", day_offset=60)
+
+    await seeded(client.db, build)
+    login(client)
+
+    tile = tile_for(client.get("/discover").text, "dated-one")
+    when_match = re.search(r'class="when dim">([^<]+)</span>', tile)
+    assert when_match, tile
+    assert re.fullmatch(r"\d{1,2} [A-Z][a-z]{2} JST", when_match.group(1))
+
+
+def test_style_gives_the_status_pill_a_dotted_divider():
+    """Demo `.status-line { border-top: 1px dotted var(--line) }`."""
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    assert ".tile .status-line" in css
+    assert "border-top: 1px dotted var(--line);" in css
+
+
+def test_style_defines_searchbar_and_filter_search_focus_chrome():
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    assert ".searchbar input:focus-visible, .filter-search:focus-visible" in css
+
+
+def test_style_defines_chip_usage_count_styling():
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    assert ".chip .n {" in css

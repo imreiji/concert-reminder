@@ -2076,6 +2076,22 @@ async def discoverable_concert_count(session: AsyncSession) -> int:
     )).scalar_one()
 
 
+async def discoverable_tag_counts(session: AsyncSession) -> dict[int, int]:
+    """How many /discover-listed concerts carry each tag -- the sidebar chip
+    counts (demo `.chip .n`, e.g. "Love Live! 64"). Scoped to
+    discoverable_concert_criterion, the same filter the tile grid itself
+    uses, so a count never promises more than the grid actually holds. One
+    GROUP BY for the whole sidebar rather than a query per chip."""
+    rows = (await session.execute(
+        select(ConcertTag.tag_id, func.count())
+        .select_from(ConcertTag)
+        .join(Concert, Concert.id == ConcertTag.concert_id)
+        .where(discoverable_concert_criterion())
+        .group_by(ConcertTag.tag_id)
+    )).all()
+    return dict(rows)
+
+
 def _open_round_criterion(now: datetime):
     """A round counts as open the same way the Python-side `_round_is_open`
     does: it must carry at least one timestamp, and `now` must fall in
