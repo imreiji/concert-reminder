@@ -225,6 +225,10 @@ class Tag(Base):
     # of one-by-one ("Kanto", "Kansai", etc.)
     location_url: Mapped[str | None] = mapped_column(String(500))
     region: Mapped[str | None] = mapped_column(String(100))
+    # ARTIST/GROUP-specific (harmless if unset on other kinds): an
+    # eventernote.com link, mirroring location_url for venues so performer
+    # chips can link out.
+    eventernote_url: Mapped[str | None] = mapped_column(String(500))
     # SET NULL on erasure (see Concert.created_by): tags are shared taxonomy,
     # not personal data -- they outlive the account that first added them.
     created_by: Mapped[int | None] = mapped_column(

@@ -205,6 +205,50 @@ async def test_edit_tag_without_name_field_leaves_name_unchanged(client):
         assert tag.region == "Kanto"
 
 
+# ── eventernote_url column (Task 1) ──────────────────────────────────────
+
+
+async def test_eventernote_url_round_trips_on_create_and_edit(client):
+    """POST /tags stores an eventernote_url; POST /tags/{id}/edit replaces it;
+    clearing the field nulls it."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Kozue Otomune", "kind": "artist",
+        "eventernote_url": "https://www.eventernote.com/actors/1234",
+    })
+    async with client.db() as s:
+        tag = await s.get(Tag, 1)
+        assert tag.eventernote_url == "https://www.eventernote.com/actors/1234"
+
+    client.post("/tags/1/edit", data={
+        "name": "Kozue Otomune",
+        "eventernote_url": "https://www.eventernote.com/actors/5678",
+    })
+    async with client.db() as s:
+        tag = await s.get(Tag, 1)
+        assert tag.eventernote_url == "https://www.eventernote.com/actors/5678"
+
+    client.post("/tags/1/edit", data={"name": "Kozue Otomune", "eventernote_url": ""})
+    async with client.db() as s:
+        tag = await s.get(Tag, 1)
+        assert tag.eventernote_url is None
+
+
+def test_eventernote_url_rejects_unsafe_scheme(client):
+    """javascript: through create AND through edit both 422 (form_url)."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/tags", data={
+        "name": "Kozue", "kind": "artist", "eventernote_url": "javascript:alert(1)",
+    })
+    assert r.status_code == 422
+    # a clean tag to aim the edit at
+    client.post("/tags", data={"name": "Kaho", "kind": "artist"})
+    r = client.post("/tags/1/edit", data={
+        "name": "Kaho", "eventernote_url": "javascript:alert(1)",
+    })
+    assert r.status_code == 422
+
+
 # ── Tags page rendering: search, hierarchy, unified dialogs ──────────────
 
 

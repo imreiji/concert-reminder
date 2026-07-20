@@ -81,6 +81,7 @@ async def create_tag(
     parent_id: int = Form(0),
     location_url: str = Form(""),
     region: str = Form(""),
+    eventernote_url: str = Form(""),
 ):
     name = name.strip()
     if await find_tag_by_name(session, name) is not None:
@@ -96,6 +97,7 @@ async def create_tag(
     session.add(Tag(
         name=name, kind=kind, created_by=user.id, parent_id=parent.id if parent else None,
         location_url=form_url(location_url), region=region.strip() or None,
+        eventernote_url=form_url(eventernote_url),
     ))
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
@@ -111,12 +113,13 @@ async def edit_tag(
     name: str = Form("", max_length=100),
     location_url: str = Form(""),
     region: str = Form(""),
+    eventernote_url: str = Form(""),
 ):
-    """Rename (any kind) plus venue-only location_url/region -- not
-    kind-restricted on the latter two, harmless to set on others.
-    `name` is optional so callers that never send it (there were none
-    before this feature; kept optional in case any external client still
-    doesn't) leave the tag's name untouched."""
+    """Rename (any kind) plus venue-only location_url/region and the
+    artist/group eventernote_url -- not kind-restricted on those, harmless
+    to set on others. `name` is optional so callers that never send it
+    (there were none before this feature; kept optional in case any external
+    client still doesn't) leave the tag's name untouched."""
     tag = await session.get(Tag, tag_id)
     if tag is None:
         raise HTTPException(status_code=404)
@@ -128,6 +131,7 @@ async def edit_tag(
         tag.name = name
     tag.location_url = form_url(location_url)
     tag.region = region.strip() or None
+    tag.eventernote_url = form_url(eventernote_url)
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
 
