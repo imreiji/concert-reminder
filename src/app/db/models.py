@@ -86,6 +86,10 @@ class User(Base):
     timezone: Mapped[str] = mapped_column(String(64), default="America/Moncton")
     # tz_auto: timezone is browser-detected until the user overrides it manually
     tz_auto: Mapped[bool] = mapped_column(default=True, server_default="1")
+    # UI + DM language. "en" is the source language; the lang cookie is a
+    # per-browser cache of this column (synced at login and on change) so the
+    # web middleware never needs a DB read. Discord always reads this column.
+    language: Mapped[str] = mapped_column(String(8), default="en", server_default="en")
     # DB-persisted editor grant, toggled by admins (web/Discord). Final editor
     # status is this OR settings.editor_whitelist OR settings.admin_whitelist.
     is_editor: Mapped[bool] = mapped_column(default=False, server_default="0")

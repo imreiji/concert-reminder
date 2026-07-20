@@ -1,6 +1,31 @@
 """app.i18n: catalogue loading, ContextVar locale, fallbacks."""
 
+import pytest
+import pytest_asyncio
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
+
 from app import i18n
+from app.db.models import Base, User
+
+
+@pytest_asyncio.fixture()
+async def session():
+    engine = create_async_engine(
+        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
+    )
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _fk(conn, _):
+        conn.execute("PRAGMA foreign_keys=ON")
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as s:
+        yield s
+    await engine.dispose()
 
 
 def test_supported_set():
@@ -74,3 +99,12 @@ def test_loaded_translation_is_used():
     finally:
         i18n.set_locale("en")
         i18n.reset_catalog_cache()
+
+
+@pytest.mark.asyncio
+async def test_user_language_defaults_to_en(session):
+    user = User(discord_id=1, username="alice")
+    session.add(user)
+    await session.commit()
+    got = await session.get(User, 1)
+    assert got.language == "en"
