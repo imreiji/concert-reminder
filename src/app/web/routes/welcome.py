@@ -10,7 +10,7 @@ sequences them.
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -176,12 +176,24 @@ async def create_wizard_preset(
     Each offset arrives as "days:hours" (the fine-tune UI's own encoding, since
     PresetItem stores days+hours only); direction and anchor ride alongside as
     matching arrays. A short/mismatched tail is ignored by zip's own truncation.
+
+    Two defensive checks, both against a tampered POST the closed <select>s
+    would never send themselves: an empty `rules` list would otherwise create
+    a zero-item ReminderPreset and mark it default -- a default that silently
+    never reminds, contradicting preferences.py's "no empty-preset limbo"
+    invariant -- and a bad offset/anchor value would otherwise raise an
+    unhandled ValueError (500) instead of a clean 422.
     """
     db_user = await ensure_user(session, user.id, user.username)
     rules: list[tuple[int, int, str, Anchor]] = []
     for off, dir_, anc in zip(offset, direction, anchor, strict=False):
         days_str, _, hours_str = off.partition(":")
-        rules.append((int(days_str or 0), int(hours_str or 0), dir_, Anchor(anc)))
+        try:
+            rules.append((int(days_str or 0), int(hours_str or 0), dir_, Anchor(anc)))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"bad reminder row: {e}") from e
+    if not rules:
+        raise HTTPException(status_code=422, detail="at least one reminder rule is required")
     preset = await create_preset_from_rules(session, user.id, "My reminders", rules)
     await set_default_preset(session, user.id, preset.id)
     # Same forward-only step gate the wizard runs on; never regress a step.

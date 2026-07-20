@@ -222,6 +222,37 @@ async def test_step_1_fine_tuned_rule_persists_direction_and_hours(client):
     assert item.offset_hours == 3
 
 
+async def test_step_1_empty_rules_rejected_and_creates_no_preset(client):
+    """C1: the fine-tune list can be cleared down to zero rows client-side
+    (the "×" on every row), so a tampered/edge-case POST can arrive with no
+    rules at all. That must never create a zero-item default preset -- a
+    default that silently never reminds, contradicting preferences.py's
+    "no empty-preset limbo" invariant -- so it's rejected with a 422 and the
+    wizard step must not advance either."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    r = client.post("/welcome/preset", data={})  # no offset/direction/anchor at all
+    assert r.status_code == 422
+    async with client.db() as s:
+        presets = (await s.execute(select(ReminderPreset))).scalars().all()
+    assert presets == []
+    assert await _onboarding_step(client, FAN_ID) == 1
+
+
+async def test_step_1_malformed_row_returns_422_not_500(client):
+    """C2: the offset/anchor <select>s are closed, so only a tampered POST
+    can send a value outside their vocabulary -- but the route must still
+    fail cleanly (422) rather than raising an unhandled ValueError (500)."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    data = {"offset": ["0:0"], "direction": ["before"], "anchor": ["not-a-real-anchor"]}
+    r = client.post("/welcome/preset", data=data)
+    assert r.status_code == 422
+    async with client.db() as s:
+        presets = (await s.execute(select(ReminderPreset))).scalars().all()
+    assert presets == []
+
+
 async def test_welcome_shows_step_2_timezone(client):
     login_as(client, FAN_ID, "fan")
     client.post("/welcome/advance")  # 0 -> 1
@@ -256,7 +287,9 @@ async def test_welcome_shows_step_4_calendar_feed(client):
         client.post("/welcome/advance")  # 0 -> 1 -> 2 -> 3 -> 4
     r = client.get("/welcome")
     assert "Get your calendar feed" in r.text
-    assert "Skip this" in r.text
+    # The continue button reads the same forward-facing label whether or
+    # not a feed was generated yet (P5 demo-parity: no "Skip this" here).
+    assert "Continue to my concerts" in r.text
 
 
 async def test_step_4_generate_feed_returns_to_welcome_with_link_shown(client):

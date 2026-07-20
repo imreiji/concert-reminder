@@ -48,10 +48,6 @@
     <p class="dim tiny">Each parsed day becomes a leg you can attach rounds to. Times are JST.</p>
   </div>
 
-  <div class="editor-actions">
-    <button type="button" class="btn quiet" onclick="addRow('day-rows','day-row-template')">Add day</button>
-  </div>
-
   <div id="day-rows" class="row-list">
     {% for d in parsed.days %}
     <div class="eleg">
@@ -78,18 +74,18 @@
       </div>
     </div>
     {% else %}
-    <p class="dim tiny" data-no-legs-row>No days parsed — add the first one above.</p>
+    <p class="dim tiny" data-no-legs-row>No days parsed — add the first one below.</p>
     {% endfor %}
+  </div>
+
+  <div class="editor-actions">
+    <button type="button" class="btn quiet" onclick="addRow('day-rows','day-row-template')">Add day</button>
   </div>
 
   <div class="section-head">
     <h2>Lottery / sale rounds</h2>
     <p class="dim tiny">Tick the days each round applies to — leave none ticked
       for a whole-event round. Times are JST.</p>
-  </div>
-
-  <div class="editor-actions">
-    <button type="button" class="btn" onclick="addRow('round-rows','round-row-template')">Add a round</button>
   </div>
 
   <div id="round-rows" class="row-list">
@@ -122,11 +118,15 @@
       </div>
     </div>
     {% else %}
-    <p class="dim tiny" data-no-rounds>No rounds yet — add the first one above.</p>
+    <p class="dim tiny" data-no-rounds>No rounds yet — add the first one below.</p>
     {% endfor %}
   </div>
 
-  <details class="fold">
+  <div class="editor-actions">
+    <button type="button" class="btn" onclick="addRow('round-rows','round-row-template')">Add a round</button>
+  </div>
+
+  <details class="fold" open>
     <summary>Tags
       <span class="fold-hint">Franchise, group, artists, venue — parsed, editable</span></summary>
     <div class="fold-body">

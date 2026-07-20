@@ -32,9 +32,10 @@
 </ul>
 
 <form class="bar" method="post" action="/tags/{{ group.id }}/members/{{ member.id }}/retroactive-apply">
-  <span class="tally"><b>{{ concerts | length }}</b> active event(s) will gain {{ member.name }}.</span>
+  <span class="tally"><b>{{ concerts | length }}</b> active event(s) will gain {{ member.name }}.
+    Concerts already carrying {{ member.name }} are skipped.</span>
   <a class="btn quiet" href="/tags">Skip</a>
-  <button class="btn">Apply to all</button>
+  <button class="btn">Apply to all {{ concerts | length }}</button>
 </form>
 {% else %}
 <p class="dim">Nothing to apply — every active event with {{ group.name }} already has {{ member.name }}.</p>

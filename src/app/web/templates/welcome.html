@@ -179,7 +179,7 @@
   <div class="bar">
     <span class="tally">Rules on a single concert always override this.</span>
     <button class="btn quiet" type="submit" formaction="/welcome/advance">Skip this step</button>
-    <button class="btn" type="submit">Create preset &amp; continue</button>
+    <button class="btn" type="submit" id="remSubmit">Create preset &amp; continue</button>
   </div>
 </form>
 
@@ -193,6 +193,7 @@
     var form = document.getElementById("remForm");
     var cards = document.getElementById("remCards");
     var ruleList = document.getElementById("remRuleList");
+    var submitBtn = document.getElementById("remSubmit");
     if (!form || !cards || !ruleList) return;
 
     var OFFSETS = {{ offset_options | tojson }};
@@ -276,8 +277,12 @@
       return wrap;
     }
 
+    // A zero-row submit would create an empty ReminderPreset server-side
+    // (rejected there too, welcome.py's create_wizard_preset) -- disabling
+    // here just keeps a normal click from ever reaching that 422.
     function renderRows() {
       ruleList.innerHTML = "";
+      if (submitBtn) submitBtn.disabled = !rows.length;
       if (!rows.length) {
         var p = document.createElement("div");
         p.className = "remrule-empty";
@@ -441,7 +446,7 @@
 <form method="post" action="/welcome/advance">
   <div class="bar">
     <span class="tally">You're set — next we'll tidy up which concerts you're actually going for.</span>
-    <button class="btn" type="submit">{{ "Continue to my concerts" if has_calendar_feed else "Skip this" }}</button>
+    <button class="btn" type="submit">Continue to my concerts</button>
   </div>
 </form>
 {% endif %}

@@ -222,6 +222,7 @@ button.x:hover { color: var(--danger); opacity: 1; }
   font-size: .85rem; line-height: 1.3;
 }
 .btn:hover { opacity: .88; }
+.btn:disabled, .btn:disabled:hover { opacity: .5; cursor: not-allowed; }
 .btn.quiet { background: none; color: var(--dim); border-color: var(--line); }
 .btn.quiet:hover { color: var(--ink); border-color: var(--ink); opacity: 1; }
 .actions { display: flex; gap: .5rem; flex-wrap: wrap; margin: .6rem 0 0; }
@@ -1038,6 +1039,9 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   background: var(--accent-wash); color: var(--accent);
 }
 .callout.warn { border-color: var(--off); background: var(--off-wash); color: var(--off); }
+/* Multiple parse warnings on the import preview stack edge to edge without
+   this -- one gap between every .callout.warn in the list. */
+.warnlist { display: grid; gap: .5rem; }
 .callout b { font-weight: 700; }
 .callout a { color: inherit; text-decoration: underline; }
 /* A bare fallback for the "more" link pattern (`.col .more` / `.steps
@@ -1045,6 +1049,13 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
    same accent-on-hover-underline look, just not nested under one. */
 .clock .more { color: var(--accent); text-decoration: none; font-weight: 550; }
 .clock .more:hover { text-decoration: underline; }
+/* The landing page's Discover-teaser link (demo's `.head .more`): a plain
+   inline link at the end of a .head row, not a button. */
+.head .more {
+  margin-left: auto; font-size: .8125rem; color: var(--accent);
+  text-decoration: none; font-weight: 550;
+}
+.head .more:hover { text-decoration: underline; }
 
 .pick {
   margin-top: 1.5rem; display: grid; gap: .75rem;
