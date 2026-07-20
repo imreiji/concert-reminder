@@ -51,7 +51,8 @@
       {% if d.round_id %}
         {{ capture_actions(row, d.round_id, "#deadline-rows",
                            prune_title=d.concert_title,
-                           prune_url="/concerts/" ~ d.event_id) }}
+                           prune_url="/concerts/" ~ d.event_id,
+                           is_upgrade=row.is_upgrade) }}
       {% endif %}
     </span>
   </div>

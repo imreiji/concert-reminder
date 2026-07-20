@@ -293,3 +293,109 @@ async def test_get_discover_renders_the_upgrade_pill_for_an_eligible_user(client
 def test_get_discover_signed_out_still_renders(client):
     r = client.get("/discover")
     assert r.status_code == 200
+
+
+# ── Task 7: Home "Coming up" rows ──────────────────────────────────────────
+
+
+async def test_home_coming_up_hides_upgrade_rows_from_ineligible_users(client):
+    """A viewer with no secured ticket cannot enter the upgrade, so its Coming
+    up row -- whose buttons would be false testimony -- is dropped."""
+    async with client.db() as s:
+        await _ensure_users(s)
+        await _upgrade_concert(s, base_outcome=None)  # ineligible: nothing secured
+        await s.commit()
+    login(client)
+
+    html = client.get("/").text
+    # The capture button is unique to the Coming up row (the board carries none).
+    assert "Entered upgrade" not in html
+
+
+async def test_home_coming_up_shows_upgrade_row_once_qualified(client):
+    """With the qualifying base ticket secured, the upgrade's Coming up row
+    appears and its capture reads the upgrade wording."""
+    async with client.db() as s:
+        await _ensure_users(s)
+        await _upgrade_concert(s, base_outcome=LotteryOutcome.WON)
+        await s.commit()
+    login(client)
+
+    html = client.get("/").text
+    assert "Entered upgrade" in html
+    assert "Skipping" in html
+
+
+async def test_entered_upgrade_posts_applied_through_the_one_write_path(client):
+    """Pressing "Entered upgrade" posts APPLIED to the SAME
+    /rounds/{id}/outcome route every capture uses -- no new endpoint."""
+    async with client.db() as s:
+        await _ensure_users(s)
+        _c, _base, up = await _upgrade_concert(s, base_outcome=LotteryOutcome.WON)
+        up_id = up.id
+        await s.commit()
+    login(client)
+
+    r = client.post(
+        f"/rounds/{up_id}/outcome", data={"outcome": "applied"}, headers={"HX-Request": "true"}
+    )
+    assert r.status_code == 200
+    async with client.db() as s:
+        outcome = (await s.execute(
+            select(RoundOutcome.outcome).where(
+                RoundOutcome.user_id == USER, RoundOutcome.round_id == up_id
+            )
+        )).scalar_one()
+    assert outcome is LotteryOutcome.APPLIED
+
+
+async def test_global_deadline_list_keeps_upgrade_rows_for_everyone(client):
+    """`upcoming_deadlines` is a public fact and is unchanged: the upgrade's
+    close still lists on Discover's Coming up soon, even signed out."""
+    async with client.db() as s:
+        await _ensure_users(s)
+        await _upgrade_concert(s, base_outcome=None)
+        await s.commit()
+
+    html = client.get("/discover").text  # signed out
+    assert "Seat upgrade" in html
+
+
+# ── Task 7: the concert page ───────────────────────────────────────────────
+
+
+async def test_concert_page_shows_requirement_line_for_ineligible_user(client):
+    async with client.db() as s:
+        await _ensure_users(s)
+        await _upgrade_concert(s, event_id="np", base_outcome=None)
+        await s.commit()
+    login(client)
+
+    html = client.get("/concerts/np").text
+    assert "Requires a ticket from: 最速先行" in html
+    assert "Entered upgrade" not in html
+
+
+async def test_concert_page_shows_capture_for_eligible_user(client):
+    async with client.db() as s:
+        await _ensure_users(s)
+        await _upgrade_concert(s, event_id="np", base_outcome=LotteryOutcome.PAID)
+        await s.commit()
+    login(client)
+
+    html = client.get("/concerts/np").text
+    assert "Entered upgrade" in html
+    assert "Requires a ticket from" not in html
+
+
+async def test_concert_page_renders_the_upgrade_round_with_dual_times(client):
+    async with client.db() as s:
+        await _ensure_users(s)
+        await _upgrade_concert(s, event_id="np", base_outcome=LotteryOutcome.PAID)
+        await s.commit()
+    login(client)
+
+    r = client.get("/concerts/np")
+    assert r.status_code == 200
+    assert "Seat upgrade" in r.text
+    assert "JST" in r.text  # times always render dual, JST first

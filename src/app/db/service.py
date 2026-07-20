@@ -1244,6 +1244,10 @@ class DeadlineRow:
     outcome: LotteryOutcome | None
     venue: str | None = None
     starts_at_utc: datetime | None = None
+    # An UPGRADE round relabels the capture buttons ("Entered upgrade" /
+    # "Skipping"). A row only reaches Home at all when the viewer is eligible
+    # for it, so this never rides on a row whose buttons they cannot press.
+    is_upgrade: bool = False
     # Is this row's round something you could have acted on at all yet?
     can_capture: bool = False
     # Has this round's result become knowable, so "I won"/"I lost" are real
@@ -1396,6 +1400,34 @@ async def my_deadline_rows(
         )).scalars()
     }
 
+    # Eligibility for any UPGRADE rounds among these deadline rows. A row for an
+    # upgrade the viewer cannot enter is noise -- its capture buttons would be
+    # false testimony -- so it is dropped below. Resolved in two BATCHED queries
+    # over the whole row set, never one per row: the qualifier sets, and the
+    # viewer's secured (WON/PAID) rounds across the concerts those upgrades
+    # belong to. Secured is scoped per concert so an empty-qualifier upgrade
+    # cannot be satisfied by a secured ticket on a different concert.
+    upgrade_ids = [rid for rid, r in rounds.items() if r.kind is RoundKind.UPGRADE]
+    eligible_upgrade_ids: set[int] = set()
+    if upgrade_ids:
+        qualifiers_by_round = await _qualifiers_by_upgrade_round(session, upgrade_ids)
+        up_concert_ids = {rounds[rid].concert_id for rid in upgrade_ids}
+        secured_by_concert: dict[int, set[int]] = {}
+        for rid, cid in (await session.execute(
+            select(RoundOutcome.round_id, Round.concert_id)
+            .join(Round, Round.id == RoundOutcome.round_id)
+            .where(
+                RoundOutcome.user_id == user_id,
+                Round.concert_id.in_(up_concert_ids),
+                RoundOutcome.outcome.in_([LotteryOutcome.WON, LotteryOutcome.PAID]),
+            )
+        )).all():
+            secured_by_concert.setdefault(cid, set()).add(rid)
+        for rid in upgrade_ids:
+            secured = secured_by_concert.get(rounds[rid].concert_id, set())
+            if is_upgrade_eligible(qualifiers_by_round.get(rid, []), secured - {rid}):
+                eligible_upgrade_ids.add(rid)
+
     rows = []
     for d in deadlines:
         concert = concerts.get(d.event_id)
@@ -1405,10 +1437,17 @@ async def my_deadline_rows(
         venue_tags = [t.name for t in concert.tags if t.kind is TagKind.VENUE] if concert else []
         round_ = rounds.get(d.round_id) if d.round_id is not None else None
         outcome = outcomes.get(d.round_id) if d.round_id is not None else None
-        can_capture, can_report_result = capture_gates(round_, outcome, now)
+        is_upgrade = round_ is not None and round_.kind is RoundKind.UPGRADE
+        if is_upgrade and round_.id not in eligible_upgrade_ids:
+            continue  # drop rows for an upgrade this viewer cannot enter
+        can_capture, can_report_result = capture_gates(
+            round_, outcome, now,
+            qualifies=(not is_upgrade) or round_.id in eligible_upgrade_ids,
+        )
         rows.append(DeadlineRow(
             deadline=d,
             outcome=outcome,
+            is_upgrade=is_upgrade,
             can_capture=can_capture,
             can_report_result=can_report_result,
             # Same display rule as the tile macro: >1 venue tag collapses to
@@ -1444,6 +1483,12 @@ class RoundRow:
     can_report_result: bool
     primary_anchor: Anchor | None = None
     primary_at_utc: datetime | None = None
+    # `upgrade_locked` is True for an UPGRADE round a signed-in viewer is NOT
+    # eligible for: the page shows a "Requires a ticket from ..." line naming
+    # `qualifier_labels` instead of capture buttons they cannot honestly press.
+    # An eligible viewer (and a signed-out one) sees the normal capture row.
+    upgrade_locked: bool = False
+    qualifier_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1527,6 +1572,17 @@ async def concert_round_rows(
             )).scalars()
         }
 
+    # Upgrade eligibility for the whole concert, ONE query for the qualifier
+    # sets (outcomes are already loaded above). A signed-in viewer ineligible
+    # for an upgrade round gets a locked row (the requirement line) instead of
+    # capture buttons; a signed-out viewer has no standing to gate on, so no
+    # row locks. `label_by_id` turns qualifier ids into the labels the
+    # requirement line names.
+    upgrade_ids = [r.id for r in rounds if r.kind is RoundKind.UPGRADE]
+    qualifiers_by_round = await _qualifiers_by_upgrade_round(session, upgrade_ids)
+    eligible_up = _eligible_upgrade_ids(rounds, outcomes, qualifiers_by_round)
+    label_by_id = {r.id: r.label for r in rounds}
+
     day_ids = {d.id for d in days}
     live_leg_ids = {d.id for d in days if not d.cancelled}
     by_leg: dict[int, list[RoundRow]] = {d.id: [] for d in days}
@@ -1534,12 +1590,24 @@ async def concert_round_rows(
 
     for r in rounds:
         outcome = outcomes.get(r.id)
-        can_capture, can_report_result = capture_gates(r, outcome, now)
+        is_upgrade = r.kind is RoundKind.UPGRADE
+        eligible = r.id in eligible_up
+        # Lock only a signed-in ineligible viewer out of an upgrade round --
+        # signed out (user_id None) there is no eligibility to judge, so the
+        # round renders like any other.
+        upgrade_locked = is_upgrade and user_id is not None and not eligible
+        can_capture, can_report_result = capture_gates(
+            r, outcome, now, qualifies=(not is_upgrade) or eligible
+        )
         anchor, at_utc = _primary_anchor(r, now)
         row = RoundRow(
             round_=r, outcome=outcome,
             can_capture=can_capture, can_report_result=can_report_result,
             primary_anchor=anchor, primary_at_utc=at_utc,
+            upgrade_locked=upgrade_locked,
+            qualifier_labels=tuple(
+                label_by_id[q] for q in qualifiers_by_round.get(r.id, []) if q in label_by_id
+            ),
         )
         # Ids for legs that no longer exist are dropped rather than trusted:
         # applies_to is plain JSON with no FK behind it, so a deleted leg can

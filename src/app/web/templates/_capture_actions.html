@@ -16,7 +16,14 @@
    The caller is responsible for only invoking this where there IS a round: a
    deadline row derived from a ConcertDay has nothing to post against. #}
 
-{% macro capture_actions(row, round_id, target, prune_title=None, prune_url=None) -%}
+{# `is_upgrade` only relabels the two ENTRY buttons for an upgrade round
+   ("Entered upgrade" / "Skipping" instead of "I have applied" / "Not
+   applying") -- the concept's exact text. Everything else (the forms, the
+   values posted, /rounds/{id}/outcome, the won/lost/paid buttons) is
+   identical: an upgrade round captures through the same one write path as any
+   round. The caller is responsible for NOT rendering this at all for an
+   upgrade round the viewer is ineligible for -- an entry they cannot make. #}
+{% macro capture_actions(row, round_id, target, prune_title=None, prune_url=None, is_upgrade=False) -%}
 {# `upcoming_deadlines` emits one row per FUTURE anchor, so one round can
    produce three or four rows. Gating on row.can_capture (the round has
    opened) stops every one of them from offering an independent "I have
@@ -28,7 +35,7 @@
 <form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
       hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome">
   <input type="hidden" name="outcome" value="applied">
-  <button class="act yes" type="submit">I have applied</button>
+  <button class="act yes" type="submit">{{ "Entered upgrade" if is_upgrade else "I have applied" }}</button>
 </form>
 {# data-prune-title, not data-name: base.html's shared filterChips() selector
    claims [data-name] globally. The title is user-controlled text and reaches
@@ -38,7 +45,7 @@
       hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome"
       {% if prune_title %}data-prune-title="{{ prune_title }}" data-prune-url="{{ prune_url }}"{% endif %}>
   <input type="hidden" name="outcome" value="not_applied">
-  <button class="act no" type="submit">Not applying</button>
+  <button class="act no" type="submit">{{ "Skipping" if is_upgrade else "Not applying" }}</button>
 </form>
 {% elif row.can_report_result %}
 {# The web's only exit from APPLIED. WON/LOST live on the DM buttons too, but
