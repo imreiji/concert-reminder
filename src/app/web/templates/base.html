@@ -32,8 +32,8 @@
 
        Discover renders signed out too, because it is public: it is the one
        piece of content the header can offer an anonymous visitor. #}
-    {% set nav_items = [("/", "Home", "home"), ("/discover", "Discover", "discover")]
-       + ([("/tags", "Tags", "tags")] if user else []) %}
+    {% set nav_items = [("/", _("Home"), "home"), ("/discover", _("Discover"), "discover")]
+       + ([("/tags", _("Tags"), "tags")] if user else []) %}
     <nav class="main">
       {% for href, label, key in nav_items %}
       <a href="{{ href }}"{% if nav_page == key %} aria-current="page"{% endif %}>{{ label }}</a>
@@ -41,14 +41,14 @@
     </nav>
     <nav class="auth">
       <button type="button" class="theme-toggle" data-theme-toggle
-              aria-label="Toggle dark mode" title="Toggle dark mode">◐</button>
+              aria-label="{{ _('Toggle dark mode') }}" title="{{ _('Toggle dark mode') }}">◐</button>
       {# Language switcher: a native <details> menu, one <form> per language so
          it works with JS disabled. `next` is prefilled with the current path
          so POST /language (Task 3) returns here after setting the cookie
          (and the users.language column, for a signed-in user). Language
          NAMES stay in their own language -- never translated. #}
       <details class="langmenu">
-        <summary class="langtoggle" title="Language">🌐 <span>{{ {"en": "EN", "zh": "中文", "ja": "日本語"}[current_locale()] }}</span></summary>
+        <summary class="langtoggle" title="{{ _('Language') }}">🌐 <span>{{ {"en": "EN", "zh": "中文", "ja": "日本語"}[current_locale()] }}</span></summary>
         <div class="langlist">
           {% for code, label in [("en", "English"), ("zh", "中文"), ("ja", "日本語")] %}
           <form method="post" action="/language">
@@ -61,28 +61,28 @@
       </details>
       {% if user %}
         <img class="avatar" src="{{ user.avatar_url }}" alt="">
-        <span>{{ user.username }}{% if user.is_admin %} <em class="badge">admin</em>{% elif user.is_editor %} <em class="badge">editor</em>{% endif %}</span>
-        {% if user.is_editor %}<a class="btn" href="/concerts/new">+ Add</a>{% endif %}
-        <a class="btn quiet" href="/preferences">Preferences</a>
-        <a class="btn quiet" href="/auth/logout">Log out</a>
+        <span>{{ user.username }}{% if user.is_admin %} <em class="badge">{{ _("admin") }}</em>{% elif user.is_editor %} <em class="badge">{{ _("editor") }}</em>{% endif %}</span>
+        {% if user.is_editor %}<a class="btn" href="/concerts/new">{{ _("+ Add") }}</a>{% endif %}
+        <a class="btn quiet" href="/preferences">{{ _("Preferences") }}</a>
+        <a class="btn quiet" href="/auth/logout">{{ _("Log out") }}</a>
       {% else %}
-        <a class="btn" href="/auth/login">Sign in with Discord</a>
+        <a class="btn" href="/auth/login">{{ _("Sign in with Discord") }}</a>
       {% endif %}
     </nav>
     </div>
   </header>
   {% if user and user.dm_blocked %}
   <div class="banner-warn">
-    Your last Discord DM couldn't be delivered — check your Discord privacy
+    {% trans %}Your last Discord DM couldn't be delivered — check your Discord privacy
     settings to allow DMs from server members, or
-    <a href="/preferences">test it from Preferences</a>.
+    <a href="/preferences">test it from Preferences</a>.{% endtrans %}
   </div>
   {% endif %}
   <main>{% block content %}{% endblock %}</main>
   <footer>
-    Times are entered in <strong>JST</strong> and shown as JST + your local time.
-    · <a href="/privacy">Privacy policy</a>
-    · <a href="/terms">Terms of service</a>
+    {% trans %}Times are entered in <strong>JST</strong> and shown as JST + your local time.{% endtrans %}
+    · <a href="/privacy">{{ _("Privacy policy") }}</a>
+    · <a href="/terms">{{ _("Terms of service") }}</a>
   </footer>
 <script>
     // Theme toggle: flip light<->dark, stamp <html data-theme>, persist. An

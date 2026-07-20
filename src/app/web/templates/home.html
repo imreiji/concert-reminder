@@ -59,104 +59,104 @@
      line, and Sign-in-with-Discord CTAs (hero + foot). Signed in, none of
      this branch runs -- the real board is below, in the else branch. #}
   <div class="hero">
-    <span class="eyebrow">dekimasen.app · Japanese concert ticketing, tracked</span>
-    <h1 class="promise">Never say <em>dekimasen deshita</em> again.</h1>
+    <span class="eyebrow">{% trans %}dekimasen.app · Japanese concert ticketing, tracked{% endtrans %}</span>
+    <h1 class="promise">{% trans %}Never say <em>dekimasen deshita</em> again.{% endtrans %}</h1>
     <p class="vprop">
-      Every Japanese ticket is a <b>campaign</b>, not a date — fan-club presale, lottery
+      {% trans %}Every Japanese ticket is a <b>campaign</b>, not a date — fan-club presale, lottery
       round 1, round 2 if you lose, a first-come sale, an upgrade round riding on the
-      seat you already hold. We track the whole ladder and tell you exactly where you stand.
+      seat you already hold. We track the whole ladder and tell you exactly where you stand.{% endtrans %}
     </p>
     <div class="cta">
-      <a class="btn btn-discord" href="/auth/login"><span class="di">✦</span> Sign in with Discord</a>
-      <span class="reassure">Free · we DM you on Discord · no card, no spam</span>
+      <a class="btn btn-discord" href="/auth/login"><span class="di">✦</span> {{ _("Sign in with Discord") }}</a>
+      <span class="reassure">{% trans %}Free · we DM you on Discord · no card, no spam{% endtrans %}</span>
     </div>
     <div class="statband num">
-      <div><div class="n">{{ catalogue_count }}</div><div class="l">concerts tracked</div></div>
-      <div><div class="n">{{ open_round_count }}</div><div class="l">with a round open now</div></div>
-      <div><div class="n">{{ franchise_count }}</div><div class="l">franchises</div></div>
-      <div><div class="n">{{ performer_count }}</div><div class="l">performers tagged</div></div>
+      <div><div class="n">{{ catalogue_count }}</div><div class="l">{{ _("concerts tracked") }}</div></div>
+      <div><div class="n">{{ open_round_count }}</div><div class="l">{{ _("with a round open now") }}</div></div>
+      <div><div class="n">{{ franchise_count }}</div><div class="l">{{ _("franchises") }}</div></div>
+      <div><div class="n">{{ performer_count }}</div><div class="l">{{ _("performers tagged") }}</div></div>
     </div>
   </div>
 
   <section>
-    <div class="head"><h2>How it works</h2><span class="note">Three steps, then it runs itself</span></div>
+    <div class="head"><h2>{{ _("How it works") }}</h2><span class="note">{{ _("Three steps, then it runs itself") }}</span></div>
     <div class="howto">
       <div class="howstep">
         <span class="k num">1</span>
-        <h3>Follow your artists</h3>
-        <p>Tap a franchise, a group, or one performer. New events for anyone you follow
-          show up on your board <b>automatically</b>.</p>
+        <h3>{{ _("Follow your artists") }}</h3>
+        <p>{% trans %}Tap a franchise, a group, or one performer. New events for anyone you follow
+          show up on your board <b>automatically</b>.{% endtrans %}</p>
       </div>
       <div class="howstep">
         <span class="k num">2</span>
-        <h3>We track every round's deadline</h3>
-        <p>Presale opens, lottery closes, results land, payment is due. All times shown
-          <b>JST and yours</b>, always both — no mental arithmetic at 3am.</p>
+        <h3>{{ _("We track every round's deadline") }}</h3>
+        <p>{% trans %}Presale opens, lottery closes, results land, payment is due. All times shown
+          <b>JST and yours</b>, always both — no mental arithmetic at 3am.{% endtrans %}</p>
       </div>
       <div class="howstep">
         <span class="k num">3</span>
-        <h3>You get a DM, and you know where you stand</h3>
-        <p>A Discord reminder before each deadline, plus a campaign board that says whether the
-          ball is <b>in your court</b> or you are already covered.</p>
+        <h3>{{ _("You get a DM, and you know where you stand") }}</h3>
+        <p>{% trans %}A Discord reminder before each deadline, plus a campaign board that says whether the
+          ball is <b>in your court</b> or you are already covered.{% endtrans %}</p>
       </div>
     </div>
   </section>
 
   <section>
     <div class="head">
-      <h2>The whole campaign, one board</h2>
-      <span class="note">One card moves left to right as you apply, win, and pay</span>
+      <h2>{{ _("The whole campaign, one board") }}</h2>
+      <span class="note">{{ _("One card moves left to right as you apply, win, and pay") }}</span>
     </div>
     {#- Illustrative sample, NOT a query: signed out there is no user to hold
         a real board for, so this is fixed markup mirroring the shape
         _board.html renders once you are signed in and following someone. -#}
     <div class="board">
       <div class="col">
-        <div class="col-head"><span class="dot d-open"></span> Open now <span class="count num">2</span></div>
+        <div class="col-head"><span class="dot d-open"></span> {{ _("Open now") }} <span class="count num">2</span></div>
         <div class="card thesiscard">
           <span class="eyebrow">Liella!</span>
           <span class="title">5th Live Tour — Yokohama</span>
           <span class="venue">横浜アリーナ · 12 Oct</span>
-          <span class="foot"><span class="pill p-danger">FC presale · 6h left</span></span>
+          <span class="foot"><span class="pill p-danger">{{ _("FC presale · 6h left") }}</span></span>
         </div>
         <div class="card thesiscard">
           <span class="eyebrow">22/7</span>
           <span class="title">Live at Nakano</span>
           <span class="venue">中野サンプラザ · 3 Sep</span>
-          <span class="foot"><span class="pill p-off">General presale · 4d</span></span>
+          <span class="foot"><span class="pill p-off">{{ _("General presale · 4d") }}</span></span>
         </div>
       </div>
       <div class="col">
-        <div class="col-head"><span class="dot d-applied"></span> Applied <span class="count num">1</span></div>
+        <div class="col-head"><span class="dot d-applied"></span> {{ _("Applied") }} <span class="count num">1</span></div>
         <div class="card thesiscard">
           <span class="eyebrow">Aqours</span>
           <span class="title">9th LoveLive! — Day 2</span>
           <span class="venue">さいたまスーパーアリーナ · 24 Aug</span>
-          <span class="foot"><span class="pill p-off">Lottery R1 · result 21 Jul</span></span>
+          <span class="foot"><span class="pill p-off">{{ _("Lottery R1 · result 21 Jul") }}</span></span>
         </div>
       </div>
       <div class="col">
-        <div class="col-head"><span class="dot d-won"></span> Won — pay <span class="count num">1</span></div>
+        <div class="col-head"><span class="dot d-won"></span> {{ _("Won — pay") }} <span class="count num">1</span></div>
         <div class="card thesiscard" data-column="won">
           <span class="eyebrow">Poppin'Party</span>
           <span class="title">Bloom in the Summer</span>
           <span class="venue">日本ガイシホール · 17 Aug</span>
-          <span class="foot"><span class="pill p-danger">Pay by 22 Jul</span><span class="clock num">¥9,800</span></span>
+          <span class="foot"><span class="pill p-danger">{{ _("Pay by 22 Jul") }}</span><span class="clock num">¥9,800</span></span>
         </div>
       </div>
       <div class="col">
-        <div class="col-head"><span class="dot d-secured"></span> Secured <span class="count num">2</span></div>
+        <div class="col-head"><span class="dot d-secured"></span> {{ _("Secured") }} <span class="count num">2</span></div>
         <div class="card thesiscard">
           <span class="eyebrow">Nijigasaki</span>
           <span class="title">7th Live — Day 1</span>
           <span class="venue">ぴあアリーナMM · 5 Oct</span>
-          <span class="foot"><span class="pill p-ok">Paid</span></span>
+          <span class="foot"><span class="pill p-ok">{{ _("Paid") }}</span></span>
         </div>
         <div class="card thesiscard">
           <span class="eyebrow">μ's</span>
           <span class="title">Final Live Encore</span>
           <span class="venue">東京ドーム · 30 Nov</span>
-          <span class="foot"><span class="pill p-ok">Paid</span></span>
+          <span class="foot"><span class="pill p-ok">{{ _("Paid") }}</span></span>
         </div>
       </div>
     </div>
@@ -164,9 +164,9 @@
 
   <section>
     <div class="head">
-      <h2>Discover what's on</h2>
-      <span class="note">The catalogue is public — browse before you sign in</span>
-      <a class="more" href="/auth/login">Sign in to track →</a>
+      <h2>{{ _("Discover what's on") }}</h2>
+      <span class="note">{{ _("The catalogue is public — browse before you sign in") }}</span>
+      <a class="more" href="/auth/login">{{ _("Sign in to track →") }}</a>
     </div>
     {% if landing_concerts %}
     <div class="peek">
@@ -176,17 +176,17 @@
   </section>
 
   <div class="ctafoot">
-    <span class="eyebrow">Ready when you are</span>
-    <h2>Follow four groups in a minute. Miss nothing after that.</h2>
-    <p>Sign in with the Discord account you already have. We only ever DM you about deadlines
-      for artists you chose to follow.</p>
-    <a class="btn btn-discord" href="/auth/login"><span class="di">✦</span> Sign in with Discord</a>
+    <span class="eyebrow">{{ _("Ready when you are") }}</span>
+    <h2>{{ _("Follow four groups in a minute. Miss nothing after that.") }}</h2>
+    <p>{% trans %}Sign in with the Discord account you already have. We only ever DM you about deadlines
+      for artists you chose to follow.{% endtrans %}</p>
+    <a class="btn btn-discord" href="/auth/login"><span class="di">✦</span> {{ _("Sign in with Discord") }}</a>
   </div>
 
   <p class="foot-note">
-    <b>Signed out, this is the whole product in one screen.</b> Sign in and it becomes your
+    {% trans %}<b>Signed out, this is the whole product in one screen.</b> Sign in and it becomes your
     board — your rounds, your outcomes, your deadlines. Everything above is a taste of what
-    fills in once you follow someone.
+    fills in once you follow someone.{% endtrans %}
   </p>
 {% else %}
 
@@ -205,7 +205,7 @@
 {% set d = up_next.deadline %}
 <div class="next">
   <div>
-    <div class="label">Up next</div>
+    <div class="label">{{ _("Up next") }}</div>
     <div class="what">
       <a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a> — {{ d.label }}
     </div>
@@ -224,7 +224,7 @@
 {# 2. Your campaigns #}
 <section>
   <div class="head">
-    <h2>Your campaigns</h2>
+    <h2>{{ _("Your campaigns") }}</h2>
     {% include "_board_summary.html" %}
   </div>
   {# Both partials are included unconditionally -- they carry their own empty
@@ -237,8 +237,8 @@
 {# 3. Coming up -- the capture surface. #}
 <section>
   <div class="head">
-    <h2>Coming up</h2>
-    <span class="note">All times JST and yours, always both</span>
+    <h2>{{ _("Coming up") }}</h2>
+    <span class="note">{{ _("All times JST and yours, always both") }}</span>
   </div>
   {% include "_deadline_rows.html" %}
 </section>
@@ -247,17 +247,17 @@
    front door. #}
 <div class="teaser">
   <div>
-    <div class="eyebrow">Not tracking these yet</div>
-    <h2>Discover</h2>
+    <div class="eyebrow">{{ _("Not tracking these yet") }}</div>
+    <h2>{{ _("Discover") }}</h2>
     <p>
-      {{ catalogue_count }} concert{{ "" if catalogue_count == 1 else "s" }} in the catalogue,
+      {% trans count=catalogue_count %}{{ count }} concert in the catalogue,{% pluralize %}{{ count }} concerts in the catalogue,{% endtrans %}
       {#- The count is what /discover would LIST, not every Concert row:
           a concert whose every leg is cancelled is hidden there. -#}
-      {{ open_round_count }} with a round still open.
-      Browse by franchise, group, artist or region — or search everything.
+      {% trans n=open_round_count %}{{ n }} with a round still open.{% endtrans %}
+      {{ _("Browse by franchise, group, artist or region — or search everything.") }}
     </p>
   </div>
-  <a class="btn" href="/discover">Open discover →</a>
+  <a class="btn" href="/discover">{{ _("Open discover →") }}</a>
 </div>
 
 {# The peek grid: a taste of what /discover holds, reusing the same card
@@ -271,21 +271,21 @@
 {% endif %}
 
 <p class="foot-note">
-  <b>Home answers "where do I stand".</b> Everything above is yours — your rounds, your outcomes,
-  your deadlines. Discovery sits at the bottom as a door out, not as the page itself.
+  {% trans %}<b>Home answers "where do I stand".</b> Everything above is yours — your rounds, your outcomes,
+  your deadlines. Discovery sits at the bottom as a door out, not as the page itself.{% endtrans %}
 </p>
 
 {# The follow-up to "Not applying". The narrow action already posted; the
    wider one is a SECOND deliberate press, never a side effect of the first. #}
 <dialog class="prune" id="pruneDlg">
-  <div class="dh">Not applying to this round
-    <button type="button" data-close aria-label="Close">×</button></div>
+  <div class="dh">{{ _("Not applying to this round") }}
+    <button type="button" data-close aria-label="{{ _('Close') }}">×</button></div>
   <p>
-    Done — you won't be reminded about this round. Later rounds for
-    <b id="pruneName">this concert</b> will still reach you.
+    {% trans %}Done — you won't be reminded about this round. Later rounds for
+    <b id="pruneName">this concert</b> will still reach you.{% endtrans %}
   </p>
   <div class="da">
-    <button class="btn quiet" type="button" data-close>That's right</button>
+    <button class="btn quiet" type="button" data-close>{{ _("That's right") }}</button>
     {# Subscriptions branch (Task 4): a real concert opt-out, not a link. Its
        action is set in JS from the same data-prune-url the dialog already
        carries -- pruneUrl is "/concerts/{event_id}", so the subscription route
@@ -293,9 +293,9 @@
        JS-less branch redirects back to Home via Referer. #}
     <form method="post" id="pruneSkipForm" class="inline">
       <input type="hidden" name="state" value="opted_out">
-      <button class="btn danger" type="submit">Skip this concert entirely</button>
+      <button class="btn danger" type="submit">{{ _("Skip this concert entirely") }}</button>
     </form>
-    <a class="btn" id="pruneLink" href="/">Manage this concert →</a>
+    <a class="btn" id="pruneLink" href="/">{{ _("Manage this concert →") }}</a>
   </div>
 </dialog>
 
