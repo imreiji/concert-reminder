@@ -224,3 +224,15 @@ def test_welcome_timezone_step_offers_language(client):
     r = client.get("/welcome")
     assert "Confirm your timezone" in r.text
     assert 'action="/language"' in r.text
+
+
+# ── legal pages: English-governs note ────────────────────────────────────
+
+
+def test_legal_governs_note_absent_in_en_present_in_ja(client):
+    r = client.get("/privacy")
+    assert "English version governs" not in r.text
+    client.cookies.set("lang", "ja")
+    r = client.get("/privacy")
+    # untranslated fallback of the note's msgid still proves the conditional
+    assert "English version governs" in r.text
