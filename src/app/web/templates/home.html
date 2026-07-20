@@ -4,11 +4,18 @@
    landing's Discover section (signed out) and the peek grid below the
    teaser (signed in), so there is exactly one place that decides how a
    catalogue card looks on Home. #}
-{% macro peek_card(c, status) %}
+{# `variant="landing"` is used ONLY by the signed-out landing's Discover taste
+   (below): it splits the venue and date onto their own lines and adds a
+   .tagrow of franchise + region minichips, reusing the Discover tile's exact
+   derivation (cv.region). The default (no variant) is the shared signed-in
+   peek grid and is byte-for-byte unchanged -- do not fold the two together. #}
+{% macro peek_card(c, status, variant="") %}
 {% set ctags = c.tags %}
 {% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
 {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
 {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
+{% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
+{% set live_days = c.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
 <a class="card" href="/concerts/{{ c.event_id }}">
   {% if cg or ca %}
   <span class="eyebrow">
@@ -18,12 +25,26 @@
   </span>
   {% endif %}
   <span class="title">{{ c.title }}</span>
-  {% set live_days = c.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
+  {% if variant == "landing" %}
+  {% if c.venue %}<span class="venue">📍 {{ c.venue }}</span>{% endif %}
+  {% if live_days %}<span class="when num">{{ day_month(live_days[0].starts_at_utc) }}</span>{% endif %}
+  {#- Franchise + venue region minichips, the same derivation the Discover
+      tiles use (region comes off the already-loaded venue tags -- no extra
+      query), so a card reads the same wherever it appears. -#}
+  {% set tag_regions = cv | map(attribute="region") | select | unique | list %}
+  {% if cf or tag_regions %}
+  <div class="tagrow">
+    {% for f in cf %}<span class="minichip">{{ f.name }}</span>{% endfor %}
+    {% for rg in tag_regions %}<span class="minichip">{{ rg }}</span>{% endfor %}
+  </div>
+  {% endif %}
+  {% else %}
   <span class="venue">
     {%- if c.venue %}📍 {{ c.venue }}{% endif -%}
     {%- if c.venue and live_days %} · {% endif -%}
     {%- if live_days %}{{ day_month(live_days[0].starts_at_utc) }}{% endif -%}
   </span>
+  {% endif %}
   {% if status %}
   <span class="foot"><span class="pill p-{{ status.tone }}">{{ status.text }}</span></span>
   {% endif %}
@@ -149,7 +170,7 @@
     </div>
     {% if landing_concerts %}
     <div class="peek">
-      {% for c in landing_concerts %}{{ peek_card(c, landing_statuses.get(c.id)) }}{% endfor %}
+      {% for c in landing_concerts %}{{ peek_card(c, landing_statuses.get(c.id), variant="landing") }}{% endfor %}
     </div>
     {% endif %}
   </section>

@@ -33,14 +33,20 @@
 {% endif %}
 
 <form class="stack wide editor" method="post" action="/concerts/import/commit" id="new-concert">
-  {#- Commit is a separate request; this hidden field is how it learns where
-      the draft came from. Re-validated server-side on POST (invariant 7) --
-      it round-trips through the client like any other field. -#}
-  <input type="hidden" name="source_url" value="{{ source_url }}">
+  {#- The source URL the draft came from is now an editable field in the
+      Details fold below (it was a hidden field). Commit is a separate request,
+      so it still round-trips through the client -- re-validated server-side on
+      POST via form_url like any other field (invariant 7 / SSRF re-check). -#}
 
   <div class="ebar">
     <label class="grow">Title (JP) <input class="title-input" name="title" required
       maxlength="200" value="{{ parsed.title }}"></label>
+    <label>Kind
+      <select name="kind">
+        <option value="">— none —</option>
+        {% for k in concert_kinds %}<option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>{% endfor %}
+      </select>
+    </label>
   </div>
 
   <div class="section-head">
@@ -125,6 +131,25 @@
   <div class="editor-actions">
     <button type="button" class="btn" onclick="addRow('round-rows','round-row-template')">Add a round</button>
   </div>
+
+  {#- Details and links fold, mirroring concert_new.html's: Title (EN),
+      organizer, and the now-editable Source URL and Notes. Blank+editable
+      where the ramen.events parse carries nothing; Source URL pre-filled
+      from the parsed page. Same field set import_commit sets on the concert
+      exactly as create_concert does. -#}
+  <details class="fold">
+    <summary>Details and links
+      <span class="fold-hint">Optional — title EN, organizer, source URL, notes</span></summary>
+    <div class="fold-body">
+      <div class="grid2">
+        <label>Title (EN) <input name="title_en" maxlength="200"></label>
+        <label>Artist / organizer <input name="organizer" maxlength="200" placeholder="non-series acts, etc."></label>
+        <label>Source URL <input name="source_url" type="url" value="{{ source_url }}"
+          placeholder="where this was sourced from"></label>
+      </div>
+      <label>Notes <textarea name="notes" rows="2"></textarea></label>
+    </div>
+  </details>
 
   <details class="fold" open>
     <summary>Tags

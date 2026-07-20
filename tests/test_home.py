@@ -219,6 +219,60 @@ async def test_signed_out_landing_catalogue_stat_line_reflects_real_counts(clien
     assert '<div class="n">1</div><div class="l">concerts tracked</div>' in html
 
 
+async def test_signed_out_landing_card_has_tagrow_and_date(client):
+    """The landing's Discover-taste cards get their own treatment: a separate
+    day-month date line and a .tagrow of franchise + region minichips (the
+    Discover tile's own derivation), which the shared signed-in peek card
+    does not carry."""
+    async def build(seed):
+        fr = Tag(name="Love Live!", kind=TagKind.FRANCHISE)
+        vn = Tag(name="Saitama Super Arena", kind=TagKind.VENUE, region="Kanto")
+        seed.s.add_all([fr, vn])
+        await seed.s.flush()
+        c = await seed.concert("aqours-9th", title="9th LoveLive", venue="SSA")
+        seed.s.add(ConcertTag(concert_id=c.id, tag_id=fr.id))
+        seed.s.add(ConcertTag(concert_id=c.id, tag_id=vn.id))
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+
+    html = client.get("/").text  # signed out
+    assert 'class="tagrow"' in html
+    assert '<span class="minichip">Love Live!</span>' in html
+    assert '<span class="minichip">Kanto</span>' in html
+    assert 'class="when num"' in html  # the separate day-month date line
+
+
+async def test_signed_in_peek_grid_keeps_its_shared_card(client):
+    """The landing card treatment is landing-only: the shared signed-in peek
+    grid keeps its merged venue-date card and emits no .tagrow, even for a
+    concert carrying a franchise + region."""
+    async def build(seed):
+        fr = Tag(name="Love Live!", kind=TagKind.FRANCHISE)
+        vn = Tag(name="Saitama Super Arena", kind=TagKind.VENUE, region="Kanto")
+        seed.s.add_all([fr, vn])
+        await seed.s.flush()
+        # Untracked (no subscribed tag), so it lands in the peek grid.
+        c = Concert(title="Untracked", event_id="untracked", created_by=USER, venue="SSA")
+        seed.s.add(c)
+        await seed.s.flush()
+        seed.s.add(ConcertTag(concert_id=c.id, tag_id=fr.id))
+        seed.s.add(ConcertTag(concert_id=c.id, tag_id=vn.id))
+        seed.s.add(ConcertDay(
+            concert_id=c.id, label="Day 1",
+            starts_at_utc=datetime.now(UTC) + timedelta(days=60),
+        ))
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text  # signed in
+    assert 'id="peek"' in html
+    assert "Untracked" in html            # it IS in the peek grid
+    assert 'class="tagrow"' not in html   # but with no landing tagrow
+
+
 # ── signed in ────────────────────────────────────────────────────────────
 
 

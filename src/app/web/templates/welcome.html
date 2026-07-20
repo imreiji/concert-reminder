@@ -357,18 +357,53 @@
 <p style="margin-top:1.25rem">Detected <strong>{{ tz }}</strong>{% if tz_auto %}
   <span class="remnote">(auto-detected from your browser)</span>{% endif %}</p>
 
-<form class="inline" method="post" action="/me/timezone">
+{# Two selects, matching preferences.html's Time section: the zone picker
+   (Save pins it manual) and a Detection mode that reuses the SAME timezone
+   routes -- "Follow my browser" re-arms auto-detect (reset route), "Keep what
+   I picked" pins the current zone manual (/me/timezone). Both paired hidden
+   forms carry next=/welcome so the wizard stays put. No user-authored text in
+   any handler (invariant 7). #}
+<div class="grid2" style="max-width:36rem; margin-top:.5rem">
+  <form class="fld inline" method="post" action="/me/timezone">
+    <input type="hidden" name="next" value="/welcome">
+    <span>Your timezone</span>
+    <select name="timezone">
+      <optgroup label="Common">
+        {% for t in common_timezones %}<option value="{{ t }}"{% if t == tz %} selected{% endif %}>{{ t }}</option>{% endfor %}
+      </optgroup>
+      <optgroup label="All zones (IANA)">
+        {% for t in all_timezones %}<option value="{{ t }}"{% if t == tz and t not in common_timezones %} selected{% endif %}>{{ t }}</option>{% endfor %}
+      </optgroup>
+    </select>
+    <button class="btn" type="submit">Use this timezone</button>
+  </form>
+  <label class="fld"><span>Detection</span>
+    <select id="tz-detect" aria-label="Timezone detection mode">
+      <option value="follow" {% if tz_auto %}selected{% endif %}>Follow my browser</option>
+      <option value="keep" {% if not tz_auto %}selected{% endif %}>Keep what I picked</option>
+    </select></label>
+</div>
+<form id="tz-follow" method="post" action="/me/timezone/reset" hidden>
   <input type="hidden" name="next" value="/welcome">
-  <select name="timezone">
-    <optgroup label="Common">
-      {% for t in common_timezones %}<option value="{{ t }}"{% if t == tz %} selected{% endif %}>{{ t }}</option>{% endfor %}
-    </optgroup>
-    <optgroup label="All zones (IANA)">
-      {% for t in all_timezones %}<option value="{{ t }}"{% if t == tz and t not in common_timezones %} selected{% endif %}>{{ t }}</option>{% endfor %}
-    </optgroup>
-  </select>
-  <button class="btn" type="submit">Use this timezone</button>
 </form>
+<form id="tz-keep" method="post" action="/me/timezone" hidden>
+  <input type="hidden" name="timezone" value="{{ tz }}">
+  <input type="hidden" name="next" value="/welcome">
+</form>
+
+<script>
+  // The Detection select submits one of the paired hidden forms above. Values
+  // are fixed tokens, not user text, so keying off them directly is safe
+  // (mirrors preferences.html's identical control).
+  (function () {
+    var sel = document.getElementById("tz-detect");
+    if (!sel) return;
+    sel.addEventListener("change", function () {
+      var form = document.getElementById(sel.value === "follow" ? "tz-follow" : "tz-keep");
+      if (form) form.submit();
+    });
+  })();
+</script>
 
 {# A live JST/local sample so the dual render is visible before relying on it
    (invariant 1: JST first, both zones always). #}

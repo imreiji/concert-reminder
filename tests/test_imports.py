@@ -333,13 +333,66 @@ async def test_commit_tolerates_blank_trailing_rows(client):
     assert await _all(client.db, Round) == []
 
 
-def test_preview_carries_source_url_as_a_hidden_field(client):
-    """The commit POST is a fresh request, so the only way it learns which
-    page the draft came from is a hidden field on the preview form."""
+def test_preview_carries_editable_source_url(client):
+    """The commit POST is a fresh request, so the only way it learns which page
+    the draft came from is a field on the preview form. It is now an editable
+    <input type="url"> in the Details fold (was a hidden field), pre-filled with
+    the parsed page; it still round-trips and is re-validated on commit."""
     login_as(client, EDITOR_ID, "reiji")
     mock_fetch(client, load("ramen_graduation_concert.html"))
     r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
-    assert f'name="source_url" value="{GRADUATION_URL}"' in r.text
+    assert f'name="source_url" type="url" value="{GRADUATION_URL}"' in r.text
+
+
+def test_preview_shows_kind_selector_and_details_fold(client):
+    """The .ebar carries a concert Kind selector and the preview grows a
+    Details-and-links fold (title EN, organizer, editable source URL, notes),
+    mirroring concert_new.html."""
+    login_as(client, EDITOR_ID, "reiji")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert r.status_code == 200
+    assert 'name="kind"' in r.text        # concert Kind selector in the .ebar
+    assert "Details and links" in r.text  # the new fold
+    assert 'name="title_en"' in r.text
+    assert 'name="organizer"' in r.text
+
+
+async def test_commit_persists_details_fold_fields(client):
+    """Committing with an edited Title EN / organizer / kind / notes persists
+    them, set on the concert exactly as create_concert does."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "Detailed Concert",
+            "title_en": "Detailed Concert (English)",
+            "organizer": "Some Organizer",
+            "kind": "tour",
+            "notes": "spotted on ramen.events",
+        },
+    )
+    assert r.status_code == 303
+    concerts = await _all(client.db, Concert)
+    assert len(concerts) == 1
+    c = concerts[0]
+    assert c.title_en == "Detailed Concert (English)"
+    assert c.organizer == "Some Organizer"
+    assert c.kind is not None and c.kind.value == "tour"
+    assert c.notes == "spotted on ramen.events"
+
+
+async def test_commit_edited_source_url_still_revalidates(client):
+    """The Source URL is now editor-editable, but a bad scheme is still
+    rejected -- it goes through form_url on commit (invariant 7), same as when
+    it was a hidden field."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={"title": "Bad URL", "source_url": "javascript:alert(1)"},
+    )
+    assert r.status_code == 422
+    assert await _all(client.db, Concert) == []
 
 
 async def test_commit_persists_source_url(client):

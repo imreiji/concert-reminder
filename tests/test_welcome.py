@@ -261,6 +261,20 @@ async def test_welcome_shows_step_2_timezone(client):
     assert "Confirm your timezone" in r.text
 
 
+async def test_step_2_renders_both_timezone_selects(client):
+    """The timezone step carries the zone select AND a Detection select, the
+    latter reflecting tz_auto -- a brand-new user is browser-auto by default,
+    so 'Follow my browser' is the selected option."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # 0 -> 1
+    client.post("/welcome/advance")  # 1 -> 2
+    r = client.get("/welcome")
+    assert r.status_code == 200
+    assert 'name="timezone"' in r.text
+    assert 'id="tz-detect"' in r.text
+    assert '<option value="follow" selected>' in r.text
+
+
 async def test_step_2_set_timezone_returns_to_welcome(client):
     login_as(client, FAN_ID, "fan")
     client.post("/welcome/advance")

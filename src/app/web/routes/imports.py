@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.service import sync_concert, tag_picker_context
 from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
-from app.domain.types import RoundKind
+from app.domain.types import ConcertKind, RoundKind
 from app.web.auth import SessionUser, require_editor
 from app.web.forms import form_url
 from app.web.routes.concerts import (
@@ -162,6 +162,9 @@ async def import_preview(
         {
             "user": user, "parsed": parsed, "source_url": url,
             "fmt": _fmt, "kinds": list(RoundKind),
+            # Concert-level Kind selector in the .ebar (the round-kind `kinds`
+            # above is a different list -- per-round, not per-concert).
+            "concert_kinds": list(ConcertKind),
             "by_kind": picker["by_kind"],
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
@@ -180,6 +183,11 @@ async def import_commit(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
+    title_en: str = Form(default=""),
+    organizer: str = Form(default=""),
+    categories: str = Form(default=""),
+    kind: str = Form(default=""),
+    notes: str = Form(default=""),
     source_url: str = Form(default=""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
@@ -225,8 +233,17 @@ async def import_commit(
     event_id = await generate_event_id(session, title)
     concert = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
+        kind=ConcertKind(kind) if kind else None,
         source_url=checked_source_url,
     )
+    # The Details-fold scalars, set exactly as create_concert does after
+    # create_concert_row returns (title_en/organizer/categories/notes). The
+    # ramen.events parse supplies none of these, so they arrive blank unless
+    # the editor filled them in.
+    concert.title_en = title_en.strip() or None
+    concert.organizer = organizer.strip() or None
+    concert.categories = categories.strip() or None
+    concert.notes = notes.strip() or None
 
     # The optional day_* fields (venue, city, doors, cancelled) round-trip in
     # full from the preview form, but a minimal client -- the older import
