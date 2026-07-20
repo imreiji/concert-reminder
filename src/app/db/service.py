@@ -2175,6 +2175,19 @@ async def discoverable_open_round_count(
     )).scalar_one()
 
 
+async def catalogue_tag_counts(session: AsyncSession) -> dict[TagKind, int]:
+    """How many tags exist per kind -- the signed-out landing's "N franchises
+    / N performers tagged" stat line (the other two figures reuse
+    discoverable_concert_count / discoverable_open_round_count).
+    Deliberately NOT scoped to discoverable_concert_criterion the way
+    discoverable_tag_counts is: this is a fact about the tag vocabulary
+    itself, not about which concerts currently show."""
+    rows = (await session.execute(
+        select(Tag.kind, func.count()).select_from(Tag).group_by(Tag.kind)
+    )).all()
+    return dict(rows)
+
+
 async def discover_peek(
     session: AsyncSession, exclude_ids: set[int], limit: int = 4,
 ) -> list[Concert]:

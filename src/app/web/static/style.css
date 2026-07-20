@@ -103,9 +103,59 @@ nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; fo
 .avatar { width: 24px; height: 24px; border-radius: 50%; }
 .badge { color: var(--ok); font-style: normal; font-size: .8em; border: 1px solid currentColor; padding: 0 .3em; border-radius: 4px; }
 
-.hero { margin-top: 4rem; text-align: center; }
-.hero h1 { font-size: 1.7rem; }
-.hero p { color: var(--dim); max-width: 34rem; margin: 0 auto; }
+/* Signed-out Home landing (.hero has no other caller). Discord brand button
+   is the one deliberate fixed colour (blurple), which reads correctly on
+   both themes since white text sits on it either way. */
+.btn-discord {
+  background: #5865f2; border-color: #5865f2; color: #fff;
+  display: inline-flex; align-items: center; gap: .5rem;
+}
+.btn-discord:hover { opacity: .9; }
+.btn-discord .di { font-size: 1rem; line-height: 1; }
+
+.hero { padding: 4rem 0 1rem; max-width: 54rem; }
+.hero .eyebrow { display: block; margin-bottom: 1rem; }
+.hero .promise {
+  font-size: clamp(2.1rem, 6vw, 3.5rem); line-height: 1.04; letter-spacing: -.035em;
+  font-weight: 680; margin: 0 0 1.2rem; text-wrap: balance;
+}
+.hero .promise em { font-style: normal; color: var(--accent); }
+.hero .vprop { font-size: 1.15rem; color: var(--dim); max-width: 46ch; margin: 0 0 1.9rem; line-height: 1.5; }
+.hero .vprop b { color: var(--ink); font-weight: 600; }
+.hero .cta { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; }
+.hero .reassure { color: var(--dim); font-size: .8125rem; }
+
+.statband { display: flex; gap: 2.75rem; flex-wrap: wrap; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.statband div .n { font-size: 1.7rem; font-weight: 680; letter-spacing: -.02em; }
+.statband div .l { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+
+.howto { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.25rem; }
+.howstep {
+  border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+  padding: 1.1rem 1.15rem; display: grid; gap: .35rem; box-shadow: var(--shadow); align-content: start;
+}
+.howstep .k {
+  width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--accent-wash);
+  color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: .85rem;
+}
+.howstep h3 { margin: .3rem 0 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+.howstep p { margin: 0; color: var(--dim); font-size: .875rem; }
+.howstep p b { color: var(--ink); font-weight: 600; }
+
+/* The landing's illustrative board thesis reuses .board/.card exactly
+   (see home.html for why it's fixed sample markup, not a query), just
+   smaller -- .thesiscard tightens the padding and type scale. */
+.thesiscard { padding: .7rem .75rem; }
+.thesiscard .title { font-size: .9rem; }
+.thesiscard .venue { font-size: .78rem; }
+
+.ctafoot {
+  margin-top: 3.5rem; border: 1px solid var(--line); border-radius: 3px;
+  background: var(--raise); box-shadow: var(--shadow);
+  padding: 2.25rem 2rem; text-align: center; display: grid; gap: 1rem; justify-items: center;
+}
+.ctafoot h2 { margin: 0; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 660; text-wrap: balance; }
+.ctafoot p { margin: 0; color: var(--dim); max-width: 48ch; }
 
 .toolbar { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
 .search-form { display: flex; gap: .5rem; margin: .6rem 0 1rem; }

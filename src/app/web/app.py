@@ -14,6 +14,7 @@ from app.db.models import User
 from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
 from app.db.session import get_session
 from app.domain.timezones import fmt_day_month, fmt_dual, fmt_dual_lines, utc_to_jst
+from app.domain.types import TagKind
 from app.ops import run_checks
 from app.scheduler import heartbeat
 from app.web import auth
@@ -137,6 +138,7 @@ def create_app() -> FastAPI:
         number of rows on the page."""
         from app.db.service import (
             board_cards,
+            catalogue_tag_counts,
             discover_peek,
             discover_statuses,
             discoverable_concert_count,
@@ -188,6 +190,20 @@ def create_app() -> FastAPI:
             peek_concerts = await discover_peek(session, tracked, limit=4)
             ctx["peek_concerts"] = peek_concerts
             ctx["peek_statuses"] = await discover_statuses(session, peek_concerts, user.id)
+        else:
+            # The landing page: the catalogue stat line plus a taste of
+            # Discover, reusing the exact helpers /discover itself calls --
+            # no separate landing-only query path (see spec's "Signed-out
+            # home" section).
+            ctx["catalogue_count"] = await discoverable_concert_count(session)
+            ctx["open_round_count"] = await discoverable_open_round_count(session)
+            tag_counts = await catalogue_tag_counts(session)
+            ctx["franchise_count"] = tag_counts.get(TagKind.FRANCHISE, 0)
+            ctx["performer_count"] = tag_counts.get(TagKind.ARTIST, 0)
+            # No tracked concerts to exclude -- everyone is a stranger signed out.
+            landing_concerts = await discover_peek(session, set(), limit=3)
+            ctx["landing_concerts"] = landing_concerts
+            ctx["landing_statuses"] = await discover_statuses(session, landing_concerts, None)
         return templates.TemplateResponse(request, "home.html", ctx)
 
     return app

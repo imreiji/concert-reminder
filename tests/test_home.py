@@ -156,15 +156,67 @@ async def seeded(db, build):
 # ── signed out ───────────────────────────────────────────────────────────
 
 
-def test_signed_out_home_renders_the_hero_and_nothing_personal(client):
+def test_signed_out_home_renders_the_landing(client):
+    """Signed out, Home is a real landing page (Task 1 of the onboarding
+    build): hero/promise, a "how it works", the illustrative campaign board,
+    a Discover taste, and Sign-in-with-Discord CTAs (hero + foot)."""
     r = client.get("/")
     assert r.status_code == 200
-    assert "できませんでした" in r.text
-    # A door out to discovery, so an anonymous visitor has somewhere to go.
-    assert 'href="/discover"' in r.text
+    assert "dekimasen deshita" in r.text
+    assert "How it works" in r.text
+    assert "The whole campaign, one board" in r.text
+    assert "Discover what's on" in r.text
+    # Two CTAs: hero + foot.
+    assert r.text.count('href="/auth/login"') >= 2
     # None of the personal blocks leak to a signed-out visitor.
     assert "Your campaigns" not in r.text
     assert "Up next" not in r.text
+
+
+async def test_signed_out_landing_board_thesis_is_static_not_a_live_query(client):
+    """The four-column board on the landing is an illustrative sample -- there
+    is no user signed out, so it must not be a query against real data (the
+    board_cards/tracked_concert_ids path). Seeding a concert must not make it
+    appear inside the thesis board specifically, since that board is fixed
+    sample copy (it may legitimately appear elsewhere, e.g. the separate
+    Discover-taste section, which IS real data)."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Should Not Appear In Thesis")
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+
+    html = client.get("/").text
+    thesis_html = html.split("The whole campaign, one board", 1)[1].split(
+        "Discover what's on", 1
+    )[0]
+    assert "Should Not Appear In Thesis" not in thesis_html
+    # The fixed illustrative sample from the demo is present verbatim.
+    assert "Bloom in the Summer" in thesis_html
+
+
+async def test_signed_out_landing_discover_taste_surfaces_real_public_concerts(client):
+    """The Discover taste section reuses the same public-catalogue helpers
+    /discover itself calls -- a real concert should appear there."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Real Public Concert")
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+
+    html = client.get("/").text
+    assert "Real Public Concert" in html
+
+
+async def test_signed_out_landing_catalogue_stat_line_reflects_real_counts(client):
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live")
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+
+    html = client.get("/").text
+    assert '<div class="n">1</div><div class="l">concerts tracked</div>' in html
 
 
 # ── signed in ────────────────────────────────────────────────────────────

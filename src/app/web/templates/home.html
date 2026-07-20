@@ -1,13 +1,172 @@
 {% extends "base.html" %}
 {% block content %}
+{# A taste of the public catalogue, rendered as a card -- shared by the
+   landing's Discover section (signed out) and the peek grid below the
+   teaser (signed in), so there is exactly one place that decides how a
+   catalogue card looks on Home. #}
+{% macro peek_card(c, status) %}
+{% set ctags = c.tags %}
+{% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
+{% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
+{% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
+<a class="card" href="/concerts/{{ c.event_id }}">
+  {% if cg or ca %}
+  <span class="eyebrow">
+    {%- if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
+    {%- elif cg %}{{ cg | map(attribute="name") | join(", ") }}
+    {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>{% endif -%}
+  </span>
+  {% endif %}
+  <span class="title">{{ c.title }}</span>
+  {% set live_days = c.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
+  <span class="venue">
+    {%- if c.venue %}📍 {{ c.venue }}{% endif -%}
+    {%- if c.venue and live_days %} · {% endif -%}
+    {%- if live_days %}{{ day_month(live_days[0].starts_at_utc) }}{% endif -%}
+  </span>
+  {% if status %}
+  <span class="foot"><span class="pill p-{{ status.tone }}">{{ status.text }}</span></span>
+  {% endif %}
+</a>
+{% endmacro %}
+
 {% if not user %}
-  {# Signed out Home is the hero and nothing else -- the same gate the old
-     index had -- plus a door out to the public catalogue. #}
-  <section class="hero">
-    <h1>Never say できませんでした again.</h1>
-    <p>Lottery rounds, serial-code sales, stream tickets — every concert deadline, one reminder ahead. Sign in with Discord to get started.</p>
-    <p><a class="btn quiet" href="/discover">Browse concerts →</a></p>
+  {# Signed-out Home is the landing page: hero + promise, a "how it works",
+     the four-column campaign board as a static illustrative thesis (there is
+     no user signed out, so this is fixed sample markup, NOT a query -- see
+     web/app.py), a real taste of the public catalogue, a catalogue stat
+     line, and Sign-in-with-Discord CTAs (hero + foot). Signed in, none of
+     this branch runs -- the real board is below, in the else branch. #}
+  <div class="hero">
+    <span class="eyebrow">dekimasen.app · Japanese concert ticketing, tracked</span>
+    <h1 class="promise">Never say <em>dekimasen deshita</em> again.</h1>
+    <p class="vprop">
+      Every Japanese ticket is a <b>campaign</b>, not a date — fan-club presale, lottery
+      round 1, round 2 if you lose, a first-come sale, an upgrade round riding on the
+      seat you already hold. We track the whole ladder and tell you exactly where you stand.
+    </p>
+    <div class="cta">
+      <a class="btn btn-discord" href="/auth/login"><span class="di">✦</span> Sign in with Discord</a>
+      <span class="reassure">Free · we DM you on Discord · no card, no spam</span>
+    </div>
+    <div class="statband num">
+      <div><div class="n">{{ catalogue_count }}</div><div class="l">concerts tracked</div></div>
+      <div><div class="n">{{ open_round_count }}</div><div class="l">with a round open now</div></div>
+      <div><div class="n">{{ franchise_count }}</div><div class="l">franchises</div></div>
+      <div><div class="n">{{ performer_count }}</div><div class="l">performers tagged</div></div>
+    </div>
+  </div>
+
+  <section>
+    <div class="head"><h2>How it works</h2><span class="note">Three steps, then it runs itself</span></div>
+    <div class="howto">
+      <div class="howstep">
+        <span class="k num">1</span>
+        <h3>Follow your artists</h3>
+        <p>Tap a franchise, a group, or one performer. New events for anyone you follow
+          show up on your board <b>automatically</b>.</p>
+      </div>
+      <div class="howstep">
+        <span class="k num">2</span>
+        <h3>We track every round's deadline</h3>
+        <p>Presale opens, lottery closes, results land, payment is due. All times shown
+          <b>JST and yours</b>, always both — no mental arithmetic at 3am.</p>
+      </div>
+      <div class="howstep">
+        <span class="k num">3</span>
+        <h3>You get a DM, and you know where you stand</h3>
+        <p>A Discord reminder before each deadline, plus a campaign board that says whether the
+          ball is <b>in your court</b> or you are already covered.</p>
+      </div>
+    </div>
   </section>
+
+  <section>
+    <div class="head">
+      <h2>The whole campaign, one board</h2>
+      <span class="note">One card moves left to right as you apply, win, and pay</span>
+    </div>
+    {#- Illustrative sample, NOT a query: signed out there is no user to hold
+        a real board for, so this is fixed markup mirroring the shape
+        _board.html renders once you are signed in and following someone. -#}
+    <div class="board">
+      <div class="col">
+        <div class="col-head"><span class="dot d-open"></span> Open now <span class="count num">2</span></div>
+        <div class="card thesiscard">
+          <span class="eyebrow">Liella!</span>
+          <span class="title">5th Live Tour — Yokohama</span>
+          <span class="venue">横浜アリーナ · 12 Oct</span>
+          <span class="foot"><span class="pill p-danger">FC presale · 6h left</span></span>
+        </div>
+        <div class="card thesiscard">
+          <span class="eyebrow">22/7</span>
+          <span class="title">Live at Nakano</span>
+          <span class="venue">中野サンプラザ · 3 Sep</span>
+          <span class="foot"><span class="pill p-off">General presale · 4d</span></span>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-head"><span class="dot d-applied"></span> Applied <span class="count num">1</span></div>
+        <div class="card thesiscard">
+          <span class="eyebrow">Aqours</span>
+          <span class="title">9th LoveLive! — Day 2</span>
+          <span class="venue">さいたまスーパーアリーナ · 24 Aug</span>
+          <span class="foot"><span class="pill p-off">Lottery R1 · result 21 Jul</span></span>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-head"><span class="dot d-won"></span> Won — pay <span class="count num">1</span></div>
+        <div class="card thesiscard" data-column="won">
+          <span class="eyebrow">Poppin'Party</span>
+          <span class="title">Bloom in the Summer</span>
+          <span class="venue">日本ガイシホール · 17 Aug</span>
+          <span class="foot"><span class="pill p-danger">Pay by 22 Jul</span><span class="clock num">¥9,800</span></span>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-head"><span class="dot d-secured"></span> Secured <span class="count num">2</span></div>
+        <div class="card thesiscard">
+          <span class="eyebrow">Nijigasaki</span>
+          <span class="title">7th Live — Day 1</span>
+          <span class="venue">ぴあアリーナMM · 5 Oct</span>
+          <span class="foot"><span class="pill p-ok">Paid</span></span>
+        </div>
+        <div class="card thesiscard">
+          <span class="eyebrow">μ's</span>
+          <span class="title">Final Live Encore</span>
+          <span class="venue">東京ドーム · 30 Nov</span>
+          <span class="foot"><span class="pill p-ok">Paid</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Discover what's on</h2>
+      <span class="note">The catalogue is public — browse before you sign in</span>
+      <a class="btn quiet" href="/auth/login">Sign in to track →</a>
+    </div>
+    {% if landing_concerts %}
+    <div class="peek">
+      {% for c in landing_concerts %}{{ peek_card(c, landing_statuses.get(c.id)) }}{% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  <div class="ctafoot">
+    <span class="eyebrow">Ready when you are</span>
+    <h2>Follow four groups in a minute. Miss nothing after that.</h2>
+    <p>Sign in with the Discord account you already have. We only ever DM you about deadlines
+      for artists you chose to follow.</p>
+    <a class="btn btn-discord" href="/auth/login"><span class="di">✦</span> Sign in with Discord</a>
+  </div>
+
+  <p class="foot-note">
+    <b>Signed out, this is the whole product in one screen.</b> Sign in and it becomes your
+    board — your rounds, your outcomes, your deadlines. Everything above is a taste of what
+    fills in once you follow someone.
+  </p>
 {% else %}
 
 {# 1. Up next -- ONE item, the nearest thing that needs your attention. The
@@ -81,33 +240,9 @@
 </div>
 
 {# The peek grid: a taste of what /discover holds, reusing the same card
-   shape and status pill the board and Discover both use. Deliberately
-   excludes tracked concerts (see the handler) so this stays a door OUT. #}
-{% macro peek_card(c, status) %}
-{% set ctags = c.tags %}
-{% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
-{% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
-{% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
-<a class="card" href="/concerts/{{ c.event_id }}">
-  {% if cg or ca %}
-  <span class="eyebrow">
-    {%- if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
-    {%- elif cg %}{{ cg | map(attribute="name") | join(", ") }}
-    {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>{% endif -%}
-  </span>
-  {% endif %}
-  <span class="title">{{ c.title }}</span>
-  {% set live_days = c.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
-  <span class="venue">
-    {%- if c.venue %}📍 {{ c.venue }}{% endif -%}
-    {%- if c.venue and live_days %} · {% endif -%}
-    {%- if live_days %}{{ day_month(live_days[0].starts_at_utc) }}{% endif -%}
-  </span>
-  {% if status %}
-  <span class="foot"><span class="pill p-{{ status.tone }}">{{ status.text }}</span></span>
-  {% endif %}
-</a>
-{% endmacro %}
+   shape and status pill the board and Discover both use (peek_card, defined
+   once at the top of this file). Deliberately excludes tracked concerts
+   (see the handler) so this stays a door OUT. #}
 {% if peek_concerts %}
 <div class="peek" id="peek">
   {% for c in peek_concerts %}{{ peek_card(c, peek_statuses.get(c.id)) }}{% endfor %}
