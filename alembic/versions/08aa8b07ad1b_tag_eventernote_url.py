@@ -11,7 +11,7 @@ from app.db.models import NAMING_CONVENTION
 
 
 revision = '08aa8b07ad1b'
-down_revision = 'ce1a80bb66f4'
+down_revision = 'cc82d6500300'
 branch_labels = None
 depends_on = None
 
