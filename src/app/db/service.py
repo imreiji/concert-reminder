@@ -958,6 +958,58 @@ async def concert_subscription_states(
     return {concert_id: state for concert_id, state in res}
 
 
+async def followed_tag_counts(
+    session: AsyncSession, user_id: int, now: datetime | None = None
+) -> dict[int, tuple[int, int]]:
+    """Per-followed-tag concert tallies for Preferences' Following rows:
+    {tag_id: (total_concerts, upcoming_concerts)}. "Upcoming" is a concert
+    with a live (non-cancelled) day still in the future -- the number that
+    makes a Notify/Auto-apply toggle meaningful, since a tag with nothing
+    upcoming will not fire either way. Scoped to the tags this user actually
+    follows, so the map has exactly one entry per Following row."""
+    now = now or _now()
+    followed = set((await session.execute(
+        select(TagSubscription.tag_id).where(TagSubscription.user_id == user_id)
+    )).scalars())
+    if not followed:
+        return {}
+    totals = dict((await session.execute(
+        select(ConcertTag.tag_id, func.count(func.distinct(ConcertTag.concert_id)))
+        .where(ConcertTag.tag_id.in_(followed))
+        .group_by(ConcertTag.tag_id)
+    )).all())
+    upcoming = dict((await session.execute(
+        select(ConcertTag.tag_id, func.count(func.distinct(ConcertTag.concert_id)))
+        .join(ConcertDay, ConcertDay.concert_id == ConcertTag.concert_id)
+        .where(
+            ConcertTag.tag_id.in_(followed),
+            ConcertDay.cancelled.is_(False),
+            ConcertDay.starts_at_utc > now,
+        )
+        .group_by(ConcertTag.tag_id)
+    )).all())
+    return {tid: (totals.get(tid, 0), upcoming.get(tid, 0)) for tid in followed}
+
+
+async def upcoming_concert_count(
+    session: AsyncSession, concert_ids: set[int], now: datetime | None = None
+) -> int:
+    """How many of `concert_ids` have a live day still in the future -- the
+    "N upcoming" half of Preferences' Following summary, applied to the
+    tracked set. Empty in, zero out (no query)."""
+    if not concert_ids:
+        return 0
+    now = now or _now()
+    return (await session.execute(
+        select(func.count(func.distinct(ConcertDay.concert_id)))
+        .where(
+            ConcertDay.concert_id.in_(concert_ids),
+            ConcertDay.cancelled.is_(False),
+            ConcertDay.starts_at_utc > now,
+        )
+    )).scalar_one()
+
+
 async def set_concert_subscription(
     session: AsyncSession, user_id: int, concert_id: int, state: SubscriptionState
 ) -> None:

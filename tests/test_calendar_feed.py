@@ -148,12 +148,12 @@ def test_preferences_shows_generate_then_active_state(client):
     login_as(client, EDITOR_ID, "reiji")
     r = client.get("/preferences")
     assert "Generate feed link" in r.text
-    assert "Your feed is active" not in r.text
+    assert "Calendar feed active" not in r.text
 
     generate_feed_token(client)
     r = client.get("/preferences")  # no feed_token this time -- one-time reveal only
-    assert "Your feed is active" in r.text
-    assert "Regenerate link" in r.text
+    assert "Calendar feed active" in r.text  # the demo's status pill
+    assert "Generate a new one" in r.text    # the regenerate control
     assert "won't be shown again" not in r.text
 
 

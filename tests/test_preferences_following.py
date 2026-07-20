@@ -187,3 +187,73 @@ async def test_editors_section_shown_for_admin(client, monkeypatch):
     r = client.get("/preferences")
     assert r.status_code == 200
     assert "Editors" in r.text
+
+
+# ── Per-tag toggle routes (Notify / Auto-apply) ──────────────────────────
+
+
+async def sub_id_for(db, user_id: int) -> int:
+    from sqlalchemy import select
+    async with db() as s:
+        return (await s.execute(
+            select(TagSubscription.id).where(TagSubscription.user_id == user_id)
+        )).scalar_one()
+
+
+async def sub_state(db, sub_id: int):
+    async with db() as s:
+        sub = await s.get(TagSubscription, sub_id)
+        return sub.notify, sub.preset_id
+
+
+async def add_default_preset(db, user_id: int) -> int:
+    from app.db.models import ReminderPreset
+    async with db() as s:
+        p = ReminderPreset(user_id=user_id, name="Standard", is_default=True)
+        s.add(p)
+        await s.commit()
+        return p.id
+
+
+async def test_toggle_notify_flips_the_flag(client):
+    """The Notify `.swb` posts to the notify toggle route, flipping sub.notify."""
+    await seed(client.db)  # seed leaves notify at its default True
+    login_as(client, USER_A, "reiji")
+    sid = await sub_id_for(client.db, USER_A)
+    notify, _ = await sub_state(client.db, sid)
+    assert notify is True
+
+    r = client.post(f"/subscriptions/{sid}/notify")
+    assert r.status_code in (200, 303)
+    notify, _ = await sub_state(client.db, sid)
+    assert notify is False
+
+
+async def test_toggle_autoapply_links_and_unlinks_default_preset(client):
+    """Auto-apply maps to whether a preset is linked: toggling on links the
+    user's default preset, toggling off clears preset_id."""
+    await seed(client.db)
+    default_id = await add_default_preset(client.db, USER_A)
+    login_as(client, USER_A, "reiji")
+    sid = await sub_id_for(client.db, USER_A)
+    _, preset_id = await sub_state(client.db, sid)
+    assert preset_id is None  # seed subscribes with no preset link
+
+    r = client.post(f"/subscriptions/{sid}/auto-apply")
+    assert r.status_code in (200, 303)
+    _, preset_id = await sub_state(client.db, sid)
+    assert preset_id == default_id
+
+    client.post(f"/subscriptions/{sid}/auto-apply")
+    _, preset_id = await sub_state(client.db, sid)
+    assert preset_id is None
+
+
+async def test_toggle_subscription_404_for_other_user(client):
+    """The toggle routes are scoped to the caller -- another user's
+    subscription id 404s, never mutates."""
+    await seed(client.db)
+    sid = await sub_id_for(client.db, USER_A)
+    login_as(client, 9999, "someone-else")
+    r = client.post(f"/subscriptions/{sid}/notify")
+    assert r.status_code == 404

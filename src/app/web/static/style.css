@@ -741,13 +741,80 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   .standing { grid-template-columns: 1fr; }
 }
 
-/* Preferences: left-rail layout (built once here). */
-.prefs-rail { position: sticky; top: 1rem; }
-.prefs-rail a { padding: .15rem 0; font-size: .9rem; }
-.prefs-section { scroll-margin-top: 1rem; padding-bottom: 1.4rem; border-bottom: 1px solid var(--line); margin-bottom: 1.4rem; }
-.prefs-section:last-child { border-bottom: none; }
-.prefs-section > h2 { margin-top: 0; }
-@media (max-width: 760px) { .prefs-rail { position: static; flex-direction: row; flex-wrap: wrap; gap: .8rem; } }
+/* ── Preferences: the demo's left-rail vocabulary ──────────────────────
+   Ported from dekimasen-demo.html (.plyt/.prail/.psec/.subrow/.swb/
+   .presetcard/.ruleline/.statline). The rail is sticky with an active-section
+   indicator; the JS that toggles `.on` lives in preferences.html. Washes and
+   radii come from the global token layer. */
+.plyt { display: grid; grid-template-columns: 13rem 1fr; gap: 2.5rem; margin-top: 1.5rem; }
+.prail { align-content: start; display: grid; gap: .1rem; position: sticky; top: 4.5rem; }
+.prail a {
+  text-decoration: none; color: var(--dim); font-size: .875rem; font-weight: 550;
+  padding: .4rem .6rem; border-radius: 3px; border-left: 2px solid transparent;
+}
+.prail a:hover { color: var(--ink); background: var(--chip); }
+.prail a.on { color: var(--ink); border-left-color: var(--accent); background: var(--chip); }
+
+.psec { padding-bottom: 2.5rem; margin-bottom: 2.5rem; border-bottom: 1px solid var(--line); }
+.psec:last-child { border-bottom: 0; }
+.psec > h3 { margin: 0 0 .3rem; font-size: 1.05rem; font-weight: 650; letter-spacing: -.01em; }
+.psec > .blurb { margin: 0 0 1.1rem; color: var(--dim); font-size: .875rem; max-width: 62ch; }
+
+/* A subscription row states its consequence: following a tag subscribes you to
+   every future concert carrying it, so "16 concerts, 3 upcoming" is the number
+   that makes the toggles meaningful. */
+.subrow {
+  display: grid; grid-template-columns: 1fr 9rem 14rem; gap: 1rem; align-items: center;
+  padding: .6rem .1rem; border-bottom: 1px solid var(--line);
+}
+.subrow:first-of-type { border-top: 1px solid var(--line); }
+.subrow .nm3 { font-weight: 550; display: flex; align-items: center; gap: .5rem; }
+.subrow .cnt { font-size: .8125rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+.subrow .cnt b { color: var(--ink); font-weight: 600; }
+.subrow .sw { display: flex; gap: .35rem; justify-content: flex-end; }
+.swb {
+  font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
+  padding: .22rem .5rem; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--raise); color: var(--dim);
+}
+.swb[aria-pressed="true"] { color: var(--ok); border-color: var(--ok); background: var(--ok-wash); }
+.swb:hover { color: var(--ink); border-color: var(--dim); }
+.swb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.presetcard {
+  border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+  padding: .85rem .95rem; display: grid; gap: .5rem;
+}
+.presetcard + .presetcard { margin-top: .7rem; }
+.presetcard .ph { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.presetcard .ph input.nm4 { font-weight: 650; font: inherit; border: 1px solid transparent; background: transparent; padding: .1rem .2rem; }
+.presetcard .ph input.nm4:hover, .presetcard .ph input.nm4:focus { border-color: var(--line); background: var(--paper); }
+.presetcard .ph .sp { margin-left: auto; display: flex; gap: .35rem; }
+.ruleline { font-size: .8125rem; color: var(--dim); display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.ruleline b { color: var(--ink); font-weight: 600; }
+
+.statline { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; font-size: .875rem; }
+
+/* General field wrapper (the tag dialog scopes its own; Time needs a page one). */
+.fld { display: grid; gap: .25rem; }
+.fld > span { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+
+/* The danger-card frame (Account items). Shared with the reveal/other pages;
+   `button.danger` above is a different, button-only rule and does not collide. */
+.danger {
+  margin-top: 2.5rem; border: 1px solid var(--danger); border-radius: 3px;
+  padding: .9rem 1rem; display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+}
+.danger .t2 { font-weight: 600; font-size: .9rem; }
+.danger .s2 { color: var(--dim); font-size: .8125rem; max-width: 62ch; }
+.danger .sp { margin-left: auto; display: flex; gap: .5rem; }
+
+@media (max-width: 860px) {
+  .plyt { grid-template-columns: 1fr; gap: 1.25rem; }
+  .prail { position: static; grid-auto-flow: column; overflow-x: auto; }
+  .subrow { grid-template-columns: 1fr; gap: .3rem; }
+  .subrow .sw { justify-content: flex-start; }
+}
 /* ── Tags page redesign: counted chips, regioned sections, tag dialogs ──
    Ported from the refactor concept. Its washes now come from the global token
    set; only the legacy --chip-bg alias remains, pointed at the themed --chip so
