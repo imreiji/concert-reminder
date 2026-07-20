@@ -375,7 +375,6 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
   padding: .5rem 0; border-bottom: 1px solid var(--line);
 }
 .row-item input, .row-item select { flex: 1 1 auto; min-width: 8rem; }
-.import-error { color: var(--danger); }
 
 /* A round row's applies_to: one toggle chip per leg. Basis 100% so the
    chips get their own line rather than competing with the row's inputs --
@@ -1021,6 +1020,23 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .lede { max-width: 58ch; }
 .lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 650; }
 .lede p { margin: 0; color: var(--dim); }
+
+/* Import + preview callouts (task 2/3): a reassurance or warning banner,
+   the accent tone by default, an .off-toned "warn" variant for a parse
+   failure or an editor-facing heads-up. */
+.callout {
+  display: flex; gap: .6rem; align-items: flex-start; padding: .75rem .9rem;
+  border-radius: 3px; font-size: .875rem; border: 1px solid var(--accent);
+  background: var(--accent-wash); color: var(--accent);
+}
+.callout.warn { border-color: var(--off); background: var(--off-wash); color: var(--off); }
+.callout b { font-weight: 700; }
+.callout a { color: inherit; text-decoration: underline; }
+/* A bare fallback for the "more" link pattern (`.col .more` / `.steps
+   .more` are the scoped originals) for pages with neither wrapper --
+   same accent-on-hover-underline look, just not nested under one. */
+.clock .more { color: var(--accent); text-decoration: none; font-weight: 550; }
+.clock .more:hover { text-decoration: underline; }
 
 .pick {
   margin-top: 1.5rem; display: grid; gap: .75rem;

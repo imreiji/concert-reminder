@@ -116,6 +116,34 @@ def test_editor_sees_import_page(client):
     assert "ramen.events" in r.text
 
 
+def test_import_form_matches_design_system(client):
+    """Task 2: the paste-a-URL screen ports demo lines 1118-1147 -- the
+    `.lede` heading block, the `.fld` labelled input, and the SSRF-guard
+    reassurance as a `.callout`. The POST target and the pattern attribute
+    (the actual SSRF guard) must survive the restyle byte-for-byte."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/concerts/import")
+    assert r.status_code == 200
+    assert '<div class="lede">' in r.text
+    assert '<label class="fld">' in r.text
+    assert 'class="callout"' in r.text
+    # SSRF guard: unchanged POST target and pattern (do not loosen either).
+    assert 'action="/concerts/import/preview"' in r.text
+    assert 'pattern="https://ramen\\.events/.*"' in r.text
+
+
+def test_import_form_error_uses_warn_callout(client):
+    """The parse-failure branch (hit via POST /preview re-rendering this
+    same template) keeps warning about the failure, now as a `.callout warn`
+    instead of the old plain `<p class="import-error">`."""
+    login_as(client, EDITOR_ID, "reiji")
+    mock_fetch(client, "<html><body>not an event</body></html>")
+    r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert r.status_code == 200
+    assert 'class="callout warn"' in r.text
+    assert "Couldn" in r.text
+
+
 # ── Host allowlist (SSRF guard) ─────────────────────────────────────────
 
 
