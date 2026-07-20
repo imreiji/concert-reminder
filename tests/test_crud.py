@@ -16,7 +16,15 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertAudit, ConcertDay, ReminderQueue, Round
+from app.db.models import (
+    Base,
+    Concert,
+    ConcertAudit,
+    ConcertDay,
+    ReminderQueue,
+    Round,
+    RoundQualifier,
+)
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.web import auth
@@ -483,12 +491,13 @@ async def test_round_applies_to_is_stored(client):
         "/concerts",
         data={
             "title": "C", "event_id": "c",
+            "day_key": ["new-a"],
             "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             "round_label": ["Day 1 lottery"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+            "round_url": [""], "round_notes": [""], "round_legs": ["new-a"],
         },
     )
     async with client.db() as s:
@@ -503,6 +512,7 @@ async def test_detail_page_groups_rounds_by_leg(client):
         "/concerts",
         data={
             "title": "Two Legs", "event_id": "two-legs",
+            "day_key": ["new-a", "new-b"],
             "day_label": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
             "day_city": ["", ""], "day_venue": ["", ""],
@@ -513,7 +523,7 @@ async def test_detail_page_groups_rounds_by_leg(client):
             "round_closes_at": ["2099-06-25T23:59", "2099-06-26T23:59", "2099-06-27T23:59"],
             "round_results_at": ["", "", ""], "round_payment_at": ["", "", ""],
             "round_label_en": ["", "", ""], "round_url": ["", "", ""], "round_notes": ["", "", ""],
-            "round_leg": ["Day 1", "Day 2", ""],
+            "round_legs": ["new-a", "new-b", ""],
         },
     )
     r = client.get("/concerts/two-legs")
@@ -564,6 +574,7 @@ async def test_detail_page_nests_performances_and_their_rounds_together(client):
         "/concerts",
         data={
             "title": "C", "event_id": "c",
+            "day_key": ["new-a", "new-b"],
             "day_label": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
             "day_city": ["", ""], "day_venue": ["", ""],
@@ -571,7 +582,7 @@ async def test_detail_page_nests_performances_and_their_rounds_together(client):
             "round_label": ["Day 1 round"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+            "round_url": [""], "round_notes": [""], "round_legs": ["new-a"],
         },
     )
     r = client.get("/concerts/c")
@@ -604,12 +615,13 @@ async def test_export_yaml_shape(client):
         data={
             "title": "Export Me", "event_id": "export-me", "kind": "concert",
             "franchise_tags": ["1"],
+            "day_key": ["new-a"],
             "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": ["2099-06-10T00:00"], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+            "round_url": [""], "round_notes": [""], "round_legs": ["new-a"],
         },
     )
 
@@ -647,10 +659,17 @@ def test_new_concert_page_is_editor_only(client):
     assert "Add an event" in r.text
     assert 'name="event_id"' in r.text  # event id field present
     assert 'name="day_label"' in r.text  # performance row template present
-    # the leg field is a dropdown of performances, not free text -- picking a
-    # real day instead of guessing a string that has to fuzzy-match server-side
-    assert '<select name="round_leg" class="round-leg-select"></select>' in r.text
-    assert "function syncLegOptions" in r.text
+    # Rounds bind to legs by chip now, exactly as the editor does -- the old
+    # free-text <select> + syncLegOptions matcher is gone.
+    assert "data-leg-chips" in r.text
+    assert 'name="round_legs"' in r.text
+    assert 'name="round_leg"' not in r.text
+    assert "syncLegOptions" not in r.text
+    # the identity spine stays open; the extras fold below it
+    assert 'class="fold"' in r.text
+    # conveniences that must survive the rebuild
+    assert "/concerts/import" in r.text  # import link
+    assert 'id="ec-title"' in r.text and 'id="ec-event-id"' in r.text  # id suggestion JS hooks
 
 
 def test_new_concert_page_shows_new_round_kind_labels(client):
@@ -676,6 +695,7 @@ async def test_rich_create_builds_concert_days_and_rounds_atomically(client):
             "source_url": "https://ramen.events/x",
             "performers_text": "Kaho\nSayaka",
             "notes": "Event notes",
+            "day_key": ["new-a", "new-b"],
             "day_label": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
             "day_city": ["Kanagawa", "Osaka"],
@@ -691,7 +711,7 @@ async def test_rich_create_builds_concert_days_and_rounds_atomically(client):
             "round_payment_at": ["", ""],
             "round_url": ["", ""],
             "round_notes": ["", ""],
-            "round_leg": ["Kanagawa", ""],  # matches day 1's city; blank = whole event
+            "round_legs": ["new-a", ""],  # first round -> day 1's chip; blank = whole event
         },
     )
     assert r.status_code == 303
@@ -740,6 +760,103 @@ async def test_rich_create_tolerates_blank_trailing_rows(client):
     async with client.db() as s:
         assert (await s.execute(select(ConcertDay))).scalars().all() == []
         assert (await s.execute(select(Round))).scalars().all() == []
+
+
+async def test_create_binds_a_round_to_two_brand_new_legs(client):
+    """The regression the old create form could not pass: a round whose chips
+    select BOTH performances must save with an applies_to holding both day
+    ids. Every leg is brand-new at creation, so each row carries a client-side
+    `day_key` (new-a / new-b) that its round references -- the same key-mapped
+    resolution the editor proved. The old single-value `round_leg` <select>
+    could only ever store one leg."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts",
+        data={
+            "title": "Two Legs", "event_id": "two-legs",
+            "day_key": ["new-a", "new-b"],
+            "day_label": ["Day 1", "Day 2"],
+            "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
+            "day_city": ["Kanagawa", "Osaka"], "day_venue": ["", ""],
+            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "round_label": ["Both legs lottery"], "round_kind": ["lottery_round"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""],
+            "round_legs": ["new-a new-b"],
+        },
+    )
+    assert r.status_code == 303
+    async with client.db() as s:
+        days = (await s.execute(select(ConcertDay))).scalars().all()
+        round_ = (await s.execute(select(Round))).scalar_one()
+    day_ids = {d.id for d in days}
+    assert len(day_ids) == 2
+    assert set(round_.applies_to) == day_ids  # BOTH legs, not just the first
+
+
+async def test_create_round_with_no_legs_stores_none(client):
+    """An empty selection means "not tied to a specific leg" -- stored as
+    None (not []), the all-legs group convention concert_round_rows reads."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts",
+        data={
+            "title": "No Leg", "event_id": "no-leg",
+            "day_key": ["new-a"],
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["Whole event"], "round_kind": ["general_sale"],
+            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
+            "round_url": [""], "round_notes": [""],
+            "round_legs": [""],
+        },
+    )
+    assert r.status_code == 303
+    async with client.db() as s:
+        round_ = (await s.execute(select(Round))).scalar_one()
+    assert round_.applies_to is None
+
+
+async def test_create_upgrade_round_stores_a_same_submit_qualifier(client):
+    """An upgrade round can qualify off another round created in the SAME
+    submit: rounds get their ids at the flush, so parse_round_qualifiers
+    resolves the reference afterwards (this fresh DB assigns the base round
+    id 1, exactly what the qualifier names). The UI cannot pre-select this --
+    the chips only offer already-saved rounds -- but the route mechanism does,
+    matching the editor's post-flush resolution."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts",
+        data={
+            "title": "Upgrade", "event_id": "upgrade",
+            "day_key": ["new-a"],
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "round_label": ["Base lottery", "VIP upgrade"],
+            "round_kind": ["lottery_round", "upgrade"],
+            "round_opens_at": ["", ""], "round_closes_at": ["2099-06-25T23:59", "2099-07-01T23:59"],
+            "round_results_at": ["", ""], "round_payment_at": ["", ""],
+            "round_label_en": ["", ""], "round_url": ["", ""], "round_notes": ["", ""],
+            "round_legs": ["", ""],
+            # Base round is the first created -> id 1 in this fresh DB. The
+            # upgrade round names it as its qualifier.
+            "round_qualifiers": ["", "1"],
+        },
+    )
+    assert r.status_code == 303
+    async with client.db() as s:
+        base = (await s.execute(
+            select(Round).where(Round.label == "Base lottery")
+        )).scalar_one()
+        upgrade = (await s.execute(
+            select(Round).where(Round.label == "VIP upgrade")
+        )).scalar_one()
+        quals = (await s.execute(
+            select(RoundQualifier).where(RoundQualifier.upgrade_round_id == upgrade.id)
+        )).scalars().all()
+    assert [q.qualifying_round_id for q in quals] == [base.id]
 
 
 async def test_edit_concert_persists_all_new_fields(client):
@@ -807,12 +924,13 @@ async def test_edit_page_preselects_the_rounds_real_leg_ids(client):
         "/concerts",
         data={
             "title": "C", "event_id": "c",
+            "day_key": ["new-a"],
             "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+            "round_url": [""], "round_notes": [""], "round_legs": ["new-a"],
         },
     )
     async with client.db() as s:
@@ -1198,12 +1316,13 @@ async def test_round_tied_to_cancelled_day_still_renders_not_vanishes(client):
         "/concerts",
         data={
             "title": "C", "event_id": "c",
+            "day_key": ["new-a"],
             "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_url": [""], "round_notes": [""], "round_leg": ["Day 1"],
+            "round_url": [""], "round_notes": [""], "round_legs": ["new-a"],
         },
     )
     async with client.db() as s:

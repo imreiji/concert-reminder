@@ -253,35 +253,6 @@ def build_round(
     )
 
 
-def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
-    """Free-text leg matching for the CREATION form only -- the edit page
-    uses real ids via parse_round_legs above, and nothing here should grow
-    back toward text matching.
-
-    Creation is the one place ids cannot work: the form renders before any
-    ConcertDay exists, so there is nothing to put on a chip. The days are
-    flushed first and their typed labels resolved after (see
-    create_concert). That is safe in a way the edit page was not -- matching
-    returns EVERY hit, so a multi-leg round can be created correctly; it was
-    only the edit page's read-back that narrowed one to its first id.
-
-    "Correctly" is narrower than it sounds, though: the creation form's leg
-    control is a single-value <select> whose option value prefers the day's
-    label, and labels are normally distinct per leg. So a round covering two
-    legs can only come out of creation when both legs happen to share the one
-    label-or-city string this matches on. In practice a genuinely multi-leg
-    round still needs a follow-up edit, where the chips can say so directly.
-
-    Matches a day's city or label, case-insensitively, exact match (not
-    substring -- avoids "Day 1" matching "Day 10"). Blank or no match ->
-    None (round shown in the all-legs group)."""
-    leg = leg.strip().lower()
-    if not leg:
-        return None
-    matches = [d.id for d in days if leg in ((d.city or "").lower(), (d.label or "").lower())]
-    return matches or None
-
-
 def parse_round_legs(
     value: str, valid_day_ids: set[int], key_to_day_id: dict[str, int] | None = None
 ) -> list[int] | None:
@@ -397,8 +368,7 @@ def title_without_lineage(title: str, group_names: list[str]) -> str:
 
 def find_venue_tag(venue_tags: list[Tag], name: str | None) -> Tag | None:
     """Resolve a day's free-text venue against real VENUE tags by exact,
-    case-insensitive name match -- same free-text-to-structured pattern as
-    resolve_round_leg above. No match just means no link is shown (a nudge
+    case-insensitive name match. No match just means no link is shown (a nudge
     to go create that tag, not a hard requirement)."""
     if not name:
         return None
@@ -522,10 +492,10 @@ async def new_concert_form(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
 ):
-    """The rich, all-in-one creation page: matches mting314/event-tracker's
-    add.html field set (see CLAUDE.md / the plan this shipped from) --
-    event fields, performers/notes, then repeatable performance and round
-    rows, one atomic submit to POST /concerts below."""
+    """The rich, all-in-one creation page, on the editor's card/chip/fold
+    language: identity spine open (title, event id, the first performance),
+    everything optional folded, and rounds bound to legs by the SAME chips as
+    edit_concert -- one atomic submit to POST /concerts below."""
     picker = await tag_picker_context(session)
     return templates.TemplateResponse(
         request,
@@ -537,6 +507,11 @@ async def new_concert_form(
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
             "initial_selected": {},
+            # No leg or round exists yet on a create page, but the chip
+            # partials the <template>s include still read these -- empty here,
+            # so the client-side script builds every chip from the DOM rows.
+            "legs": [],
+            "saved_rounds": [],
         },
     )
 
@@ -561,6 +536,7 @@ async def create_concert(
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
     venue_tags: list[int] = Form(default=[]),
+    day_key: list[str] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
     day_city: list[str] = Form(default=[]),
@@ -577,12 +553,19 @@ async def create_concert(
     round_payment_at: list[str] = Form(default=[]),
     round_url: list[str] = Form(default=[]),
     round_notes: list[str] = Form(default=[]),
-    round_leg: list[str] = Form(default=[]),
+    round_legs: list[str] = Form(default=[]),
+    round_qualifiers: list[str] = Form(default=[]),
 ):
     """The rich all-in-one submit: concert + tags, then every performance
     and round row, created together in one transaction -- same
     compose-and-loop shape imports.py's import_commit uses, just with the
-    fuller add.html-matched field set."""
+    fuller add.html-matched field set.
+
+    Rounds bind to legs by chip, exactly as edit_concert does: every leg is
+    brand-new here (no id until the flush), so its row carries a client-side
+    `day_key` that the round's `round_legs` value references, resolved to real
+    ids through key_to_day_id after the days flush. The old single-value
+    `round_leg` <select> could only ever store one leg of a multi-leg round."""
     concert = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
         kind=ConcertKind(kind) if kind else None,
@@ -601,34 +584,83 @@ async def create_concert(
     # for every row, matching apply_day_fields'/build_day's own default --
     # pad rather than let a whole-array omission trip the strict zip below.
     day_cancelled = day_cancelled + ["false"] * (len(day_label) - len(day_cancelled))
+    # day_key is padded only when omitted ENTIRELY (an older submitter that
+    # predates the chips). A partially-supplied array is left alone so the
+    # strict zip below raises instead of end-padding it into misalignment --
+    # a key that slid one row would assign a round to the wrong leg, silently,
+    # which is worse than a 500. Same rule edit_concert applies.
+    if not day_key:
+        day_key = [""] * len(day_label)
     days: list[ConcertDay] = []
-    for label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
-        day_label, day_starts_at, day_city, day_venue, day_venue_address, day_doors_at,
-        day_cancelled, strict=True,
+    # key -> the ConcertDay its row produced, built INSIDE the loop from the
+    # same tuple so a key can never be paired with another row's day; the ids
+    # are filled in after the flush below.
+    key_rows: list[tuple[str, ConcertDay]] = []
+    for key, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
+        day_key, day_label, day_starts_at, day_city, day_venue, day_venue_address,
+        day_doors_at, day_cancelled, strict=True,
     ):
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
-            continue  # blank trailing row from the repeatable UI
+            continue  # blank trailing row from the repeatable UI -- key and all
         day = build_day(
             concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled
         )
         session.add(day)
         days.append(day)
-    await session.flush()  # real ids, needed for leg-matching below
+        if key.strip():
+            key_rows.append((key.strip(), day))
+    await session.flush()  # real ids, needed to resolve the leg chips below
+    valid_day_ids = {d.id for d in days}
+    # Resolved only now, because a row had no id until the flush above. A
+    # duplicate key would be the one way two rows could collide, so the first
+    # row claiming a key keeps it rather than a later one silently stealing it.
+    key_to_day_id: dict[str, int] = {}
+    for key, day in key_rows:
+        key_to_day_id.setdefault(key, day.id)
 
+    # round_legs / round_qualifiers are the newer chip fields; a submitter
+    # that omits either ENTIRELY means "nothing to say" -- every round gets no
+    # legs / no qualifiers, matching build_round's own defaults. A partial
+    # array is left alone so the strict zip raises rather than sliding a row.
+    if not round_legs:
+        round_legs = [""] * len(round_label)
+    if not round_qualifiers:
+        round_qualifiers = [""] * len(round_label)
+    # (round object, its submitted kind, its raw qualifier value) for every
+    # created round, reconciled into round_qualifiers rows AFTER the flush
+    # below hands the new rounds their ids -- the same post-flush ordering
+    # edit_concert uses so a same-submit qualifier reference resolves.
+    qual_jobs: list[tuple[Round, RoundKind, str]] = []
     for (
-        label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url, notes_, leg
+        label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url,
+        notes_, legs, quals
     ) in zip(
         round_label, round_label_en, round_kind, round_opens_at, round_closes_at,
-        round_results_at, round_payment_at, round_url, round_notes, round_leg,
-        strict=True,
+        round_results_at, round_payment_at, round_url, round_notes, round_legs,
+        round_qualifiers, strict=True,
     ):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue
-        session.add(build_round(
+        round_ = build_round(
             concert.id, label, kind_, opens_at, closes_at, results_at, payment_at, url,
-            applies_to=resolve_round_leg(days, leg), label_en=label_en, notes=notes_,
-        ))
+            applies_to=parse_round_legs(legs, valid_day_ids, key_to_day_id),
+            label_en=label_en, notes=notes_,
+        )
+        session.add(round_)
+        qual_jobs.append((round_, kind_, quals))
+
+    await session.flush()  # new rounds now have ids, needed by parse_round_qualifiers
+    # valid_round_ids is every round created this submit, so an upgrade round
+    # can qualify off another one made in the same save (its id exists after
+    # the flush) while a reference to a non-existent round is dropped.
+    valid_round_ids = {r.id for r, _, _ in qual_jobs}
+    for round_, kind_, quals in qual_jobs:
+        if kind_ is RoundKind.UPGRADE:
+            for q_id in parse_round_qualifiers(quals, valid_round_ids, round_.id):
+                session.add(
+                    RoundQualifier(upgrade_round_id=round_.id, qualifying_round_id=q_id)
+                )
 
     await session.flush()
     await sync_concert(session, concert.id)
