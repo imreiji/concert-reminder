@@ -1,0 +1,1765 @@
+<title>dekimasen.app — landing, onboarding, import & legal concept</title>
+<style>
+  :root {
+    --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+    --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+    --accent: #4f46b8;
+    --ok-wash: #e8f2ec; --off-wash: #f7eede; --danger-wash: #f8e8e6;
+    --accent-wash: #eceaf7; --chip: #efede6;
+    --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+      --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+      --accent: #9a92f0;
+      --ok-wash: #1a2a22; --off-wash: #2c2418; --danger-wash: #2e1d1c;
+      --accent-wash: #23204a; --chip: #2a2830;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+    --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+    --accent: #9a92f0; --ok-wash: #1a2a22; --off-wash: #2c2418;
+    --danger-wash: #2e1d1c; --accent-wash: #23204a; --chip: #2a2830;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+  }
+  :root[data-theme="light"] {
+    --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+    --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+    --accent: #4f46b8; --ok-wash: #e8f2ec; --off-wash: #f7eede;
+    --danger-wash: #f8e8e6; --accent-wash: #eceaf7; --chip: #efede6;
+    --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 74rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+  .eyebrow {
+    font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650;
+  }
+
+  /* ---- site header ----------------------------------------------------- */
+  header.site {
+    border-bottom: 1px solid var(--line); background: var(--raise);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .site-in {
+    max-width: 74rem; margin: 0 auto; padding: .85rem 1.5rem;
+    display: flex; align-items: center; gap: 1.5rem;
+  }
+  .mark { font-weight: 700; letter-spacing: .08em; font-size: .95rem; }
+  .mark span { color: var(--dim); font-weight: 400; letter-spacing: 0; margin-left: .5rem; font-size: .8rem; }
+  nav.main { display: flex; gap: .25rem; margin-left: .75rem; flex-wrap: wrap; }
+  nav.main button {
+    font: inherit; font-size: .875rem; font-weight: 550; cursor: pointer;
+    background: none; border: 0; color: var(--dim); padding: .35rem .7rem;
+    border-radius: 3px; transition: color 150ms ease, background 150ms ease;
+  }
+  nav.main button:hover { color: var(--ink); background: var(--chip); }
+  nav.main button[aria-current="page"] { color: var(--ink); background: var(--chip); }
+  nav.main button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .hright { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
+  .ttoggle {
+    font: inherit; font-size: 1rem; line-height: 1; cursor: pointer; background: none;
+    border: 1px solid var(--line); color: var(--dim); border-radius: 3px;
+    width: 2rem; height: 2rem; display: grid; place-items: center;
+  }
+  .ttoggle:hover { color: var(--ink); border-color: var(--dim); }
+  .ttoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .langtoggle {
+    font: inherit; font-size: .8rem; line-height: 1; cursor: pointer; background: none;
+    border: 1px solid var(--line); color: var(--dim); border-radius: 3px;
+    height: 2rem; padding: 0 .55rem; display: inline-flex; align-items: center; gap: .3rem;
+  }
+  .langtoggle:hover { color: var(--ink); border-color: var(--dim); }
+  .langtoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .banner {
+    background: var(--chip); border-bottom: 1px solid var(--line);
+    text-align: center; padding: .4rem 1rem; font-size: .78rem; color: var(--dim);
+  }
+
+  /* ---- shared bits ----------------------------------------------------- */
+  section { margin-top: 2.75rem; }
+  .head { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .head h2 { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+  .head .note { color: var(--dim); font-size: .8125rem; }
+  .head .note strong { color: var(--ink); font-weight: 600; }
+  .head .more { margin-left: auto; font-size: .8125rem; color: var(--accent); text-decoration: none; font-weight: 550; background:none;border:0;cursor:pointer; }
+  .head .more:hover { text-decoration: underline; }
+
+  .pill {
+    font-size: .6875rem; font-weight: 650; letter-spacing: .04em;
+    padding: .15rem .45rem; border-radius: 3px; border: 1px solid currentColor; white-space: nowrap;
+  }
+  .p-danger { color: var(--danger); background: var(--danger-wash); }
+  .p-off { color: var(--off); background: var(--off-wash); }
+  .p-ok { color: var(--ok); background: var(--ok-wash); }
+  .p-quiet { color: var(--dim); background: transparent; }
+
+  /* ---- board ----------------------------------------------------------- */
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: .875rem; }
+  .col { display: grid; gap: .625rem; align-content: start; }
+  .col-head {
+    display: flex; align-items: center; gap: .5rem; font-size: .75rem;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+    font-weight: 650; padding-bottom: .5rem; border-bottom: 1px solid var(--line);
+  }
+  .col-head .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .col-head .count { margin-left: auto; font-weight: 500; letter-spacing: 0; }
+  .d-open { background: var(--danger); } .d-applied { background: var(--off); }
+  .d-won { background: var(--accent); } .d-secured { background: var(--ok); }
+
+  .card {
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .8rem .85rem; display: grid; gap: .45rem; box-shadow: var(--shadow);
+    transition: transform 160ms ease, border-color 160ms ease;
+    text-decoration: none; color: inherit; cursor: pointer;
+  }
+  .card:hover { transform: translateY(-1px); border-color: var(--dim); }
+  .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card .artist { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .card .title { font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
+  .card .venue { font-size: .8125rem; color: var(--dim); }
+  .card .foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .15rem; }
+  .clock { font-size: .8125rem; color: var(--dim); }
+
+  .ladder { display: grid; margin-top: .3rem; }
+  .rung {
+    display: grid; grid-template-columns: 14px 1fr auto; gap: .55rem; align-items: center;
+    padding: .3rem 0; font-size: .8125rem; border-top: 1px dotted var(--line);
+  }
+  .rung:first-child { border-top: 0; }
+  .rung .mark {
+    width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line);
+    display: grid; place-items: center; font-size: 9px; font-weight: 700; line-height: 1;
+  }
+  .m-lost { border-color: var(--dim); color: var(--dim); }
+  .m-live { border-color: var(--danger); background: var(--danger); color: var(--raise); }
+  .m-wait { border-color: var(--off); color: var(--off); }
+  .m-todo { border-color: var(--line); color: transparent; }
+  .rung.is-done .name { color: var(--dim); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .rung.is-todo .name { color: var(--dim); }
+  .rung .stat { font-size: .75rem; color: var(--dim); }
+
+  .btn {
+    display: inline-block; font: inherit; font-size: .875rem; font-weight: 600;
+    padding: .5rem .9rem; border: 1px solid var(--ink); border-radius: 3px;
+    background: var(--ink); color: var(--paper); text-decoration: none; cursor: pointer;
+    transition: opacity 150ms ease; white-space: nowrap;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn.quiet { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn.warn { background: transparent; color: var(--danger); border-color: var(--danger); }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .875rem; }
+  .grid .card .when { font-size: .8125rem; color: var(--dim); }
+  .tagrow { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .1rem; }
+  .minichip { font-size: .7rem; padding: .1rem .4rem; border-radius: 999px; background: var(--chip); color: var(--dim); }
+
+  .status-line {
+    display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+    margin-top: .2rem; padding-top: .5rem; border-top: 1px dotted var(--line);
+  }
+  .s-in { color: var(--ok); background: var(--ok-wash); border-color: var(--ok); }
+  .s-act { color: var(--danger); background: var(--danger-wash); border-color: var(--danger); }
+  .s-none { color: var(--dim); background: transparent; border-color: var(--line); }
+  .s-up { color: var(--accent); background: var(--accent-wash); border-color: var(--accent); }
+
+  .foot-note {
+    margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+    color: var(--dim); font-size: .8125rem; max-width: 66ch;
+  }
+  .foot-note b { color: var(--ink); font-weight: 600; }
+
+  /* ---- editor / import-preview vocabulary ------------------------------ */
+  .ebar {
+    margin-top: 2rem; display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+    padding-bottom: 1rem; border-bottom: 1px solid var(--line);
+  }
+  .ebar .grow { flex: 1 1 20rem; min-width: 0; }
+  .fld { display: grid; gap: .25rem; }
+  .fld > span {
+    font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650;
+  }
+  .fld input, .fld select, .fld textarea {
+    font: inherit; padding: .45rem .6rem; border: 1px solid var(--line);
+    border-radius: 3px; background: var(--raise); color: var(--ink); width: 100%;
+  }
+  .fld input:focus-visible, .fld select:focus-visible, .fld textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+  .fld.sm input, .fld.sm select { font-size: .8125rem; padding: .35rem .5rem; }
+
+  details.fold {
+    margin-top: 1.25rem; border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+  }
+  details.fold > summary {
+    cursor: pointer; padding: .7rem .9rem; font-weight: 600; font-size: .9rem;
+    list-style: none; display: flex; align-items: center; gap: .5rem;
+  }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary::before { content: "\25B8"; color: var(--dim); transition: transform 150ms ease; }
+  details.fold[open] > summary::before { transform: rotate(90deg); }
+  details.fold > summary .hint { margin-left: auto; font-weight: 400; color: var(--dim); font-size: .8125rem; }
+  .foldbody { padding: 0 .9rem 1rem; display: grid; gap: .75rem; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; }
+
+  .elegs { margin-top: 1.5rem; display: grid; gap: 1.25rem; }
+  .elegcard { border: 1px solid var(--line); border-radius: 3px; background: var(--raise); }
+  .elegcard > .lh {
+    display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+    padding: .7rem .9rem; border-bottom: 1px solid var(--line);
+  }
+  .elegcard > .lh h3 { margin: 0; font-size: .95rem; font-weight: 650; }
+  .elegcard > .lh .meta { color: var(--dim); font-size: .8125rem; }
+  .elegcard > .lh .sp { margin-left: auto; display: flex; gap: .4rem; }
+  .rlist { padding: .3rem .9rem .9rem; display: grid; gap: .5rem; }
+
+  .redit {
+    border: 1px solid var(--line); border-radius: 3px; padding: .7rem .8rem;
+    display: grid; gap: .6rem; background: var(--paper);
+  }
+  .redit .top { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+  .redit .top .nm { font-weight: 600; }
+  .redit .top .sp { margin-left: auto; display: flex; gap: .35rem; }
+  .redit .times { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .6rem; }
+  .applies { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; font-size: .8125rem; }
+  .applies .lbl3 { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .legchip {
+    font: inherit; font-size: .78rem; padding: .18rem .55rem; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--chip); color: var(--dim); cursor: pointer;
+  }
+  .legchip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .legchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .upgradebox {
+    border-left: 3px solid var(--accent); background: var(--accent-wash);
+    padding: .6rem .75rem; border-radius: 3px; display: grid; gap: .45rem;
+  }
+  .upgradebox .u1 { font-size: .8125rem; }
+  .upgradebox .u1 b { font-weight: 650; }
+
+  .act {
+    font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
+    padding: .22rem .5rem; border-radius: 3px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--raise); color: var(--dim);
+    transition: color 150ms ease, border-color 150ms ease; white-space: nowrap;
+  }
+  .act:hover { color: var(--ink); border-color: var(--dim); }
+  .act.yes:hover { color: var(--ok); border-color: var(--ok); }
+  .act.no:hover { color: var(--danger); border-color: var(--danger); }
+  .act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .chip {
+    font-size: .78rem; padding: .2rem .5rem; border-radius: 999px; line-height: 1.5;
+    background: var(--chip); color: var(--ink); text-decoration: none;
+    border: 1px solid transparent; cursor: pointer; transition: border-color 150ms ease;
+  }
+  .chip:hover { border-color: var(--dim); }
+  .chip.on { background: var(--accent); color: #fff; }
+
+  /* ---- onboarding capture (shared with setup) -------------------------- */
+  .steps { display: flex; gap: .4rem; align-items: center; margin: 2rem 0 1.25rem; flex-wrap: wrap; }
+  .stepdot {
+    font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 650;
+    color: var(--dim); padding: .25rem .6rem; border-radius: 3px; border: 1px solid var(--line);
+  }
+  .stepdot.on { color: var(--ink); border-color: var(--ink); }
+  .stepdot.done { color: var(--ok); border-color: var(--ok); }
+  .stepsep { color: var(--dim); font-size: .8rem; }
+  .lede { max-width: 58ch; }
+  .lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 650; text-wrap: balance; }
+  .lede p { margin: 0; color: var(--dim); }
+
+  .pick {
+    margin-top: 1.5rem; display: grid; gap: .75rem;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  }
+  .tile {
+    position: relative; text-align: left; font: inherit; color: inherit;
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .85rem .9rem .8rem; cursor: pointer; display: grid; gap: .35rem;
+    box-shadow: var(--shadow);
+    transition: opacity 160ms ease, border-color 160ms ease,
+                background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+  .tile:hover { transform: translateY(-1px); }
+  .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tile[aria-pressed="true"] { border-color: var(--ok); background: var(--ok-wash); }
+  .tile[aria-pressed="false"] {
+    opacity: .38; box-shadow: none; background: transparent; border-style: dashed;
+  }
+  .tile[aria-pressed="false"]:hover { opacity: .62; }
+  .tile .tick {
+    position: absolute; top: .6rem; right: .6rem; width: 1.15rem; height: 1.15rem;
+    border-radius: 50%; display: grid; place-items: center;
+    font-size: .68rem; font-weight: 700; line-height: 1;
+    border: 1.5px solid var(--line); color: transparent; background: transparent;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  }
+  .tile[aria-pressed="true"] .tick { background: var(--ok); border-color: var(--ok); color: var(--raise); }
+  .tile .who-t { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .tile .t { font-weight: 600; line-height: 1.3; letter-spacing: -.01em; padding-right: 1.4rem; }
+  .tile .v { font-size: .8125rem; color: var(--dim); }
+  .tile .rnd {
+    font-size: .75rem; color: var(--dim); margin-top: .2rem;
+    padding-top: .45rem; border-top: 1px dotted var(--line);
+  }
+  .tile .rnd b { color: var(--ink); font-weight: 600; }
+
+  .bar {
+    display: flex; align-items: center; gap: .75rem; margin-top: 1.5rem;
+    padding-top: 1.25rem; border-top: 1px solid var(--line); flex-wrap: wrap;
+  }
+  .bar .tally { color: var(--dim); font-size: .875rem; margin-right: auto; }
+  .bar .tally b { color: var(--ink); font-weight: 650; }
+
+  .reveal { text-align: center; padding: 3rem 0 1rem; }
+  .reveal .big { font-size: 2.6rem; font-weight: 650; letter-spacing: -.03em; }
+  .tallies { display: flex; gap: 2.5rem; justify-content: center; margin: 2rem 0; flex-wrap: wrap; }
+  .tallies div { text-align: center; }
+  .tallies .n { font-size: 1.8rem; font-weight: 650; letter-spacing: -.02em; }
+  .tallies .l { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+
+  /* ===================================================================== */
+  /* NEW — classes added for the landing / onboarding / import / legal      */
+  /* views. All styled from the same tokens; no new palette.                */
+  /* ===================================================================== */
+
+  /* Discord brand button — the one deliberate fixed colour (Discord blurple),
+     it reads correctly on both themes. */
+  .btn-discord {
+    background: #5865f2; border-color: #5865f2; color: #fff;
+    display: inline-flex; align-items: center; gap: .5rem;
+  }
+  .btn-discord:hover { opacity: .9; }
+  .btn-discord .di { font-size: 1rem; line-height: 1; }
+  .btn-discord.sm { font-size: .8rem; padding: .38rem .7rem; }
+
+  /* landing hero */
+  .hero { padding: 4rem 0 1rem; max-width: 54rem; }
+  .hero .eyebrow { display: block; margin-bottom: 1rem; }
+  .hero .promise {
+    font-size: clamp(2.1rem, 6vw, 3.5rem); line-height: 1.04; letter-spacing: -.035em;
+    font-weight: 680; margin: 0 0 1.2rem; text-wrap: balance;
+  }
+  .hero .promise em { font-style: normal; color: var(--accent); }
+  .hero .vprop { font-size: 1.15rem; color: var(--dim); max-width: 46ch; margin: 0 0 1.9rem; line-height: 1.5; }
+  .hero .vprop b { color: var(--ink); font-weight: 600; }
+  .hero .cta { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; }
+  .hero .reassure { color: var(--dim); font-size: .8125rem; }
+
+  .statband { display: flex; gap: 2.75rem; flex-wrap: wrap; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+  .statband div .n { font-size: 1.7rem; font-weight: 680; letter-spacing: -.02em; }
+  .statband div .l { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+
+  .howto { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.25rem; }
+  .howstep {
+    border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+    padding: 1.1rem 1.15rem; display: grid; gap: .35rem; box-shadow: var(--shadow); align-content: start;
+  }
+  .howstep .k {
+    width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--accent-wash);
+    color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: .85rem;
+  }
+  .howstep h3 { margin: .3rem 0 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+  .howstep p { margin: 0; color: var(--dim); font-size: .875rem; }
+  .howstep p b { color: var(--ink); font-weight: 600; }
+
+  .thesiscard { padding: .7rem .75rem; }
+  .thesiscard .title { font-size: .9rem; }
+  .thesiscard .venue { font-size: .78rem; }
+
+  .ctafoot {
+    margin-top: 3.5rem; border: 1px solid var(--line); border-radius: 3px;
+    background: var(--raise); box-shadow: var(--shadow);
+    padding: 2.25rem 2rem; text-align: center; display: grid; gap: 1rem; justify-items: center;
+  }
+  .ctafoot h2 { margin: 0; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 660; text-wrap: balance; }
+  .ctafoot p { margin: 0; color: var(--dim); max-width: 48ch; }
+
+  /* preset sentence builder -- inline dropdowns built into running prose;
+     shared by the welcome-step-1 chip picker and the fine-tune rows below */
+  .sentence {
+    display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; font-size: .95rem;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: .8rem .9rem;
+  }
+  .sentence select, .remrule select {
+    font: inherit; padding: .3rem .45rem; border: 1px solid var(--line);
+    border-radius: 3px; background: var(--raise); color: var(--ink);
+  }
+  .sentence select:focus-visible, .remrule select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* reminder-preset step: three selectable preset cards */
+  .remcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; }
+  .remcard { position: relative; font: inherit; text-align: left; width: 100%; }
+  .remcard .rem-label { font-weight: 600; letter-spacing: -.01em; }
+  .remcard .rem-lines { margin-top: .1rem; }
+  .remcard .rem-lines div { font-size: .8125rem; color: var(--dim); }
+  .remcard .remtick {
+    position: absolute; top: .7rem; right: .7rem; width: 1.15rem; height: 1.15rem;
+    border-radius: 50%; display: grid; place-items: center; font-size: .68rem; font-weight: 700; line-height: 1;
+    border: 1.5px solid var(--line); color: transparent; background: transparent;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  }
+  .remcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .remcard[aria-pressed="true"] .remtick { background: var(--accent); border-color: var(--accent); color: var(--raise); }
+
+  /* reminder-preset step: fine-tune list -- every row is a live sentence
+     built from inline dropdowns; picking a card above resets it wholesale */
+  .remtune { margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
+  .remtune-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; margin-bottom: .6rem; }
+  .remtune-head h3 { margin: 0; font-size: .9rem; font-weight: 650; letter-spacing: -.01em; }
+  .remtune-head .note { color: var(--dim); font-size: .8125rem; }
+  .remrules { border: 1px solid var(--line); border-radius: 3px; background: var(--raise); }
+  .remrule { display: flex; align-items: center; gap: .45rem; padding: .55rem .75rem; border-top: 1px dotted var(--line); flex-wrap: wrap; }
+  .remrule:first-child { border-top: 0; }
+  .remrule .act { margin-left: auto; }
+  .remrule-empty { padding: .85rem .75rem; color: var(--dim); font-size: .875rem; }
+  .remtune-add { margin-top: .75rem; }
+
+  /* fake Discord DM preview (welcome step 3) */
+  .dmcard {
+    border: 1px solid var(--line); border-radius: 6px; background: var(--raise);
+    padding: 1rem 1.1rem; display: grid; grid-template-columns: auto 1fr; gap: .8rem;
+    box-shadow: var(--shadow); max-width: 36rem; margin-top: 1rem;
+  }
+  .dmcard .bot { width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: #fff; font-weight: 700; }
+  .dmcard .bn { font-weight: 650; font-size: .9rem; display: flex; align-items: center; gap: .4rem; }
+  .dmcard .bn .bg { background: #5865f2; color: #fff; font-size: .58rem; padding: .05rem .3em; border-radius: 3px; letter-spacing: .04em; font-weight: 700; text-transform: uppercase; }
+  .dmcard .bn .ts { color: var(--dim); font-weight: 400; font-size: .72rem; }
+  .dmcard .msg { font-size: .9rem; margin-top: .35rem; line-height: 1.5; }
+  .dmcard .msg b { font-weight: 650; }
+  .dmcard .dbtn { margin-top: .7rem; display: inline-block; background: #5865f2; color: #fff; font-size: .8rem; font-weight: 600; padding: .35rem .75rem; border-radius: 3px; }
+
+  /* calendar feed reveal */
+  .feedbox { border: 1px solid var(--ok); background: var(--ok-wash); border-radius: 3px; padding: .9rem 1rem; display: grid; gap: .5rem; max-width: 42rem; margin-top: 1rem; }
+  .feedbox .fl { font-size: .8125rem; color: var(--ok); font-weight: 650; }
+  .feedbox code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: .78rem; background: var(--raise); border: 1px solid var(--line); border-radius: 3px; padding: .45rem .55rem; word-break: break-all; color: var(--ink); }
+  .feedbox .frow { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+
+  /* import + preview callouts */
+  .callout { display: flex; gap: .6rem; align-items: flex-start; padding: .75rem .9rem; border-radius: 3px; font-size: .875rem; border: 1px solid var(--accent); background: var(--accent-wash); color: var(--accent); }
+  .callout.warn { border-color: var(--off); background: var(--off-wash); color: var(--off); }
+  .callout b { font-weight: 700; }
+  .warnlist { display: grid; gap: .45rem; margin: 1.25rem 0; }
+
+  /* legal prose */
+  .legal { max-width: 62ch; margin-top: 2.5rem; }
+  .legal h1 { font-size: 1.7rem; letter-spacing: -.025em; font-weight: 650; margin: 0 0 .3rem; }
+  .legal .updated { color: var(--dim); font-size: .8125rem; margin: 0 0 2.25rem; }
+  .legal h2 { font-size: 1rem; font-weight: 650; margin: 2.25rem 0 .5rem; letter-spacing: -.01em; }
+  .legal p { margin: 0 0 1rem; font-size: .9375rem; line-height: 1.7; }
+  .legal ul { margin: 0 0 1rem; padding-left: 1.2rem; display: grid; gap: .4rem; }
+  .legal li { font-size: .9375rem; line-height: 1.6; }
+  .legal a { color: var(--accent); }
+  .legal .lead { color: var(--dim); font-size: 1rem; }
+
+  .wizard { max-width: 47rem; }
+  .rt { display: block; }
+
+  [hidden] { display: none !important; }
+
+  @media (max-width: 1024px) {
+    .howto { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 960px) {
+    .board { grid-template-columns: repeat(2, 1fr); }
+    .grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .board, .grid { grid-template-columns: 1fr; }
+    nav.main { margin-left: 0; }
+    .site-in { flex-wrap: wrap; gap: .75rem; }
+    .hright { margin-left: 0; }
+    .redit .times { grid-template-columns: 1fr 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="banner">Concept — use the header nav to move between the seven views. <b>New user flow</b> walks end to end.</div>
+
+<header class="site">
+  <div class="site-in">
+    <div class="mark">DEKIMASEN<span>dekimasen.app</span></div>
+    <nav class="main">
+      <button type="button" data-view="landing" aria-current="page">Landing</button>
+      <button type="button" data-view="flow">New user flow</button>
+      <button type="button" data-view="import">Import</button>
+      <button type="button" data-view="preview">Import preview</button>
+      <button type="button" data-view="retro">Retroactive apply</button>
+      <button type="button" data-view="privacy">Privacy</button>
+      <button type="button" data-view="terms">Terms</button>
+    </nav>
+    <div class="hright">
+      <button class="langtoggle" type="button" id="langBtn" title="Language">🌐 <span id="langLabel">EN</span></button>
+      <button class="ttoggle" type="button" id="themeBtn" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
+      <button class="btn btn-discord sm" type="button" data-view="flow"><span class="di">✦</span> Sign in</button>
+    </div>
+  </div>
+</header>
+
+
+<!-- ==================== LANDING (signed-out home) ==================== -->
+<div class="wrap" id="view-landing">
+
+  <div class="hero">
+    <span class="eyebrow">dekimasen.app · Japanese concert ticketing, tracked</span>
+    <h1 class="promise">Never say <em>dekimasen deshita</em> again.</h1>
+    <p class="vprop">
+      Every Japanese ticket is a <b>campaign</b>, not a date — fan-club presale, lottery
+      round 1, round 2 if you lose, a first-come sale, an upgrade round riding on the
+      seat you already hold. We track the whole ladder and tell you exactly where you stand.
+    </p>
+    <div class="cta">
+      <button class="btn btn-discord" type="button" data-view="flow"><span class="di">✦</span> Sign in with Discord</button>
+      <span class="reassure">Free · we DM you on Discord · no card, no spam</span>
+    </div>
+
+    <div class="statband num">
+      <div><div class="n">142</div><div class="l">concerts tracked</div></div>
+      <div><div class="n">38</div><div class="l">rounds open now</div></div>
+      <div><div class="n">6</div><div class="l">franchises</div></div>
+      <div><div class="n">96</div><div class="l">performers tagged</div></div>
+    </div>
+  </div>
+
+  <section>
+    <div class="head"><h2>How it works</h2><span class="note">Three steps, then it runs itself</span></div>
+    <div class="howto">
+      <div class="howstep">
+        <span class="k num">1</span>
+        <h3>Follow your artists</h3>
+        <p>Tap Aqours, Liella!, Roselia — a franchise, a group, or one performer. New events for
+          anyone you follow show up on your board <b>automatically</b>.</p>
+      </div>
+      <div class="howstep">
+        <span class="k num">2</span>
+        <h3>We track every round's deadline</h3>
+        <p>Presale opens, lottery closes, results land, payment is due. All times shown
+          <b>JST and yours</b>, always both — no mental arithmetic at 3am.</p>
+      </div>
+      <div class="howstep">
+        <span class="k num">3</span>
+        <h3>You get a DM, and you know where you stand</h3>
+        <p>A Discord reminder before each deadline, plus a campaign board that says whether the
+          ball is <b>in your court</b> or you are already covered.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>The whole campaign, one board</h2>
+      <span class="note">One card moves left to right as you apply, win, and pay</span>
+    </div>
+    <div class="board">
+      <div class="col">
+        <div class="col-head"><span class="dot d-open"></span> Open now <span class="count num">2</span></div>
+        <div class="card thesiscard">
+          <div class="artist">Liella!</div>
+          <div class="title">5th Live Tour — Yokohama</div>
+          <div class="venue">横浜アリーナ · 12 Oct</div>
+          <div class="foot"><span class="pill p-danger">FC presale · 6h left</span></div>
+        </div>
+        <div class="card thesiscard">
+          <div class="artist">22/7</div>
+          <div class="title">Live at Nakano</div>
+          <div class="venue">中野サンプラザ · 3 Sep</div>
+          <div class="foot"><span class="pill p-off">General presale · 4d</span></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-head"><span class="dot d-applied"></span> Applied <span class="count num">1</span></div>
+        <div class="card thesiscard">
+          <div class="artist">Aqours</div>
+          <div class="title">9th LoveLive! — Day 2</div>
+          <div class="venue">さいたまスーパーアリーナ · 24 Aug</div>
+          <div class="foot"><span class="pill p-off">Lottery R1 · result 21 Jul</span></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-head"><span class="dot d-won"></span> Won — pay <span class="count num">1</span></div>
+        <div class="card thesiscard" style="border-left:3px solid var(--accent)">
+          <div class="artist">Poppin'Party</div>
+          <div class="title">Bloom in the Summer</div>
+          <div class="venue">日本ガイシホール · 17 Aug</div>
+          <div class="foot"><span class="pill p-danger">Pay by 22 Jul</span><span class="clock num">¥9,800</span></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-head"><span class="dot d-secured"></span> Secured <span class="count num">2</span></div>
+        <div class="card thesiscard">
+          <div class="artist">Nijigasaki</div>
+          <div class="title">7th Live — Day 1</div>
+          <div class="venue">ぴあアリーナMM · 5 Oct</div>
+          <div class="foot"><span class="pill p-ok">Paid</span></div>
+        </div>
+        <div class="card thesiscard">
+          <div class="artist">μ's</div>
+          <div class="title">Final Live Encore</div>
+          <div class="venue">東京ドーム · 30 Nov</div>
+          <div class="foot"><span class="pill p-ok">Paid</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Discover what's on</h2>
+      <span class="note">The catalogue is public — browse before you sign in</span>
+      <button class="more" type="button" data-view="flow">Sign in to track →</button>
+    </div>
+    <div class="grid">
+      <a class="card" href="#" onclick="return false">
+        <div class="artist">Aqours</div>
+        <div class="title">9th LoveLive! — Day 1</div>
+        <div class="venue">さいたまスーパーアリーナ</div>
+        <div class="when num">Sat 23 Aug</div>
+        <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kanto</span></div>
+        <div class="status-line"><span class="pill s-none">Lottery R1 · Closes in 3d</span></div>
+      </a>
+      <a class="card" href="#" onclick="return false">
+        <div class="artist">Hasunosora</div>
+        <div class="title">2nd Live — Day 2</div>
+        <div class="venue">日本武道館</div>
+        <div class="when num">Sun 19 Oct</div>
+        <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kanto</span></div>
+        <div class="status-line"><span class="pill s-none">FC presale · Closes in 21d</span></div>
+      </a>
+      <a class="card" href="#" onclick="return false">
+        <div class="artist">Roselia</div>
+        <div class="title">Rausch und/oder Craziness</div>
+        <div class="venue">幕張メッセ</div>
+        <div class="when num">Sat 6 Sep</div>
+        <div class="tagrow"><span class="minichip">BanG Dream!</span><span class="minichip">Kanto</span></div>
+        <div class="status-line"><span class="pill s-none">FC lottery · Result 2 Aug</span></div>
+      </a>
+    </div>
+  </section>
+
+  <div class="ctafoot">
+    <span class="eyebrow">Ready when you are</span>
+    <h2>Follow four groups in a minute. Miss nothing after that.</h2>
+    <p>Sign in with the Discord account you already have. We only ever DM you about deadlines
+      for artists you chose to follow.</p>
+    <button class="btn btn-discord" type="button" data-view="flow"><span class="di">✦</span> Sign in with Discord</button>
+  </div>
+
+  <p class="foot-note">
+    <b>Signed out, this is the whole product in one screen.</b> Sign in and it becomes your
+    board — your rounds, your outcomes, your deadlines. Everything above is a taste of what
+    fills in once you follow someone.
+  </p>
+</div>
+
+
+<!-- ==================== NEW USER FLOW ==================== -->
+<div class="wrap" id="view-flow" hidden>
+  <div class="steps" id="flowsteps"></div>
+
+  <!-- ---- step: follow artists ---- -->
+  <div class="flowstep wizard" id="flow-follow">
+    <div class="lede">
+      <h1>Follow some artists</h1>
+      <p>Get a DM the moment a new event drops for anyone you follow. Pick a franchise to
+        cover everyone under it, a group, or a single performer — you can change any of this
+        later. Tap to follow.</p>
+    </div>
+    <div class="fld" style="max-width:26rem; margin-top:1.25rem">
+      <input type="search" placeholder="Search franchises, groups, performers…" aria-label="Search tags">
+    </div>
+
+    <div style="margin-top:1.4rem; display:grid; gap:1.1rem">
+      <div>
+        <div class="applies" style="margin-bottom:.5rem"><span class="lbl3">Love Live! Sunshine!!</span></div>
+        <div class="applies">
+          <button class="chip on" type="button" data-follow>Aqours ✓</button>
+          <button class="chip" type="button" data-follow>伊波杏樹</button>
+          <button class="chip" type="button" data-follow>逢田梨香子</button>
+          <button class="chip" type="button" data-follow>諏訪ななか</button>
+          <button class="chip" type="button" data-follow>斉藤朱夏</button>
+        </div>
+      </div>
+      <div>
+        <div class="applies" style="margin-bottom:.5rem"><span class="lbl3">Love Live! Superstar!!</span></div>
+        <div class="applies">
+          <button class="chip on" type="button" data-follow>Liella! ✓</button>
+          <button class="chip" type="button" data-follow>Sunny Passion</button>
+          <button class="chip" type="button" data-follow>伊達さゆり</button>
+          <button class="chip" type="button" data-follow>岬なこ</button>
+        </div>
+      </div>
+      <div>
+        <div class="applies" style="margin-bottom:.5rem"><span class="lbl3">BanG Dream!</span></div>
+        <div class="applies">
+          <button class="chip on" type="button" data-follow>Roselia ✓</button>
+          <button class="chip on" type="button" data-follow>Poppin'Party ✓</button>
+          <button class="chip" type="button" data-follow>Morfonica</button>
+          <button class="chip" type="button" data-follow>RAISE A SUILEN</button>
+        </div>
+      </div>
+      <div>
+        <div class="applies" style="margin-bottom:.5rem"><span class="lbl3">Venues</span></div>
+        <div class="applies">
+          <button class="chip" type="button" data-follow>横浜アリーナ</button>
+          <button class="chip" type="button" data-follow>東京ドーム</button>
+          <button class="chip" type="button" data-follow>大阪城ホール</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <span class="tally"><b class="followCount">4</b> tags followed</span>
+      <button class="btn" type="button" data-goflow="1">Continue</button>
+    </div>
+  </div>
+
+  <!-- ---- step: default reminders ---- -->
+  <div class="flowstep wizard" id="flow-remind">
+    <div class="lede">
+      <h1>Pick a default reminder preset</h1>
+      <p>This is what fires when you tap "Set my reminders" on a concert, or press the Discord
+        DM button — a standard loadout you won't have to rebuild every time. Rules on a single
+        concert always override it.</p>
+    </div>
+
+    <div class="remdemo" id="remDemo" style="margin-top:1.5rem">
+      <!-- three preset cards, radio-select; each lists its coverage across
+           all five anchors, not just "before the deadline" -->
+      <div class="remcards">
+        <button class="card remcard" type="button" data-remcard="relaxed" aria-pressed="false">
+          <span class="remtick">✓</span>
+          <span class="eyebrow">Light touch</span>
+          <span class="rem-label">Relaxed</span>
+          <div class="rem-lines">
+            <div>Opens - when applications open</div>
+            <div>Closes - 1 day before</div>
+            <div>Results - when results come out</div>
+            <div>Payment - when payment is due</div>
+          </div>
+        </button>
+        <button class="card remcard" type="button" data-remcard="standard" aria-pressed="true">
+          <span class="remtick">✓</span>
+          <span class="eyebrow">Balanced</span>
+          <div style="display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; padding-right:1.4rem">
+            <span class="rem-label">★ Standard</span>
+            <span class="pill p-ok">Recommended</span>
+          </div>
+          <div class="rem-lines">
+            <div>Opens - when applications open</div>
+            <div>Closes - 3 days &amp; 1 day before</div>
+            <div>Results - when results come out</div>
+            <div>Payment - 1 day before</div>
+          </div>
+        </button>
+        <button class="card remcard" type="button" data-remcard="onball" aria-pressed="false">
+          <span class="remtick">✓</span>
+          <span class="eyebrow">Maximum coverage</span>
+          <span class="rem-label">On the ball</span>
+          <div class="rem-lines">
+            <div>Opens - 1 day before &amp; when applications open</div>
+            <div>Closes - 5, 3 &amp; 1 days before</div>
+            <div>Results - when results come out</div>
+            <div>Payment - 3 &amp; 1 days before</div>
+          </div>
+        </button>
+      </div>
+      <p class="clock" style="display:block; margin-top:.7rem">
+        One reminder for each single moment — opens, results, payment — plus a couple of
+        nudges before closes, since that's the one with an action to take. Fine-tune any of
+        these below, or later in Preferences.
+      </p>
+    </div>
+
+    <!-- fine-tune: every rule renders as one grammatical sentence, built
+         from inline dropdowns. Picking a card above resets this list
+         wholesale -- the real, believable source of truth. -->
+    <div class="remtune" id="remTune">
+      <div class="remtune-head">
+        <h3>Fine-tune these reminders</h3>
+        <span class="note">Change any dropdown — each row stays a real sentence.</span>
+      </div>
+      <div class="remrules" id="remRuleList"><!-- rows rendered by JS --></div>
+      <div class="remtune-add">
+        <button class="btn quiet" type="button" id="remAddRow">+ Add a reminder</button>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="btn quiet" type="button" data-goflow="0">Back</button>
+      <button class="btn" type="button" data-goflow="2">Create preset &amp; continue</button>
+    </div>
+  </div>
+
+  <!-- ---- step: timezone ---- -->
+  <div class="flowstep wizard" id="flow-tz">
+    <div class="lede">
+      <h1>Confirm your timezone</h1>
+      <p>Deadlines always show JST first, then this timezone — so you never have to convert a
+        23:59 JST close in your head.</p>
+    </div>
+
+    <p style="margin-top:1.25rem">Detected <strong>America/Moncton</strong>
+      <span class="clock">(auto-detected from your browser)</span></p>
+
+    <div class="grid2" style="max-width:36rem; margin-top:.5rem">
+      <label class="fld"><span>Your timezone</span>
+        <select>
+          <option selected>America/Moncton</option>
+          <option>Asia/Tokyo</option>
+          <option>Europe/London</option>
+          <option>America/Los_Angeles</option>
+        </select></label>
+      <label class="fld"><span>Detection</span>
+        <select><option selected>Follow my browser</option><option>Keep what I picked</option></select></label>
+    </div>
+    <p class="clock" style="display:block; margin-top:.7rem">
+      A 23:59 JST close currently reads <span class="num">23:59 JST · 10:59 AST</span> for you.
+    </p>
+
+    <div class="bar">
+      <button class="btn quiet" type="button" data-goflow="1">Back</button>
+      <button class="btn" type="button" data-goflow="3">Looks right, continue</button>
+    </div>
+  </div>
+
+  <!-- ---- step: test DM ---- -->
+  <div class="flowstep wizard" id="flow-dm">
+    <div class="lede">
+      <h1>Send a test DM</h1>
+      <p>Confirm reminders can actually reach you on Discord before you rely on them. If your
+        DMs are closed, this is where you find out — not the night a lottery closes.</p>
+    </div>
+
+    <div style="margin-top:1.25rem; display:flex; gap:.75rem; align-items:center; flex-wrap:wrap">
+      <button class="btn" type="button" id="dmSend">Send test DM</button>
+      <span id="dmResult" class="clock"></span>
+    </div>
+
+    <div class="dmcard" id="dmPreview" hidden>
+      <div class="bot">✦</div>
+      <div>
+        <div class="bn">dekimasen <span class="bg">bot</span> <span class="ts">now</span></div>
+        <div class="msg">
+          ✅ <b>Test reminder.</b> If you can read this, your deadline DMs will reach you.
+          You'll get messages like: <i>"Liella! 5th Live Tour — FC presale closes in 3 days
+          (23:59 JST · 10:59 AST)."</i>
+          <br><span class="dbtn">I have applied</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button class="btn quiet" type="button" data-goflow="2">Back</button>
+      <button class="btn" type="button" data-goflow="4">Continue</button>
+    </div>
+  </div>
+
+  <!-- ---- step: calendar feed ---- -->
+  <div class="flowstep wizard" id="flow-feed">
+    <div class="lede">
+      <h1>Get your calendar feed</h1>
+      <p>Subscribe once in your phone or calendar app and every deadline you have a reminder
+        for stays in sync automatically — a belt to the DM's braces.</p>
+    </div>
+
+    <div style="margin-top:1.25rem">
+      <button class="btn" type="button" id="feedGen">Generate feed link</button>
+    </div>
+
+    <div class="feedbox" id="feedBox" hidden>
+      <div class="fl">✓ Your feed link is ready — save it now, it won't be shown again.</div>
+      <code>https://dekimasen.app/calendar/8f3ac91e7b2d4a60bce15f772a09d4e1.ics</code>
+      <div class="frow">
+        <button class="act" type="button">Copy link</button>
+        <span class="clock">Add it in Google Calendar, Apple Calendar, or Outlook.</span>
+      </div>
+    </div>
+
+    <div class="bar">
+      <span class="tally">You're set — next we'll tidy up which concerts you're actually going for.</span>
+      <button class="btn quiet" type="button" data-goflow="3">Back</button>
+      <button class="btn" type="button" data-goflow="5">Continue to my concerts</button>
+    </div>
+  </div>
+
+  <!-- ---- setup handoff: prune ---- -->
+  <div class="flowstep" id="flow-prune">
+    <div class="lede">
+      <h1>We found 9 upcoming concerts for you</h1>
+      <p>Because you follow Aqours, Liella!, Roselia and Poppin'Party. Most people cannot get
+        to every date — switch off the ones you are not going for and we will not chase you
+        about them. You can change any of this later.</p>
+    </div>
+
+    <div class="pick" data-prunegrid>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Liella!</span>
+        <span class="t">5th Live Tour — Yokohama</span>
+        <span class="v">横浜アリーナ · Sun 12 Oct</span>
+        <span class="rnd"><b>FC presale</b> closes in 6h · <span class="num">23:59 JST · 10:59 AST</span></span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Liella!</span>
+        <span class="t">5th Live Tour — Osaka</span>
+        <span class="v">大阪城ホール · Sat 1 Nov</span>
+        <span class="rnd"><b>FC presale</b> opens 3 Aug</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Liella!</span>
+        <span class="t">5th Live Tour — Fukuoka</span>
+        <span class="v">マリンメッセ福岡 · Sat 25 Oct</span>
+        <span class="rnd"><b>FC presale</b> opens 3 Aug</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Aqours</span>
+        <span class="t">9th LoveLive! — Day 1</span>
+        <span class="v">さいたまスーパーアリーナ · Sat 23 Aug</span>
+        <span class="rnd"><b>Lottery R1</b> closes in 3d</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Aqours</span>
+        <span class="t">9th LoveLive! — Day 2</span>
+        <span class="v">さいたまスーパーアリーナ · Sun 24 Aug</span>
+        <span class="rnd"><b>Lottery R1</b> result 21 Jul</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Aqours</span>
+        <span class="t">9th — Osaka Day 1</span>
+        <span class="v">京セラドーム大阪 · Sat 8 Nov</span>
+        <span class="rnd"><b>Upgrade round</b> closes in 3d</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Roselia</span>
+        <span class="t">Rausch und/oder Craziness</span>
+        <span class="v">幕張メッセ · Sat 6 Sep</span>
+        <span class="rnd"><b>FC lottery</b> result 2 Aug</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Poppin'Party</span>
+        <span class="t">Bloom in the Summer</span>
+        <span class="v">日本ガイシホール · Sun 17 Aug</span>
+        <span class="rnd"><b>FC lottery R2</b> result 14 Jul</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Roselia</span>
+        <span class="t">Yokohama Final</span>
+        <span class="v">ぴあアリーナMM · Sun 23 Nov</span>
+        <span class="rnd"><b>General sale</b> opens 12 Aug</span>
+      </button>
+    </div>
+
+    <div class="bar">
+      <span class="tally"><b class="keepCount">9</b> of 9 kept</span>
+      <button class="btn quiet" type="button" data-alloff>Turn all off</button>
+      <button class="btn" type="button" data-goflow="6">Continue</button>
+    </div>
+  </div>
+
+  <!-- ---- setup handoff: applications ---- -->
+  <div class="flowstep" id="flow-applied">
+    <div class="lede">
+      <h1>Already applied to any of these?</h1>
+      <p>Only the rounds you could still be in — open now, or closed and waiting on a result.
+        A past round you lost does not change what happens next, so we do not ask.</p>
+    </div>
+
+    <div class="pick" data-plaingrid>
+      <button class="tile" type="button" aria-pressed="false">
+        <span class="tick">✓</span><span class="who-t">Liella!</span>
+        <span class="t">5th Live Tour — Yokohama</span>
+        <span class="v">FC presale · closes in 6h</span>
+        <span class="rnd">Still open</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Aqours</span>
+        <span class="t">9th LoveLive! — Day 2</span>
+        <span class="v">Lottery R1 · result 21 Jul</span>
+        <span class="rnd">Awaiting result</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="false">
+        <span class="tick">✓</span><span class="who-t">Aqours</span>
+        <span class="t">9th LoveLive! — Day 1</span>
+        <span class="v">Lottery R1 · closes in 3d</span>
+        <span class="rnd">Still open</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">✓</span><span class="who-t">Roselia</span>
+        <span class="t">Rausch und/oder Craziness</span>
+        <span class="v">FC lottery · result 2 Aug</span>
+        <span class="rnd">Awaiting result</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true" style="border-left:3px solid var(--accent)">
+        <span class="tick">✓</span><span class="who-t">Aqours · upgrade eligibility</span>
+        <span class="t">9th — Osaka Day 1</span>
+        <span class="v">最速先行 · closed 30 Jun</span>
+        <span class="rnd">Do you hold this ticket? <b>An upgrade round is open</b> and only holders can enter.</span>
+      </button>
+    </div>
+
+    <div class="bar">
+      <span class="tally">Anything you skip, we will ask about by DM when its result lands.</span>
+      <button class="btn quiet" type="button" data-goflow="5">Back</button>
+      <button class="btn" type="button" data-goflow="7">Finish</button>
+    </div>
+  </div>
+
+  <!-- ---- setup handoff: ready reveal ---- -->
+  <div class="flowstep" id="flow-ready">
+    <div class="reveal">
+      <div class="eyebrow">Setup complete</div>
+      <div class="big">Your board is ready</div>
+      <div class="tallies num">
+        <div><div class="n">9</div><div class="l">tracking</div></div>
+        <div><div class="n">3</div><div class="l">applied</div></div>
+        <div><div class="n">1</div><div class="l">payment due</div></div>
+        <div><div class="n">6h</div><div class="l">next deadline</div></div>
+      </div>
+      <p class="lede" style="margin:0 auto 1.5rem; color:var(--dim)">
+        Poppin'Party is waiting on a payment by Tue 22 Jul — the closest thing here to losing
+        a ticket you have already won.
+      </p>
+      <button class="btn" type="button" data-goflow="8">Go to my board</button>
+    </div>
+  </div>
+
+  <!-- ---- landed: signed-in campaign board ---- -->
+  <div class="flowstep" id="flow-board">
+    <div class="head" style="margin-top:2rem">
+      <h2 style="font-size:1.35rem">Welcome to your board, reiji</h2>
+      <span class="note"><strong>2 open</strong> · 2 awaiting results · 1 payment due · 3 secured</span>
+    </div>
+    <p class="clock" style="display:block; margin:-.5rem 0 1.25rem">
+      This is where you land every visit from now on. New events for the tags you follow
+      appear here on their own.
+    </p>
+    <div class="board">
+      <div class="col">
+        <div class="col-head"><span class="dot d-open"></span> Open now <span class="count num">2</span></div>
+        <div class="card thesiscard">
+          <div class="artist">Liella!</div><div class="title">5th Live Tour — Yokohama</div>
+          <div class="venue">横浜アリーナ · 12 Oct</div>
+          <div class="ladder">
+            <div class="rung"><span class="mark m-live">1</span><span class="name">FC presale R1</span><span class="stat">open</span></div>
+            <div class="rung is-todo"><span class="mark m-todo">2</span><span class="name">General sale</span><span class="stat">10 Aug</span></div>
+          </div>
+          <div class="foot"><span class="pill p-danger">6h left</span></div>
+        </div>
+        <div class="card thesiscard">
+          <div class="artist">22/7</div><div class="title">Live at Nakano</div>
+          <div class="venue">中野サンプラザ · 3 Sep</div>
+          <div class="foot"><span class="pill p-off">General presale · 4d</span></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-head"><span class="dot d-applied"></span> Applied <span class="count num">2</span></div>
+        <div class="card thesiscard">
+          <div class="artist">Aqours</div><div class="title">9th LoveLive! — Day 2</div>
+          <div class="venue">さいたまスーパーアリーナ · 24 Aug</div>
+          <div class="foot"><span class="pill p-off">Result tomorrow</span></div>
+        </div>
+        <div class="card thesiscard">
+          <div class="artist">Roselia</div><div class="title">Rausch und/oder Craziness</div>
+          <div class="venue">幕張メッセ · 6 Sep</div>
+          <div class="foot"><span class="pill p-quiet">Result 2 Aug</span></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-head"><span class="dot d-won"></span> Won — pay <span class="count num">1</span></div>
+        <div class="card thesiscard" style="border-left:3px solid var(--accent)">
+          <div class="artist">Poppin'Party</div><div class="title">Bloom in the Summer</div>
+          <div class="venue">日本ガイシホール · 17 Aug</div>
+          <div class="foot"><span class="pill p-danger">Pay by 22 Jul</span><span class="clock num">¥9,800</span></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-head"><span class="dot d-secured"></span> Secured <span class="count num">3</span></div>
+        <div class="card thesiscard">
+          <div class="artist">Nijigasaki</div><div class="title">7th Live — Day 1</div>
+          <div class="venue">ぴあアリーナMM · 5 Oct</div>
+          <div class="foot"><span class="pill p-ok">Paid</span></div>
+        </div>
+        <div class="card thesiscard">
+          <div class="artist">μ's</div><div class="title">Final Live Encore</div>
+          <div class="venue">東京ドーム · 30 Nov</div>
+          <div class="foot"><span class="pill p-ok">Paid</span></div>
+        </div>
+        <div class="card thesiscard">
+          <div class="artist">Morfonica</div><div class="title">Rebloom</div>
+          <div class="venue">Zepp Haneda · 21 Sep</div>
+          <div class="foot"><span class="pill p-ok">Paid</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="bar">
+      <span class="tally">That's the whole flow. From here on it runs itself.</span>
+      <button class="btn quiet" type="button" data-goflow="0">Walk it again</button>
+      <button class="btn quiet" type="button" data-view="landing">Back to landing</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ==================== IMPORT ==================== -->
+<div class="wrap" id="view-import" hidden>
+  <div class="lede" style="margin-top:2rem">
+    <h1>Import from a URL</h1>
+    <p>Paste a <code>ramen.events</code> event page — we fetch the title, tags, performance
+      days and lottery rounds as a draft. Nothing is saved until you review and submit the
+      next page.</p>
+  </div>
+
+  <div style="max-width:42rem; margin-top:1.75rem; display:grid; gap:1rem">
+    <label class="fld"><span>ramen.events URL</span>
+      <input type="url" value="https://ramen.events/e/aqours-9th-love-live-saitama"
+             placeholder="https://ramen.events/…"></label>
+    <div>
+      <button class="btn" type="button" data-view="preview">Fetch draft</button>
+    </div>
+  </div>
+
+  <div class="callout" style="margin-top:1.75rem; max-width:42rem">
+    <span>🔒</span>
+    <span>Only <b>https ramen.events</b> URLs are accepted. The fetch is size-capped and
+      re-checked on every redirect — an editor safety rail, not a general web fetcher.</span>
+  </div>
+
+  <p class="clock" style="display:block; margin-top:1.5rem">
+    No ramen.events page? <button class="more" type="button" data-view="flow" style="margin:0">Create the concert manually</button> instead.
+  </p>
+</div>
+
+
+<!-- ==================== IMPORT PREVIEW ==================== -->
+<div class="wrap" id="view-preview" hidden>
+  <div class="lede" style="margin-top:2rem">
+    <h1>Review draft</h1>
+    <p>Parsed from <a href="#" onclick="return false" style="color:var(--accent)">ramen.events/e/aqours-9th-love-live-saitama</a>.
+      Edit anything below, then create the concert.</p>
+  </div>
+
+  <div class="callout info" style="margin-top:1.25rem">
+    <span>💾</span>
+    <span><b>Nothing is saved yet.</b> This is a draft in your browser. It becomes a real
+      concert only when you press <b>Create concert</b> at the bottom.</span>
+  </div>
+
+  <div class="warnlist">
+    <div class="callout warn"><span>⚠</span><span>Round 3 had no close time on the page — <b>please fill "Closes (JST)"</b> before saving.</span></div>
+    <div class="callout warn"><span>⚠</span><span>Venue <b>さいたまスーパーアリーナ</b> matched an existing tag. Payment and result times were not listed and are left blank.</span></div>
+  </div>
+
+  <!-- top-level fields, editor vocabulary -->
+  <div class="ebar">
+    <label class="fld grow"><span>Title (JP)</span>
+      <input value="9th LoveLive! — ノーバディーズ・パーフェクト"></label>
+    <label class="fld" style="flex:0 0 10rem"><span>Kind</span>
+      <select><option selected>lottery event</option><option>stream</option><option>serial code</option></select></label>
+  </div>
+
+  <details class="fold" open>
+    <summary>Tags <span class="hint">Franchise · group · performers · venue — parsed, editable</span></summary>
+    <div class="foldbody">
+      <div class="applies"><span class="lbl3">Franchise</span><span class="chip">Love Live! Sunshine!!</span><button class="legchip" type="button">+ Add</button></div>
+      <div class="applies"><span class="lbl3">Group</span><span class="chip">Aqours</span><button class="legchip" type="button">+ Add</button></div>
+      <div class="applies"><span class="lbl3">Performers</span><span class="chip">伊波杏樹</span><span class="chip">逢田梨香子</span><span class="chip">諏訪ななか</span><span class="chip">+6 more</span><button class="legchip" type="button">+ Add</button></div>
+      <div class="applies"><span class="lbl3">Venue</span><span class="chip">さいたまスーパーアリーナ</span><button class="legchip" type="button">+ Add</button></div>
+    </div>
+  </details>
+
+  <div class="head" style="margin-top:1.75rem">
+    <h2>Performance days</h2>
+    <span class="note">Each parsed day becomes a leg you can attach rounds to</span>
+  </div>
+
+  <div class="elegs">
+    <div class="elegcard">
+      <div class="lh">
+        <h3>Day 1</h3>
+        <span class="meta num">Sat 23 Aug · 開演 16:00 · さいたまスーパーアリーナ</span>
+        <span class="sp"><button class="act" type="button">Edit</button><button class="act no" type="button">Remove</button></span>
+      </div>
+    </div>
+    <div class="elegcard">
+      <div class="lh">
+        <h3>Day 2</h3>
+        <span class="meta num">Sun 24 Aug · 開演 15:00 · さいたまスーパーアリーナ</span>
+        <span class="sp"><button class="act" type="button">Edit</button><button class="act no" type="button">Remove</button></span>
+      </div>
+    </div>
+  </div>
+  <div class="bar" style="margin-top:1rem"><button class="btn quiet" type="button">+ Add day</button></div>
+
+  <div class="head" style="margin-top:1.75rem">
+    <h2>Lottery / sale rounds</h2>
+    <span class="note">Parsed round kinds and times — leg chips say which days each applies to</span>
+  </div>
+
+  <div class="elegs">
+    <div class="elegcard">
+      <div class="lh"><h3>Rounds</h3><span class="meta">3 parsed · toggle the leg chips to change scope</span><span class="sp"></span></div>
+      <div class="rlist">
+        <div class="redit">
+          <div class="top">
+            <span class="nm">最速先行</span><span class="pill p-quiet">fan club</span>
+            <span class="sp"><button class="act" type="button">Edit</button><button class="act no" type="button">Remove</button></span>
+          </div>
+          <div class="times">
+            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-06-01T10:00"></label>
+            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value="2026-06-30T23:59"></label>
+            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value="2026-07-04T12:00"></label>
+            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
+          </div>
+          <div class="applies">
+            <span class="lbl3">Applies to</span>
+            <button class="legchip" type="button" aria-pressed="true">Day 1</button>
+            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
+          </div>
+        </div>
+        <div class="redit">
+          <div class="top">
+            <span class="nm">先行抽選 R1</span><span class="pill p-quiet">lottery</span>
+            <span class="sp"><button class="act" type="button">Edit</button><button class="act no" type="button">Remove</button></span>
+          </div>
+          <div class="times">
+            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-07-10T10:00"></label>
+            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value="2026-07-23T23:59"></label>
+            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value="2026-07-28T12:00"></label>
+            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
+          </div>
+          <div class="applies">
+            <span class="lbl3">Applies to</span>
+            <button class="legchip" type="button" aria-pressed="true">Day 1</button>
+            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
+          </div>
+        </div>
+        <div class="redit" style="border-color:var(--off)">
+          <div class="top">
+            <span class="nm">一般発売</span><span class="pill p-quiet">first come</span>
+            <span class="pill p-off">needs close time</span>
+            <span class="sp"><button class="act" type="button">Edit</button><button class="act no" type="button">Remove</button></span>
+          </div>
+          <div class="times">
+            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-08-09T10:00"></label>
+            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value=""></label>
+            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value=""></label>
+            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
+          </div>
+          <div class="applies">
+            <span class="lbl3">Applies to</span>
+            <button class="legchip" type="button" aria-pressed="true">Day 1</button>
+            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bar" style="margin-top:1rem"><button class="btn quiet" type="button">+ Add round</button></div>
+
+  <details class="fold">
+    <summary>Details and links <span class="hint">Title (EN), organizer, source URL, notes</span></summary>
+    <div class="foldbody">
+      <div class="grid2">
+        <label class="fld"><span>Title (EN)</span><input value="9th LoveLive! — Nobody's Perfect"></label>
+        <label class="fld"><span>Artist / organizer</span><input value="Aqours"></label>
+      </div>
+      <label class="fld"><span>Source URL</span><input type="url" value="https://ramen.events/e/aqours-9th-love-live-saitama"></label>
+      <label class="fld"><span>Notes</span><textarea rows="2"></textarea></label>
+    </div>
+  </details>
+
+  <div class="bar">
+    <span class="tally">Once created, this concert enters the shared catalogue for everyone.</span>
+    <button class="btn quiet" type="button" data-view="import">Back</button>
+    <button class="btn" type="button" data-view="flow">Create concert</button>
+  </div>
+</div>
+
+
+<!-- ==================== RETROACTIVE APPLY ==================== -->
+<div class="wrap" id="view-retro" hidden>
+  <div class="lede" style="margin-top:2rem">
+    <h1>Add 降幡愛 to active events?</h1>
+    <p>降幡愛 was just added to the <b>Aqours</b> group tag. Group membership is materialised
+      when a group is attached to a concert, so existing concerts are not touched automatically.
+      These active events carry Aqours but not 降幡愛 individually:</p>
+  </div>
+
+  <div class="callout info" style="margin-top:1.25rem; max-width:44rem">
+    <span>ℹ</span>
+    <span>Applying adds 降幡愛 as a performer chip on each concert below. It does <b>not</b>
+      re-expand the group or restore performers an editor pruned — only this one new member is added.</span>
+  </div>
+
+  <div class="pick" style="grid-template-columns:repeat(auto-fill,minmax(17rem,1fr))">
+    <div class="tile" aria-pressed="true" style="cursor:default">
+      <span class="tick">✓</span><span class="who-t">Love Live! Sunshine!! · Aqours</span>
+      <span class="t">9th LoveLive! — ノーバディーズ・パーフェクト</span>
+      <span class="v">さいたまスーパーアリーナ · 23–24 Aug</span>
+    </div>
+    <div class="tile" aria-pressed="true" style="cursor:default">
+      <span class="tick">✓</span><span class="who-t">Love Live! Sunshine!! · Aqours</span>
+      <span class="t">9th LoveLive! — Osaka</span>
+      <span class="v">京セラドーム大阪 · 8–9 Nov</span>
+    </div>
+    <div class="tile" aria-pressed="true" style="cursor:default">
+      <span class="tick">✓</span><span class="who-t">Love Live! Sunshine!! · Aqours</span>
+      <span class="t">Aqours ユニット CafeLive</span>
+      <span class="v">Zepp Haneda · 14 Dec</span>
+    </div>
+  </div>
+
+  <div class="bar">
+    <span class="tally"><b>3</b> active events will gain 降幡愛. Concerts already carrying her are skipped.</span>
+    <a class="btn quiet" href="#" onclick="return false" data-view="flow">Skip</a>
+    <button class="btn" type="button" data-view="flow">Apply to all 3</button>
+  </div>
+</div>
+
+
+<!-- ==================== PRIVACY ==================== -->
+<div class="wrap" id="view-privacy" hidden>
+  <div class="legal">
+    <h1>Privacy policy</h1>
+    <p class="updated num">Last updated 19 July 2026</p>
+
+    <p class="lead">dekimasen.app tracks Japanese concert ticketing deadlines and reminds you
+      about them on Discord. This page explains what we store and why. The short version: we
+      keep the minimum needed to send you the right reminder at the right time.</p>
+
+    <h2>What we collect</h2>
+    <ul>
+      <li><b>Your Discord identity</b> — your Discord user ID and username, received when you
+        sign in with Discord. We use it to address your DMs and to know which board is yours.</li>
+      <li><b>Your choices</b> — the tags you follow, reminder presets, per-concert overrides,
+        your timezone, and the lottery outcomes you record (applied, won, lost, paid).</li>
+      <li><b>Delivery state</b> — which reminders we have sent, so we do not send them twice.</li>
+    </ul>
+
+    <h2>What we do not collect</h2>
+    <p>We do not read your Discord messages, servers, or contacts. We do not use tracking
+      cookies or third-party analytics. The only cookie we set is your login session, which is
+      a revocable token — we store only its SHA-256 hash, never the raw value.</p>
+
+    <h2>Your calendar feed</h2>
+    <p>If you generate a calendar feed, its link contains a secret token. Anyone with the link
+      can read your deadlines, so treat it like a password. We store only the hash of the token;
+      if you lose the link the fix is to generate a new one, which immediately revokes the old.</p>
+
+    <h2>Sharing</h2>
+    <p>We do not sell or share your personal data. Concerts, rounds and tags you create as an
+      editor go into a catalogue shared with all users — but those are event facts, not personal
+      information. Your follows, outcomes and reminders are never shown to anyone else.</p>
+
+    <h2>Deleting your data</h2>
+    <p>You can delete your account from Preferences at any time. That removes your
+      subscriptions, reminders, presets, outcomes and sessions. Concerts and tags you
+      contributed stay in the shared catalogue with your name removed.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about your data? Reach the maintainer on Discord, or open an issue on the
+      project repository.</p>
+  </div>
+</div>
+
+
+<!-- ==================== TERMS ==================== -->
+<div class="wrap" id="view-terms" hidden>
+  <div class="legal">
+    <h1>Terms of service</h1>
+    <p class="updated num">Last updated 19 July 2026</p>
+
+    <p class="lead">By using dekimasen.app you agree to these terms. It is a free, hobbyist tool
+      for tracking concert ticketing deadlines — helpful, but not a guarantee.</p>
+
+    <h2>What the service does</h2>
+    <p>dekimasen.app records ticketing deadlines for Japanese concerts and sends reminders on
+      Discord and via an optional calendar feed. Deadline data is entered by editors and parsed
+      from public pages. It can be wrong, incomplete, or out of date.</p>
+
+    <h2>No guarantee</h2>
+    <ul>
+      <li>We do not sell tickets and are not affiliated with any artist, promoter, fan club, or
+        ticketing platform.</li>
+      <li>Reminders are best-effort. A missed DM, a wrong time, or a deadline that changed after
+        we recorded it can happen. <b>Always confirm times on the official page.</b></li>
+      <li>You are responsible for actually entering lotteries and completing payments. We track
+        where you stand; we do not act on your behalf.</li>
+    </ul>
+
+    <h2>Acceptable use</h2>
+    <p>Editors may add and change concerts, rounds and tags for everyone. Do not enter false or
+      abusive data, and do not use the service to scrape or overload ticketing sites. We may
+      revoke editor access or accounts that misuse the shared catalogue.</p>
+
+    <h2>Availability</h2>
+    <p>The service is provided "as is", with no uptime guarantee. It may go down, lose data, or
+      be discontinued. Keep your own note of any deadline you truly cannot miss.</p>
+
+    <h2>Changes</h2>
+    <p>These terms may change as the service evolves. Continued use after a change means you
+      accept the updated terms.</p>
+
+    <p class="dim">tl;dr: it's a helpful reminder tool built by a fan, not a ticket broker.
+      Double-check the official page before every deadline.</p>
+  </div>
+</div>
+
+
+<script>
+  /* ---- theme toggle ---------------------------------------------------- */
+  const themeBtn = document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', () => {
+    const root = document.documentElement;
+    const cur = root.getAttribute('data-theme');
+    let next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else {
+      // no explicit theme yet -> flip away from the OS preference
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      next = prefersDark ? 'light' : 'dark';
+    }
+    root.setAttribute('data-theme', next);
+    themeBtn.textContent = next === 'dark' ? '☾' : '☀';
+  });
+
+  /* ---- language switch (demo: cycles the label; real app swaps locale) --- */
+  const LANGS = ['EN', '中文', '日本語'];
+  const langLabel = document.getElementById('langLabel');
+  document.getElementById('langBtn').addEventListener('click', () => {
+    const i = (LANGS.indexOf(langLabel.textContent) + 1) % LANGS.length;
+    langLabel.textContent = LANGS[i];
+  });
+
+  /* ---- view switching -------------------------------------------------- */
+  const views = {
+    landing: document.getElementById('view-landing'),
+    flow: document.getElementById('view-flow'),
+    import: document.getElementById('view-import'),
+    preview: document.getElementById('view-preview'),
+    retro: document.getElementById('view-retro'),
+    privacy: document.getElementById('view-privacy'),
+    terms: document.getElementById('view-terms'),
+  };
+  const navBtns = document.querySelectorAll('nav.main button');
+  function show(name) {
+    for (const [key, el] of Object.entries(views)) el.hidden = key !== name;
+    navBtns.forEach(b => {
+      if (b.dataset.view === name) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    });
+    if (name === 'flow') goFlow(0);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('[data-view]');
+    if (!trigger) return;
+    e.preventDefault();
+    show(trigger.dataset.view);
+  });
+
+  /* ---- new-user-flow stepped navigation -------------------------------- */
+  const FLOW = ['flow-follow','flow-remind','flow-tz','flow-dm','flow-feed',
+                'flow-prune','flow-applied','flow-ready','flow-board'];
+  const WIZ = ['Follow','Reminders','Timezone','Test DM','Calendar'];
+  const stepsEl = document.getElementById('flowsteps');
+  let curFlow = 0;
+
+  function dot(label, cls) { return '<span class="stepdot ' + cls + '">' + label + '</span>'; }
+  const SKIP = '<button class="more" type="button" data-goflow="8" style="margin-left:auto;font:inherit;font-size:.8125rem;color:var(--accent);background:none;border:0;cursor:pointer;font-weight:550">Skip setup →</button>';
+
+  function renderSteps(idx) {
+    let html = '';
+    if (idx <= 4) {
+      // account wizard phase
+      WIZ.forEach((w, i) => { html += dot(w, i < idx ? 'done' : (i === idx ? 'on' : '')); });
+      html += SKIP;
+    } else if (idx === 5) {
+      WIZ.forEach(w => html += dot(w, 'done'));
+      html += '<span class="stepsep">·</span>' + dot('Your concerts', 'on') + dot('Applications', '');
+      html += SKIP;
+    } else if (idx === 6) {
+      WIZ.forEach(w => html += dot(w, 'done'));
+      html += '<span class="stepsep">·</span>' + dot('Your concerts', 'done') + dot('Applications', 'on');
+      html += SKIP;
+    } else {
+      WIZ.forEach(w => html += dot(w, 'done'));
+      html += '<span class="stepsep">·</span>' + dot('Your concerts', 'done') + dot('Applications', 'done') + dot('Board', 'done');
+    }
+    stepsEl.innerHTML = html;
+  }
+
+  function goFlow(idx) {
+    curFlow = idx;
+    FLOW.forEach((id, i) => { document.getElementById(id).hidden = i !== idx; });
+    renderSteps(idx);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+  document.addEventListener('click', (e) => {
+    const g = e.target.closest('[data-goflow]');
+    if (!g) return;
+    goFlow(parseInt(g.dataset.goflow, 10));
+  });
+
+  /* ---- follow-artist chips + count ------------------------------------- */
+  function refreshFollowCount() {
+    const grid = document.getElementById('flow-follow');
+    const n = grid.querySelectorAll('.chip.on').length;
+    grid.querySelectorAll('.followCount').forEach(el => el.textContent = n);
+  }
+  document.getElementById('flow-follow').addEventListener('click', (e) => {
+    const c = e.target.closest('.chip[data-follow]');
+    if (!c) return;
+    const on = c.classList.toggle('on');
+    const base = c.textContent.replace(/\s*✓\s*$/, '');
+    c.textContent = on ? base + ' ✓' : base;
+    refreshFollowCount();
+  });
+
+  /* ---- prune tiles + keep count ---------------------------------------- */
+  const pruneGrid = document.querySelector('[data-prunegrid]');
+  function refreshKeep() {
+    const n = pruneGrid.querySelectorAll('.tile[aria-pressed="true"]').length;
+    document.querySelectorAll('.keepCount').forEach(el => el.textContent = n);
+  }
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('.pick .tile[aria-pressed]');
+    if (!t || t.style.cursor === 'default') return;
+    t.setAttribute('aria-pressed', String(t.getAttribute('aria-pressed') !== 'true'));
+    if (pruneGrid && pruneGrid.contains(t)) refreshKeep();
+  });
+  document.querySelector('[data-alloff]').addEventListener('click', () => {
+    pruneGrid.querySelectorAll('.tile').forEach(t => t.setAttribute('aria-pressed', 'false'));
+    refreshKeep();
+  });
+
+  /* ---- test DM + calendar feed reveals --------------------------------- */
+  document.getElementById('dmSend').addEventListener('click', () => {
+    document.getElementById('dmResult').textContent = '✓ Sent — check your Discord DMs.';
+    document.getElementById('dmResult').style.color = 'var(--ok)';
+    document.getElementById('dmPreview').hidden = false;
+  });
+  document.getElementById('feedGen').addEventListener('click', () => {
+    document.getElementById('feedBox').hidden = false;
+  });
+
+  /* ---- leg chips toggle in import preview ------------------------------ */
+  document.addEventListener('click', (e) => {
+    const lc = e.target.closest('.legchip[aria-pressed]');
+    if (lc) lc.setAttribute('aria-pressed', String(lc.getAttribute('aria-pressed') !== 'true'));
+  });
+
+  /* ---- reminder-preset step: three preset cards, plus a fine-tune list
+     where every rule renders as one grammatical sentence built from inline
+     dropdowns (offset / relation / anchor) ------------------------------ */
+  (() => {
+    const demo = document.getElementById('remDemo');
+    const ruleList = document.getElementById('remRuleList');
+    if (!demo || !ruleList) return;
+
+    const ANCHOR_ORDER = ['opens', 'closes', 'results', 'payment', 'show'];
+    // two phrasings per anchor: the verb-phrase used after "when" (moment
+    // offset) and the noun-phrase used after "before"/"after" (duration
+    // offset). Swapping the anchor <select>'s own option text between these
+    // two sets is what keeps every row reading as a real sentence.
+    const ANCHOR_MOMENT = {
+      opens: 'applications open', closes: 'applications close',
+      results: 'results come out', payment: 'payment is due', show: 'the show starts',
+    };
+    const ANCHOR_NOUN = {
+      opens: 'the opening', closes: 'the deadline',
+      results: 'the results', payment: 'the payment deadline', show: 'the show',
+    };
+
+    // offset choices; the special "moment" entry reads as "when" in the
+    // sentence ("Remind me when applications open") and hides the relation
+    // dropdown, since there's no before/after for a moment-anchored reminder
+    const OFFSETS = [
+      { key: 'moment', label: 'when', moment: true },
+      { key: '30m', label: '30 minutes' },
+      { key: '1h', label: '1 hour' },
+      { key: '3h', label: '3 hours' },
+      { key: '1d', label: '1 day' },
+      { key: '3d', label: '3 days' },
+      { key: '5d', label: '5 days' },
+      { key: '1w', label: '1 week' },
+    ];
+    const isMomentOffset = (key) => OFFSETS.find((o) => o.key === key).moment === true;
+
+    // default rule sets for each card -- matches the coverage listed on
+    // the card itself. Single reminder for each one-off moment
+    // (opens/results/payment); closes and payment get a run-up on the
+    // busier presets, since those are the ones with an action to take.
+    const PRESETS = {
+      relaxed: [
+        { offset: 'moment', anchor: 'opens' },
+        { offset: '1d', relation: 'before', anchor: 'closes' },
+        { offset: 'moment', anchor: 'results' },
+        { offset: 'moment', anchor: 'payment' },
+      ],
+      standard: [
+        { offset: 'moment', anchor: 'opens' },
+        { offset: '3d', relation: 'before', anchor: 'closes' },
+        { offset: '1d', relation: 'before', anchor: 'closes' },
+        { offset: 'moment', anchor: 'results' },
+        { offset: '1d', relation: 'before', anchor: 'payment' },
+      ],
+      onball: [
+        { offset: '1d', relation: 'before', anchor: 'opens' },
+        { offset: 'moment', anchor: 'opens' },
+        { offset: '5d', relation: 'before', anchor: 'closes' },
+        { offset: '3d', relation: 'before', anchor: 'closes' },
+        { offset: '1d', relation: 'before', anchor: 'closes' },
+        { offset: 'moment', anchor: 'results' },
+        { offset: '3d', relation: 'before', anchor: 'payment' },
+        { offset: '1d', relation: 'before', anchor: 'payment' },
+      ],
+    };
+
+    const cards = Array.from(demo.querySelectorAll('.remcard'));
+    let rows = []; // [{ id, offset, relation, anchor }] -- the fine-tune state
+    let seq = 0;
+
+    function withId(rule) {
+      return { id: 'r' + (seq++), relation: 'before', ...rule };
+    }
+
+    // build one row as a real sentence: "Remind me" + offset select +
+    // (relation select, hidden for "when") + anchor select + "."
+    function buildRow(row) {
+      const moment = isMomentOffset(row.offset);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'remrule sentence';
+      wrap.dataset.ruleid = row.id;
+
+      const lead = document.createElement('span');
+      lead.textContent = 'Remind me';
+      wrap.appendChild(lead);
+
+      const offsetSel = document.createElement('select');
+      offsetSel.dataset.role = 'offset';
+      offsetSel.setAttribute('aria-label', 'Offset');
+      OFFSETS.forEach((o) => {
+        const opt = document.createElement('option');
+        opt.value = o.key;
+        opt.textContent = o.label;
+        if (o.key === row.offset) opt.selected = true;
+        offsetSel.appendChild(opt);
+      });
+      wrap.appendChild(offsetSel);
+
+      if (!moment) {
+        const relSel = document.createElement('select');
+        relSel.dataset.role = 'relation';
+        relSel.setAttribute('aria-label', 'Before or after');
+        ['before', 'after'].forEach((r) => {
+          const opt = document.createElement('option');
+          opt.value = r;
+          opt.textContent = r;
+          if (r === row.relation) opt.selected = true;
+          relSel.appendChild(opt);
+        });
+        wrap.appendChild(relSel);
+      }
+
+      const anchorSel = document.createElement('select');
+      anchorSel.dataset.role = 'anchor';
+      anchorSel.setAttribute('aria-label', 'Anchor');
+      const phraseMap = moment ? ANCHOR_MOMENT : ANCHOR_NOUN;
+      ANCHOR_ORDER.forEach((a) => {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = phraseMap[a];
+        if (a === row.anchor) opt.selected = true;
+        anchorSel.appendChild(opt);
+      });
+      wrap.appendChild(anchorSel);
+
+      wrap.appendChild(document.createTextNode('.'));
+
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'act no';
+      rm.dataset.remove = row.id;
+      rm.setAttribute('aria-label', 'Remove this reminder');
+      rm.textContent = '×';
+      wrap.appendChild(rm);
+
+      return wrap;
+    }
+
+    function renderRows() {
+      ruleList.innerHTML = '';
+      if (!rows.length) {
+        const p = document.createElement('div');
+        p.className = 'remrule-empty';
+        p.textContent = 'No reminders yet — add one below.';
+        ruleList.appendChild(p);
+        return;
+      }
+      rows.forEach((row) => ruleList.appendChild(buildRow(row)));
+    }
+
+    // selecting a card replaces the whole list wholesale -- a deliberate
+    // reset, same as picking a fresh loadout
+    function applyPreset(name) {
+      rows = PRESETS[name].map(withId);
+      cards.forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.remcard === name)));
+      renderRows();
+    }
+
+    cards.forEach((card) => {
+      card.addEventListener('click', () => applyPreset(card.dataset.remcard));
+    });
+
+    // editing a row's dropdowns updates that row's state live, then
+    // re-renders so the anchor phrasing (verb vs noun) flips with the offset
+    ruleList.addEventListener('change', (e) => {
+      const sel = e.target.closest('select[data-role]');
+      if (!sel) return;
+      const rowEl = sel.closest('.remrule');
+      const row = rows.find((r) => r.id === rowEl.dataset.ruleid);
+      if (!row) return;
+      if (sel.dataset.role === 'offset') row.offset = sel.value;
+      else if (sel.dataset.role === 'relation') row.relation = sel.value;
+      else if (sel.dataset.role === 'anchor') row.anchor = sel.value;
+      renderRows();
+    });
+
+    ruleList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-remove]');
+      if (!btn) return;
+      rows = rows.filter((r) => r.id !== btn.dataset.remove);
+      renderRows();
+    });
+
+    const addBtn = document.getElementById('remAddRow');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        rows.push(withId({ offset: '1d', relation: 'before', anchor: 'closes' }));
+        renderRows();
+      });
+    }
+
+    applyPreset('standard');
+  })();
+
+  // start on landing
+  goFlow(0);
+</script>
