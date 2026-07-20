@@ -43,25 +43,55 @@ here are what a rename or delete actually touches.</p>
 
 <input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.tags-page')">
 
+{#- Per-tag edit dialog. One dialog per tag, real <form>s posting to real
+    routes (the concept uses a single JS-populated dialog; we keep the shipped
+    mechanism). The usage strip and apply links read Task 2's directory context
+    (counts / eligible_members). The delete name crosses via data-tag-name, read
+    through dataset by confirmDeleteTag -- never interpolated into onsubmit. -#}
 {% macro tag_dialog(t) %}
-<dialog id="tag-dialog-{{ t.id }}" class="picker">
-  <div class="picker-head">
+{%- set c = counts[t.id] -%}
+{%- set is_group = t.kind.value == "group" -%}
+{%- set is_venue = t.kind.value == "venue" -%}
+{%- set is_artist = t.kind.value == "artist" -%}
+{%- set kind_label = "performer" if is_artist else t.kind.value -%}
+<dialog id="tag-dialog-{{ t.id }}" class="tagdlg">
+  <div class="dh">
     <h3>{{ t.name }}</h3>
+    <span class="pill p-quiet">{{ kind_label }}</span>
     <button type="button" class="x" onclick="document.getElementById('tag-dialog-{{ t.id }}').close()">×</button>
   </div>
-  <div class="picker-body">
-    <form method="post" action="/tags/{{ t.id }}/edit" class="stack">
-      <label>Name <input name="name" required maxlength="100" value="{{ t.name }}"></label>
-      {% if t.kind.value == "venue" %}
-      <label>Location link <input name="location_url" type="url" value="{{ t.location_url or '' }}"></label>
-      <label>Region <input name="region" maxlength="100" value="{{ t.region or '' }}"></label>
+  <div class="db">
+    <div class="usage">
+      <div><div class="n3">{{ c.concerts }}</div><div class="l3">concerts</div></div>
+      <div><div class="n3">{{ c.followers }}</div><div class="l3">followers</div></div>
+      {% if is_group %}<div><div class="n3">{{ c.members }}</div><div class="l3">members</div></div>{% endif %}
+      <div><div class="n3">{{ c.upcoming }}</div><div class="l3">upcoming</div></div>
+    </div>
+
+    <form id="tag-edit-{{ t.id }}" method="post" action="/tags/{{ t.id }}/edit" class="stack">
+      <label class="fld"><span>Name</span><input name="name" required maxlength="100" value="{{ t.name }}"></label>
+      {% if is_group or is_artist %}
+      <label class="fld"><span>eventernote URL</span>
+        <input name="eventernote_url" type="url" value="{{ t.eventernote_url or '' }}"
+               placeholder="https://www.eventernote.com/actors/…"></label>
       {% endif %}
-      <button>Save</button>
+      {% if is_venue %}
+      <label class="fld"><span>Location link</span>
+        <input name="location_url" type="url" value="{{ t.location_url or '' }}"></label>
+      <label class="fld"><span>Region</span>
+        <input name="region" maxlength="100" value="{{ t.region or '' }}" list="regions-{{ t.id }}"></label>
+      <datalist id="regions-{{ t.id }}">
+        {%- set region_names = [] -%}
+        {%- for rn, _vs in venue_regions -%}{%- if rn != "No region" -%}{% set _ = region_names.append(rn) %}{%- endif -%}{%- endfor -%}
+        {% for rn in region_names %}<option value="{{ rn }}"></option>{% endfor %}
+      </datalist>
+      {% endif %}
     </form>
-    {% if t.kind.value == "group" %}
-    <div>
-      <strong>Members</strong>
-      <div class="taglist">
+
+    {% if is_group %}
+    <div class="fld">
+      <span>Members</span>
+      <div class="memb">
         {% for m in members.get(t.id, []) %}
         <span class="chip">{{ m.name }}
           <form class="chip-x" method="post" action="/tags/{{ t.id }}/members/{{ m.id }}/delete">
@@ -80,10 +110,23 @@ here are what a rename or delete actually touches.</p>
       </form>
       {% endif %}
     </div>
+
+    <div class="upgradebox">
+      <div class="u1"><b>Apply to existing concerts.</b> Adding a member does not touch
+        concerts that already carry this group — expansion is materialised at the moment
+        you attach it. Use this to push a new member onto active events.</div>
+      {% for m, n in eligible_members.get(t.id, []) %}
+      <a href="/tags/{{ t.id }}/members/{{ m.id }}/retroactive-apply">Apply {{ m.name }} to {{ n }} upcoming concert{{ '' if n == 1 else 's' }}</a>
+      {% endfor %}
+    </div>
     {% endif %}
+  </div>
+  <div class="df">
+    <button class="btn" form="tag-edit-{{ t.id }}">Save</button>
+    <button class="btn quiet" type="button" onclick="document.getElementById('tag-dialog-{{ t.id }}').close()">Cancel</button>
     <form method="post" action="/tags/{{ t.id }}/delete"
           data-tag-name="{{ t.name }}" onsubmit="return confirmDeleteTag(this)">
-      <button class="danger">Delete tag</button>
+      <button class="btn warn">Delete tag</button>
     </form>
   </div>
 </dialog>

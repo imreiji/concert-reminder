@@ -400,8 +400,7 @@ def test_tags_page_renders_hierarchy_and_search_box(client):
     # every tag gets its own dialog
     assert 'id="tag-dialog-1"' in r.text  # Hasunosora
     assert 'id="tag-dialog-2"' in r.text  # Liella
-    assert 'dialog.picker' not in r.text  # sanity: that's a CSS selector, not markup
-    assert 'class="picker"' in r.text
+    assert 'class="tagdlg"' in r.text
     # the filter scope container the search box targets
     assert 'class="tags-page"' in r.text
 
@@ -481,6 +480,98 @@ def test_tags_page_summary_line_counts_kinds(client):
     assert "1 group" in r.text
     assert "3 performers" in r.text
     assert "1 venue" in r.text
+
+
+# ── Per-tag edit dialog: usage strip, kind fields, apply action (Task 4) ──
+
+
+def test_tag_dialog_shows_usage_counts(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    client.post("/concerts", data={"title": "Show", "event_id": "show", "group_tags": [1]})
+    login_as(client, VIEWER_ID, "viewer")
+    client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/tags")
+    assert r.status_code == 200
+    dlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    assert '<div class="usage">' in dlg
+    assert '<div class="l3">concerts</div>' in dlg
+    assert '<div class="l3">followers</div>' in dlg
+    # concerts=1 and followers=1 are wired from counts, not hardcoded
+    assert dlg.count('<div class="n3">1</div>') >= 2
+
+
+def test_group_dialog_shows_members_stat_and_artist_dialog_does_not(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    client.post("/tags", data={"name": "Solo", "kind": "artist"})
+    r = client.get("/tags")
+    gdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    adlg = r.text.split('id="tag-dialog-2"')[1].split("</dialog>")[0]
+    assert '<div class="l3">members</div>' in gdlg
+    assert '<div class="l3">members</div>' not in adlg
+
+
+def test_group_dialog_offers_apply_link_only_when_concerts_eligible(client):
+    login_as(client, EDITOR_ID, "reiji")
+    # eligible: group tagged onto a live concert, then a member added
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    # not eligible: a group with a member but no concerts
+    client.post("/tags", data={"name": "Empty", "kind": "group"})
+    client.post("/tags", data={"name": "Lonely", "kind": "artist"})
+    client.post("/tags/3/members", data={"member_tag_id": 4})
+
+    r = client.get("/tags")
+    gdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    assert "/tags/1/members/2/retroactive-apply" in gdlg
+    assert "Apply Sumire to 1 upcoming concert" in gdlg
+
+    edlg = r.text.split('id="tag-dialog-3"')[1].split("</dialog>")[0]
+    assert "upgradebox" in edlg  # the invariant explanation still renders
+    assert "retroactive-apply" not in edlg  # but with no apply link
+
+
+def test_venue_dialog_region_datalist_lists_existing_regions(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Kanto Hall", "kind": "venue", "region": "Kanto"})
+    client.post("/tags", data={"name": "Kansai Hall", "kind": "venue", "region": "Kansai"})
+    client.post("/tags", data={"name": "Mystery Hall", "kind": "venue"})
+    r = client.get("/tags")
+    vdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    assert "<datalist" in vdlg
+    assert '<option value="Kanto">' in vdlg
+    assert '<option value="Kansai">' in vdlg
+    # the synthetic "No region" bucket is never offered as a real region
+    assert '<option value="No region">' not in vdlg
+
+
+def test_artist_dialog_has_eventernote_field_and_venue_dialog_does_not(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Solo", "kind": "artist"})
+    client.post("/tags", data={"name": "Hall", "kind": "venue"})
+    r = client.get("/tags")
+    adlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    vdlg = r.text.split('id="tag-dialog-2"')[1].split("</dialog>")[0]
+    assert 'name="eventernote_url"' in adlg
+    assert 'name="location_url"' not in adlg
+    assert 'name="location_url"' in vdlg
+    assert 'name="eventernote_url"' not in vdlg
+
+
+def test_delete_form_uses_data_tag_name_not_inline_interpolation(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Trouble", "kind": "franchise"})
+    r = client.get("/tags")
+    dlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
+    assert 'data-tag-name="Trouble"' in dlg
+    assert "confirmDeleteTag(this)" in dlg
+    # the name must never be interpolated into an on* handler
+    assert "Delete tag Trouble" not in r.text
+    assert 'confirm("Delete tag Trouble' not in r.text
 
 
 def test_tags_page_viewer_sees_no_edit_dialogs(client):
