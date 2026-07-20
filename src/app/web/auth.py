@@ -33,6 +33,9 @@ from app.config import settings
 from app.db.models import User, WebSession
 from app.db.service import ensure_user
 from app.db.session import get_session
+from app.i18n import SUPPORTED as SUPPORTED_LANGUAGES
+
+LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth")
@@ -163,13 +166,25 @@ async def callback(
     username = me.get("global_name") or me["username"]
     is_new_user = await db.get(User, user_id) is None
     await ensure_user(db, user_id, username)
+    db_user = await db.get(User, user_id)
+    lang_cookie = request.cookies.get("lang")
+    if is_new_user and lang_cookie in SUPPORTED_LANGUAGES:
+        # Seed at creation ONLY: the column can't distinguish "default en"
+        # from "chose en", so only the moment before the row exists is safe.
+        db_user.language = lang_cookie
     sid = await create_web_session(db, user_id)
     await db.commit()
 
     request.session["sid"] = sid
     request.session["user"] = {"id": user_id, "username": username, "avatar": me.get("avatar")}
     log.info("login: %s (%s)", username, user_id)
-    return RedirectResponse("/welcome" if is_new_user else "/")
+    response = RedirectResponse("/welcome" if is_new_user else "/")
+    # Set the cookie from the (possibly just-seeded, possibly pre-existing)
+    # column so this browser now matches the account.
+    response.set_cookie(
+        "lang", db_user.language, max_age=LANG_COOKIE_MAX_AGE, samesite="lax", path="/",
+    )
+    return response
 
 
 async def revoke_session(request: Request, db: AsyncSession) -> None:
