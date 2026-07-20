@@ -41,6 +41,7 @@ from app.db.models import (
     ReminderRule,
     Round,
     RoundOutcome,
+    RoundQualifier,
     Tag,
     TagMember,
     TagSubscription,
@@ -50,6 +51,7 @@ from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.timezones import utc_to_jst
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
+from app.domain.upgrades import is_upgrade_eligible
 
 
 def _now() -> datetime:
@@ -186,11 +188,28 @@ async def _apply_outcome_suppression(
 ) -> list[Round]:
     """Drop rounds this user's outcomes make irrelevant, before the pure
     planner ever sees them -- same pattern as the cancelled-round
-    filtering sync_rule already does. Three passes: cross-round (every leg
-    a round covers is already secured via WON/PAID elsewhere on this
-    concert), same-round (this rule's own anchor is moot given this
-    round's outcome), and per-leg opt-out (every leg a round covers has a
-    LegOptOut row for this user)."""
+    filtering sync_rule already does. Four passes now:
+
+      * per-leg opt-out -- every leg a round covers has a LegOptOut row for
+        this user.
+      * cross-round "secured elsewhere" -- every leg a round covers is
+        already secured (WON/PAID) by some OTHER round on this concert.
+      * upgrade eligibility (this pass replaces the cross-round pass for
+        UPGRADE rounds only) -- see below.
+      * same-round anchor -- this rule's own anchor (RESULTS/PAYMENT) is
+        moot given this round's own outcome.
+
+    Why an UPGRADE round is EXEMPT from the cross-round pass (it looks wrong
+    at a glance): an upgrade round is a nested second campaign only holders
+    of a qualifying round's ticket may enter, and it covers the SAME legs as
+    those base rounds. The cross-round pass would therefore drop it for
+    exactly the users who secured a ticket -- its entire audience -- because
+    their leg is "already secured elsewhere". But holding a ticket is the
+    PREREQUISITE for entering the upgrade, not a reason to hide it. So for an
+    UPGRADE round we skip the cross-round pass and instead drop it for a user
+    who is NOT is_upgrade_eligible (no secured qualifying ticket). Its own
+    WON/PAID outcome still feeds secured_by for OTHER rounds, and the
+    same-round anchor pass still applies to it unchanged."""
     if not rounds:
         return rounds
 
@@ -206,6 +225,25 @@ async def _apply_outcome_suppression(
             )
         )).scalars()
     } if all_round_ids else {}
+
+    # Qualifier map for upgrade eligibility: upgrade_round_id -> [qualifying
+    # round ids]. Read straight from the association table rather than the
+    # lazy Round.qualifiers relationship, which would trip async lazy-load.
+    # An upgrade round with no rows means "any secured ticket qualifies".
+    qualifiers_by_round: dict[int, list[int]] = {}
+    for up_id, q_id in (await session.execute(
+        select(RoundQualifier.upgrade_round_id, RoundQualifier.qualifying_round_id).where(
+            RoundQualifier.upgrade_round_id.in_(all_round_ids)
+        )
+    )).all() if all_round_ids else []:
+        qualifiers_by_round.setdefault(up_id, []).append(q_id)
+
+    # Rounds this user has SECURED (WON or PAID) -- the WON/PAID-vs-everything
+    # distinction lives here, at the caller, so the pure helper stays simple.
+    user_secured_round_ids = {
+        rid for rid, outcome in outcomes.items()
+        if outcome in (LotteryOutcome.WON, LotteryOutcome.PAID)
+    }
     all_day_ids = set((await session.execute(
         select(ConcertDay.id).where(ConcertDay.concert_id == concert_id)
     )).scalars())
@@ -243,13 +281,26 @@ async def _apply_outcome_suppression(
         # empty case falls through untouched.
         if r.applies_to and all(d in opted_out_day_ids for d in r.applies_to):
             continue
-        applies = set(r.applies_to) if r.applies_to else all_day_ids
-        secured_elsewhere: set[int] = set()
-        for other_id, legs in secured_by.items():
-            if other_id != r.id:
-                secured_elsewhere |= legs
-        if applies and applies <= secured_elsewhere:
-            continue  # every leg this round covers is already secured elsewhere
+        if r.kind is RoundKind.UPGRADE:
+            # Exemption: skip the cross-round "secured elsewhere" pass (see
+            # the docstring) and gate on eligibility instead. Exclude the
+            # upgrade round's OWN outcome from the secured set -- you cannot
+            # qualify for an upgrade by winning the upgrade itself; only
+            # base-round tickets qualify (matters for the empty-qualifier
+            # any-secured case).
+            if not is_upgrade_eligible(
+                qualifiers_by_round.get(r.id, []),
+                user_secured_round_ids - {r.id},
+            ):
+                continue
+        else:
+            applies = set(r.applies_to) if r.applies_to else all_day_ids
+            secured_elsewhere: set[int] = set()
+            for other_id, legs in secured_by.items():
+                if other_id != r.id:
+                    secured_elsewhere |= legs
+            if applies and applies <= secured_elsewhere:
+                continue  # every leg this round covers is already secured elsewhere
         outcome = outcomes.get(r.id)
         if anchor is Anchor.RESULTS and outcome is LotteryOutcome.NOT_APPLIED:
             continue
@@ -328,6 +379,11 @@ async def _next_round_for_leg(session: AsyncSession, lost_round: Round) -> Round
             Round.concert_id == lost_round.concert_id,
             Round.id != lost_round.id,
             Round.opens_at_utc.is_not(None),
+            # An upgrade round is never a fallback for a lost base round: the
+            # user just lost, so they hold no qualifying ticket and could not
+            # enter it. Eligibility gating would silence any rule we armed
+            # anyway -- don't arm one in the first place.
+            Round.kind != RoundKind.UPGRADE,
         )
     )).scalars())
     lost_legs = set(lost_round.applies_to) if lost_round.applies_to else None
@@ -351,6 +407,11 @@ async def _auto_arm_next_round(
     auto-create a real ReminderRule for its OPENS anchor, using the
     user's default preset offset if they have one, else immediate."""
     now = now or _now()
+    if lost_round.kind is RoundKind.UPGRADE:
+        # Losing an upgrade ends that nested side-campaign -- there is no
+        # "next round" to fall back to; the user still holds their base
+        # ticket. Auto-arming a later base round here would be wrong.
+        return
     next_round = await _next_round_for_leg(session, lost_round)
     if next_round is None:
         return  # nothing to arm yet -- sync_concert catches up when it's added
