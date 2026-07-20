@@ -175,6 +175,24 @@ async def test_signed_out_discover_shows_no_personal_standing(client):
     assert "Closes in" in html
 
 
+async def test_discover_shows_catalogue_count_summary(client):
+    """The demo's "142 concerts · 38 with a round still open" summary next
+    to the h1 -- same two counts (discoverable_concert_count,
+    discoverable_open_round_count) Home's teaser already links out with, so
+    the two pages never disagree about what /discover holds."""
+    async def build(seed):
+        c1 = await seed.concert("aqours-live", title="Aqours Live")
+        await seed.open_round(c1, "FC lottery")
+        await seed.concert("bandori-live", title="Bandori Live")  # no open round
+
+    await seeded(client.db, build)
+
+    r = client.get("/discover")
+    assert r.status_code == 200
+    assert "<strong>2 concerts</strong>" in r.text
+    assert "1 with a round still open" in r.text
+
+
 async def test_signed_in_discover_renders(client):
     """The logged-in GET render test CLAUDE.md requires for every page."""
     async def build(seed):

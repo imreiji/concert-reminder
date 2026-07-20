@@ -411,7 +411,7 @@ def test_tags_page_renders_hierarchy_and_search_box(client):
 
     r = client.get("/tags")
     assert r.status_code == 200
-    assert 'placeholder="Search tags…"' in r.text
+    assert 'placeholder="Search franchises, groups, performers, venues…"' in r.text
     assert "Hasunosora" in r.text and "Liella" in r.text
     assert "Kaho" in r.text and "K Arena" in r.text
     # every tag gets its own dialog

@@ -30,7 +30,7 @@
     <div class="pick">
       {% for t in tiles %}
       <label class="tile">
-        <input type="checkbox" name="keep" value="{{ t.concert.id }}"{% if t.kept %} checked{% endif %} hidden>
+        <input type="checkbox" class="visually-hidden" name="keep" value="{{ t.concert.id }}"{% if t.kept %} checked{% endif %}>
         <input type="hidden" name="shown" value="{{ t.concert.id }}">
         <span class="tick">&check;</span>
         {% if t.because %}<span class="who-t">{{ t.because | join(" · ") }}</span>{% endif %}
@@ -38,7 +38,10 @@
         <span class="v">
           {%- if t.venue %}📍 {{ t.venue }}{% endif -%}
           {%- if t.venue and t.starts_at_utc %} · {% endif -%}
-          {%- if t.starts_at_utc %}{% set vl = dual_lines(t.starts_at_utc, tz) %}{{ vl[0] }} {{ vl[1] }}{% endif -%}
+          {#- The concert's own START date, not a deadline -- day_month only
+              (invariant 1 governs deadlines, not a performance date; see
+              fmt_day_month's docstring). No dual_lines, no zone. -#}
+          {%- if t.starts_at_utc %}{{ day_month(t.starts_at_utc) }}{% endif -%}
         </span>
         {% if t.next_round_label %}
         {# The round's deadline as the demo's two lines: the labelled anchor
@@ -111,7 +114,7 @@
       {% set eyebrow = (row.concert.tags | rejectattr("kind.value", "equalto", "venue")
                         | map(attribute="name") | list) %}
       <label class="tile">
-        <input type="checkbox" name="applied" value="{{ row.round_.id }}" hidden>
+        <input type="checkbox" class="visually-hidden" name="applied" value="{{ row.round_.id }}">
         <span class="tick">&check;</span>
         {% if eyebrow %}<span class="who-t">{{ eyebrow[0] }}</span>{% endif %}
         <span class="t">{{ row.concert.title }}</span>

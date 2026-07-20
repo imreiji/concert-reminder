@@ -27,7 +27,7 @@
   <p class="u1"><b>Upgrade round.</b> Only people holding a ticket from a
     qualifying round can enter.</p>
   <div class="leg-chips" data-qualifier-chips>
-    <span class="dim tiny">Qualifies</span>
+    <span class="eyebrow">Qualifies</span>
     <input type="hidden" name="round_qualifiers" value="{{ value | default('', true) }}">
     {% set options = saved_rounds | rejectattr('id', 'equalto', self_id) | list %}
     <span class="dim tiny" data-no-qualifiers {% if options %}hidden{% endif %}>Save the concert first, then a saved round can be picked here.</span>

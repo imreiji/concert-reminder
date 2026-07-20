@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.models import (
     Base,
     Concert,
+    ConcertDay,
     ConcertTag,
     Round,
     Tag,
@@ -144,6 +145,33 @@ async def test_setup_renders_pruned_tile_unchecked(client):
     assert r.status_code == 200
     assert f'value="{cid}"' in r.text
     assert f'value="{cid}" checked' not in r.text
+
+
+async def test_setup_tile_start_date_uses_day_month_not_dual_time(client):
+    """The tile's `.v` line shows the concert's own START date (a
+    performance date, not a deadline), so it must render via day_month --
+    date only, no time-of-day, no zone -- per fmt_day_month's own docstring
+    and every other tile's convention. It used to wrongly go through
+    dual_lines, printing a full JST+local clock line for a bare date.
+
+    Uses seed_concert (no default round) so the only dual-time-eligible
+    timestamp on the tile is the day itself -- a round's own deadline
+    legitimately keeps the dual JST+local format (invariant 1), so mixing
+    one in here would make the assertion ambiguous."""
+    login_as(client, FAN_ID, "fan")
+    cid = await seed_concert(client, "aqours-9th", "Aqours 9th Live", "Aqours")
+    async with client.db() as s:
+        s.add(ConcertDay(concert_id=cid, label="Day 1", starts_at_utc=FUTURE))
+        await s.commit()
+
+    r = client.get("/setup")
+    assert r.status_code == 200
+    # day_month: date only, no weekday, no time, no zone.
+    assert "20 Jun" in r.text
+    # The old dual_lines rendering would have produced this exact shape
+    # ("Sat 20 Jun" + "21:00 JST · HH:MM <tz>") -- must be gone.
+    assert "Sat 20 Jun" not in r.text
+    assert "21:00 JST" not in r.text
 
 
 async def test_setup_empty_state(client):

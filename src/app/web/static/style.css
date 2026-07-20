@@ -45,6 +45,14 @@ body {
   display: flex; min-height: 100vh; flex-direction: column;
 }
 .num { font-variant-numeric: tabular-nums; }
+/* Visually hidden but still focusable and still submits its value --
+   unlike the `hidden` attribute (or display:none), which drops an element
+   from the tab order entirely. Use for a real form control whose visual
+   stand-in is drawn elsewhere (e.g. the setup pick-tiles' checkbox). */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 
 /* Sticky header: a full-bleed bar (border + raised ground) with an inner
    .site-in that caps its width to the content column and lays the row out. */
@@ -190,7 +198,7 @@ button.x:hover { color: var(--danger); opacity: 1; }
 .tag-section { margin: .4rem 0; }
 .tag-section summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
 .tag-section .taglist { margin: .4rem 0 .6rem; }
-.tag-search { width: 100%; margin: .3rem 0 .6rem; }
+.tag-search { width: 100%; max-width: 26rem; margin: .3rem 0 .6rem; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1rem; }
 .tile {
@@ -380,7 +388,11 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 }
 .eleg-fields label { display: grid; gap: .2rem; font-size: .8rem; color: var(--dim); }
 .cancel-toggle { flex: 0 0 auto; }
-.cancel-toggle .chip.on { background: var(--danger); border-color: var(--danger); color: #fff; }
+/* var(--raise), not a hardcoded #fff -- it flips near-white in light mode
+   and near-black in dark, staying legible on this --danger ground either
+   way (unlike the other #fff occurrences here, which sit on the accent
+   purple and stay white in both themes). */
+.cancel-toggle .chip.on { background: var(--danger); border-color: var(--danger); color: var(--raise); }
 
 /* Folds. The summary states its contents, so a closed fold still says what
    is in it rather than only naming itself. */
@@ -685,6 +697,12 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 /* No eventernote link yet -- dimmed rather than a dead link (see the
    markup: these render as a plain <span>, never an <a>). */
 .performers .chip.nolink { opacity: .75; }
+/* Linked performer chips get a hover/focus ground so they read as
+   clickable -- white-on-accent here is correct in both themes (accent
+   purple stays dark enough for white text in light and dark mode alike). */
+.performers a.chip { text-decoration: none; transition: background 150ms ease, color 150ms ease; }
+.performers a.chip:hover, .performers a.chip:focus-visible { background: var(--accent); color: #fff; }
+.performers a.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* "Next for you": the nearest moment on THIS concert that wants the reader.
    Accent rather than the danger red Home's "Closes next" uses -- that one is
@@ -824,6 +842,12 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .tags-head { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
 .tags-head .note { font-size: .85rem; }
 .tags-head .note strong { color: var(--ink); font-weight: 600; }
+/* Discover's count summary, next to the h1 -- same .note idiom (dim,
+   strong picks out the headline number) as .head .note and .tags-head
+   .note above, scoped to .toolbar since neither of those is an ancestor
+   here. */
+.toolbar .note { color: var(--dim); font-size: .85rem; }
+.toolbar .note strong { color: var(--ink); font-weight: 600; }
 .tags-head .btn { margin-left: auto; }
 
 .tsec { margin-top: 2rem; }
@@ -843,10 +867,6 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 }
 .grow2 + .grow2 { margin-top: .35rem; }
 .memb { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; }
-.eyebrow {
-  font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650;
-}
 .region-label { width: 6rem; flex: none; }
 
 .tchip {
@@ -897,12 +917,6 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
   color: var(--dim); font-weight: 650;
 }
-
-.pill {
-  font-size: .68rem; font-weight: 650; letter-spacing: .04em;
-  padding: .15rem .45rem; border-radius: 4px; border: 1px solid currentColor;
-}
-.pill.p-quiet { color: var(--dim); }
 
 .kindpick { display: flex; gap: .35rem; flex-wrap: wrap; }
 .kindpick button {
@@ -971,6 +985,11 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
               background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 .pick .tile:hover { transform: translateY(-1px); border-color: var(--dim); }
+/* Keyboard-operable: the checkbox is visually hidden (not display:none/
+   `hidden`, which drops it from the tab order entirely) so Tab still reaches
+   it and it still submits its name/value on toggle. The tile shows a visible
+   focus ring so a keyboard user can see which tile Tab landed on. */
+.pick .tile:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* ON: lit -- an accent-washed ground and a solid ok edge, so a kept tile
    reads as claimed rather than merely default. */
 .pick .tile:has(input:checked) { border-color: var(--ok); background: var(--ok-wash); }
@@ -986,7 +1005,9 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   border: 1.5px solid var(--line); color: transparent; background: transparent;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
-.pick .tile:has(input:checked) .tick { background: var(--ok); border-color: var(--ok); color: #fff; }
+/* var(--raise), not a hardcoded #fff -- see the .cancel-toggle .chip.on
+   comment above; this sits on the --ok ground, same reasoning. */
+.pick .tile:has(input:checked) .tick { background: var(--ok); border-color: var(--ok); color: var(--raise); }
 .pick .tile .who-t {
   font-size: .68rem; letter-spacing: .08em; text-transform: uppercase;
   color: var(--dim); font-weight: 650;
@@ -1000,6 +1021,13 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .pick .tile .rnd b { color: var(--ink); font-weight: 600; }
 /* The round's JST/local time on its own line under the labelled anchor. */
 .pick .tile .rnd .rt { display: block; color: var(--dim); }
+
+/* My reminders rows: each row sets grid-template-columns inline but never
+   display:grid, and .deadline-rows (the only other selector granting it) is
+   not an ancestor here -- so the label and Remove button stacked instead of
+   aligning left/right. Scoped to #rules rather than reusing .deadline-rows,
+   which drags in header-row assumptions this list does not have. */
+#rules .row { display: grid; align-items: center; gap: .5rem; }
 
 .bar {
   display: flex; align-items: center; gap: .75rem; margin-top: 1.5rem;

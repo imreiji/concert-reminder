@@ -72,7 +72,13 @@
   </aside>
 
   <section class="content">
-    <div class="toolbar"><h1>Concerts</h1></div>
+    <div class="toolbar">
+      <h1>Concerts</h1>
+      <span class="note">
+        <strong>{{ catalogue_count }} concert{{ "" if catalogue_count == 1 else "s" }}</strong>
+        &middot; {{ open_round_count }} with a round still open
+      </span>
+    </div>
 
     <form class="search-form searchbar" method="get" action="/discover">
       <input type="hidden" name="sort" value="{{ sort }}">

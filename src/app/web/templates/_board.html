@@ -48,7 +48,7 @@
   <div class="col">
     <div class="col-head">
       <span class="dot {{ dot }}"></span> {{ heading }}
-      <span class="count">{{ open_total if key == "open" else cards | length }}</span>
+      <span class="count num">{{ open_total if key == "open" else cards | length }}</span>
     </div>
     {% for card in cards %}
     <a class="card" data-column="{{ key }}" data-event-id="{{ card.concert.event_id }}"
@@ -86,7 +86,7 @@
             is in -- domain.board.pill_tone, computed once in board_cards. #}
         <span class="pill {{ card.pill_tone }}"
               data-countdown data-iso="{{ card.next_deadline.isoformat() }}"></span>
-        <span class="clock">{% set wl = dual_lines(card.next_deadline, tz) %}<b>{{ wl[0] }}</b>{{ wl[1] }}</span>
+        <span class="clock num">{% set wl = dual_lines(card.next_deadline, tz) %}<b>{{ wl[0] }}</b>{{ wl[1] }}</span>
       </span>
       {% endif %}
     </a>
