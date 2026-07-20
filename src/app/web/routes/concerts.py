@@ -52,6 +52,7 @@ from app.db.service import (
     concert_subscription_states,
     detach_tag,
     ensure_user,
+    get_default_preset,
     group_members,
     handle_newly_tagged,
     notify_newly_cancelled_legs,
@@ -436,11 +437,15 @@ async def render_rules_fragment(
 
     rules = await user_rules(session, user.id, concert.id)
     presets = await my_presets(session, user.id)
+    # Names the preset "My reminders" falls back to when this concert has no
+    # per-concert rules of its own -- the demo's "From your default preset —
+    # <name>" note. Presentation only; does not change which rules apply.
+    default_preset = await get_default_preset(session, user.id)
     return templates.TemplateResponse(
         request,
         "_rules.html",
         {"concert": concert, "user": user, "rules": rules, "presets": presets,
-         "anchors": list(Anchor)},
+         "anchors": list(Anchor), "default_preset": default_preset},
     )
 
 
@@ -742,6 +747,10 @@ async def concert_detail(
     from app.web.routes.preferences import my_presets
 
     presets = await my_presets(session, user.id)
+    # Same "From your default preset — <name>" note render_rules_fragment
+    # builds after a rules mutation -- computed here too so the first GET
+    # agrees with every later htmx swap.
+    default_preset = await get_default_preset(session, user.id)
     # The lineage line above the title carries the group, so the title itself
     # does not repeat it (see title_without_lineage).
     display_title = title_without_lineage(
@@ -755,6 +764,7 @@ async def concert_detail(
         "concert_detail.html",
         {"concert": concert, "user": user, "rules": rules, "tz": tz, "presets": presets,
          "anchors": list(Anchor),
+         "default_preset": default_preset,
          "display_title": display_title,
          "audit_log": audit_log,
          **await following_toggle_context(session, user.id, concert),

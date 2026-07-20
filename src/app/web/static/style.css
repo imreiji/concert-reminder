@@ -379,11 +379,6 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 
 .countdown { display: inline-block; }
 
-/* Header meta grid ("dt"/"dd" summary), mirrors the reference site's layout */
-.meta-grid { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .8rem; margin: .4rem 0; font-size: .9rem; }
-.meta-grid dt { color: var(--dim); }
-.meta-grid dd { margin: 0; }
-
 .feed-url {
   background: var(--paper); border: 1px solid var(--line); border-radius: 3px;
   padding: .3rem .5rem; word-break: break-all; font-size: .85rem;
@@ -612,6 +607,21 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .chead .links a:hover { text-decoration: underline; }
 .chead .bar2 { align-items: center; margin-top: .3rem; }
 
+/* Following toggle: shipped with .btn's box model (padding/radius/border)
+   already applied but zero rules of its own, so it rendered as a bare black
+   .btn regardless of state. A green "covered" pill with a check glyph when
+   on; the unfollowed state stays dim/outlined via .btn.quiet, restated here
+   too so the treatment holds even if .quiet is ever dropped from it. */
+.follow { gap: .45rem; }
+.follow.on {
+  border-color: var(--ok); background: var(--ok-wash); color: var(--ok);
+}
+.follow.on::before { content: "\2713"; font-weight: 700; }
+.follow.on:hover { opacity: .92; }
+.follow:not(.on) { border-color: var(--line); background: transparent; color: var(--dim); }
+/* The following-toggle's explanatory caption, next to the button. */
+.clock { font-size: .8125rem; color: var(--dim); }
+
 /* Performers are the reason someone is on this page; a nine-member group
    mixed into a generic chip row is unreadable. The label names the source
    because these are the members MATERIALISED at attach time (invariant 3),
@@ -629,9 +639,13 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .performers .chips { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
 .performers .chip {
   background: var(--chip); border-color: transparent;
-  display: inline-flex; align-items: center; line-height: 1.5; padding: .22rem .6rem;
+  display: inline-flex; align-items: center; justify-content: center; text-align: center;
+  line-height: 1.5; padding: .22rem .6rem;
 }
 .performers .chip.grp { background: var(--accent); color: #fff; font-weight: 650; }
+/* No eventernote link yet -- dimmed rather than a dead link (see the
+   markup: these render as a plain <span>, never an <a>). */
+.performers .chip.nolink { opacity: .75; }
 
 /* "Next for you": the nearest moment on THIS concert that wants the reader.
    Accent rather than the danger red Home's "Closes next" uses -- that one is
@@ -880,6 +894,9 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 }
 .bar .tally { color: var(--dim); font-size: .875rem; margin-right: auto; }
 .bar .tally b { color: var(--ink); font-weight: 650; }
+/* "Add a reminder" reveal (My reminders, concert page): a details.fold sized
+   to sit inline in the bar rather than stacking with its usual block margin. */
+.bar details.fold { margin-top: 0; flex: 0 0 auto; }
 
 .reveal { text-align: center; padding: 3rem 0 1rem; }
 .reveal .eyebrow {
