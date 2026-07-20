@@ -25,6 +25,7 @@ from app.web.routes import outcomes as outcome_routes
 from app.web.routes import preferences as pref_routes
 from app.web.routes import privacy as privacy_routes
 from app.web.routes import reminders as reminder_routes
+from app.web.routes import subscriptions as subscription_routes
 from app.web.routes import tags as tag_routes
 from app.web.routes import terms as terms_routes
 from app.web.routes import welcome as welcome_routes
@@ -66,6 +67,11 @@ def create_app() -> FastAPI:
     app.include_router(concert_routes.router)
     # no templates: renders via concerts.render_rules_fragment
     app.include_router(reminder_routes.router)
+    # /concerts/{event_id}/subscription and .../legs/{day_id}/opt-out are all
+    # deeper than the /concerts/{event_id} catch-all, so registration order
+    # against concert_routes does not matter here (unlike imports/concerts).
+    subscription_routes.templates = templates
+    app.include_router(subscription_routes.router)
     tag_routes.templates = templates
     app.include_router(tag_routes.router)
     # /discover is a literal, unique path -- order-independent.

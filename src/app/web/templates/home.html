@@ -86,6 +86,15 @@
   </p>
   <div class="da">
     <button class="btn quiet" type="button" data-close>That's right</button>
+    {# Subscriptions branch (Task 4): a real concert opt-out, not a link. Its
+       action is set in JS from the same data-prune-url the dialog already
+       carries -- pruneUrl is "/concerts/{event_id}", so the subscription route
+       is that plus "/subscription". A plain (non-htmx) form: the route's
+       JS-less branch redirects back to Home via Referer. #}
+    <form method="post" id="pruneSkipForm" class="inline">
+      <input type="hidden" name="state" value="opted_out">
+      <button class="btn danger" type="submit">Skip this concert entirely</button>
+    </form>
     <a class="btn" id="pruneLink" href="/">Manage this concert →</a>
   </div>
 </dialog>
@@ -105,7 +114,11 @@
       if (!el || !el.dataset || !el.dataset.pruneTitle) return;
       if (!e.detail.successful) return;
       document.getElementById("pruneName").textContent = el.dataset.pruneTitle;
-      document.getElementById("pruneLink").href = el.dataset.pruneUrl || "/";
+      var pruneUrl = el.dataset.pruneUrl || "/";
+      document.getElementById("pruneLink").href = pruneUrl;
+      // "/concerts/{event_id}" -> the concert's subscription route. Set from
+      // the same trusted, server-emitted url the link uses; no user text.
+      document.getElementById("pruneSkipForm").action = pruneUrl + "/subscription";
       dlg.showModal();
     });
     dlg.addEventListener("click", function (e) {

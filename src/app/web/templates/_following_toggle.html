@@ -1,0 +1,68 @@
+{# The concert-page Following control. Its own partial because POST
+   /concerts/{event_id}/subscription swaps it back in after a toggle; keep the
+   outer #following-toggle, that is the htmx outerHTML target. The route builds
+   this context in ONE place (`following_toggle_context`) so the swapped-in copy
+   cannot drift from the one GET /concerts/{event_id} rendered.
+
+   Three states, one binary control:
+     - following  -> the button offers to opt out (state=opted_out).
+     - opted out  -> the button offers to follow, which CLEARS the override
+                     (state=default) and returns the concert to its tag default.
+     - no row, no matching tag -> follow SUBSCRIBES it (state=subscribed).
+
+   The `state` posted is decided here, not in the route, because only the
+   template knows which of the three the reader is looking at.
+
+   Heavy confirmation: opting out while holding a WON/PAID ticket names the
+   specific loss before the write. It is a client-side gate only -- the form
+   still posts and the route never requires the outcome to be gone (the ticket
+   record survives the prune). The dialog ids interpolated into the on* handlers
+   below are STATIC, so invariant 7 (no user text in on* handlers) holds; the
+   only user-controlled value, the payment moment, goes through `dual()` in
+   normal element text. #}
+<div class="follow-toggle" id="following-toggle">
+{% if following %}
+  {% if holds_ticket %}
+  <button type="button" class="btn follow on"
+          onclick="document.getElementById('unfollowConfirm').showModal()">Following</button>
+  <dialog id="unfollowConfirm" class="prune">
+    <div class="dh">Opt out of this concert?
+      <button type="button" class="x" aria-label="Close"
+              onclick="document.getElementById('unfollowConfirm').close()">×</button></div>
+    <p>
+      {% if won_payment_at_utc %}
+      You won this ticket. Payment is due {{ dual(won_payment_at_utc, tz) }}. Opting out stops
+      that reminder and forfeits the ticket.
+      {% else %}
+      You hold a ticket for this concert. Opting out forfeits it and stops its reminders.
+      {% endif %}
+    </p>
+    <div class="da">
+      <button class="btn quiet" type="button"
+              onclick="document.getElementById('unfollowConfirm').close()">Keep following</button>
+      <form hx-post="/concerts/{{ concert.event_id }}/subscription"
+            hx-target="#following-toggle" hx-swap="outerHTML"
+            method="post" action="/concerts/{{ concert.event_id }}/subscription">
+        <input type="hidden" name="state" value="opted_out">
+        <button class="btn danger" type="submit">Opt out and forfeit</button>
+      </form>
+    </div>
+  </dialog>
+  {% else %}
+  <form hx-post="/concerts/{{ concert.event_id }}/subscription"
+        hx-target="#following-toggle" hx-swap="outerHTML"
+        method="post" action="/concerts/{{ concert.event_id }}/subscription">
+    <input type="hidden" name="state" value="opted_out">
+    <button class="btn follow on" type="submit">Following</button>
+  </form>
+  {% endif %}
+{% else %}
+  {% set next_state = "default" if sub_state and sub_state.value == "opted_out" else "subscribed" %}
+  <form hx-post="/concerts/{{ concert.event_id }}/subscription"
+        hx-target="#following-toggle" hx-swap="outerHTML"
+        method="post" action="/concerts/{{ concert.event_id }}/subscription">
+    <input type="hidden" name="state" value="{{ next_state }}">
+    <button class="btn quiet follow" type="submit">Follow</button>
+  </form>
+{% endif %}
+</div>
