@@ -24,6 +24,7 @@ from app.db.service import (
     attach_tag,
     ensure_user,
     find_tag_by_name,
+    find_tag_by_name_and_kind,
     group_members,
     handle_newly_tagged,
     resolve_group_member,
@@ -57,6 +58,19 @@ async def tag_directory(
     groups = [t for t in tags if t.kind is TagKind.GROUP]
     members = {t.id: await group_members(session, t.id) for t in groups}
     grouped_artist_ids = {m.id for ms in members.values() for m in ms}
+    counts = ctx["counts"]
+    # Raw Python payload for the new-tag dialog's duplicate warning; the
+    # template embeds it via `| tojson` (never json.dumps first, never | safe)
+    # so it escapes cleanly into the inline <script>.
+    tag_dupe_data = [
+        {
+            "name": t.name,
+            "kind": t.kind.value,
+            "concerts": counts[t.id].concerts,
+            "followers": counts[t.id].followers,
+        }
+        for t in tags
+    ]
     return templates.TemplateResponse(
         request,
         "tags.html",
@@ -70,6 +84,7 @@ async def tag_directory(
             ],
             "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
             "venues": [t for t in tags if t.kind is TagKind.VENUE],
+            "tag_dupe_data": tag_dupe_data,
             **ctx,
         },
     )
@@ -87,8 +102,13 @@ async def create_tag(
     eventernote_url: str = Form(""),
 ):
     name = name.strip()
-    if await find_tag_by_name(session, name) is not None:
-        raise HTTPException(status_code=409, detail=f"tag {name!r} already exists")
+    # Kind-scoped duplicate rule (resolved with the owner): block only a tag of
+    # the same name AND same kind; same name across kinds is allowed and the
+    # dialog warns about it client-side. Rename keeps its name-only collision.
+    if await find_tag_by_name_and_kind(session, name, kind) is not None:
+        raise HTTPException(
+            status_code=409, detail=f"a {kind.value} tag named {name!r} already exists"
+        )
     parent = None
     if parent_id:
         parent = await session.get(Tag, parent_id)

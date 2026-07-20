@@ -1868,6 +1868,23 @@ async def find_tag_by_name(session: AsyncSession, name: str) -> Tag | None:
     return res.scalar_one_or_none()
 
 
+async def find_tag_by_name_and_kind(
+    session: AsyncSession, name: str, kind: TagKind
+) -> Tag | None:
+    """A name+kind collision -- the kind-scoped duplicate the create route
+    blocks on. A second `Aqours` GROUP is a real duplicate; an `Aqours` VENUE
+    beside the `Aqours` GROUP is allowed (resolved with the owner). Rename
+    still uses the name-only find_tag_by_name."""
+    from sqlalchemy import func as sa_func
+
+    res = await session.execute(
+        select(Tag).where(
+            sa_func.lower(Tag.name) == name.strip().lower(), Tag.kind == kind
+        )
+    )
+    return res.scalar_one_or_none()
+
+
 async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
     res = await session.execute(
         select(Tag)

@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
+from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -162,10 +162,26 @@ def test_tag_creation_is_editor_only(client):
     assert client.post("/tags", data={"name": "X", "kind": "artist"}).status_code == 303
 
 
-def test_duplicate_tag_names_rejected_case_insensitively(client):
+def test_creating_same_name_same_kind_still_409s(client):
+    """Kind-scoped duplicate rule (resolved with the owner): a second tag of
+    the SAME name AND SAME kind is a real duplicate and stays blocked."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
-    assert client.post("/tags", data={"name": "hasunosora", "kind": "artist"}).status_code == 409
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    assert client.post("/tags", data={"name": "aqours", "kind": "group"}).status_code == 409
+
+
+async def test_creating_same_name_tag_now_succeeds(client):
+    """Replaces test_duplicate_tag_names_rejected_case_insensitively: same
+    name with a DIFFERENT kind is now allowed (warn in the UI, don't block)."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    r = client.post("/tags", data={"name": "aqours", "kind": "venue"})
+    assert r.status_code == 303
+    async with client.db() as s:
+        rows = (await s.execute(
+            select(Tag).where(func.lower(Tag.name) == "aqours")
+        )).scalars().all()
+        assert len(rows) == 2
 
 
 def test_groups_cannot_contain_groups(client):
@@ -599,14 +615,71 @@ def test_tags_page_renders_one_dialog_even_for_artist_in_multiple_groups(client)
     assert r.text.count('id="tag-dialog-3"') == 1
 
 
-def test_new_tag_form_includes_parent_visibility_script(client):
-    """The kind/parent select-hiding is JS-only, client-side behavior --
-    not server-testable via HTTP. This just confirms the toggle script and
-    its target elements are actually present in the rendered page."""
+def test_new_tag_dialog_has_kind_switching_script(client):
+    """The per-kind field-hiding is JS-only, client-side behaviour -- not
+    server-testable via HTTP. This confirms the new-tag dialog's kind picker,
+    its switching function, and the duplicate-warning box are all present."""
     login_as(client, EDITOR_ID, "reiji")
     r = client.get("/tags")
-    assert "new-tag-kind" in r.text and "new-tag-parent" in r.text
-    assert "syncParentVisibility" in r.text
+    assert 'id="kindPick"' in r.text
+    assert "setTagKind" in r.text
+    assert 'id="new-tag-dupe"' in r.text
+
+
+# ── New-tag dialog and warn-not-block duplicates (Task 5) ────────────────
+
+
+def test_new_tag_dialog_fields_are_conditional_on_kind(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/tags")
+    body = r.text
+    # kind pill picker: four kinds, performer submits as artist
+    assert 'data-kind="franchise"' in body
+    assert 'data-kind="group"' in body
+    assert 'data-kind="artist"' in body
+    assert 'data-kind="venue"' in body
+    # conditional field groups keyed by kind class
+    assert "kf k-group" in body        # parent franchise + eventernote
+    assert "kf k-venue" in body        # region + map url
+    assert "kf k-franchise" in body    # the "nothing else to set" note
+    assert 'name="eventernote_url"' in body
+    # the region consequence note
+    assert "No region" in body
+
+
+def test_dupe_payload_is_tojson_not_double_encoded(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "X</script><script>alert(1)", "kind": "artist"})
+    r = client.get("/tags")
+    # the raw breakout sequence must never appear unescaped
+    assert "</script><script>alert(1)" not in r.text
+    # tojson escapes < and > to < / > in the inline payload
+    assert "\\u003c/script\\u003e\\u003cscript\\u003ealert(1)" in r.text
+
+
+def test_rename_to_existing_name_still_409s(client):
+    """Rename collision is name-only (global across kinds) and unchanged --
+    only CREATE became kind-scoped."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Aqours", "kind": "group"})
+    client.post("/tags", data={"name": "Hall", "kind": "venue"})
+    r = client.post("/tags/2/edit", data={"name": "aqours"})
+    assert r.status_code == 409
+
+
+def test_new_tag_dialog_replaces_details_form(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/tags")
+    # the old inline <details> create form is gone
+    assert 'id="new-tag-form"' not in r.text
+    assert "syncParentVisibility" not in r.text
+    # replaced by the dialog + its opener button, editor-only
+    assert 'id="new-tag-dialog"' in r.text
+    assert "+ New tag" in r.text
+    login_as(client, VIEWER_ID, "viewer")
+    r2 = client.get("/tags")
+    assert "+ New tag" not in r2.text
+    assert 'id="new-tag-dialog"' not in r2.text
 
 
 # ── Retroactive-apply confirmation flow ──────────────────────────────────
