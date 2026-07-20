@@ -782,3 +782,4 @@ def test_label_by_round_kind_exact_text():
     assert LABEL_BY_ROUND_KIND[RoundKind.OTHER] == "Other"
     assert LABEL_BY_ROUND_KIND[RoundKind.FCFS_SALE] == "First come, first served"
     assert LABEL_BY_ROUND_KIND[RoundKind.TOUR_PACKAGE] == "Overseas tour package"
+    assert LABEL_BY_ROUND_KIND[RoundKind.UPGRADE] == "Upgrade round"
