@@ -26,29 +26,10 @@ first-served sales are exactly the case where "remind me 5 minutes before
 it opens" beats "remind me 3 hours before", so this is no longer
 speculative - it just has no user complaints behind it yet.
 
-### 2. Upgrade rounds and their qualifying-round set
-
-Impact: medium - effort: medium. Raised: 2026-07-19 (concert page and
-editor, out-of-scope list).
-
-Some rounds only exist for people who already got something out of an
-earlier one - an upgrade or a seat-improvement round whose entry condition
-is "won round 1". The model has no way to say that: `Round` carries no
-relationship to another round, so the editor cannot express the dependency
-and the reminder planner cannot act on it. Today an upgrade round pings
-everyone tracking the concert, including people who never applied to the
-qualifying round and cannot enter this one.
-
-`RoundOutcome` already knows who won what, so the suppression half is a
-short extension of `_apply_outcome_suppression` (invariant 2's per-user
-pass) once the qualifying set exists. The cost is the schema and the editor
-UI for it, not the logic. Held out of the concert page and editor branch
-deliberately rather than half-built.
-
-### 3. Collapse a round's multiple "Coming up" rows into one
+### 2. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
-branch review). Re-ranked 2026-07-19.
+branch review). Re-ranked 2026-07-19 (twice).
 
 `upcoming_deadlines` emits one row per future anchor, so a single round
 with opens/closes/results/payment ahead of it takes up to four of Home's
@@ -66,7 +47,13 @@ ROUND with a single primary anchor chosen by `_primary_anchor`, so the
 collapsed shape exists and has tests behind it. What remains is deciding
 whether Home wants the same rule and re-pointing the htmx swap at it.
 
-### 4. Let the creation form express a multi-leg round in one pass
+Nudged up one slot (from #3) by upgrade rounds shipping on 2026-07-19: an
+upgrade round is one more anchor-bearing round per concert, so on a concert
+with an upgrade the row budget is tighter still - though only for a viewer
+eligible to enter it, since `my_deadline_rows` drops the upgrade's rows for
+everyone else.
+
+### 3. Let the creation form express a multi-leg round in one pass
 
 Impact: low - effort: small. Raised: 2026-07-19 (concert page and editor,
 branch review).
@@ -86,19 +73,42 @@ creation already lands on, and multi-leg rounds are the minority shape.
 The fix is a client-side version of the same chip control the editor uses,
 keyed on `day_key` (which already exists) instead of on ids.
 
-### 5. Eventernote links on performer chips
-
-Impact: low - effort: small. Raised: 2026-07-19 (concert page and editor,
-out-of-scope list).
-
-The redesigned concert page leads with lineage and performers, and every
-performer is a chip - but the chips are inert, because linking one out to
-its eventernote page needs an `eventernote_url` column on `Tag` that does
-not exist yet. Concerts already carry one; tags do not. Small and
-self-contained, and it makes the page's new headline block do more than
-name people.
+(The former "Eventernote links on performer chips" entry was dropped in the
+2026-07-19 revision pass: it already shipped inside the Tags page redesign,
+which added `Tag.eventernote_url` and wired it onto the concert page's
+performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Upgrade rounds and their qualifying-round set (2026-07-19)
+
+Shipped as: a new `RoundKind.UPGRADE` (label "Upgrade round", emoji) for the
+Japanese upgrade round - a nested second campaign only holders of a
+qualifying round's ticket may enter - modelled end to end. A named
+association table `round_qualifiers(upgrade_round_id, qualifying_round_id)`
+with both FKs ON DELETE CASCADE (modelled on `TagMember`) records which
+rounds qualify; no qualifiers means "any secured (WON/PAID) ticket on this
+concert qualifies", mirroring `applies_to`'s empty-means-all. A pure
+`domain/upgrades.py:is_eligible` derives per-user eligibility from recorded
+`RoundOutcome`s - never stored - and is threaded through the three existing
+per-user seams, not the pure planner: `_apply_outcome_suppression` (the
+upgrade is exempt from the secured-elsewhere suppression a base ticket would
+trigger, then re-suppressed for ineligible users), `_next_round_for_leg` /
+`_auto_arm_next_round` (an upgrade neither arms on a base loss nor arms
+anything when itself lost), and `column_for` (a won upgrade's payment
+outranks a secured base). Discover shows the campaign as its own accent pill
+beside the base standing; Home's Coming up gates the upgrade row and its
+`Entered upgrade` / `Skipping` capture on eligibility; the concert page shows
+an ineligible viewer a `Requires a ticket from: ...` line instead of capture
+buttons; the global anonymous deadline list is unchanged (the round's
+existence is public). The editor gained a "Qualifies" toggle-chip row inside
+an `.upgradebox`, shown only for an UPGRADE round, encoded exactly like the
+branch-2 `round_legs` chips (one hidden `round_qualifiers` field per round
+row, `parse_round_qualifiers` filtering to surviving round ids and dropping
+self). Chips reference only already-saved rounds; a round created in the same
+submit cannot be a qualifier until saved once, stated in the UI copy. No new
+`RoundOutcome` write path (invariant 2 intact); one nullable-free migration
+(the association table), no backfill.
 
 ### Tags page redesign, second pass (2026-07-19)
 

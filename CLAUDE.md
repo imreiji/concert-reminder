@@ -139,6 +139,17 @@ deleting them.
    per-user suppression pass onto the same `sync_rule` candidate-list
    filtering, orthogonal to cancellation — see
    `db/service.py`'s `_apply_outcome_suppression`.
+   An UPGRADE round (`RoundKind.UPGRADE`) is a nested second campaign whose
+   availability is per-user DERIVED, never stored: a user is eligible only
+   when they hold a secured (WON/PAID) ticket in one of the round's
+   `round_qualifiers` (an empty qualifier set means any secured ticket on the
+   concert, mirroring `applies_to`'s empty-means-all). Eligibility is pure
+   (`domain/upgrades.py:is_eligible`) and threaded through the same per-user
+   seams — `_apply_outcome_suppression` (exempt from the secured-elsewhere
+   suppression, then re-suppressed when ineligible), auto-arm, `column_for`,
+   and every capture surface — not the pure planner. Editors set the
+   qualifier set as chips (`parse_round_qualifiers`); never persist
+   eligibility.
 3. **Group tag expansion** (agreed with the owner, do not change): attaching
    a GROUP tag to a concert materializes its members AT THAT MOMENT only.
    Editors prune non-performers; removed members stay removed; detach +
