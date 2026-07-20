@@ -1266,8 +1266,57 @@ def _result_moment(round_: Round) -> datetime | None:
     return round_.results_at_utc or round_.closes_at_utc
 
 
+async def _qualifiers_by_upgrade_round(
+    session: AsyncSession, round_ids: list[int]
+) -> dict[int, list[int]]:
+    """upgrade_round_id -> [qualifying round ids], from the round_qualifiers
+    association table in ONE query for every id given -- never one query per
+    round. An upgrade round absent from the returned map has no qualifier rows,
+    which the empty-qualifier convention reads as "any secured ticket on this
+    concert qualifies" (see domain/upgrades.py).
+
+    Read from the association table directly rather than the lazy
+    Round.qualifiers relationship, which would trip MissingGreenlet under async
+    template rendering."""
+    out: dict[int, list[int]] = {}
+    if not round_ids:
+        return out
+    for up_id, q_id in (await session.execute(
+        select(RoundQualifier.upgrade_round_id, RoundQualifier.qualifying_round_id).where(
+            RoundQualifier.upgrade_round_id.in_(round_ids)
+        )
+    )).all():
+        out.setdefault(up_id, []).append(q_id)
+    return out
+
+
+def _eligible_upgrade_ids(
+    rounds: list[Round],
+    outcomes: dict[int, LotteryOutcome],
+    qualifiers_by_round: dict[int, list[int]],
+) -> set[int]:
+    """Which of `rounds`'s UPGRADE rounds this user is eligible for, given the
+    user's `outcomes` for THIS concert and the pre-loaded qualifier map.
+
+    Concert-scoped on purpose: `outcomes` must hold only this concert's rounds,
+    so the empty-qualifier "any secured ticket" case cannot be satisfied by a
+    ticket on a different concert. Mirrors the suppression pass exactly --
+    WON/PAID counts as secured, and a round's own outcome is excluded from its
+    secured set (you cannot qualify for an upgrade by winning the upgrade)."""
+    secured = {
+        rid for rid, o in outcomes.items()
+        if o in (LotteryOutcome.WON, LotteryOutcome.PAID)
+    }
+    return {
+        r.id for r in rounds
+        if r.kind is RoundKind.UPGRADE
+        and is_upgrade_eligible(qualifiers_by_round.get(r.id, []), secured - {r.id})
+    }
+
+
 def capture_gates(
-    round_: Round | None, outcome: LotteryOutcome | None, now: datetime
+    round_: Round | None, outcome: LotteryOutcome | None, now: datetime,
+    qualifies: bool = True,
 ) -> tuple[bool, bool]:
     """The two gates on WHICH capture buttons a row may offer, as ONE
     definition shared by every surface that offers them (Home's "Coming up"
@@ -1279,8 +1328,14 @@ def capture_gates(
     other still calls unopened, and nothing would fail.
 
     `round_` is None for a row with no round behind it at all (an EVENT_START
-    row derived from a ConcertDay), where neither gate can ever open."""
-    can_capture = round_ is not None and _round_has_opened(round_, now)
+    row derived from a ConcertDay), where neither gate can ever open.
+
+    `qualifies` is False only for an UPGRADE round the viewer is not eligible
+    for: they hold no qualifying ticket, so offering "I have applied" would let
+    them record an entry to a campaign they cannot join. Callers resolve it
+    from the outcomes they already hold (see `_eligible_upgrade_ids`); it
+    defaults True so every ordinary round is unaffected."""
+    can_capture = round_ is not None and _round_has_opened(round_, now) and qualifies
     moment = _result_moment(round_) if round_ is not None else None
     can_report_result = (
         can_capture
@@ -1622,6 +1677,15 @@ class DiscoverStatus:
     tone: str            # "ok" | "danger" | "quiet"
     at_utc: datetime | None = None
     next_deadline: datetime | None = None
+    # The SECOND pill: the upgrade campaign as a fact of its own, beside the
+    # base standing above. Only ever set for a viewer who is is_upgrade_eligible
+    # for an open/applied upgrade round -- an ineligible or signed-out viewer
+    # gets None and the template renders no second pill. A WON upgrade does NOT
+    # use this: it collapses into the single urgent `text`/`tone` pill instead,
+    # replacing the base standing (there is money owed, not two facts to show).
+    # `upgrade_tone` is "accent" (template class s-up).
+    upgrade_text: str | None = None
+    upgrade_tone: str | None = None
 
 
 def _humanize_until(then: datetime, now: datetime) -> str:
@@ -1683,6 +1747,15 @@ async def discover_statuses(
                 )).scalars()
             }
 
+    # Qualifier sets for every upgrade round on the page, ONE query -- reused
+    # per concert below so the eligibility check adds no per-round query.
+    qualifiers_by_round: dict[int, list[int]] = {}
+    if user_id is not None:
+        qualifiers_by_round = await _qualifiers_by_upgrade_round(
+            session,
+            [r.id for c in concerts for r in c.rounds if r.kind is RoundKind.UPGRADE],
+        )
+
     out: dict[int, DiscoverStatus] = {}
     for concert in concerts:
         cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
@@ -1707,9 +1780,53 @@ async def discover_statuses(
             has_open_round=False,
         )
 
+        # Upgrade campaign, as a SECOND fact beside the base standing -- but
+        # only for a viewer eligible to enter it (a held qualifying ticket).
+        # Signed out, `outcomes` is empty, so nobody is eligible and no upgrade
+        # pill shows -- the facet stays event-only above.
+        eligible_up = _eligible_upgrade_ids(rounds, card_outcomes, qualifiers_by_round)
+        # A WON upgrade owes money: it COLLAPSES the two pills into one urgent
+        # standing, replacing the base pill entirely (handled first).
+        won_up = next(
+            (r for r in rounds if r.id in eligible_up
+             and card_outcomes.get(r.id) is LotteryOutcome.WON),
+            None,
+        )
+        if won_up is not None:
+            due = won_up.payment_deadline_at_utc
+            out[concert.id] = DiscoverStatus(
+                status,
+                f"Upgrade won — pay by {_day_month(due)}" if due else "Upgrade won — payment due",
+                "danger", due, _next_deadline(rounds, now),
+            )
+            continue
+
+        # Otherwise the upgrade is its own accent pill, shown for an APPLIED
+        # entry or an open round not yet entered; PAID/LOST show nothing (the
+        # base standing already carries a PAID upgrade via column_for).
+        upgrade_text = upgrade_tone = None
+        applied_up = any(
+            r.id in eligible_up and card_outcomes.get(r.id) is LotteryOutcome.APPLIED
+            for r in rounds
+        )
+        open_up = next(
+            (r for r in rounds if r.id in eligible_up
+             and card_outcomes.get(r.id) is None and _round_is_open(r, now)),
+            None,
+        )
+        if applied_up:
+            upgrade_text, upgrade_tone = "Upgrade · Applied", "accent"
+        elif open_up is not None:
+            upgrade_text = (
+                f"Upgrade · Closes in {_humanize_until(open_up.closes_at_utc, now)}"
+                if open_up.closes_at_utc else "Upgrade · Open now"
+            )
+            upgrade_tone = "accent"
+
         if standing is Column.SECURED:
             out[concert.id] = DiscoverStatus(
-                status, "Secured", "ok", None, _next_deadline(rounds, now)
+                status, "Secured", "ok", None, _next_deadline(rounds, now),
+                upgrade_text, upgrade_tone,
             )
             continue
         if standing is Column.WON:
@@ -1721,23 +1838,31 @@ async def discover_statuses(
                 status,
                 f"Won — pay by {_day_month(due)}" if due else "Won — payment due",
                 "danger", due, _next_deadline(rounds, now),
+                upgrade_text, upgrade_tone,
             )
             continue
         if standing is Column.APPLIED:
             applied = next(r for r in rounds if card_outcomes.get(r.id) is LotteryOutcome.APPLIED)
             out[concert.id] = DiscoverStatus(
                 status, f"{LABEL_BY_ROUND_KIND[applied.kind]} · Applied", "ok",
-                None, _next_deadline(rounds, now),
+                None, _next_deadline(rounds, now), upgrade_text, upgrade_tone,
             )
             continue
 
-        # No standing: the event's own state, always neutral.
+        # No standing: the event's own state, always neutral. An eligible
+        # viewer always has a standing (eligibility needs a secured ticket), so
+        # no upgrade pill reaches here -- but the featured round still PREFERS a
+        # non-upgrade open round, falling back to the upgrade only when it is
+        # the only thing open (an ineligible viewer must not be led with an
+        # upgrade countdown they cannot act on).
         if open_rounds:
+            non_upgrade_open = [r for r in open_rounds if r.kind is not RoundKind.UPGRADE]
+            pool = non_upgrade_open or open_rounds
             closing = sorted(
-                (r for r in open_rounds if r.closes_at_utc),
+                (r for r in pool if r.closes_at_utc),
                 key=lambda r: r.closes_at_utc,
             )
-            r = closing[0] if closing else open_rounds[0]
+            r = closing[0] if closing else pool[0]
             text = (
                 f"{LABEL_BY_ROUND_KIND[r.kind]} · Closes in {_humanize_until(r.closes_at_utc, now)}"
                 if r.closes_at_utc else f"{LABEL_BY_ROUND_KIND[r.kind]} · Open now"
@@ -1752,7 +1877,10 @@ async def discover_statuses(
             # yet" -- from a browser's point of view they are the same thing:
             # there is nothing here you can act on.
             text, at = "All rounds closed", None
-        out[concert.id] = DiscoverStatus(status, text, "quiet", at, _next_deadline(rounds, now))
+        out[concert.id] = DiscoverStatus(
+            status, text, "quiet", at, _next_deadline(rounds, now),
+            upgrade_text, upgrade_tone,
+        )
 
     return out
 
