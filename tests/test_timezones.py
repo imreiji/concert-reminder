@@ -7,6 +7,7 @@ import pytest
 
 from app.domain.timezones import (
     UTC,
+    fmt_day_month,
     fmt_dual,
     fmt_dual_lines,
     jst_to_utc,
@@ -62,3 +63,10 @@ def test_fmt_dual_lines_two_line_shape():
     assert "19:00 JST" in time_line
     assert "07:00" in time_line  # America/Moncton in summer is UTC-3
     assert time_line.index("JST") < time_line.index("07:00")
+
+
+def test_fmt_day_month_has_no_year_weekday_or_zone():
+    # A PERFORMANCE date (a concert's start day) is a fact about the world,
+    # not a deadline -- it carries none of dual time's JST/local apparatus.
+    utc = jst_to_utc(datetime(2026, 10, 12, 19, 0))
+    assert fmt_day_month(utc) == "12 Oct"

@@ -63,3 +63,16 @@ def fmt_dual_lines(aware_utc: datetime, tz_name: str) -> tuple[str, str]:
     date_line = f"{jst:%a} {jst.day} {jst:%b}"
     time_line = f"{jst:%H:%M} JST · {local:%H:%M %Z}"
     return date_line, time_line
+
+
+def fmt_day_month(aware_utc: datetime) -> str:
+    """'12 Oct' -- day-month, no year, no weekday, no zone.
+
+    For PERFORMANCE dates (a concert's start day), never for a deadline: a
+    date is a fact about the world, not a moment you must act by, so it
+    carries none of dual time's JST/local apparatus (invariant 1 governs
+    deadlines, not this). Always JST, like every other date in the app. Same
+    hand-built day as fmt_dual_lines, for the same Windows strftime reason.
+    """
+    jst = utc_to_jst(aware_utc)
+    return f"{jst.day} {jst:%b}"

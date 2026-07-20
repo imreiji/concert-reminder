@@ -5,7 +5,7 @@
 to a tag and attaches that tag to the concerts it wants on the board.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
 from sqlalchemy import event
@@ -23,6 +23,8 @@ from app.db.models import (
 )
 from app.db.service import (
     board_cards,
+    discover_peek,
+    discoverable_open_round_count,
     ensure_user,
     my_upcoming_deadlines,
     record_round_outcome,
@@ -257,6 +259,27 @@ async def test_rung_states_follow_recorded_outcomes(session):
     ]
 
 
+async def test_board_card_pill_tone_follows_urgency_not_just_column(session):
+    """Two OPEN cards with different time left must get different pill tones
+    -- before this, the template hardcoded the tone off the column alone
+    (won vs everything else), so two OPEN cards always looked identical
+    regardless of how much time was actually left."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+
+    urgent = await make_concert(session, "urgent-one", tag)
+    await open_round(session, urgent, closes=NOW + timedelta(hours=6))
+
+    distant = await make_concert(session, "distant-one", tag)
+    await open_round(session, distant, closes=NOW + timedelta(days=20))
+
+    columns, _ = await board_cards(session, USER, now=NOW)
+    tones = {card.concert.event_id: card.pill_tone for card in columns[Column.OPEN]}
+
+    assert tones["urgent-one"] == "p-danger"
+    assert tones["distant-one"] == "p-quiet"
+
+
 # ── my_upcoming_deadlines ────────────────────────────────────────────────
 
 
@@ -308,3 +331,43 @@ async def test_my_deadlines_respect_the_limit(session):
     rows = await my_upcoming_deadlines(session, USER, now=NOW, limit=3)
 
     assert [row.label for row in rows] == ["R0", "R1", "R2"]
+
+
+# ── discoverable_open_round_count: the teaser's "N with a round still open" ──
+
+
+async def test_open_round_count_counts_only_concerts_with_a_round_open_now(session):
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+    open_now = await make_concert(session, "open-now", tag)
+    await open_round(session, open_now)
+    not_open_yet = await make_concert(session, "not-yet", tag)
+    await add_round(session, not_open_yet, "R1", opens=dt(7, 1), closes=dt(7, 20))
+    already_closed = await make_concert(session, "closed", tag)
+    await add_round(session, already_closed, "R1", opens=dt(4, 1), closes=dt(4, 20))
+
+    assert await discoverable_open_round_count(session, now=NOW) == 1
+
+
+# ── discover_peek: Home's 4 sample Discover cards ────────────────────────
+
+
+async def test_peek_excludes_the_callers_tracked_concerts(session):
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+    tracked = await make_concert(session, "tracked-one", tag)
+    await make_concert(session, "untracked-one", None)
+
+    peek = await discover_peek(session, {tracked.id}, limit=4)
+
+    assert [c.event_id for c in peek] == ["untracked-one"]
+
+
+async def test_peek_respects_the_limit(session):
+    await ensure_user(session, USER, "reiji")
+    for i in range(6):
+        await make_concert(session, f"peek-{i}", None)
+
+    peek = await discover_peek(session, set(), limit=4)
+
+    assert len(peek) == 4

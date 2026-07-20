@@ -62,7 +62,7 @@
       {#- A franchise alone is not an eyebrow: it only ever qualifies a group,
           so there is nothing to show without one. -#}
       {% if cg or ca %}
-      <span class="who">
+      <span class="eyebrow">
         {%- if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
         {%- elif cg %}{{ cg | map(attribute="name") | join(", ") }}
         {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>{% endif -%}
@@ -73,7 +73,7 @@
       <span class="venue">
         {%- if card.concert.venue %}📍 {{ card.concert.venue }}{% endif -%}
         {%- if card.concert.venue and live_days %} · {% endif -%}
-        {%- if live_days %}{{ jst(live_days[0].starts_at_utc).strftime("%Y-%m-%d") }} JST{% endif -%}
+        {%- if live_days %}{{ day_month(live_days[0].starts_at_utc) }}{% endif -%}
       </span>
       {% if card.rungs %}
       <span class="ladder">
@@ -82,7 +82,9 @@
       {% endif %}
       {% if card.next_deadline %}
       <span class="foot">
-        <span class="pill {{ 'p-danger' if key == 'won' else 'p-off' }}"
+        {#- Tone reflects urgency (time left), not just which column the card
+            is in -- domain.board.pill_tone, computed once in board_cards. #}
+        <span class="pill {{ card.pill_tone }}"
               data-countdown data-iso="{{ card.next_deadline.isoformat() }}"></span>
         <span class="clock">{% set wl = dual_lines(card.next_deadline, tz) %}<b>{{ wl[0] }}</b>{{ wl[1] }}</span>
       </span>

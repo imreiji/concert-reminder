@@ -436,6 +436,9 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .next .when b { display: block; color: var(--ink); font-weight: 600; }
 .next .countdown { display: block; text-align: right; }
 .next .countdown .big { font-size: 1.75rem; font-weight: 650; line-height: 1.2; color: var(--danger); }
+.next .countdown .unit {
+  font-size: .75rem; color: var(--dim); letter-spacing: .08em; text-transform: uppercase;
+}
 
 /* The board */
 .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: .875rem; }
@@ -452,21 +455,28 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .col .more { font-size: .8125rem; color: var(--accent); text-decoration: none; font-weight: 550; }
 .col .more:hover { text-decoration: underline; }
 
-.board .card {
+/* .peek reuses the exact same card: Home's peek grid is a taste of the
+   catalogue rendered with the board's own card shape (see home.html). */
+.board .card, .peek .card {
   background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
   padding: .8rem .85rem; display: grid; gap: .45rem; box-shadow: var(--shadow);
   text-decoration: none; color: inherit;
   transition: transform 160ms ease, border-color 160ms ease;
 }
-.board .card:hover { transform: translateY(-1px); border-color: var(--dim); }
+.board .card:hover, .peek .card:hover { transform: translateY(-1px); border-color: var(--dim); }
+/* Money you could still lose gets a visible accent -- the same urgency the
+   pill communicates, echoed as a left border. Keys off data-column so no
+   extra class is needed on the card itself. */
+.board .card[data-column="won"] { border-left: 3px solid var(--accent); }
 /* The eyebrow: franchise/group above the title, or artist chips when that is
-   all the concert has. Pulled tight against the title so it reads as a label
-   for it rather than as a second line of content. */
-.board .card .who { font-size: .75rem; color: var(--dim); margin-bottom: -.25rem; }
-.board .card .artists { display: flex; flex-wrap: wrap; gap: .25rem; }
-.board .card .title { font-weight: 600; line-height: 1.35; }
-.board .card .venue { font-size: .8125rem; color: var(--dim); }
-.board .card .foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+   all the concert has. Typography comes from the shared .eyebrow utility;
+   this just pulls it tight against the title so it reads as a label for it
+   rather than as a second line of content. */
+.board .card .eyebrow, .peek .card .eyebrow { margin-bottom: -.25rem; }
+.board .card .artists, .peek .card .artists { display: flex; flex-wrap: wrap; gap: .25rem; }
+.board .card .title, .peek .card .title { font-weight: 600; line-height: 1.35; }
+.board .card .venue, .peek .card .venue { font-size: .8125rem; color: var(--dim); }
+.board .card .foot, .peek .card .foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .board .card .clock { font-size: .75rem; color: var(--dim); line-height: 1.3; text-align: right; }
 /* Two-line dual time: bold weekday+day+month over the JST/local line. */
 .board .card .clock b { display: block; color: var(--ink); font-weight: 600; }
@@ -546,13 +556,25 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .teaser h2 { margin: .3rem 0 .35rem; font-size: 1.1rem; font-weight: 650; }
 .teaser p { margin: 0; color: var(--dim); font-size: .875rem; max-width: 52ch; }
 
+.peek { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-top: 1.25rem; }
+.peek .card { gap: .3rem; }
+
+.foot-note {
+  margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+  color: var(--dim); font-size: .8125rem; max-width: 66ch;
+}
+.foot-note b { color: var(--ink); font-weight: 600; }
+
 @media (max-width: 1024px) {
   .rowhead, .deadline-rows .row { grid-template-columns: 6.5rem 12rem 1fr 14rem; }
   .rowhead span:nth-child(4), .row .act-c { display: none; }
 }
-@media (max-width: 960px) { .board { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 960px) {
+  .board { grid-template-columns: repeat(2, 1fr); }
+  .peek { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 600px) {
-  .board { grid-template-columns: 1fr; }
+  .board, .peek { grid-template-columns: 1fr; }
   .next, .teaser { grid-template-columns: 1fr; }
   .next .countdown { text-align: left; }
   .rowhead { display: none; }

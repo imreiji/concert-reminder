@@ -11,6 +11,7 @@ index already had, plus a door out to /discover.
 """
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -692,3 +693,156 @@ async def test_not_applying_carries_its_concert_title_in_a_data_attribute(client
     assert 'data-prune-title="Aqours Live"' in html
     assert "<dialog" in html
     assert "onclick=\"" not in html.split('data-prune-title')[1][:400]
+
+
+# ── Task 3: peek grid, foot-note, teaser open-round count ──────────────────
+
+
+async def test_peek_grid_shows_four_untracked_discover_cards(client):
+    """The teaser's peek grid is a door out to Discover, not the board -- it
+    must show concerts the user does NOT already track."""
+    async def build(seed):
+        tracked = await seed.concert("tracked-one", title="Tracked concert")
+        await seed.open_round(tracked, "R1")
+        for i in range(5):
+            seed.s.add(Concert(title=f"Peek {i}", event_id=f"peek-{i}", created_by=USER))
+        await seed.s.flush()
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    assert 'id="peek"' in html
+    peek_html = html.split('id="peek"', 1)[1].split("</div>", 1)[0]
+    assert peek_html.count('class="card"') == 4
+    assert "Tracked concert" not in peek_html
+
+
+async def test_foot_note_paragraph_renders(client):
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live")
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    assert 'class="foot-note"' in html
+    assert "Home answers" in html
+
+
+async def test_teaser_names_the_open_round_count_alongside_the_catalogue_count(client):
+    async def build(seed):
+        open_c = await seed.concert("open-one", title="Open concert")
+        await seed.open_round(open_c)
+        closed_c = await seed.concert("closed-one", title="Closed concert", day_offset=None)
+        await seed.round(
+            closed_c, "R1",
+            opens=datetime.now(UTC) - timedelta(days=30),
+            closes=datetime.now(UTC) - timedelta(days=10),
+        )
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    assert "1 with a round still open" in html
+
+
+# ── Task 3: the Won column card's accent border ─────────────────────────────
+
+
+def test_style_gives_the_won_column_card_an_accent_border():
+    text = (
+        Path(__file__).resolve().parents[1] / "src/app/web/static/style.css"
+    ).read_text(encoding="utf-8")
+    assert '[data-column="won"]' in text
+    assert "border-left: 3px solid var(--accent)" in text
+
+
+# ── Task 3: the countdown pill's tone follows urgency, not just column ──────
+
+
+async def test_two_open_cards_get_different_pill_tones_by_urgency(client):
+    async def build(seed):
+        urgent = await seed.concert("urgent-one", title="Urgent concert")
+        await seed.round(
+            urgent, "R1",
+            opens=datetime.now(UTC) - timedelta(hours=1),
+            closes=datetime.now(UTC) + timedelta(hours=6),
+        )
+        distant = await seed.concert("distant-one", title="Distant concert")
+        await seed.round(
+            distant, "R1",
+            opens=datetime.now(UTC) - timedelta(hours=1),
+            closes=datetime.now(UTC) + timedelta(days=20),
+        )
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    urgent_card = html.split('data-event-id="urgent-one"')[1].split("</a>")[0]
+    distant_card = html.split('data-event-id="distant-one"')[1].split("</a>")[0]
+    assert "pill p-danger" in urgent_card
+    assert "pill p-quiet" in distant_card
+
+
+# ── Task 3: the board-card artist eyebrow ───────────────────────────────────
+
+
+async def test_board_card_artist_name_carries_the_eyebrow_class(client):
+    async def build(seed):
+        c = await seed.concert("ninth-live", title="9th LoveLive")
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    card = html.split('data-event-id="ninth-live"')[1].split("</a>")[0]
+    assert 'class="eyebrow"' in card
+    assert "Aqours" in card.split('class="eyebrow"')[1].split("</span>")[0]
+
+
+# ── Task 3: performance dates render day-month, not the old ISO+JST form ────
+
+
+async def test_board_and_deadline_row_dates_render_day_month(client):
+    """Performance DATES (a concert's start day) are a fact about the world,
+    not a deadline -- day-month with no year, no weekday, no zone label. The
+    deadline TIME column keeps the dual JST/local render from Task 2; only
+    this venue/date context line changes."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", venue="SSA", day_offset=None)
+        seed.s.add(ConcertDay(
+            concert_id=c.id, label="Day 1",
+            starts_at_utc=datetime(2026, 10, 12, 10, 0, tzinfo=UTC),
+        ))
+        await seed.s.flush()
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    assert "12 Oct" in html
+    assert "2026-10-12 JST" not in html
+
+
+# ── Task 3: the two-tier "Up next" countdown ────────────────────────────────
+
+
+async def test_up_next_countdown_is_two_tier(client):
+    """Big number + a small unit caption underneath (demo .next .big/.unit),
+    not one flat countdown span."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live")
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    assert "data-countdown-big" in html
+    assert 'class="unit"' in html

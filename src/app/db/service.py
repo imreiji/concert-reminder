@@ -22,7 +22,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -47,7 +47,7 @@ from app.db.models import (
     TagSubscription,
     User,
 )
-from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for
+from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.timezones import utc_to_jst
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
@@ -1051,6 +1051,10 @@ class BoardCard:
     rungs: list[Rung]
     next_deadline: datetime | None
     outcome_by_round: dict[int, LotteryOutcome]
+    # The countdown pill's CSS tone -- computed here (read side) from the
+    # pure domain.board.pill_tone, not in the template, so the urgency rule
+    # lives in exactly one place.
+    pill_tone: str
 
 
 def _round_is_open(round_: Round, now: datetime) -> bool:
@@ -1173,12 +1177,14 @@ async def board_cards(
             )
             for r in live_rounds
         ]
+        next_deadline = _next_deadline(live_rounds, now)
         columns[column].append(BoardCard(
             concert=concert,
             column=column,
             rungs=rungs,
-            next_deadline=_next_deadline(live_rounds, now),
+            next_deadline=next_deadline,
             outcome_by_round=card_outcomes,
+            pill_tone=pill_tone(column, next_deadline, now),
         ))
 
     # Soonest first everywhere; a card with no future deadline sorts last.
@@ -2068,6 +2074,70 @@ async def discoverable_concert_count(session: AsyncSession) -> int:
     return (await session.execute(
         select(func.count()).select_from(Concert).where(discoverable_concert_criterion())
     )).scalar_one()
+
+
+def _open_round_criterion(now: datetime):
+    """A round counts as open the same way the Python-side `_round_is_open`
+    does: it must carry at least one timestamp, and `now` must fall in
+    [opens, closes). Expressed in SQL so discoverable_open_round_count can
+    filter in one query rather than loading every round to check in Python."""
+    return (
+        exists()
+        .where(
+            Round.concert_id == Concert.id,
+            or_(Round.opens_at_utc.isnot(None), Round.closes_at_utc.isnot(None)),
+            or_(Round.opens_at_utc.is_(None), Round.opens_at_utc <= now),
+            or_(Round.closes_at_utc.is_(None), Round.closes_at_utc > now),
+        )
+        .correlate(Concert)
+    )
+
+
+async def discoverable_open_round_count(
+    session: AsyncSession, now: datetime | None = None
+) -> int:
+    """How many /discover-listed concerts have a round open RIGHT NOW -- the
+    "N with a round still open" half of Home's teaser, alongside
+    discoverable_concert_count."""
+    now = now or _now()
+    return (await session.execute(
+        select(func.count()).select_from(Concert).where(
+            discoverable_concert_criterion(), _open_round_criterion(now)
+        )
+    )).scalar_one()
+
+
+async def discover_peek(
+    session: AsyncSession, exclude_ids: set[int], limit: int = 4,
+) -> list[Concert]:
+    """Up to `limit` discoverable concerts for Home's peek grid -- a taste of
+    the catalogue below the Discover teaser.
+
+    `exclude_ids` (normally the caller's own tracked_concert_ids) keeps the
+    grid a door OUT to concerts the user does not already follow, never a
+    reprint of the board above it. Same eager-loads and default ordering
+    (earliest live day first, undated last) as /discover's own query, since
+    the card rendered from this reuses that page's shape."""
+    stmt = (
+        select(Concert)
+        .where(discoverable_concert_criterion())
+        .options(
+            selectinload(Concert.days), selectinload(Concert.rounds), selectinload(Concert.tags)
+        )
+    )
+    if exclude_ids:
+        stmt = stmt.where(Concert.id.notin_(exclude_ids))
+    first_day = func.min(ConcertDay.starts_at_utc)
+    stmt = (
+        stmt.outerjoin(
+            ConcertDay,
+            (ConcertDay.concert_id == Concert.id) & (ConcertDay.cancelled.is_(False)),
+        )
+        .group_by(Concert.id)
+        .order_by(first_day.is_(None), first_day)
+        .limit(limit)
+    )
+    return list((await session.execute(stmt)).scalars())
 
 
 @dataclass(frozen=True)

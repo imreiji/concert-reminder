@@ -126,8 +126,31 @@
         else text = remMins + "m left";
         el.textContent = text;
       });
+      // The Home landing countdown: the same clock, split into a big
+      // magnitude (data-countdown-big) and a small unit caption in the
+      // following sibling -- demo's .next .big/.unit two-tier shape.
+      document.querySelectorAll("[data-countdown-big][data-iso]").forEach(function (el) {
+        var target = Date.parse(el.dataset.iso);
+        var diffMs = target - now;
+        var unitEl = el.nextElementSibling;
+        if (isNaN(target) || diffMs <= 0) {
+          el.textContent = "";
+          if (unitEl) unitEl.textContent = "";
+          return;
+        }
+        var mins = Math.floor(diffMs / 60000);
+        var days = Math.floor(mins / 1440);
+        var hours = Math.floor((mins % 1440) / 60);
+        var remMins = mins % 60;
+        var big, unit;
+        if (days > 0) { big = days; unit = days === 1 ? "day left" : "days left"; }
+        else if (hours > 0) { big = hours; unit = hours === 1 ? "hour left" : "hours left"; }
+        else { big = remMins; unit = remMins === 1 ? "minute left" : "minutes left"; }
+        el.textContent = big;
+        if (unitEl) unitEl.textContent = unit;
+      });
     }
-    if (document.querySelector("[data-countdown][data-iso]")) {
+    if (document.querySelector("[data-countdown][data-iso], [data-countdown-big][data-iso]")) {
       refreshCountdowns();
       setInterval(refreshCountdowns, 60000);
     }

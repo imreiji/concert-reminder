@@ -32,7 +32,11 @@
     <div class="when">{% set wl = dual_lines(d.at_utc, tz) %}<b>{{ deadline_label(d.anchor) | capitalize }} {{ wl[0] }}</b>{{ wl[1] }}</div>
   </div>
   <div class="countdown">
-    <span class="big" data-countdown data-iso="{{ d.at_utc.isoformat() }}"></span>
+    {#- Two-tier: a big magnitude over a small unit caption (demo .next
+        .big/.unit), instead of one flat "Xd Yh left" string. Both spans are
+        filled/kept in sync by the shared refreshCountdowns() in base.html. -#}
+    <div class="big num" data-countdown-big data-iso="{{ d.at_utc.isoformat() }}"></div>
+    <div class="unit"></div>
   </div>
 </div>
 {% endif %}
@@ -66,14 +70,54 @@
     <div class="eyebrow">Not tracking these yet</div>
     <h2>Discover</h2>
     <p>
-      {{ catalogue_count }} concert{{ "" if catalogue_count == 1 else "s" }} in the catalogue.
+      {{ catalogue_count }} concert{{ "" if catalogue_count == 1 else "s" }} in the catalogue,
       {#- The count is what /discover would LIST, not every Concert row:
           a concert whose every leg is cancelled is hidden there. -#}
+      {{ open_round_count }} with a round still open.
       Browse by franchise, group, artist or region — or search everything.
     </p>
   </div>
   <a class="btn" href="/discover">Open discover →</a>
 </div>
+
+{# The peek grid: a taste of what /discover holds, reusing the same card
+   shape and status pill the board and Discover both use. Deliberately
+   excludes tracked concerts (see the handler) so this stays a door OUT. #}
+{% macro peek_card(c, status) %}
+{% set ctags = c.tags %}
+{% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
+{% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
+{% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
+<a class="card" href="/concerts/{{ c.event_id }}">
+  {% if cg or ca %}
+  <span class="eyebrow">
+    {%- if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
+    {%- elif cg %}{{ cg | map(attribute="name") | join(", ") }}
+    {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>{% endif -%}
+  </span>
+  {% endif %}
+  <span class="title">{{ c.title }}</span>
+  {% set live_days = c.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
+  <span class="venue">
+    {%- if c.venue %}📍 {{ c.venue }}{% endif -%}
+    {%- if c.venue and live_days %} · {% endif -%}
+    {%- if live_days %}{{ day_month(live_days[0].starts_at_utc) }}{% endif -%}
+  </span>
+  {% if status %}
+  <span class="foot"><span class="pill p-{{ status.tone }}">{{ status.text }}</span></span>
+  {% endif %}
+</a>
+{% endmacro %}
+{% if peek_concerts %}
+<div class="peek" id="peek">
+  {% for c in peek_concerts %}{{ peek_card(c, peek_statuses.get(c.id)) }}{% endfor %}
+</div>
+{% endif %}
+
+<p class="foot-note">
+  <b>Home answers "where do I stand".</b> Everything above is yours — your rounds, your outcomes,
+  your deadlines. Discovery sits at the bottom as a door out, not as the page itself.
+</p>
 
 {# The follow-up to "Not applying". The narrow action already posted; the
    wider one is a SECOND deliberate press, never a side effect of the first. #}
