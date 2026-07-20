@@ -35,12 +35,20 @@ from app.web.routes import welcome as welcome_routes
 
 _here = Path(__file__).parent
 templates = Jinja2Templates(directory=_here / "templates")
-templates.env.globals["dual"] = fmt_dual        # {{ dual(dt, tz) }}
-templates.env.globals["dual_lines"] = fmt_dual_lines  # dual_lines(dt, tz) -> (date, time)
+templates.env.add_extension("jinja2.ext.i18n")
+# newstyle=True gives {% trans %} and {{ _("...") }} that read the request's
+# ContextVar on every call -- one shared env, per-request locale.
+templates.env.install_gettext_callables(
+    gettext=i18n.gettext, ngettext=i18n.ngettext, newstyle=True
+)
+# Locale-aware wrappers: template-side signatures unchanged -- the active
+# locale is picked up here, NOT passed by templates.
+templates.env.globals["dual"] = lambda dt, tz: fmt_dual(dt, tz, i18n.get_locale())
+templates.env.globals["dual_lines"] = lambda dt, tz: fmt_dual_lines(dt, tz, i18n.get_locale())
 templates.env.globals["jst"] = utc_to_jst       # {{ jst(dt).strftime(...) }}
-templates.env.globals["day_month"] = fmt_day_month  # {{ day_month(dt) }} -> "12 Oct"
-templates.env.globals["deadline_label"] = lambda anchor: LABEL_BY_ANCHOR[anchor]
-templates.env.globals["round_kind_label"] = lambda kind: LABEL_BY_ROUND_KIND[kind]
+templates.env.globals["day_month"] = lambda dt: fmt_day_month(dt, i18n.get_locale())
+templates.env.globals["deadline_label"] = lambda anchor: i18n.gettext(LABEL_BY_ANCHOR[anchor])
+templates.env.globals["round_kind_label"] = lambda kind: i18n.gettext(LABEL_BY_ROUND_KIND[kind])
 templates.env.globals["current_locale"] = i18n.get_locale  # {{ current_locale() }}
 
 COMMON_TIMEZONES = [

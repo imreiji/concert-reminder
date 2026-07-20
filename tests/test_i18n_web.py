@@ -144,3 +144,50 @@ async def test_login_sets_cookie_from_column_for_existing_user(client):
     login(client)
     r = client.get("/")
     assert '<html lang="zh"' in r.text
+
+
+# ── Jinja env wiring: i18n extension + locale-aware globals ─────────────
+
+
+async def test_template_gettext_available(client):
+    # base.html renders _( ) calls once templates convert; until then, prove
+    # the machinery: the env has the extension and newstyle callables.
+    from app.web.app import templates
+
+    assert "jinja2.ext.InternationalizationExtension" in templates.env.extensions
+
+
+async def test_label_globals_translate(client):
+    from app import i18n
+    from app.domain.types import Anchor
+    from app.web.app import templates
+
+    i18n._catalog_cache["ja"] = i18n._translations_from_po_text(
+        'msgid ""\nmsgstr ""\n"Content-Type: text/plain; charset=utf-8\\n"\n'
+        '"Plural-Forms: nplurals=1; plural=0;\\n"\n\n'
+        'msgid "opens"\nmsgstr "受付開始"\n',
+        "ja",
+    )
+    i18n.set_locale("ja")
+    try:
+        assert templates.env.globals["deadline_label"](Anchor.OPENS) == "受付開始"
+    finally:
+        i18n.set_locale("en")
+        i18n.reset_catalog_cache()
+    assert templates.env.globals["deadline_label"](Anchor.OPENS) == "opens"
+
+
+async def test_date_globals_follow_active_locale(client):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app import i18n
+    from app.web.app import templates
+
+    dt = datetime(2026, 8, 1, 10, 0, tzinfo=ZoneInfo("UTC"))
+    i18n.set_locale("ja")
+    try:
+        date_line, _t = templates.env.globals["dual_lines"](dt, "UTC")
+        assert date_line == "8月1日(土)"
+    finally:
+        i18n.set_locale("en")

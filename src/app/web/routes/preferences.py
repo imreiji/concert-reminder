@@ -28,6 +28,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import i18n
 from app.config import settings
 from app.db.models import Concert, PresetItem, ReminderPreset, Tag, TagSubscription, User
 from app.db.service import (
@@ -152,7 +153,7 @@ async def preferences(
 
     # A live JST/local sample for the Time section's preview line: the current
     # instant read in both zones (invariant 1: JST first, both always present).
-    _, tz_preview = fmt_dual_lines(datetime.now(UTC), tz)
+    _, tz_preview = fmt_dual_lines(datetime.now(UTC), tz, i18n.get_locale())
 
     return templates.TemplateResponse(
         request,

@@ -53,6 +53,7 @@ from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan
 from app.domain.timezones import utc_to_jst
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
 from app.domain.upgrades import is_upgrade_eligible
+from app.i18n import N_
 
 
 def _now() -> datetime:
@@ -813,24 +814,24 @@ async def upcoming_rounds(
 
 
 LABEL_BY_ANCHOR: dict[Anchor, str] = {
-    Anchor.OPENS: "opens",
-    Anchor.CLOSES: "closes",
-    Anchor.RESULTS: "results announced",
-    Anchor.PAYMENT: "payment due",
-    Anchor.EVENT_START: "event",
+    Anchor.OPENS: N_("opens"),
+    Anchor.CLOSES: N_("closes"),
+    Anchor.RESULTS: N_("results announced"),
+    Anchor.PAYMENT: N_("payment due"),
+    Anchor.EVENT_START: N_("event"),
 }
 
 LABEL_BY_ROUND_KIND: dict[RoundKind, str] = {
-    RoundKind.LOTTERY_ROUND: "Lottery round",
-    RoundKind.ELIGIBILITY_ITEM_SALE: "Eligibility item sale",
-    RoundKind.STREAM_TICKET_SALE: "Stream ticket sale",
-    RoundKind.GENERAL_SALE: "General sale",
-    RoundKind.RESULT_ANNOUNCEMENT: "Result announcement",
-    RoundKind.PAYMENT_DEADLINE: "Payment deadline",
-    RoundKind.FCFS_SALE: "First come, first served",
-    RoundKind.TOUR_PACKAGE: "Overseas tour package",
-    RoundKind.UPGRADE: "Upgrade round",
-    RoundKind.OTHER: "Other",
+    RoundKind.LOTTERY_ROUND: N_("Lottery round"),
+    RoundKind.ELIGIBILITY_ITEM_SALE: N_("Eligibility item sale"),
+    RoundKind.STREAM_TICKET_SALE: N_("Stream ticket sale"),
+    RoundKind.GENERAL_SALE: N_("General sale"),
+    RoundKind.RESULT_ANNOUNCEMENT: N_("Result announcement"),
+    RoundKind.PAYMENT_DEADLINE: N_("Payment deadline"),
+    RoundKind.FCFS_SALE: N_("First come, first served"),
+    RoundKind.TOUR_PACKAGE: N_("Overseas tour package"),
+    RoundKind.UPGRADE: N_("Upgrade round"),
+    RoundKind.OTHER: N_("Other"),
 }
 
 
