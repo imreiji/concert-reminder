@@ -33,7 +33,7 @@ from app.db.models import (
 from app.db.service import DEADLINE_ROWS_LIMIT, record_round_outcome
 from app.db.session import get_session
 from app.domain.board import OPEN_COLUMN_LIMIT
-from app.domain.timezones import fmt_dual
+from app.domain.timezones import fmt_dual_lines
 from app.domain.types import LotteryOutcome, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
@@ -534,9 +534,14 @@ async def test_times_render_dual_jst_first(client):
     async with client.db() as s:
         db_user = await s.get(User, USER)
         tz = db_user.timezone
-    expected = fmt_dual(round_.closes_at_utc, tz)
-    assert expected in html
-    assert "JST" in expected and expected.index("JST") < expected.index("(")
+    # The web now renders the two-line shape (Task 2 demo reconciliation): a
+    # bold weekday+day+month line over a "HH:MM JST · HH:MM <zone>" time line,
+    # not the flat fmt_dual string. Invariant 1 still holds -- both zones, JST
+    # first -- so we assert against the two-line formatter's output.
+    date_line, time_line = fmt_dual_lines(round_.closes_at_utc, tz)
+    assert date_line in html
+    assert time_line in html
+    assert "JST" in time_line and time_line.index("JST") < time_line.index("·")
 
 
 # ── the two limits must agree ────────────────────────────────────────────

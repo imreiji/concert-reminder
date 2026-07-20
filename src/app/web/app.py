@@ -13,7 +13,7 @@ from app.config import settings
 from app.db.models import User
 from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
 from app.db.session import get_session
-from app.domain.timezones import fmt_dual, utc_to_jst
+from app.domain.timezones import fmt_dual, fmt_dual_lines, utc_to_jst
 from app.ops import run_checks
 from app.scheduler import heartbeat
 from app.web import auth
@@ -34,6 +34,7 @@ from app.web.routes import welcome as welcome_routes
 _here = Path(__file__).parent
 templates = Jinja2Templates(directory=_here / "templates")
 templates.env.globals["dual"] = fmt_dual        # {{ dual(dt, tz) }}
+templates.env.globals["dual_lines"] = fmt_dual_lines  # dual_lines(dt, tz) -> (date, time)
 templates.env.globals["jst"] = utc_to_jst       # {{ jst(dt).strftime(...) }}
 templates.env.globals["deadline_label"] = lambda anchor: LABEL_BY_ANCHOR[anchor]
 templates.env.globals["round_kind_label"] = lambda kind: LABEL_BY_ROUND_KIND[kind]

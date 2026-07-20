@@ -84,7 +84,7 @@
       <span class="foot">
         <span class="pill {{ 'p-danger' if key == 'won' else 'p-off' }}"
               data-countdown data-iso="{{ card.next_deadline.isoformat() }}"></span>
-        <span class="clock">{{ dual(card.next_deadline, tz) }}</span>
+        <span class="clock">{% set wl = dual_lines(card.next_deadline, tz) %}<b>{{ wl[0] }}</b>{{ wl[1] }}</span>
       </span>
       {% endif %}
     </a>

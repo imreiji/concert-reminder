@@ -31,10 +31,12 @@
         <span class="v">
           {%- if t.venue %}📍 {{ t.venue }}{% endif -%}
           {%- if t.venue and t.starts_at_utc %} · {% endif -%}
-          {%- if t.starts_at_utc %}{{ dual(t.starts_at_utc, tz) }}{% endif -%}
+          {%- if t.starts_at_utc %}{% set vl = dual_lines(t.starts_at_utc, tz) %}{{ vl[0] }} {{ vl[1] }}{% endif -%}
         </span>
         {% if t.next_round_label %}
-        <span class="rnd"><b>{{ t.next_round_label }}</b> {{ deadline_label(t.next_round_anchor) }} {{ dual(t.next_round_at_utc, tz) }}</span>
+        {# The round's deadline as the demo's two lines: the labelled anchor
+           over a smaller JST/local time line. #}
+        <span class="rnd"><b>{{ t.next_round_label }}</b> {{ deadline_label(t.next_round_anchor) }}{% set rl = dual_lines(t.next_round_at_utc, tz) %}<span class="rt num">{{ rl[0] }} · {{ rl[1] }}</span></span>
         {% endif %}
       </label>
       {% endfor %}
@@ -108,7 +110,7 @@
         <span class="t">{{ row.concert.title }}</span>
         <span class="v">
           {{- row.round_.label -}}
-          {%- if row.moment_utc %} · {{ dual(row.moment_utc, tz) }}{% endif -%}
+          {%- if row.moment_utc %} · {% set al = dual_lines(row.moment_utc, tz) %}{{ al[0] }} {{ al[1] }}{% endif -%}
         </span>
         <span class="rnd">{{ "Still open" if row.status == "open" else "Awaiting result" }}</span>
       </label>

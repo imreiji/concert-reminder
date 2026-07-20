@@ -38,7 +38,7 @@
        is the show itself, not something you enter. "Not applied" there would
        be a claim about nothing. #}
     <span>{% if d.round_id %}{{ status_pill(row.outcome) }}{% endif %}</span>
-    <span class="when-c">{{ dual(d.at_utc, tz) }}</span>
+    <span class="when-c num">{% set wl = dual_lines(d.at_utc, tz) %}<b>{{ wl[0] }}</b>{{ wl[1] }}</span>
     <span class="title-c">
       <a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a>
       <small>{% if row.venue %}📍 {{ row.venue }}{% endif %}{% if row.venue and row.starts_at_utc %} · {% endif %}{% if row.starts_at_utc %}{{ jst(row.starts_at_utc).strftime("%Y-%m-%d") }} JST{% endif %}</small>
