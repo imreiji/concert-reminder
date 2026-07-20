@@ -361,6 +361,8 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .p-off { color: var(--off); background: var(--off-wash); }
 .p-ok { color: var(--ok); background: var(--ok-wash); }
 .p-quiet { color: var(--dim); background: transparent; border-color: var(--line); }
+/* The upgrade campaign's own accent pill, shown beside the base standing. */
+.s-up { color: var(--accent); background: var(--accent-wash); }
 
 /* Closes next */
 .next {

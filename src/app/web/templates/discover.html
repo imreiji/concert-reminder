@@ -112,6 +112,11 @@
       <span class="tile-status">
         <span class="pill p-{{ st.tone }}"
               {% if st.at_utc %}title="{{ dual(st.at_utc, tz) }}"{% endif %}>{{ st.text }}</span>
+        {#- The second pill: the upgrade campaign as its own fact, only ever set
+            for an eligible viewer (signed out or ineligible -> None -> nothing
+            renders here). A WON upgrade never lands here; it collapses into the
+            single urgent base pill above. -#}
+        {% if st.upgrade_text %}<span class="pill s-up">{{ st.upgrade_text }}</span>{% endif %}
       </span>
       {% endif %}
     </a>

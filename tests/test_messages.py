@@ -93,6 +93,29 @@ def test_tour_package_gets_its_own_emoji():
     assert "✈️" in msg
 
 
+def test_upgrade_round_gets_its_own_emoji():
+    item = DueReminder(
+        queue_id=6,
+        discord_id=42,
+        user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th",
+        anchor=Anchor.CLOSES,
+        fire_at_utc=dt(6, 22, 14),
+        round_label="Upgrade round",
+        round_kind="upgrade",
+        anchor_time_utc=dt(6, 25, 14),
+    )
+    msg = format_reminder(item)
+    assert "⬆️" in msg
+
+
+def test_every_round_kind_has_an_emoji():
+    from app.bot.messages import KIND_EMOJI
+    from app.domain.types import RoundKind
+
+    assert set(KIND_EMOJI) == {k.value for k in RoundKind}
+
+
 def test_format_day_reminder_without_round():
     item = DueReminder(
         queue_id=2,

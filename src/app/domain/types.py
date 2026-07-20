@@ -38,6 +38,10 @@ class RoundKind(enum.StrEnum):
     # ticket bundle sold via its own lottery, structurally separate from
     # the eplus serial-code system. Not guaranteed to exist per concert.
     TOUR_PACKAGE = "tour_package"
+    # A second, nested campaign that only holders of a qualifying round's
+    # ticket may enter (e.g. an upgrade lottery for premium seats open only
+    # to people who already secured a ticket in an earlier round).
+    UPGRADE = "upgrade"
     OTHER = "other"                                  # future franchise inventions
 
 

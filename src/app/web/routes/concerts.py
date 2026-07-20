@@ -29,7 +29,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
@@ -39,10 +39,12 @@ from app.db.models import (
     ReminderRule,
     Round,
     RoundOutcome,
+    RoundQualifier,
     Tag,
     User,
 )
 from app.db.service import (
+    _qualifiers_by_upgrade_round,
     attach_tag,
     concert_audit_log,
     concert_next_moment,
@@ -325,6 +327,44 @@ def parse_round_legs(
         if day_id not in ids:
             ids.append(day_id)
     return ids or None
+
+
+def parse_round_qualifiers(
+    value: str, valid_round_ids: set[int], self_id: int
+) -> list[int]:
+    """One UPGRADE round's qualifier selection, as submitted by the editor's
+    "Qualifies" chips: a space-separated list of Round ids naming the rounds
+    whose ticket-holders may enter this upgrade round.
+
+    Same encoding as parse_round_legs -- ONE form field per round row
+    (`round_qualifiers`), not one field per id, so the parallel round_* lists
+    stay positionally aligned when zipped in edit_concert. A flat repeated
+    field could not say which row an id belonged to.
+
+    Ids are filtered against the rounds that actually survived this submit
+    (valid_round_ids), so a round the editor deleted in the same save leaves no
+    dangling qualifier -- the DB's ON DELETE CASCADE would drop it too, but the
+    filter means the stored set is correct even before the flush. `self_id`
+    (the upgrade round's own id) is dropped: a round cannot qualify itself.
+    Non-integers and unknown ids are dropped rather than guessed at.
+
+    Chips only ever offer already-saved rounds, so unlike parse_round_legs
+    there is no provisional-key path: a round created in the same submit has no
+    id and cannot be a qualifier until the concert is saved once.
+
+    Returns [] (not None) when empty. Zero qualifier rows is the
+    empty-means-all convention: any secured ticket on this concert qualifies
+    (see domain/upgrades.py).
+    """
+    ids: list[int] = []
+    for token in value.replace(",", " ").split():
+        if not token.isdigit():
+            continue
+        rid = int(token)
+        if rid == self_id or rid not in valid_round_ids or rid in ids:
+            continue
+        ids.append(rid)
+    return ids
 
 
 # Separators an editor might put between a group name and the rest of a
@@ -765,8 +805,20 @@ async def edit_concert_form(
         (d for d in concert.days if not d.cancelled),
         key=lambda d: (d.starts_at_utc, d.id),
     )
-    rounds_with_legs = [
-        (r, " ".join(str(i) for i in (r.applies_to or [])), set(r.applies_to or []))
+    # Upgrade rounds carry a second chip row -- which OTHER rounds qualify a
+    # user to enter (see _round_qualifier_chips.html). Loaded from the
+    # association table directly, in ONE query, not the lazy Round.qualifiers
+    # relationship (which would trip MissingGreenlet under async rendering).
+    qualifiers_by_round = await _qualifiers_by_upgrade_round(
+        session, [r.id for r in concert.rounds]
+    )
+    rounds_with_chips = [
+        (
+            r,
+            " ".join(str(i) for i in (r.applies_to or [])), set(r.applies_to or []),
+            " ".join(str(i) for i in qualifiers_by_round.get(r.id, [])),
+            set(qualifiers_by_round.get(r.id, [])),
+        )
         for r in concert.rounds
     ]
     # The folds each summarise their own contents, so a closed one still says
@@ -791,7 +843,10 @@ async def edit_concert_form(
             "tag_names": picker["tag_names"],
             "initial_selected": initial_selected,
             "legs": legs,
-            "rounds_with_legs": rounds_with_legs,
+            "rounds_with_chips": rounds_with_chips,
+            # Chip options for the "Qualifies" row: every already-saved round
+            # (each row excludes itself in the template).
+            "saved_rounds": list(concert.rounds),
             "tag_summary": tag_summary,
             "audit_log": await concert_audit_log(session, concert.id),
             "tz": await user_tz(session, user.id),
@@ -839,6 +894,7 @@ async def edit_concert(
     round_url: list[str] = Form(default=[]),
     round_notes: list[str] = Form(default=[]),
     round_legs: list[str] = Form(default=[]),
+    round_qualifiers: list[str] = Form(default=[]),
 ):
     """Atomic update: scalars assigned directly; tags/days/rounds
     RECONCILED (not blindly recreated) against what's submitted, so rows
@@ -946,6 +1002,21 @@ async def edit_concert(
     await session.refresh(concert, ["rounds"])
     existing_rounds = {r.id: r for r in concert.rounds}
     kept_round_ids: set[int] = set()
+    # Each upgrade round's current qualifier set, loaded up front (one query,
+    # not the lazy relationship) so a wholly-omitted round_qualifiers array can
+    # preserve it -- the same absent-field rule as round_legs below.
+    existing_qualifiers = await _qualifiers_by_upgrade_round(session, list(existing_rounds))
+    # (round object, its submitted kind, its raw qualifier value) for every
+    # surviving round, reconciled into round_qualifiers rows AFTER the flush
+    # below hands new rounds their ids.
+    qual_jobs: list[tuple[Round, RoundKind, str]] = []
+    # round_qualifiers is padded/omitted exactly like round_legs (see below):
+    # a whole-array omission preserves each round's existing qualifiers; a
+    # partial array is left alone so the strict zip raises rather than sliding
+    # every later row's selection by one.
+    quals_omitted = not round_qualifiers
+    if quals_omitted:
+        round_qualifiers = [""] * len(round_label)
     # round_legs is newer than the other round_* fields, so a submitter can
     # legitimately omit it ENTIRELY: a browser still holding the pre-deploy
     # edit page posts the old free-text `round_leg`, which this signature no
@@ -963,10 +1034,11 @@ async def edit_concert(
     if legs_omitted:
         round_legs = [""] * len(round_label)
     for (
-        rid, label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url, notes_, legs
+        rid, label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url,
+        notes_, legs, quals
     ) in zip(
         round_id, round_label, round_label_en, round_kind, round_opens_at, round_closes_at,
-        round_results_at, round_payment_at, round_url, round_notes, round_legs,
+        round_results_at, round_payment_at, round_url, round_notes, round_legs, round_qualifiers,
         strict=True,
     ):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
@@ -979,6 +1051,10 @@ async def edit_concert(
             # across, so an id whose leg THIS submit deleted still drops --
             # preserving the selection must not preserve a dangling reference.
             legs = " ".join(str(i) for i in existing.applies_to or [])
+        if quals_omitted and existing is not None:
+            # Same rationale as legs above: re-fed through parse_round_qualifiers
+            # so a qualifier round THIS submit deleted still drops.
+            quals = " ".join(str(i) for i in existing_qualifiers.get(existing.id, []))
         applies_to = parse_round_legs(legs, valid_day_ids, key_to_day_id)
         if existing is not None:
             round_ = apply_round_fields(
@@ -987,16 +1063,39 @@ async def edit_concert(
             )
             kept_round_ids.add(round_.id)
         else:
-            session.add(build_round(
+            round_ = build_round(
                 concert.id, label, kind_, opens_at, closes_at, results_at, payment_at, url,
                 applies_to, label_en, notes_,
-            ))
+            )
+            session.add(round_)
+        qual_jobs.append((round_, kind_, quals))
     for rid, round_ in existing_rounds.items():
         if rid not in kept_round_ids:
             await session.delete(round_)
 
     await record_concert_edit(session, concert, user.id, before)
+    await session.flush()  # new rounds now have ids; dropped rounds are gone
+
+    # -- Qualifiers: reconcile each surviving round's round_qualifiers rows.
+    # Done after the flush so new rounds have ids and deleted rounds (with
+    # their qualifier links, via ON DELETE CASCADE) are already gone.
+    # valid_round_ids is every round that survived, so a qualifier naming a
+    # round dropped in this same submit is filtered out. A round created in
+    # this submit gets its id here but is never itself a qualifier -- the chips
+    # only ever offered already-saved rounds. Clean-slate delete-then-insert
+    # keeps this idempotent and drops qualifiers when a kind flips off UPGRADE.
+    valid_round_ids = {r.id for r, _, _ in qual_jobs}
+    for round_, kind_, quals in qual_jobs:
+        await session.execute(
+            delete(RoundQualifier).where(RoundQualifier.upgrade_round_id == round_.id)
+        )
+        if kind_ is RoundKind.UPGRADE:
+            for q_id in parse_round_qualifiers(quals, valid_round_ids, round_.id):
+                session.add(
+                    RoundQualifier(upgrade_round_id=round_.id, qualifying_round_id=q_id)
+                )
     await session.flush()
+
     if newly_cancelled_day_ids:
         await notify_newly_cancelled_legs(session, concert.id, newly_cancelled_day_ids)
     await sync_concert(session, concert.id)

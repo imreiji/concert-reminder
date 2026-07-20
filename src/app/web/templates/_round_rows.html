@@ -64,7 +64,15 @@
   <span class="acts">
     {% if not past and row.primary_at_utc %}<a class="ics" href="/rounds/{{ r.id }}/ics" title="Add to calendar">📅</a>{% endif %}
     {% if r.url %}<a class="ics" href="{{ r.url }}" target="_blank" rel="noopener" title="Round page">🔗</a>{% endif %}
-    {{ capture_actions(row, r.id, "#concert-rounds") }}
+    {# An upgrade round the signed-in reader cannot enter shows what they need
+       to hold, not capture buttons. `qualifier_labels` is user-controlled
+       text; it reaches the page as plain text content (auto-escaped), never an
+       inline on* handler -- invariant 7. #}
+    {% if row.upgrade_locked %}
+    <span class="done">Requires a ticket from{% if row.qualifier_labels %}: {{ row.qualifier_labels | join(", ") }}{% else %} an earlier round{% endif %}</span>
+    {% else %}
+    {{ capture_actions(row, r.id, "#concert-rounds", is_upgrade=(r.kind.value == "upgrade")) }}
+    {% endif %}
   </span>
 </div>
 <!-- /rnd -->

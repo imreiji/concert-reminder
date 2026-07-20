@@ -322,6 +322,34 @@ class Round(Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     concert: Mapped[Concert] = relationship(back_populates="rounds")
+    # Qualifying rounds for an UPGRADE round (see RoundQualifier). Meaningful
+    # only when kind == UPGRADE; an empty list means "any secured ticket on
+    # this concert qualifies" (mirrors applies_to's empty-means-all). CASCADE
+    # on the association rows keeps this list free of dangling ids.
+    qualifiers: Mapped[list["Round"]] = relationship(
+        secondary="round_qualifiers",
+        primaryjoin="Round.id == RoundQualifier.upgrade_round_id",
+        secondaryjoin="Round.id == RoundQualifier.qualifying_round_id",
+    )
+
+
+class RoundQualifier(Base):
+    """upgrade round ⊇ qualifying round: which rounds' ticket-holders may
+    enter an UPGRADE round. Modelled on TagMember -- a plain two-column
+    association table with a composite primary key (so the pair is unique)
+    and both foreign keys ON DELETE CASCADE. Deleting either the upgrade
+    round or a qualifying round removes the link automatically, so readers
+    never see a dangling id. No qualifier rows for an upgrade round means
+    "any secured ticket on this concert qualifies"."""
+
+    __tablename__ = "round_qualifiers"
+
+    upgrade_round_id: Mapped[int] = mapped_column(
+        ForeignKey("rounds.id", ondelete="CASCADE"), primary_key=True
+    )
+    qualifying_round_id: Mapped[int] = mapped_column(
+        ForeignKey("rounds.id", ondelete="CASCADE"), primary_key=True
+    )
 
 
 class RoundOutcome(Base):
