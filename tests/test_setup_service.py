@@ -10,7 +10,7 @@ existing `record_round_outcome`. It adds no schema of its own.
 from datetime import UTC, datetime
 
 import pytest_asyncio
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -19,20 +19,27 @@ from app.db.models import (
     Concert,
     ConcertDay,
     ConcertTag,
+    ReminderQueue,
+    ReminderRule,
     Round,
+    RoundOutcome,
     Tag,
     TagSubscription,
 )
 from app.db.service import (
     _round_asks_application,
+    apply_prune_selection,
+    concert_subscription_states,
     ensure_user,
     record_round_outcome,
+    record_setup_applications,
     set_concert_subscription,
     setup_application_rows,
     setup_prune_tiles,
     setup_tallies,
+    sync_rule,
 )
-from app.domain.types import LotteryOutcome, RoundKind, SubscriptionState, TagKind
+from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
 
 USER = 42
 OTHER = 99
@@ -288,3 +295,157 @@ async def test_tallies(session):
     assert tallies.payment_due == 1
     assert tallies.next_deadline_utc == dt(6, 5)
     assert tallies.payment_concert is not None and tallies.payment_concert.id == c2.id
+
+
+# ── apply_prune_selection ────────────────────────────────────────────────
+
+
+async def test_prune_selection_writes_optout_for_unchecked(session):
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", user=USER)
+    a = await make_concert(session, "aqours-a", tag)
+    await add_round(session, a, closes_at_utc=dt(6, 20))
+    b = await make_concert(session, "aqours-b", tag)
+    await add_round(session, b, closes_at_utc=dt(6, 21))
+
+    pruned, unpruned = await apply_prune_selection(
+        session, USER, shown_ids={a.id, b.id}, keep_ids={a.id}, now=NOW
+    )
+    assert (pruned, unpruned) == (1, 0)
+
+    states = await concert_subscription_states(session, USER)
+    assert states.get(b.id) is SubscriptionState.OPTED_OUT
+    tiles = {t.concert.id: t.kept for t in await setup_prune_tiles(session, USER, now=NOW)}
+    assert tiles[b.id] is False and tiles[a.id] is True
+
+
+async def test_prune_selection_clears_override_for_rechecked(session):
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", user=USER)
+    a = await make_concert(session, "aqours-a", tag)
+    await add_round(session, a, closes_at_utc=dt(6, 20))
+    await set_concert_subscription(session, USER, a.id, SubscriptionState.OPTED_OUT)
+
+    pruned, unpruned = await apply_prune_selection(
+        session, USER, shown_ids={a.id}, keep_ids={a.id}, now=NOW
+    )
+    assert (pruned, unpruned) == (0, 1)
+    assert await concert_subscription_states(session, USER) == {}
+    tiles = {t.concert.id: t.kept for t in await setup_prune_tiles(session, USER, now=NOW)}
+    assert tiles[a.id] is True
+
+
+async def test_prune_selection_ignores_untracked_ids(session):
+    await ensure_user(session, USER, "reiji")
+    await ensure_user(session, OTHER, "other")
+    tag = await make_tag(session, "Aqours", user=USER)
+    a = await make_concert(session, "aqours-a", tag)
+    await add_round(session, a, closes_at_utc=dt(6, 20))
+    # A concert USER does not track at all (no matching tag, no override).
+    foreign = await make_concert(session, "foreign")
+    await add_round(session, foreign, closes_at_utc=dt(6, 20))
+
+    pruned, unpruned = await apply_prune_selection(
+        session, USER, shown_ids={a.id, foreign.id, 9999}, keep_ids={a.id}, now=NOW
+    )
+    assert (pruned, unpruned) == (0, 0)
+    assert await concert_subscription_states(session, USER) == {}
+
+
+async def test_prune_selection_is_idempotent(session):
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", user=USER)
+    a = await make_concert(session, "aqours-a", tag)
+    await add_round(session, a, closes_at_utc=dt(6, 20))
+    b = await make_concert(session, "aqours-b", tag)
+    await add_round(session, b, closes_at_utc=dt(6, 21))
+
+    first = await apply_prune_selection(session, USER, {a.id, b.id}, {a.id}, now=NOW)
+    second = await apply_prune_selection(session, USER, {a.id, b.id}, {a.id}, now=NOW)
+    assert first == (1, 0)
+    assert second == (0, 0)
+
+
+async def test_prune_writes_resync_reminders(session):
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", user=USER)
+    b = await make_concert(session, "aqours-b", tag)
+    round_ = await add_round(session, b, closes_at_utc=dt(6, 25))
+    rule = ReminderRule(user_id=USER, round_id=round_.id, anchor=Anchor.CLOSES, offset_days=0)
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert list((await session.execute(
+        select(ReminderQueue).where(ReminderQueue.rule_id == rule.id)
+    )).scalars()) != []
+
+    await apply_prune_selection(session, USER, {b.id}, set(), now=NOW)
+
+    assert list((await session.execute(
+        select(ReminderQueue).where(ReminderQueue.rule_id == rule.id)
+    )).scalars()) == []
+
+
+# ── record_setup_applications ────────────────────────────────────────────
+
+
+async def test_setup_applications_records_applied(session):
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", user=USER)
+    concert = await make_concert(session, "aqours-9th", tag)
+    round_ = await add_round(
+        session, concert, "R1", opens_at_utc=dt(5, 20), closes_at_utc=dt(6, 20)
+    )
+
+    count = await record_setup_applications(session, USER, {round_.id}, now=NOW)
+    assert count == 1
+
+    outcome = (await session.execute(
+        select(RoundOutcome).where(
+            RoundOutcome.user_id == USER, RoundOutcome.round_id == round_.id
+        )
+    )).scalar_one()
+    assert outcome.outcome is LotteryOutcome.APPLIED
+    assert await setup_application_rows(session, USER, now=NOW) == []
+
+
+async def test_setup_applications_skips_unchecked(session):
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", user=USER)
+    concert = await make_concert(session, "aqours-9th", tag)
+    await add_round(session, concert, "R1", opens_at_utc=dt(5, 20), closes_at_utc=dt(6, 20))
+
+    count = await record_setup_applications(session, USER, set(), now=NOW)
+    assert count == 0
+    assert (await session.execute(select(RoundOutcome))).scalars().all() == []
+
+
+async def test_setup_applications_ignores_forged_decided_round(session):
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", user=USER)
+    concert = await make_concert(session, "aqours-9th", tag)
+    await add_day(session, concert, dt(8, 1))
+    decided = await add_round(
+        session, concert, "R1", closes_at_utc=dt(5, 10), results_at_utc=dt(5, 20)
+    )
+
+    count = await record_setup_applications(session, USER, {decided.id}, now=NOW)
+    assert count == 0
+    assert (await session.execute(select(RoundOutcome))).scalars().all() == []
+
+
+async def test_setup_applications_never_overwrites(session):
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", user=USER)
+    concert = await make_concert(session, "aqours-9th", tag)
+    round_ = await add_round(
+        session, concert, "R1", opens_at_utc=dt(5, 20), closes_at_utc=dt(6, 20)
+    )
+    await record_round_outcome(session, USER, round_.id, LotteryOutcome.WON, NOW)
+
+    count = await record_setup_applications(session, USER, {round_.id}, now=NOW)
+    assert count == 0
+    outcome = (await session.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_.id)
+    )).scalar_one()
+    assert outcome.outcome is LotteryOutcome.WON

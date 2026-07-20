@@ -1756,6 +1756,60 @@ async def setup_tallies(
     )
 
 
+async def apply_prune_selection(
+    session: AsyncSession, user_id: int, shown_ids: set[int], keep_ids: set[int],
+    now: datetime | None = None,
+) -> tuple[int, int]:
+    """Screen 1's batch write. Over `shown_ids` intersected with the RECOMPUTED
+    tracked-upcoming tile set (ids outside are ignored, so a forged id can at
+    worst edit the tamperer's own overrides):
+
+    - shown, unchecked, not already pruned -> write a concert-level opt-out.
+    - shown, checked, currently pruned      -> clear the override (back to the
+      tag-derived default; per the resolved decision this never writes an
+      explicit `subscribed` row).
+
+    Both writes go through branch 4's `set_concert_subscription` /
+    `clear_concert_subscription`, which own the invariant-2 reminder resync --
+    this function never touches ConcertSubscription or the queue directly.
+    Returns (pruned, unpruned) counts."""
+    now = now or _now()
+    tiles = await setup_prune_tiles(session, user_id, now)
+    kept_by_id = {t.concert.id: t.kept for t in tiles}
+
+    pruned = unpruned = 0
+    for cid in shown_ids & kept_by_id.keys():
+        currently_kept = kept_by_id[cid]
+        if cid not in keep_ids and currently_kept:
+            await set_concert_subscription(session, user_id, cid, SubscriptionState.OPTED_OUT)
+            pruned += 1
+        elif cid in keep_ids and not currently_kept:
+            await clear_concert_subscription(session, user_id, cid)
+            unpruned += 1
+    return pruned, unpruned
+
+
+async def record_setup_applications(
+    session: AsyncSession, user_id: int, round_ids: set[int], now: datetime | None = None
+) -> int:
+    """Screen 2's batch write. Recomputes the qualifying round set via
+    `setup_application_rows` and records APPLIED for each requested id that is
+    actually in it -- ignoring ids outside the set, which is what
+    server-enforces the middle-path rule against forged decided-round ids.
+    Goes through `record_round_outcome` only (invariant 2, no second write
+    path); its own starting-state rule already refuses to overwrite. Returns
+    the count recorded."""
+    now = now or _now()
+    rows = await setup_application_rows(session, user_id, now)
+    qualifying = {r.round_.id for r in rows}
+
+    count = 0
+    for rid in round_ids & qualifying:
+        await record_round_outcome(session, user_id, rid, LotteryOutcome.APPLIED, now)
+        count += 1
+    return count
+
+
 # ── Concert page: rounds grouped by leg ───────────────────────────────────
 
 
