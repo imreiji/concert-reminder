@@ -1462,6 +1462,300 @@ async def my_deadline_rows(
     return rows
 
 
+# ── First-run capture flow (/setup) ──────────────────────────────────────
+
+# Ordering priority for a tile's "because" attribution: the group/franchise a
+# follower recognises first leads, then artists, then venues.
+_BECAUSE_KIND_ORDER = {
+    TagKind.GROUP: 0, TagKind.FRANCHISE: 1, TagKind.ARTIST: 2, TagKind.VENUE: 3,
+}
+
+
+@dataclass(frozen=True)
+class SetupTile:
+    """One pruning tile on screen 1: a tracked upcoming concert, why it is
+    here, whether it is currently kept (False iff a concert-level opt-out
+    override exists), and the little bit of context the tile shows -- venue,
+    first live date, and the nearest future round moment. Timestamps render
+    dual via fmt_dual; the dataclass stays timezone-agnostic."""
+
+    concert: Concert
+    because: list[str]
+    kept: bool
+    venue: str | None
+    starts_at_utc: datetime | None
+    next_round_label: str | None
+    next_round_anchor: Anchor | None
+    next_round_at_utc: datetime | None
+
+
+@dataclass(frozen=True)
+class SetupAskRow:
+    """One application question on screen 2: a (concert, round) the user could
+    still be in. `status` is "open" (acting now) or "awaiting" (closed, result
+    pending); `moment_utc` is the close when open, else the result moment."""
+
+    concert: Concert
+    round_: Round
+    status: str
+    moment_utc: datetime | None
+
+
+@dataclass(frozen=True)
+class SetupTallies:
+    """Screen 3's reveal, computed fresh over the surviving tracked upcoming
+    set. `payment_concert` is the concert with the soonest pending payment,
+    for the narrative line shown only when payment_due > 0."""
+
+    tracking: int
+    applied: int
+    payment_due: int
+    next_deadline_utc: datetime | None
+    payment_concert: Concert | None
+
+
+def _setup_tile_venue(concert: Concert) -> str | None:
+    """Same >1-venue rule my_deadline_rows uses: many VENUE tags collapse to
+    "Multiple", one wins, the free-text venue is the fallback with no tag."""
+    venue_tags = [t.name for t in concert.tags if t.kind is TagKind.VENUE]
+    if len(venue_tags) > 1:
+        return "Multiple"
+    if venue_tags:
+        return venue_tags[0]
+    return concert.venue
+
+
+def _next_round_anchor(
+    live_rounds: list[Round], now: datetime
+) -> tuple[str, Anchor, datetime] | None:
+    """The soonest FUTURE round anchor across a concert's live rounds, as
+    (round label, anchor, moment). None when no live round has a future
+    anchor. Mirrors _next_deadline's four-anchor sweep, but keeps the label
+    and anchor so the tile can say WHICH moment ("FC presale closes …")."""
+    best: tuple[str, Anchor, datetime] | None = None
+    for r in live_rounds:
+        for anchor, ts in (
+            (Anchor.OPENS, r.opens_at_utc),
+            (Anchor.CLOSES, r.closes_at_utc),
+            (Anchor.RESULTS, r.results_at_utc),
+            (Anchor.PAYMENT, r.payment_deadline_at_utc),
+        ):
+            if ts is None or ts <= now:
+                continue
+            if best is None or ts < best[2]:
+                best = (r.label, anchor, ts)
+    return best
+
+
+async def _tracked_upcoming_concerts(
+    session: AsyncSession, user_id: int, now: datetime
+) -> tuple[list[Concert], set[int]]:
+    """The setup flow's working set: every concert this user tracks (branch
+    4's override-folded `tracked_concert_ids`) UNIONED with every concert
+    they have pruned, loaded (days/rounds/tags eager) and filtered to
+    *upcoming* -- a live (non-cancelled) day in the future, or any live round
+    anchor in the future.
+
+    Pruned concerts are unioned back in precisely because `tracked_concert_ids`
+    excludes them by definition, yet screen 1 must render them unchecked so
+    they can be brought back. Returns (concerts, opted_out_ids) so the tiles,
+    the applications pass and the tallies all share one load and one
+    upcoming-filter instead of re-deriving it three ways."""
+    tracked = await tracked_concert_ids(session, user_id)
+    overrides = await concert_subscription_states(session, user_id)
+    opted_out = {cid for cid, st in overrides.items() if st is SubscriptionState.OPTED_OUT}
+    candidate_ids = tracked | opted_out
+    if not candidate_ids:
+        return [], opted_out
+
+    concerts = list((await session.execute(
+        select(Concert)
+        .where(Concert.id.in_(candidate_ids))
+        .options(
+            selectinload(Concert.days),
+            selectinload(Concert.rounds),
+            selectinload(Concert.tags),
+        )
+    )).scalars())
+
+    upcoming = []
+    for c in concerts:
+        cancelled_day_ids = {d.id for d in c.days if d.cancelled}
+        live_rounds = [r for r in c.rounds if not is_round_cancelled(r, cancelled_day_ids)]
+        future_day = any(not d.cancelled and d.starts_at_utc > now for d in c.days)
+        if future_day or _next_deadline(live_rounds, now) is not None:
+            upcoming.append(c)
+    return upcoming, opted_out
+
+
+async def setup_prune_tiles(
+    session: AsyncSession, user_id: int, now: datetime | None = None
+) -> list[SetupTile]:
+    """Screen 1's tiles: every tracked upcoming concert, INCLUDING currently
+    pruned ones (which render unchecked). Ordered soonest-next-moment first,
+    same rationale as the board."""
+    now = now or _now()
+    concerts, opted_out = await _tracked_upcoming_concerts(session, user_id, now)
+    if not concerts:
+        return []
+
+    sub_tag_ids = set((await session.execute(
+        select(TagSubscription.tag_id).where(TagSubscription.user_id == user_id)
+    )).scalars())
+
+    tiles = []
+    for c in concerts:
+        cancelled_day_ids = {d.id for d in c.days if d.cancelled}
+        live_rounds = [r for r in c.rounds if not is_round_cancelled(r, cancelled_day_ids)]
+        live_days = sorted(
+            (d for d in c.days if not d.cancelled), key=lambda d: d.starts_at_utc
+        )
+        because = [
+            t.name for t in sorted(
+                c.tags, key=lambda t: (_BECAUSE_KIND_ORDER.get(t.kind, 9), t.name)
+            )
+            if t.id in sub_tag_ids
+        ]
+        nxt = _next_round_anchor(live_rounds, now)
+        tiles.append(SetupTile(
+            concert=c,
+            because=because,
+            kept=c.id not in opted_out,
+            venue=_setup_tile_venue(c),
+            starts_at_utc=live_days[0].starts_at_utc if live_days else None,
+            next_round_label=nxt[0] if nxt else None,
+            next_round_anchor=nxt[1] if nxt else None,
+            next_round_at_utc=nxt[2] if nxt else None,
+        ))
+
+    def sort_key(t: SetupTile) -> tuple[bool, datetime, int]:
+        # Soonest future moment across the round anchor and a future first
+        # date; a tile with neither (should not happen given the upcoming
+        # filter, but stay total) sorts last.
+        moments = [
+            m for m in (
+                t.next_round_at_utc,
+                t.starts_at_utc if t.starts_at_utc and t.starts_at_utc > now else None,
+            ) if m is not None
+        ]
+        nm = min(moments) if moments else None
+        return (nm is None, nm or now, t.concert.id)
+
+    tiles.sort(key=sort_key)
+    return tiles
+
+
+def _round_asks_application(
+    round_: Round, outcome: LotteryOutcome | None, now: datetime
+) -> bool:
+    """Screen 2's eligibility predicate: does the setup flow ask whether the
+    user already applied to this round? True iff no outcome is recorded, the
+    round has opened, it carries at least one apply-window / result timestamp,
+    and its result moment is unset or still in the future -- the "middle path"
+    rule that a round already decided is never asked about.
+
+    Branch-5 hook: an open UPGRADE round will widen this to also ask about
+    its qualifying CLOSED round ("Do you hold this ticket?"), the one
+    exception to the middle-path rule. The widening lands here; nothing else
+    in this branch anticipates it."""
+    if outcome is not None:
+        return False
+    if not _round_has_opened(round_, now):
+        return False
+    if not any((round_.opens_at_utc, round_.closes_at_utc, round_.results_at_utc)):
+        return False
+    moment = _result_moment(round_)
+    return moment is None or moment > now
+
+
+async def setup_application_rows(
+    session: AsyncSession, user_id: int, now: datetime | None = None
+) -> list[SetupAskRow]:
+    """Screen 2's rows: over SURVIVING (non-pruned) tracked upcoming concerts,
+    every live round passing `_round_asks_application`. Ordered by
+    `moment_utc`, None last."""
+    now = now or _now()
+    concerts, opted_out = await _tracked_upcoming_concerts(session, user_id, now)
+    surviving = [c for c in concerts if c.id not in opted_out]
+    if not surviving:
+        return []
+
+    all_round_ids = [r.id for c in surviving for r in c.rounds]
+    outcomes: dict[int, LotteryOutcome] = {
+        o.round_id: o.outcome for o in (await session.execute(
+            select(RoundOutcome).where(
+                RoundOutcome.user_id == user_id, RoundOutcome.round_id.in_(all_round_ids)
+            )
+        )).scalars()
+    } if all_round_ids else {}
+
+    rows = []
+    for c in surviving:
+        cancelled_day_ids = {d.id for d in c.days if d.cancelled}
+        for r in c.rounds:
+            if is_round_cancelled(r, cancelled_day_ids):
+                continue
+            if not _round_asks_application(r, outcomes.get(r.id), now):
+                continue
+            is_open = _round_is_open(r, now)
+            rows.append(SetupAskRow(
+                concert=c, round_=r,
+                status="open" if is_open else "awaiting",
+                moment_utc=r.closes_at_utc if is_open else _result_moment(r),
+            ))
+    rows.sort(key=lambda x: (x.moment_utc is None, x.moment_utc or now, x.round_.id))
+    return rows
+
+
+async def setup_tallies(
+    session: AsyncSession, user_id: int, now: datetime | None = None
+) -> SetupTallies:
+    """Screen 3's four numbers, computed over the surviving tracked upcoming
+    concerts' live rounds (per the spec's table)."""
+    now = now or _now()
+    concerts, opted_out = await _tracked_upcoming_concerts(session, user_id, now)
+    surviving = [c for c in concerts if c.id not in opted_out]
+
+    all_round_ids = [r.id for c in surviving for r in c.rounds]
+    outcomes: dict[int, LotteryOutcome] = {
+        o.round_id: o.outcome for o in (await session.execute(
+            select(RoundOutcome).where(
+                RoundOutcome.user_id == user_id, RoundOutcome.round_id.in_(all_round_ids)
+            )
+        )).scalars()
+    } if all_round_ids else {}
+
+    applied = 0
+    payment_due = 0
+    next_deadline: datetime | None = None
+    payment_candidates: list[tuple[datetime, Concert]] = []
+    for c in surviving:
+        cancelled_day_ids = {d.id for d in c.days if d.cancelled}
+        live_rounds = [r for r in c.rounds if not is_round_cancelled(r, cancelled_day_ids)]
+        for r in live_rounds:
+            oc = outcomes.get(r.id)
+            if oc is LotteryOutcome.APPLIED:
+                applied += 1
+            if (
+                oc is LotteryOutcome.WON
+                and r.payment_deadline_at_utc is not None
+                and r.payment_deadline_at_utc > now
+            ):
+                payment_due += 1
+                payment_candidates.append((r.payment_deadline_at_utc, c))
+        nd = _next_deadline(live_rounds, now)
+        if nd is not None and (next_deadline is None or nd < next_deadline):
+            next_deadline = nd
+
+    payment_concert = (
+        min(payment_candidates, key=lambda x: x[0])[1] if payment_candidates else None
+    )
+    return SetupTallies(
+        tracking=len(surviving), applied=applied, payment_due=payment_due,
+        next_deadline_utc=next_deadline, payment_concert=payment_concert,
+    )
+
+
 # ── Concert page: rounds grouped by leg ───────────────────────────────────
 
 
