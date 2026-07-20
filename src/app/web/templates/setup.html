@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}setup — dekimasen.app{% endblock %}
+{% block content %}
+
+<div class="steps">
+  <span class="stepdot{% if screen == 'prune' %} on{% elif screen != 'prune' %} done{% endif %}">Your concerts</span>
+  <span class="stepdot{% if screen == 'applications' %} on{% elif screen == 'ready' %} done{% endif %}">Applications</span>
+  <span class="stepdot{% if screen == 'ready' %} on{% endif %}">Ready</span>
+</div>
+
+{% if screen == "prune" %}
+  {% if tiles %}
+  <div class="lede">
+    <h1>We found {{ tiles | length }} upcoming concert{{ "s" if tiles | length != 1 }} for you</h1>
+    <p>
+      {% if because %}Because you follow {{ because | join(", ") }}. {% endif %}Most people
+      cannot get to every date — switch off the ones you are not going for and we will not
+      chase you about them. You can change any of this later.
+    </p>
+  </div>
+
+  <form method="post" action="/setup/prune" id="pruneForm">
+    <div class="pick">
+      {% for t in tiles %}
+      <label class="tile">
+        <input type="checkbox" name="keep" value="{{ t.concert.id }}"{% if t.kept %} checked{% endif %} hidden>
+        <input type="hidden" name="shown" value="{{ t.concert.id }}">
+        <span class="tick">&check;</span>
+        {% if t.because %}<span class="who-t">{{ t.because | join(" · ") }}</span>{% endif %}
+        <span class="t">{{ t.concert.title }}</span>
+        <span class="v">
+          {%- if t.venue %}📍 {{ t.venue }}{% endif -%}
+          {%- if t.venue and t.starts_at_utc %} · {% endif -%}
+          {%- if t.starts_at_utc %}{{ dual(t.starts_at_utc, tz) }}{% endif -%}
+        </span>
+        {% if t.next_round_label %}
+        <span class="rnd"><b>{{ t.next_round_label }}</b> {{ deadline_label(t.next_round_anchor) }} {{ dual(t.next_round_at_utc, tz) }}</span>
+        {% endif %}
+      </label>
+      {% endfor %}
+    </div>
+
+    <div class="bar">
+      <span class="tally"><b id="keepCount">{{ tiles | selectattr("kept") | list | length }}</b> of {{ tiles | length }} kept</span>
+      <button class="btn quiet" type="button" id="allOff">Turn all off</button>
+      <button class="btn" type="submit">Continue</button>
+    </div>
+  </form>
+
+  <script>
+    // Static, zero user-controlled text (invariant 7): keeps the "N of M
+    // kept" tally live and wires the "Turn all off" shortcut. Toggling a tile
+    // is pure CSS (:has(:checked)); this only maintains the count and the bulk
+    // action. Degrades cleanly -- without JS the tally is the server's initial
+    // count and every checkbox still submits.
+    (function () {
+      var form = document.getElementById("pruneForm");
+      if (!form) return;
+      var boxes = form.querySelectorAll('input[name="keep"]');
+      var count = document.getElementById("keepCount");
+      function sync() {
+        var n = 0;
+        boxes.forEach(function (b) { if (b.checked) n++; });
+        if (count) count.textContent = n;
+      }
+      form.addEventListener("change", sync);
+      var off = document.getElementById("allOff");
+      if (off) off.addEventListener("click", function () {
+        boxes.forEach(function (b) { b.checked = false; });
+        sync();
+      });
+    })();
+  </script>
+  {% else %}
+  <div class="lede">
+    <h1>No upcoming concerts yet</h1>
+    <p>
+      We didn't find any upcoming concerts for the tags you follow yet.
+      <a href="/discover">Browse what's on</a> to find some — or continue, and your board
+      will fill in as new events drop.
+    </p>
+  </div>
+  <form method="post" action="/setup/prune">
+    <div class="bar"><button class="btn" type="submit">Continue</button></div>
+  </form>
+  {% endif %}
+{% endif %}
+
+{% endblock %}
