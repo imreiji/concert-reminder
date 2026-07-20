@@ -798,7 +798,7 @@ span.tchip { cursor: default; }
 /* ── per-tag edit dialog + new-tag dialog ── */
 dialog.tagdlg {
   border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
-  color: var(--ink); padding: 0; width: min(34rem, 92vw);
+  color: var(--ink); padding: 0; width: min(34rem, 92vw); box-shadow: var(--shadow);
 }
 dialog.tagdlg::backdrop { background: rgba(27, 27, 32, .45); }
 dialog.tagdlg .dh {
@@ -861,11 +861,18 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 }
 .upgradebox .u1 { font-size: .8125rem; }
 .upgradebox .u1 b { font-weight: 650; }
-.upgradebox a { color: var(--accent); font-size: .8125rem; justify-self: start; }
+/* Retroactive-apply reads as a button (.btn.quiet), not an underlined text
+   link -- .upgradebox is a grid, so the link still needs justify-self to
+   avoid stretching to the row's full width. */
+.upgradebox a.btn { justify-self: start; }
 
 .btn.warn { background: none; color: var(--danger); border-color: var(--danger); }
 .btn.warn:hover { opacity: .88; }
-.df .btn.warn { margin-left: auto; }
+/* Delete tag is a real POST, so it is wrapped in its own <form> (the demo's
+   button has no form -- it is JS-only). .df is a flex row, so the actual
+   flex item pushed right must be the FORM, not the button nested inside it;
+   margin-left: auto on the button alone has no effect. */
+.df form { margin-left: auto; }
 
 /* ── First-run capture flow (/setup) ─────────────────────────────────────
    Ported from the setup concept. Tile styling hangs off :has(input:checked)
