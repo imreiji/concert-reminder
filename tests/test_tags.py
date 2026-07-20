@@ -745,6 +745,42 @@ def test_confirmation_page_handles_nothing_eligible_gracefully(client):
     assert "Nothing to apply" in r.text
 
 
+def test_confirmation_page_shows_info_callout_and_bar_actions(client):
+    """Restyled to the design system (invariant 3): an info callout must
+    spell out that applying adds ONLY the new member, never re-expanding
+    the group or un-pruning anything, and the actions sit in a .bar with
+    the exact same POST target the plain-list version used."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    create_active_concert_with_group(client, "liella-live", 1)
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    r = client.get("/tags/1/members/2/retroactive-apply")
+    assert r.status_code == 200
+    assert 'class="callout info"' in r.text
+    # states it adds only the new member: no re-expansion, no un-pruning
+    assert "not</b> re-expand" in r.text or "not re-expand" in r.text
+    assert 'class="bar"' in r.text
+    assert 'action="/tags/1/members/2/retroactive-apply"' in r.text
+    assert "Apply to all" in r.text
+    assert 'class="btn quiet"' in r.text  # Skip
+
+
+def test_confirmation_empty_case_keeps_styled_framing(client):
+    """The 'nothing to apply' branch stays reachable and still uses the
+    shared .dim/.btn vocabulary rather than the old bare-list markup."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Liella", "kind": "group"})
+    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags/1/members", data={"member_tag_id": 2})
+    r = client.get("/tags/1/members/2/retroactive-apply")
+    assert r.status_code == 200
+    assert "Nothing to apply" in r.text
+    assert 'class="dim"' in r.text
+    assert 'class="btn quiet"' in r.text
+    assert 'class="callout info"' not in r.text  # nothing to caveat about
+
+
 async def test_apply_to_all_attaches_tag_and_notifies_subscriber(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Liella", "kind": "group"})
