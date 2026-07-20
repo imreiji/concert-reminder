@@ -604,3 +604,11 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   .rnd2 .dts, .rnd2 .acts { grid-column: 1 / -1; justify-content: flex-start; }
   .standing { grid-template-columns: 1fr; }
 }
+
+/* Preferences: left-rail layout (built once here). */
+.prefs-rail { position: sticky; top: 1rem; }
+.prefs-rail a { padding: .15rem 0; font-size: .9rem; }
+.prefs-section { scroll-margin-top: 1rem; padding-bottom: 1.4rem; border-bottom: 1px solid var(--line); margin-bottom: 1.4rem; }
+.prefs-section:last-child { border-bottom: none; }
+.prefs-section > h2 { margin-top: 0; }
+@media (max-width: 760px) { .prefs-rail { position: static; flex-direction: row; flex-wrap: wrap; gap: .8rem; } }

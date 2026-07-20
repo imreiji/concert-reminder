@@ -26,15 +26,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db.models import PresetItem, ReminderPreset, Tag, TagSubscription, User
+from app.db.models import Concert, PresetItem, ReminderPreset, Tag, TagSubscription, User
 from app.db.service import (
     apply_preset,
+    concert_subscription_states,
     ensure_user,
     group_members,
     list_editors,
     record_dm_outcome,
     set_default_preset,
     set_editor,
+    tracked_concert_ids,
 )
 from app.db.session import get_session
 from app.domain.types import Anchor
@@ -121,6 +123,21 @@ async def preferences(
     tz_auto = db_user.tz_auto if db_user else True
     has_calendar_feed = bool(db_user and db_user.calendar_token_hash)
     editors = await list_editors(session) if user.is_admin else []
+
+    # Following section: the tracked count, plus the deliberately-invisible
+    # OPTED_OUT overrides surfaced as a review-and-restore list (spec
+    # decision 1). concert_subscription_states is Task 2's read surface;
+    # tracked_concert_ids is the single definition of "tracked".
+    tracked_count = len(await tracked_concert_ids(session, user.id))
+    overrides = await concert_subscription_states(session, user.id)
+    from app.domain.types import SubscriptionState
+    pruned_ids = [cid for cid, st in overrides.items() if st is SubscriptionState.OPTED_OUT]
+    pruned_concerts = []
+    if pruned_ids:
+        pruned_concerts = list((await session.execute(
+            select(Concert).where(Concert.id.in_(pruned_ids)).order_by(Concert.title)
+        )).scalars())
+
     return templates.TemplateResponse(
         request,
         "preferences.html",
@@ -131,6 +148,7 @@ async def preferences(
          "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
          "anchors": list(Anchor), "editors": editors,
          "has_calendar_feed": has_calendar_feed,
+         "tracked_count": tracked_count, "pruned_concerts": pruned_concerts,
          "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
          "bot_enabled": settings.bot_enabled},
     )
