@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 803 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 871 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -29,7 +29,9 @@ a new overseas tour package round kind, both reflected in round-kind
 labels/emoji and the ramen.events import heuristics, and a post-wizard
 first-run capture flow — prune tag-implied concerts, record existing
 applications, board reveal — at /setup, re-runnable from Preferences —
-have shipped since).
+and a demo-reconciliation pass restoring the full design-token layer,
+dark mode, and each view's lost components against the frozen concept
+demo have shipped since).
 
 ## Commands
 
@@ -197,6 +199,10 @@ deleting them.
    the raw value shown to the user exactly once and never persisted
    anywhere retrievable — recovery is "generate a new one," not "look up
    the old one."
+   Self-serve erasure is `POST /me/delete` (`web/routes/preferences.py`):
+   `require_user`-scoped to the caller, revokes the session via the shared
+   `revoke_session` helper, then calls `service.delete_user`, behind a
+   heavy client-side confirmation naming what is kept vs removed.
 6. **`event_id` vs `id`**: every FK targets `Concert.id` (internal PK), but
    URLs use the editor-chosen, unique `event_id` string instead. `"new"` and
    `"import"` are reserved and rejected as `event_id` values so they can
@@ -289,6 +295,24 @@ deleting them.
 ## UI conventions
 
 - Sentence case everywhere ("Add group", not "add group").
+- **Theming**: the full design-token layer (`--paper`, `--accent`, the
+  `*-wash` set, `--raise`, `--chip`, `--shadow`, ...) lives in `style.css`'s
+  `:root`. Dark mode is defined BOTH ways -- `@media (prefers-color-scheme:
+  dark)` (the OS default when the user has never chosen) AND
+  `:root[data-theme="dark"]`/`[data-theme="light"]` (the header toggle
+  stamps `data-theme`, which wins on specificity and persists to
+  `localStorage`). `base.html` stamps the saved theme in `<head>` before
+  first paint -- do this in `<body>` or after CSS loads and every page
+  flashes the wrong theme on load. Style new components against both
+  directions, not just light.
+- Deadline TIMES render as two lines via `fmt_dual_lines`/the `dual_lines`
+  Jinja global -- a bold weekday+day+month line, then a "HH:MM JST, HH:MM
+  local" time line -- never a flat one-line string on the web (that shape is
+  `fmt_dual`, kept only for Discord embeds/plain text, which can't do two
+  lines). Performance DATES (a concert's start day, not a deadline) use
+  `fmt_day_month`/`day_month` instead: day-month only, no zone, no dual
+  apparatus -- a date is a fact about the world, invariant 1 governs
+  deadlines you must act by, not this.
 - Tag chips are the universal element; "+ Add x" buttons share the exact
   chip silhouette. Pickers are native <dialog> white cards: header (title +
   ×), search, chip list; no footer; backdrop-click and Esc close.
