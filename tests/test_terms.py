@@ -100,6 +100,16 @@ def test_terms_are_linked_from_the_footer(client):
     assert 'href="/terms"' in r.text
 
 
+def test_terms_uses_the_legal_frame(client):
+    """Long-form prose gets the design system's .legal wrapper (constrained
+    measure, heading hierarchy) -- ported from the onboarding demo, not a
+    bespoke one-off. Checked signed out since that's the page's main
+    audience (Discord reviewers, prospective users)."""
+    r = client.get("/terms")
+    assert r.status_code == 200
+    assert 'class="legal"' in r.text
+
+
 def test_terms_and_privacy_cross_link(client):
     """Two halves of the same set of promises -- each points at the other."""
     assert 'href="/privacy"' in client.get("/terms").text

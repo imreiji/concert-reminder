@@ -71,10 +71,18 @@ main { max-width: 72rem; width: 100%; margin: 2rem auto; padding: 0 1.5rem; flex
 footer { text-align: center; color: var(--dim); font-size: .75rem; padding: 1.5rem; }
 footer a { color: inherit; }
 
-/* Long-form text pages (privacy policy). main is 72rem for data-dense
-   grids; prose needs a much narrower column to stay readable. */
-.prose { max-width: 42rem; }
-.prose li { margin-bottom: .5rem; }
+/* Long-form text pages (privacy policy, terms of service). main is 72rem
+   for data-dense grids; legal prose needs a much narrower column and its
+   own heading rhythm to stay readable. Ported from the onboarding demo. */
+.legal { max-width: 62ch; margin-top: 2.5rem; }
+.legal h1 { font-size: 1.7rem; letter-spacing: -.025em; font-weight: 650; margin: 0 0 .3rem; }
+.legal .updated { color: var(--dim); font-size: .8125rem; margin: 0 0 2.25rem; }
+.legal h2 { font-size: 1rem; font-weight: 650; margin: 2.25rem 0 .5rem; letter-spacing: -.01em; }
+.legal p { margin: 0 0 1rem; font-size: .9375rem; line-height: 1.7; }
+.legal ul { margin: 0 0 1rem; padding-left: 1.2rem; display: grid; gap: .4rem; }
+.legal li { font-size: .9375rem; line-height: 1.6; }
+.legal a { color: var(--accent); }
+.legal .lead { color: var(--dim); font-size: 1rem; }
 
 /* The three-item primary nav. The active item is marked with
    aria-current="page" -- the styling hangs off that attribute rather than a
