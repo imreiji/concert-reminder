@@ -253,35 +253,6 @@ def build_round(
     )
 
 
-def resolve_round_leg(days: list[ConcertDay], leg: str) -> list[int] | None:
-    """Free-text leg matching for the CREATION form only -- the edit page
-    uses real ids via parse_round_legs above, and nothing here should grow
-    back toward text matching.
-
-    Creation is the one place ids cannot work: the form renders before any
-    ConcertDay exists, so there is nothing to put on a chip. The days are
-    flushed first and their typed labels resolved after (see
-    create_concert). That is safe in a way the edit page was not -- matching
-    returns EVERY hit, so a multi-leg round can be created correctly; it was
-    only the edit page's read-back that narrowed one to its first id.
-
-    "Correctly" is narrower than it sounds, though: the creation form's leg
-    control is a single-value <select> whose option value prefers the day's
-    label, and labels are normally distinct per leg. So a round covering two
-    legs can only come out of creation when both legs happen to share the one
-    label-or-city string this matches on. In practice a genuinely multi-leg
-    round still needs a follow-up edit, where the chips can say so directly.
-
-    Matches a day's city or label, case-insensitively, exact match (not
-    substring -- avoids "Day 1" matching "Day 10"). Blank or no match ->
-    None (round shown in the all-legs group)."""
-    leg = leg.strip().lower()
-    if not leg:
-        return None
-    matches = [d.id for d in days if leg in ((d.city or "").lower(), (d.label or "").lower())]
-    return matches or None
-
-
 def parse_round_legs(
     value: str, valid_day_ids: set[int], key_to_day_id: dict[str, int] | None = None
 ) -> list[int] | None:
@@ -397,8 +368,7 @@ def title_without_lineage(title: str, group_names: list[str]) -> str:
 
 def find_venue_tag(venue_tags: list[Tag], name: str | None) -> Tag | None:
     """Resolve a day's free-text venue against real VENUE tags by exact,
-    case-insensitive name match -- same free-text-to-structured pattern as
-    resolve_round_leg above. No match just means no link is shown (a nudge
+    case-insensitive name match. No match just means no link is shown (a nudge
     to go create that tag, not a hard requirement)."""
     if not name:
         return None
