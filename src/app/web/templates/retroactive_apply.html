@@ -1,16 +1,41 @@
 {% extends "base.html" %}
 {% block title %}confirm — dekimasen.app{% endblock %}
 {% block content %}
-<h1>Add {{ member.name }} to active events?</h1>
+{#- Restyled onto the shared lede/callout/rows/bar vocabulary (see
+    import_preview.html for the same pattern). No behaviour change: the
+    POST target and GET data are exactly what the route already sends. -#}
+<div class="lede">
+  <h1>Add {{ member.name }} to active events?</h1>
+  {% if concerts %}
+  <p>{{ member.name }} was just added to the <b>{{ group.name }}</b> group tag. Group membership
+    is materialised when a group is attached to a concert, so existing concerts are not touched
+    automatically. These {{ concerts | length }} active event(s) already carry {{ group.name }}
+    but not {{ member.name }} individually:</p>
+  {% endif %}
+</div>
+
 {% if concerts %}
-<p class="dim">{{ member.name }} was just added to {{ group.name }}. These {{ concerts | length }}
-  active event(s) already have {{ group.name }} attached but not {{ member.name }} individually:</p>
+{#- Invariant 3: applying here adds only the one new member. It must never
+    read as "re-sync this concert's group membership" -- that would
+    un-prune members an editor deliberately removed. -#}
+<div class="callout info">
+  <span>ℹ</span>
+  <span>Applying adds {{ member.name }} as a performer chip on each concert below. It does
+    <b>not</b> re-expand the group or restore performers an editor pruned — only this one new
+    member is added.</span>
+</div>
+
 <ul class="rows">
-  {% for c in concerts %}<li><a href="/concerts/{{ c.event_id }}">{{ c.title }}</a></li>{% endfor %}
+  {% for c in concerts %}
+  <li><a href="/concerts/{{ c.event_id }}">{{ c.title }}</a></li>
+  {% endfor %}
 </ul>
-<form class="inline" method="post" action="/tags/{{ group.id }}/members/{{ member.id }}/retroactive-apply">
-  <button>Apply to all</button>
+
+<form class="bar" method="post" action="/tags/{{ group.id }}/members/{{ member.id }}/retroactive-apply">
+  <span class="tally"><b>{{ concerts | length }}</b> active event(s) will gain {{ member.name }}.
+    Concerts already carrying {{ member.name }} are skipped.</span>
   <a class="btn quiet" href="/tags">Skip</a>
+  <button class="btn">Apply to all {{ concerts | length }}</button>
 </form>
 {% else %}
 <p class="dim">Nothing to apply — every active event with {{ group.name }} already has {{ member.name }}.</p>

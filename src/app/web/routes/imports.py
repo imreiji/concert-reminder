@@ -13,6 +13,7 @@ only the editor's final submit on that draft writes anything.
 
 import asyncio
 import logging
+from collections import namedtuple
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -23,10 +24,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.service import sync_concert, tag_picker_context
 from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
-from app.domain.types import RoundKind
+from app.domain.types import ConcertKind, RoundKind
 from app.web.auth import SessionUser, require_editor
 from app.web.forms import form_url
-from app.web.routes.concerts import build_day, build_round, create_concert_row, generate_event_id
+from app.web.routes.concerts import (
+    build_day,
+    build_round,
+    create_concert_row,
+    generate_event_id,
+    parse_round_legs,
+)
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/concerts/import")
@@ -102,6 +109,21 @@ def _fmt(dt) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M") if dt else ""
 
 
+# A parsed day has no id yet, so each round's leg chips reference it by a
+# stable `day_key` ("d0", "d1", ...) the preview template also stamps on the
+# matching `.eleg` card. This shim gives `_round_leg_chips.html` the same
+# attribute surface a real ConcertDay exposes (id -> the key, plus label);
+# the round chips render unselected (all-legs), so city/starts are never read.
+_PreviewLeg = namedtuple("_PreviewLeg", "id label city starts_at_utc")
+
+
+def _preview_legs(parsed) -> list[_PreviewLeg]:
+    return [
+        _PreviewLeg(id=f"d{i}", label=d.label, city=None, starts_at_utc=None)
+        for i, d in enumerate(parsed.days)
+    ]
+
+
 @router.get("", response_class=HTMLResponse)
 async def import_form(
     request: Request,
@@ -140,11 +162,17 @@ async def import_preview(
         {
             "user": user, "parsed": parsed, "source_url": url,
             "fmt": _fmt, "kinds": list(RoundKind),
+            # Concert-level Kind selector in the .ebar (the round-kind `kinds`
+            # above is a different list -- per-round, not per-concert).
+            "concert_kinds": list(ConcertKind),
             "by_kind": picker["by_kind"],
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
             "initial_selected": {},
+            # One chip target per parsed day, keyed by day_key -- the round
+            # cards render their leg chips from this via _round_leg_chips.html.
+            "legs": _preview_legs(parsed),
         },
     )
 
@@ -155,26 +183,47 @@ async def import_commit(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
+    title_en: str = Form(default=""),
+    organizer: str = Form(default=""),
+    categories: str = Form(default=""),
+    kind: str = Form(default=""),
+    notes: str = Form(default=""),
     source_url: str = Form(default=""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
     venue_tags: list[int] = Form(default=[]),
+    day_key: list[str] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
+    day_city: list[str] = Form(default=[]),
+    day_venue: list[str] = Form(default=[]),
+    day_venue_address: list[str] = Form(default=[]),
+    day_doors_at: list[str] = Form(default=[]),
+    day_cancelled: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
+    round_label_en: list[str] = Form(default=[]),
     round_kind: list[RoundKind] = Form(default=[]),
     round_opens_at: list[str] = Form(default=[]),
     round_closes_at: list[str] = Form(default=[]),
     round_results_at: list[str] = Form(default=[]),
     round_payment_at: list[str] = Form(default=[]),
     round_url: list[str] = Form(default=[]),
+    round_notes: list[str] = Form(default=[]),
+    round_legs: list[str] = Form(default=[]),
 ):
     """Same validation as manual entry (build_day/build_round), just looped
     -- create_concert_row + add_day + add_round combined into one commit.
     event_id isn't a field the import form collects, so it's auto-suggested
     from the title (slugified, de-duplicated) -- editable afterward via the
-    edit page."""
+    edit page.
+
+    Rounds bind to legs by chip exactly as create_concert does: every leg is
+    brand-new here (no id until the flush), so its card carries a client-side
+    `day_key` that the round's `round_legs` value references, resolved to real
+    ids through key_to_day_id after the days flush. Upgrade qualifiers are not
+    part of import -- the parser never produces an UPGRADE round -- so this
+    route does not collect round_qualifiers."""
     # _check_host pinned the *fetch* to ramen.events, but this value reached
     # the browser as a hidden field on the preview form and came back on this
     # request, so it is client-supplied like any other field. Validated before
@@ -184,23 +233,86 @@ async def import_commit(
     event_id = await generate_event_id(session, title)
     concert = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
+        kind=ConcertKind(kind) if kind else None,
         source_url=checked_source_url,
     )
+    # The Details-fold scalars, set exactly as create_concert does after
+    # create_concert_row returns (title_en/organizer/categories/notes). The
+    # ramen.events parse supplies none of these, so they arrive blank unless
+    # the editor filled them in.
+    concert.title_en = title_en.strip() or None
+    concert.organizer = organizer.strip() or None
+    concert.categories = categories.strip() or None
+    concert.notes = notes.strip() or None
 
-    for label, starts_at in zip(day_label, day_starts_at, strict=True):
-        if not label.strip() and not starts_at.strip():
-            continue  # a blank trailing row from the repeatable UI
-        session.add(build_day(concert.id, label, starts_at))
+    # The optional day_* fields (venue, city, doors, cancelled) round-trip in
+    # full from the preview form, but a minimal client -- the older import
+    # contract, and its tests -- posts only day_label/day_starts_at. End-pad
+    # those secondary text arrays to the label count so their omission is read
+    # as "blank for every row" (their own default) rather than tripping the
+    # strict zip below. Safe because they are non-binding display text: a
+    # trailing row losing empty text is harmless.
+    n_days = len(day_label)
+    day_city = day_city + [""] * (n_days - len(day_city))
+    day_venue = day_venue + [""] * (n_days - len(day_venue))
+    day_venue_address = day_venue_address + [""] * (n_days - len(day_venue_address))
+    day_doors_at = day_doors_at + [""] * (n_days - len(day_doors_at))
+    day_cancelled = day_cancelled + ["false"] * (n_days - len(day_cancelled))
+    # day_key is the leg-binding key, so it is NOT end-padded: a partial array
+    # is left alone so the strict zip raises instead of sliding a key one row
+    # and assigning a round to the wrong leg, silently -- worse than a 500.
+    # Only a WHOLLY-omitted array (an older client with no chips) is padded to
+    # empty keys. Same rule create_concert applies.
+    if not day_key:
+        day_key = [""] * n_days
+    # key -> the ConcertDay its row produced, built INSIDE the loop from the
+    # same tuple so a key can never be paired with another row's day; ids are
+    # filled in after the flush below.
+    days: list = []
+    key_rows: list[tuple[str, object]] = []
+    for key, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
+        day_key, day_label, day_starts_at, day_city, day_venue, day_venue_address,
+        day_doors_at, day_cancelled, strict=True,
+    ):
+        if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
+            continue  # a blank trailing row from the repeatable UI -- key and all
+        day = build_day(
+            concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled
+        )
+        session.add(day)
+        days.append(day)
+        if key.strip():
+            key_rows.append((key.strip(), day))
+    await session.flush()  # real ids, needed to resolve the leg chips below
+    valid_day_ids = {d.id for d in days}
+    # Resolved only now, because a row had no id until the flush above. A
+    # duplicate key would be the one way two rows could collide, so the first
+    # row claiming a key keeps it rather than a later one silently stealing it.
+    key_to_day_id: dict[str, int] = {}
+    for key, day in key_rows:
+        key_to_day_id.setdefault(key, day.id)
 
-    for label, kind, opens_at, closes_at, results_at, payment_at, r_url in zip(
-        round_label, round_kind, round_opens_at, round_closes_at,
-        round_results_at, round_payment_at, round_url, strict=True
+    # round_legs is the newer chip field; a submitter that omits it ENTIRELY
+    # means "nothing to say about legs" -- every round gets no legs, matching
+    # build_round's own default. A partial array is left alone so the strict
+    # zip raises rather than sliding a row's selection.
+    if not round_legs:
+        round_legs = [""] * len(round_label)
+    round_label_en = round_label_en + [""] * (len(round_label) - len(round_label_en))
+    round_notes = round_notes + [""] * (len(round_label) - len(round_notes))
+    for (
+        label, label_en, kind, opens_at, closes_at, results_at, payment_at, r_url, notes_, legs
+    ) in zip(
+        round_label, round_label_en, round_kind, round_opens_at, round_closes_at,
+        round_results_at, round_payment_at, round_url, round_notes, round_legs, strict=True,
     ):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue  # a blank trailing row from the repeatable UI
         session.add(build_round(
-            concert.id, label, kind, opens_at, closes_at, results_at, payment_at, r_url
+            concert.id, label, kind, opens_at, closes_at, results_at, payment_at, r_url,
+            applies_to=parse_round_legs(legs, valid_day_ids, key_to_day_id),
+            label_en=label_en, notes=notes_,
         ))
 
     await session.flush()

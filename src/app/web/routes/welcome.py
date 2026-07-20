@@ -8,24 +8,94 @@ sequences them.
   POST /welcome/skip-all     jump straight to done
 """
 
-from fastapi import APIRouter, Depends, Request
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.models import Tag, TagSubscription
-from app.db.service import ensure_user, group_members
+from app.db.service import (
+    create_preset_from_rules,
+    ensure_user,
+    group_members,
+    set_default_preset,
+)
 from app.db.session import get_session
+from app.domain.timezones import fmt_dual_lines
 from app.domain.types import Anchor, TagKind
 from app.web.auth import SessionUser, require_user
-from app.web.routes.preferences import COMMON_TIMEZONES, all_timezones, my_presets
+from app.web.routes.preferences import COMMON_TIMEZONES, all_timezones
 
 router = APIRouter()
 
 templates = None  # set by web.app at startup
 
 TOTAL_STEPS = 5
+
+# The reminder-step vocabulary, defined ONCE here and handed to the template
+# (the JS seeds/edits rows from these; invariant 7: passed via `| tojson`, not
+# `| safe`). Offsets are expressible in days+hours only -- PresetItem has no
+# minutes column (minute offsets are a separate wishlist item), so the demo's
+# "30 minutes" option is deliberately dropped. A "0:0" offset is the "when it
+# happens" moment, which carries no before/after.
+OFFSET_OPTIONS = [
+    {"value": "0:0", "label": "when", "moment": True},
+    {"value": "0:1", "label": "1 hour", "moment": False},
+    {"value": "0:3", "label": "3 hours", "moment": False},
+    {"value": "0:6", "label": "6 hours", "moment": False},
+    {"value": "1:0", "label": "1 day", "moment": False},
+    {"value": "3:0", "label": "3 days", "moment": False},
+    {"value": "5:0", "label": "5 days", "moment": False},
+    {"value": "7:0", "label": "1 week", "moment": False},
+]
+
+# Two phrasings per anchor keep every rule reading as a grammatical sentence:
+# the verb phrase after "when" (a moment offset) and the noun phrase after
+# "before"/"after" (a duration offset). Covers all five real anchors.
+ANCHOR_ORDER = ["opens", "closes", "results", "payment", "event_start"]
+ANCHOR_MOMENT = {
+    "opens": "applications open", "closes": "applications close",
+    "results": "results come out", "payment": "payment is due",
+    "event_start": "the show starts",
+}
+ANCHOR_NOUN = {
+    "opens": "the opening", "closes": "the deadline", "results": "the results",
+    "payment": "the payment deadline", "event_start": "the show",
+}
+
+# The three starter presets as rule sets, defined once. Each rule is
+# (offset_days, offset_hours, direction, anchor); direction is "before"/"after"
+# and only meaningful for non-moment offsets. The default (standard) reminds
+# once for opens/results/payment and gives closes -- the round with an action
+# to take -- a couple of run-ups; nothing on the show itself.
+PRESET_TEMPLATES = {
+    "relaxed": [
+        [0, 0, "before", "opens"],
+        [1, 0, "before", "closes"],
+        [0, 0, "before", "results"],
+        [0, 0, "before", "payment"],
+    ],
+    "standard": [
+        [0, 0, "before", "opens"],
+        [3, 0, "before", "closes"],
+        [1, 0, "before", "closes"],
+        [0, 0, "before", "results"],
+        [1, 0, "before", "payment"],
+    ],
+    "onball": [
+        [1, 0, "before", "opens"],
+        [0, 0, "before", "opens"],
+        [5, 0, "before", "closes"],
+        [3, 0, "before", "closes"],
+        [1, 0, "before", "closes"],
+        [0, 0, "before", "results"],
+        [3, 0, "before", "payment"],
+        [1, 0, "before", "payment"],
+    ],
+}
 
 
 @router.get("/welcome", response_class=HTMLResponse)
@@ -63,11 +133,23 @@ async def welcome(
             "solo_artists": solo_artists, "venues": venues, "sub_by_tag": sub_by_tag,
         })
     elif step == 1:
-        presets = await my_presets(session, user.id)
-        context.update({"has_preset": bool(presets), "anchors": list(Anchor)})
-    elif step == 2:
+        # The reminder-step data the fine-tune UI seeds and edits from. The
+        # standard rows are also emitted server-side so the list is populated
+        # with JS off (no flash, and a JS-off submit still creates a preset).
         context.update({
-            "tz": db_user.timezone, "tz_auto": db_user.tz_auto,
+            "offset_options": OFFSET_OPTIONS,
+            "anchor_order": ANCHOR_ORDER,
+            "anchor_moment": ANCHOR_MOMENT,
+            "anchor_noun": ANCHOR_NOUN,
+            "preset_templates": PRESET_TEMPLATES,
+            "standard_rules": PRESET_TEMPLATES["standard"],
+        })
+    elif step == 2:
+        # A live JST/local sample so the user sees the dual render in the flesh
+        # (invariant 1: JST first, both zones always present).
+        _, tz_preview = fmt_dual_lines(datetime.now(UTC), db_user.timezone)
+        context.update({
+            "tz": db_user.timezone, "tz_auto": db_user.tz_auto, "tz_preview": tz_preview,
             "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
         })
     elif step == 4:
@@ -77,6 +159,47 @@ async def welcome(
         })
 
     return templates.TemplateResponse(request, "welcome.html", context)
+
+
+@router.post("/welcome/preset")
+async def create_wizard_preset(
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    offset: list[str] = Form(default=[]),
+    direction: list[str] = Form(default=[]),
+    anchor: list[str] = Form(default=[]),
+):
+    """The reminder step's submit: zip the fine-tune rows' parallel arrays into
+    a real ReminderPreset via the shared service (no second write path), mark it
+    the user's default, then advance into the timezone step.
+
+    Each offset arrives as "days:hours" (the fine-tune UI's own encoding, since
+    PresetItem stores days+hours only); direction and anchor ride alongside as
+    matching arrays. A short/mismatched tail is ignored by zip's own truncation.
+
+    Two defensive checks, both against a tampered POST the closed <select>s
+    would never send themselves: an empty `rules` list would otherwise create
+    a zero-item ReminderPreset and mark it default -- a default that silently
+    never reminds, contradicting preferences.py's "no empty-preset limbo"
+    invariant -- and a bad offset/anchor value would otherwise raise an
+    unhandled ValueError (500) instead of a clean 422.
+    """
+    db_user = await ensure_user(session, user.id, user.username)
+    rules: list[tuple[int, int, str, Anchor]] = []
+    for off, dir_, anc in zip(offset, direction, anchor, strict=False):
+        days_str, _, hours_str = off.partition(":")
+        try:
+            rules.append((int(days_str or 0), int(hours_str or 0), dir_, Anchor(anc)))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"bad reminder row: {e}") from e
+    if not rules:
+        raise HTTPException(status_code=422, detail="at least one reminder rule is required")
+    preset = await create_preset_from_rules(session, user.id, "My reminders", rules)
+    await set_default_preset(session, user.id, preset.id)
+    # Same forward-only step gate the wizard runs on; never regress a step.
+    db_user.onboarding_step = max(db_user.onboarding_step, 2)
+    await session.commit()
+    return RedirectResponse("/welcome", status_code=303)
 
 
 @router.post("/welcome/advance")

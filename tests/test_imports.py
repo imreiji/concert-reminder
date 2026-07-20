@@ -116,6 +116,34 @@ def test_editor_sees_import_page(client):
     assert "ramen.events" in r.text
 
 
+def test_import_form_matches_design_system(client):
+    """Task 2: the paste-a-URL screen ports demo lines 1118-1147 -- the
+    `.lede` heading block, the `.fld` labelled input, and the SSRF-guard
+    reassurance as a `.callout`. The POST target and the pattern attribute
+    (the actual SSRF guard) must survive the restyle byte-for-byte."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/concerts/import")
+    assert r.status_code == 200
+    assert '<div class="lede">' in r.text
+    assert '<label class="fld">' in r.text
+    assert 'class="callout"' in r.text
+    # SSRF guard: unchanged POST target and pattern (do not loosen either).
+    assert 'action="/concerts/import/preview"' in r.text
+    assert 'pattern="https://ramen\\.events/.*"' in r.text
+
+
+def test_import_form_error_uses_warn_callout(client):
+    """The parse-failure branch (hit via POST /preview re-rendering this
+    same template) keeps warning about the failure, now as a `.callout warn`
+    instead of the old plain `<p class="import-error">`."""
+    login_as(client, EDITOR_ID, "reiji")
+    mock_fetch(client, "<html><body>not an event</body></html>")
+    r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert r.status_code == 200
+    assert 'class="callout warn"' in r.text
+    assert "Couldn" in r.text
+
+
 # ── Host allowlist (SSRF guard) ─────────────────────────────────────────
 
 
@@ -221,6 +249,66 @@ async def test_commit_creates_concert_days_and_rounds(client):
     assert len(rounds) == 2
 
 
+async def test_commit_binds_a_round_to_multiple_legs(client):
+    """The preview's leg chips let one round apply to SEVERAL legs -- an
+    expression the old flat form had no field for. Each day carries a
+    client-side `day_key`; a round's `round_legs` value references those keys,
+    and import_commit resolves them to the real ConcertDay ids the flush hands
+    out, exactly like create_concert (key_to_day_id + parse_round_legs)."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "Two Leg Tour",
+            "day_key": ["d0", "d1"],
+            "day_label": ["Osaka", "Tokyo"],
+            "day_starts_at": ["2027-01-23T17:00", "2027-01-24T15:30"],
+            "round_label": ["Nationwide lottery"],
+            "round_kind": ["lottery_round"],
+            "round_opens_at": ["2026-10-14T12:00"],
+            "round_closes_at": ["2026-11-08T23:59"],
+            "round_results_at": [""],
+            "round_payment_at": [""],
+            "round_url": [""],
+            "round_legs": ["d0 d1"],
+        },
+    )
+    assert r.status_code == 303
+    days = await _all(client.db, ConcertDay)
+    rounds = await _all(client.db, Round)
+    assert len(rounds) == 1
+    assert rounds[0].applies_to is not None
+    assert set(rounds[0].applies_to) == {d.id for d in days}
+
+
+async def test_commit_round_with_no_legs_is_all_legs(client):
+    """A round whose chips select nothing binds to no specific leg --
+    applies_to stays None (the all-legs / "General" convention), matching
+    apply_round_fields and what concert_round_rows reads."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "Whole Event Round",
+            "day_key": ["d0"],
+            "day_label": ["Day 1"],
+            "day_starts_at": ["2027-01-23T17:00"],
+            "round_label": ["Fan club presale"],
+            "round_kind": ["lottery_round"],
+            "round_opens_at": ["2026-10-14T12:00"],
+            "round_closes_at": ["2026-11-08T23:59"],
+            "round_results_at": [""],
+            "round_payment_at": [""],
+            "round_url": [""],
+            "round_legs": [""],
+        },
+    )
+    assert r.status_code == 303
+    rounds = await _all(client.db, Round)
+    assert len(rounds) == 1
+    assert rounds[0].applies_to is None
+
+
 async def test_commit_tolerates_blank_trailing_rows(client):
     """The JS lets an editor add then not fill a row -- a fully blank row
     from the repeatable UI shouldn't become a junk day/round."""
@@ -245,13 +333,66 @@ async def test_commit_tolerates_blank_trailing_rows(client):
     assert await _all(client.db, Round) == []
 
 
-def test_preview_carries_source_url_as_a_hidden_field(client):
-    """The commit POST is a fresh request, so the only way it learns which
-    page the draft came from is a hidden field on the preview form."""
+def test_preview_carries_editable_source_url(client):
+    """The commit POST is a fresh request, so the only way it learns which page
+    the draft came from is a field on the preview form. It is now an editable
+    <input type="url"> in the Details fold (was a hidden field), pre-filled with
+    the parsed page; it still round-trips and is re-validated on commit."""
     login_as(client, EDITOR_ID, "reiji")
     mock_fetch(client, load("ramen_graduation_concert.html"))
     r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
-    assert f'name="source_url" value="{GRADUATION_URL}"' in r.text
+    assert f'name="source_url" type="url" value="{GRADUATION_URL}"' in r.text
+
+
+def test_preview_shows_kind_selector_and_details_fold(client):
+    """The .ebar carries a concert Kind selector and the preview grows a
+    Details-and-links fold (title EN, organizer, editable source URL, notes),
+    mirroring concert_new.html."""
+    login_as(client, EDITOR_ID, "reiji")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert r.status_code == 200
+    assert 'name="kind"' in r.text        # concert Kind selector in the .ebar
+    assert "Details and links" in r.text  # the new fold
+    assert 'name="title_en"' in r.text
+    assert 'name="organizer"' in r.text
+
+
+async def test_commit_persists_details_fold_fields(client):
+    """Committing with an edited Title EN / organizer / kind / notes persists
+    them, set on the concert exactly as create_concert does."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "Detailed Concert",
+            "title_en": "Detailed Concert (English)",
+            "organizer": "Some Organizer",
+            "kind": "tour",
+            "notes": "spotted on ramen.events",
+        },
+    )
+    assert r.status_code == 303
+    concerts = await _all(client.db, Concert)
+    assert len(concerts) == 1
+    c = concerts[0]
+    assert c.title_en == "Detailed Concert (English)"
+    assert c.organizer == "Some Organizer"
+    assert c.kind is not None and c.kind.value == "tour"
+    assert c.notes == "spotted on ramen.events"
+
+
+async def test_commit_edited_source_url_still_revalidates(client):
+    """The Source URL is now editor-editable, but a bad scheme is still
+    rejected -- it goes through form_url on commit (invariant 7), same as when
+    it was a hidden field."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={"title": "Bad URL", "source_url": "javascript:alert(1)"},
+    )
+    assert r.status_code == 422
+    assert await _all(client.db, Concert) == []
 
 
 async def test_commit_persists_source_url(client):

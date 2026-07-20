@@ -163,12 +163,94 @@ async def test_skipping_step_1_does_not_create_a_preset(client):
     assert presets == []
 
 
-def test_step_1_shows_continue_once_a_preset_exists(client):
+def test_step_1_renders_the_three_preset_cards(client):
     login_as(client, FAN_ID, "fan")
     client.post("/welcome/advance")  # step 0 -> 1
-    client.post("/presets", data={"name": "standard", "next": "/welcome"})
     r = client.get("/welcome")
-    assert "Continue" in r.text and "Preset created" in r.text
+    assert "Relaxed" in r.text and "Standard" in r.text and "On the ball" in r.text
+    # The demo drops "30 minutes" -- PresetItem has no minutes column.
+    assert "30 minutes" not in r.text
+
+
+# The five standard-template rows as parallel form arrays (offset "days:hours",
+# direction, anchor) -- exactly what the fine-tune UI submits on "Create preset".
+# Aligned by index across the three lists, the way the browser's repeated
+# form keys arrive.
+_STANDARD_FORM = {
+    "offset": ["0:0", "3:0", "1:0", "0:0", "1:0"],
+    "direction": ["before", "before", "before", "before", "before"],
+    "anchor": ["opens", "closes", "closes", "results", "payment"],
+}
+
+
+async def test_step_1_submit_creates_default_preset_with_items(client):
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    r = client.post("/welcome/preset", data=_STANDARD_FORM)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/welcome"
+    async with client.db() as s:
+        presets = (await s.execute(select(ReminderPreset))).scalars().all()
+        assert len(presets) == 1
+        preset = presets[0]
+        assert preset.is_default is True
+        await s.refresh(preset, ["items"])
+        # before = a negative offset; the "when it" moment rows are 0/0.
+        rows = sorted((i.anchor.value, i.offset_days, i.offset_hours) for i in preset.items)
+    assert rows == sorted([
+        ("opens", 0, 0), ("closes", -3, 0), ("closes", -1, 0),
+        ("results", 0, 0), ("payment", -1, 0),
+    ])
+    # Submitting the preset advances the wizard to the timezone step.
+    assert await _onboarding_step(client, FAN_ID) == 2
+
+
+async def test_step_1_fine_tuned_rule_persists_direction_and_hours(client):
+    """An edited row -- an 'after' relation and an hours-only offset -- lands as
+    the right PresetItem: after = a positive sign, 3 hours = offset_hours +3."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    data = {"offset": ["0:3"], "direction": ["after"], "anchor": ["results"]}
+    r = client.post("/welcome/preset", data=data)
+    assert r.headers["location"] == "/welcome"
+    async with client.db() as s:
+        preset = (await s.execute(select(ReminderPreset))).scalar_one()
+        await s.refresh(preset, ["items"])
+        item = preset.items[0]
+    assert item.anchor.value == "results"
+    assert item.offset_days == 0
+    assert item.offset_hours == 3
+
+
+async def test_step_1_empty_rules_rejected_and_creates_no_preset(client):
+    """C1: the fine-tune list can be cleared down to zero rows client-side
+    (the "×" on every row), so a tampered/edge-case POST can arrive with no
+    rules at all. That must never create a zero-item default preset -- a
+    default that silently never reminds, contradicting preferences.py's
+    "no empty-preset limbo" invariant -- so it's rejected with a 422 and the
+    wizard step must not advance either."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    r = client.post("/welcome/preset", data={})  # no offset/direction/anchor at all
+    assert r.status_code == 422
+    async with client.db() as s:
+        presets = (await s.execute(select(ReminderPreset))).scalars().all()
+    assert presets == []
+    assert await _onboarding_step(client, FAN_ID) == 1
+
+
+async def test_step_1_malformed_row_returns_422_not_500(client):
+    """C2: the offset/anchor <select>s are closed, so only a tampered POST
+    can send a value outside their vocabulary -- but the route must still
+    fail cleanly (422) rather than raising an unhandled ValueError (500)."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    data = {"offset": ["0:0"], "direction": ["before"], "anchor": ["not-a-real-anchor"]}
+    r = client.post("/welcome/preset", data=data)
+    assert r.status_code == 422
+    async with client.db() as s:
+        presets = (await s.execute(select(ReminderPreset))).scalars().all()
+    assert presets == []
 
 
 async def test_welcome_shows_step_2_timezone(client):
@@ -177,6 +259,20 @@ async def test_welcome_shows_step_2_timezone(client):
     client.post("/welcome/advance")  # 1 -> 2
     r = client.get("/welcome")
     assert "Confirm your timezone" in r.text
+
+
+async def test_step_2_renders_both_timezone_selects(client):
+    """The timezone step carries the zone select AND a Detection select, the
+    latter reflecting tz_auto -- a brand-new user is browser-auto by default,
+    so 'Follow my browser' is the selected option."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # 0 -> 1
+    client.post("/welcome/advance")  # 1 -> 2
+    r = client.get("/welcome")
+    assert r.status_code == 200
+    assert 'name="timezone"' in r.text
+    assert 'id="tz-detect"' in r.text
+    assert '<option value="follow" selected>' in r.text
 
 
 async def test_step_2_set_timezone_returns_to_welcome(client):
@@ -205,7 +301,9 @@ async def test_welcome_shows_step_4_calendar_feed(client):
         client.post("/welcome/advance")  # 0 -> 1 -> 2 -> 3 -> 4
     r = client.get("/welcome")
     assert "Get your calendar feed" in r.text
-    assert "Skip this" in r.text
+    # The continue button reads the same forward-facing label whether or
+    # not a feed was generated yet (P5 demo-parity: no "Skip this" here).
+    assert "Continue to my concerts" in r.text
 
 
 async def test_step_4_generate_feed_returns_to_welcome_with_link_shown(client):

@@ -26,6 +26,12 @@ first-served sales are exactly the case where "remind me 5 minutes before
 it opens" beats "remind me 3 hours before", so this is no longer
 speculative - it just has no user complaints behind it yet.
 
+Reinforced, not re-ranked, by the 2026-07-20 onboarding build: the welcome
+wizard's default-reminders step had to drop the demo's "30 minutes before"
+fine-tune option for the same reason (`PresetItem` has no minutes column),
+so the gap now visibly shows up in a second surface, not just FCFS sales.
+Stays #1.
+
 ### 2. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
@@ -53,7 +59,30 @@ with an upgrade the row budget is tighter still - though only for a viewer
 eligible to enter it, since `my_deadline_rows` drops the upgrade's rows for
 everyone else.
 
-### 3. Minor demo-parity cosmetics
+### 3. Multi-language support (English / Mandarin / Japanese)
+
+Impact: medium - effort: large. Raised: 2026-07-20 (onboarding-pages build).
+
+The concept demo carries a placeholder language switcher (three labels, no
+translation behind them) that the onboarding build's landing and welcome
+pages deliberately left unwired -- the plan scoped it out explicitly ("no
+i18n, out of scope, see spec") rather than half-build it. Real i18n is its
+own large project, not an extension of any single page task: locale
+catalogues, extracting every user-visible string out of the ~30 Jinja
+templates (most copy is inline, not routed through a translation helper
+today), a per-user language preference (the same shape as the existing
+timezone preference), actually-translated copy for English, Mandarin, and
+Japanese, and localized date/number formatting layered on top of the
+existing dual JST/local-timezone rendering (invariant 1) rather than
+replacing it. Rated medium rather than low because the concert domain
+(J-pop/anime/idol live events) has a genuinely large non-English-reading
+audience, both Mandarin- and English-speaking; rated large effort, and
+ranked behind the two small/medium-effort medium-impact entries above,
+because it touches every template at once instead of one surface at a
+time, and there is no user complaint behind it yet, only the demo's
+unfulfilled placeholder.
+
+### 4. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -69,7 +98,7 @@ keyboard-reachable now but use a visually-hidden checkbox where the demo
 uses a real `<button aria-pressed>`, and `.lede h1` lacks `text-wrap:
 balance`. The cheapest of the open items - one small pass closes all of it.
 
-### 4. Discover sort in the content head, plus the catalogue-count note
+### 5. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -83,7 +112,7 @@ reconciliation, but not this filtered one. Deferred rather than done because
 moving sort is a real DOM restructure and it is debatable whether the
 sidebar is actually worse.
 
-### 5. Editor page parity with the demo
+### 6. Editor page parity with the demo
 
 Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
 re-review).

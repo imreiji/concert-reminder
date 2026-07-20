@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 876 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 889 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -31,7 +31,11 @@ first-run capture flow — prune tag-implied concerts, record existing
 applications, board reveal — at /setup, re-runnable from Preferences —
 and a demo-reconciliation pass restoring the full design-token layer,
 dark mode, and each view's lost components against the frozen concept
-demo have shipped since).
+demo, and an onboarding build -- a real signed-out landing page, the
+welcome wizard rebuilt on the design system and feeding into /setup,
+import preview rebuilt in the day/round/leg vocabulary with real
+multi-leg round binding, and retroactive-apply/privacy/terms reframed in
+the design system -- have shipped since).
 
 ## Commands
 
@@ -69,7 +73,13 @@ demo have shipped since).
   before literal segments. Its fetch is SSRF-guarded three ways: https +
   `ramen.events` host only, the same check re-run on every redirect hop via
   an httpx response hook, and the body streamed under a byte cap — don't
-  loosen any of them. Reminder-rule add/delete lives in
+  loosen any of them. Its preview (`import_preview.html`) is built in the
+  same day-card/round-card/leg-chip vocabulary as `concert_new.html`/
+  `concert_edit.html`, and `import_commit` binds a parsed round's
+  `applies_to` to legs via the same `round_legs`/`day_key`/
+  `parse_round_legs`/`key_to_day_id` path `create_concert` uses -- before
+  this, the flat import form could not express a round spanning more than
+  one leg. Reminder-rule add/delete lives in
   `routes/reminders.py` (split out of `concerts.py`; renders via
   `concerts.render_rules_fragment`), and the `/me/timezone*` routes live in
   `routes/preferences.py` with the other per-user preference routes.
@@ -91,6 +101,17 @@ demo have shipped since).
   nothing (neither is an end state). `service.board_cards` gathers its
   inputs and `OPEN_COLUMN_LIMIT` caps the open column.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
+- `routes/welcome.py` -- the five-step welcome wizard, rebuilt on the design
+  system and flowing seamlessly into `/setup` (`POST /welcome/advance`
+  redirects there once the step count is exhausted). Its default-reminders
+  step is the one step here that writes: it materialises a real
+  `ReminderPreset` through the single `db/service.py` helper
+  `create_preset_from_rules` (no second write path), offering three
+  template rule sets (Relaxed / Standard / On the ball) plus a
+  sentence-style fine-tune list over the five anchors. Offsets are
+  days+hours only -- `PresetItem` has no minutes column, so the wizard
+  cannot offer a "30 minutes before" choice; see the minute-offset entry
+  in WISHLIST.md.
 - `routes/setup.py` — the first-run capture flow, run AFTER the `/welcome`
   wizard. Three plain GETs (`/setup` prune tiles → `/setup/applications` →
   `/setup/ready` reveal) plus two batch POSTs. NO capture-flow step state
@@ -325,8 +346,11 @@ deleting them.
 - **Home vs Discover** -- the old combined index is split in two by the
   question each page answers. `/` (`home.html`, the handler in `web/app.py`)
   is Home: "where do I stand", personal and login-gated, four blocks in order
-  -- Up next, the campaign board, Coming up, a Discover teaser. Signed
-  out it is the hero alone. The first block is headed "Up next", NOT "Closes
+  -- Up next, the campaign board, Coming up, a Discover teaser. Signed out it
+  is a real landing page instead -- hero, a "how it works" section, a static
+  illustrative campaign board (sample data, not the viewer's, since there is
+  no viewer), a real Discover taste pulling live public cards, and the
+  sign-in CTA. The first block is headed "Up next", NOT "Closes
   next": it picks the soonest row with a round behind it whatever anchor that
   row carries, so the header must stay moment-agnostic while the body names
   the moment. Narrowing the pick to `Anchor.CLOSES` to justify the old header

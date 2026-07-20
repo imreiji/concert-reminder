@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Terms of service — dekimasen.app{% endblock %}
 {% block content %}
-<article class="prose">
+<article class="legal">
   <h1>Terms of service</h1>
-  <p class="dim">Last updated: {{ last_updated }}</p>
+  <p class="updated num">Last updated: {{ last_updated }}</p>
 
-  <p>
+  <p class="lead">
     These are the terms for using dekimasen.app. By signing in you agree to
     them. They are short on purpose: this is a free hobby project, not a
     company, and the honest version fits on one page. How your data is
@@ -123,5 +123,8 @@
     this page from a running site, contact whoever operates it.
   </p>
   {% endif %}
+
+  <p class="dim">tl;dr: it's a helpful reminder tool built by a fan, not a ticket broker.
+    Double-check the official page before every deadline.</p>
 </article>
 {% endblock %}

@@ -1,18 +1,37 @@
 {% extends "base.html" %}
 {% block title %}import concert — dekimasen.app{% endblock %}
 {% block content %}
-<h1>Import from a URL</h1>
-<p class="dim">Paste a <code>ramen.events</code> event page — it'll fetch the title, days, and
-  lottery rounds as a draft. Nothing is saved until you review and submit the form on the next page.</p>
 
-{% if error %}<p class="import-error">Couldn't parse that page: {{ error }}. You can still
-  <a href="/">create the concert manually</a>.</p>{% endif %}
+<div class="lede">
+  <h1>Import from a URL</h1>
+  <p>Paste a <code>ramen.events</code> event page — it'll fetch the title, tags, performance
+    days and lottery rounds as a draft. Nothing is saved until you review and submit the
+    next page.</p>
+</div>
 
-<form class="stack" method="post" action="/concerts/import/preview">
-  <label>ramen.events URL
-    <input type="url" name="url" required placeholder="https://ramen.events/..." pattern="https://ramen\.events/.*">
-  </label>
-  <button>Fetch draft</button>
+{% if error %}
+<div class="callout warn" style="margin-top:1.25rem; max-width:42rem">
+  <span>&#9888;</span>
+  <span>Couldn't parse that page: {{ error }}. You can still
+    <a href="/">create the concert manually</a>.</span>
+</div>
+{% endif %}
+
+<form class="stack" method="post" action="/concerts/import/preview"
+      style="max-width:42rem; margin-top:1.75rem; display:grid; gap:1rem">
+  <label class="fld"><span>ramen.events URL</span>
+    <input type="url" name="url" required placeholder="https://ramen.events/..."
+           pattern="https://ramen\.events/.*"></label>
+  <div><button class="btn" type="submit">Fetch draft</button></div>
 </form>
-<p class="dim tiny"><a href="/">← Back to concerts</a></p>
+
+<div class="callout" style="margin-top:1.75rem; max-width:42rem">
+  <span>&#128274;</span>
+  <span>Only <b>https ramen.events</b> URLs are accepted. The fetch is size-capped and
+    re-checked on every redirect — an editor safety rail, not a general web fetcher.</span>
+</div>
+
+<p class="clock" style="display:block; margin-top:1.5rem">
+  No ramen.events page? <a class="more" href="/">Create the concert manually</a> instead.
+</p>
 {% endblock %}

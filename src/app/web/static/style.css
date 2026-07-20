@@ -71,10 +71,18 @@ main { max-width: 72rem; width: 100%; margin: 2rem auto; padding: 0 1.5rem; flex
 footer { text-align: center; color: var(--dim); font-size: .75rem; padding: 1.5rem; }
 footer a { color: inherit; }
 
-/* Long-form text pages (privacy policy). main is 72rem for data-dense
-   grids; prose needs a much narrower column to stay readable. */
-.prose { max-width: 42rem; }
-.prose li { margin-bottom: .5rem; }
+/* Long-form text pages (privacy policy, terms of service). main is 72rem
+   for data-dense grids; legal prose needs a much narrower column and its
+   own heading rhythm to stay readable. Ported from the onboarding demo. */
+.legal { max-width: 62ch; margin-top: 2.5rem; }
+.legal h1 { font-size: 1.7rem; letter-spacing: -.025em; font-weight: 650; margin: 0 0 .3rem; }
+.legal .updated { color: var(--dim); font-size: .8125rem; margin: 0 0 2.25rem; }
+.legal h2 { font-size: 1rem; font-weight: 650; margin: 2.25rem 0 .5rem; letter-spacing: -.01em; }
+.legal p { margin: 0 0 1rem; font-size: .9375rem; line-height: 1.7; }
+.legal ul { margin: 0 0 1rem; padding-left: 1.2rem; display: grid; gap: .4rem; }
+.legal li { font-size: .9375rem; line-height: 1.6; }
+.legal a { color: var(--accent); }
+.legal .lead { color: var(--dim); font-size: 1rem; }
 
 /* The three-item primary nav. The active item is marked with
    aria-current="page" -- the styling hangs off that attribute rather than a
@@ -103,9 +111,59 @@ nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; fo
 .avatar { width: 24px; height: 24px; border-radius: 50%; }
 .badge { color: var(--ok); font-style: normal; font-size: .8em; border: 1px solid currentColor; padding: 0 .3em; border-radius: 4px; }
 
-.hero { margin-top: 4rem; text-align: center; }
-.hero h1 { font-size: 1.7rem; }
-.hero p { color: var(--dim); max-width: 34rem; margin: 0 auto; }
+/* Signed-out Home landing (.hero has no other caller). Discord brand button
+   is the one deliberate fixed colour (blurple), which reads correctly on
+   both themes since white text sits on it either way. */
+.btn-discord {
+  background: #5865f2; border-color: #5865f2; color: #fff;
+  display: inline-flex; align-items: center; gap: .5rem;
+}
+.btn-discord:hover { opacity: .9; }
+.btn-discord .di { font-size: 1rem; line-height: 1; }
+
+.hero { padding: 4rem 0 1rem; max-width: 54rem; }
+.hero .eyebrow { display: block; margin-bottom: 1rem; }
+.hero .promise {
+  font-size: clamp(2.1rem, 6vw, 3.5rem); line-height: 1.04; letter-spacing: -.035em;
+  font-weight: 680; margin: 0 0 1.2rem; text-wrap: balance;
+}
+.hero .promise em { font-style: normal; color: var(--accent); }
+.hero .vprop { font-size: 1.15rem; color: var(--dim); max-width: 46ch; margin: 0 0 1.9rem; line-height: 1.5; }
+.hero .vprop b { color: var(--ink); font-weight: 600; }
+.hero .cta { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; }
+.hero .reassure { color: var(--dim); font-size: .8125rem; }
+
+.statband { display: flex; gap: 2.75rem; flex-wrap: wrap; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.statband div .n { font-size: 1.7rem; font-weight: 680; letter-spacing: -.02em; }
+.statband div .l { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+
+.howto { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.25rem; }
+.howstep {
+  border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+  padding: 1.1rem 1.15rem; display: grid; gap: .35rem; box-shadow: var(--shadow); align-content: start;
+}
+.howstep .k {
+  width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--accent-wash);
+  color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: .85rem;
+}
+.howstep h3 { margin: .3rem 0 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+.howstep p { margin: 0; color: var(--dim); font-size: .875rem; }
+.howstep p b { color: var(--ink); font-weight: 600; }
+
+/* The landing's illustrative board thesis reuses .board/.card exactly
+   (see home.html for why it's fixed sample markup, not a query), just
+   smaller -- .thesiscard tightens the padding and type scale. */
+.thesiscard { padding: .7rem .75rem; }
+.thesiscard .title { font-size: .9rem; }
+.thesiscard .venue { font-size: .78rem; }
+
+.ctafoot {
+  margin-top: 3.5rem; border: 1px solid var(--line); border-radius: 3px;
+  background: var(--raise); box-shadow: var(--shadow);
+  padding: 2.25rem 2rem; text-align: center; display: grid; gap: 1rem; justify-items: center;
+}
+.ctafoot h2 { margin: 0; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 660; text-wrap: balance; }
+.ctafoot p { margin: 0; color: var(--dim); max-width: 48ch; }
 
 .toolbar { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
 .search-form { display: flex; gap: .5rem; margin: .6rem 0 1rem; }
@@ -164,6 +222,7 @@ button.x:hover { color: var(--danger); opacity: 1; }
   font-size: .85rem; line-height: 1.3;
 }
 .btn:hover { opacity: .88; }
+.btn:disabled, .btn:disabled:hover { opacity: .5; cursor: not-allowed; }
 .btn.quiet { background: none; color: var(--dim); border-color: var(--line); }
 .btn.quiet:hover { color: var(--ink); border-color: var(--ink); opacity: 1; }
 .actions { display: flex; gap: .5rem; flex-wrap: wrap; margin: .6rem 0 0; }
@@ -325,7 +384,6 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
   padding: .5rem 0; border-bottom: 1px solid var(--line);
 }
 .row-item input, .row-item select { flex: 1 1 auto; min-width: 8rem; }
-.import-error { color: var(--danger); }
 
 /* A round row's applies_to: one toggle chip per leg. Basis 100% so the
    chips get their own line rather than competing with the row's inputs --
@@ -972,6 +1030,33 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 650; }
 .lede p { margin: 0; color: var(--dim); }
 
+/* Import + preview callouts (task 2/3): a reassurance or warning banner,
+   the accent tone by default, an .off-toned "warn" variant for a parse
+   failure or an editor-facing heads-up. */
+.callout {
+  display: flex; gap: .6rem; align-items: flex-start; padding: .75rem .9rem;
+  border-radius: 3px; font-size: .875rem; border: 1px solid var(--accent);
+  background: var(--accent-wash); color: var(--accent);
+}
+.callout.warn { border-color: var(--off); background: var(--off-wash); color: var(--off); }
+/* Multiple parse warnings on the import preview stack edge to edge without
+   this -- one gap between every .callout.warn in the list. */
+.warnlist { display: grid; gap: .5rem; }
+.callout b { font-weight: 700; }
+.callout a { color: inherit; text-decoration: underline; }
+/* A bare fallback for the "more" link pattern (`.col .more` / `.steps
+   .more` are the scoped originals) for pages with neither wrapper --
+   same accent-on-hover-underline look, just not nested under one. */
+.clock .more { color: var(--accent); text-decoration: none; font-weight: 550; }
+.clock .more:hover { text-decoration: underline; }
+/* The landing page's Discover-teaser link (demo's `.head .more`): a plain
+   inline link at the end of a .head row, not a button. */
+.head .more {
+  margin-left: auto; font-size: .8125rem; color: var(--accent);
+  text-decoration: none; font-weight: 550;
+}
+.head .more:hover { text-decoration: underline; }
+
 .pick {
   margin-top: 1.5rem; display: grid; gap: .75rem;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
@@ -1064,3 +1149,96 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   text-decoration: none; font-weight: 550;
 }
 .steps .more:hover { text-decoration: underline; }
+
+/* ── Welcome wizard ──────────────────────────────────────────────────────
+   Ported from the onboarding demo. The wizard flows into /setup, so these
+   sit on the same tokens as the setup tiles above -- both themes, no
+   hardcoded light colours. */
+
+/* Reminder step: the three selectable starter-preset cards. */
+.remcards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: .75rem; margin-top: 1.5rem;
+}
+.remcard {
+  position: relative; font: inherit; text-align: left; width: 100%; cursor: pointer;
+  background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+  padding: .85rem .9rem; display: grid; gap: .3rem; box-shadow: var(--shadow);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.remcard:hover { transform: translateY(-1px); border-color: var(--dim); }
+.remcard .rem-label { font-weight: 600; letter-spacing: -.01em; }
+.remcard .rem-labelrow { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; padding-right: 1.4rem; }
+.remcard .rem-lines { margin-top: .1rem; display: grid; gap: .05rem; }
+.remcard .rem-lines div { font-size: .8125rem; color: var(--dim); }
+.remcard .remtick {
+  position: absolute; top: .7rem; right: .7rem; width: 1.15rem; height: 1.15rem;
+  border-radius: 50%; display: grid; place-items: center; font-size: .68rem;
+  font-weight: 700; line-height: 1; border: 1.5px solid var(--line);
+  color: transparent; background: transparent;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.remcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.remcard[aria-pressed="true"] .remtick { background: var(--accent); border-color: var(--accent); color: var(--raise); }
+/* The dim note under the cards and reused for small helper lines this step. */
+.remnote { color: var(--dim); font-size: .8125rem; margin-top: .7rem; }
+
+/* Reminder step: the fine-tune list -- every row a live sentence built from
+   inline dropdowns; picking a card above resets it wholesale. */
+.remtune { margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
+.remtune-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; margin-bottom: .6rem; }
+.remtune-head h3 { margin: 0; font-size: .9rem; font-weight: 650; letter-spacing: -.01em; }
+.remtune-head .note { color: var(--dim); font-size: .8125rem; }
+.remrules { border: 1px solid var(--line); border-radius: 3px; background: var(--raise); }
+.remrule {
+  display: flex; align-items: center; gap: .45rem; padding: .55rem .75rem;
+  border-top: 1px dotted var(--line); flex-wrap: wrap; font-size: .95rem;
+}
+.remrule:first-child { border-top: 0; }
+.remrule select {
+  font: inherit; padding: .3rem .45rem; border: 1px solid var(--line);
+  border-radius: 3px; background: var(--raise); color: var(--ink);
+}
+.remrule select[hidden] { display: none; }
+.remrule select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.remrule .act {
+  margin-left: auto; background: none; border: none; color: var(--dim);
+  cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 .2rem;
+}
+.remrule .act:hover { color: var(--danger); }
+.remrule-empty { padding: .85rem .75rem; color: var(--dim); font-size: .875rem; }
+.remtune-add { margin-top: .75rem; }
+
+/* Test-DM step: a static illustrative Discord DM preview (no user text). The
+   Discord brand blue is intentional and reads on both themes. */
+.dmcard {
+  border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+  padding: 1rem 1.1rem; display: grid; grid-template-columns: auto 1fr; gap: .8rem;
+  box-shadow: var(--shadow); max-width: 36rem; margin-top: 1rem;
+}
+.dmcard .bot {
+  width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--accent);
+  display: grid; place-items: center; color: #fff; font-weight: 700;
+}
+.dmcard .bn { font-weight: 650; font-size: .9rem; display: flex; align-items: center; gap: .4rem; }
+.dmcard .bn .bg {
+  background: #5865f2; color: #fff; font-size: .58rem; padding: .05rem .3em;
+  border-radius: 3px; letter-spacing: .04em; font-weight: 700; text-transform: uppercase;
+}
+.dmcard .bn .ts { color: var(--dim); font-weight: 400; font-size: .72rem; }
+.dmcard .msg { font-size: .9rem; margin-top: .35rem; line-height: 1.5; }
+.dmcard .msg b { font-weight: 650; }
+
+/* Calendar step: the feed-link reveal, an ok-toned card with the one-time
+   URL and a copy control. */
+.feedbox {
+  border: 1px solid var(--ok); background: var(--ok-wash); border-radius: 3px;
+  padding: .9rem 1rem; display: grid; gap: .5rem; max-width: 42rem; margin-top: 1.25rem;
+}
+.feedbox .fl { font-size: .8125rem; color: var(--ok); font-weight: 650; }
+.feedbox code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: .78rem;
+  background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+  padding: .45rem .55rem; word-break: break-all; color: var(--ink);
+}
+.feedbox .frow { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }

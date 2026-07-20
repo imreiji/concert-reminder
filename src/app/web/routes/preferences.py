@@ -483,12 +483,16 @@ async def set_timezone_auto(
 async def reset_timezone_auto(
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
+    next_url: str = Form("/preferences", alias="next"),
 ):
-    """Back to auto: next page load re-detects from the browser."""
+    """Back to auto: next page load re-detects from the browser. `next` (guarded
+    by _safe_next, same as /me/timezone) lets the welcome wizard's Detection
+    control land back on /welcome instead of /preferences -- not a new write
+    path, just the same reset honouring where it was invoked from."""
     db_user = await ensure_user(session, user.id, user.username)
     db_user.tz_auto = True
     await session.commit()
-    return RedirectResponse("/preferences", status_code=303)
+    return RedirectResponse(_safe_next(next_url), status_code=303)
 
 
 # ── DM diagnostics ───────────────────────────────────────────────────────

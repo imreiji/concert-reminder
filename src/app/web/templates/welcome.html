@@ -1,17 +1,29 @@
 {% extends "base.html" %}
 {% block title %}welcome — dekimasen.app{% endblock %}
 {% block content %}
-<h1>Welcome to dekimasen.app</h1>
-<p class="dim">Step {{ step + 1 }} of 5 —
-  <form method="post" action="/welcome/skip-all" class="inline">
-    <button type="submit" class="quiet tiny">skip setup entirely</button>
+
+{# Step tracker: the wizard's five steps as done/on/upcoming pills, matching
+   the /setup flow this hands off into (setup.html uses the same .stepdot). #}
+<div class="steps">
+  {% set labels = ["Follow", "Reminders", "Timezone", "Test DM", "Calendar"] %}
+  {% for label in labels %}
+  <span class="stepdot{% if loop.index0 < step %} done{% elif loop.index0 == step %} on{% endif %}">{{ label }}</span>
+  {% endfor %}
+  <form method="post" action="/welcome/skip-all" class="inline" style="margin-left:auto">
+    <button type="submit" class="btn quiet tiny">Skip setup entirely</button>
   </form>
-</p>
+</div>
 
 {% if step == 0 %}
-<h2>Follow some artists</h2>
-<p class="dim">Get notified the moment a new event drops for anyone you follow.</p>
-<input class="tag-search" type="search" placeholder="Search tags…" oninput="filterChips(this, '.sub-box')">
+<div class="lede">
+  <h1>Follow some artists</h1>
+  <p>Get a DM the moment a new event drops for anyone you follow. Pick a franchise to cover
+    everyone under it, a group, or a single performer — you can change any of this later. Tap
+    to follow.</p>
+</div>
+
+<input class="tag-search" type="search" placeholder="Search franchises, groups, performers…"
+       aria-label="Search tags" oninput="filterChips(this, '.sub-box')">
 
 {% macro subchip(t) -%}
   {%- set sub = sub_by_tag.get(t.id) -%}
@@ -65,90 +77,412 @@
   {% endif %}
 </div>
 
-<form method="post" action="/welcome/advance"><button>Continue</button></form>
+<form method="post" action="/welcome/advance">
+  <div class="bar">
+    <span class="tally"><b>{{ sub_by_tag | length }}</b> tag{{ "s" if sub_by_tag | length != 1 }} followed</span>
+    <button class="btn" type="submit">Continue</button>
+  </div>
+</form>
 {% endif %}
 
 {% if step == 1 %}
-<h2>Pick a default reminder preset</h2>
-<p class="dim">This is what fires when you tap "Set my reminders" on a concert or click the
-  Discord DM button — a standard loadout you won't have to rebuild every time.</p>
-{% if has_preset %}
-<p class="dim">Preset created — nice.</p>
-{% else %}
-<form class="stack" method="post" action="/presets">
-  <input type="hidden" name="next" value="/welcome">
-  <label>Name <input name="name" required maxlength="100" placeholder="standard lottery coverage"></label>
-  <div class="sentence">
-    <span>Remind me</span>
-    <select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == 3 %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
-    <span>day(s)</span>
-    <select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}">{{ n }}</option>{% endfor %}</select>
-    <span>hour(s)</span>
-    <select name="direction">
-      <option value="before" selected>before</option>
-      <option value="after">after</option>
-    </select>
-    <span>each</span>
-    <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == "closes" %}selected{% endif %}>{{ a.value.replace("_"," ") | capitalize }}</option>{% endfor %}</select>
+<div class="lede">
+  <h1>Pick a default reminder preset</h1>
+  <p>This is what fires when you tap "Set my reminders" on a concert, or press the Discord DM
+    button — a standard loadout you won't have to rebuild every time. Rules on a single concert
+    always override it.</p>
+</div>
+
+{# The fine-tune rows below are the source of truth; picking a card reseeds
+   them. The whole thing is one form -- its named selects submit as three
+   aligned arrays (offset "days:hours" / direction / anchor) to /welcome/preset,
+   which zips them into a real ReminderPreset. #}
+<form method="post" action="/welcome/preset" id="remForm">
+  <div class="remcards" id="remCards">
+    <button class="remcard" type="button" data-remcard="relaxed" aria-pressed="false">
+      <span class="remtick">✓</span>
+      <span class="eyebrow">Light touch</span>
+      <span class="rem-label">Relaxed</span>
+      <div class="rem-lines">
+        <div>Opens — when applications open</div>
+        <div>Closes — 1 day before</div>
+        <div>Results — when results come out</div>
+        <div>Payment — when payment is due</div>
+      </div>
+    </button>
+    <button class="remcard" type="button" data-remcard="standard" aria-pressed="true">
+      <span class="remtick">✓</span>
+      <span class="eyebrow">Balanced</span>
+      <div class="rem-labelrow">
+        <span class="rem-label">★ Standard</span>
+        <span class="pill p-ok">Recommended</span>
+      </div>
+      <div class="rem-lines">
+        <div>Opens — when applications open</div>
+        <div>Closes — 3 days &amp; 1 day before</div>
+        <div>Results — when results come out</div>
+        <div>Payment — 1 day before</div>
+      </div>
+    </button>
+    <button class="remcard" type="button" data-remcard="onball" aria-pressed="false">
+      <span class="remtick">✓</span>
+      <span class="eyebrow">Maximum coverage</span>
+      <span class="rem-label">On the ball</span>
+      <div class="rem-lines">
+        <div>Opens — 1 day before &amp; when applications open</div>
+        <div>Closes — 5, 3 &amp; 1 days before</div>
+        <div>Results — when results come out</div>
+        <div>Payment — 3 &amp; 1 days before</div>
+      </div>
+    </button>
   </div>
-  <button>Create preset</button>
+
+  <p class="remnote">One reminder for each single moment — opens, results, payment — plus a
+    couple of nudges before closes, since that's the one with an action to take. Fine-tune any of
+    these below, or later in Preferences.</p>
+
+  {% macro remrow(days, hours, direction, anchor) -%}
+    {%- set offval = days ~ ":" ~ hours -%}
+    {%- set moment = (days == 0 and hours == 0) -%}
+    <div class="remrule" data-ruleid="server">
+      <span>Remind me</span>
+      <select name="offset" data-role="offset" aria-label="Offset">
+        {% for o in offset_options %}<option value="{{ o.value }}"{% if o.value == offval %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
+      </select>
+      <select name="direction" data-role="direction" aria-label="Before or after"{% if moment %} hidden{% endif %}>
+        <option value="before"{% if direction == "before" %} selected{% endif %}>before</option>
+        <option value="after"{% if direction == "after" %} selected{% endif %}>after</option>
+      </select>
+      <select name="anchor" data-role="anchor" aria-label="Anchor">
+        {% for a in anchor_order %}<option value="{{ a }}"{% if a == anchor %} selected{% endif %}>{{ anchor_moment[a] if moment else anchor_noun[a] }}</option>{% endfor %}
+      </select>
+      <span>.</span>
+      <button class="act" type="button" data-remove="server" aria-label="Remove this reminder">×</button>
+    </div>
+  {%- endmacro %}
+
+  <div class="remtune">
+    <div class="remtune-head">
+      <h3>Fine-tune these reminders</h3>
+      <span class="note">Change any dropdown — each row stays a real sentence.</span>
+    </div>
+    {# Standard rows rendered server-side: the list is populated with JS off,
+       and the script rebuilds the identical rows on load, so there is no flash. #}
+    <div class="remrules" id="remRuleList">
+      {% for r in standard_rules %}{{ remrow(r[0], r[1], r[2], r[3]) }}{% endfor %}
+    </div>
+    <div class="remtune-add">
+      <button class="btn quiet" type="button" id="remAddRow">+ Add a reminder</button>
+    </div>
+  </div>
+
+  <div class="bar">
+    <span class="tally">Rules on a single concert always override this.</span>
+    <button class="btn quiet" type="submit" formaction="/welcome/advance">Skip this step</button>
+    <button class="btn" type="submit" id="remSubmit">Create preset &amp; continue</button>
+  </div>
 </form>
-{% endif %}
-<form method="post" action="/welcome/advance"><button>{{ "Continue" if has_preset else "Skip this" }}</button></form>
+
+<script>
+  // Static, self-contained: seeds and edits the fine-tune rows entirely from
+  // config passed via `| tojson` (invariant 7 -- never `| safe`, and every
+  // label reaches the DOM through textContent, never innerHTML). None of this
+  // is user-controlled; it is the offset/anchor vocabulary and the three
+  // starter presets, defined once server-side in routes/welcome.py.
+  (function () {
+    var form = document.getElementById("remForm");
+    var cards = document.getElementById("remCards");
+    var ruleList = document.getElementById("remRuleList");
+    var submitBtn = document.getElementById("remSubmit");
+    if (!form || !cards || !ruleList) return;
+
+    var OFFSETS = {{ offset_options | tojson }};
+    var ANCHOR_ORDER = {{ anchor_order | tojson }};
+    var ANCHOR_MOMENT = {{ anchor_moment | tojson }};
+    var ANCHOR_NOUN = {{ anchor_noun | tojson }};
+    var PRESETS = {{ preset_templates | tojson }};
+
+    function isMoment(value) {
+      var o = OFFSETS.find(function (x) { return x.value === value; });
+      return !!o && o.moment === true;
+    }
+
+    var cardEls = Array.prototype.slice.call(cards.querySelectorAll(".remcard"));
+    var rows = [];   // [{ id, offset, direction, anchor }] -- the fine-tune state
+    var seq = 0;
+
+    // One row as a real sentence, with NAMED selects so the native form submit
+    // carries three aligned arrays. The direction select is always present
+    // (hidden for a moment offset) so those arrays never fall out of step.
+    function buildRow(row) {
+      var moment = isMoment(row.offset);
+      var wrap = document.createElement("div");
+      wrap.className = "remrule";
+      wrap.dataset.ruleid = row.id;
+
+      var lead = document.createElement("span");
+      lead.textContent = "Remind me";
+      wrap.appendChild(lead);
+
+      var offsetSel = document.createElement("select");
+      offsetSel.name = "offset";
+      offsetSel.dataset.role = "offset";
+      offsetSel.setAttribute("aria-label", "Offset");
+      OFFSETS.forEach(function (o) {
+        var opt = document.createElement("option");
+        opt.value = o.value;
+        opt.textContent = o.label;
+        if (o.value === row.offset) opt.selected = true;
+        offsetSel.appendChild(opt);
+      });
+      wrap.appendChild(offsetSel);
+
+      var relSel = document.createElement("select");
+      relSel.name = "direction";
+      relSel.dataset.role = "direction";
+      relSel.setAttribute("aria-label", "Before or after");
+      if (moment) relSel.hidden = true;
+      ["before", "after"].forEach(function (r) {
+        var opt = document.createElement("option");
+        opt.value = r;
+        opt.textContent = r;
+        if (r === row.direction) opt.selected = true;
+        relSel.appendChild(opt);
+      });
+      wrap.appendChild(relSel);
+
+      var anchorSel = document.createElement("select");
+      anchorSel.name = "anchor";
+      anchorSel.dataset.role = "anchor";
+      anchorSel.setAttribute("aria-label", "Anchor");
+      var phrase = moment ? ANCHOR_MOMENT : ANCHOR_NOUN;
+      ANCHOR_ORDER.forEach(function (a) {
+        var opt = document.createElement("option");
+        opt.value = a;
+        opt.textContent = phrase[a];
+        if (a === row.anchor) opt.selected = true;
+        anchorSel.appendChild(opt);
+      });
+      wrap.appendChild(anchorSel);
+
+      wrap.appendChild(document.createTextNode("."));
+
+      var rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "act";
+      rm.dataset.remove = row.id;
+      rm.setAttribute("aria-label", "Remove this reminder");
+      rm.textContent = "×";
+      wrap.appendChild(rm);
+      return wrap;
+    }
+
+    // A zero-row submit would create an empty ReminderPreset server-side
+    // (rejected there too, welcome.py's create_wizard_preset) -- disabling
+    // here just keeps a normal click from ever reaching that 422.
+    function renderRows() {
+      ruleList.innerHTML = "";
+      if (submitBtn) submitBtn.disabled = !rows.length;
+      if (!rows.length) {
+        var p = document.createElement("div");
+        p.className = "remrule-empty";
+        p.textContent = "No reminders yet — add one below.";
+        ruleList.appendChild(p);
+        return;
+      }
+      rows.forEach(function (row) { ruleList.appendChild(buildRow(row)); });
+    }
+
+    function withId(rule) {
+      // rule is [days, hours, direction, anchor]
+      return { id: "r" + (seq++), offset: rule[0] + ":" + rule[1],
+               direction: rule[2] || "before", anchor: rule[3] };
+    }
+
+    // Selecting a card replaces the whole list wholesale -- a deliberate reset,
+    // same as picking a fresh loadout.
+    function applyPreset(name) {
+      rows = (PRESETS[name] || []).map(withId);
+      cardEls.forEach(function (c) {
+        c.setAttribute("aria-pressed", String(c.dataset.remcard === name));
+      });
+      renderRows();
+    }
+
+    cardEls.forEach(function (card) {
+      card.addEventListener("click", function () { applyPreset(card.dataset.remcard); });
+    });
+
+    // Editing a dropdown updates that row's state, then re-renders so the
+    // anchor phrasing (verb vs noun) flips with the offset.
+    ruleList.addEventListener("change", function (e) {
+      var sel = e.target.closest("select[data-role]");
+      if (!sel) return;
+      var rowEl = sel.closest(".remrule");
+      var row = rows.find(function (r) { return r.id === rowEl.dataset.ruleid; });
+      if (!row) return;
+      if (sel.dataset.role === "offset") row.offset = sel.value;
+      else if (sel.dataset.role === "direction") row.direction = sel.value;
+      else if (sel.dataset.role === "anchor") row.anchor = sel.value;
+      renderRows();
+    });
+
+    ruleList.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-remove]");
+      if (!btn) return;
+      rows = rows.filter(function (r) { return r.id !== btn.dataset.remove; });
+      renderRows();
+    });
+
+    var addBtn = document.getElementById("remAddRow");
+    if (addBtn) addBtn.addEventListener("click", function () {
+      rows.push(withId([1, 0, "before", "closes"]));
+      renderRows();
+    });
+
+    // Sync JS state with the pre-selected Standard card. Rebuilds the same rows
+    // the server rendered, so there is no visible flash.
+    applyPreset("standard");
+  })();
+</script>
 {% endif %}
 
 {% if step == 2 %}
-<h2>Confirm your timezone</h2>
-<p class="dim">Deadlines always show in JST plus this timezone.</p>
-<p>Detected: <strong>{{ tz }}</strong>{% if tz_auto %} <span class="dim tiny">(auto-detected from your browser)</span>{% endif %}</p>
-<form class="inline" method="post" action="/me/timezone">
+<div class="lede">
+  <h1>Confirm your timezone</h1>
+  <p>Deadlines always show JST first, then this timezone — so you never have to convert a
+    23:59 JST close in your head.</p>
+</div>
+
+<p style="margin-top:1.25rem">Detected <strong>{{ tz }}</strong>{% if tz_auto %}
+  <span class="remnote">(auto-detected from your browser)</span>{% endif %}</p>
+
+{# Two selects, matching preferences.html's Time section: the zone picker
+   (Save pins it manual) and a Detection mode that reuses the SAME timezone
+   routes -- "Follow my browser" re-arms auto-detect (reset route), "Keep what
+   I picked" pins the current zone manual (/me/timezone). Both paired hidden
+   forms carry next=/welcome so the wizard stays put. No user-authored text in
+   any handler (invariant 7). #}
+<div class="grid2" style="max-width:36rem; margin-top:.5rem">
+  <form class="fld inline" method="post" action="/me/timezone">
+    <input type="hidden" name="next" value="/welcome">
+    <span>Your timezone</span>
+    <select name="timezone">
+      <optgroup label="Common">
+        {% for t in common_timezones %}<option value="{{ t }}"{% if t == tz %} selected{% endif %}>{{ t }}</option>{% endfor %}
+      </optgroup>
+      <optgroup label="All zones (IANA)">
+        {% for t in all_timezones %}<option value="{{ t }}"{% if t == tz and t not in common_timezones %} selected{% endif %}>{{ t }}</option>{% endfor %}
+      </optgroup>
+    </select>
+    <button class="btn" type="submit">Use this timezone</button>
+  </form>
+  <label class="fld"><span>Detection</span>
+    <select id="tz-detect" aria-label="Timezone detection mode">
+      <option value="follow" {% if tz_auto %}selected{% endif %}>Follow my browser</option>
+      <option value="keep" {% if not tz_auto %}selected{% endif %}>Keep what I picked</option>
+    </select></label>
+</div>
+<form id="tz-follow" method="post" action="/me/timezone/reset" hidden>
   <input type="hidden" name="next" value="/welcome">
-  <select name="timezone">
-    <optgroup label="Common">
-      {% for t in common_timezones %}<option value="{{ t }}" {% if t == tz %}selected{% endif %}>{{ t }}</option>{% endfor %}
-    </optgroup>
-    <optgroup label="All zones (IANA)">
-      {% for t in all_timezones %}<option value="{{ t }}" {% if t == tz and t not in common_timezones %}selected{% endif %}>{{ t }}</option>{% endfor %}
-    </optgroup>
-  </select>
-  <button>Use this timezone</button>
 </form>
-<form method="post" action="/welcome/advance"><button>Looks right, continue</button></form>
+<form id="tz-keep" method="post" action="/me/timezone" hidden>
+  <input type="hidden" name="timezone" value="{{ tz }}">
+  <input type="hidden" name="next" value="/welcome">
+</form>
+
+<script>
+  // The Detection select submits one of the paired hidden forms above. Values
+  // are fixed tokens, not user text, so keying off them directly is safe
+  // (mirrors preferences.html's identical control).
+  (function () {
+    var sel = document.getElementById("tz-detect");
+    if (!sel) return;
+    sel.addEventListener("change", function () {
+      var form = document.getElementById(sel.value === "follow" ? "tz-follow" : "tz-keep");
+      if (form) form.submit();
+    });
+  })();
+</script>
+
+{# A live JST/local sample so the dual render is visible before relying on it
+   (invariant 1: JST first, both zones always). #}
+<p class="remnote" style="margin-top:.7rem">Right now that reads
+  <span class="num">{{ tz_preview }}</span> for you.</p>
+
+<form method="post" action="/welcome/advance">
+  <div class="bar">
+    <button class="btn" type="submit">Looks right, continue</button>
+  </div>
+</form>
 {% endif %}
 
 {% if step == 3 %}
-<h2>Send a test DM</h2>
-<p class="dim">Confirm reminders can actually reach you on Discord before you rely on them.</p>
+<div class="lede">
+  <h1>Send a test DM</h1>
+  <p>Confirm reminders can actually reach you on Discord before you rely on them. If your DMs
+    are closed, this is where you find out — not the night a lottery closes.</p>
+</div>
+
 {% if bot_enabled %}
-<p class="inline">
-  <button hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">Send test DM</button>
-  <span id="dm-test-result" class="dim"></span>
+<p class="inline" style="margin-top:1.25rem; display:flex; gap:.75rem; align-items:center; flex-wrap:wrap">
+  <button class="btn" hx-post="/me/test-dm" hx-target="#dm-test-result" hx-swap="innerHTML">Send test DM</button>
+  <span id="dm-test-result" class="remnote"></span>
 </p>
+
+<div class="dmcard">
+  <div class="bot">✦</div>
+  <div>
+    <div class="bn">dekimasen <span class="bg">bot</span> <span class="ts">now</span></div>
+    <div class="msg">
+      ✅ <b>Test reminder.</b> If you can read this, your deadline DMs will reach you — you'll
+      get messages like a presale closing in 3 days, with the time in JST and your own zone.
+    </div>
+  </div>
+</div>
 {% else %}
-<p class="dim">The Discord bot isn't running in this environment (dev mode), so DMs can't be tested here.</p>
+<p class="remnote" style="margin-top:1.25rem">The Discord bot isn't running in this environment
+  (dev mode), so DMs can't be tested here.</p>
 {% endif %}
-<form method="post" action="/welcome/advance"><button>Continue</button></form>
+
+<form method="post" action="/welcome/advance">
+  <div class="bar">
+    <button class="btn" type="submit">Continue</button>
+  </div>
+</form>
 {% endif %}
 
 {% if step == 4 %}
-<h2>Get your calendar feed</h2>
-<p class="dim">Subscribe once in your phone/calendar app and every deadline you have a
-  reminder for stays in sync automatically.</p>
+<div class="lede">
+  <h1>Get your calendar feed</h1>
+  <p>Subscribe once in your phone or calendar app and every deadline you have a reminder for
+    stays in sync automatically — a belt to the DM's braces.</p>
+</div>
+
 {% if feed_url %}
-<div class="panel">
-  <p><strong>Your feed link is ready — save it now, it won't be shown again:</strong></p>
-  <p class="inline"><code class="feed-url">{{ feed_url }}</code>
-    <button type="button" class="quiet" data-copy="{{ feed_url }}"
-            onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy</button></p>
+<div class="feedbox">
+  <div class="fl">✓ Your feed link is ready — save it now, it won't be shown again.</div>
+  <code>{{ feed_url }}</code>
+  <div class="frow">
+    <button type="button" class="btn quiet" data-copy="{{ feed_url }}"
+            onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy link</button>
+    <span class="remnote">Add it in Google Calendar, Apple Calendar, or Outlook.</span>
+  </div>
 </div>
 {% elif has_calendar_feed %}
-<p class="dim">Your feed is active.</p>
+<p class="remnote" style="margin-top:1.25rem">Your feed is active.</p>
 {% else %}
-<form method="post" action="/me/calendar-feed">
+<form method="post" action="/me/calendar-feed" style="margin-top:1.25rem">
   <input type="hidden" name="next" value="/welcome">
-  <button>Generate feed link</button>
+  <button class="btn" type="submit">Generate feed link</button>
 </form>
 {% endif %}
-<form method="post" action="/welcome/advance"><button>{{ "Continue" if has_calendar_feed else "Skip this" }}</button></form>
+
+<form method="post" action="/welcome/advance">
+  <div class="bar">
+    <span class="tally">You're set — next we'll tidy up which concerts you're actually going for.</span>
+    <button class="btn" type="submit">Continue to my concerts</button>
+  </div>
+</form>
 {% endif %}
 {% endblock %}
