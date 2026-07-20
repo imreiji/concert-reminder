@@ -2,10 +2,17 @@
 {% block title %}setup — dekimasen.app{% endblock %}
 {% block content %}
 
+{# The completed /welcome wizard steps as static done-pills, matching the
+   demo's tracker (dekimasen-demo.html lines 985-991) -- this GET is only
+   ever reached after the wizard finishes, so all four are always done. #}
 <div class="steps">
-  <span class="stepdot{% if screen == 'prune' %} on{% elif screen != 'prune' %} done{% endif %}">Your concerts</span>
+  <span class="stepdot done">Follow</span>
+  <span class="stepdot done">Timezone</span>
+  <span class="stepdot done">Reminders</span>
+  <span class="stepdot done">Test DM</span>
+  <a class="more" href="/preferences">&larr; Preferences</a>
+  <span class="stepdot{% if screen == 'prune' %} on{% else %} done{% endif %}">Your concerts</span>
   <span class="stepdot{% if screen == 'applications' %} on{% elif screen == 'ready' %} done{% endif %}">Applications</span>
-  <span class="stepdot{% if screen == 'ready' %} on{% endif %}">Ready</span>
 </div>
 
 {% if screen == "prune" %}
@@ -146,7 +153,17 @@
     <div><div class="n">{{ tallies.applied }}</div><div class="l">applied</div></div>
     <div><div class="n">{{ tallies.payment_due }}</div><div class="l">payment due</div></div>
     <div>
-      <div class="n">{{ dual(tallies.next_deadline_utc, tz) if tallies.next_deadline_utc else "—" }}</div>
+      {# The other three tallies are short digits; a full one-line dual
+         string overflowed this big-font tile. Split it the way tile rows
+         above already do: the short date in `.n`, the JST+local clock
+         (invariant 1 -- both zones, always) in a smaller line below. #}
+      {% if tallies.next_deadline_utc %}
+      {% set ndl = dual_lines(tallies.next_deadline_utc, tz) %}
+      <div class="n">{{ ndl[0] }}</div>
+      <div class="stat num">{{ ndl[1] }}</div>
+      {% else %}
+      <div class="n">—</div>
+      {% endif %}
       <div class="l">next deadline</div>
     </div>
   </div>

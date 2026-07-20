@@ -953,7 +953,19 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .tallies { display: flex; gap: 2.5rem; justify-content: center; margin: 2rem 0; flex-wrap: wrap; }
 .tallies div { text-align: center; }
 .tallies .n { font-size: 1.8rem; font-weight: 650; letter-spacing: -.02em; }
+/* The next-deadline tile's dual JST+local clock (invariant 1), one size
+   down from `.n` so it never overflows the tile the way the full one-line
+   dual string used to. */
+.tallies .stat { font-size: .72rem; color: var(--dim); margin-top: .1rem; }
 .tallies .l {
   font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
   color: var(--dim); font-weight: 650;
 }
+
+/* The step tracker's escape link back to Preferences (demo's `.head .more`,
+   scoped here to `.steps` since the app has no matching `.head` wrapper). */
+.steps .more {
+  margin-left: auto; font-size: .8125rem; color: var(--accent);
+  text-decoration: none; font-weight: 550;
+}
+.steps .more:hover { text-decoration: underline; }

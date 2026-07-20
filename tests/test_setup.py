@@ -337,6 +337,62 @@ async def test_ready_without_payment_due_has_no_narrative(client):
     assert "waiting on a payment" not in r.text
 
 
+async def test_ready_next_deadline_stat_does_not_overflow_big_tile(client):
+    """The reveal screen's fourth tally (next deadline) used to cram the full
+    one-line dual string ('Sat 2099-06-20 21:00 JST (09:00 ADT)') into the
+    same big-font `.n` tile as the three short digit tallies, overflowing it.
+    It must now render a short value in `.n` and keep the dual JST+local time
+    (invariant 1) in a smaller, separate line."""
+    login_as(client, FAN_ID, "fan")
+    a = await seed_concert(client, "aqours-a", "Aqours A", "Aqours")
+    await add_round(client, a, "R1", opens_at_utc=PAST, closes_at_utc=FUTURE)
+
+    r = client.get("/setup/ready")
+    assert r.status_code == 200
+    # The big-font stat tile holds only the short date -- no clock, no
+    # parenthesised second zone, nothing that made the old string overflow.
+    assert '<div class="n">Sat 20 Jun</div>' in r.text
+    assert '<div class="n">Sat 2099-06-20' not in r.text
+    # Both zones are still present (invariant 1), just not inside `.n`.
+    assert "21:00 JST" in r.text
+    assert "09:00 ADT" in r.text
+
+
+async def test_ready_step_tracker_matches_demo_shape(client):
+    """The step tracker reconciles with the demo: the completed /welcome
+    wizard steps as static done-pills, a Preferences escape link, and just
+    the two real capture-flow dots (no third "Ready" dot -- the demo shows
+    both capture dots as done on the reveal screen, not a separate node)."""
+    login_as(client, FAN_ID, "fan")
+
+    r = client.get("/setup/ready")
+    assert r.status_code == 200
+    for label in ("Follow", "Timezone", "Reminders", "Test DM"):
+        assert f'<span class="stepdot done">{label}</span>' in r.text
+    assert '<a class="more" href="/preferences">' in r.text
+    assert "&larr; Preferences" in r.text or "← Preferences" in r.text
+    # Both capture-flow dots read done on the reveal screen; no third dot.
+    assert '<span class="stepdot done">Your concerts</span>' in r.text
+    assert '<span class="stepdot done">Applications</span>' in r.text
+    assert ">Ready<" not in r.text
+
+
+async def test_prune_screen_step_tracker_marks_first_dot_on(client):
+    login_as(client, FAN_ID, "fan")
+    r = client.get("/setup")
+    assert r.status_code == 200
+    assert '<span class="stepdot on">Your concerts</span>' in r.text
+    assert '<span class="stepdot">Applications</span>' in r.text
+
+
+async def test_applications_screen_step_tracker_marks_second_dot_on(client):
+    login_as(client, FAN_ID, "fan")
+    r = client.get("/setup/applications")
+    assert r.status_code == 200
+    assert '<span class="stepdot done">Your concerts</span>' in r.text
+    assert '<span class="stepdot on">Applications</span>' in r.text
+
+
 async def test_rerun_reflects_prior_choices(client):
     login_as(client, FAN_ID, "fan")
     keep = await seed_concert(client, "aqours-a", "Aqours A", "Aqours")
