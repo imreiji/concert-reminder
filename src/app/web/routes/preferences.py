@@ -33,6 +33,7 @@ from app.db.models import Concert, PresetItem, ReminderPreset, Tag, TagSubscript
 from app.db.service import (
     apply_preset,
     concert_subscription_states,
+    delete_user,
     ensure_user,
     followed_tag_counts,
     get_default_preset,
@@ -47,7 +48,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual_lines
 from app.domain.types import Anchor
-from app.web.auth import SessionUser, require_admin, require_user
+from app.web.auth import SessionUser, require_admin, require_user, revoke_session
 
 router = APIRouter()
 
@@ -523,3 +524,31 @@ async def send_test_dm(
         return HTMLResponse("Still blocked — check your Discord privacy settings.")
     except discord.HTTPException:
         return HTMLResponse("Couldn't reach Discord, try again.")
+
+
+# ── Account deletion ─────────────────────────────────────────────────────
+
+
+@router.post("/me/delete")
+async def delete_account(
+    request: Request,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Self-serve GDPR erasure, scoped to the AUTHENTICATED CALLER ONLY.
+
+    The id comes from the session (require_user), never from request input, so
+    a logged-in user can only ever delete themselves. delete_user cascades away
+    everything personal and SET-NULLs the shared catalogue this user authored
+    -- their concerts/tags survive with the author blanked (see db/service.py).
+    Revoke the session through the same path logout uses (the cascade then
+    removes the row too), then land the now-signed-out visitor on Home.
+
+    The heavy confirmation lives client-side in the Account danger card (a
+    deliberate second action naming the loss); the route deliberately does NOT
+    require it to have run -- it just performs the erasure for the caller.
+    """
+    await revoke_session(request, session)
+    await delete_user(session, user.id)
+    await session.commit()
+    return RedirectResponse("/?deleted=1", status_code=303)

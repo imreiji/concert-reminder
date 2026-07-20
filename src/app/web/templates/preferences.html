@@ -365,16 +365,35 @@
       <span class="sp"><a class="btn" href="/setup">Run setup</a></span>
     </div>
 
-    {# Destructive item: full danger frame. The delete button itself is wired
-       in Task 9; until then this is the documented manual-request placeholder. #}
+    {# Destructive item: full danger frame. The button opens a heavy
+       confirmation (dialog.prune -- the same pattern as the concert page's
+       WON/PAID opt-out) that names exactly what goes and what stays before the
+       POST fires. A deliberate second action, not a one-click. The dialog id in
+       the on* handlers is STATIC and the copy is static, so invariant 7 (no
+       user-controlled text in on* handlers) holds. #}
     <div class="danger" style="margin-top:1rem">
       <div>
         <div class="t2">Delete my account</div>
-        <div class="s2">Removes your subscriptions, reminders, presets and outcomes. Concerts
-          and tags you contributed stay in the shared catalogue with your name removed.
-          To request deletion, contact the site owner — erasure is handled manually for now.</div>
+        <div class="s2">Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed.</div>
       </div>
+      <span class="sp">
+        <button class="btn warn" type="button"
+                onclick="document.getElementById('deleteAccountConfirm').showModal()">Delete account</button>
+      </span>
     </div>
+    <dialog id="deleteAccountConfirm" class="prune">
+      <div class="dh">Delete your account?
+        <button type="button" class="x" aria-label="Close"
+                onclick="document.getElementById('deleteAccountConfirm').close()">×</button></div>
+      <p>Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed. This cannot be undone.</p>
+      <div class="da">
+        <button class="btn quiet" type="button"
+                onclick="document.getElementById('deleteAccountConfirm').close()">Keep my account</button>
+        <form method="post" action="/me/delete" style="display:contents">
+          <button class="btn danger" type="submit">Delete my account</button>
+        </form>
+      </div>
+    </dialog>
   </section>
 
   {# ── Editors (admin only) ──────────────────────────────────────────── #}
