@@ -100,6 +100,21 @@ name people.
 
 ## Shipped
 
+### Tags page redesign, second pass (2026-07-19)
+
+Shipped as: the Tags page rebuilt around counted chips (dashed when unused),
+franchise->group->member families, region-bucketed venues with a "No region"
+bucket, and a performers-with-no-group section; a per-tag edit dialog with a
+usage strip (concerts/followers/members/upcoming) and a per-member
+"apply to N upcoming concerts" action reusing the shipped retroactive-apply
+route (invariant 3 intact); a kind-conditional new-tag dialog that warns
+instead of blocking on a same-name/different-kind tag (`create_tag` drops its
+blanket 409 for a kind-scoped one). Adds `Tag.eventernote_url` (mirroring
+venue `location_url`, through `form_url`) and wires it onto the concert
+page's performer chips, closing the link the branch-2 concert page deferred.
+Follow-up noted: the tag directory's per-member eligible-concerts count is an
+N+1, immaterial at current scale.
+
 ### Concert subscriptions and per-leg opt-out (2026-07-19)
 
 Shipped as: `ConcertSubscription` (state `subscribed`/`opted_out`) and
