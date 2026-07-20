@@ -24,7 +24,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.service import (
     apply_prune_selection,
     ensure_user,
+    record_setup_applications,
+    setup_application_rows,
     setup_prune_tiles,
+    setup_tallies,
 )
 from app.db.session import get_session
 from app.web.auth import SessionUser, require_user
@@ -60,3 +63,41 @@ async def setup_prune_submit(
     await apply_prune_selection(session, user.id, set(shown), set(keep))
     await session.commit()
     return RedirectResponse("/setup/applications", status_code=303)
+
+
+@router.get("/setup/applications", response_class=HTMLResponse)
+async def setup_applications(
+    request: Request,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    db_user = await ensure_user(session, user.id, user.username)
+    rows = await setup_application_rows(session, user.id)
+    return templates.TemplateResponse(request, "setup.html", {
+        "user": user, "screen": "applications", "rows": rows, "tz": db_user.timezone,
+    })
+
+
+@router.post("/setup/applications")
+async def setup_applications_submit(
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    applied: list[int] = Form([]),
+):
+    await ensure_user(session, user.id, user.username)
+    await record_setup_applications(session, user.id, set(applied))
+    await session.commit()
+    return RedirectResponse("/setup/ready", status_code=303)
+
+
+@router.get("/setup/ready", response_class=HTMLResponse)
+async def setup_ready(
+    request: Request,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    db_user = await ensure_user(session, user.id, user.username)
+    tallies = await setup_tallies(session, user.id)
+    return templates.TemplateResponse(request, "setup.html", {
+        "user": user, "screen": "ready", "tallies": tallies, "tz": db_user.timezone,
+    })

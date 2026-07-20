@@ -175,3 +175,200 @@ async def test_prune_submit_ignores_forged_ids(client):
     assert r.status_code == 303
     async with client.db() as s:
         assert await concert_subscription_states(s, FAN_ID) == {}
+
+
+# ── extra seeding for screens 2 and 3 ────────────────────────────────────
+
+
+async def _followed_tag_id(s, tag_name: str, kind: TagKind) -> int:
+    row = (await s.execute(Tag.__table__.select().where(Tag.name == tag_name))).first()
+    if row is not None:
+        return row[0]
+    tag = Tag(name=tag_name, kind=kind)
+    s.add(tag)
+    await s.flush()
+    s.add(TagSubscription(user_id=FAN_ID, tag_id=tag.id))
+    await s.flush()
+    return tag.id
+
+
+async def seed_concert(
+    client, event_id: str, title: str, tag_name: str, *, kind: TagKind = TagKind.GROUP,
+) -> int:
+    """A followed concert with NO round of its own, so a test can attach
+    exactly the rounds it needs via add_round."""
+    async with client.db() as s:
+        tag_id = await _followed_tag_id(s, tag_name, kind)
+        concert = Concert(title=title, event_id=event_id, created_by=FAN_ID)
+        s.add(concert)
+        await s.flush()
+        s.add(ConcertTag(concert_id=concert.id, tag_id=tag_id))
+        await s.commit()
+        return concert.id
+
+
+async def add_round(client, concert_id: int, label: str, **timing) -> int:
+    async with client.db() as s:
+        r = Round(
+            concert_id=concert_id, kind=RoundKind.LOTTERY_ROUND, label=label, **timing
+        )
+        s.add(r)
+        await s.flush()
+        rid = r.id
+        await s.commit()
+        return rid
+
+
+async def set_outcome(client, round_id: int, outcome) -> None:
+    from app.db.service import record_round_outcome
+    async with client.db() as s:
+        await record_round_outcome(s, FAN_ID, round_id, outcome)
+        await s.commit()
+
+
+async def prune(client, concert_id: int) -> None:
+    from app.db.service import set_concert_subscription
+    async with client.db() as s:
+        await set_concert_subscription(s, FAN_ID, concert_id, SubscriptionState.OPTED_OUT)
+        await s.commit()
+
+
+# ── GET/POST /setup/applications (screen 2) ──────────────────────────────
+
+
+def test_applications_requires_login(client):
+    assert client.get("/setup/applications").status_code == 401
+
+
+def test_ready_requires_login(client):
+    assert client.get("/setup/ready").status_code == 401
+
+
+async def test_applications_renders_only_qualifying_rounds(client):
+    login_as(client, FAN_ID, "fan")
+    live = await seed_concert(client, "aqours-9th", "Aqours 9th Live", "Aqours")
+    await add_round(client, live, "Open lottery", opens_at_utc=PAST, closes_at_utc=FUTURE)
+    await add_round(client, live, "Awaiting lottery", closes_at_utc=PAST, results_at_utc=FUTURE)
+    await add_round(client, live, "Decided lottery", closes_at_utc=PAST, results_at_utc=PAST)
+    pruned = await seed_concert(client, "muse-live", "Muse Live", "Aqours")
+    await add_round(client, pruned, "Pruned lottery", opens_at_utc=PAST, closes_at_utc=FUTURE)
+    await prune(client, pruned)
+
+    r = client.get("/setup/applications")
+    assert r.status_code == 200
+    assert "Open lottery" in r.text and "Still open" in r.text
+    assert "Awaiting lottery" in r.text and "Awaiting result" in r.text
+    assert "Decided lottery" not in r.text
+    assert "Pruned lottery" not in r.text
+
+
+async def test_applications_empty_state(client):
+    login_as(client, FAN_ID, "fan")
+    r = client.get("/setup/applications")
+    assert r.status_code == 200
+    assert "Nothing to ask" in r.text
+    assert "Finish" in r.text
+
+
+async def test_applications_submit_records_and_redirects(client):
+    login_as(client, FAN_ID, "fan")
+    concert = await seed_concert(client, "aqours-9th", "Aqours 9th Live", "Aqours")
+    applied = await add_round(client, concert, "R1", opens_at_utc=PAST, closes_at_utc=FUTURE)
+    skipped = await add_round(client, concert, "R2", opens_at_utc=PAST, closes_at_utc=FUTURE_LATER)
+
+    r = client.post("/setup/applications", data={"applied": [applied]})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/setup/ready"
+
+    from app.db.models import RoundOutcome
+    async with client.db() as s:
+        rows = {
+            o.round_id: o.outcome
+            for o in (await s.execute(RoundOutcome.__table__.select())).all()
+        }
+    from app.domain.types import LotteryOutcome
+    assert rows.get(applied) is LotteryOutcome.APPLIED
+    assert skipped not in rows
+
+
+async def test_applications_submit_ignores_decided_round_id(client):
+    login_as(client, FAN_ID, "fan")
+    concert = await seed_concert(client, "aqours-9th", "Aqours 9th Live", "Aqours")
+    await add_round(client, concert, "Live day", closes_at_utc=FUTURE)  # keeps it upcoming
+    decided = await add_round(client, concert, "Decided", closes_at_utc=PAST, results_at_utc=PAST)
+
+    r = client.post("/setup/applications", data={"applied": [decided]})
+    assert r.status_code == 303
+    from app.db.models import RoundOutcome
+    async with client.db() as s:
+        assert (await s.execute(RoundOutcome.__table__.select())).all() == []
+
+
+# ── GET /setup/ready (screen 3) ──────────────────────────────────────────
+
+
+async def test_ready_renders_tallies(client):
+    login_as(client, FAN_ID, "fan")
+    from app.domain.types import LotteryOutcome
+    a = await seed_concert(client, "aqours-a", "Aqours A", "Aqours")
+    r_applied = await add_round(client, a, "R1", opens_at_utc=PAST, closes_at_utc=FUTURE)
+    await set_outcome(client, r_applied, LotteryOutcome.APPLIED)
+    b = await seed_concert(client, "aqours-b", "Payment Concert B", "Aqours")
+    r_won = await add_round(
+        client, b, "R1", closes_at_utc=PAST, results_at_utc=PAST,
+        payment_deadline_at_utc=FUTURE_LATER,
+    )
+    await set_outcome(client, r_won, LotteryOutcome.WON)
+
+    r = client.get("/setup/ready")
+    assert r.status_code == 200
+    assert "Your board is ready" in r.text
+    assert ">2<" in r.text and ">1<" in r.text  # tracking 2, applied 1 / payment due 1
+    assert "Payment Concert B" in r.text
+
+
+async def test_ready_without_payment_due_has_no_narrative(client):
+    login_as(client, FAN_ID, "fan")
+    a = await seed_concert(client, "aqours-a", "Aqours A", "Aqours")
+    await add_round(client, a, "R1", opens_at_utc=PAST, closes_at_utc=FUTURE)
+
+    r = client.get("/setup/ready")
+    assert r.status_code == 200
+    assert "waiting on a payment" not in r.text
+
+
+async def test_rerun_reflects_prior_choices(client):
+    login_as(client, FAN_ID, "fan")
+    keep = await seed_concert(client, "aqours-a", "Aqours A", "Aqours")
+    await add_round(client, keep, "Keep round", opens_at_utc=PAST, closes_at_utc=FUTURE)
+    drop = await seed_concert(client, "aqours-b", "Aqours B", "Aqours")
+    applied = await add_round(client, drop, "Apply round", opens_at_utc=PAST, closes_at_utc=FUTURE)
+
+    # First pass: prune `drop`, apply its round is not possible (pruned), so
+    # apply the surviving concert's round instead.
+    client.post("/setup/prune", data={"keep": [keep], "shown": [keep, drop]})
+    # Re-enable drop so its round qualifies, then apply it.
+    client.post("/setup/prune", data={"keep": [keep, drop], "shown": [keep, drop]})
+    client.post("/setup/applications", data={"applied": [applied]})
+
+    # Now prune drop again for the re-run assertion.
+    client.post("/setup/prune", data={"keep": [keep], "shown": [keep, drop]})
+
+    r1 = client.get("/setup")
+    assert f'value="{drop}" checked' not in r1.text
+    assert f'value="{keep}" checked' in r1.text
+
+    r2 = client.get("/setup/applications")
+    assert "Apply round" not in r2.text  # already applied -> gone
+
+    # A second identical POST to each endpoint changes nothing.
+    from app.db.models import RoundOutcome
+    async with client.db() as s:
+        before = len((await s.execute(RoundOutcome.__table__.select())).all())
+    client.post("/setup/prune", data={"keep": [keep], "shown": [keep, drop]})
+    client.post("/setup/applications", data={"applied": [applied]})
+    async with client.db() as s:
+        after = len((await s.execute(RoundOutcome.__table__.select())).all())
+        states = await concert_subscription_states(s, FAN_ID)
+    assert before == after
+    assert states.get(drop) is SubscriptionState.OPTED_OUT

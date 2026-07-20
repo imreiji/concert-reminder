@@ -86,4 +86,76 @@
   {% endif %}
 {% endif %}
 
+{% if screen == "applications" %}
+  {% if rows %}
+  <div class="lede">
+    <h1>Already applied to any of these?</h1>
+    <p>
+      Only the rounds you could still be in — open now, or closed and waiting on a result. A
+      past round you lost does not change what happens next, so we do not ask.
+    </p>
+  </div>
+
+  <form method="post" action="/setup/applications">
+    <div class="pick">
+      {% for row in rows %}
+      {% set eyebrow = (row.concert.tags | rejectattr("kind.value", "equalto", "venue")
+                        | map(attribute="name") | list) %}
+      <label class="tile">
+        <input type="checkbox" name="applied" value="{{ row.round_.id }}" hidden>
+        <span class="tick">&check;</span>
+        {% if eyebrow %}<span class="who-t">{{ eyebrow[0] }}</span>{% endif %}
+        <span class="t">{{ row.concert.title }}</span>
+        <span class="v">
+          {{- row.round_.label -}}
+          {%- if row.moment_utc %} · {{ dual(row.moment_utc, tz) }}{% endif -%}
+        </span>
+        <span class="rnd">{{ "Still open" if row.status == "open" else "Awaiting result" }}</span>
+      </label>
+      {% endfor %}
+    </div>
+
+    <div class="bar">
+      <span class="tally">Anything you skip, we will ask about by DM when its result lands.</span>
+      <a class="btn quiet" href="/setup">Back</a>
+      <button class="btn" type="submit">Finish</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="lede">
+    <h1>Nothing to ask right now</h1>
+    <p>
+      None of the concerts you are tracking has a round still waiting on you. We will ask by
+      DM the moment one does.
+    </p>
+  </div>
+  <form method="post" action="/setup/applications">
+    <div class="bar"><button class="btn" type="submit">Finish</button></div>
+  </form>
+  {% endif %}
+{% endif %}
+
+{% if screen == "ready" %}
+<div class="reveal">
+  <div class="eyebrow">Setup complete</div>
+  <div class="big">Your board is ready</div>
+  <div class="tallies">
+    <div><div class="n">{{ tallies.tracking }}</div><div class="l">tracking</div></div>
+    <div><div class="n">{{ tallies.applied }}</div><div class="l">applied</div></div>
+    <div><div class="n">{{ tallies.payment_due }}</div><div class="l">payment due</div></div>
+    <div>
+      <div class="n">{{ dual(tallies.next_deadline_utc, tz) if tallies.next_deadline_utc else "—" }}</div>
+      <div class="l">next deadline</div>
+    </div>
+  </div>
+  {% if tallies.payment_due > 0 and tallies.payment_concert %}
+  <p class="lede" style="margin: 0 auto 1.5rem; color: var(--dim);">
+    {{ tallies.payment_concert.title }} is waiting on a payment — the closest thing here to
+    losing a ticket you have already won.
+  </p>
+  {% endif %}
+  <a class="btn" href="/">Go to my board</a>
+</div>
+{% endif %}
+
 {% endblock %}
