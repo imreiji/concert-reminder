@@ -252,9 +252,9 @@
     </div>
   </section>
 
-  {# ── Time (timezone) ───────────────────────────────────────────────── #}
+  {# ── Time & language (timezone + display language) ──────────────────── #}
   <section class="psec" id="p-time">
-    <h3>Time</h3>
+    <h3>Time & language</h3>
     <p class="blurb">Every deadline shows JST first, then yours. This sets the second one.</p>
 
     <div class="grid2" style="max-width:34rem">
@@ -291,6 +291,22 @@
       {% if tz_auto %}Detected <b>{{ tz }}</b> from your browser.{% else %}Using <b>{{ tz }}</b>.{% endif %}
       Right now that reads <span class="num">{{ tz_preview }}</span>.
     </p>
+
+    {# Display language: same three-form pattern as the header switcher, laid
+       out as a labelled row matching the timezone row above. Language NAMES
+       stay in their own language -- never translated. #}
+    <div class="fld inline" style="margin-top:1rem">
+      <span>Language</span>
+      <div class="langrow">
+        {% for code, label in [("en", "English"), ("zh", "中文"), ("ja", "日本語")] %}
+        <form method="post" action="/language">
+          <input type="hidden" name="language" value="{{ code }}">
+          <input type="hidden" name="next" value="/preferences">
+          <button class="act" type="submit" {% if current_locale() == code %}aria-current="true"{% endif %}>{{ label }}</button>
+        </form>
+        {% endfor %}
+      </div>
+    </div>
   </section>
 
   {# ── Delivery (Discord DMs + calendar feed) ────────────────────────── #}

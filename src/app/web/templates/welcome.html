@@ -405,6 +405,22 @@
   })();
 </script>
 
+{# Display language: same three-form pattern as the header switcher and
+   preferences.html's Time & language row, with next=/welcome so the wizard
+   stays put. Language NAMES stay in their own language -- never translated. #}
+<div class="fld inline" style="margin-top:1rem">
+  <span>Language</span>
+  <div class="langrow">
+    {% for code, label in [("en", "English"), ("zh", "中文"), ("ja", "日本語")] %}
+    <form method="post" action="/language">
+      <input type="hidden" name="language" value="{{ code }}">
+      <input type="hidden" name="next" value="/welcome">
+      <button class="act" type="submit" {% if current_locale() == code %}aria-current="true"{% endif %}>{{ label }}</button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+
 {# A live JST/local sample so the dual render is visible before relying on it
    (invariant 1: JST first, both zones always). #}
 <p class="remnote" style="margin-top:.7rem">Right now that reads

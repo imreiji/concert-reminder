@@ -107,6 +107,39 @@ nav.main a[aria-current="page"] { color: var(--ink); background: var(--chip); fo
 }
 .theme-toggle:hover { color: var(--ink); background: var(--chip); }
 
+/* Language switcher: a native <details> menu. The toggle is the same chip
+   silhouette as the theme toggle; the menu is a small white dropdown card
+   (--raise/--shadow), right-aligned under the toggle. Plain forms inside --
+   no JS is required for the switcher itself to work. */
+.langmenu { position: relative; }
+.langmenu summary {
+  list-style: none; cursor: pointer; user-select: none;
+}
+.langmenu summary::-webkit-details-marker { display: none; }
+.langtoggle {
+  font: inherit; font-size: .8rem; line-height: 1; color: var(--dim);
+  border-radius: 3px; padding: .3rem .55rem; display: inline-flex;
+  align-items: center; gap: .3rem; transition: color 150ms ease, background 150ms ease;
+}
+.langtoggle:hover { color: var(--ink); background: var(--chip); }
+.langmenu[open] .langtoggle { color: var(--ink); background: var(--chip); }
+.langlist {
+  position: absolute; top: calc(100% + .35rem); right: 0; z-index: 6;
+  background: var(--raise); border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: var(--shadow); padding: .3rem; display: grid; gap: .1rem;
+  min-width: 8rem;
+}
+.langlist form { display: contents; }
+.langlist button {
+  font: inherit; font-size: .85rem; text-align: left; cursor: pointer;
+  background: none; border: 0; border-radius: 3px; color: var(--ink);
+  padding: .4rem .6rem; white-space: nowrap;
+}
+.langlist button:hover { background: var(--chip); }
+.langlist button[aria-current="true"] {
+  color: var(--accent); font-weight: 650; background: var(--accent-wash);
+}
+
 nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; font-size: .9rem; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; }
 .badge { color: var(--ok); font-style: normal; font-size: .8em; border: 1px solid currentColor; padding: 0 .3em; border-radius: 4px; }
@@ -637,6 +670,15 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .act:hover { color: var(--ink); border-color: var(--dim); }
 .act.yes:hover { color: var(--ok); border-color: var(--ok); }
 .act.no:hover { color: var(--danger); border-color: var(--danger); }
+.act[aria-current="true"] {
+  color: var(--accent); border-color: var(--accent); background: var(--accent-wash);
+}
+
+/* Language row on preferences.html (Time & language) and welcome.html's
+   timezone step: the same three `.act` buttons as the header switcher, laid
+   out inline to match the timezone row beside it. */
+.langrow { display: flex; gap: .4rem; flex-wrap: wrap; }
+.langrow form { display: contents; }
 .done { font-size: .72rem; font-weight: 650; color: var(--ok); letter-spacing: .03em; }
 
 /* The follow-up to "Not applying": the narrow action already happened, the

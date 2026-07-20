@@ -191,3 +191,36 @@ async def test_date_globals_follow_active_locale(client):
         assert date_line == "8月1日(土)"
     finally:
         i18n.set_locale("en")
+
+
+# ── UI switcher: header, preferences row, wizard select ──────────────────
+
+
+def test_switcher_present_signed_out(client):
+    r = client.get("/")
+    assert 'action="/language"' in r.text
+    assert "日本語" in r.text and "中文" in r.text
+
+
+def test_switcher_marks_current(client):
+    client.cookies.set("lang", "ja")
+    r = client.get("/")
+    # the current language's submit carries aria-current
+    assert 'aria-current="true"' in r.text
+
+
+def test_preferences_language_row(client):
+    login(client)
+    r = client.get("/preferences")
+    assert 'action="/language"' in r.text
+
+
+def test_welcome_timezone_step_offers_language(client):
+    # Reach the timezone step the same way tests/test_welcome.py does:
+    # advance twice (step 0 -> 1 -> 2).
+    login(client)
+    client.post("/welcome/advance")
+    client.post("/welcome/advance")
+    r = client.get("/welcome")
+    assert "Confirm your timezone" in r.text
+    assert 'action="/language"' in r.text
