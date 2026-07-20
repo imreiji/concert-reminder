@@ -1,0 +1,47 @@
+{#- The qualifier chips' client half: toggle a chip into/out of the row's
+    hidden round_qualifiers value, and show the .upgradebox only while the
+    row's kind <select> reads "upgrade".
+
+    Unlike the leg chips, the qualifier chip SET is static -- it lists only
+    already-saved rounds (a round created in this submit has no id and cannot
+    be a qualifier yet), so there is nothing to rebuild when rows are added.
+    Only the toggle and the kind-driven visibility are dynamic. Server-rendered
+    markup carries the correct initial visibility; this only reacts to changes.
+
+    Delegated listeners on #round-rows, never inline on*: round labels are
+    user-controlled and the browser HTML-decodes an on* attribute before
+    parsing it as JS (invariant 7). data-qualifier-id is a numeric round id. -#}
+<script>
+  (function () {
+    const rounds = document.getElementById("round-rows");
+    if (!rounds) return;
+
+    rounds.addEventListener("click", (e) => {
+      const chip = e.target.closest("[data-qualifier-id]");
+      if (!chip) return;
+      const field = chip
+        .closest("[data-qualifier-chips]")
+        ?.querySelector('input[name="round_qualifiers"]');
+      if (!field) return;
+      const id = chip.dataset.qualifierId;
+      const ids = field.value.split(/[\s,]+/).filter(Boolean);
+      const at = ids.indexOf(id);
+      const on = at === -1;
+      if (on) ids.push(id);
+      else ids.splice(at, 1);
+      field.value = ids.join(" ");
+      chip.classList.toggle("on", on);
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+
+    // The box appears only for an upgrade round. A checkbox-style hidden
+    // attribute keeps the round_qualifiers field submitting either way, so
+    // hiding never drops the field from the form.
+    rounds.addEventListener("change", (e) => {
+      const select = e.target.closest('select[name="round_kind"]');
+      if (!select) return;
+      const box = select.closest(".redit")?.querySelector("[data-qualifier-box]");
+      if (box) box.hidden = select.value !== "upgrade";
+    });
+  })();
+</script>

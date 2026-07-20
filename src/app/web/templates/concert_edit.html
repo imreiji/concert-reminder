@@ -52,7 +52,7 @@
   </div>
 
   <div id="round-rows" class="row-list">
-    {% for r, leg_value, leg_ids in rounds_with_legs %}
+    {% for r, leg_value, leg_ids, qual_value, qual_ids in rounds_with_chips %}
     <div class="redit">
       <input type="hidden" name="round_id" value="{{ r.id }}">
       <div class="redit-top">
@@ -66,6 +66,7 @@
         <button type="button" class="x" title="Remove this round" data-remove-round>×</button>
       </div>
       {% with value = leg_value, selected = leg_ids %}{% include "_round_leg_chips.html" %}{% endwith %}
+      {% with value = qual_value, selected = qual_ids, self_id = r.id, kind_value = r.kind.value %}{% include "_round_qualifier_chips.html" %}{% endwith %}
       <div class="redit-times">
         <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"
           value="{{ jst(r.opens_at_utc).strftime('%Y-%m-%dT%H:%M') if r.opens_at_utc else '' }}"></label>
@@ -234,6 +235,7 @@
       <button type="button" class="x" title="Remove this round" data-remove-round>×</button>
     </div>
     {% with value = "", selected = none %}{% include "_round_leg_chips.html" %}{% endwith %}
+    {% with value = "", selected = none, self_id = none, kind_value = "" %}{% include "_round_qualifier_chips.html" %}{% endwith %}
     <div class="redit-times">
       <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"></label>
       <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"></label>
@@ -247,4 +249,5 @@
   </div>
 </template>
 {% include "_leg_chips_script.html" %}
+{% include "_qualifier_chips_script.html" %}
 {% endblock %}
