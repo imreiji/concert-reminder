@@ -522,10 +522,10 @@ async def new_concert_form(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
 ):
-    """The rich, all-in-one creation page: matches mting314/event-tracker's
-    add.html field set (see CLAUDE.md / the plan this shipped from) --
-    event fields, performers/notes, then repeatable performance and round
-    rows, one atomic submit to POST /concerts below."""
+    """The rich, all-in-one creation page, on the editor's card/chip/fold
+    language: identity spine open (title, event id, the first performance),
+    everything optional folded, and rounds bound to legs by the SAME chips as
+    edit_concert -- one atomic submit to POST /concerts below."""
     picker = await tag_picker_context(session)
     return templates.TemplateResponse(
         request,
@@ -537,6 +537,11 @@ async def new_concert_form(
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
             "initial_selected": {},
+            # No leg or round exists yet on a create page, but the chip
+            # partials the <template>s include still read these -- empty here,
+            # so the client-side script builds every chip from the DOM rows.
+            "legs": [],
+            "saved_rounds": [],
         },
     )
 

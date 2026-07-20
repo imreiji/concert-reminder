@@ -659,10 +659,17 @@ def test_new_concert_page_is_editor_only(client):
     assert "Add an event" in r.text
     assert 'name="event_id"' in r.text  # event id field present
     assert 'name="day_label"' in r.text  # performance row template present
-    # the leg field is a dropdown of performances, not free text -- picking a
-    # real day instead of guessing a string that has to fuzzy-match server-side
-    assert '<select name="round_leg" class="round-leg-select"></select>' in r.text
-    assert "function syncLegOptions" in r.text
+    # Rounds bind to legs by chip now, exactly as the editor does -- the old
+    # free-text <select> + syncLegOptions matcher is gone.
+    assert "data-leg-chips" in r.text
+    assert 'name="round_legs"' in r.text
+    assert 'name="round_leg"' not in r.text
+    assert "syncLegOptions" not in r.text
+    # the identity spine stays open; the extras fold below it
+    assert 'class="fold"' in r.text
+    # conveniences that must survive the rebuild
+    assert "/concerts/import" in r.text  # import link
+    assert 'id="ec-title"' in r.text and 'id="ec-event-id"' in r.text  # id suggestion JS hooks
 
 
 def test_new_concert_page_shows_new_round_kind_labels(client):
