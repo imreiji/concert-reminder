@@ -163,12 +163,63 @@ async def test_skipping_step_1_does_not_create_a_preset(client):
     assert presets == []
 
 
-def test_step_1_shows_continue_once_a_preset_exists(client):
+def test_step_1_renders_the_three_preset_cards(client):
     login_as(client, FAN_ID, "fan")
     client.post("/welcome/advance")  # step 0 -> 1
-    client.post("/presets", data={"name": "standard", "next": "/welcome"})
     r = client.get("/welcome")
-    assert "Continue" in r.text and "Preset created" in r.text
+    assert "Relaxed" in r.text and "Standard" in r.text and "On the ball" in r.text
+    # The demo drops "30 minutes" -- PresetItem has no minutes column.
+    assert "30 minutes" not in r.text
+
+
+# The five standard-template rows as parallel form arrays (offset "days:hours",
+# direction, anchor) -- exactly what the fine-tune UI submits on "Create preset".
+# Aligned by index across the three lists, the way the browser's repeated
+# form keys arrive.
+_STANDARD_FORM = {
+    "offset": ["0:0", "3:0", "1:0", "0:0", "1:0"],
+    "direction": ["before", "before", "before", "before", "before"],
+    "anchor": ["opens", "closes", "closes", "results", "payment"],
+}
+
+
+async def test_step_1_submit_creates_default_preset_with_items(client):
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    r = client.post("/welcome/preset", data=_STANDARD_FORM)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/welcome"
+    async with client.db() as s:
+        presets = (await s.execute(select(ReminderPreset))).scalars().all()
+        assert len(presets) == 1
+        preset = presets[0]
+        assert preset.is_default is True
+        await s.refresh(preset, ["items"])
+        # before = a negative offset; the "when it" moment rows are 0/0.
+        rows = sorted((i.anchor.value, i.offset_days, i.offset_hours) for i in preset.items)
+    assert rows == sorted([
+        ("opens", 0, 0), ("closes", -3, 0), ("closes", -1, 0),
+        ("results", 0, 0), ("payment", -1, 0),
+    ])
+    # Submitting the preset advances the wizard to the timezone step.
+    assert await _onboarding_step(client, FAN_ID) == 2
+
+
+async def test_step_1_fine_tuned_rule_persists_direction_and_hours(client):
+    """An edited row -- an 'after' relation and an hours-only offset -- lands as
+    the right PresetItem: after = a positive sign, 3 hours = offset_hours +3."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    data = {"offset": ["0:3"], "direction": ["after"], "anchor": ["results"]}
+    r = client.post("/welcome/preset", data=data)
+    assert r.headers["location"] == "/welcome"
+    async with client.db() as s:
+        preset = (await s.execute(select(ReminderPreset))).scalar_one()
+        await s.refresh(preset, ["items"])
+        item = preset.items[0]
+    assert item.anchor.value == "results"
+    assert item.offset_days == 0
+    assert item.offset_hours == 3
 
 
 async def test_welcome_shows_step_2_timezone(client):

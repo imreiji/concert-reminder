@@ -36,6 +36,7 @@ from app.db.models import (
     LegOptOut,
     Notification,
     OpsCheckState,
+    PresetItem,
     ReminderPreset,
     ReminderQueue,
     ReminderRule,
@@ -3154,6 +3155,34 @@ async def get_default_preset(session: AsyncSession, user_id: int) -> ReminderPre
         )
     )
     return res.scalar_one_or_none()
+
+
+async def create_preset_from_rules(
+    session: AsyncSession,
+    user_id: int,
+    name: str,
+    rules: list[tuple[int, int, str, Anchor]],
+) -> ReminderPreset:
+    """Materialise a named preset and its items from (offset_days, offset_hours,
+    direction, anchor) rules -- the welcome wizard's preset step.
+
+    This is the SAME write shape POST /presets uses (invariant: no second
+    preset write path): direction is not a stored column, it is encoded in the
+    SIGN of the offsets (before = negative, after = positive), and a 0/0 offset
+    is the "when it happens" moment. Returns the flushed preset so the caller
+    can mark it default.
+    """
+    preset = ReminderPreset(user_id=user_id, name=name.strip() or "My reminders")
+    session.add(preset)
+    await session.flush()
+    for offset_days, offset_hours, direction, anchor in rules:
+        sign = 1 if direction == "after" else -1
+        session.add(PresetItem(
+            preset_id=preset.id, anchor=anchor,
+            offset_days=sign * offset_days, offset_hours=sign * offset_hours,
+        ))
+    await session.flush()
+    return preset
 
 
 async def set_default_preset(session: AsyncSession, user_id: int, preset_id: int) -> None:

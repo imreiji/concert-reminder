@@ -1138,3 +1138,96 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   text-decoration: none; font-weight: 550;
 }
 .steps .more:hover { text-decoration: underline; }
+
+/* ── Welcome wizard ──────────────────────────────────────────────────────
+   Ported from the onboarding demo. The wizard flows into /setup, so these
+   sit on the same tokens as the setup tiles above -- both themes, no
+   hardcoded light colours. */
+
+/* Reminder step: the three selectable starter-preset cards. */
+.remcards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: .75rem; margin-top: 1.5rem;
+}
+.remcard {
+  position: relative; font: inherit; text-align: left; width: 100%; cursor: pointer;
+  background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+  padding: .85rem .9rem; display: grid; gap: .3rem; box-shadow: var(--shadow);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.remcard:hover { transform: translateY(-1px); border-color: var(--dim); }
+.remcard .rem-label { font-weight: 600; letter-spacing: -.01em; }
+.remcard .rem-labelrow { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; padding-right: 1.4rem; }
+.remcard .rem-lines { margin-top: .1rem; display: grid; gap: .05rem; }
+.remcard .rem-lines div { font-size: .8125rem; color: var(--dim); }
+.remcard .remtick {
+  position: absolute; top: .7rem; right: .7rem; width: 1.15rem; height: 1.15rem;
+  border-radius: 50%; display: grid; place-items: center; font-size: .68rem;
+  font-weight: 700; line-height: 1; border: 1.5px solid var(--line);
+  color: transparent; background: transparent;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.remcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.remcard[aria-pressed="true"] .remtick { background: var(--accent); border-color: var(--accent); color: var(--raise); }
+/* The dim note under the cards and reused for small helper lines this step. */
+.remnote { color: var(--dim); font-size: .8125rem; margin-top: .7rem; }
+
+/* Reminder step: the fine-tune list -- every row a live sentence built from
+   inline dropdowns; picking a card above resets it wholesale. */
+.remtune { margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
+.remtune-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; margin-bottom: .6rem; }
+.remtune-head h3 { margin: 0; font-size: .9rem; font-weight: 650; letter-spacing: -.01em; }
+.remtune-head .note { color: var(--dim); font-size: .8125rem; }
+.remrules { border: 1px solid var(--line); border-radius: 3px; background: var(--raise); }
+.remrule {
+  display: flex; align-items: center; gap: .45rem; padding: .55rem .75rem;
+  border-top: 1px dotted var(--line); flex-wrap: wrap; font-size: .95rem;
+}
+.remrule:first-child { border-top: 0; }
+.remrule select {
+  font: inherit; padding: .3rem .45rem; border: 1px solid var(--line);
+  border-radius: 3px; background: var(--raise); color: var(--ink);
+}
+.remrule select[hidden] { display: none; }
+.remrule select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.remrule .act {
+  margin-left: auto; background: none; border: none; color: var(--dim);
+  cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 .2rem;
+}
+.remrule .act:hover { color: var(--danger); }
+.remrule-empty { padding: .85rem .75rem; color: var(--dim); font-size: .875rem; }
+.remtune-add { margin-top: .75rem; }
+
+/* Test-DM step: a static illustrative Discord DM preview (no user text). The
+   Discord brand blue is intentional and reads on both themes. */
+.dmcard {
+  border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+  padding: 1rem 1.1rem; display: grid; grid-template-columns: auto 1fr; gap: .8rem;
+  box-shadow: var(--shadow); max-width: 36rem; margin-top: 1rem;
+}
+.dmcard .bot {
+  width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--accent);
+  display: grid; place-items: center; color: #fff; font-weight: 700;
+}
+.dmcard .bn { font-weight: 650; font-size: .9rem; display: flex; align-items: center; gap: .4rem; }
+.dmcard .bn .bg {
+  background: #5865f2; color: #fff; font-size: .58rem; padding: .05rem .3em;
+  border-radius: 3px; letter-spacing: .04em; font-weight: 700; text-transform: uppercase;
+}
+.dmcard .bn .ts { color: var(--dim); font-weight: 400; font-size: .72rem; }
+.dmcard .msg { font-size: .9rem; margin-top: .35rem; line-height: 1.5; }
+.dmcard .msg b { font-weight: 650; }
+
+/* Calendar step: the feed-link reveal, an ok-toned card with the one-time
+   URL and a copy control. */
+.feedbox {
+  border: 1px solid var(--ok); background: var(--ok-wash); border-radius: 3px;
+  padding: .9rem 1rem; display: grid; gap: .5rem; max-width: 42rem; margin-top: 1.25rem;
+}
+.feedbox .fl { font-size: .8125rem; color: var(--ok); font-weight: 650; }
+.feedbox code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: .78rem;
+  background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+  padding: .45rem .55rem; word-break: break-all; color: var(--ink);
+}
+.feedbox .frow { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
