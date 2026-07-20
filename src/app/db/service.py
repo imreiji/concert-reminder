@@ -31,7 +31,9 @@ from app.db.models import (
     Concert,
     ConcertAudit,
     ConcertDay,
+    ConcertSubscription,
     ConcertTag,
+    LegOptOut,
     Notification,
     OpsCheckState,
     ReminderPreset,
@@ -47,7 +49,7 @@ from app.db.models import (
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.timezones import utc_to_jst
-from app.domain.types import Anchor, LotteryOutcome, RoundKind, TagKind
+from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
 
 
 def _now() -> datetime:
@@ -236,6 +238,18 @@ async def _apply_outcome_suppression(
     return survivors
 
 
+async def _concert_opted_out(session: AsyncSession, user_id: int, concert_id: int) -> bool:
+    """Whether this user holds a concert-level OPTED_OUT override -- read by
+    sync_rule so a pruned concert plans (and thus keeps) no reminders."""
+    state = (await session.execute(
+        select(ConcertSubscription.state).where(
+            ConcertSubscription.user_id == user_id,
+            ConcertSubscription.concert_id == concert_id,
+        )
+    )).scalar_one_or_none()
+    return state is SubscriptionState.OPTED_OUT
+
+
 async def record_round_outcome(
     session: AsyncSession, user_id: int, round_id: int, outcome: LotteryOutcome,
     now: datetime | None = None,
@@ -382,6 +396,20 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
         cancelled_day_ids = {d.id for d in all_days if d.cancelled}
         live_rounds = [r for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)]
         days = [_day_info(d) for d in all_days if not d.cancelled]
+
+    # A concert-level OPTED_OUT override prunes the whole concert for this
+    # user: no rounds are live, so plan_for_rule yields nothing and the
+    # "no longer planned -> delete" pass below clears any queued reminders.
+    # This is the read-side half of set_concert_subscription's invariant-2
+    # resync -- it is what actually makes a pruned concert stop reminding.
+    # (Per-leg opt-out is a separate, finer pass -- Task 3.)
+    scope_concert_id = rule.concert_id if rule.round_id is None else (
+        round_.concert_id if round_ is not None else None
+    )
+    if scope_concert_id is not None and await _concert_opted_out(
+        session, rule.user_id, scope_concert_id
+    ):
+        live_rounds = []
 
     live_rounds = await _apply_outcome_suppression(session, rule.user_id, live_rounds, rule.anchor)
     rounds = [_round_info(r) for r in live_rounds]
@@ -812,22 +840,102 @@ async def upcoming_deadlines(
 async def tracked_concert_ids(session: AsyncSession, user_id: int) -> set[int]:
     """Concerts this user is deemed to be following.
 
-    INTERIM DEFINITION: "tracked" = carries any tag the user has a
-    TagSubscription for, derived at query time. There is deliberately no
-    per-concert opt-in or opt-out yet -- the real `ConcertSubscription`
-    table (plus per-leg opt-out) is branch 4 of the Home/Discover project
-    and replaces this function's body wholesale. Until then the
-    OPEN_COLUMN_LIMIT cap in board_cards is what keeps an over-broad match
-    tolerable; do not add a half-version of pruning here, it would have to
-    be migrated later.
+        tracked = (tag-matched ids  -  opted-out ids)  |  subscribed ids
+
+    A ConcertSubscription row is an *override* on the tag-derived default
+    (see the model): no row means "follow the tag default", an OPTED_OUT
+    row prunes a tag-matched concert, a SUBSCRIBED row forces one on even
+    with no matching tag. This is the SINGLE definition of "tracked" --
+    callers must not re-derive it anywhere else.
     """
-    res = await session.execute(
+    tag_matched = set((await session.execute(
         select(ConcertTag.concert_id)
         .join(TagSubscription, TagSubscription.tag_id == ConcertTag.tag_id)
         .where(TagSubscription.user_id == user_id)
         .distinct()
+    )).scalars())
+    overrides = await concert_subscription_states(session, user_id)
+    opted_out = {cid for cid, st in overrides.items() if st is SubscriptionState.OPTED_OUT}
+    subscribed = {cid for cid, st in overrides.items() if st is SubscriptionState.SUBSCRIBED}
+    return (tag_matched - opted_out) | subscribed
+
+
+async def concert_subscription_states(
+    session: AsyncSession, user_id: int
+) -> dict[int, SubscriptionState]:
+    """Every explicit per-concert override this user holds, keyed by concert
+    id. The read surface Preferences and setup need to show pruned concerts,
+    which `tracked_concert_ids` excludes by definition."""
+    res = await session.execute(
+        select(ConcertSubscription.concert_id, ConcertSubscription.state)
+        .where(ConcertSubscription.user_id == user_id)
     )
-    return set(res.scalars())
+    return {concert_id: state for concert_id, state in res}
+
+
+async def set_concert_subscription(
+    session: AsyncSession, user_id: int, concert_id: int, state: SubscriptionState
+) -> None:
+    """Upsert this user's per-concert override to `state`."""
+    existing = (await session.execute(
+        select(ConcertSubscription).where(
+            ConcertSubscription.user_id == user_id,
+            ConcertSubscription.concert_id == concert_id,
+        )
+    )).scalar_one_or_none()
+    if existing is None:
+        session.add(
+            ConcertSubscription(user_id=user_id, concert_id=concert_id, state=state)
+        )
+    else:
+        existing.state = state
+    await session.flush()
+    # Invariant 2: the override changes which reminders should exist for this
+    # concert, so re-sync this user's rules exactly as record_round_outcome
+    # does after an outcome write. An OPTED_OUT concert now plans nothing
+    # (sync_rule drops its rounds), so unsent queue rows are deleted; going
+    # back to SUBSCRIBED/default re-arms them. Skip the resync and a pruned
+    # concert keeps sending reminders -- the bug this branch fixes.
+    await reinstate_user_rules(session, user_id, concert_id)
+
+
+async def clear_concert_subscription(
+    session: AsyncSession, user_id: int, concert_id: int
+) -> None:
+    """Delete this user's override for the concert -- back to the tag
+    default. Branch 6's un-prune calls this."""
+    existing = (await session.execute(
+        select(ConcertSubscription).where(
+            ConcertSubscription.user_id == user_id,
+            ConcertSubscription.concert_id == concert_id,
+        )
+    )).scalar_one_or_none()
+    if existing is not None:
+        await session.delete(existing)
+    await session.flush()
+    # Same invariant-2 resync as set_concert_subscription: un-pruning must
+    # let this concert's reminders resume.
+    await reinstate_user_rules(session, user_id, concert_id)
+
+
+async def set_leg_opt_out(
+    session: AsyncSession, user_id: int, day_id: int, opted_out: bool
+) -> None:
+    """Toggle a per-leg opt-out by row presence: add a row when opting out,
+    delete it when opting back in. The suppression this drives is a
+    read-side planner pass added in Task 3 -- there is no concert-level
+    resync here."""
+    existing = (await session.execute(
+        select(LegOptOut).where(
+            LegOptOut.user_id == user_id,
+            LegOptOut.concert_day_id == day_id,
+        )
+    )).scalar_one_or_none()
+    if opted_out and existing is None:
+        session.add(LegOptOut(user_id=user_id, concert_day_id=day_id))
+    elif not opted_out and existing is not None:
+        await session.delete(existing)
+    await session.flush()
 
 
 @dataclass(frozen=True)
