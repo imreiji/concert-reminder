@@ -25,6 +25,7 @@ from app.db.models import (
     ConcertDay,
     ConcertTag,
     Round,
+    RoundQualifier,
     Tag,
     TagSubscription,
     User,
@@ -210,6 +211,35 @@ async def test_concert_appears_in_the_column_for_its_most_advanced_outcome(clien
     assert 'data-column="won" data-event-id="won-one"' in html
     assert 'data-column="open" data-event-id="won-one"' not in html
     assert 'data-column="open" data-event-id="open-one"' in html
+
+
+async def test_base_paid_plus_won_upgrade_lands_in_won_pay_column(client):
+    """A concert whose base ticket is PAID but whose (eligible) upgrade is WON
+    and unpaid owes money -- it belongs in the Won column, not Secured, through
+    board_cards' column_for wiring."""
+    async def build(seed):
+        c = await seed.concert("upgrade-owe", title="Upgrade owed")
+        base = await seed.open_round(c, "FC lottery")
+        up = Round(
+            concert_id=c.id, kind=RoundKind.UPGRADE, label="Seat upgrade",
+            opens_at_utc=datetime.now(UTC) - timedelta(days=2),
+            closes_at_utc=datetime.now(UTC) - timedelta(days=1),
+            payment_deadline_at_utc=datetime.now(UTC) + timedelta(days=3),
+        )
+        seed.s.add(up)
+        await seed.s.flush()
+        seed.s.add(RoundQualifier(upgrade_round_id=up.id, qualifying_round_id=base.id))
+        await seed.s.flush()
+        await record_round_outcome(seed.s, USER, base.id, LotteryOutcome.WON)
+        await record_round_outcome(seed.s, USER, base.id, LotteryOutcome.PAID)
+        await record_round_outcome(seed.s, USER, up.id, LotteryOutcome.WON)
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    assert 'data-column="won" data-event-id="upgrade-owe"' in html
+    assert 'data-column="secured" data-event-id="upgrade-owe"' not in html
 
 
 async def test_open_column_renders_the_cap_and_reports_the_true_remainder(client):

@@ -1149,7 +1149,11 @@ async def board_cards(
 
         card_outcomes = {r.id: outcomes[r.id] for r in live_rounds if r.id in outcomes}
         column = column_for(
-            list(card_outcomes.values()),
+            [
+                (outcomes[r.id], r.kind is RoundKind.UPGRADE)
+                for r in live_rounds
+                if r.id in outcomes
+            ],
             has_open_round=any(_round_is_open(r, now) for r in live_rounds),
         )
         if column is None:
@@ -1694,7 +1698,14 @@ async def discover_statuses(
         # they do not, instead of falling back to Column.OPEN. Reusing it here
         # is what keeps the pill's precedence identical to the board's.
         card_outcomes = {r.id: outcomes[r.id] for r in rounds if r.id in outcomes}
-        standing = column_for(list(card_outcomes.values()), has_open_round=False)
+        standing = column_for(
+            [
+                (outcomes[r.id], r.kind is RoundKind.UPGRADE)
+                for r in rounds
+                if r.id in outcomes
+            ],
+            has_open_round=False,
+        )
 
         if standing is Column.SECURED:
             out[concert.id] = DiscoverStatus(
