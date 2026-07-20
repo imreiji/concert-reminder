@@ -1,0 +1,2287 @@
+<title>dekimasen.app — home and discover concept</title>
+<style>
+  :root {
+    --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+    --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+    --accent: #4f46b8;
+    --ok-wash: #e8f2ec; --off-wash: #f7eede; --danger-wash: #f8e8e6;
+    --accent-wash: #eceaf7; --chip: #efede6;
+    --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+      --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+      --accent: #9a92f0;
+      --ok-wash: #1a2a22; --off-wash: #2c2418; --danger-wash: #2e1d1c;
+      --accent-wash: #23204a; --chip: #2a2830;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+    --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+    --accent: #9a92f0; --ok-wash: #1a2a22; --off-wash: #2c2418;
+    --danger-wash: #2e1d1c; --accent-wash: #23204a; --chip: #2a2830;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+  }
+  :root[data-theme="light"] {
+    --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+    --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+    --accent: #4f46b8; --ok-wash: #e8f2ec; --off-wash: #f7eede;
+    --danger-wash: #f8e8e6; --accent-wash: #eceaf7; --chip: #efede6;
+    --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 74rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+  .eyebrow {
+    font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650;
+  }
+
+  /* ---- site header ----------------------------------------------------- */
+  header.site {
+    border-bottom: 1px solid var(--line); background: var(--raise);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .site-in {
+    max-width: 74rem; margin: 0 auto; padding: .85rem 1.5rem;
+    display: flex; align-items: center; gap: 1.5rem;
+  }
+  .mark { font-weight: 700; letter-spacing: .08em; font-size: .95rem; }
+  .mark span { color: var(--dim); font-weight: 400; letter-spacing: 0; margin-left: .5rem; font-size: .8rem; }
+  nav.main { display: flex; gap: .25rem; margin-left: .75rem; }
+  nav.main button {
+    font: inherit; font-size: .875rem; font-weight: 550; cursor: pointer;
+    background: none; border: 0; color: var(--dim); padding: .35rem .7rem;
+    border-radius: 3px; transition: color 150ms ease, background 150ms ease;
+  }
+  nav.main button:hover { color: var(--ink); background: var(--chip); }
+  nav.main button[aria-current="page"] { color: var(--ink); background: var(--chip); }
+  nav.main button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .who {
+    margin-left: auto; display: flex; align-items: center; gap: .55rem;
+    font: inherit; font-size: .875rem; color: var(--dim); background: none;
+    border: 0; cursor: pointer; padding: .2rem .4rem; border-radius: 3px;
+  }
+  .who:hover { background: var(--chip); color: var(--ink); }
+  .who:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .who .av { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: #fff; font-size: .7rem; font-weight: 700; }
+  .who .tag { border: 1px solid var(--ok); color: var(--ok); font-size: .7rem; padding: 0 .3em; border-radius: 3px; font-weight: 600; }
+
+  .banner {
+    background: var(--chip); border-bottom: 1px solid var(--line);
+    text-align: center; padding: .4rem 1rem; font-size: .78rem; color: var(--dim);
+  }
+
+  /* ---- shared bits ----------------------------------------------------- */
+  section { margin-top: 2.75rem; }
+  .head { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .head h2 { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+  .head .note { color: var(--dim); font-size: .8125rem; }
+  .head .note strong { color: var(--ink); font-weight: 600; }
+  .head .more { margin-left: auto; font-size: .8125rem; color: var(--accent); text-decoration: none; font-weight: 550; }
+  .head .more:hover { text-decoration: underline; }
+
+  .pill {
+    font-size: .6875rem; font-weight: 650; letter-spacing: .04em;
+    padding: .15rem .45rem; border-radius: 3px; border: 1px solid currentColor; white-space: nowrap;
+  }
+  .p-danger { color: var(--danger); background: var(--danger-wash); }
+  .p-off { color: var(--off); background: var(--off-wash); }
+  .p-ok { color: var(--ok); background: var(--ok-wash); }
+  .p-quiet { color: var(--dim); background: transparent; }
+
+  /* ---- closes next ----------------------------------------------------- */
+  .next {
+    margin-top: 2rem; background: var(--raise); border: 1px solid var(--line);
+    border-left: 3px solid var(--danger); border-radius: 3px;
+    padding: 1.25rem 1.4rem; box-shadow: var(--shadow);
+    display: grid; grid-template-columns: 1fr auto; gap: 1.25rem; align-items: center;
+  }
+  .next .label {
+    font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--danger); font-weight: 700; margin-bottom: .35rem;
+  }
+  .next .what { font-size: 1.15rem; font-weight: 600; letter-spacing: -.01em; }
+  .next .when { color: var(--dim); font-size: .875rem; margin-top: .2rem; }
+  .countdown { text-align: right; }
+  .countdown .big { font-size: 2rem; font-weight: 650; letter-spacing: -.03em; line-height: 1; color: var(--danger); }
+  .countdown .unit { font-size: .75rem; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+
+  /* ---- board ----------------------------------------------------------- */
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: .875rem; }
+  .col { display: grid; gap: .625rem; align-content: start; }
+  .col-head {
+    display: flex; align-items: center; gap: .5rem; font-size: .75rem;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+    font-weight: 650; padding-bottom: .5rem; border-bottom: 1px solid var(--line);
+  }
+  .col-head .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .col-head .count { margin-left: auto; font-weight: 500; letter-spacing: 0; }
+  .d-open { background: var(--danger); } .d-applied { background: var(--off); }
+  .d-won { background: var(--accent); } .d-secured { background: var(--ok); }
+
+  .card {
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .8rem .85rem; display: grid; gap: .45rem; box-shadow: var(--shadow);
+    transition: transform 160ms ease, border-color 160ms ease;
+    text-decoration: none; color: inherit; cursor: pointer;
+  }
+  .card:hover { transform: translateY(-1px); border-color: var(--dim); }
+  .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card .artist { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .card .title { font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
+  .card .venue { font-size: .8125rem; color: var(--dim); }
+  .card .foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .15rem; }
+  .clock { font-size: .8125rem; color: var(--dim); }
+
+  .ladder { display: grid; margin-top: .3rem; }
+  .rung {
+    display: grid; grid-template-columns: 14px 1fr auto; gap: .55rem; align-items: center;
+    padding: .3rem 0; font-size: .8125rem; border-top: 1px dotted var(--line);
+  }
+  .rung:first-child { border-top: 0; }
+  .rung .mark {
+    width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line);
+    display: grid; place-items: center; font-size: 9px; font-weight: 700; line-height: 1;
+  }
+  .m-lost { border-color: var(--dim); color: var(--dim); }
+  .m-live { border-color: var(--danger); background: var(--danger); color: var(--raise); }
+  .m-wait { border-color: var(--off); color: var(--off); }
+  .m-todo { border-color: var(--line); color: transparent; }
+  .rung.is-done .name { color: var(--dim); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .rung.is-todo .name { color: var(--dim); }
+  .rung .stat { font-size: .75rem; color: var(--dim); }
+
+  /* ---- deadline rows --------------------------------------------------- */
+  /* Five aligned columns: where you stand, when, what, what happens, what
+     you can do. Capture lives here rather than on a board card because a row
+     is ONE round on ONE leg -- "applied" has exactly one meaning. */
+  .rows { border-top: 1px solid var(--line); }
+  .rowhead {
+    display: grid; grid-template-columns: 6.5rem 10.5rem 1fr 10rem 14rem;
+    gap: 1rem; padding: .4rem .1rem; border-bottom: 1px solid var(--line);
+    font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650;
+  }
+  .rowhead span:nth-child(4) { text-align: left; }
+  .rowhead span:nth-child(5) { text-align: right; }
+  .row {
+    display: grid; grid-template-columns: 6.5rem 10.5rem 1fr 10rem 14rem;
+    gap: 1rem; align-items: center; padding: .65rem .1rem;
+    border-bottom: 1px solid var(--line); text-decoration: none; color: inherit;
+  }
+  .row:hover { background: var(--raise); }
+  .row .when-c { font-size: .8125rem; color: var(--dim); line-height: 1.35; }
+  .row .when-c b { display: block; color: var(--ink); font-weight: 600; }
+  .row .title-c { font-weight: 550; line-height: 1.35; }
+  .row .title-c small { display: block; font-weight: 400; font-size: .78rem; color: var(--dim); }
+  .row .act-c { font-size: .8125rem; color: var(--dim); text-align: left; }
+  .row .act-c b { color: var(--ink); font-weight: 600; }
+  .row .acts { display: flex; align-items: center; gap: .4rem; justify-content: flex-end; text-align: right; }
+  .act {
+    font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
+    padding: .22rem .5rem; border-radius: 3px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--raise); color: var(--dim);
+    transition: color 150ms ease, border-color 150ms ease; white-space: nowrap;
+  }
+  .act:hover { color: var(--ink); border-color: var(--dim); }
+  .act.yes:hover { color: var(--ok); border-color: var(--ok); }
+  .act.no:hover { color: var(--danger); border-color: var(--danger); }
+  .act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .done { font-size: .72rem; font-weight: 650; color: var(--ok); letter-spacing: .03em; }
+
+  /* follow-up: narrow action first, wider one offered after */
+  dialog.prune {
+    border: 1px solid var(--line); border-radius: 4px; background: var(--raise);
+    color: var(--ink); padding: 0; max-width: 26rem; box-shadow: var(--shadow);
+  }
+  dialog.prune::backdrop { background: rgba(0,0,0,.35); }
+  dialog.prune .dh {
+    display: flex; align-items: baseline; gap: 1rem;
+    padding: 1rem 1.1rem .5rem; font-weight: 650;
+  }
+  dialog.prune .dh button {
+    margin-left: auto; background: none; border: 0; color: var(--dim);
+    font-size: 1.1rem; cursor: pointer; line-height: 1;
+  }
+  dialog.prune p { margin: 0; padding: 0 1.1rem 1rem; color: var(--dim); font-size: .875rem; }
+  dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wrap: wrap; }
+
+  /* ---- discovery teaser ------------------------------------------------ */
+  .teaser {
+    margin-top: 2.75rem; border-top: 1px solid var(--line); padding-top: 1.75rem;
+    display: grid; grid-template-columns: 1fr auto; gap: 2rem; align-items: end;
+  }
+  .teaser h2 { margin: .3rem 0 .35rem; font-size: 1.1rem; font-weight: 650; letter-spacing: -.015em; }
+  .teaser p { margin: 0; color: var(--dim); font-size: .875rem; max-width: 52ch; }
+  .btn {
+    display: inline-block; font: inherit; font-size: .875rem; font-weight: 600;
+    padding: .5rem .9rem; border: 1px solid var(--ink); border-radius: 3px;
+    background: var(--ink); color: var(--paper); text-decoration: none; cursor: pointer;
+    transition: opacity 150ms ease; white-space: nowrap;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn.quiet { background: transparent; color: var(--ink); border-color: var(--line); }
+
+  .peek { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-top: 1.25rem; }
+  .peek .card { gap: .3rem; }
+
+  /* ---- discover page --------------------------------------------------- */
+  .layout { display: grid; grid-template-columns: 15rem 1fr; gap: 2.25rem; margin-top: 1.75rem; }
+  .sidebar { align-content: start; display: grid; gap: 1.4rem; }
+  .filter-search {
+    width: 100%; font: inherit; font-size: .875rem; padding: .45rem .6rem;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--raise); color: var(--ink);
+  }
+  .filter-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .facet .ftitle {
+    font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--dim);
+    font-weight: 650; margin-bottom: .55rem; display: flex; gap: .4rem; align-items: baseline;
+  }
+  .facet .ftitle span { font-weight: 500; letter-spacing: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .chip {
+    font-size: .78rem; padding: .2rem .5rem; border-radius: 999px; line-height: 1.5;
+    background: var(--chip); color: var(--ink); text-decoration: none;
+    border: 1px solid transparent; cursor: pointer; transition: border-color 150ms ease;
+  }
+  .chip:hover { border-color: var(--dim); }
+  .chip.on { background: var(--accent); color: #fff; }
+  .chip .n { color: var(--dim); font-size: .72em; margin-left: .25em; }
+  .chip.on .n { color: rgba(255,255,255,.75); }
+
+  .searchbar { display: flex; gap: .5rem; margin-bottom: 1.25rem; }
+  .searchbar input {
+    flex: 1; font: inherit; padding: .55rem .75rem; border: 1px solid var(--line);
+    border-radius: 3px; background: var(--raise); color: var(--ink);
+  }
+  .searchbar input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .sorts { display: flex; gap: .3rem; }
+  .sorts button {
+    font: inherit; font-size: .8125rem; padding: .3rem .6rem; cursor: pointer;
+    border: 1px solid var(--line); background: var(--raise); color: var(--dim); border-radius: 3px;
+  }
+  .sorts button[aria-pressed="true"] { color: var(--ink); border-color: var(--dim); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .875rem; }
+  .grid .card .when { font-size: .8125rem; color: var(--dim); }
+  .tagrow { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .1rem; }
+  .minichip { font-size: .7rem; padding: .1rem .4rem; border-radius: 999px; background: var(--chip); color: var(--dim); }
+
+  /* ONE pill per card. It answers "what is the state of this for me?" --
+     your standing replaces the countdown when you have one, rather than
+     sitting beside it. Colour encodes who owes the next move:
+       green   = you are in, nothing to do
+       urgent  = you owe an action, with the deadline
+       neutral = you have no standing here, this is just what the event is doing */
+  .status-line {
+    display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+    margin-top: .2rem; padding-top: .5rem; border-top: 1px dotted var(--line);
+  }
+  .s-in { color: var(--ok); background: var(--ok-wash); border-color: var(--ok); }
+  .s-act { color: var(--danger); background: var(--danger-wash); border-color: var(--danger); }
+  .s-none { color: var(--dim); background: transparent; border-color: var(--line); }
+  /* Upgrade is a second campaign riding on a ticket you already hold, so it
+     earns its own pill beside Secured rather than replacing it. Accent, because
+     it is neither "covered" nor "you owe money" -- it is an extra shot. */
+  .s-up { color: var(--accent); background: var(--accent-wash); border-color: var(--accent); }
+
+  .foot-note {
+    margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+    color: var(--dim); font-size: .8125rem; max-width: 66ch;
+  }
+  .foot-note b { color: var(--ink); font-weight: 600; }
+
+  /* ---- concert page ---------------------------------------------------- */
+  .chead { margin-top: 2rem; display: grid; gap: .55rem; }
+  .chead h1 { margin: 0; font-size: 1.7rem; letter-spacing: -.025em; font-weight: 650; text-wrap: balance; }
+  .chead .sub { color: var(--dim); }
+  .chead .taglist { display: flex; gap: .35rem; flex-wrap: wrap; }
+  .chead .links { font-size: .8125rem; color: var(--dim); display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap; }
+  .chead .links .lbl2 { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 650; }
+  .chead .links a { color: var(--accent); text-decoration: none; }
+  .chead .links a:hover { text-decoration: underline; }
+  /* Franchise + group lead, per the tile display rule ("F . G"). The group is
+     what someone recognises first -- the title is often a long subtitle. */
+  .chead .lineage {
+    font-size: .78rem; letter-spacing: .1em; text-transform: uppercase;
+    font-weight: 700; color: var(--dim);
+  }
+  .chead .lineage b { color: var(--accent); font-weight: 700; }
+
+  /* Performers get their own block rather than being mixed into a generic tag
+     row: on this app they are the reason someone is on the page, and a nine
+     member group buried among franchise and venue chips is unreadable. */
+  .performers {
+    margin-top: 1.1rem; padding: .85rem .95rem; border: 1px solid var(--line);
+    border-radius: 3px; background: var(--raise);
+  }
+  .performers .plabel {
+    font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650; margin-bottom: .5rem;
+    display: flex; align-items: baseline; gap: .5rem;
+  }
+  .performers .plabel span { letter-spacing: 0; text-transform: none; font-weight: 500; }
+  .performers .chips { gap: .3rem; }
+  .performers .chip.grp {
+    background: var(--accent); color: #fff; font-weight: 650;
+  }
+  /* Performer chips link out to eventernote. No arrow glyph: an ::after at
+     opacity 0 still occupies layout, which pushed every label off-centre.
+     The hover colour change is affordance enough.
+     Needs an eventernote_url on ARTIST/GROUP tags, mirroring VENUE.location_url.
+     Chips without one render as plain spans, not dead links. */
+  .performers .chip {
+    background: var(--chip);
+    display: inline-flex; align-items: center; justify-content: center;
+    line-height: 1.5; padding: .22rem .6rem; text-align: center;
+  }
+  .performers a.chip { text-decoration: none; transition: background 150ms ease, color 150ms ease; }
+  .performers a.chip:hover, .performers a.chip:focus-visible { background: var(--accent); color: #fff; }
+  .performers a.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .performers a.chip.grp:hover { opacity: .88; }
+  .performers .chip.nolink { opacity: .75; }
+  .performers .chips { align-items: center; }
+
+  .chead .othertags { display: flex; gap: .35rem; flex-wrap: wrap; align-items: center; }
+  .chead .othertags .lbl { font-size: .72rem; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; font-weight: 650; }
+
+  .chead .bar2 { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .3rem; }
+
+  /* following state doubles as the concert-level prune */
+  .follow {
+    display: inline-flex; align-items: center; gap: .45rem; font: inherit;
+    font-size: .8125rem; font-weight: 600; padding: .38rem .7rem; border-radius: 3px;
+    cursor: pointer; border: 1px solid var(--ok); background: var(--ok-wash); color: var(--ok);
+    transition: all 160ms ease;
+  }
+  .follow[aria-pressed="false"] { border-color: var(--line); background: transparent; color: var(--dim); }
+  .follow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .standing {
+    margin-top: 1.75rem; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 3px; background: var(--raise); box-shadow: var(--shadow);
+    padding: 1rem 1.15rem; display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: center;
+  }
+  .standing .l { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .standing .w { font-size: 1.05rem; font-weight: 600; margin-top: .25rem; }
+  .standing .s { color: var(--dim); font-size: .875rem; margin-top: .15rem; }
+
+  .leg { margin-top: 2.25rem; }
+  .leghead {
+    display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
+    padding-bottom: .6rem; border-bottom: 1px solid var(--line);
+  }
+  .leghead h3 { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+  .leghead .lv { color: var(--dim); font-size: .8125rem; }
+  .leghead .lact { margin-left: auto; }
+  .leg.off .rnds { opacity: .4; }
+
+  .rnds { display: grid; }
+  .rnd2 {
+    display: grid; grid-template-columns: 7rem 1fr 13rem 13rem; gap: 1rem;
+    align-items: center; padding: .75rem .1rem; border-bottom: 1px solid var(--line);
+  }
+  .rnd2.past { opacity: .5; }
+  .rnd2 .nm { font-weight: 550; line-height: 1.3; }
+  .rnd2 .nm em { font-style: normal; display: block; font-size: .75rem; color: var(--dim); font-weight: 400; }
+  .rnd2 .dts { font-size: .8125rem; color: var(--dim); line-height: 1.4; }
+  .rnd2 .dts b { display: block; color: var(--ink); font-weight: 600; }
+  .rnd2 .dts .more { font-size: .75rem; }
+  .rnd2 .acts { display: flex; gap: .4rem; justify-content: flex-end; }
+
+  @media (max-width: 900px) {
+    .rnd2 { grid-template-columns: 6rem 1fr; }
+    .rnd2 .dts, .rnd2 .acts { grid-column: 2; justify-content: flex-start; }
+    .standing { grid-template-columns: 1fr; }
+  }
+
+  /* ---- editor ---------------------------------------------------------- */
+  .ebar {
+    margin-top: 2rem; display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+    padding-bottom: 1rem; border-bottom: 1px solid var(--line);
+  }
+  .ebar .grow { flex: 1 1 20rem; min-width: 0; }
+  .fld { display: grid; gap: .25rem; }
+  .fld > span {
+    font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650;
+  }
+  .fld input, .fld select, .fld textarea {
+    font: inherit; padding: .45rem .6rem; border: 1px solid var(--line);
+    border-radius: 3px; background: var(--raise); color: var(--ink); width: 100%;
+  }
+  .fld input:focus-visible, .fld select:focus-visible, .fld textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+  .fld.sm input, .fld.sm select { font-size: .8125rem; padding: .35rem .5rem; }
+
+  details.fold {
+    margin-top: 1.25rem; border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+  }
+  details.fold > summary {
+    cursor: pointer; padding: .7rem .9rem; font-weight: 600; font-size: .9rem;
+    list-style: none; display: flex; align-items: center; gap: .5rem;
+  }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary::before { content: "\25B8"; color: var(--dim); transition: transform 150ms ease; }
+  details.fold[open] > summary::before { transform: rotate(90deg); }
+  details.fold > summary .hint { margin-left: auto; font-weight: 400; color: var(--dim); font-size: .8125rem; }
+  .foldbody { padding: 0 .9rem 1rem; display: grid; gap: .75rem; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; }
+
+  /* Rounds nest under the legs they apply to, instead of carrying a leg
+     dropdown. applies_to is a SET, so the relationship is expressed by which
+     leg boxes are ticked -- and a round that spans both legs is shown once,
+     in a shared section, rather than duplicated. */
+  .elegs { margin-top: 1.5rem; display: grid; gap: 1.25rem; }
+  .elegcard { border: 1px solid var(--line); border-radius: 3px; background: var(--raise); }
+  .elegcard > .lh {
+    display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+    padding: .7rem .9rem; border-bottom: 1px solid var(--line);
+  }
+  .elegcard > .lh h3 { margin: 0; font-size: .95rem; font-weight: 650; }
+  .elegcard > .lh .meta { color: var(--dim); font-size: .8125rem; }
+  .elegcard > .lh .sp { margin-left: auto; display: flex; gap: .4rem; }
+  .elegcard.cancelled { opacity: .55; }
+  .elegcard.cancelled h3::after {
+    content: "cancelled"; margin-left: .5rem; font-size: .68rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--danger); border: 1px solid var(--danger);
+    padding: 0 .3em; border-radius: 3px;
+  }
+  .rlist { padding: .3rem .9rem .9rem; display: grid; gap: .5rem; }
+
+  .redit {
+    border: 1px solid var(--line); border-radius: 3px; padding: .7rem .8rem;
+    display: grid; gap: .6rem; background: var(--paper);
+  }
+  .redit .top { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+  .redit .top .nm { font-weight: 600; }
+  .redit .top .sp { margin-left: auto; display: flex; gap: .35rem; }
+  .redit .times { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .6rem; }
+  .applies { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; font-size: .8125rem; }
+  .applies .lbl3 { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .legchip {
+    font: inherit; font-size: .78rem; padding: .18rem .55rem; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--chip); color: var(--dim); cursor: pointer;
+  }
+  .legchip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .legchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .upgradebox {
+    border-left: 3px solid var(--accent); background: var(--accent-wash);
+    padding: .6rem .75rem; border-radius: 3px; display: grid; gap: .45rem;
+  }
+  .upgradebox .u1 { font-size: .8125rem; }
+  .upgradebox .u1 b { font-weight: 650; }
+
+  .danger {
+    margin-top: 2.5rem; border: 1px solid var(--danger); border-radius: 3px;
+    padding: .9rem 1rem; display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+  }
+  .danger .t2 { font-weight: 600; font-size: .9rem; }
+  .danger .s2 { color: var(--dim); font-size: .8125rem; }
+  .danger .sp { margin-left: auto; display: flex; gap: .5rem; }
+  .btn.warn { background: transparent; color: var(--danger); border-color: var(--danger); }
+
+  /* ---- tags page ------------------------------------------------------- */
+  .tsearch { display: flex; gap: .5rem; margin: 1.25rem 0 1.75rem; }
+  .tsearch input {
+    flex: 1; max-width: 26rem; font: inherit; padding: .55rem .75rem;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--raise); color: var(--ink);
+  }
+  .tsearch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .tsec { margin-top: 2rem; }
+  .tsec > h3 {
+    margin: 0 0 .75rem; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650; padding-bottom: .5rem; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: .5rem;
+  }
+  .tsec > h3 span { letter-spacing: 0; text-transform: none; font-weight: 500; }
+
+  .fam { padding: .8rem 0; border-bottom: 1px solid var(--line); display: grid; gap: .5rem; }
+  .fam:last-child { border-bottom: 0; }
+  .famhead { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .grow2 { display: grid; grid-template-columns: 11rem 1fr; gap: .75rem; align-items: start; padding-left: 1rem; }
+  .grow2 + .grow2 { margin-top: .35rem; }
+  .memb { display: flex; gap: .3rem; flex-wrap: wrap; }
+
+  /* A chip carries what it costs to change it: concerts tagged, people
+     following. Without that, a franchise on 64 concerts looks identical to an
+     artist on one -- and since following a tag now auto-subscribes you to every
+     future concert, renaming or deleting the wrong one is not a small mistake. */
+  .tchip {
+    font: inherit; font-size: .8rem; padding: .22rem .6rem; border-radius: 999px;
+    border: 1px solid transparent; background: var(--chip); color: var(--ink);
+    cursor: pointer; display: inline-flex; align-items: center; gap: .4rem;
+    transition: border-color 150ms ease;
+  }
+  .tchip:hover { border-color: var(--dim); }
+  .tchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tchip .n2 { font-size: .72em; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .tchip.k-franchise { background: var(--accent-wash); color: var(--accent); font-weight: 650; }
+  .tchip.k-group { background: var(--ok-wash); color: var(--ok); font-weight: 600; }
+  .tchip.k-venue { background: var(--off-wash); color: var(--off); }
+  .tchip.unused { opacity: .5; border-style: dashed; border-color: var(--line); }
+
+  dialog.tagdlg {
+    border: 1px solid var(--line); border-radius: 4px; background: var(--raise);
+    color: var(--ink); padding: 0; width: min(34rem, 92vw); box-shadow: var(--shadow);
+  }
+  dialog.tagdlg::backdrop { background: rgba(0,0,0,.35); }
+  dialog.tagdlg .dh {
+    display: flex; align-items: center; gap: .6rem; padding: .9rem 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+  dialog.tagdlg .dh h3 { margin: 0; font-size: 1rem; font-weight: 650; }
+  dialog.tagdlg .dh button.x {
+    margin-left: auto; background: none; border: 0; color: var(--dim);
+    font-size: 1.2rem; cursor: pointer; line-height: 1;
+  }
+  dialog.tagdlg .db { padding: 1rem; display: grid; gap: .9rem; }
+  dialog.tagdlg .df { padding: .8rem 1rem; border-top: 1px solid var(--line); display: flex; gap: .5rem; flex-wrap: wrap; }
+  .usage {
+    display: flex; gap: 1.5rem; padding: .6rem .75rem; border-radius: 3px;
+    background: var(--paper); border: 1px solid var(--line);
+  }
+  .usage div { text-align: center; }
+  .usage .n3 { font-size: 1.1rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .usage .l3 { font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+
+  /* New-tag dialog. The form changes shape with the kind, because the four
+     kinds genuinely need different fields -- a venue has a region and a map
+     link, a group has a parent franchise, a franchise has neither. Showing all
+     of them at once and letting the editor guess which apply is how you get
+     venues with no region. */
+  .kindpick { display: flex; gap: .35rem; flex-wrap: wrap; }
+  .kindpick button {
+    font: inherit; font-size: .82rem; padding: .35rem .7rem; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--chip); color: var(--dim);
+    cursor: pointer; font-weight: 600; transition: all 150ms ease;
+  }
+  .kindpick button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .kindpick button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .dupe {
+    display: none; gap: .5rem; align-items: flex-start; padding: .6rem .7rem;
+    border-radius: 3px; background: var(--off-wash); border: 1px solid var(--off);
+    color: var(--off); font-size: .8125rem;
+  }
+  .dupe.show { display: flex; }
+  .dupe b { font-weight: 700; }
+  .dupe .chip { background: var(--raise); color: var(--ink); }
+
+  /* ---- preferences ----------------------------------------------------- */
+  .plyt { display: grid; grid-template-columns: 13rem 1fr; gap: 2.5rem; margin-top: 1.5rem; }
+  .prail { align-content: start; display: grid; gap: .1rem; position: sticky; top: 4.5rem; }
+  .prail a {
+    text-decoration: none; color: var(--dim); font-size: .875rem; font-weight: 550;
+    padding: .4rem .6rem; border-radius: 3px; border-left: 2px solid transparent;
+  }
+  .prail a:hover { color: var(--ink); background: var(--chip); }
+  .prail a.on { color: var(--ink); border-left-color: var(--accent); background: var(--chip); }
+
+  .psec { padding-bottom: 2.5rem; margin-bottom: 2.5rem; border-bottom: 1px solid var(--line); }
+  .psec:last-child { border-bottom: 0; }
+  .psec > h3 { margin: 0 0 .3rem; font-size: 1.05rem; font-weight: 650; letter-spacing: -.01em; }
+  .psec > .blurb { margin: 0 0 1.1rem; color: var(--dim); font-size: .875rem; max-width: 62ch; }
+
+  /* A subscription row states its consequence: following a tag now auto
+     subscribes you to every future concert carrying it, so "16 concerts, 3
+     upcoming" is the number that makes the toggle meaningful. */
+  .subrow {
+    display: grid; grid-template-columns: 1fr 9rem 12rem; gap: 1rem; align-items: center;
+    padding: .6rem .1rem; border-bottom: 1px solid var(--line);
+  }
+  .subrow:first-of-type { border-top: 1px solid var(--line); }
+  .subrow .nm3 { font-weight: 550; display: flex; align-items: center; gap: .5rem; }
+  .subrow .cnt { font-size: .8125rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .subrow .cnt b { color: var(--ink); font-weight: 600; }
+  .subrow .sw { display: flex; gap: .35rem; justify-content: flex-end; }
+  .swb {
+    font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
+    padding: .22rem .5rem; border-radius: 3px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--raise); color: var(--dim);
+  }
+  .swb[aria-pressed="true"] { color: var(--ok); border-color: var(--ok); background: var(--ok-wash); }
+  .swb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .presetcard {
+    border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+    padding: .85rem .95rem; display: grid; gap: .5rem;
+  }
+  .presetcard + .presetcard { margin-top: .7rem; }
+  .presetcard .ph { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .presetcard .ph .nm4 { font-weight: 650; }
+  .presetcard .ph .sp { margin-left: auto; display: flex; gap: .35rem; }
+  .ruleline { font-size: .8125rem; color: var(--dim); display: flex; gap: .5rem; align-items: center; }
+  .ruleline b { color: var(--ink); font-weight: 600; }
+
+  .statline { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; font-size: .875rem; }
+
+  @media (max-width: 860px) {
+    .plyt { grid-template-columns: 1fr; gap: 1.25rem; }
+    .prail { position: static; grid-auto-flow: column; overflow-x: auto; }
+    .subrow { grid-template-columns: 1fr; gap: .3rem; }
+    .subrow .sw { justify-content: flex-start; }
+  }
+
+  /* ---- onboarding capture --------------------------------------------- */
+  .steps { display: flex; gap: .4rem; align-items: center; margin: 2rem 0 1.25rem; }
+  .stepdot {
+    font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 650;
+    color: var(--dim); padding: .25rem .6rem; border-radius: 3px; border: 1px solid var(--line);
+  }
+  .stepdot.on { color: var(--ink); border-color: var(--ink); }
+  .stepdot.done { color: var(--ok); border-color: var(--ok); }
+  .lede { max-width: 58ch; }
+  .lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 650; text-wrap: balance; }
+  .lede p { margin: 0; color: var(--dim); }
+
+  /* Tiles, not rows: nine is the friendly case and a franchise follower could
+     see forty. A grid scans far faster, and selection state reads at a glance
+     across the whole set rather than one line at a time. */
+  .pick {
+    margin-top: 1.5rem; display: grid; gap: .75rem;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  }
+  .tile {
+    position: relative; text-align: left; font: inherit; color: inherit;
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .85rem .9rem .8rem; cursor: pointer; display: grid; gap: .35rem;
+    box-shadow: var(--shadow);
+    transition: opacity 160ms ease, border-color 160ms ease,
+                background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+  .tile:hover { transform: translateY(-1px); }
+  .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ON: lit. Accent-washed ground and a solid edge, so a kept tile reads as
+     claimed rather than merely default. */
+  .tile[aria-pressed="true"] {
+    border-color: var(--ok); background: var(--ok-wash);
+  }
+  /* OFF: dimmed right down. Still legible so it can be brought back, but it
+     visibly leaves the set. */
+  .tile[aria-pressed="false"] {
+    opacity: .38; box-shadow: none; background: transparent;
+    border-style: dashed;
+  }
+  .tile[aria-pressed="false"]:hover { opacity: .62; }
+
+  .tile .tick {
+    position: absolute; top: .6rem; right: .6rem; width: 1.15rem; height: 1.15rem;
+    border-radius: 50%; display: grid; place-items: center;
+    font-size: .68rem; font-weight: 700; line-height: 1;
+    border: 1.5px solid var(--line); color: transparent; background: transparent;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  }
+  .tile[aria-pressed="true"] .tick {
+    background: var(--ok); border-color: var(--ok); color: var(--raise);
+  }
+  .tile .who-t { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .tile .t { font-weight: 600; line-height: 1.3; letter-spacing: -.01em; padding-right: 1.4rem; }
+  .tile .v { font-size: .8125rem; color: var(--dim); }
+  .tile .rnd {
+    font-size: .75rem; color: var(--dim); margin-top: .2rem;
+    padding-top: .45rem; border-top: 1px dotted var(--line);
+  }
+  .tile .rnd b { color: var(--ink); font-weight: 600; }
+
+  .bar {
+    display: flex; align-items: center; gap: .75rem; margin-top: 1.5rem;
+    padding-top: 1.25rem; border-top: 1px solid var(--line); flex-wrap: wrap;
+  }
+  .bar .tally { color: var(--dim); font-size: .875rem; margin-right: auto; }
+  .bar .tally b { color: var(--ink); font-weight: 650; }
+
+  .reveal { text-align: center; padding: 3rem 0 1rem; }
+  .reveal .big { font-size: 2.6rem; font-weight: 650; letter-spacing: -.03em; }
+  .tallies { display: flex; gap: 2.5rem; justify-content: center; margin: 2rem 0; flex-wrap: wrap; }
+  .tallies div { text-align: center; }
+  .tallies .n { font-size: 1.8rem; font-weight: 650; letter-spacing: -.02em; }
+  .tallies .l { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+
+  @media (max-width: 700px) {
+  
+  [hidden] { display: none !important; }
+
+  @media (max-width: 1024px) {
+    .rowhead, .row { grid-template-columns: 6.5rem 9.5rem 1fr 14rem; }
+    .rowhead span:nth-child(4), .row .act-c { display: none; }
+    .rowhead span:nth-child(5) { text-align: right; }
+    .row .title-c small::after { content: " 2 " attr(data-happens); }
+  }
+  @media (max-width: 960px) {
+    .board { grid-template-columns: repeat(2, 1fr); }
+    .layout { grid-template-columns: 1fr; }
+    .grid, .peek { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .board, .grid, .peek { grid-template-columns: 1fr; }
+    .next, .teaser { grid-template-columns: 1fr; }
+    .countdown { text-align: left; }
+    .rowhead { display: none; }
+    .row {
+      grid-template-columns: 1fr auto; gap: .3rem .75rem;
+      padding: .8rem .1rem; align-items: start;
+    }
+    .row > :nth-child(1) { grid-column: 1; }
+    .row > :nth-child(2) { grid-column: 2; grid-row: 1; text-align: right; }
+    .row .title-c { grid-column: 1 / -1; }
+    .row .acts { grid-column: 1 / -1; justify-content: flex-start; margin-top: .25rem; }
+    nav.main { margin-left: 0; }
+    .site-in { flex-wrap: wrap; gap: .75rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="banner">Concept — click <b>Home</b> and <b>Discover</b> in the header to move between the two pages</div>
+
+<header class="site">
+  <div class="site-in">
+    <div class="mark">DEKIMASEN<span>dekimasen.app</span></div>
+    <nav class="main">
+      <button type="button" data-view="home" aria-current="page">Home</button>
+      <button type="button" data-view="discover">Discover</button>
+      <button type="button" data-view="tags">Tags</button>
+    </nav>
+    <button class="who" type="button" data-view="prefs" title="Preferences">
+      <span class="av">R</span> reiji <span class="tag">editor</span>
+    </button>
+  </div>
+</header>
+
+<!-- ==================== HOME ==================== -->
+<div class="wrap" id="view-home">
+
+  <div class="next">
+    <div>
+      <div class="label">Closes next</div>
+      <div class="what">Liella! 5th Live Tour — FC presale, round 1</div>
+      <div class="when num">Closes 23:59 JST Sun 20 Jul &middot; 10:59 AST your time</div>
+    </div>
+    <div class="countdown">
+      <div class="big num">6:12</div>
+      <div class="unit">hours left</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="head">
+      <h2>Your campaigns</h2>
+      <span class="note"><strong>2 open</strong> &middot; 2 awaiting results &middot; 1 payment due &middot; 3 secured</span>
+    </div>
+
+    <div class="board">
+      <div class="col">
+        <div class="col-head"><span class="dot d-open"></span> Open now <span class="count num">2</span></div>
+        <a class="card" href="#" data-view="concert">
+          <div class="artist">Liella!</div>
+          <div class="title">5th Live Tour — Yokohama</div>
+          <div class="venue">横浜アリーナ &middot; 12 Oct</div>
+          <div class="ladder">
+            <div class="rung"><span class="mark m-live">1</span><span class="name">FC presale R1</span><span class="stat">open</span></div>
+            <div class="rung is-todo"><span class="mark m-todo">2</span><span class="name">General presale</span><span class="stat">28 Jul</span></div>
+            <div class="rung is-todo"><span class="mark m-todo">3</span><span class="name">General sale</span><span class="stat">10 Aug</span></div>
+          </div>
+          <div class="foot"><span class="pill p-danger">6h left</span><span class="clock num">23:59 JST</span></div>
+        </a>
+        <a class="card" href="#" data-view="concert">
+          <div class="artist">22/7</div>
+          <div class="title">Live at Nakano</div>
+          <div class="venue">中野サンプラザ &middot; 3 Sep</div>
+          <div class="ladder">
+            <div class="rung is-done"><span class="mark m-lost">&times;</span><span class="name">FC presale</span><span class="stat">lost</span></div>
+            <div class="rung"><span class="mark m-live">2</span><span class="name">General presale</span><span class="stat">open</span></div>
+          </div>
+          <div class="foot"><span class="pill p-off">4 days</span><span class="clock num">23:59 JST</span></div>
+        </a>
+      </div>
+
+      <div class="col">
+        <div class="col-head"><span class="dot d-applied"></span> Applied <span class="count num">2</span></div>
+        <a class="card" href="#" data-view="concert">
+          <div class="artist">Aqours</div>
+          <div class="title">9th LoveLive! Day 2</div>
+          <div class="venue">さいたまスーパーアリーナ &middot; 24 Aug</div>
+          <div class="ladder">
+            <div class="rung"><span class="mark m-wait">?</span><span class="name">FC lottery R1</span><span class="stat">result 21 Jul</span></div>
+            <div class="rung is-todo"><span class="mark m-todo">2</span><span class="name">Lottery R2</span><span class="stat">if lost</span></div>
+          </div>
+          <div class="foot"><span class="pill p-off">Result tomorrow</span></div>
+        </a>
+        <a class="card" href="#" data-view="concert">
+          <div class="artist">Roselia</div>
+          <div class="title">Rausch und/oder Craziness</div>
+          <div class="venue">幕張メッセ &middot; 6 Sep</div>
+          <div class="ladder">
+            <div class="rung"><span class="mark m-wait">?</span><span class="name">Fan-club lottery</span><span class="stat">result 2 Aug</span></div>
+          </div>
+          <div class="foot"><span class="pill p-quiet">14 days</span></div>
+        </a>
+      </div>
+
+      <div class="col">
+        <div class="col-head"><span class="dot d-won"></span> Won — pay <span class="count num">1</span></div>
+        <a class="card" href="#" data-view="concert" style="border-left: 3px solid var(--accent);">
+          <div class="artist">Poppin'Party</div>
+          <div class="title">Bloom in the Summer</div>
+          <div class="venue">日本ガイシホール &middot; 17 Aug</div>
+          <div class="ladder">
+            <div class="rung is-done"><span class="mark m-lost">&times;</span><span class="name">FC lottery R1</span><span class="stat">lost</span></div>
+            <div class="rung"><span class="mark m-live">2</span><span class="name">FC lottery R2</span><span class="stat">won</span></div>
+          </div>
+          <div class="foot"><span class="pill p-danger">Pay by 22 Jul</span><span class="clock num">&yen;9,800</span></div>
+        </a>
+      </div>
+
+      <div class="col">
+        <div class="col-head"><span class="dot d-secured"></span> Secured <span class="count num">3</span></div>
+        <a class="card" href="#" data-view="concert">
+          <div class="artist">&mu;'s</div>
+          <div class="title">Final Live Encore</div>
+          <div class="venue">東京ドーム &middot; 30 Nov</div>
+          <div class="foot"><span class="pill p-ok">Paid</span><span class="clock">Seat 2F&nbsp;A-14</span></div>
+        </a>
+        <a class="card" href="#" data-view="concert">
+          <div class="artist">Nijigasaki</div>
+          <div class="title">7th Live — Day 1</div>
+          <div class="venue">ぴあアリーナMM &middot; 5 Oct</div>
+          <div class="foot"><span class="pill p-ok">Paid</span></div>
+        </a>
+        <a class="card" href="#" data-view="concert">
+          <div class="artist">Morfonica</div>
+          <div class="title">Rebloom</div>
+          <div class="venue">Zepp Haneda &middot; 21 Sep</div>
+          <div class="foot"><span class="pill p-ok">Paid</span></div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Coming up</h2>
+      <span class="note">All times JST and yours, always both</span>
+    </div>
+    <div class="rows">
+      <div class="rowhead">
+        <span>Your status</span><span>Closes</span><span>Concert</span><span>What happens</span><span>You</span>
+      </div>
+
+      <div class="row">
+        <span><span class="pill p-quiet">Not applied</span></span>
+        <span class="when-c num"><b>Sun 20 Jul</b>23:59 JST &middot; 10:59 AST</span>
+        <span class="title-c">Liella! 5th Live Tour<small data-happens="FC presale closes in 6h">横浜アリーナ &middot; 12 Oct</small></span>
+        <span class="act-c"><b>FC presale</b> closes<br>in 6 hours</span>
+        <span class="acts">
+          <button class="act yes" type="button">I have applied</button>
+          <button class="act no" type="button" data-prune="Liella! 5th Live Tour">Not applying</button>
+        </span>
+      </div>
+
+      <div class="row">
+        <span><span class="pill p-ok">Applied</span></span>
+        <span class="when-c num"><b>Mon 21 Jul</b>12:00 JST &middot; 23:00 AST</span>
+        <span class="title-c">Aqours 9th LoveLive! Day 2<small data-happens="Lottery result">さいたまスーパーアリーナ &middot; 24 Aug</small></span>
+        <span class="act-c"><b>Lottery result</b><br>announced</span>
+        <span class="acts"><span class="done">Nothing to do</span></span>
+      </div>
+
+      <div class="row">
+        <span><span class="pill p-danger">Won</span></span>
+        <span class="when-c num"><b>Tue 22 Jul</b>23:59 JST &middot; 10:59 AST</span>
+        <span class="title-c">Poppin'Party — Bloom in the Summer<small data-happens="Payment due &yen;9,800">日本ガイシホール &middot; 17 Aug</small></span>
+        <span class="act-c"><b>Payment due</b><br>&yen;9,800</span>
+        <span class="acts"><button class="act yes" type="button">Paid</button></span>
+      </div>
+
+      <div class="row">
+        <span><span class="pill p-quiet">Not applied</span></span>
+        <span class="when-c num"><b>Thu 24 Jul</b>23:59 JST &middot; 10:59 AST</span>
+        <span class="title-c">22/7 Live at Nakano<small data-happens="General presale closes in 4d">中野サンプラザ &middot; 3 Sep</small></span>
+        <span class="act-c"><b>General presale</b> closes<br>in 4 days</span>
+        <span class="acts">
+          <button class="act yes" type="button">I have applied</button>
+          <button class="act no" type="button" data-prune="22/7 Live at Nakano">Not applying</button>
+        </span>
+      </div>
+
+      <div class="row">
+        <span><span class="pill p-ok">Secured</span></span>
+        <span class="when-c num"><b>Sat 2 Aug</b>12:00 JST &middot; 23:00 AST</span>
+        <span class="title-c">Aqours 9th — Osaka Day 1<small data-happens="Upgrade closes in 3d">京セラドーム大阪 &middot; 8 Nov</small></span>
+        <span class="act-c"><b>Upgrade round</b><br>closes in 3 days</span>
+        <span class="acts">
+          <button class="act yes" type="button">Entered upgrade</button>
+          <button class="act no" type="button" data-prune="Aqours 9th — Osaka Day 1">Skipping</button>
+        </span>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="teaser">
+    <div>
+      <div class="eyebrow">Not tracking these yet</div>
+      <h2>Discover</h2>
+      <p>
+        142 concerts in the catalogue, 38 with a round still open. Browse by franchise, group,
+        artist or region — or search everything.
+      </p>
+    </div>
+    <button class="btn" type="button" data-view="discover">Open discover &rarr;</button>
+  </div>
+
+  <div class="peek">
+    <a class="card" href="#" data-view="concert">
+      <div class="artist">Sunny Passion</div>
+      <div class="title">Summer Sparkle</div>
+      <div class="venue">Zepp Osaka &middot; 14 Sep</div>
+      <div class="foot"><span class="pill p-quiet">FC presale open</span></div>
+    </a>
+    <a class="card" href="#" data-view="concert">
+      <div class="artist">Aqours</div>
+      <div class="title">9th LoveLive! Day 1</div>
+      <div class="venue">さいたまスーパーアリーナ &middot; 23 Aug</div>
+      <div class="foot"><span class="pill p-quiet">Lottery open</span></div>
+    </a>
+    <a class="card" href="#" data-view="concert">
+      <div class="artist">RAISE A SUILEN</div>
+      <div class="title">Rausch — Nagoya</div>
+      <div class="venue">日本ガイシホール &middot; 28 Sep</div>
+      <div class="foot"><span class="pill p-quiet">General sale</span></div>
+    </a>
+    <a class="card" href="#" data-view="concert">
+      <div class="artist">Hasunosora</div>
+      <div class="title">2nd Live — Day 2</div>
+      <div class="venue">武道館 &middot; 19 Oct</div>
+      <div class="foot"><span class="pill p-quiet">FC presale open</span></div>
+    </a>
+  </div>
+
+  <p class="foot-note">
+    <b>Home answers "where do I stand".</b> Everything above is yours — your rounds, your outcomes,
+    your deadlines. Discovery sits at the bottom as a door out, not as the page itself.
+  </p>
+</div>
+
+
+<!-- ==================== SETUP / CAPTURE ==================== -->
+<div class="wrap" id="view-setup" hidden>
+
+  <div class="steps">
+    <span class="stepdot done">Follow</span>
+    <span class="stepdot done">Timezone</span>
+    <span class="stepdot done">Reminders</span>
+    <span class="stepdot done">Test DM</span>
+    <a class="more" href="#" data-view="prefs" style="margin-left:auto">&larr; Preferences</a>
+    <span class="stepdot on" id="sd1">Your concerts</span>
+    <span class="stepdot" id="sd2">Applications</span>
+  </div>
+
+  <div id="cap1">
+    <div class="lede">
+      <h1>We found 9 upcoming concerts for you</h1>
+      <p>
+        Because you follow Liella!, Aqours, Roselia and Poppin&rsquo;Party. Most people
+        cannot get to every date &mdash; switch off the ones you are not going for and we
+        will not chase you about them. You can change any of this later.
+      </p>
+    </div>
+
+    <div class="pick" id="pickList">
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Liella!</span>
+        <span class="t">5th Live Tour &mdash; Yokohama</span>
+        <span class="v">横浜アリーナ &middot; Sun 12 Oct</span>
+        <span class="rnd"><b>FC presale</b> closes in 6h</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Liella!</span>
+        <span class="t">5th Live Tour &mdash; Osaka</span>
+        <span class="v">大阪城ホール &middot; Sat 1 Nov</span>
+        <span class="rnd"><b>FC presale</b> opens 3 Aug</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Liella!</span>
+        <span class="t">5th Live Tour &mdash; Fukuoka</span>
+        <span class="v">マリンメッセ福岡 &middot; Sat 25 Oct</span>
+        <span class="rnd"><b>FC presale</b> opens 3 Aug</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Aqours</span>
+        <span class="t">9th LoveLive! &mdash; Day 1</span>
+        <span class="v">さいたまスーパーアリーナ &middot; Sat 23 Aug</span>
+        <span class="rnd"><b>Lottery R1</b> closes in 3d</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Aqours</span>
+        <span class="t">9th LoveLive! &mdash; Day 2</span>
+        <span class="v">さいたまスーパーアリーナ &middot; Sun 24 Aug</span>
+        <span class="rnd"><b>Lottery R1</b> result 21 Jul</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Aqours</span>
+        <span class="t">9th &mdash; Osaka Day 1</span>
+        <span class="v">京セラドーム大阪 &middot; Sat 8 Nov</span>
+        <span class="rnd"><b>Upgrade round</b> closes in 3d</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Roselia</span>
+        <span class="t">Rausch und/oder Craziness</span>
+        <span class="v">幕張メッセ &middot; Sat 6 Sep</span>
+        <span class="rnd"><b>FC lottery</b> result 2 Aug</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Poppin&rsquo;Party</span>
+        <span class="t">Bloom in the Summer</span>
+        <span class="v">日本ガイシホール &middot; Sun 17 Aug</span>
+        <span class="rnd"><b>FC lottery R2</b> result 14 Jul</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Roselia</span>
+        <span class="t">Yokohama Final</span>
+        <span class="v">ぴあアリーナMM &middot; Sun 23 Nov</span>
+        <span class="rnd"><b>General sale</b> opens 12 Aug</span>
+      </button>
+    </div>
+
+    <div class="bar">
+      <span class="tally"><b id="keepCount">9</b> of 9 kept</span>
+      <button class="btn quiet" type="button" id="allOff">Turn all off</button>
+      <button class="btn" type="button" data-cap="2">Continue</button>
+    </div>
+  </div>
+
+  <div id="cap2" hidden>
+    <div class="lede">
+      <h1>Already applied to any of these?</h1>
+      <p>
+        Only the rounds you could still be in &mdash; open now, or closed and waiting on a
+        result. A past round you lost does not change what happens next, so we do not ask.
+      </p>
+    </div>
+
+    <div class="pick">
+      <button class="tile" type="button" aria-pressed="false">
+        <span class="tick">&check;</span>
+        <span class="who-t">Liella!</span>
+        <span class="t">5th Live Tour &mdash; Yokohama</span>
+        <span class="v">FC presale &middot; closes in 6h</span>
+        <span class="rnd">Still open</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Aqours</span>
+        <span class="t">9th LoveLive! &mdash; Day 2</span>
+        <span class="v">Lottery R1 &middot; result 21 Jul</span>
+        <span class="rnd">Awaiting result</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="false">
+        <span class="tick">&check;</span>
+        <span class="who-t">Aqours</span>
+        <span class="t">9th LoveLive! &mdash; Day 1</span>
+        <span class="v">Lottery R1 &middot; closes in 3d</span>
+        <span class="rnd">Still open</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true">
+        <span class="tick">&check;</span>
+        <span class="who-t">Roselia</span>
+        <span class="t">Rausch und/oder Craziness</span>
+        <span class="v">FC lottery &middot; result 2 Aug</span>
+        <span class="rnd">Awaiting result</span>
+      </button>
+      <button class="tile" type="button" aria-pressed="true" style="border-left: 3px solid var(--accent);">
+        <span class="tick">&check;</span>
+        <span class="who-t">Aqours &middot; upgrade eligibility</span>
+        <span class="t">9th &mdash; Osaka Day 1</span>
+        <span class="v">最速先行 &middot; closed 30 Jun</span>
+        <span class="rnd">Do you hold this ticket? <b>An upgrade round is open</b> and only holders can enter.</span>
+      </button>
+    </div>
+
+    <div class="bar">
+      <span class="tally">Anything you skip, we will ask about by DM when its result lands.</span>
+      <button class="btn quiet" type="button" data-cap="1">Back</button>
+      <button class="btn" type="button" data-cap="3">Finish</button>
+    </div>
+  </div>
+
+  <div id="cap3" hidden>
+    <div class="reveal">
+      <div class="eyebrow">Setup complete</div>
+      <div class="big">Your board is ready</div>
+      <div class="tallies">
+        <div><div class="n num">9</div><div class="l">tracking</div></div>
+        <div><div class="n num">3</div><div class="l">applied</div></div>
+        <div><div class="n num">1</div><div class="l">payment due</div></div>
+        <div><div class="n num">6h</div><div class="l">next deadline</div></div>
+      </div>
+      <p class="lede" style="margin: 0 auto 1.5rem; color: var(--dim);">
+        Poppin&rsquo;Party is waiting on a payment by Tue 22 Jul &mdash; the closest thing
+        here to losing a ticket you have already won.
+      </p>
+      <button class="btn" type="button" data-view="home">Go to my board</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ==================== CONCERT ==================== -->
+<div class="wrap" id="view-concert" hidden>
+
+  <div class="chead">
+    <a class="more" href="#" data-view="home" style="font-size:.8125rem;text-decoration:none;color:var(--accent)">&larr; Back</a>
+    <p class="lineage">Love Live! Sunshine!! &middot; <b>Aqours</b></p>
+    <h1>9th LoveLive! &mdash; ノーバディーズ・パーフェクト</h1>
+    <p class="othertags">
+      <span class="lbl">Tags</span>
+      <span class="chip">Love Live!</span><span class="chip">Aqours</span><span class="chip">Kanto</span>
+    </p>
+    <p class="links">
+      <span class="lbl2">Links</span> <a href="#" target="_blank" rel="noopener">eventernote</a> &middot; <a href="#" target="_blank" rel="noopener">official site</a> &middot; <a href="#" target="_blank" rel="noopener">ramen.events</a>
+    </p>
+    <div class="bar2">
+      <button class="follow" type="button" aria-pressed="true" id="followBtn">
+        <span id="followTick">&check;</span> <span id="followTxt">Following</span>
+      </button>
+      <span class="clock">You will be reminded about every round below.</span>
+      <span style="margin-left:auto; display:flex; gap:.4rem">
+        <button class="act" type="button" data-view="editor">Edit event</button>
+        <button class="act" type="button">Export YAML</button>
+      </span>
+    </div>
+  </div>
+
+
+  <div class="performers">
+    <div class="plabel">Performing <span>&mdash; 9 members, from the Aqours group tag &middot; links go to eventernote</span></div>
+    <div class="chips">
+      <a class="chip grp" href="#" target="_blank" rel="noopener" title="Aqours on eventernote">Aqours</a><a class="chip" href="#" target="_blank" rel="noopener" title="伊波杏樹 on eventernote">伊波杏樹</a><a class="chip" href="#" target="_blank" rel="noopener" title="逢田梨香子 on eventernote">逢田梨香子</a><a class="chip" href="#" target="_blank" rel="noopener" title="諏訪ななか on eventernote">諏訪ななか</a><a class="chip" href="#" target="_blank" rel="noopener" title="小宮有紗 on eventernote">小宮有紗</a><a class="chip" href="#" target="_blank" rel="noopener" title="斉藤朱夏 on eventernote">斉藤朱夏</a><a class="chip" href="#" target="_blank" rel="noopener" title="小林愛香 on eventernote">小林愛香</a><a class="chip" href="#" target="_blank" rel="noopener" title="高槻かなこ on eventernote">高槻かなこ</a><a class="chip" href="#" target="_blank" rel="noopener" title="鈴木愛奈 on eventernote">鈴木愛奈</a><span class="chip nolink" title="No eventernote link yet">降幡愛</span>
+    </div>
+  </div>
+
+  <div class="standing">
+    <div>
+      <div class="l">Next for you</div>
+      <div class="w">Lottery round 1 &mdash; result announced</div>
+      <div class="s num">Mon 21 Jul 12:00 JST &middot; 23:00 AST &middot; you applied on 8 Jul</div>
+    </div>
+    <span class="pill p-ok">Applied</span>
+  </div>
+
+  <div class="leg" id="leg1">
+    <div class="leghead">
+      <h3>Day 1</h3>
+      <span class="lv num">Sat 23 Aug &middot; doors 15:00 &middot; 開演 16:00<br><span style="color:var(--dim)">📍 さいたまスーパーアリーナ &middot; Kanto</span></span>
+      <span class="lact">
+        <button class="act no" type="button" data-leg="1">Not going to this day</button>
+      </span>
+    </div>
+    <div class="rnds">
+      <div class="rnd2 past">
+        <span><span class="pill p-quiet">Not applied</span></span>
+        <span class="nm">最速先行<em>Fastest presale &middot; fan club</em></span>
+        <span class="dts num"><b>Closed 30 Jun</b><span class="more">Result 4 Jul</span></span>
+        <span class="acts"></span>
+      </div>
+      <div class="rnd2">
+        <span><span class="pill p-quiet">Not applied</span></span>
+        <span class="nm">先行抽選 R1<em>Lottery round 1</em></span>
+        <span class="dts num"><b>Closes Wed 23 Jul</b><span class="more">Result 28 Jul &middot; pay by 3 Aug</span></span>
+        <span class="acts">
+          <button class="act yes" type="button">I have applied</button>
+          <button class="act no" type="button" data-prune="Aqours 9th &mdash; Day 1">Not applying</button>
+        </span>
+      </div>
+      <div class="rnd2">
+        <span><span class="pill p-quiet">&mdash;</span></span>
+        <span class="nm">一般発売<em>General sale &middot; first come</em></span>
+        <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span></span>
+        <span class="acts"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="leg" id="leg2">
+    <div class="leghead">
+      <h3>Day 2</h3>
+      <span class="lv num">Sun 24 Aug &middot; doors 14:00 &middot; 開演 15:00<br><span style="color:var(--dim)">📍 さいたまスーパーアリーナ &middot; Kanto</span></span>
+      <span class="lact">
+        <button class="act no" type="button" data-leg="2">Not going to this day</button>
+      </span>
+    </div>
+    <div class="rnds">
+      <div class="rnd2 past">
+        <span><span class="pill p-quiet">Not applied</span></span>
+        <span class="nm">最速先行<em>Fastest presale &middot; fan club</em></span>
+        <span class="dts num"><b>Closed 30 Jun</b><span class="more">Result 4 Jul</span></span>
+        <span class="acts"></span>
+      </div>
+      <div class="rnd2">
+        <span><span class="pill p-ok">Applied</span></span>
+        <span class="nm">先行抽選 R1<em>Lottery round 1</em></span>
+        <span class="dts num"><b>Result Mon 21 Jul</b><span class="more">Applied 8 Jul &middot; pay by 27 Jul if won</span></span>
+        <span class="acts"><span class="done">Nothing to do</span></span>
+      </div>
+      <div class="rnd2">
+        <span><span class="pill p-quiet">&mdash;</span></span>
+        <span class="nm">先行抽選 R2<em>Lottery round 2 &middot; armed if you lose R1</em></span>
+        <span class="dts num"><b>Opens Wed 30 Jul</b><span class="more">Closes 5 Aug &middot; result 9 Aug</span></span>
+        <span class="acts"></span>
+      </div>
+      <div class="rnd2">
+        <span><span class="pill p-quiet">&mdash;</span></span>
+        <span class="nm">一般発売<em>General sale &middot; first come</em></span>
+        <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span></span>
+        <span class="acts"></span>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <div class="head"><h2>My reminders</h2><span class="note">From your default preset &mdash; <strong>Standard</strong></span></div>
+    <div class="rows">
+      <div class="row" style="grid-template-columns: 1fr auto">
+        <span class="title-c">3 days before each closing deadline<small>DM &middot; applies to every round above</small></span>
+        <span class="acts"><button class="act no" type="button">Remove</button></span>
+      </div>
+      <div class="row" style="grid-template-columns: 1fr auto">
+        <span class="title-c">1 day before each payment deadline<small>DM &middot; applies to every round above</small></span>
+        <span class="acts"><button class="act no" type="button">Remove</button></span>
+      </div>
+      <div class="row" style="grid-template-columns: 1fr auto">
+        <span class="title-c">On the morning of each result<small>DM &middot; applies to every round above</small></span>
+        <span class="acts"><button class="act no" type="button">Remove</button></span>
+      </div>
+    </div>
+    <div class="bar">
+      <span class="tally">Rules here override your default preset for this concert only.</span>
+      <button class="btn quiet" type="button">Add a reminder</button>
+    </div>
+  </section>
+</div>
+
+
+<!-- ==================== EDITOR ==================== -->
+<div class="wrap" id="view-editor" hidden>
+
+  <div class="ebar">
+    <label class="fld grow"><span>Title (JP)</span>
+      <input value="9th LoveLive! — ノーバディーズ・パーフェクト"></label>
+    <label class="fld" style="flex:0 0 12rem"><span>Event ID</span>
+      <input value="aqours-9th-saitama"></label>
+    <label class="fld" style="flex:0 0 10rem"><span>Kind</span>
+      <select><option>lottery event</option><option>stream</option><option>serial code</option></select></label>
+  </div>
+
+  <div class="head" style="margin-top:1.5rem">
+    <h2>Rounds &amp; legs</h2>
+    <span class="note">Where nearly every edit happens &mdash; a new round gets announced and needs adding</span>
+    <span class="more" style="margin-left:auto"></span>
+  </div>
+
+  <div class="bar" style="margin:0 0 1rem; padding-top:0; border-top:0">
+    <span class="tally">2 legs &middot; 7 rounds &middot; 1 upgrade</span>
+    <button class="btn quiet" type="button">Add a leg</button>
+    <button class="btn" type="button">Add a round</button>
+  </div>
+
+  <div class="elegs">
+
+    <div class="elegcard">
+      <div class="lh">
+        <h3>Day 1</h3>
+        <span class="meta num">Sat 23 Aug &middot; doors 15:00 &middot; さいたまスーパーアリーナ</span>
+        <span class="sp">
+          <button class="act" type="button">Edit leg</button>
+          <button class="act no" type="button" data-cancel>Mark cancelled</button>
+        </span>
+      </div>
+      <div class="rlist">
+        <div class="redit">
+          <div class="top">
+            <span class="nm">最速先行</span>
+            <span class="pill p-quiet">fan club</span>
+            <span class="sp">
+              <button class="act" type="button">Edit</button>
+              <button class="act no" type="button">Remove</button>
+            </span>
+          </div>
+          <div class="times">
+            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-06-01T10:00"></label>
+            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value="2026-06-30T23:59"></label>
+            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value="2026-07-04T12:00"></label>
+            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value="2026-07-10T23:59"></label>
+          </div>
+          <div class="applies">
+            <span class="lbl3">Applies to</span>
+            <button class="legchip" type="button" aria-pressed="true">Day 1</button>
+            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
+          </div>
+          
+        </div>
+        <div class="redit">
+          <div class="top">
+            <span class="nm">先行抽選 R1</span>
+            <span class="pill p-quiet">lottery</span>
+            <span class="sp">
+              <button class="act" type="button">Edit</button>
+              <button class="act no" type="button">Remove</button>
+            </span>
+          </div>
+          <div class="times">
+            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-07-10T10:00"></label>
+            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value="2026-07-23T23:59"></label>
+            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value="2026-07-28T12:00"></label>
+            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value="2026-08-03T23:59"></label>
+          </div>
+          <div class="applies">
+            <span class="lbl3">Applies to</span>
+            <button class="legchip" type="button" aria-pressed="true">Day 1</button>
+            <button class="legchip" type="button" aria-pressed="false">Day 2</button>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+
+    <div class="elegcard">
+      <div class="lh">
+        <h3>Day 2</h3>
+        <span class="meta num">Sun 24 Aug &middot; doors 14:00 &middot; さいたまスーパーアリーナ</span>
+        <span class="sp">
+          <button class="act" type="button">Edit leg</button>
+          <button class="act no" type="button" data-cancel>Mark cancelled</button>
+        </span>
+      </div>
+      <div class="rlist">
+        <div class="redit">
+          <div class="top">
+            <span class="nm">先行抽選 R1</span>
+            <span class="pill p-quiet">lottery</span>
+            <span class="sp">
+              <button class="act" type="button">Edit</button>
+              <button class="act no" type="button">Remove</button>
+            </span>
+          </div>
+          <div class="times">
+            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-07-10T10:00"></label>
+            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value="2026-07-18T23:59"></label>
+            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value="2026-07-21T12:00"></label>
+            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value="2026-07-27T23:59"></label>
+          </div>
+          <div class="applies">
+            <span class="lbl3">Applies to</span>
+            <button class="legchip" type="button" aria-pressed="false">Day 1</button>
+            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
+          </div>
+          
+        </div>
+        <div class="redit">
+          <div class="top">
+            <span class="nm">先行抽選 R2</span>
+            <span class="pill p-quiet">lottery</span>
+            <span class="sp">
+              <button class="act" type="button">Edit</button>
+              <button class="act no" type="button">Remove</button>
+            </span>
+          </div>
+          <div class="times">
+            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-07-30T10:00"></label>
+            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value="2026-08-05T23:59"></label>
+            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value="2026-08-09T12:00"></label>
+            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value="2026-08-15T23:59"></label>
+          </div>
+          <div class="applies">
+            <span class="lbl3">Applies to</span>
+            <button class="legchip" type="button" aria-pressed="false">Day 1</button>
+            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
+          </div>
+          
+        </div>
+        <div class="redit">
+          <div class="top">
+            <span class="nm">アップグレード</span>
+            <span class="pill p-quiet">upgrade</span>
+            <span class="sp">
+              <button class="act" type="button">Edit</button>
+              <button class="act no" type="button">Remove</button>
+            </span>
+          </div>
+          <div class="times">
+            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-07-25T10:00"></label>
+            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value="2026-08-02T23:59"></label>
+            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value="2026-08-06T12:00"></label>
+            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value="2026-08-12T23:59"></label>
+          </div>
+          <div class="applies">
+            <span class="lbl3">Applies to</span>
+            <button class="legchip" type="button" aria-pressed="false">Day 1</button>
+            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
+          </div>
+          <div class="upgradebox">
+            <div class="u1"><b>Upgrade round.</b> Only people holding a ticket from a qualifying round can enter.</div>
+            <div class="applies">
+              <span class="lbl3">Qualifies</span>
+              <button class="legchip" type="button" aria-pressed="true">最速先行</button>
+              <button class="legchip" type="button" aria-pressed="true">先行抽選 R1</button>
+              <button class="legchip" type="button" aria-pressed="false">一般発売</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="elegcard">
+      <div class="lh">
+        <h3>Both days</h3>
+        <span class="meta">Rounds that apply to every leg</span>
+        <span class="sp"></span>
+      </div>
+      <div class="rlist">
+        <div class="redit">
+          <div class="top">
+            <span class="nm">一般発売</span>
+            <span class="pill p-quiet">first come</span>
+            <span class="sp">
+              <button class="act" type="button">Edit</button>
+              <button class="act no" type="button">Remove</button>
+            </span>
+          </div>
+          <div class="times">
+            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-08-09T10:00"></label>
+            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value="2026-08-20T23:59"></label>
+            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value=""></label>
+            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
+          </div>
+          <div class="applies">
+            <span class="lbl3">Applies to</span>
+            <button class="legchip" type="button" aria-pressed="true">Day 1</button>
+            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <details class="fold">
+    <summary>Details and links <span class="hint">Title (EN), organizer, categories, notes, 3 URLs</span></summary>
+    <div class="foldbody">
+      <div class="grid2">
+        <label class="fld"><span>Title (EN)</span><input value="9th LoveLive! — Nobody's Perfect"></label>
+        <label class="fld"><span>Artist / organizer</span><input value="Aqours"></label>
+        <label class="fld"><span>Categories</span><input value="live, arena"></label>
+      </div>
+      <div class="grid2">
+        <label class="fld"><span>eventernote URL</span><input type="url" value="https://www.eventernote.com/events/..."></label>
+        <label class="fld"><span>Official URL</span><input type="url" value="https://lovelive-anime.jp/..."></label>
+        <label class="fld"><span>Source URL</span><input type="url" value="https://ramen.events/..."></label>
+      </div>
+      <label class="fld"><span>Notes</span><textarea rows="2"></textarea></label>
+    </div>
+  </details>
+
+  <details class="fold">
+    <summary>Tags <span class="hint">Love Live! Sunshine!! &middot; Aqours &middot; 9 performers &middot; Kanto</span></summary>
+    <div class="foldbody">
+      <div class="applies"><span class="lbl3">Franchise</span><span class="chip">Love Live! Sunshine!!</span><button class="legchip" type="button">+ Add</button></div>
+      <div class="applies"><span class="lbl3">Group</span><span class="chip">Aqours</span><button class="legchip" type="button">+ Add</button></div>
+      <div class="applies"><span class="lbl3">Performers</span><span class="chip">伊波杏樹</span><span class="chip">逢田梨香子</span><span class="chip">諏訪ななか</span><span class="chip dim">+6 more</span><button class="legchip" type="button">+ Add</button></div>
+      <div class="applies"><span class="lbl3">Venue</span><span class="chip">さいたまスーパーアリーナ</span><button class="legchip" type="button">+ Add</button></div>
+    </div>
+  </details>
+
+  <details class="fold">
+    <summary>Edit history <span class="hint">4 changes &middot; last by reiji, 2 days ago</span></summary>
+    <div class="foldbody">
+      <div class="rows" style="border-top:0">
+        <div class="row" style="grid-template-columns: 10rem 1fr">
+          <span class="when-c num"><b>Fri 17 Jul</b>21:14 JST</span>
+          <span class="title-c">reiji<small>official_url set &middot; notes changed</small></span>
+        </div>
+        <div class="row" style="grid-template-columns: 10rem 1fr">
+          <span class="when-c num"><b>Wed 15 Jul</b>08:02 JST</span>
+          <span class="title-c">Deleted user<small>title_en set</small></span>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <div class="danger">
+    <div>
+      <div class="t2">Duplicate or delete</div>
+      <div class="s2">Duplicating copies tags and details, not rounds or legs.</div>
+    </div>
+    <span class="sp">
+      <button class="btn quiet" type="button">Duplicate</button>
+      <button class="btn warn" type="button">Delete event</button>
+    </span>
+  </div>
+</div>
+
+
+<!-- ==================== PREFERENCES ==================== -->
+<div class="wrap" id="view-prefs" hidden>
+  <div class="head" style="margin-top:2rem">
+    <h2 style="font-size:1.35rem">Preferences</h2>
+    <a class="more" href="#" data-view="home" style="margin-left:auto">&larr; Back to home</a>
+  </div>
+
+  <div class="plyt">
+    <nav class="prail">
+      <a class="on" href="#p-follow">Following</a>
+      <a href="#p-remind">Reminders</a>
+      <a href="#p-time">Time</a>
+      <a href="#p-deliver">Delivery</a>
+      <a href="#p-account">Account</a>
+      <a href="#p-admin">Editors</a>
+    </nav>
+
+    <div>
+      <section class="psec" id="p-follow">
+        <h3>Following</h3>
+        <p class="blurb">
+          Following a tag subscribes you to <b>every future concert</b> carrying it. You can
+          drop individual concerts later from the concert page or a reminder DM &mdash; this
+          is the tap that opens the flow.
+        </p>
+        <div class="statline" style="margin-bottom:1rem">
+          <span class="pill p-ok">4 tags followed</span>
+          <span class="clock">37 concerts tracked &middot; 9 upcoming &middot; 2 pruned by you</span>
+        </div>
+      <div class="subrow">
+        <span class="nm3"><span class="tchip k-group">Aqours</span></span>
+        <span class="cnt"><b>16</b> concerts &middot; 3 upcoming</span>
+        <span class="sw">
+          <button class="swb" type="button" aria-pressed="true">Notify</button>
+          <button class="swb" type="button" aria-pressed="true">Auto-apply preset</button>
+          <button class="act no" type="button">Unfollow</button>
+        </span>
+      </div>
+      <div class="subrow">
+        <span class="nm3"><span class="tchip k-group">Liella!</span></span>
+        <span class="cnt"><b>18</b> concerts &middot; 4 upcoming</span>
+        <span class="sw">
+          <button class="swb" type="button" aria-pressed="true">Notify</button>
+          <button class="swb" type="button" aria-pressed="true">Auto-apply preset</button>
+          <button class="act no" type="button">Unfollow</button>
+        </span>
+      </div>
+      <div class="subrow">
+        <span class="nm3"><span class="tchip k-group">Roselia</span></span>
+        <span class="cnt"><b>12</b> concerts &middot; 2 upcoming</span>
+        <span class="sw">
+          <button class="swb" type="button" aria-pressed="true">Notify</button>
+          <button class="swb" type="button" aria-pressed="false">Auto-apply preset</button>
+          <button class="act no" type="button">Unfollow</button>
+        </span>
+      </div>
+      <div class="subrow">
+        <span class="nm3"><span class="tchip k-group">Poppin&rsquo;Party</span></span>
+        <span class="cnt"><b>14</b> concerts &middot; 0 upcoming</span>
+        <span class="sw">
+          <button class="swb" type="button" aria-pressed="false">Notify</button>
+          <button class="swb" type="button" aria-pressed="false">Auto-apply preset</button>
+          <button class="act no" type="button">Unfollow</button>
+        </span>
+      </div>
+        <div class="bar">
+          <span class="tally">Notify sends a DM when a new concert appears. Auto-apply adds your default preset to it.</span>
+          <button class="btn" type="button">Follow another tag</button>
+        </div>
+      </section>
+
+      <section class="psec" id="p-remind">
+        <h3>Reminders</h3>
+        <p class="blurb">
+          A preset is a set of rules applied to concerts you follow. Rules on an individual
+          concert override these.
+        </p>
+        <div class="presetcard">
+          <div class="ph">
+            <span class="nm4">Standard</span>
+            <span class="pill p-ok">Default</span>
+            <span class="sp">
+              <button class="act" type="button">Rename</button>
+              <button class="act no" type="button">Delete</button>
+            </span>
+          </div>
+          <div class="ruleline">&bull; <b>3 days</b> before each closing deadline</div>
+          <div class="ruleline">&bull; <b>1 day</b> before each payment deadline</div>
+          <div class="ruleline">&bull; <b>On the morning</b> of each result</div>
+          <button class="act" type="button" style="justify-self:start">Add a rule</button>
+        </div>
+        <div class="presetcard">
+          <div class="ph">
+            <span class="nm4">Last minute</span>
+            <span class="sp">
+              <button class="act" type="button">Make default</button>
+              <button class="act" type="button">Rename</button>
+              <button class="act no" type="button">Delete</button>
+            </span>
+          </div>
+          <div class="ruleline">&bull; <b>6 hours</b> before each closing deadline</div>
+          <button class="act" type="button" style="justify-self:start">Add a rule</button>
+        </div>
+        <div class="bar">
+          <span class="tally">Presets apply to future concerts. Existing ones keep the rules they already have.</span>
+          <button class="btn quiet" type="button">New preset</button>
+        </div>
+      </section>
+
+      <section class="psec" id="p-time">
+        <h3>Time</h3>
+        <p class="blurb">Every deadline shows JST first, then yours. This sets the second one.</p>
+        <div class="grid2" style="max-width:34rem">
+          <label class="fld"><span>Your timezone</span>
+            <select><option>America/Moncton</option><option>Asia/Tokyo</option><option>Europe/London</option></select></label>
+          <label class="fld"><span>Detection</span>
+            <select><option>Follow my browser</option><option>Keep what I picked</option></select></label>
+        </div>
+        <p class="clock" style="margin-top:.6rem; display:block">
+          Detected <b>America/Moncton</b> from your browser. Deadlines currently read
+          <span class="num">23:59 JST &middot; 10:59 AST</span>.
+        </p>
+      </section>
+
+      <section class="psec" id="p-deliver">
+        <h3>Delivery</h3>
+        <p class="blurb">Where reminders actually arrive.</p>
+        <div class="statline" style="margin-bottom:.9rem">
+          <span class="pill p-ok">Discord DMs reaching you</span>
+          <span class="clock">Last delivered Fri 18 Jul 09:00 JST</span>
+          <button class="act" type="button">Send a test DM</button>
+        </div>
+        <div class="statline">
+          <span class="pill p-ok">Calendar feed active</span>
+          <span class="clock">Created 12 Jul &middot; subscribe in Google or Apple Calendar</span>
+          <button class="act" type="button">Copy link</button>
+          <button class="act no" type="button">Generate a new one</button>
+        </div>
+        <p class="clock" style="margin-top:.6rem; display:block">
+          Generating a new link revokes the old one immediately. Anyone still subscribed to it
+          stops receiving updates.
+        </p>
+      </section>
+
+      <section class="psec" id="p-account">
+        <h3>Account</h3>
+        <p class="blurb">Signed in with Discord as <b>reiji</b>.</p>
+        <div class="danger" style="border-color: var(--line); margin-top:0">
+          <div>
+            <div class="t2">Run first-time setup again</div>
+            <div class="s2">
+              Walks you back through your concerts so you can prune the ones you are not going
+              for and mark what you have already applied to. Nothing is reset &mdash; your
+              existing choices are the starting point.
+            </div>
+          </div>
+          <span class="sp"><button class="btn" type="button" data-view="setup">Run setup</button></span>
+        </div>
+        <div class="danger" style="margin-top:1rem">
+          <div>
+            <div class="t2">Delete my account</div>
+            <div class="s2">
+              Removes your subscriptions, reminders, presets and outcomes. Concerts and tags you
+              contributed stay in the shared catalogue with your name removed.
+            </div>
+          </div>
+          <span class="sp"><button class="btn warn" type="button">Delete account</button></span>
+        </div>
+      </section>
+
+      <section class="psec" id="p-admin">
+        <h3>Editors <span class="pill p-quiet">admin only</span></h3>
+        <p class="blurb">Editors can add and change concerts, rounds and tags.</p>
+        <div class="subrow" style="grid-template-columns: 1fr auto">
+          <span class="nm3">reiji <span class="pill p-quiet">you &middot; from env</span></span>
+          <span class="sw"><span class="clock">cannot be removed here</span></span>
+        </div>
+        <div class="subrow" style="grid-template-columns: 1fr auto">
+          <span class="nm3">kanata</span>
+          <span class="sw"><button class="act no" type="button">Remove</button></span>
+        </div>
+        <div class="bar">
+          <span class="tally">Whitelisted editors live in the server env and cannot be removed from here.</span>
+          <button class="btn quiet" type="button">Add an editor</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TAGS ==================== -->
+<div class="wrap" id="view-tags" hidden>
+  <div class="head" style="margin-top:2rem">
+    <h2 style="font-size:1.35rem">Tags</h2>
+    <span class="note"><strong>142 concerts</strong> across 6 franchises, 18 groups, 96 performers, 24 venues</span>
+    <button class="btn" type="button" id="newTagBtn" style="margin-left:auto">+ New tag</button>
+  </div>
+
+  <p class="clock" style="max-width:64ch; display:block">
+    Following a tag subscribes you to every future concert carrying it, so counts
+    here are what a rename or delete actually touches.
+  </p>
+
+  <div class="tsearch">
+    <input type="search" placeholder="Search franchises, groups, performers, venues…" aria-label="Search tags">
+  </div>
+
+  <div class="tsec">
+    <h3>Franchises and groups <span>&mdash; click any tag to edit</span></h3>
+
+    <div class="fam">
+      <div class="famhead"><button class="tchip k-franchise" type="button" data-tag="Love Live! Sunshine!!">Love Live! Sunshine!!<span class="n2">64</span></button></div>
+      <div class="grow2">
+        <span><button class="tchip k-group" type="button" data-tag="Aqours">Aqours<span class="n2">16</span></button></span>
+        <span class="memb"><button class="tchip" type="button" data-tag="伊波杏樹">伊波杏樹</button><button class="tchip" type="button" data-tag="逢田梨香子">逢田梨香子</button><button class="tchip" type="button" data-tag="諏訪ななか">諏訪ななか</button><button class="tchip" type="button" data-tag="小宮有紗">小宮有紗</button><button class="tchip" type="button" data-tag="斉藤朱夏">斉藤朱夏</button><button class="tchip" type="button" data-tag="小林愛香">小林愛香</button><button class="tchip" type="button" data-tag="高槻かなこ">高槻かなこ</button><button class="tchip" type="button" data-tag="鈴木愛奈">鈴木愛奈</button><button class="tchip" type="button" data-tag="降幡愛">降幡愛</button></span>
+      </div>
+    </div>
+
+    <div class="fam">
+      <div class="famhead"><button class="tchip k-franchise" type="button" data-tag="Love Live! Superstar!!">Love Live! Superstar!!<span class="n2">31</span></button></div>
+      <div class="grow2">
+        <span><button class="tchip k-group" type="button" data-tag="Liella!">Liella!<span class="n2">18</span></button></span>
+        <span class="memb"><button class="tchip" type="button" data-tag="伊達さゆり">伊達さゆり</button><button class="tchip" type="button" data-tag="岬なこ">岬なこ</button><button class="tchip" type="button" data-tag="ペイトン尚未">ペイトン尚未</button><button class="tchip" type="button" data-tag="青山なぎさ">青山なぎさ</button><button class="tchip" type="button" data-tag="鈴原希実">鈴原希実</button></span>
+      </div>
+      <div class="grow2">
+        <span><button class="tchip k-group" type="button" data-tag="Sunny Passion">Sunny Passion<span class="n2">3</span></button></span>
+        <span class="memb"><button class="tchip" type="button" data-tag="大熊和奏">大熊和奏</button><button class="tchip" type="button" data-tag="絵森彩">絵森彩</button></span>
+      </div>
+    </div>
+
+    <div class="fam">
+      <div class="famhead"><button class="tchip k-franchise" type="button" data-tag="BanG Dream!">BanG Dream!<span class="n2">41</span></button></div>
+      <div class="grow2">
+        <span><button class="tchip k-group" type="button" data-tag="Roselia">Roselia<span class="n2">12</span></button></span>
+        <span class="memb"><button class="tchip" type="button" data-tag="相羽あいな">相羽あいな</button><button class="tchip" type="button" data-tag="工藤晴香">工藤晴香</button><button class="tchip" type="button" data-tag="中島由貴">中島由貴</button><button class="tchip" type="button" data-tag="櫻川めぐ">櫻川めぐ</button><button class="tchip" type="button" data-tag="志崎樺音">志崎樺音</button></span>
+      </div>
+      <div class="grow2">
+        <span><button class="tchip k-group" type="button" data-tag="Poppin&rsquo;Party">Poppin&rsquo;Party<span class="n2">14</span></button></span>
+        <span class="memb"><button class="tchip" type="button" data-tag="愛美">愛美</button><button class="tchip" type="button" data-tag="大塚紗英">大塚紗英</button><button class="tchip" type="button" data-tag="西本りみ">西本りみ</button><button class="tchip" type="button" data-tag="大橋彩香">大橋彩香</button><button class="tchip" type="button" data-tag="伊藤彩沙">伊藤彩沙</button></span>
+      </div>
+      <div class="grow2">
+        <span><button class="tchip k-group unused" type="button" data-tag="Morfonica">Morfonica<span class="n2">0</span></button></span>
+        <span class="memb"><em class="clock">no members yet</em></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tsec">
+    <h3>Venues <span>&mdash; grouped by the region used in the Discover sidebar</span></h3>
+    <div class="fam">
+      <div class="famhead"><span class="eyebrow" style="width:5rem">Kanto</span>
+        <button class="tchip k-venue" type="button" data-tag="さいたまスーパーアリーナ">さいたまスーパーアリーナ<span class="n2">12</span></button><button class="tchip k-venue" type="button" data-tag="横浜アリーナ">横浜アリーナ<span class="n2">9</span></button><button class="tchip k-venue" type="button" data-tag="幕張メッセ">幕張メッセ<span class="n2">7</span></button><button class="tchip k-venue" type="button" data-tag="東京ドーム">東京ドーム<span class="n2">4</span></button><button class="tchip k-venue" type="button" data-tag="日本武道館">日本武道館<span class="n2">6</span></button><button class="tchip k-venue" type="button" data-tag="ぴあアリーナMM">ぴあアリーナMM<span class="n2">5</span></button>
+      </div>
+    </div>
+    <div class="fam">
+      <div class="famhead"><span class="eyebrow" style="width:5rem">Kansai</span>
+        <button class="tchip k-venue" type="button" data-tag="大阪城ホール">大阪城ホール<span class="n2">8</span></button><button class="tchip k-venue" type="button" data-tag="京セラドーム大阪">京セラドーム大阪<span class="n2">3</span></button><button class="tchip k-venue" type="button" data-tag="Zepp Osaka">Zepp Osaka<span class="n2">6</span></button>
+      </div>
+    </div>
+    <div class="fam">
+      <div class="famhead"><span class="eyebrow" style="width:5rem">Chubu</span>
+        <button class="tchip k-venue" type="button" data-tag="日本ガイシホール">日本ガイシホール<span class="n2">5</span></button><button class="tchip k-venue" type="button" data-tag="Zepp Nagoya">Zepp Nagoya<span class="n2">2</span></button>
+      </div>
+    </div>
+    <div class="fam">
+      <div class="famhead"><span class="eyebrow" style="width:5rem">No region</span>
+        <button class="tchip k-venue unused" type="button" data-tag="マリンメッセ福岡">マリンメッセ福岡<span class="n2">2</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tsec">
+    <h3>Performers with no group <span>&mdash; solo artists, or members not yet attached</span></h3>
+    <div class="fam">
+      <div class="famhead"><button class="tchip" type="button" data-tag="水樹奈々">水樹奈々<span class="n2">3</span></button><button class="tchip" type="button" data-tag="南條愛乃">南條愛乃<span class="n2">2</span></button><button class="tchip" type="button" data-tag="楠木ともり">楠木ともり<span class="n2">1</span></button><button class="tchip unused" type="button" data-tag="鈴木このみ">鈴木このみ<span class="n2">0</span></button></div>
+    </div>
+  </div>
+</div>
+
+<dialog class="tagdlg" id="newTagDlg">
+  <div class="dh">
+    <h3>New tag</h3>
+    <button class="x" type="button" data-nclose aria-label="Close">&times;</button>
+  </div>
+  <div class="db">
+    <div class="fld">
+      <span>Kind</span>
+      <div class="kindpick" id="kindPick">
+        <button type="button" data-kind="franchise" aria-pressed="false">Franchise</button>
+        <button type="button" data-kind="group" aria-pressed="true">Group</button>
+        <button type="button" data-kind="artist" aria-pressed="false">Performer</button>
+        <button type="button" data-kind="venue" aria-pressed="false">Venue</button>
+      </div>
+      <span class="clock" id="kindHint">A group contains performers. Attaching it to a concert adds its members.</span>
+    </div>
+
+    <label class="fld"><span>Name</span>
+      <input id="newTagName" placeholder="As it is written on the official site" value="Aqours"></label>
+
+    <div class="dupe show" id="dupeWarn">
+      <span>&#9888;</span>
+      <span><b>Already exists.</b> A group tag with this name is on 16 concerts with 8 followers.
+      Adding a second one splits them &mdash; there is no merge yet.
+      <span class="chip">Aqours</span></span>
+    </div>
+
+    <div class="fld kf k-group">
+      <span>Parent franchise</span>
+      <select><option>Love Live! Sunshine!!</option><option>Love Live! Superstar!!</option><option>BanG Dream!</option><option>&mdash; none &mdash;</option></select>
+    </div>
+
+    <div class="fld kf k-group k-artist">
+      <span>eventernote URL <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></span>
+      <input type="url" placeholder="https://www.eventernote.com/actors/…">
+    </div>
+
+    <div class="fld kf k-venue">
+      <span>Region</span>
+      <select><option>Kanto</option><option>Kansai</option><option>Chubu</option><option>Kyushu</option><option>Other</option></select>
+      <span class="clock">Discover groups venues by region. Without one it lands in &ldquo;No region&rdquo; and drops out of region filtering.</span>
+    </div>
+
+    <div class="fld kf k-venue">
+      <span>Map or venue URL <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></span>
+      <input type="url" placeholder="https://…">
+    </div>
+
+    <div class="fld kf k-franchise">
+      <span class="clock" style="text-transform:none;letter-spacing:0;font-weight:400">
+        A franchise is just a parent for groups &mdash; nothing else to set.
+      </span>
+    </div>
+  </div>
+  <div class="df">
+    <button class="btn" type="button" data-nclose>Create tag</button>
+    <button class="btn quiet" type="button" data-nclose>Cancel</button>
+  </div>
+</dialog>
+
+<dialog class="tagdlg" id="tagDlg">
+  <div class="dh">
+    <h3 id="tagDlgName">Aqours</h3>
+    <span class="pill p-quiet" id="tagDlgKind">group</span>
+    <button class="x" type="button" data-tclose aria-label="Close">&times;</button>
+  </div>
+  <div class="db">
+    <div class="usage">
+      <div><div class="n3">16</div><div class="l3">concerts</div></div>
+      <div><div class="n3">8</div><div class="l3">followers</div></div>
+      <div><div class="n3">9</div><div class="l3">members</div></div>
+      <div><div class="n3">3</div><div class="l3">upcoming</div></div>
+    </div>
+
+    <label class="fld"><span>Name</span><input value="Aqours"></label>
+    <label class="fld"><span>eventernote URL</span>
+      <input type="url" placeholder="https://www.eventernote.com/actors/…"></label>
+
+    <div class="fld">
+      <span>Members</span>
+      <div class="memb" style="margin-top:.15rem">
+        <span class="chip">伊波杏樹 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">逢田梨香子 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">諏訪ななか <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">小宮有紗 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span>
+        <span class="chip">+5 more</span>
+        <button class="legchip" type="button">+ Add member</button>
+      </div>
+    </div>
+
+    <div class="upgradebox">
+      <div class="u1"><b>Apply to existing concerts.</b> Adding a member does not touch
+      concerts that already carry this group &mdash; expansion is materialised at the time
+      you attach it. Use this to push a new member onto active events.</div>
+      <button class="btn quiet" type="button" style="justify-self:start">Apply to 3 upcoming concerts</button>
+    </div>
+  </div>
+  <div class="df">
+    <button class="btn" type="button" data-tclose>Save</button>
+    <button class="btn quiet" type="button" data-tclose>Cancel</button>
+    <button class="btn warn" type="button" style="margin-left:auto">Delete tag</button>
+  </div>
+</dialog>
+
+<!-- ==================== DISCOVER ==================== -->
+<div class="wrap" id="view-discover" hidden>
+
+  <section style="margin-top:2rem">
+    <div class="head">
+      <h2 style="font-size:1.35rem">Discover</h2>
+      <span class="note"><strong>142 concerts</strong> &middot; 38 with a round still open</span>
+      <a class="more" href="#" data-view="home">&larr; Back to home</a>
+    </div>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <input class="filter-search" type="search" placeholder="Search tags…" aria-label="Search tags">
+
+        <div class="facet">
+          <div class="ftitle">Franchise <span>(6)</span></div>
+          <div class="chips">
+            <a class="chip on" href="#">Love Live! <span class="n">64</span></a>
+            <a class="chip" href="#">BanG Dream! <span class="n">41</span></a>
+            <a class="chip" href="#">Idolm@ster <span class="n">22</span></a>
+            <a class="chip" href="#">22/7 <span class="n">9</span></a>
+          </div>
+        </div>
+
+        <div class="facet">
+          <div class="ftitle">Group <span>(18)</span></div>
+          <div class="chips">
+            <a class="chip" href="#">Liella! <span class="n">18</span></a>
+            <a class="chip" href="#">Aqours <span class="n">16</span></a>
+            <a class="chip" href="#">Nijigasaki <span class="n">14</span></a>
+            <a class="chip" href="#">&mu;'s <span class="n">8</span></a>
+            <a class="chip" href="#">Hasunosora <span class="n">8</span></a>
+            <a class="chip" href="#">Roselia <span class="n">12</span></a>
+          </div>
+        </div>
+
+        <div class="facet">
+          <div class="ftitle">Region <span>(5)</span></div>
+          <div class="chips">
+            <a class="chip" href="#">Kanto <span class="n">88</span></a>
+            <a class="chip" href="#">Kansai <span class="n">27</span></a>
+            <a class="chip" href="#">Chubu <span class="n">15</span></a>
+            <a class="chip" href="#">Kyushu <span class="n">7</span></a>
+          </div>
+        </div>
+
+        <div class="facet">
+          <div class="ftitle">Round status</div>
+          <div class="chips">
+            <a class="chip" href="#">Open now <span class="n">38</span></a>
+            <a class="chip" href="#">Opening soon <span class="n">21</span></a>
+            <a class="chip" href="#">Not tracking <span class="n">104</span></a>
+          </div>
+        </div>
+
+        <a class="btn quiet" href="#" style="text-align:center">Clear filters</a>
+      </aside>
+
+      <div>
+        <div class="searchbar">
+          <input type="search" placeholder="Search concerts, venues, artists…" aria-label="Search concerts">
+          <button class="btn quiet" type="button">Search</button>
+        </div>
+
+        <div class="head" style="margin-bottom:.75rem">
+          <span class="note"><strong>Love Live!</strong> &middot; 64 concerts</span>
+          <div class="sorts" style="margin-left:auto">
+            <button type="button" aria-pressed="true">Event date</button>
+            <button type="button" aria-pressed="false">Next deadline</button>
+            <button type="button" aria-pressed="false">Recently added</button>
+          </div>
+        </div>
+
+        <div class="grid">
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Liella!</div>
+            <div class="title">5th Live Tour — Yokohama</div>
+            <div class="venue">横浜アリーナ</div>
+            <div class="when num">Sun 12 Oct</div>
+            <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kanto</span></div>
+            <div class="status-line">
+              <span class="pill s-in">FC presale &middot; Applied</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Aqours</div>
+            <div class="title">9th LoveLive! Day 1</div>
+            <div class="venue">さいたまスーパーアリーナ</div>
+            <div class="when num">Sat 23 Aug</div>
+            <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kanto</span></div>
+            <div class="status-line">
+              <span class="pill s-none">Lottery R1 &middot; Closes in 3d</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Aqours</div>
+            <div class="title">9th LoveLive! Day 2</div>
+            <div class="venue">さいたまスーパーアリーナ</div>
+            <div class="when num">Sun 24 Aug</div>
+            <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kanto</span></div>
+            <div class="status-line">
+              <span class="pill s-in">Lottery R1 &middot; Applied</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Hasunosora</div>
+            <div class="title">2nd Live — Day 2</div>
+            <div class="venue">日本武道館</div>
+            <div class="when num">Sun 19 Oct</div>
+            <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kanto</span></div>
+            <div class="status-line">
+              <span class="pill s-none">FC presale &middot; Closes in 21d</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Nijigasaki</div>
+            <div class="title">7th Live — Day 1</div>
+            <div class="venue">ぴあアリーナMM</div>
+            <div class="when num">Sun 5 Oct</div>
+            <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kanto</span></div>
+            <div class="status-line">
+              <span class="pill s-in">Secured</span><span class="pill s-up">Upgrade &middot; Closes in 3d</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Poppin'Party</div>
+            <div class="title">Bloom in the Summer</div>
+            <div class="venue">日本ガイシホール</div>
+            <div class="when num">Sun 17 Aug</div>
+            <div class="tagrow"><span class="minichip">BanG Dream!</span><span class="minichip">Chubu</span></div>
+            <div class="status-line">
+              <span class="pill s-act">Won &mdash; pay by 22 Jul</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Aqours</div>
+            <div class="title">9th LoveLive! &mdash; Osaka Day 1</div>
+            <div class="venue">京セラドーム大阪</div>
+            <div class="when num">Sat 8 Nov</div>
+            <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kansai</span></div>
+            <div class="status-line">
+              <span class="pill s-in">Secured</span><span class="pill s-up">Upgrade &middot; Applied</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Roselia</div>
+            <div class="title">Rausch &mdash; Yokohama Final</div>
+            <div class="venue">ぴあアリーナMM</div>
+            <div class="when num">Sun 23 Nov</div>
+            <div class="tagrow"><span class="minichip">BanG Dream!</span><span class="minichip">Kanto</span></div>
+            <div class="status-line">
+              <span class="pill s-act">Upgrade won &mdash; pay by 24 Jul</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Liella!</div>
+            <div class="title">5th Live Tour &mdash; Osaka</div>
+            <div class="venue">大阪城ホール</div>
+            <div class="when num">Sat 1 Nov</div>
+            <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kansai</span></div>
+            <div class="status-line">
+              <span class="pill s-in">Secured</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Sunny Passion</div>
+            <div class="title">Summer Sparkle</div>
+            <div class="venue">Zepp Osaka</div>
+            <div class="when num">Sun 14 Sep</div>
+            <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kansai</span></div>
+            <div class="status-line">
+              <span class="pill s-none">FC presale &middot; Opens in 13d</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Liella!</div>
+            <div class="title">5th Live Tour — Fukuoka</div>
+            <div class="venue">マリンメッセ福岡</div>
+            <div class="when num">Sat 25 Oct</div>
+            <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kyushu</span></div>
+            <div class="status-line">
+              <span class="pill s-none">FC presale &middot; Opens in 15d</span>
+            </div>
+          </a>
+          <a class="card" href="#" data-view="concert">
+            <div class="artist">Nijigasaki</div>
+            <div class="title">7th Live — Day 2</div>
+            <div class="venue">ぴあアリーナMM</div>
+            <div class="when num">Mon 6 Oct</div>
+            <div class="tagrow"><span class="minichip">Love Live!</span><span class="minichip">Kanto</span></div>
+            <div class="status-line">
+              <span class="pill s-none">Lottery R1 &middot; Closes in 4d</span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot-note">
+    <b>Discover answers "what's on".</b> This is today's index page, given its own room — the tag
+    sidebar, the search, the grid, plus a filter for round status. Cards show your standing when you
+    have one, so the two pages stay connected without discovery pretending to be a dashboard.
+  </p>
+</div>
+
+<dialog class="prune" id="pruneDlg">
+  <div class="dh">Not applying to this round<button type="button" data-close aria-label="Close">&times;</button></div>
+  <p>
+    Done &mdash; you won't be reminded about this round for this leg. Later rounds for
+    <b id="pruneName">this concert</b> will still reach you.
+  </p>
+  <div class="da">
+    <button class="btn quiet" type="button" data-close>That's right</button>
+    <button class="btn" type="button" data-close>Skip this concert entirely</button>
+  </div>
+</dialog>
+
+<script>
+  const dlg = document.getElementById('pruneDlg');
+  document.addEventListener('click', (e) => {
+    const p = e.target.closest('[data-prune]');
+    if (p) { document.getElementById('pruneName').textContent = p.dataset.prune; dlg.showModal(); return; }
+    if (e.target.closest('[data-close]')) dlg.close();
+  });
+
+  const views = {
+    home: document.getElementById('view-home'),
+    discover: document.getElementById('view-discover'),
+    setup: document.getElementById('view-setup'),
+    concert: document.getElementById('view-concert'),
+    editor: document.getElementById('view-editor'),
+    prefs: document.getElementById('view-prefs'),
+    tags: document.getElementById('view-tags'),
+  };
+  const navBtns = document.querySelectorAll('nav.main button');
+
+  function show(name) {
+    for (const [key, el] of Object.entries(views)) el.hidden = key !== name;
+    navBtns.forEach(b => {
+      if (b.dataset.view === name) {
+        b.setAttribute('aria-current', 'page');
+      } else {
+        b.removeAttribute('aria-current');
+      }
+    });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('.tile');
+    if (!t) return;
+    const on = t.getAttribute('aria-pressed') === 'true';
+    t.setAttribute('aria-pressed', String(!on));
+    const list = document.getElementById('pickList');
+    if (list && list.contains(t)) {
+      document.getElementById('keepCount').textContent =
+        list.querySelectorAll('.tile[aria-pressed="true"]').length;
+    }
+  });
+
+  document.getElementById('allOff').addEventListener('click', () => {
+    document.querySelectorAll('#pickList .tile')
+      .forEach(t => t.setAttribute('aria-pressed', 'false'));
+    document.getElementById('keepCount').textContent = '0';
+  });
+
+  document.getElementById('followBtn').addEventListener('click', (ev) => {
+    const b = ev.currentTarget;
+    const on = b.getAttribute('aria-pressed') === 'true';
+    b.setAttribute('aria-pressed', String(!on));
+    document.getElementById('followTick').textContent = on ? '' : '\u2713';
+    document.getElementById('followTxt').textContent = on ? 'Not following' : 'Following';
+    b.nextElementSibling.textContent = on
+      ? 'Muted. Nothing from this concert will reach you.'
+      : 'You will be reminded about every round below.';
+  });
+
+  const newTagDlg = document.getElementById('newTagDlg');
+  const KIND_HINTS = {
+    franchise: 'A franchise is the top level. Groups hang off it.',
+    group: 'A group contains performers. Attaching it to a concert adds its members.',
+    artist: 'A single performer. Can belong to a group, or stand alone.',
+    venue: 'A place. Discover filters venues by region, not individually.',
+  };
+  function setKind(kind) {
+    document.querySelectorAll('#kindPick button').forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.kind === kind)));
+    document.querySelectorAll('.kf').forEach(f =>
+      f.style.display = f.classList.contains('k-' + kind) ? '' : 'none');
+    document.getElementById('kindHint').textContent = KIND_HINTS[kind];
+    document.getElementById('dupeWarn').classList.toggle('show',
+      kind === 'group' && document.getElementById('newTagName').value.trim() === 'Aqours');
+  }
+  document.getElementById('newTagBtn').addEventListener('click', () => {
+    setKind('group');
+    newTagDlg.showModal();
+  });
+  document.addEventListener('click', (e) => {
+    const k = e.target.closest('#kindPick button');
+    if (k) { setKind(k.dataset.kind); return; }
+    if (e.target.closest('[data-nclose]')) newTagDlg.close();
+  });
+  document.getElementById('newTagName').addEventListener('input', (e) => {
+    const dup = e.target.value.trim().toLowerCase() === 'aqours';
+    document.getElementById('dupeWarn').classList.toggle('show', dup);
+  });
+
+  document.querySelectorAll('.prail a').forEach(a => a.addEventListener('click', () => {
+    document.querySelectorAll('.prail a').forEach(x => x.classList.remove('on'));
+    a.classList.add('on');
+  }));
+
+  const tagDlg = document.getElementById('tagDlg');
+  document.addEventListener('click', (e) => {
+    const tc = e.target.closest('[data-tag]');
+    if (tc) {
+      document.getElementById('tagDlgName').textContent = tc.dataset.tag;
+      tagDlg.showModal();
+      return;
+    }
+    if (e.target.closest('[data-tclose]')) tagDlg.close();
+  });
+
+  document.addEventListener('click', (e) => {
+    const lc = e.target.closest('.legchip[aria-pressed]');
+    if (lc) lc.setAttribute('aria-pressed', String(lc.getAttribute('aria-pressed') !== 'true'));
+    const cx = e.target.closest('[data-cancel]');
+    if (cx) {
+      const card = cx.closest('.elegcard');
+      const off = card.classList.toggle('cancelled');
+      cx.textContent = off ? 'Un-cancel' : 'Mark cancelled';
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const lb = e.target.closest('[data-leg]');
+    if (!lb) return;
+    const leg = document.getElementById('leg' + lb.dataset.leg);
+    const off = leg.classList.toggle('off');
+    lb.textContent = off ? 'Going to this day after all' : 'Not going to this day';
+    lb.classList.toggle('yes', off);
+    lb.classList.toggle('no', !off);
+  });
+
+  document.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-cap]');
+    if (!c) return;
+    const n = c.dataset.cap;
+    ['1','2','3'].forEach(i => { document.getElementById('cap'+i).hidden = i !== n; });
+    document.getElementById('sd1').className = 'stepdot ' + (n === '1' ? 'on' : 'done');
+    document.getElementById('sd2').className = 'stepdot ' + (n === '2' ? 'on' : (n === '3' ? 'done' : ''));
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  });
+
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('[data-view]');
+    if (!trigger) return;
+    e.preventDefault();
+    show(trigger.dataset.view);
+  });
+</script>
