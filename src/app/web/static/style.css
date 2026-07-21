@@ -1361,6 +1361,43 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      deterministic 1fr keeps it consistent with the rest of the retrofit. */
   .tiles { grid-template-columns: 1fr; }
   .searchbar { padding: 0; }
+
+  /* Dialogs -> bottom sheets (spec §7; demo .sheet). Native <dialog> UA
+     styling centers a fixed box; on phone every dialog anchors to the
+     bottom edge instead. The app's three dialog classes (picker/prune/
+     tagdlg -- `rg "<dialog" src/app/web/templates`) each already set their
+     own width/max-width/border/border-radius/box-shadow, which beats a bare
+     `dialog` selector on specificity alone, so they are named here too at
+     the SAME specificity -- this rule's later position in the file wins
+     the cascade tie without needing !important. */
+  dialog, dialog.picker, dialog.prune, dialog.tagdlg {
+    inset: auto 0 0 0; width: 100%; max-width: none; margin: 0;
+    border: 0; border-radius: 14px 14px 0 0; max-height: 78dvh;
+    box-shadow: var(--shadow);
+  }
+
+  /* Concert page (demo frame 5): full-width Following toggle, capture
+     buttons flexed 44px. Task 2's `.row .acts` mobile rules do NOT reach
+     this page -- round rows use `.rnd2 .acts` (see _round_rows.html), a
+     different ancestor -- so the touch-target treatment needs its own copy
+     here. The pre-existing (non-mobile-specific) 900px `.rnd2` breakpoint
+     already stacks each round row (badge+name, then date, then actions)
+     below this width, and performer chips (`.performers .chips`) already
+     wrap -- both left alone. */
+  #following-toggle .btn { width: 100%; justify-content: center; min-height: 44px; }
+  .rnd2 .acts { flex-wrap: wrap; }
+  .rnd2 .acts form { flex: 1 1 8rem; }
+  .rnd2 .acts .act, .rnd2 .acts .done {
+    width: 100%; min-height: 44px; font-size: .8rem;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Tags page: dialogs covered above; touch-height counted chips, and the
+     group/members two-column grid (.grow2: 11rem label + chip row)
+     collapses to one column so a long member list does not fight the
+     fixed label column. */
+  .tchip { min-height: 34px; }
+  .grow2 { grid-template-columns: 1fr; }
 }
 
 /* The .fsheet component switches modes at 760px, NOT the phone breakpoint
