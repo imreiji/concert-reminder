@@ -1560,6 +1560,10 @@ msgstr "排序"
 msgid "Round status"
 msgstr "轮次状态"
 
+#: src/app/web/templates/discover.html:144
+msgid "Filters"
+msgstr "筛选"
+
 #: src/app/web/templates/discover.html:36
 msgid "Filter by tag"
 msgstr "按标签筛选"

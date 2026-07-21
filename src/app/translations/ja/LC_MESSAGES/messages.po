@@ -1560,6 +1560,10 @@ msgstr "並び替え"
 msgid "Round status"
 msgstr "抽選状況"
 
+#: src/app/web/templates/discover.html:144
+msgid "Filters"
+msgstr "絞り込み"
+
 #: src/app/web/templates/discover.html:36
 msgid "Filter by tag"
 msgstr "タグで絞り込み"

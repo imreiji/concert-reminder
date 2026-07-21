@@ -261,6 +261,22 @@ button.x:hover { color: var(--danger); opacity: 1; }
 /* Phase 11: layout, tiles, subscription box, sentence builder */
 .layout { display: grid; grid-template-columns: 15rem 1fr; gap: 2rem; align-items: start; }
 @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+
+/* Discover's filter sheet (.fsheet, a native <details> wrapping the sidebar
+   controls -- see discover.html and the mobile CSS section further down).
+   .fsheet sits AFTER .content in DOM order (mobile is content-first, no JS
+   required); .layout has no grid-template-areas, so auto-placement follows
+   DOM order and would put .fsheet in the wide 1fr track on desktop too.
+   `order: -1` repaints it back into the narrow first track without moving
+   any markup, which is what keeps desktop pixel-identical. The summary
+   (closed/open toggle) itself is desktop-invisible; the panel below it is
+   the plain sidebar block both directions. */
+.fsheet > summary { list-style: none; cursor: pointer; }
+.fsheet > summary::-webkit-details-marker { display: none; }
+@media (min-width: 701px) {
+  .fsheet { order: -1; }
+  .fsheet > summary { display: none; }
+}
 .sidebar h3 { font-size: .85rem; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 1.2rem 0 .4rem; }
 .sidebar .sorts { display: flex; flex-direction: column; gap: .2rem; }
 .tag-section { margin: .4rem 0; }
@@ -1336,4 +1352,26 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   /* Up next + discover teaser: single column, per the demo's stacked frames. */
   .next, .teaser, .peek { grid-template-columns: 1fr; }
   .next .countdown { text-align: left; }
+
+  /* Discover: content-first + filter bottom sheet (spec §6; demo frames 3-4).
+     .tiles already collapses to one column via its auto-fill minmax, but a
+     deterministic 1fr keeps it consistent with the rest of the retrofit. */
+  .tiles { grid-template-columns: 1fr; }
+  .searchbar { padding: 0; }
+
+  .fsheet > summary {   /* the Filters button, .btnq-summary look */
+    display: inline-flex; align-items: center; min-height: 36px;
+    padding: .25rem .75rem; border: 1px solid var(--line); border-radius: 3px;
+    font-size: .87rem; color: var(--dim); background: none; margin: .6rem 0;
+  }
+  .fsheet[open] > summary::after {  /* dim overlay behind the sheet; also the
+       tap-outside-to-close target since it is the summary's own hit area */
+    content: ""; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 24;
+  }
+  .fsheet[open] .fsheet-panel {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+    max-height: 78dvh; overflow-y: auto; background: var(--raise);
+    border-radius: 14px 14px 0 0; box-shadow: var(--shadow);
+    padding: 1rem 1.1rem calc(1.2rem + env(safe-area-inset-bottom, 0px));
+  }
 }

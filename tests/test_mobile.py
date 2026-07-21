@@ -89,3 +89,14 @@ def test_fab_editor_only(client):
 
     client.monkeypatch.setattr(settings, "editor_whitelist", str(USER))
     assert 'class="fab"' in client.get("/").text
+
+
+def test_discover_filter_sheet_contains_controls(client):
+    r = client.get("/discover")
+    assert 'class="fsheet"' in r.text
+    # the sheet holds the relocated sidebar controls (sort + facet + tags)
+    body = r.text
+    sheet = body.split('class="fsheet"')[1]
+    assert "Filters" in body
+    for fragment in ("sort=", "status="):   # the existing GET filter links
+        assert fragment in sheet
