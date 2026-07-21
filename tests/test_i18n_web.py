@@ -230,9 +230,82 @@ def test_welcome_timezone_step_offers_language(client):
 
 
 def test_legal_governs_note_absent_in_en_present_in_ja(client):
+    # The note renders only when locale != en (the {% if %} in privacy.html).
     r = client.get("/privacy")
     assert "English version governs" not in r.text
+    assert "英語版が優先されます" not in r.text
     client.cookies.set("lang", "ja")
     r = client.get("/privacy")
-    # untranslated fallback of the note's msgid still proves the conditional
-    assert "English version governs" in r.text
+    # Now that Task 14 filled the catalogues, the note renders translated
+    # (the pre-fill English-fallback proxy this used is obsolete).
+    assert "英語版が優先されます" in r.text
+
+
+# ── per-locale smoke tests: real msgstr on the five copy-heaviest pages ───
+#
+# These render pages under ja/zh and assert an actual translated string from
+# the shipped catalogues. They depend on the REAL .po files loading, so the
+# catalog cache is reset around them to shed any fake catalogue injected by an
+# earlier test (e.g. test_label_globals_translate).
+
+
+@pytest.fixture()
+def real_catalogues():
+    from app import i18n
+
+    i18n.reset_catalog_cache()
+    yield
+    i18n.reset_catalog_cache()
+
+
+# (page, ja msgstr, zh msgstr) — each pulled from the filled catalogues.
+_SMOKE = {
+    # / signed-out landing: "How it works"
+    "landing": ("仕組み", "运作方式"),
+    # /discover: "Round status"
+    "discover": ("抽選状況", "轮次状态"),
+    # /privacy: "What we collect"
+    "privacy": ("収集する情報", "我们收集什么"),
+    # /preferences (logged in): "Account"
+    "preferences": ("アカウント", "账户"),
+    # /welcome step 0 (logged in): "Follow some artists"
+    "welcome": ("アーティストをフォローしましょう", "关注一些艺人"),
+}
+
+
+@pytest.mark.parametrize("lang,idx", [("ja", 0), ("zh", 1)])
+def test_landing_smoke(client, real_catalogues, lang, idx):
+    client.cookies.set("lang", lang)
+    r = client.get("/")
+    assert f'<html lang="{lang}"' in r.text
+    assert _SMOKE["landing"][idx] in r.text
+
+
+@pytest.mark.parametrize("lang,idx", [("ja", 0), ("zh", 1)])
+def test_discover_smoke(client, real_catalogues, lang, idx):
+    client.cookies.set("lang", lang)
+    r = client.get("/discover")
+    assert _SMOKE["discover"][idx] in r.text
+
+
+@pytest.mark.parametrize("lang,idx", [("ja", 0), ("zh", 1)])
+def test_privacy_smoke(client, real_catalogues, lang, idx):
+    client.cookies.set("lang", lang)
+    r = client.get("/privacy")
+    assert _SMOKE["privacy"][idx] in r.text
+
+
+@pytest.mark.parametrize("lang,idx", [("ja", 0), ("zh", 1)])
+def test_preferences_smoke(client, real_catalogues, lang, idx):
+    login(client)
+    client.cookies.set("lang", lang)
+    r = client.get("/preferences")
+    assert _SMOKE["preferences"][idx] in r.text
+
+
+@pytest.mark.parametrize("lang,idx", [("ja", 0), ("zh", 1)])
+def test_welcome_smoke(client, real_catalogues, lang, idx):
+    login(client)
+    client.cookies.set("lang", lang)
+    r = client.get("/welcome")
+    assert _SMOKE["welcome"][idx] in r.text
