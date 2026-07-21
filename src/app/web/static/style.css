@@ -1398,6 +1398,43 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      fixed label column. */
   .tchip { min-height: 34px; }
   .grow2 { grid-template-columns: 1fr; }
+
+  /* ── Editor + import forms (concert_edit/concert_new/import_preview;
+     demo frame 6's .frm/.legchips vocabulary) ──────────────────────────
+     .redit/.eleg round/leg cards and their auto-fit time grids already
+     collapse to one column on their own (11rem-minmax tracks can't fit
+     two across a ~320px card) -- the two pieces that stay genuinely
+     two-column at this width are the title/event-id/kind bar and the
+     details/translations grids, so those are the only overrides needed. */
+  .editor .ebar { flex-direction: column; align-items: stretch; }
+  .editor .ebar label.grow { flex-basis: auto; }
+  .grid2 { grid-template-columns: 1fr; }
+  /* Applies-to / qualifies chips (_round_leg_chips.html,
+     _round_qualifier_chips.html) wrap already; this is just the touch floor. */
+  .leg-chips .chip { min-height: 34px; }
+  /* Save/Create is the page's one deliberate action here -- full-width and
+     touch-height, matching the demo's stacked Save + "Delete concert..."
+     buttons. Duplicate/Delete follow the same treatment below it. */
+  .editor > .btn { width: 100%; justify-content: center; min-height: 44px; }
+  .danger-row { flex-direction: column; align-items: stretch; }
+  .danger-row-actions { margin-left: 0; }
+  .danger-row-actions form { width: 100%; }
+  .danger-row-actions .btn { width: 100%; justify-content: center; min-height: 44px; }
+
+  /* ── Preferences phone polish ─────────────────────────────────────────
+     .subrow itself already collapses to one column at the existing 860px
+     tablet breakpoint (kept as-is, see the comment there) -- Notify/
+     Auto-apply/Unfollow/Restore are real per-row actions, not merely
+     informational, so they get the same >=34px floor as other dense
+     action chips at phone width. */
+  .subrow .sw .swb, .subrow .sw .act { min-height: 34px; }
+
+  /* ── Setup + welcome wizard ────────────────────────────────────────────
+     Both grids already auto-collapse via their auto-fill/auto-fit minmax
+     tracks (15rem / 13rem can't fit twice under ~320px) -- pinned explicit
+     here for the same reason .tiles is above: one deterministic rule
+     instead of relying on the arithmetic at every width. */
+  .pick, .remcards { grid-template-columns: 1fr; }
 }
 
 /* The .fsheet component switches modes at 760px, NOT the phone breakpoint
