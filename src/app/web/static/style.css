@@ -1458,6 +1458,24 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      action chips at phone width. */
   .subrow .sw .swb, .subrow .sw .act { min-height: 34px; }
 
+  /* .plyt is a single 1fr track below 860px (see the comment there), and a
+     grid track's automatic minimum is its content's min-content width -- so
+     one unshrinkable child inflates the WHOLE track and drags every card in
+     the column past the viewport with it, even cards that set no width of
+     their own. Two children do this: the timezone <select> carries the full
+     IANA zone list (`America/Argentina/ComodRivadavia` etc.), so its
+     min-content is that widest option (~392px, where the timezone/detection/
+     setup/editor/danger cards all break together -- they're passengers, not
+     causes); the "New preset" fold is pinned `flex: 0 0 auto` (line ~1162)
+     so it never shrinks below its `.stack`'s 26rem max-width (~470px, where
+     that card alone breaks). `min-width: 0` on the column's children is
+     defence-in-depth; the select and fold rules below are the two actual
+     fixes. */
+  .plyt > * { min-width: 0; }
+  .psec select, .psec input { max-width: 100%; min-width: 0; }
+  .bar details.fold { flex: 1 1 100%; min-width: 0; }
+  .bar .stack { max-width: none; }
+
   /* ── Setup + welcome wizard ────────────────────────────────────────────
      Both grids already auto-collapse via their auto-fill/auto-fit minmax
      tracks (15rem / 13rem can't fit twice under ~320px) -- pinned explicit
