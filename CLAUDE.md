@@ -466,6 +466,30 @@ deleting them.
   `data-status` with no round trip, and each control stays a real `<a href>`
   or a real GET `<form>` so it degrades to slower server-side filtering with
   JS disabled. Add a fourth filter the same way.
+- **Mobile is a retrofit, not a second design**: every phone rule lives in
+  `style.css`'s single `@media (max-width: 700px)` section at the end of
+  the file (banner comment marks its start) -- desktop pixels stay
+  untouched by construction, since nothing outside that block may change.
+  The one documented exception is `.fsheet` (Discover's filter sheet),
+  which switches at 760px instead because it must track `.layout`'s own
+  collapse point exactly (also 760px) -- splitting the two breakpoints
+  would open a 701-760px band where `.layout` has already stacked to one
+  column but `.fsheet` still thinks it's in two-column desktop mode.
+  Three phone-only patterns recur: a fixed bottom `.tabbar` (Home/Discover/
+  Tags/Me or Sign in, `aria-current` on the active tab exactly like the
+  desktop nav, keyed off the same `nav_page`) replacing the header nav; an
+  editor-only `.fab` ("+", bottom-right) replacing the header's "+ Add";
+  and dialogs (`<dialog>`, including `.picker`/`.prune`/`.tagdlg`) becoming
+  bottom sheets (anchored to the bottom edge, rounded top corners, `max-
+  height: 78dvh`) instead of the desktop's centered card. `docs/superpowers/
+  demo/dekimasen-mobile-demo.html` (static frames, reference CSS values)
+  and `dekimasen-mobile-live.html` (interactions) are the mobile design
+  reference, alongside the existing `dekimasen-demo.html`/`dekimasen-
+  onboarding-demo.html` for desktop. The 3px-radius guard
+  (`test_style_uses_3px_radius_not_6or8`) still applies inside the mobile
+  section -- phone cards and chips use the same `border-radius: 3px` as
+  desktop; only the bottom-sheet corners deliberately deviate (`14px 14px
+  0 0`, a sheet-specific shape, never 6px or 8px).
 
 ## Deploy
 

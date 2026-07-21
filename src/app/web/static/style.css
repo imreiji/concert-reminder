@@ -261,6 +261,25 @@ button.x:hover { color: var(--danger); opacity: 1; }
 /* Phase 11: layout, tiles, subscription box, sentence builder */
 .layout { display: grid; grid-template-columns: 15rem 1fr; gap: 2rem; align-items: start; }
 @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+
+/* Discover's filter sheet (.fsheet, a native <details> wrapping the sidebar
+   controls -- see discover.html and the mobile CSS section further down).
+   .fsheet sits AFTER .content in DOM order (mobile is content-first, no JS
+   required); .layout has no grid-template-areas, so auto-placement follows
+   DOM order and would put .fsheet in the wide 1fr track on desktop too.
+   `order: -1` repaints it back into the narrow first track without moving
+   any markup, which is what keeps desktop pixel-identical. The summary
+   (closed/open toggle) itself is desktop-invisible; the panel below it is
+   the plain sidebar block both directions. */
+.fsheet > summary { list-style: none; cursor: pointer; }
+.fsheet > summary::-webkit-details-marker { display: none; }
+/* 761px, not 701 -- must track .layout's own collapse point (line 263)
+   exactly, see the longer comment at the mobile @media (max-width: 760px)
+   .fsheet rules further down. */
+@media (min-width: 761px) {
+  .fsheet { order: -1; }
+  .fsheet > summary { display: none; }
+}
 .sidebar h3 { font-size: .85rem; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 1.2rem 0 .4rem; }
 .sidebar .sorts { display: flex; flex-direction: column; gap: .2rem; }
 .tag-section { margin: .4rem 0; }
@@ -694,19 +713,6 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 @media (max-width: 960px) {
   .board { grid-template-columns: repeat(2, 1fr); }
   .peek { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 600px) {
-  .board, .peek { grid-template-columns: 1fr; }
-  .next, .teaser { grid-template-columns: 1fr; }
-  .next .countdown { text-align: left; }
-  .rowhead { display: none; }
-  .deadline-rows .row {
-    grid-template-columns: 1fr auto; gap: .3rem .75rem;
-    padding: .8rem .1rem; align-items: start;
-  }
-  .deadline-rows .row > :nth-child(2) { grid-row: 1; text-align: right; }
-  .row .title-c { grid-column: 1 / -1; }
-  .row .acts { grid-column: 1 / -1; justify-content: flex-start; margin-top: .25rem; }
 }
 
 /* -- Concert page ---------------------------------------------------------
@@ -1260,3 +1266,212 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   padding: .45rem .55rem; word-break: break-all; color: var(--ink);
 }
 .feedbox .frow { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+
+/* ── Mobile (≤700px) ─────────────────────────────────────────────────────
+   Spec: docs/superpowers/specs/2026-07-21-mobile-view-design.md; visual
+   reference: docs/superpowers/demo/dekimasen-mobile-demo.html. Everything
+   below this banner is phone-only — desktop must not change by a pixel. */
+.tabbar, .fab { display: none; }
+@media (max-width: 700px) {
+  /* compact header: one row, wordmark on one line, auth cluster leaves */
+  header.site .site-in { flex-wrap: nowrap; gap: .55rem; }
+  header.site a.home .mark { font-size: .95rem; white-space: nowrap; }
+  header.site nav.main { display: none; }         /* nav lives in the tab bar */
+  header.site nav.auth > .avatar,
+  header.site nav.auth > span,
+  header.site nav.auth > .btn { display: none; }  /* theme + lang chip stay */
+
+  body.has-tabbar { padding-bottom: 4.6rem; }     /* content clears the bar */
+
+  .tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+    display: grid; grid-auto-flow: column; justify-items: center;
+    background: var(--raise); border-top: 1px solid var(--line);
+    padding: .45rem 0 calc(.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  .tab {
+    display: grid; justify-items: center; gap: .12rem; text-decoration: none;
+    color: var(--dim); font-size: .68rem; letter-spacing: .02em;
+    min-width: 64px; padding: .15rem .5rem; border-radius: 3px;
+  }
+  .tab svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+  .tab[aria-current="page"] { color: var(--accent); font-weight: 650; }
+  .tab .ava, .tab img.ava {
+    width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line);
+    background: linear-gradient(135deg, var(--accent-wash), var(--chip));
+  }
+  .fab {
+    position: fixed; right: 1rem; bottom: calc(4.6rem + env(safe-area-inset-bottom, 0px));
+    z-index: 20; width: 3.1rem; height: 3.1rem; border-radius: 50%;
+    background: var(--ink); color: var(--paper); font-size: 1.6rem; line-height: 1;
+    box-shadow: var(--shadow); display: grid; place-items: center;
+    text-decoration: none; padding-bottom: .2rem;
+  }
+
+  /* Home: campaign board -> center-snap carousel (spec §4; demo .board-swipe).
+     grid-template-columns: none neutralises the desktop repeat(4, 1fr) (and
+     the 960px repeat(2, 1fr)) so grid-auto-columns below is what sizes the
+     columns; .col is the board's real column, .card the real board tile. */
+  .board {
+    grid-template-columns: none;
+    display: grid; grid-auto-flow: column; grid-auto-columns: 78%;
+    gap: .8rem; overflow-x: auto; scroll-snap-type: x mandatory;
+    padding: 0 11% .5rem; scrollbar-width: none;
+  }
+  .board::-webkit-scrollbar { display: none; }
+  .board > .col { scroll-snap-align: center; }
+
+  /* Home landing's illustrative "how it works" grid: single column, matching
+     the rest of the retrofit's collapse-everywhere rule. */
+  .howto { grid-template-columns: 1fr; }
+
+  /* Home: "Coming up" deadline rows -> two-line cards (demo .m-row). Migrated
+     and extended from the old 600px block: .rowhead hides, each .row becomes
+     a bordered card instead of a table row, and its capture buttons (real
+     classes .act/.done inside .acts, see _capture_actions.html) go full-width
+     and >=44px tall instead of the desktop's small inline pills. */
+  .rowhead { display: none; }
+  .deadline-rows { border-top: 0; }
+  .deadline-rows .row {
+    grid-template-columns: 1fr auto; gap: .3rem .75rem;
+    padding: .7rem .8rem; align-items: start;
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    margin-bottom: .55rem;
+  }
+  .deadline-rows .row:last-child { margin-bottom: 0; }
+  .deadline-rows .row > :nth-child(2) { grid-row: 1; text-align: right; }
+  .row .title-c { grid-column: 1 / -1; }
+  .row .acts {
+    grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap;
+    gap: .5rem; margin-top: .4rem;
+  }
+  .row .acts form { flex: 1 1 8rem; }
+  .row .acts .act, .row .acts .done {
+    width: 100%; min-height: 44px; font-size: .8rem;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Up next + discover teaser: single column, per the demo's stacked frames. */
+  .next, .teaser, .peek { grid-template-columns: 1fr; }
+  .next .countdown { text-align: left; }
+
+  /* Discover: content-first + filter bottom sheet (spec §6; demo frames 3-4).
+     .tiles already collapses to one column via its auto-fill minmax, but a
+     deterministic 1fr keeps it consistent with the rest of the retrofit. */
+  .tiles { grid-template-columns: 1fr; }
+  .searchbar { padding: 0; }
+
+  /* Dialogs -> bottom sheets (spec §7; demo .sheet). Native <dialog> UA
+     styling centers a fixed box; on phone every dialog anchors to the
+     bottom edge instead. The app's three dialog classes (picker/prune/
+     tagdlg -- `rg "<dialog" src/app/web/templates`) each already set their
+     own width/max-width/border/border-radius/box-shadow, which beats a bare
+     `dialog` selector on specificity alone, so they are named here too at
+     the SAME specificity -- this rule's later position in the file wins
+     the cascade tie without needing !important. */
+  dialog, dialog.picker, dialog.prune, dialog.tagdlg {
+    inset: auto 0 0 0; width: 100%; max-width: none; margin: 0;
+    border: 0; border-radius: 14px 14px 0 0; max-height: 78dvh;
+    box-shadow: var(--shadow);
+  }
+
+  /* Concert page (demo frame 5): full-width Following toggle, capture
+     buttons flexed 44px. Task 2's `.row .acts` mobile rules do NOT reach
+     this page -- round rows use `.rnd2 .acts` (see _round_rows.html), a
+     different ancestor -- so the touch-target treatment needs its own copy
+     here. The pre-existing (non-mobile-specific) 900px `.rnd2` breakpoint
+     already stacks each round row (badge+name, then date, then actions)
+     below this width, and performer chips (`.performers .chips`) already
+     wrap -- both left alone. */
+  #following-toggle .btn { width: 100%; justify-content: center; min-height: 44px; }
+  .rnd2 .acts { flex-wrap: wrap; }
+  .rnd2 .acts form { flex: 1 1 8rem; }
+  .rnd2 .acts .act, .rnd2 .acts .done {
+    width: 100%; min-height: 44px; font-size: .8rem;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Tags page: dialogs covered above; touch-height counted chips, and the
+     group/members two-column grid (.grow2: 11rem label + chip row)
+     collapses to one column so a long member list does not fight the
+     fixed label column. */
+  .tchip { min-height: 34px; }
+  .grow2 { grid-template-columns: 1fr; }
+
+  /* ── Editor + import forms (concert_edit/concert_new/import_preview;
+     demo frame 6's .frm/.legchips vocabulary) ──────────────────────────
+     .redit/.eleg round/leg cards and their auto-fit time grids already
+     collapse to one column on their own (11rem-minmax tracks can't fit
+     two across a ~320px card) -- the two pieces that stay genuinely
+     two-column at this width are the title/event-id/kind bar and the
+     details/translations grids, so those are the only overrides needed. */
+  .editor .ebar { flex-direction: column; align-items: stretch; }
+  .editor .ebar label.grow { flex-basis: auto; }
+  .grid2 { grid-template-columns: 1fr; }
+  /* Applies-to / qualifies chips (_round_leg_chips.html,
+     _round_qualifier_chips.html) wrap already; this is just the touch floor. */
+  .leg-chips .chip { min-height: 34px; }
+  /* Save/Create is the page's one deliberate action here -- full-width and
+     touch-height, matching the demo's stacked Save + "Delete concert..."
+     buttons. Duplicate/Delete follow the same treatment below it. */
+  .editor > .btn { width: 100%; justify-content: center; min-height: 44px; }
+  .danger-row { flex-direction: column; align-items: stretch; }
+  .danger-row-actions { margin-left: 0; }
+  .danger-row-actions form { width: 100%; }
+  .danger-row-actions .btn { width: 100%; justify-content: center; min-height: 44px; }
+
+  /* ── Preferences phone polish ─────────────────────────────────────────
+     .subrow itself already collapses to one column at the existing 860px
+     tablet breakpoint (kept as-is, see the comment there) -- Notify/
+     Auto-apply/Unfollow/Restore are real per-row actions, not merely
+     informational, so they get the same >=34px floor as other dense
+     action chips at phone width. */
+  .subrow .sw .swb, .subrow .sw .act { min-height: 34px; }
+
+  /* ── Setup + welcome wizard ────────────────────────────────────────────
+     Both grids already auto-collapse via their auto-fill/auto-fit minmax
+     tracks (15rem / 13rem can't fit twice under ~320px) -- pinned explicit
+     here for the same reason .tiles is above: one deterministic rule
+     instead of relying on the arithmetic at every width. */
+  .pick, .remcards { grid-template-columns: 1fr; }
+}
+
+/* The .fsheet component switches modes at 760px, NOT the phone breakpoint
+   (700px) used above -- it must track exactly where .layout itself collapses
+   to one column (line 263: `@media (max-width: 760px) { .layout {
+   grid-template-columns: 1fr; } }`). If .fsheet switched at 700 while
+   .layout switched at 760, the 701-760px band would render .layout as a
+   single stacked column (tablet mode) while .fsheet's desktop rules
+   (`order: -1`, summary hidden) still applied -- putting the full filters
+   panel above the tiles with no toggle to collapse it. */
+@media (max-width: 760px) {
+  /* With JS (sheet mode) the fsheet is just its small Filters button, so it
+     moves ABOVE the content column, per the demo's filter row -- content is
+     still on screen one. Without JS the fsheet stays where the DOM puts it
+     (after .content): the expanded in-flow fallback must not push the tiles
+     below a screenful of filters. */
+  .fsheet.fsheet-js { order: -1; }
+  .fsheet > summary {   /* the Filters button, .btnq-summary look */
+    display: inline-flex; align-items: center; min-height: 36px;
+    padding: .25rem .75rem; border: 1px solid var(--line); border-radius: 3px;
+    font-size: .87rem; color: var(--dim); background: none; margin: .6rem 0;
+  }
+  /* Gated on .fsheet-js (added by discover.html's script only when JS ran
+     AND the breakpoint matched), not bare .fsheet[open]. SSR always renders
+     `open` (see discover.html) so the panel is visible with no JS at all --
+     if these rules keyed off [open] alone, a no-JS phone would get the dark
+     overlay and a fixed bottom sheet covering the tiles on first paint,
+     exactly the opposite of the "filters expanded in-flow after content"
+     fallback the plan requires. Without the class, an open .fsheet is just
+     a plain block after .content -- the correct no-JS shape. */
+  .fsheet-js[open] > summary::after {  /* dim overlay behind the sheet; also
+       the tap-outside-to-close target since it is the summary's own hit area */
+    content: ""; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 24;
+  }
+  .fsheet-js[open] .fsheet-panel {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+    max-height: 78dvh; overflow-y: auto; background: var(--raise);
+    border-radius: 14px 14px 0 0; box-shadow: var(--shadow);
+    padding: 1rem 1.1rem calc(1.2rem + env(safe-area-inset-bottom, 0px));
+  }
+}

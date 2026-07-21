@@ -963,6 +963,18 @@ msgstr "发现"
 msgid "Tags"
 msgstr "标签"
 
+#: src/app/web/templates/base.html:96
+msgid "Me"
+msgstr "我的"
+
+#: src/app/web/templates/base.html:99
+msgid "Sign in"
+msgstr "登录"
+
+#: src/app/web/templates/base.html:104
+msgid "Add concert"
+msgstr "添加演出"
+
 #: src/app/web/templates/base.html:44
 msgid "Toggle dark mode"
 msgstr "切换深色模式"
@@ -1547,6 +1559,10 @@ msgstr "排序"
 #: src/app/web/templates/discover.html:26
 msgid "Round status"
 msgstr "轮次状态"
+
+#: src/app/web/templates/discover.html:144
+msgid "Filters"
+msgstr "筛选"
 
 #: src/app/web/templates/discover.html:36
 msgid "Filter by tag"

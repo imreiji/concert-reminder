@@ -5,72 +5,11 @@
    status pill, which falls back to the event's own round state when nobody is
    signed in (routes/discover.py passes user_id=None and no outcome query
    runs at all). #}
+{# No route change: the mobile Filters button's "(n)" badge is derived here
+   from context already passed in, the same way the desktop "Clear filters"
+   link derives its own visibility from selected_tags. #}
+{% set active_filter_count = (selected_tags | length) + (1 if status else 0) %}
 <div class="layout">
-  <aside class="sidebar">
-    <h3>{{ _("Sort") }}</h3>
-    <nav class="sorts discover-sorts">
-      {% for key, label in sorts %}
-      <a data-sort="{{ key }}" href="/discover?{{ filter_query(key, selected_tags, status) }}"
-         {% if sort == key or (key == "event" and sort not in ["added", "next"]) %}class="on"{% endif %}>{{ label }}</a>
-      {% endfor %}
-    </nav>
-
-    {# The round-status facet: filtering by whether you can act, which on a
-       discovery page beats taxonomy alone. Real <a href> links, so with JS
-       off the server does the filtering (see visible_concert_ids); with JS on
-       toggleStatusFilter shows/hides tiles by their data-status with no round
-       trip, the same contract the tag chips and the search box already keep.
-       Counts come from status_counts -- the same statuses dict already built
-       for the tile pills, just tallied by facet key, so this costs no extra
-       query. #}
-    <h3>{{ _("Round status") }}</h3>
-    <nav class="sorts facets discover-sorts">
-      {% for key, label in status_facets %}
-      <a data-status="{{ key }}"
-         href="/discover?{{ filter_query(sort, selected_tags, '' if status == key else key) }}"
-         onclick="return toggleStatusFilter(event, this)"
-         {% if status == key %}class="on"{% endif %}>{{ label }} <span class="n">{{ status_counts.get(key, 0) }}</span></a>
-      {% endfor %}
-    </nav>
-
-    <h3>{{ _("Filter by tag") }}</h3>
-    <input class="tag-search filter-search" type="search" placeholder="{{ _('Search tags…') }}"
-           oninput="filterChips(this, '.sidebar')">
-    {% macro chiplink(t) -%}
-      {%- set active = t.id in selected_tags -%}
-      {%- set others = selected_tags | reject("equalto", t.id) | list -%}
-      <a class="chip kind-{{ t.kind.value }} {% if active %}on{% endif %}" data-name="{{ t.name | lower }}"
-         data-tag-ids="{{ t.id }}" onclick="return toggleTagFilter(event, this)"
-         href="/discover?{{ filter_query(sort, (others if active else others + [t.id]), status) }}">{{ loc(t, "name") }}<span class="n">{{ tag_counts.get(t.id, 0) }}</span></a>
-    {%- endmacro %}
-    {% for section, kindname in [(_("Franchises"),"franchise"),(_("Groups"),"group"),(_("Artists"),"artist")] %}
-      {% set ktags = by_kind.get(kindname, []) %}
-      {% if ktags %}
-      <details open class="tag-section">
-        <summary>{{ section }} <span class="dim">({{ ktags | length }})</span></summary>
-        <div class="taglist">{% for t in ktags %}{{ chiplink(t) }}{% endfor %}</div>
-      </details>
-      {% endif %}
-    {% endfor %}
-    {% if region_links %}
-    <details open class="tag-section">
-      <summary>{{ _("Regions") }} <span class="dim">({{ region_links | length }})</span></summary>
-      <div class="taglist">
-        {% for r in region_links %}
-        <a class="chip kind-venue {% if r.active %}on{% endif %}" data-name="{{ r.name | lower }}"
-           data-tag-ids="{{ r.ids | join(',') }}" onclick="return toggleTagFilter(event, this)"
-           href="{{ r.href }}">{{ r.name }} <span class="dim">({{ r.count }})</span></a>
-        {% endfor %}
-      </div>
-    </details>
-    {% endif %}
-    <p id="clear-filters" {% if not selected_tags %}style="display:none"{% endif %}>
-      <a class="dim" href="/discover?{{ filter_query(sort, [], status) }}"
-         onclick="return clearTagFilters(event)">{{ _("Clear filters") }}</a>
-    </p>
-    {% if user %}<p><a class="btn quiet" href="/tags">{{ _("Manage tags") }}</a></p>{% endif %}
-  </aside>
-
   <section class="content">
     <div class="toolbar">
       <h1>{{ _("Concerts") }}</h1>
@@ -184,7 +123,107 @@
     </ul>
     {% endif %}
   </section>
+
+  {#- The filter sheet: the sidebar controls, unchanged, wrapped in a native
+      <details> so mobile CSS can present them as a bottom sheet. Moved AFTER
+      .content in DOM order -- Discover's mobile design is content-first (see
+      demo frames 3-4), and .layout is a plain two-track grid with no
+      grid-template-areas (auto-placement follows DOM order), so relocating
+      the sheet here is what makes mobile show tiles before filters with no
+      JS at all. Desktop restores the original visual order with
+      `order: -1` on .fsheet (see the >=701px rule in style.css) rather than
+      moving markup back -- grid `order` repaints the same two DOM nodes into
+      the original two columns without touching source order, so desktop
+      stays pixel-identical. `open` is required: a closed <details> hides its
+      panel entirely, which would break desktop (where the summary is
+      display:none and the panel must always render as the plain sidebar).
+      The tiny script below closes it under 700px on load, progressively --
+      with JS off, mobile users see the filters expanded in-flow right here,
+      after the tiles: fully functional, just not sheet-shaped. #}
+  <details class="fsheet" open>
+    <summary class="btnq-summary">{{ _("Filters") }}{% if active_filter_count %} ({{ active_filter_count }}){% endif %}</summary>
+    <div class="fsheet-panel sidebar">
+      <h3>{{ _("Sort") }}</h3>
+    <nav class="sorts discover-sorts">
+      {% for key, label in sorts %}
+      <a data-sort="{{ key }}" href="/discover?{{ filter_query(key, selected_tags, status) }}"
+         {% if sort == key or (key == "event" and sort not in ["added", "next"]) %}class="on"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+
+    {# The round-status facet: filtering by whether you can act, which on a
+       discovery page beats taxonomy alone. Real <a href> links, so with JS
+       off the server does the filtering (see visible_concert_ids); with JS on
+       toggleStatusFilter shows/hides tiles by their data-status with no round
+       trip, the same contract the tag chips and the search box already keep.
+       Counts come from status_counts -- the same statuses dict already built
+       for the tile pills, just tallied by facet key, so this costs no extra
+       query. #}
+    <h3>{{ _("Round status") }}</h3>
+    <nav class="sorts facets discover-sorts">
+      {% for key, label in status_facets %}
+      <a data-status="{{ key }}"
+         href="/discover?{{ filter_query(sort, selected_tags, '' if status == key else key) }}"
+         onclick="return toggleStatusFilter(event, this)"
+         {% if status == key %}class="on"{% endif %}>{{ label }} <span class="n">{{ status_counts.get(key, 0) }}</span></a>
+      {% endfor %}
+    </nav>
+
+    <h3>{{ _("Filter by tag") }}</h3>
+    <input class="tag-search filter-search" type="search" placeholder="{{ _('Search tags…') }}"
+           oninput="filterChips(this, '.sidebar')">
+    {% macro chiplink(t) -%}
+      {%- set active = t.id in selected_tags -%}
+      {%- set others = selected_tags | reject("equalto", t.id) | list -%}
+      <a class="chip kind-{{ t.kind.value }} {% if active %}on{% endif %}" data-name="{{ t.name | lower }}"
+         data-tag-ids="{{ t.id }}" onclick="return toggleTagFilter(event, this)"
+         href="/discover?{{ filter_query(sort, (others if active else others + [t.id]), status) }}">{{ loc(t, "name") }}<span class="n">{{ tag_counts.get(t.id, 0) }}</span></a>
+    {%- endmacro %}
+    {% for section, kindname in [(_("Franchises"),"franchise"),(_("Groups"),"group"),(_("Artists"),"artist")] %}
+      {% set ktags = by_kind.get(kindname, []) %}
+      {% if ktags %}
+      <details open class="tag-section">
+        <summary>{{ section }} <span class="dim">({{ ktags | length }})</span></summary>
+        <div class="taglist">{% for t in ktags %}{{ chiplink(t) }}{% endfor %}</div>
+      </details>
+      {% endif %}
+    {% endfor %}
+    {% if region_links %}
+    <details open class="tag-section">
+      <summary>{{ _("Regions") }} <span class="dim">({{ region_links | length }})</span></summary>
+      <div class="taglist">
+        {% for r in region_links %}
+        <a class="chip kind-venue {% if r.active %}on{% endif %}" data-name="{{ r.name | lower }}"
+           data-tag-ids="{{ r.ids | join(',') }}" onclick="return toggleTagFilter(event, this)"
+           href="{{ r.href }}">{{ r.name }} <span class="dim">({{ r.count }})</span></a>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+    <p id="clear-filters" {% if not selected_tags %}style="display:none"{% endif %}>
+      <a class="dim" href="/discover?{{ filter_query(sort, [], status) }}"
+         onclick="return clearTagFilters(event)">{{ _("Clear filters") }}</a>
+    </p>
+    {% if user %}<p><a class="btn quiet" href="/tags">{{ _("Manage tags") }}</a></p>{% endif %}
+    </div>
+  </details>
 </div>
+{# Progressive enhancement only: mobile starts the sheet closed so tiles are
+   the first thing seen; with JS disabled it stays `open` (set above), i.e.
+   the no-JS fallback is the filters rendered in-flow after the tiles,
+   fully functional, just not sheet-shaped. The breakpoint here (760px) must
+   match .fsheet's own CSS breakpoint (style.css), which tracks .layout's
+   collapse point, not the 700px phone breakpoint used elsewhere. The
+   fsheet-js class is the JS-confirmed signal style.css gates the overlay/
+   fixed-sheet presentation on -- without it (JS off), an open .fsheet stays
+   a plain in-flow block, never the fixed bottom sheet + dark overlay. #}
+<script>
+  if (matchMedia("(max-width: 760px)").matches)
+    document.querySelectorAll(".fsheet[open]").forEach((d) => {
+      d.classList.add("fsheet-js");
+      d.removeAttribute("open");
+    });
+</script>
 <script>
   // Tag/region filtering, the round-status facet AND free-text search are all
   // entirely client-side: every concert tile is already in the DOM with its
