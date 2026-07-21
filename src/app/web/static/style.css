@@ -873,6 +873,10 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .subrow .cnt { font-size: .8125rem; color: var(--dim); font-variant-numeric: tabular-nums; }
 .subrow .cnt b { color: var(--ink); font-weight: 600; }
 .subrow .sw { display: flex; gap: .35rem; justify-content: flex-end; }
+/* The editors row (admin only) has no count column, so it runs 2-up. Carried
+   as a class, never an inline style -- inline wins over media queries too, so
+   an inline copy is a row the phone collapse can never reach. */
+.subrow.two { grid-template-columns: 1fr auto; }
 .swb {
   font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
   padding: .22rem .5rem; border-radius: 3px; cursor: pointer;
@@ -1458,23 +1462,33 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      action chips at phone width. */
   .subrow .sw .swb, .subrow .sw .act { min-height: 34px; }
 
-  /* .plyt is a single 1fr track below 860px (see the comment there), and a
-     grid track's automatic minimum is its content's min-content width -- so
-     one unshrinkable child inflates the WHOLE track and drags every card in
-     the column past the viewport with it, even cards that set no width of
-     their own. Two children do this: the timezone <select> carries the full
-     IANA zone list (`America/Argentina/ComodRivadavia` etc.), so its
-     min-content is that widest option (~392px, where the timezone/detection/
-     setup/editor/danger cards all break together -- they're passengers, not
-     causes); the "New preset" fold is pinned `flex: 0 0 auto` (line ~1162)
-     so it never shrinks below its `.stack`'s 26rem max-width (~470px, where
-     that card alone breaks). `min-width: 0` on the column's children is
-     defence-in-depth; the select and fold rules below are the two actual
-     fixes. */
-  .plyt > * { min-width: 0; }
-  .psec select, .psec input { max-width: 100%; min-width: 0; }
+  /* Two independent things used to push this page wider than the phone.
+     Both measured in Chrome against a dump of the real page; the numbers
+     below are observed, not estimated.
+
+     1. The "New preset" reveal. `.bar details.fold` is pinned `flex: 0 0
+        auto` (line ~1162) so it cannot shrink, and its body is a `.stack`
+        capped at 26rem -- together a floor of 444px that overflowed the
+        344px column from ~470px down. Note it only shows when the fold is
+        OPEN, which is why a page with a preset already saved (fold closed)
+        looks fine. Let it take the bar's full width and shrink instead.
+
+     2. The editors row (admin only). Its min-content is set by `.nm3`,
+        which is a flex row with NO wrap, and an env-whitelisted editor has
+        no username so the template prints the Discord id TWICE -- id + id
+        + the "from env" pill = 389px of unbreakable digits, flooring the
+        `1fr` track and blowing the document out to 470px even at a 320px
+        viewport. Wrapping `.nm3` drops its min-content to one id (~142px).
+        The row also had to stop carrying its 2-up grid inline before any
+        of this could apply -- see `.subrow.two` up in the desktop block.
+
+     A `<select>` is NOT one of the causes: Chrome sizes the timezone select
+     to the available width, not to its widest option, so all 565 IANA zones
+     measured 344px -- the same as every other card. */
   .bar details.fold { flex: 1 1 100%; min-width: 0; }
   .bar .stack { max-width: none; }
+  .subrow.two { grid-template-columns: 1fr; }
+  .subrow .nm3 { flex-wrap: wrap; overflow-wrap: anywhere; }
 
   /* ── Setup + welcome wizard ────────────────────────────────────────────
      Both grids already auto-collapse via their auto-fill/auto-fit minmax
