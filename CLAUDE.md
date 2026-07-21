@@ -271,6 +271,20 @@ deleting them.
    and swap the whole landing page into a fragment target. Being signed in
    and unauthorized IS an error and stays 403 (`require_editor`/
    `require_admin`) -- don't fold the two together.
+   The redirect carries `?next=<path>` so login returns the visitor to the
+   page they asked for. Three rules hold it together: only GETs get a
+   `next` (a POST body is gone, so replaying its URL renders a form that
+   looks like it submitted and didn't); htmx uses `HX-Current-URL`, since
+   the fragment endpoint is not somewhere you can stand; and the value
+   always passes `domain/urls.py:safe_next`, which reduces it to a
+   same-origin path or None (it folds backslashes -- `/\evil.com` reaches
+   the network as scheme-relative `//evil.com`). `next` rides to Discord
+   in OUR signed session cookie next to `oauth_state`, never as an OAuth
+   query param, so it cannot return attacker-controlled; the callback
+   re-validates anyway, and a brand-new account still goes to `/welcome`
+   regardless. Templates link sign-in via the `login_url(request)` global,
+   never a bare `/auth/login` -- miss one CTA and that button silently
+   drops the destination the others keep.
    No separate CSRF token: mutating routes rely on `SameSite=Lax` cookies
    (`web/app.py`'s `SessionMiddleware`). Deliberate for an app this size —
    don't read it as a gap to fill or bolt a token system onto.

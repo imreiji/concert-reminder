@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-20 22:14-0300\n"
+"POT-Creation-Date: 2026-07-21 16:42-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -14,55 +14,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/app/bot/cogs/admin.py:36
-msgid "Admin access required."
-msgstr "需要管理员权限。"
-
-#: src/app/bot/cogs/admin.py:56
-#, python-brace-format
-msgid "**{name}** is now an editor."
-msgstr "**{name}** 现在是编辑者。"
-
-#: src/app/bot/cogs/admin.py:66
-#, python-brace-format
-msgid "**{name}** is env-managed (EDITOR_WHITELIST) — edit `.env` instead."
-msgstr "**{name}** 由环境变量管理（EDITOR_WHITELIST）— 请改为编辑 `.env`。"
-
-#: src/app/bot/cogs/admin.py:76
-#, python-brace-format
-msgid "**{name}** is no longer an editor."
-msgstr "**{name}** 已不再是编辑者。"
-
-#: src/app/bot/cogs/admin.py:86 src/app/web/templates/preferences.html:435
-msgid "No editors yet."
-msgstr "还没有编辑者。"
-
-#: src/app/bot/cogs/admin.py:88
-msgid "env"
-msgstr "env"
-
-#: src/app/bot/cogs/ping.py:25 src/app/web/templates/base.html:64
-msgid "admin"
-msgstr "管理员"
-
-#: src/app/bot/cogs/ping.py:26 src/app/web/templates/base.html:64
-msgid "editor"
-msgstr "编辑者"
-
-#: src/app/bot/cogs/ping.py:27
-msgid "viewer"
-msgstr "访客"
-
-#: src/app/bot/cogs/ping.py:30
-#, python-brace-format
-msgid "pong — latency {ms:.0f}ms — you are a **{role}**"
-msgstr "pong — 延迟 {ms:.0f}ms — 你是 **{role}**"
-
-#: src/app/bot/cogs/reminders.py:44
-#, python-brace-format
-msgid "Nothing opens or closes in the next {days} days. 平和ですね。"
-msgstr "接下来 {days} 天没有任何开放或截止。天下太平。"
-
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:32
 #: src/app/bot/views.py:175 src/app/db/service.py:824
 msgid "opens"
@@ -72,64 +23,6 @@ msgstr "开放申请"
 #: src/app/bot/views.py:177 src/app/db/service.py:825
 msgid "closes"
 msgstr "截止"
-
-#: src/app/bot/cogs/reminders.py:63
-#, python-brace-format
-msgid "Next {days} days"
-msgstr "接下来 {days} 天"
-
-#: src/app/bot/cogs/reminders.py:64
-msgid "Nothing upcoming."
-msgstr "暂无即将到来的安排。"
-
-#: src/app/bot/cogs/reminders.py:93
-msgid "No upcoming deadlines on your reminders. `/remindme` to add one."
-msgstr "你的提醒中没有即将到来的截止。用 `/remindme` 添加一个。"
-
-#: src/app/bot/cogs/reminders.py:104
-msgid "Your upcoming deadlines"
-msgstr "你即将到来的截止"
-
-#: src/app/bot/cogs/reminders.py:132
-msgid "That concert doesn't exist (deleted?)."
-msgstr "该演出不存在（已删除？）。"
-
-#: src/app/bot/cogs/reminders.py:147
-msgid "same day"
-msgstr "当天"
-
-#: src/app/bot/cogs/reminders.py:147
-#, python-brace-format
-msgid "{n} day(s) before"
-msgstr "{n} 天前"
-
-#: src/app/bot/cogs/reminders.py:149
-#, python-brace-format
-msgid "Done — I'll DM you {when} each **{anchor}** for **{title}**."
-msgstr "完成 — 我会在 **{title}** 每个 **{anchor}** 的{when}给你发私信。"
-
-#: src/app/bot/cogs/reminders.py:183
-msgid "No rules yet — `/remindme` to create one."
-msgstr "还没有规则 — 用 `/remindme` 创建一个。"
-
-#: src/app/bot/cogs/reminders.py:189
-#, python-brace-format
-msgid "round #{n}"
-msgstr "第 {n} 轮"
-
-#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:194
-#: src/app/web/templates/welcome.html:154
-msgid "before"
-msgstr "之前"
-
-#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:195
-#: src/app/web/templates/welcome.html:155
-msgid "after"
-msgstr "之后"
-
-#: src/app/bot/cogs/reminders.py:192
-msgid "same-day"
-msgstr "当天"
 
 #: src/app/bot/messages.py:34 src/app/db/service.py:826
 msgid "results announced"
@@ -332,7 +225,7 @@ msgid ""
 msgstr "很遗憾 — 无需付款提醒；若有下一轮，我会在它开放时通知你。"
 
 #: src/app/bot/views.py:324 src/app/web/templates/_capture_actions.html:72
-#: src/app/web/templates/home.html:153 src/app/web/templates/home.html:159
+#: src/app/web/templates/home.html:159 src/app/web/templates/home.html:165
 msgid "Paid"
 msgstr "已付款"
 
@@ -360,6 +253,113 @@ msgstr "收到 — 我会在 {n} 天后再次提醒你。"
 #: src/app/bot/views.py:367
 msgid "Can't snooze that far — the deadline is too close. ⏳"
 msgstr "无法延后那么久 — 距离截止太近了。⏳"
+
+#: src/app/bot/cogs/admin.py:36
+msgid "Admin access required."
+msgstr "需要管理员权限。"
+
+#: src/app/bot/cogs/admin.py:56
+#, python-brace-format
+msgid "**{name}** is now an editor."
+msgstr "**{name}** 现在是编辑者。"
+
+#: src/app/bot/cogs/admin.py:66
+#, python-brace-format
+msgid "**{name}** is env-managed (EDITOR_WHITELIST) — edit `.env` instead."
+msgstr "**{name}** 由环境变量管理（EDITOR_WHITELIST）— 请改为编辑 `.env`。"
+
+#: src/app/bot/cogs/admin.py:76
+#, python-brace-format
+msgid "**{name}** is no longer an editor."
+msgstr "**{name}** 已不再是编辑者。"
+
+#: src/app/bot/cogs/admin.py:86 src/app/web/templates/preferences.html:438
+msgid "No editors yet."
+msgstr "还没有编辑者。"
+
+#: src/app/bot/cogs/admin.py:88
+msgid "env"
+msgstr "env"
+
+#: src/app/bot/cogs/ping.py:25 src/app/web/templates/base.html:62
+msgid "admin"
+msgstr "管理员"
+
+#: src/app/bot/cogs/ping.py:26 src/app/web/templates/base.html:62
+msgid "editor"
+msgstr "编辑者"
+
+#: src/app/bot/cogs/ping.py:27
+msgid "viewer"
+msgstr "访客"
+
+#: src/app/bot/cogs/ping.py:30
+#, python-brace-format
+msgid "pong — latency {ms:.0f}ms — you are a **{role}**"
+msgstr "pong — 延迟 {ms:.0f}ms — 你是 **{role}**"
+
+#: src/app/bot/cogs/reminders.py:44
+#, python-brace-format
+msgid "Nothing opens or closes in the next {days} days. 平和ですね。"
+msgstr "接下来 {days} 天没有任何开放或截止。天下太平。"
+
+#: src/app/bot/cogs/reminders.py:63
+#, python-brace-format
+msgid "Next {days} days"
+msgstr "接下来 {days} 天"
+
+#: src/app/bot/cogs/reminders.py:64
+msgid "Nothing upcoming."
+msgstr "暂无即将到来的安排。"
+
+#: src/app/bot/cogs/reminders.py:93
+msgid "No upcoming deadlines on your reminders. `/remindme` to add one."
+msgstr "你的提醒中没有即将到来的截止。用 `/remindme` 添加一个。"
+
+#: src/app/bot/cogs/reminders.py:104
+msgid "Your upcoming deadlines"
+msgstr "你即将到来的截止"
+
+#: src/app/bot/cogs/reminders.py:132
+msgid "That concert doesn't exist (deleted?)."
+msgstr "该演出不存在（已删除？）。"
+
+#: src/app/bot/cogs/reminders.py:147
+msgid "same day"
+msgstr "当天"
+
+#: src/app/bot/cogs/reminders.py:147
+#, python-brace-format
+msgid "{n} day(s) before"
+msgstr "{n} 天前"
+
+#: src/app/bot/cogs/reminders.py:149
+#, python-brace-format
+msgid "Done — I'll DM you {when} each **{anchor}** for **{title}**."
+msgstr "完成 — 我会在 **{title}** 每个 **{anchor}** 的{when}给你发私信。"
+
+#: src/app/bot/cogs/reminders.py:183
+msgid "No rules yet — `/remindme` to create one."
+msgstr "还没有规则 — 用 `/remindme` 创建一个。"
+
+#: src/app/bot/cogs/reminders.py:189
+#, python-brace-format
+msgid "round #{n}"
+msgstr "第 {n} 轮"
+
+#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:194
+#: src/app/web/templates/welcome.html:154
+msgid "before"
+msgstr "之前"
+
+#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:195
+#: src/app/web/templates/welcome.html:155
+msgid "after"
+msgstr "之后"
+
+#: src/app/bot/cogs/reminders.py:192
+msgid "same-day"
+msgstr "当天"
 
 #: src/app/db/service.py:832
 msgid "Lottery round"
@@ -402,7 +402,7 @@ msgid "Other"
 msgstr "其他"
 
 #: src/app/db/service.py:1529 src/app/db/service.py:1595
-#: src/app/web/templates/discover.html:116
+#: src/app/web/templates/discover.html:55
 msgid "Multiple"
 msgstr "多个"
 
@@ -421,70 +421,70 @@ msgstr "{n}小时"
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/service.py:2381
+#: src/app/db/service.py:2383
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "升级中签 — 于 {day} 前付款"
 
-#: src/app/db/service.py:2382
+#: src/app/db/service.py:2384
 msgid "Upgrade won — payment due"
 msgstr "升级中签 — 付款截止"
 
-#: src/app/db/service.py:2401
+#: src/app/db/service.py:2403
 msgid "Upgrade · Applied"
 msgstr "升级 · 已申请"
 
-#: src/app/db/service.py:2404
+#: src/app/db/service.py:2406
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "升级 · {n}后截止"
 
-#: src/app/db/service.py:2407
+#: src/app/db/service.py:2409
 msgid "Upgrade · Open now"
 msgstr "升级 · 现正开放"
 
-#: src/app/db/service.py:2413 src/app/web/templates/_board.html:23
+#: src/app/db/service.py:2415 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:23
 #: src/app/web/templates/_round_rows.html:27
-#: src/app/web/templates/home.html:148
+#: src/app/web/templates/home.html:154
 msgid "Secured"
 msgstr "已确保"
 
-#: src/app/db/service.py:2424
+#: src/app/db/service.py:2426
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "中签 — 于 {day} 前付款"
 
-#: src/app/db/service.py:2425
+#: src/app/db/service.py:2427
 msgid "Won — payment due"
 msgstr "中签 — 付款截止"
 
-#: src/app/db/service.py:2434
+#: src/app/db/service.py:2436
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind} · 已申请"
 
-#: src/app/db/service.py:2454
+#: src/app/db/service.py:2456
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind} · {n}后截止"
 
-#: src/app/db/service.py:2459
+#: src/app/db/service.py:2461
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind} · 现正开放"
 
-#: src/app/db/service.py:2465
+#: src/app/db/service.py:2467
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind} · {n}后开放"
 
-#: src/app/db/service.py:2472
+#: src/app/db/service.py:2474
 msgid "All rounds closed"
 msgstr "所有轮次已截止"
 
 #: src/app/web/routes/discover.py:55 src/app/web/templates/_board.html:20
-#: src/app/web/templates/home.html:115
+#: src/app/web/templates/home.html:121
 msgid "Open now"
 msgstr "现正开放"
 
@@ -551,11 +551,11 @@ msgstr "演出"
 #: src/app/web/templates/_board.html:21
 #: src/app/web/templates/_deadline_rows.html:21
 #: src/app/web/templates/_round_rows.html:25
-#: src/app/web/templates/home.html:130
+#: src/app/web/templates/home.html:136
 msgid "Applied"
 msgstr "已申请"
 
-#: src/app/web/templates/_board.html:22 src/app/web/templates/home.html:139
+#: src/app/web/templates/_board.html:22 src/app/web/templates/home.html:145
 msgid "Won — pay"
 msgstr "中签 — 付款"
 
@@ -660,13 +660,13 @@ msgid "Your status"
 msgstr "你的状态"
 
 #: src/app/web/templates/_deadline_rows.html:31
-msgid "Concert"
-msgstr "演出"
-
-#: src/app/web/templates/_deadline_rows.html:31
 #: src/app/web/templates/preferences.html:200
 msgid "Closes"
 msgstr "截止"
+
+#: src/app/web/templates/_deadline_rows.html:31
+msgid "Concert"
+msgstr "演出"
 
 #: src/app/web/templates/_deadline_rows.html:32
 msgid "What happens"
@@ -698,7 +698,7 @@ msgid "Opt out of this concert?"
 msgstr "不再关注这场演出？"
 
 #: src/app/web/templates/_following_toggle.html:31
-#: src/app/web/templates/home.html:282
+#: src/app/web/templates/home.html:288
 #: src/app/web/templates/preferences.html:406
 msgid "Close"
 msgstr "关闭"
@@ -787,10 +787,6 @@ msgid "No date announced yet"
 msgstr "尚未公布日期"
 
 #: src/app/web/templates/_round_rows.html:127
-msgid "Not going"
-msgstr "不参加"
-
-#: src/app/web/templates/_round_rows.html:127
 #: src/app/web/templates/concert_edit.html:107
 #: src/app/web/templates/concert_edit.html:234
 #: src/app/web/templates/concert_new.html:51
@@ -799,6 +795,10 @@ msgstr "不参加"
 #: src/app/web/templates/import_preview.html:177
 msgid "Cancelled"
 msgstr "已取消"
+
+#: src/app/web/templates/_round_rows.html:127
+msgid "Not going"
+msgstr "不参加"
 
 #: src/app/web/templates/_round_rows.html:129
 #, python-format
@@ -859,7 +859,7 @@ msgstr "私信 &middot; 适用于以上每一轮"
 
 #: src/app/web/templates/_rules.html:22
 #: src/app/web/templates/preferences.html:227
-#: src/app/web/templates/preferences.html:431
+#: src/app/web/templates/preferences.html:434
 msgid "Remove"
 msgstr "删除"
 
@@ -895,7 +895,7 @@ msgid "Edit presets"
 msgstr "编辑预设"
 
 #: src/app/web/templates/_tag_picker_fields.html:4
-#: src/app/web/templates/discover.html:46
+#: src/app/web/templates/discover.html:182
 msgid "Franchises"
 msgstr "系列"
 
@@ -904,7 +904,7 @@ msgid "+ Add franchise"
 msgstr "+ 添加系列"
 
 #: src/app/web/templates/_tag_picker_fields.html:8
-#: src/app/web/templates/discover.html:46
+#: src/app/web/templates/discover.html:182
 msgid "Groups"
 msgstr "组合"
 
@@ -913,28 +913,28 @@ msgid "+ Add group"
 msgstr "+ 添加组合"
 
 #: src/app/web/templates/_tag_picker_fields.html:12
-msgid "(auto-filled from groups — × anyone not performing)"
-msgstr "（由组合自动填充 — 用×移除未出演者）"
-
-#: src/app/web/templates/_tag_picker_fields.html:12
-#: src/app/web/templates/discover.html:46
+#: src/app/web/templates/discover.html:182
 msgid "Artists"
 msgstr "艺人"
+
+#: src/app/web/templates/_tag_picker_fields.html:12
+msgid "(auto-filled from groups — × anyone not performing)"
+msgstr "（由组合自动填充 — 用×移除未出演者）"
 
 #: src/app/web/templates/_tag_picker_fields.html:14
 msgid "+ Add artist"
 msgstr "+ 添加艺人"
 
 #: src/app/web/templates/_tag_picker_fields.html:16
-#, python-format
-msgid "(suggested: %(venue)s)"
-msgstr "（建议：%(venue)s）"
-
-#: src/app/web/templates/_tag_picker_fields.html:16
 #: src/app/web/templates/preferences.html:160
 #: src/app/web/templates/tags.html:164 src/app/web/templates/welcome.html:74
 msgid "Venues"
 msgstr "场馆"
+
+#: src/app/web/templates/_tag_picker_fields.html:16
+#, python-format
+msgid "(suggested: %(venue)s)"
+msgstr "（建议：%(venue)s）"
 
 #: src/app/web/templates/_tag_picker_fields.html:18
 msgid "+ Add venue"
@@ -946,15 +946,16 @@ msgid ""
 "concerts are tag-driven."
 msgstr "缺少某个标签？请先在<a href=\"/tags\">标签页</a>创建 — 演出是由标签驱动的。"
 
-#: src/app/web/templates/base.html:35
+#: src/app/web/templates/base.html:35 src/app/web/templates/base.html:84
 msgid "Home"
 msgstr "主页"
 
-#: src/app/web/templates/base.html:35 src/app/web/templates/home.html:251
+#: src/app/web/templates/base.html:35 src/app/web/templates/base.html:86
+#: src/app/web/templates/home.html:257
 msgid "Discover"
 msgstr "发现"
 
-#: src/app/web/templates/base.html:36
+#: src/app/web/templates/base.html:36 src/app/web/templates/base.html:89
 #: src/app/web/templates/concert_detail.html:25
 #: src/app/web/templates/concert_edit.html:163
 #: src/app/web/templates/concert_new.html:121
@@ -963,47 +964,35 @@ msgstr "发现"
 msgid "Tags"
 msgstr "标签"
 
-#: src/app/web/templates/base.html:96
-msgid "Me"
-msgstr "我的"
-
-#: src/app/web/templates/base.html:99
-msgid "Sign in"
-msgstr "登录"
-
-#: src/app/web/templates/base.html:104
-msgid "Add concert"
-msgstr "添加演出"
-
 #: src/app/web/templates/base.html:44
 msgid "Toggle dark mode"
 msgstr "切换深色模式"
 
-#: src/app/web/templates/base.html:51
+#: src/app/web/templates/base.html:58
 #: src/app/web/templates/preferences.html:302
 #: src/app/web/templates/welcome.html:413
 msgid "Language"
 msgstr "语言"
 
-#: src/app/web/templates/base.html:65
+#: src/app/web/templates/base.html:63
 msgid "+ Add"
 msgstr "+ 添加"
 
-#: src/app/web/templates/base.html:66 src/app/web/templates/preferences.html:11
+#: src/app/web/templates/base.html:64 src/app/web/templates/preferences.html:11
 #: src/app/web/templates/setup.html:13
 msgid "Preferences"
 msgstr "偏好设置"
 
-#: src/app/web/templates/base.html:67
+#: src/app/web/templates/base.html:65
 msgid "Log out"
 msgstr "登出"
 
-#: src/app/web/templates/base.html:69 src/app/web/templates/home.html:70
-#: src/app/web/templates/home.html:183
+#: src/app/web/templates/base.html:67 src/app/web/templates/home.html:76
+#: src/app/web/templates/home.html:189
 msgid "Sign in with Discord"
 msgstr "用 Discord 登录"
 
-#: src/app/web/templates/base.html:76
+#: src/app/web/templates/base.html:74
 msgid ""
 "Your last Discord DM couldn't be delivered — check your Discord privacy\n"
 "    settings to allow DMs from server members, or\n"
@@ -1012,28 +1001,40 @@ msgstr ""
 "你上一条 Discord 私信未能送达 — 请检查 Discord 隐私设置以允许来自服务器成员的私信，或<a "
 "href=\"/preferences\">在偏好设置中测试</a>。"
 
-#: src/app/web/templates/base.html:83
+#: src/app/web/templates/base.html:91
+msgid "Me"
+msgstr "我的"
+
+#: src/app/web/templates/base.html:94
+msgid "Sign in"
+msgstr "登录"
+
+#: src/app/web/templates/base.html:98
+msgid "Add concert"
+msgstr "添加演出"
+
+#: src/app/web/templates/base.html:102
 msgid ""
 "Times are entered in <strong>JST</strong> and shown as JST + your local "
 "time."
 msgstr "时间以<strong>日本标准时间（JST）</strong>输入，并以 JST 及你的当地时间显示。"
 
-#: src/app/web/templates/base.html:84 src/app/web/templates/privacy.html:2
+#: src/app/web/templates/base.html:103 src/app/web/templates/privacy.html:2
 #: src/app/web/templates/privacy.html:8
 msgid "Privacy policy"
 msgstr "隐私政策"
 
-#: src/app/web/templates/base.html:85 src/app/web/templates/terms.html:2
+#: src/app/web/templates/base.html:104 src/app/web/templates/terms.html:2
 #: src/app/web/templates/terms.html:8
 msgid "Terms of service"
 msgstr "服务条款"
 
-#: src/app/web/templates/base.html:132
+#: src/app/web/templates/base.html:144
 #, python-brace-format
 msgid "Delete tag {name} everywhere?"
 msgstr "在所有位置删除标签 {name}？"
 
-#: src/app/web/templates/base.html:133
+#: src/app/web/templates/base.html:145
 #, python-brace-format
 msgid "Delete preset {name}?"
 msgstr "删除预设 {name}？"
@@ -1552,97 +1553,101 @@ msgstr "系列、组合、艺人、场馆 — 可选"
 msgid "Create event"
 msgstr "创建活动"
 
-#: src/app/web/templates/discover.html:10
-msgid "Sort"
-msgstr "排序"
-
-#: src/app/web/templates/discover.html:26
-msgid "Round status"
-msgstr "轮次状态"
-
-#: src/app/web/templates/discover.html:144
-msgid "Filters"
-msgstr "筛选"
-
-#: src/app/web/templates/discover.html:36
-msgid "Filter by tag"
-msgstr "按标签筛选"
-
-#: src/app/web/templates/discover.html:37
-#: src/app/web/templates/preferences.html:114
-msgid "Search tags…"
-msgstr "搜索标签…"
-
-#: src/app/web/templates/discover.html:57
-msgid "Regions"
-msgstr "地区"
-
-#: src/app/web/templates/discover.html:69
-msgid "Clear filters"
-msgstr "清除筛选"
-
-#: src/app/web/templates/discover.html:71
-msgid "Manage tags"
-msgstr "管理标签"
-
-#: src/app/web/templates/discover.html:76
+#: src/app/web/templates/discover.html:15
 msgid "Concerts"
 msgstr "演出"
 
-#: src/app/web/templates/discover.html:78 src/app/web/templates/tags.html:10
+#: src/app/web/templates/discover.html:17 src/app/web/templates/tags.html:10
 #, python-format
 msgid "%(count)s concert"
 msgid_plural "%(count)s concerts"
 msgstr[0] "%(count)s 场演出"
 
-#: src/app/web/templates/discover.html:79
+#: src/app/web/templates/discover.html:18
 #, python-format
 msgid "%(n)s with a round still open"
 msgstr "%(n)s 场仍有轮次开放"
 
-#: src/app/web/templates/discover.html:88
+#: src/app/web/templates/discover.html:27
 msgid "Search concerts…"
 msgstr "搜索演出…"
 
-#: src/app/web/templates/discover.html:89
+#: src/app/web/templates/discover.html:28
 msgid "Search"
 msgstr "搜索"
 
-#: src/app/web/templates/discover.html:119
+#: src/app/web/templates/discover.html:58
 #, python-format
 msgid "%(day)s JST"
 msgstr "%(day)s JST"
 
-#: src/app/web/templates/discover.html:155
+#: src/app/web/templates/discover.html:94
 msgid "Open &amp; upcoming"
 msgstr "开放中 &amp; 即将到来"
 
-#: src/app/web/templates/discover.html:161
+#: src/app/web/templates/discover.html:100
 msgid "Upcoming"
 msgstr "即将到来"
 
-#: src/app/web/templates/discover.html:167
-#: src/app/web/templates/discover.html:169
+#: src/app/web/templates/discover.html:106
+#: src/app/web/templates/discover.html:108
 msgid "No concerts match."
 msgstr "没有匹配的演出。"
 
-#: src/app/web/templates/discover.html:169
+#: src/app/web/templates/discover.html:108
 msgid "Create the first one →"
 msgstr "创建第一场 →"
 
-#: src/app/web/templates/discover.html:173
+#: src/app/web/templates/discover.html:112
 msgid "Coming up soon"
 msgstr "即将到来"
 
-#: src/app/web/templates/home.html:62
+#: src/app/web/templates/discover.html:144
+msgid "Filters"
+msgstr "筛选"
+
+#: src/app/web/templates/discover.html:146
+msgid "Sort"
+msgstr "排序"
+
+#: src/app/web/templates/discover.html:162
+msgid "Round status"
+msgstr "轮次状态"
+
+#: src/app/web/templates/discover.html:172
+msgid "Filter by tag"
+msgstr "按标签筛选"
+
+#: src/app/web/templates/discover.html:173
+#: src/app/web/templates/preferences.html:114
+msgid "Search tags…"
+msgstr "搜索标签…"
+
+#: src/app/web/templates/discover.html:193
+msgid "Regions"
+msgstr "地区"
+
+#: src/app/web/templates/discover.html:205
+msgid "Clear filters"
+msgstr "清除筛选"
+
+#: src/app/web/templates/discover.html:207
+msgid "Manage tags"
+msgstr "管理标签"
+
+#: src/app/web/templates/home.html:65
+msgid "Sign in to continue to the page you asked for."
+msgstr "登录后即可继续前往您要访问的页面。"
+
+#: src/app/web/templates/home.html:68
 msgid "dekimasen.app · Japanese concert ticketing, tracked"
 msgstr "dekimasen.app · 追踪日本演出购票"
 
-#: src/app/web/templates/home.html:63
+#: src/app/web/templates/home.html:69
 msgid "Never say <em>dekimasen deshita</em> again."
 msgstr "再也不用说<em>dekimasen deshita</em>了。"
 
-#: src/app/web/templates/home.html:65
+#: src/app/web/templates/home.html:71
 msgid ""
 "Every Japanese ticket is a <b>campaign</b>, not a date — fan-club "
 "presale, lottery\n"
@@ -1654,119 +1659,119 @@ msgstr ""
 "日本的每一张票都是一场<b>战役</b>，而不只是一个日期 — "
 "后援会先行、抽选第一轮、落选后的第二轮、先到先得的发售、依托你已有座位的升级抽选。我们追踪整条阶梯，并准确告诉你现在处于哪一步。"
 
-#: src/app/web/templates/home.html:71
+#: src/app/web/templates/home.html:77
 msgid "Free · we DM you on Discord · no card, no spam"
 msgstr "免费 · 我们通过 Discord 私信你 · 无需绑卡，绝无骚扰"
 
-#: src/app/web/templates/home.html:74
+#: src/app/web/templates/home.html:80
 msgid "concerts tracked"
 msgstr "追踪中的演出"
 
-#: src/app/web/templates/home.html:75
+#: src/app/web/templates/home.html:81
 msgid "with a round open now"
 msgstr "当前有轮次开放"
 
-#: src/app/web/templates/home.html:76
+#: src/app/web/templates/home.html:82
 msgid "franchises"
 msgstr "系列"
 
-#: src/app/web/templates/home.html:77
+#: src/app/web/templates/home.html:83
 msgid "performers tagged"
 msgstr "已标记的表演者"
 
-#: src/app/web/templates/home.html:82
+#: src/app/web/templates/home.html:88
 msgid "How it works"
 msgstr "运作方式"
 
-#: src/app/web/templates/home.html:82
+#: src/app/web/templates/home.html:88
 msgid "Three steps, then it runs itself"
 msgstr "三步之后，它便自动运转"
 
-#: src/app/web/templates/home.html:86
+#: src/app/web/templates/home.html:92
 msgid "Follow your artists"
 msgstr "关注你的艺人"
 
-#: src/app/web/templates/home.html:87
+#: src/app/web/templates/home.html:93
 msgid ""
 "Tap a franchise, a group, or one performer. New events for anyone you "
 "follow\n"
 "          show up on your board <b>automatically</b>."
 msgstr "点选一个系列、一个组合，或某一位表演者。你关注对象的新活动会<b>自动</b>出现在你的看板上。"
 
-#: src/app/web/templates/home.html:92
+#: src/app/web/templates/home.html:98
 msgid "We track every round's deadline"
 msgstr "我们追踪每一轮的截止"
 
-#: src/app/web/templates/home.html:93
+#: src/app/web/templates/home.html:99
 msgid ""
 "Presale opens, lottery closes, results land, payment is due. All times "
 "shown\n"
 "          <b>JST and yours</b>, always both — no mental arithmetic at 3am."
 msgstr "先行开放、抽选截止、结果公布、付款截止。所有时间都<b>同时以 JST 和你的时间</b>显示，永远两者兼备 — 无需在凌晨三点心算。"
 
-#: src/app/web/templates/home.html:98
+#: src/app/web/templates/home.html:104
 msgid "You get a DM, and you know where you stand"
 msgstr "你会收到私信，并清楚自己的处境"
 
-#: src/app/web/templates/home.html:99
+#: src/app/web/templates/home.html:105
 msgid ""
 "A Discord reminder before each deadline, plus a campaign board that says "
 "whether the\n"
 "          ball is <b>in your court</b> or you are already covered."
 msgstr "每个截止前的 Discord 提醒，外加一块战役看板 — 告诉你<b>球在你这边</b>，还是你已经万事俱备。"
 
-#: src/app/web/templates/home.html:107
+#: src/app/web/templates/home.html:113
 msgid "The whole campaign, one board"
 msgstr "整场战役，一块看板"
 
-#: src/app/web/templates/home.html:108
+#: src/app/web/templates/home.html:114
 msgid "One card moves left to right as you apply, win, and pay"
 msgstr "随着你申请、中签、付款，一张卡片从左移到右"
 
-#: src/app/web/templates/home.html:120
+#: src/app/web/templates/home.html:126
 msgid "FC presale · 6h left"
 msgstr "FC 先行 · 剩 6 小时"
 
-#: src/app/web/templates/home.html:126
+#: src/app/web/templates/home.html:132
 msgid "General presale · 4d"
 msgstr "一般先行 · 4 天"
 
-#: src/app/web/templates/home.html:135
+#: src/app/web/templates/home.html:141
 msgid "Lottery R1 · result 21 Jul"
 msgstr "抽选 R1 · 结果 7 月 21 日"
 
-#: src/app/web/templates/home.html:144
+#: src/app/web/templates/home.html:150
 msgid "Pay by 22 Jul"
 msgstr "7 月 22 日前付款"
 
-#: src/app/web/templates/home.html:167
+#: src/app/web/templates/home.html:173
 msgid "Discover what's on"
 msgstr "发现正在进行的演出"
 
-#: src/app/web/templates/home.html:168
+#: src/app/web/templates/home.html:174
 msgid "The catalogue is public — browse before you sign in"
 msgstr "目录是公开的 — 登录前即可浏览"
 
-#: src/app/web/templates/home.html:169
+#: src/app/web/templates/home.html:175
 msgid "Sign in to track →"
 msgstr "登录以追踪 →"
 
-#: src/app/web/templates/home.html:179
+#: src/app/web/templates/home.html:185
 msgid "Ready when you are"
 msgstr "随时准备就绪"
 
-#: src/app/web/templates/home.html:180
+#: src/app/web/templates/home.html:186
 msgid "Follow four groups in a minute. Miss nothing after that."
 msgstr "一分钟关注四个组合。此后什么都不会错过。"
 
-#: src/app/web/templates/home.html:181
+#: src/app/web/templates/home.html:187
 msgid ""
 "Sign in with the Discord account you already have. We only ever DM you "
 "about deadlines\n"
 "      for artists you chose to follow."
 msgstr "用你已有的 Discord 账号登录。我们只会就你选择关注的艺人的截止给你发私信。"
 
-#: src/app/web/templates/home.html:187
+#: src/app/web/templates/home.html:193
 msgid ""
 "<b>Signed out, this is the whole product in one screen.</b> Sign in and "
 "it becomes your\n"
@@ -1777,46 +1782,46 @@ msgstr ""
 "<b>在登出状态下，这一屏就是整个产品。</b>登录后它会变成你的看板 — "
 "你的轮次、你的结果、你的截止。上方所展示的一切，都是你关注某人后会逐渐填满的内容的预览。"
 
-#: src/app/web/templates/home.html:208
+#: src/app/web/templates/home.html:214
 msgid "Up next"
 msgstr "接下来"
 
-#: src/app/web/templates/home.html:227
+#: src/app/web/templates/home.html:233
 msgid "Your campaigns"
 msgstr "你的战役"
 
-#: src/app/web/templates/home.html:240
+#: src/app/web/templates/home.html:246
 msgid "Coming up"
 msgstr "即将到来"
 
-#: src/app/web/templates/home.html:241
+#: src/app/web/templates/home.html:247
 msgid "All times JST and yours, always both"
 msgstr "时间同时以 JST 和你的时间显示，永远两者兼备"
 
-#: src/app/web/templates/home.html:250
+#: src/app/web/templates/home.html:256
 msgid "Not tracking these yet"
 msgstr "尚未追踪这些"
 
-#: src/app/web/templates/home.html:253
+#: src/app/web/templates/home.html:259
 #, python-format
 msgid "%(count)s concert in the catalogue,"
 msgid_plural "%(count)s concerts in the catalogue,"
 msgstr[0] "目录中有 %(count)s 场演出，"
 
-#: src/app/web/templates/home.html:256
+#: src/app/web/templates/home.html:262
 #, python-format
 msgid "%(n)s with a round still open."
 msgstr "其中 %(n)s 场仍有轮次开放。"
 
-#: src/app/web/templates/home.html:257
+#: src/app/web/templates/home.html:263
 msgid "Browse by franchise, group, artist or region — or search everything."
 msgstr "按系列、组合、艺人或地区浏览 — 或搜索全部。"
 
-#: src/app/web/templates/home.html:260
+#: src/app/web/templates/home.html:266
 msgid "Open discover →"
 msgstr "打开发现页 →"
 
-#: src/app/web/templates/home.html:274
+#: src/app/web/templates/home.html:280
 msgid ""
 "<b>Home answers \"where do I stand\".</b> Everything above is yours — "
 "your rounds, your outcomes,\n"
@@ -1824,25 +1829,25 @@ msgid ""
 "page itself."
 msgstr "<b>主页回答“我现在处于哪一步”。</b>上方的一切都是你的 — 你的轮次、你的结果、你的截止。发现页作为一道出口位于底部，而不是这个页面本身。"
 
-#: src/app/web/templates/home.html:281
+#: src/app/web/templates/home.html:287
 msgid "Not applying to this round"
 msgstr "不申请这一轮"
 
-#: src/app/web/templates/home.html:284
+#: src/app/web/templates/home.html:290
 msgid ""
 "Done — you won't be reminded about this round. Later rounds for\n"
 "    <b id=\"pruneName\">this concert</b> will still reach you."
 msgstr "完成 — 你不会收到关于这一轮的提醒。<b id=\"pruneName\">这场演出</b>之后的轮次仍会通知你。"
 
-#: src/app/web/templates/home.html:288
+#: src/app/web/templates/home.html:294
 msgid "That's right"
 msgstr "没错"
 
-#: src/app/web/templates/home.html:296
+#: src/app/web/templates/home.html:302
 msgid "Skip this concert entirely"
 msgstr "完全跳过这场演出"
 
-#: src/app/web/templates/home.html:298
+#: src/app/web/templates/home.html:304
 msgid "Manage this concert →"
 msgstr "管理这场演出 →"
 
@@ -2206,14 +2211,14 @@ msgid "New preset"
 msgstr "新预设"
 
 #: src/app/web/templates/preferences.html:248
-msgid "standard lottery coverage"
-msgstr "标准抽选覆盖"
-
-#: src/app/web/templates/preferences.html:248
 #: src/app/web/templates/tags.html:56 src/app/web/templates/tags.html:59
 #: src/app/web/templates/tags.html:60 src/app/web/templates/tags.html:209
 msgid "Name"
 msgstr "名称"
+
+#: src/app/web/templates/preferences.html:248
+msgid "standard lottery coverage"
+msgstr "标准抽选覆盖"
 
 #: src/app/web/templates/preferences.html:250
 msgid "Create preset"
@@ -2419,29 +2424,29 @@ msgstr ""
 "用户。由环境变量管理的编辑者（<code>EDITOR_WHITELIST</code>）无法在此移除 — 请改为编辑 "
 "<code>.env</code>。"
 
-#: src/app/web/templates/preferences.html:428
+#: src/app/web/templates/preferences.html:431
 msgid "from env"
 msgstr "来自环境变量"
 
-#: src/app/web/templates/preferences.html:430
+#: src/app/web/templates/preferences.html:433
 msgid "cannot be removed here"
 msgstr "无法在此移除"
 
-#: src/app/web/templates/preferences.html:431
+#: src/app/web/templates/preferences.html:434
 msgid "Remove editor"
 msgstr "移除编辑者"
 
-#: src/app/web/templates/preferences.html:438
+#: src/app/web/templates/preferences.html:441
 msgid ""
 "Whitelisted editors live in the server env and cannot be removed from "
 "here."
 msgstr "白名单编辑者存放在服务器环境变量中，无法从此处移除。"
 
-#: src/app/web/templates/preferences.html:440
+#: src/app/web/templates/preferences.html:443
 msgid "Discord user ID"
 msgstr "Discord 用户 ID"
 
-#: src/app/web/templates/preferences.html:441
+#: src/app/web/templates/preferences.html:444
 msgid "Add an editor"
 msgstr "添加编辑者"
 

@@ -48,3 +48,35 @@ def clean_url(raw: str | None) -> str | None:
     if parsed.scheme.lower() not in ALLOWED_SCHEMES or not parsed.netloc:
         raise UnsafeURLError("links must be http:// or https:// URLs")
     return candidate
+
+
+# A return path lands in a Location header after login, so the whole job here
+# is refusing anything that could point off-origin. Long values are dropped
+# rather than truncated -- the value rides in the session cookie, and half a
+# path is not a better destination than the default.
+_MAX_NEXT_LENGTH = 512
+
+
+def safe_next(raw: str | None) -> str | None:
+    """Reduce a post-login return target to a same-origin path, or None.
+
+    Returns None (caller falls back to "/") for anything that isn't a plain
+    absolute-from-root path: an absolute URL, a scheme-relative one, a bare
+    relative segment. Unlike clean_url this never raises -- a bad `next` is a
+    stale or hostile link, not an editor mistake worth a 422.
+    """
+    if not raw:
+        return None
+    candidate = raw.strip(_EDGE_TRIM).translate(_INTERIOR_DELETE)
+    if len(candidate) > _MAX_NEXT_LENGTH or not candidate.startswith("/"):
+        return None
+    # Browsers fold backslashes to forward slashes before resolving, so
+    # "/\evil.com" is sent as scheme-relative "//evil.com" -- a redirect
+    # straight off-origin that a naive startswith("/") check waves through.
+    if candidate[:2].replace("\\", "/") == "//":
+        return None
+    parsed = urlsplit(candidate)
+    if parsed.scheme or parsed.netloc:
+        return None
+    # Fragments never reach the server, so there is nothing to preserve.
+    return parsed.path + (f"?{parsed.query}" if parsed.query else "")

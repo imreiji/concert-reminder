@@ -172,6 +172,97 @@ def test_anonymous_is_rejected_by_protected_routes(client):
     assert r.headers["location"] == "/"
 
 
+def test_anonymous_get_carries_the_destination_home(client):
+    r = client.get("/preferences")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/?next=%2Fpreferences"
+
+
+def test_anonymous_get_preserves_the_query_string(client):
+    r = client.get("/setup/applications?from=dm")
+    assert r.headers["location"] == "/?next=%2Fsetup%2Fapplications%3Ffrom%3Ddm"
+
+
+def test_anonymous_post_carries_no_destination(client):
+    """A POST body is gone by now, so replaying its URL after login would
+    render a form that looks like it submitted and didn't."""
+    r = client.post("/concerts", data={"title": "X"})
+    assert r.headers["location"] == "/"
+
+
+def test_htmx_returns_to_the_page_not_the_fragment_endpoint(client):
+    """The fragment URL is not somewhere you can stand -- HX-Current-URL is."""
+    r = client.post(
+        "/concerts",
+        data={"title": "X"},
+        headers={"HX-Request": "true", "HX-Current-URL": "http://testserver/discover?tag=3"},
+    )
+    assert r.status_code == 204
+    assert r.headers["hx-redirect"] == "/?next=%2Fdiscover%3Ftag%3D3"
+
+
+def test_htmx_current_url_origin_cannot_steer_the_redirect(client):
+    """Only the PATH of that header survives, so a forged origin goes nowhere."""
+    r = client.post(
+        "/concerts",
+        data={"title": "X"},
+        headers={"HX-Request": "true", "HX-Current-URL": "https://evil.com/phish"},
+    )
+    assert r.headers["hx-redirect"] == "/?next=%2Fphish"
+
+
+def _login_with_next(client, query: str = "") -> str:
+    """Run the OAuth round-trip, returning where the callback sent us."""
+    r = client.get(f"/auth/login{query}")
+    state = r.headers["location"].split("state=")[1].split("&")[0]
+    return client.get(f"/auth/callback?code=good-code&state={state}").headers["location"]
+
+
+def test_next_round_trips_through_oauth_to_the_original_page(client):
+    """The whole point: bounced off /preferences, signed in, land there."""
+    do_login(client)  # account now exists -- see the new-user test below
+    client.get("/auth/logout")
+    assert _login_with_next(client, "?next=%2Fpreferences") == "/preferences"
+
+
+def test_new_user_still_goes_to_the_wizard(client):
+    """A brand-new account has not picked a single tag, so the page that
+    bounced them is the wrong place to land -- the wizard wins over next."""
+    assert _login_with_next(client, "?next=%2Fpreferences") == "/welcome"
+
+
+def test_hostile_next_is_dropped_at_login(client):
+    """safe_next runs on the way IN, so nothing off-origin ever reaches the
+    session -- and the callback re-checks on the way out anyway."""
+    do_login(client)
+    client.get("/auth/logout")
+    assert _login_with_next(client, "?next=https%3A%2F%2Fevil.com%2Fphish") == "/"
+
+
+def test_abandoned_next_does_not_outlive_its_login(client):
+    """Start a login with a destination, abandon it, start a clean one: the
+    stale destination must not be waiting in the session."""
+    do_login(client)
+    client.get("/auth/logout")
+    client.get("/auth/login?next=%2Fpreferences")  # abandoned
+    assert _login_with_next(client) == "/"
+
+
+def test_sign_in_cta_preserves_next(client):
+    """Every CTA goes through login_url(request), so the destination survives
+    the visitor reading the landing page before clicking."""
+    r = client.get("/?next=%2Fpreferences")
+    assert r.status_code == 200
+    assert "/auth/login?next=%2Fpreferences" in r.text
+    assert 'href="/auth/login"' not in r.text  # no CTA silently drops it
+
+
+def test_home_explains_the_bounce(client):
+    """Without this the redirect is silent and the click just looks broken."""
+    assert "Sign in to continue" in client.get("/?next=%2Fpreferences").text
+    assert "Sign in to continue" not in client.get("/").text
+
+
 def test_anonymous_get_lands_on_a_rendered_home_page(client):
     """The redirect has to go somewhere real: following it renders Home's
     signed-out landing page, which carries the sign-in CTA."""

@@ -58,6 +58,12 @@
      web/app.py), a real taste of the public catalogue, a catalogue stat
      line, and Sign-in-with-Discord CTAs (hero + foot). Signed in, none of
      this branch runs -- the real board is below, in the else branch. #}
+  {# Bounced off a signed-in-only page (web/app.py's LoginRequired handler).
+     Without this the redirect is silent and the visitor's click just looks
+     broken -- they asked for a page and landed somewhere else unexplained. #}
+  {% if request.query_params.get("next") %}
+  <p class="signin-note">{{ _("Sign in to continue to the page you asked for.") }}</p>
+  {% endif %}
   <div class="hero">
     <span class="eyebrow">{% trans %}dekimasen.app · Japanese concert ticketing, tracked{% endtrans %}</span>
     <h1 class="promise">{% trans %}Never say <em>dekimasen deshita</em> again.{% endtrans %}</h1>
@@ -67,7 +73,7 @@
       seat you already hold. We track the whole ladder and tell you exactly where you stand.{% endtrans %}
     </p>
     <div class="cta">
-      <a class="btn btn-discord" href="/auth/login"><span class="di">✦</span> {{ _("Sign in with Discord") }}</a>
+      <a class="btn btn-discord" href="{{ login_url(request) }}"><span class="di">✦</span> {{ _("Sign in with Discord") }}</a>
       <span class="reassure">{% trans %}Free · we DM you on Discord · no card, no spam{% endtrans %}</span>
     </div>
     <div class="statband num">
@@ -166,7 +172,7 @@
     <div class="head">
       <h2>{{ _("Discover what's on") }}</h2>
       <span class="note">{{ _("The catalogue is public — browse before you sign in") }}</span>
-      <a class="more" href="/auth/login">{{ _("Sign in to track →") }}</a>
+      <a class="more" href="{{ login_url(request) }}">{{ _("Sign in to track →") }}</a>
     </div>
     {% if landing_concerts %}
     <div class="peek">
@@ -180,7 +186,7 @@
     <h2>{{ _("Follow four groups in a minute. Miss nothing after that.") }}</h2>
     <p>{% trans %}Sign in with the Discord account you already have. We only ever DM you about deadlines
       for artists you chose to follow.{% endtrans %}</p>
-    <a class="btn btn-discord" href="/auth/login"><span class="di">✦</span> {{ _("Sign in with Discord") }}</a>
+    <a class="btn btn-discord" href="{{ login_url(request) }}"><span class="di">✦</span> {{ _("Sign in with Discord") }}</a>
   </div>
 
   <p class="foot-note">

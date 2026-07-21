@@ -1,6 +1,7 @@
 """Web application: sessions, auth, concert CRUD."""
 
 from pathlib import Path
+from urllib.parse import quote, urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -17,6 +18,7 @@ from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
 from app.db.session import get_session
 from app.domain.timezones import fmt_day_month, fmt_dual, fmt_dual_lines, utc_to_jst
 from app.domain.types import TagKind
+from app.domain.urls import safe_next
 from app.ops import run_checks
 from app.scheduler import heartbeat
 from app.web import auth
@@ -58,6 +60,24 @@ templates.env.globals["loc"] = lambda obj, field: i18n.loc_field(obj, field, i18
 # Filter form for `| map("loc_name")` over a tag list (the "F · G" eyebrow joins).
 templates.env.filters["loc_name"] = lambda tag: i18n.loc_field(tag, "name", i18n.get_locale())
 
+def home_with_next(target: str | None) -> str:
+    """Home, carrying the page the visitor actually asked for (if any)."""
+    return f"/?next={quote(target, safe='')}" if target else "/"
+
+
+def login_url(request: Request) -> str:
+    """The sign-in href for the CURRENT page, preserving any `next`.
+
+    A template global rather than per-route context so every CTA agrees --
+    header, tab bar and both landing-page buttons. Miss one and that button
+    silently drops the destination the others keep.
+    """
+    target = safe_next(request.query_params.get("next"))
+    return f"/auth/login?next={quote(target, safe='')}" if target else "/auth/login"
+
+
+templates.env.globals["login_url"] = login_url
+
 COMMON_TIMEZONES = [
     "America/Moncton", "America/Halifax", "America/Toronto", "America/Vancouver",
     "Asia/Tokyo", "Asia/Hong_Kong", "Asia/Singapore", "Australia/Sydney",
@@ -96,9 +116,20 @@ def create_app() -> FastAPI:
             # An htmx XHR would FOLLOW a 303 and swap the whole landing page
             # into whatever fragment target the request had. HX-Redirect makes
             # the browser navigate instead, which is what a session that
-            # expired mid-page actually needs.
-            return Response(status_code=204, headers={"HX-Redirect": "/"})
-        return RedirectResponse("/", status_code=303)
+            # expired mid-page actually needs. The destination is the PAGE they
+            # were on (HX-Current-URL), never this fragment endpoint -- and only
+            # its path survives, so the header's origin can't steer us.
+            current = urlsplit(request.headers.get("hx-current-url", ""))
+            target = safe_next(current.path + (f"?{current.query}" if current.query else ""))
+            return Response(status_code=204, headers={"HX-Redirect": home_with_next(target)})
+        # Only a GET is worth returning to. A signed-out POST's body is gone by
+        # now, so replaying its URL after login would render a form that looks
+        # like it submitted and didn't.
+        target = None
+        if request.method == "GET":
+            query = request.url.query
+            target = safe_next(request.url.path + (f"?{query}" if query else ""))
+        return RedirectResponse(home_with_next(target), status_code=303)
 
     app.mount("/static", StaticFiles(directory=_here / "static"), name="static")
     app.include_router(auth.router)
