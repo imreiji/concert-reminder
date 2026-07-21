@@ -64,7 +64,31 @@ with an upgrade the row budget is tighter still - though only for a viewer
 eligible to enter it, since `my_deadline_rows` drops the upgrade's rows for
 everyone else.
 
-### 3. Minor demo-parity cosmetics
+### 3. Pin the Python version across dev, CI and the server
+
+Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
+2026-07-21 (PR #57 CI failure post-mortem).
+
+CI went red on the i18n branch with an `UnboundLocalError` that no local
+run could reproduce: Ubuntu 24.04's system Python is CPython 3.12.3, whose
+PEP 709 inlined comprehensions leak the iteration variable into the
+enclosing scope's symbol table (fixed in later 3.12.x), while the dev
+machine runs 3.13.1 where the same code is legal. Nothing pins a version
+anywhere - no `.python-version`, no `python-version:` in `ci.yml` - so dev,
+CI and the production server (also Ubuntu 24.04, so also 3.12.3-eligible)
+can all resolve different interpreters, and `requires-python = ">=3.11"`
+makes every one of them fair game. The immediate bug was fixed in code
+(`f41b847` renames the throwaway `_` bindings), but the drift remains.
+
+Fix is one file: a `.python-version` (e.g. `3.13`) at the repo root, which
+`uv sync` honors everywhere. Deliberately NOT done as part of the CI fix
+because it changes the production interpreter on the next deploy (uv would
+download 3.13 to Lightsail and rebuild the venv) - that is an operational
+call the owner should make consciously, ideally timed with a deploy he can
+watch. Until then, any new code that behaves differently across 3.11-3.13
+will only be caught if CI's particular interpreter happens to object.
+
+### 4. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -85,7 +109,7 @@ now needs both catalogues updated (`tests/test_i18n_catalogues.py` fails
 otherwise), a small but real addition to "small" effort that didn't exist
 when this was raised.
 
-### 4. Discover sort in the content head, plus the catalogue-count note
+### 5. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -104,7 +128,7 @@ user-visible copy with an embedded count, so whoever builds this owes both
 catalogues an `ngettext`-shaped entry (singular/plural), not just an
 English string, on top of the DOM work already scoped.
 
-### 5. Editor page parity with the demo
+### 6. Editor page parity with the demo
 
 Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
 re-review).
