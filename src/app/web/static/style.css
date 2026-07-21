@@ -1171,7 +1171,14 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   display: flex; align-items: center; gap: .75rem; margin-top: 1.5rem;
   padding-top: 1.25rem; border-top: 1px solid var(--line); flex-wrap: wrap;
 }
-.bar .tally { color: var(--dim); font-size: .875rem; margin-right: auto; }
+/* `flex: 1 1 0` (not the default `0 1 auto`) so the hint absorbs the row's
+   slack and wraps INSIDE its own box. Sized to content it instead pushed the
+   trailing control onto a second row once the text got wide enough, which
+   made the bar's height depend on the translation: measured in Chrome, this
+   line's intrinsic width is 392px in zh but 488px in en and 641px in ja, so
+   the fold displaced on laptop widths in en/ja while zh stayed on one row.
+   `min-width: 0` is what actually lets a flex item shrink below min-content. */
+.bar .tally { color: var(--dim); font-size: .875rem; flex: 1 1 0; min-width: 0; }
 .bar .tally b { color: var(--ink); font-weight: 650; }
 /* "Add a reminder" reveal (My reminders, concert page): a details.fold sized
    to sit inline in the bar rather than stacking with its usual block margin. */
