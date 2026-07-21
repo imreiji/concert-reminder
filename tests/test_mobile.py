@@ -3,6 +3,8 @@
 Fixtures mirror tests/test_i18n_web.py's sync TestClient shape.
 """
 
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -106,3 +108,39 @@ def test_discover_filter_sheet_contains_controls(client):
     assert "Filters" in body
     for fragment in ("sort=", "status="):   # the existing GET filter links
         assert fragment in sheet
+
+
+# ── Preferences section rail (.prail) at narrow widths ───────────────────
+# Below 860px the rail flips from the sticky left column to a horizontal
+# strip (`grid-auto-flow: column; overflow-x: auto`). Its implicit tracks
+# default to `auto`, which is FLEXIBLE: when the labels don't fit, each
+# track shrinks toward min-content instead of letting the strip scroll.
+# In Latin that floors at the longest word, so the strip merely overflows;
+# in Japanese min-content is a SINGLE CHARACTER (CJK breaks between
+# characters), so every label squashed into a 2-3 character column and
+# stacked vertically -- measured at 320px: five 3-line labels, the rail
+# 80px tall instead of 35px. Pin the tracks to max-content so a label
+# never breaks and the strip scrolls, which is what overflow-x already
+# intended. Guarded as CSS text, the same parity-guard idiom as
+# tests/test_theme_and_tokens.py.
+STYLE = Path(__file__).resolve().parents[1] / "src/app/web/static/style.css"
+
+
+def _prail_collapse_rule() -> str:
+    """The `.prail` rule inside the 860px block, as text."""
+    text = STYLE.read_text(encoding="utf-8")
+    # the media block ends at the first close-brace in column 0
+    block = text.split("@media (max-width: 860px) {")[1].split("\n}")[0]
+    assert ".prail" in block, "the 860px block no longer holds the .prail collapse rule"
+    return block
+
+
+def test_prail_strip_keeps_labels_on_one_line():
+    """Tracks sized to content, so a CJK label can't break per character."""
+    assert "grid-auto-columns: max-content" in _prail_collapse_rule()
+
+
+def test_prail_links_never_wrap():
+    text = STYLE.read_text(encoding="utf-8")
+    rule = text.split(".prail a {")[1].split("}")[0]
+    assert "white-space: nowrap" in rule

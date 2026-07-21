@@ -851,6 +851,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .prail a {
   text-decoration: none; color: var(--dim); font-size: .875rem; font-weight: 550;
   padding: .4rem .6rem; border-radius: 3px; border-left: 2px solid transparent;
+  white-space: nowrap;   /* see the 860px strip rule: a label is one line */
 }
 .prail a:hover { color: var(--ink); background: var(--chip); }
 .prail a.on { color: var(--ink); border-left-color: var(--accent); background: var(--chip); }
@@ -911,7 +912,19 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 
 @media (max-width: 860px) {
   .plyt { grid-template-columns: 1fr; gap: 1.25rem; }
-  .prail { position: static; grid-auto-flow: column; overflow-x: auto; }
+  /* The rail becomes a horizontal strip. `grid-auto-columns` must be pinned
+     to max-content: the default `auto` track is FLEXIBLE, so when the labels
+     don't fit it shrinks each one toward min-content rather than letting the
+     strip scroll. In Latin that floors at the longest word (the strip just
+     overflows), but in Japanese min-content is ONE CHARACTER -- CJK breaks
+     between characters -- so every label squashed into a 2-3 character column
+     and stacked vertically (measured at 320px: five 3-line labels, rail 80px
+     tall instead of 35px). max-content + the nowrap on `.prail a` keep each
+     label whole in every language and let overflow-x do what it intended. */
+  .prail {
+    position: static; grid-auto-flow: column; grid-auto-columns: max-content;
+    overflow-x: auto;
+  }
   .subrow { grid-template-columns: 1fr; gap: .3rem; }
   .subrow .sw { justify-content: flex-start; }
 }
