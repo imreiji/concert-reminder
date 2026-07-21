@@ -32,6 +32,7 @@ from enum import Enum
 
 import discord
 
+from app import i18n
 from app.bot.messages import (
     build_leg_cancelled_message,
     build_new_event_message,
@@ -74,8 +75,17 @@ class DeliveryOutcome(Enum):
 
 async def deliver(bot, item: DueReminder) -> DeliveryOutcome:
     """Send one reminder DM (embed + buttons). Pure Discord I/O -- no
-    session access, safe to run concurrently."""
+    session access, safe to run concurrently.
+
+    The recipient's locale is set here, not in tick(): message construction
+    (build_reminder_message) happens in this coroutine, and each concurrent
+    send runs in its own asyncio Task with an isolated ContextVar copy, so
+    setting the locale per task is what keeps two recipients' languages from
+    racing. Reset to en in a finally so the task's context never leaks a
+    stale locale to anything that reuses it.
+    """
     try:
+        i18n.set_locale(item.user_language)
         user = bot.get_user(item.discord_id) or await bot.fetch_user(item.discord_id)
         embed, view = build_reminder_message(item)
         await user.send(embed=embed, view=view)
@@ -88,6 +98,8 @@ async def deliver(bot, item: DueReminder) -> DeliveryOutcome:
     except discord.HTTPException as e:
         log.error("transient send failure for queue row %s: %s", item.queue_id, e)
         return DeliveryOutcome.TRANSIENT_FAILURE  # leave unsent; next tick retries
+    finally:
+        i18n.set_locale("en")
 
 
 async def _notification_context(session, note):
@@ -106,6 +118,11 @@ async def _send_notification(bot, note, ctx) -> DeliveryOutcome:
     state-aware buttons; otherwise the plain-text fallback body. Pure
     Discord I/O -- no session access, safe to run concurrently."""
     try:
+        # Same per-Task locale discipline as deliver(). NoticeContext carries
+        # the recipient's language; LegCancelledContext does not, so its embed
+        # prose falls back to en (see the report's known-English note), and the
+        # plain-text fallback body (ctx is None) was composed at enqueue time.
+        i18n.set_locale(getattr(ctx, "user_language", "en"))
         user = bot.get_user(note.user_id) or await bot.fetch_user(note.user_id)
         if ctx is not None and note.kind == "leg_cancelled":
             embed, view = build_leg_cancelled_message(ctx)
@@ -122,6 +139,8 @@ async def _send_notification(bot, note, ctx) -> DeliveryOutcome:
     except discord.HTTPException as e:
         log.error("transient notification failure for user %s: %s", note.user_id, e)
         return DeliveryOutcome.TRANSIENT_FAILURE
+    finally:
+        i18n.set_locale("en")
 
 
 async def tick(bot) -> int:

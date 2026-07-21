@@ -682,6 +682,11 @@ class DueReminder:
     concert_title: str
     anchor: Anchor
     fire_at_utc: datetime
+    # Recipient's DM language; the scheduler sets the locale from it before
+    # composing. Defaulted so this leads the dataclass's default-valued block
+    # (a required field cannot follow a defaulted one) -- every caller passes
+    # it by keyword anyway.
+    user_language: str = "en"
     # round-anchored:
     round_id: int | None = None
     round_label: str | None = None
@@ -760,6 +765,7 @@ async def due_reminders(
                 queue_id=row.id,
                 discord_id=user.discord_id,
                 user_timezone=user.timezone,
+                user_language=user.language,
                 concert_title=concert.title,
                 anchor=row.anchor,
                 fire_at_utc=row.fire_at_utc,
@@ -3292,8 +3298,9 @@ class NoticeContext:
     first_deadline_label: str | None
     first_deadline_at: datetime | None
     user_timezone: str
-    user_has_rules: bool
-    user_has_default_preset: bool
+    user_language: str = "en"
+    user_has_rules: bool = False
+    user_has_default_preset: bool = False
 
 
 async def notice_context(
@@ -3330,6 +3337,7 @@ async def notice_context(
         first_deadline_label=first[0].label if first else None,
         first_deadline_at=first[1] if first else None,
         user_timezone=user.timezone if user else "America/Moncton",
+        user_language=user.language if user else "en",
         user_has_rules=has_rules,
         user_has_default_preset=await get_default_preset(session, user_id) is not None,
     )

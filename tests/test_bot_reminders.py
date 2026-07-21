@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.bot.cogs import reminders as reminders_cog
 from app.db.models import Base, Concert, Round
-from app.db.service import ensure_user, sync_rule
+from app.db.service import due_reminders, ensure_user, sync_rule
 from app.domain.types import Anchor, RoundKind
 
 NOW = datetime(2099, 6, 1, tzinfo=UTC)
@@ -106,6 +106,35 @@ async def test_mydeadlines_lists_only_this_users_reminders(db):
     other = FakeInteraction(777, "other")
     await call_mydeadlines(other)
     assert "No upcoming deadlines" in other.response.sent["args"][0]
+
+
+async def test_due_reminders_populates_user_language(db):
+    """The scheduler needs each recipient's language to localize the DM, so
+    due_reminders() must carry User.language onto every DueReminder it emits."""
+    async with db() as s:
+        user = await ensure_user(s, 42, "reiji")
+        user.language = "ja"
+        concert = Concert(title="Hasunosora 5th", event_id="hasu-5th", created_by=42)
+        s.add(concert)
+        await s.flush()
+        round_ = Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="R1",
+            closes_at_utc=dt(6, 25),
+        )
+        s.add(round_)
+        await s.flush()
+        from app.db.models import ReminderRule
+
+        rule = ReminderRule(user_id=42, round_id=round_.id, anchor=Anchor.CLOSES, offset_days=-3)
+        s.add(rule)
+        await s.flush()
+        await sync_rule(s, rule, NOW)
+        await s.commit()
+
+    async with db() as s:
+        items = await due_reminders(s, datetime(2099, 6, 24, tzinfo=UTC))
+    assert items
+    assert all(item.user_language == "ja" for item in items)
 
 
 async def test_mydeadlines_respects_count_and_clamps_range(db):
