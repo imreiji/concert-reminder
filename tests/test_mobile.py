@@ -146,18 +146,26 @@ def test_prail_links_never_wrap():
     assert "white-space: nowrap" in rule
 
 
-# ── Preferences column overflow at phone widths ──────────────────────────
-# Below 860px .plyt is a single 1fr track, and a grid track's automatic
-# minimum is its content's min-content width -- so one unshrinkable child
-# inflates the WHOLE track and drags every card in the column past the
-# viewport with it, even cards that set no width of their own. Two children
-# did this: the timezone <select> carries the full IANA zone list, whose
-# widest option (`America/Argentina/ComodRivadavia`) floors the track at
-# ~392px (where the timezone/detection/setup/editor/danger cards all broke
-# together -- they were passengers, not causes); the "New preset" fold is
-# pinned `flex: 0 0 auto`, so it never shrank below its `.stack`'s 26rem
-# max-width, flooring the track at ~470px. Guarded as CSS text, same idiom
-# as the .prail block above.
+# ── Preferences page: horizontal overflow at phone widths ────────────────
+# Two independent causes, both measured in Chrome against a dump of the
+# real page (viewport 320-470px, en/zh/ja, admin view, folds open):
+#
+#   1. The "New preset" reveal. `.bar details.fold` is pinned `flex: 0 0
+#      auto` and its body is a `.stack` capped at 26rem -- a 444px floor
+#      that overflowed the 344px column from ~470px down. Only visible with
+#      the fold OPEN, which is why a page with a preset already saved looks
+#      fine and the bug appears to come and go.
+#   2. The editors row. `.nm3` is a flex row with no wrap, and an
+#      env-whitelisted editor has no username so the template prints the
+#      Discord id TWICE -- 389px of unbreakable digits floored the 1fr
+#      track and blew the document out to 470px at a 320px viewport.
+#
+# A <select> is NOT a cause: Chrome sizes the timezone select to the
+# available width, not to its widest option (all 565 IANA zones measured
+# 344px, same as every other card). An earlier fix asserted otherwise;
+# these guards replace it. Guarded as CSS text, same idiom as .prail above.
+
+PREFS_TMPL = Path(__file__).resolve().parents[1] / "src/app/web/templates/preferences.html"
 
 
 def _phone_block() -> str:
@@ -169,16 +177,8 @@ def _phone_block() -> str:
     """
     text = STYLE.read_text(encoding="utf-8")
     block = text.split("@media (max-width: 700px) {")[1].split("\n}")[0]
-    assert ".plyt > *" in block, "the 700px block no longer holds the preferences overflow fix"
+    assert ".bar details.fold" in block, "the 700px block no longer holds the overflow fix"
     return block
-
-
-def test_plyt_children_get_min_width_zero():
-    assert ".plyt > * { min-width: 0; }" in _phone_block()
-
-
-def test_psec_select_and_input_capped_to_column_width():
-    assert ".psec select, .psec input { max-width: 100%; min-width: 0; }" in _phone_block()
 
 
 def test_new_preset_fold_can_shrink():
@@ -187,3 +187,20 @@ def test_new_preset_fold_can_shrink():
 
 def test_new_preset_stack_drops_its_max_width():
     assert ".bar .stack { max-width: none; }" in _phone_block()
+
+
+def test_editors_row_collapses_to_one_column_on_phones():
+    assert ".subrow.two { grid-template-columns: 1fr; }" in _phone_block()
+
+
+def test_editor_name_cell_wraps_so_a_long_discord_id_cannot_floor_the_row():
+    assert ".subrow .nm3 { flex-wrap: wrap; overflow-wrap: anywhere; }" in _phone_block()
+
+
+def test_editors_row_carries_its_grid_as_a_class_not_an_inline_style():
+    """An inline style beats media queries, so an inline grid-template-columns
+    is a row the phone collapse can never reach -- that was the bug."""
+    tmpl = PREFS_TMPL.read_text(encoding="utf-8")
+    assert 'class="subrow two"' in tmpl
+    assert 'style="grid-template-columns' not in tmpl   # the trap, in any row
+    assert ".subrow.two { grid-template-columns: 1fr auto; }" in STYLE.read_text(encoding="utf-8")
