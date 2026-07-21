@@ -273,7 +273,10 @@ button.x:hover { color: var(--danger); opacity: 1; }
    the plain sidebar block both directions. */
 .fsheet > summary { list-style: none; cursor: pointer; }
 .fsheet > summary::-webkit-details-marker { display: none; }
-@media (min-width: 701px) {
+/* 761px, not 701 -- must track .layout's own collapse point (line 263)
+   exactly, see the longer comment at the mobile @media (max-width: 760px)
+   .fsheet rules further down. */
+@media (min-width: 761px) {
   .fsheet { order: -1; }
   .fsheet > summary { display: none; }
 }
@@ -1358,17 +1361,35 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      deterministic 1fr keeps it consistent with the rest of the retrofit. */
   .tiles { grid-template-columns: 1fr; }
   .searchbar { padding: 0; }
+}
 
+/* The .fsheet component switches modes at 760px, NOT the phone breakpoint
+   (700px) used above -- it must track exactly where .layout itself collapses
+   to one column (line 263: `@media (max-width: 760px) { .layout {
+   grid-template-columns: 1fr; } }`). If .fsheet switched at 700 while
+   .layout switched at 760, the 701-760px band would render .layout as a
+   single stacked column (tablet mode) while .fsheet's desktop rules
+   (`order: -1`, summary hidden) still applied -- putting the full filters
+   panel above the tiles with no toggle to collapse it. */
+@media (max-width: 760px) {
   .fsheet > summary {   /* the Filters button, .btnq-summary look */
     display: inline-flex; align-items: center; min-height: 36px;
     padding: .25rem .75rem; border: 1px solid var(--line); border-radius: 3px;
     font-size: .87rem; color: var(--dim); background: none; margin: .6rem 0;
   }
-  .fsheet[open] > summary::after {  /* dim overlay behind the sheet; also the
-       tap-outside-to-close target since it is the summary's own hit area */
+  /* Gated on .fsheet-js (added by discover.html's script only when JS ran
+     AND the breakpoint matched), not bare .fsheet[open]. SSR always renders
+     `open` (see discover.html) so the panel is visible with no JS at all --
+     if these rules keyed off [open] alone, a no-JS phone would get the dark
+     overlay and a fixed bottom sheet covering the tiles on first paint,
+     exactly the opposite of the "filters expanded in-flow after content"
+     fallback the plan requires. Without the class, an open .fsheet is just
+     a plain block after .content -- the correct no-JS shape. */
+  .fsheet-js[open] > summary::after {  /* dim overlay behind the sheet; also
+       the tap-outside-to-close target since it is the summary's own hit area */
     content: ""; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 24;
   }
-  .fsheet[open] .fsheet-panel {
+  .fsheet-js[open] .fsheet-panel {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
     max-height: 78dvh; overflow-y: auto; background: var(--raise);
     border-radius: 14px 14px 0 0; box-shadow: var(--shadow);

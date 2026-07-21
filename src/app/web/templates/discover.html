@@ -211,10 +211,18 @@
 {# Progressive enhancement only: mobile starts the sheet closed so tiles are
    the first thing seen; with JS disabled it stays `open` (set above), i.e.
    the no-JS fallback is the filters rendered in-flow after the tiles,
-   fully functional, just not sheet-shaped. #}
+   fully functional, just not sheet-shaped. The breakpoint here (760px) must
+   match .fsheet's own CSS breakpoint (style.css), which tracks .layout's
+   collapse point, not the 700px phone breakpoint used elsewhere. The
+   fsheet-js class is the JS-confirmed signal style.css gates the overlay/
+   fixed-sheet presentation on -- without it (JS off), an open .fsheet stays
+   a plain in-flow block, never the fixed bottom sheet + dark overlay. #}
 <script>
-  if (matchMedia("(max-width: 700px)").matches)
-    document.querySelectorAll(".fsheet[open]").forEach((d) => d.removeAttribute("open"));
+  if (matchMedia("(max-width: 760px)").matches)
+    document.querySelectorAll(".fsheet[open]").forEach((d) => {
+      d.classList.add("fsheet-js");
+      d.removeAttribute("open");
+    });
 </script>
 <script>
   // Tag/region filtering, the round-status facet AND free-text search are all
