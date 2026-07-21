@@ -52,7 +52,7 @@
       <form method="post" action="/language" class="langform">
         <input type="hidden" name="language" value="{{ lang_next }}">
         <input type="hidden" name="next" value="{{ request.url.path }}">
-        <button type="submit" class="langtoggle" title="{{ _('Language') }}">🌐 {{ lang_label }}</button>
+        <button type="submit" class="btn quiet langtoggle" title="{{ _('Language') }}">🌐 {{ lang_label }}</button>
       </form>
       {% if user %}
         <img class="avatar" src="{{ user.avatar_url }}" alt="">
