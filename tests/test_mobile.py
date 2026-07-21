@@ -144,3 +144,46 @@ def test_prail_links_never_wrap():
     text = STYLE.read_text(encoding="utf-8")
     rule = text.split(".prail a {")[1].split("}")[0]
     assert "white-space: nowrap" in rule
+
+
+# ── Preferences column overflow at phone widths ──────────────────────────
+# Below 860px .plyt is a single 1fr track, and a grid track's automatic
+# minimum is its content's min-content width -- so one unshrinkable child
+# inflates the WHOLE track and drags every card in the column past the
+# viewport with it, even cards that set no width of their own. Two children
+# did this: the timezone <select> carries the full IANA zone list, whose
+# widest option (`America/Argentina/ComodRivadavia`) floors the track at
+# ~392px (where the timezone/detection/setup/editor/danger cards all broke
+# together -- they were passengers, not causes); the "New preset" fold is
+# pinned `flex: 0 0 auto`, so it never shrank below its `.stack`'s 26rem
+# max-width, flooring the track at ~470px. Guarded as CSS text, same idiom
+# as the .prail block above.
+
+
+def _phone_block() -> str:
+    """The whole `@media (max-width: 700px)` block, as text.
+
+    That block contains a NESTED `@media (max-width: 380px)`, so splitting
+    on the first column-0 `\n}` is still correct: the nested block's own
+    closing brace is indented, not at column 0.
+    """
+    text = STYLE.read_text(encoding="utf-8")
+    block = text.split("@media (max-width: 700px) {")[1].split("\n}")[0]
+    assert ".plyt > *" in block, "the 700px block no longer holds the preferences overflow fix"
+    return block
+
+
+def test_plyt_children_get_min_width_zero():
+    assert ".plyt > * { min-width: 0; }" in _phone_block()
+
+
+def test_psec_select_and_input_capped_to_column_width():
+    assert ".psec select, .psec input { max-width: 100%; min-width: 0; }" in _phone_block()
+
+
+def test_new_preset_fold_can_shrink():
+    assert ".bar details.fold { flex: 1 1 100%; min-width: 0; }" in _phone_block()
+
+
+def test_new_preset_stack_drops_its_max_width():
+    assert ".bar .stack { max-width: none; }" in _phone_block()
