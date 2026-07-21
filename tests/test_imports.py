@@ -179,6 +179,19 @@ def test_preview_renders_parsed_draft(client):
     assert 'value="2026-10-14T12:00"' in r.text  # round opens prefilled
 
 
+def test_preview_language_chip_targets_import_form(client):
+    """The preview (and its parse-failure re-render) is served from POST-only
+    /concerts/import/preview, so the header language form must aim its `next`
+    at GET-able /concerts/import instead of request.url.path."""
+    login_as(client, EDITOR_ID, "reiji")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert 'name="next" value="/concerts/import"' in r.text
+    mock_fetch(client, "<html><body>not an event</body></html>")
+    r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert 'name="next" value="/concerts/import"' in r.text
+
+
 def test_preview_shows_new_round_kind_labels(client):
     login_as(client, EDITOR_ID, "reiji")
     mock_fetch(client, load("ramen_graduation_concert.html"))

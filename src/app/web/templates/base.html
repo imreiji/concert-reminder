@@ -51,7 +51,10 @@
       {% set lang_next, lang_label = {"en": ("zh", "EN"), "zh": ("ja", "中文"), "ja": ("en", "日本語")}[current_locale()] %}
       <form method="post" action="/language" class="langform">
         <input type="hidden" name="language" value="{{ lang_next }}">
-        <input type="hidden" name="next" value="{{ request.url.path }}">
+        {# Pages served from a POST-only path (the import preview) pass
+           lang_next_url -- their own path would 405 on the GET after the
+           303. Everyone else round-trips back to where they stand. #}
+        <input type="hidden" name="next" value="{{ lang_next_url | default(request.url.path, true) }}">
         <button type="submit" class="btn quiet langtoggle" title="{{ _('Language') }}">🌐 {{ lang_label }}</button>
       </form>
       {% if user %}
