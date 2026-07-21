@@ -195,7 +195,10 @@
         <option value="after" {% if dir_val == "after" %}selected{% endif %}>{{ _("after") }}</option>
       </select>
       <span>{{ _("each") }}</span>
-      <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ a.value.replace("_"," ") | capitalize }}</option>{% endfor %}</select>
+      {# Literal label map: computed .value.replace().capitalize() can't be
+         extracted for translation. msgids reproduce today's rendered strings. #}
+      {%- set anchor_labels = {"opens": _("Opens"), "closes": _("Closes"), "results": _("Results"), "payment": _("Payment"), "event_start": _("Event start")} -%}
+      <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ anchor_labels.get(a.value, a.value) }}</option>{% endfor %}</select>
     {%- endmacro %}
 
     {% for p in presets %}
@@ -354,7 +357,8 @@
     {% elif has_calendar_feed %}
     <form class="inline" method="post" action="/me/calendar-feed" style="margin-top:.6rem">
       <button class="act no" type="submit"
-              onclick="return confirm('This invalidates your current feed link — your calendar app will need the new one.')">{{ _("Generate a new one") }}</button>
+              data-confirm="{{ _('This invalidates your current feed link — your calendar app will need the new one.') }}"
+              onclick="return confirm(this.dataset.confirm)">{{ _("Generate a new one") }}</button>
     </form>
     {% else %}
     <form method="post" action="/me/calendar-feed" style="margin-top:.6rem"><button class="act" type="submit">{{ _("Generate feed link") }}</button></form>

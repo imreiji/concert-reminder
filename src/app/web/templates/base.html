@@ -126,11 +126,16 @@
     // itself: the browser HTML-decodes an attribute value before parsing it
     // as JS, so Jinja's &#39; escaping is undone first and a name like
     // "'); alert(1); //" would execute. Read this way it stays a string.
+    // Translated templates carry a {name} placeholder; the editor-/user-
+    // authored name still arrives via dataset (invariant 7), swapped in with a
+    // function replacer so a "$" in the name is never a special replacement.
+    var DELETE_TAG_MSG = {{ _("Delete tag {name} everywhere?") | tojson }};
+    var DELETE_PRESET_MSG = {{ _("Delete preset {name}?") | tojson }};
     function confirmDeleteTag(form) {
-      return confirm("Delete tag " + form.dataset.tagName + " everywhere?");
+      return confirm(DELETE_TAG_MSG.replace("{name}", function () { return form.dataset.tagName; }));
     }
     function confirmDeletePreset(form) {
-      return confirm("Delete preset " + form.dataset.presetName + "?");
+      return confirm(DELETE_PRESET_MSG.replace("{name}", function () { return form.dataset.presetName; }));
     }
     // shared: refresh every [data-countdown][data-iso] span with a live
     // "Xd Yh" / "Zh Wm" / "Nm" countdown to that ISO timestamp.

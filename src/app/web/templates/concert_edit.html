@@ -214,7 +214,8 @@
       <button class="btn quiet">{{ _("Duplicate as new event") }}</button>
     </form>
     <form method="post" action="/concerts/{{ concert.event_id }}/delete"
-          onsubmit="return confirm('Delete this concert and every reminder attached to it?')">
+          data-confirm="{{ _('Delete this concert and every reminder attached to it?') }}"
+          onsubmit="return confirm(this.dataset.confirm)">
       <button class="btn danger">{{ _("Delete event") }}</button>
     </form>
   </span>

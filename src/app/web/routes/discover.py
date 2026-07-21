@@ -41,6 +41,8 @@ from app.db.service import (
 )
 from app.db.session import get_session
 from app.domain.types import ConcertKind, TagKind
+from app.i18n import N_
+from app.i18n import gettext as _
 from app.web.auth import SessionUser, current_user
 
 router = APIRouter()
@@ -50,16 +52,20 @@ templates = None  # set by web.app at startup
 # The round-status facet, in the order it renders. Keys match
 # DiscoverStatus.status, which is what each tile carries as data-status.
 STATUS_FACETS = [
-    ("open", "Open now"),
-    ("soon", "Opening soon"),
-    ("none", "Not tracking"),
+    ("open", N_("Open now")),
+    ("soon", N_("Opening soon")),
+    ("none", N_("Not tracking")),
 ]
 
 # Sort keys the page offers. "next" is handled in Python rather than SQL --
 # the soonest deadline spans four nullable timestamp columns across a
 # variable number of non-cancelled rounds, and discover_statuses has already
 # computed it for the pill by the time we sort.
-SORTS = [("event", "Event date"), ("next", "Next deadline"), ("added", "Recently added")]
+SORTS = [
+    ("event", N_("Event date")),
+    ("next", N_("Next deadline")),
+    ("added", N_("Recently added")),
+]
 
 DEADLINE_LIST_LIMIT = 10
 
@@ -231,9 +237,10 @@ async def discover(
             },
             "query": q,
             "sort": sort,
-            "sorts": SORTS,
+            # Labels translated per-request (N_ marks them for extraction).
+            "sorts": [(key, _(label)) for key, label in SORTS],
             "status": facet,
-            "status_facets": STATUS_FACETS,
+            "status_facets": [(key, _(label)) for key, label in STATUS_FACETS],
             "filter_query": filter_query,
             "tz": tz,
             "tz_auto": tz_auto,

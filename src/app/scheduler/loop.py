@@ -109,7 +109,9 @@ async def _notification_context(session, note):
     context shapes (a leg-cancellation notice doesn't need the new-event
     context's subscriber-state fields, and vice versa)."""
     if note.kind == "leg_cancelled":
-        return await leg_cancelled_context(session, note.concert_id) if note.concert_id else None
+        return await leg_cancelled_context(
+            session, note.concert_id, note.user_id
+        ) if note.concert_id else None
     return await notice_context(session, note.concert_id, note.user_id) if note.concert_id else None
 
 

@@ -12,7 +12,7 @@ from app.db.service import ensure_user, sync_rule, upcoming_rounds, user_calenda
 from app.db.session import SessionMaker
 from app.domain.timezones import fmt_dual
 from app.domain.types import Anchor
-from app.i18n import get_locale, set_locale
+from app.i18n import get_locale, loc_field, set_locale
 from app.i18n import gettext as _
 
 ANCHOR_CHOICES = [
@@ -56,7 +56,8 @@ class Reminders(commands.Cog):
             if round_.closes_at_utc and round_.closes_at_utc > now:
                 bits.append(f"{_('closes')} {fmt_dual(round_.closes_at_utc, tz, loc)}")
             if bits:
-                lines.append(f"**{concert.title}** — {round_.label}\n{' / '.join(bits)}")
+                title = loc_field(concert, "title", loc)
+                lines.append(f"**{title}** — {round_.label}\n{' / '.join(bits)}")
 
         embed = discord.Embed(
             title=_("Next {days} days").format(days=days),
@@ -82,7 +83,9 @@ class Reminders(commands.Cog):
             user = await ensure_user(session, interaction.user.id, interaction.user.name)
             set_locale(user.language)
             tz = user.timezone
-            events = await user_calendar_events(session, interaction.user.id)
+            events = await user_calendar_events(
+                session, interaction.user.id, locale=get_locale()
+            )
             await session.commit()
 
         if not events:

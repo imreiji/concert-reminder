@@ -68,6 +68,19 @@ def gettext(message: str) -> str:
     return _catalog().gettext(message)
 
 
+def gettext_in(locale: str, message: str) -> str:
+    """Translate a static msgid under an EXPLICIT locale, ignoring the active
+    ContextVar. For text composed before the scheduler sets the recipient's
+    locale -- the notification builder runs the DB prep for every recipient up
+    front (all under the default "en" context), then sends. en/unsupported is
+    the identity, so English output stays byte-identical."""
+    if locale == "en" or locale not in SUPPORTED:
+        return message
+    if locale not in _catalog_cache:
+        _catalog_cache[locale] = _load(locale)
+    return _catalog_cache[locale].gettext(message)
+
+
 def ngettext(singular: str, plural: str, n: int) -> str:
     return _catalog().ngettext(singular, plural, n)
 

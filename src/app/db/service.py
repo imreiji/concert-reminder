@@ -53,7 +53,7 @@ from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan
 from app.domain.timezones import utc_to_jst
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
 from app.domain.upgrades import is_upgrade_eligible
-from app.i18n import N_, get_locale, loc_field
+from app.i18n import N_, get_locale, gettext_in, loc_field
 from app.i18n import gettext as _
 
 
@@ -1592,7 +1592,7 @@ def _setup_tile_venue(concert: Concert) -> str | None:
     "Multiple", one wins, the free-text venue is the fallback with no tag."""
     venue_tags = [t for t in concert.tags if t.kind is TagKind.VENUE]
     if len(venue_tags) > 1:
-        return "Multiple"
+        return _("Multiple")
     if venue_tags:
         return loc_field(venue_tags[0], "name", get_locale())
     return loc_field(concert, "venue", get_locale())
@@ -2280,10 +2280,10 @@ def _humanize_until(then: datetime, now: datetime) -> str:
     the page is refreshed."""
     minutes = max(int((then - now).total_seconds()) // 60, 0)
     if minutes >= 1440:
-        return f"{int(minutes / 1440 + 0.5)}d"
+        return _("{n}d").format(n=int(minutes / 1440 + 0.5))
     if minutes >= 60:
-        return f"{int(minutes / 60 + 0.5)}h"
-    return f"{max(minutes, 1)}m"
+        return _("{n}h").format(n=int(minutes / 60 + 0.5))
+    return _("{n}m").format(n=max(minutes, 1))
 
 
 def _day_month(when: datetime) -> str:
@@ -2523,7 +2523,8 @@ class CalendarEvent:
 
 
 async def user_calendar_events(
-    session: AsyncSession, user_id: int, now: datetime | None = None
+    session: AsyncSession, user_id: int, now: datetime | None = None,
+    locale: str | None = None,
 ) -> list[CalendarEvent]:
     """Every round/day the user currently has an active reminder rule
     covering (concert-wide or round-specific), each producing ONE event at
@@ -2531,8 +2532,18 @@ async def user_calendar_events(
     exactly which rounds/days are in scope per rule (sync_rule/plan_for_rule
     already did the anchor-specific filtering). Future-only: a round/day
     whose deadline already passed is left off the feed.
+
+    `locale` localizes the concert title for a locale-aware caller (the
+    /mydeadlines cog passes the recipient's language). Left None by the .ics
+    feed, which has no viewer locale -- that path keeps the canonical title,
+    byte-identical to before.
     """
     now = now or _now()
+
+    def _title(concert: Concert | None) -> str:
+        if concert is None:
+            return "Concert"
+        return loc_field(concert, "title", locale) if locale else concert.title
     round_ids = set((await session.execute(
         select(ReminderQueue.round_id)
         .join(ReminderRule, ReminderQueue.rule_id == ReminderRule.id)
@@ -2563,7 +2574,7 @@ async def user_calendar_events(
                 continue
             concert = concerts.get(r.concert_id)
             events.append(CalendarEvent(
-                concert_title=concert.title if concert else "Concert",
+                concert_title=_title(concert),
                 label=r.label, at_utc=at, url=r.url, notes=r.notes,
             ))
 
@@ -2581,7 +2592,7 @@ async def user_calendar_events(
                 continue
             concert = concerts.get(d.concert_id)
             events.append(CalendarEvent(
-                concert_title=concert.title if concert else "Concert",
+                concert_title=_title(concert),
                 label=d.label, at_utc=d.starts_at_utc,
             ))
 
@@ -3341,7 +3352,7 @@ async def notice_context(
         event_id=concert.event_id,
         title=loc_field(concert, "title", locale),
         tags_line=" · ".join(non_venue),
-        venue=("Multiple" if len(venues) > 1
+        venue=(gettext_in(locale, "Multiple") if len(venues) > 1
                else (venues[0] if venues else loc_field(concert, "venue", locale))),
         first_deadline_label=first[0].label if first else None,
         first_deadline_at=first[1] if first else None,
@@ -3359,14 +3370,23 @@ class LegCancelledContext:
     concert_id: int
     event_id: str
     title: str
+    # Recipient's DM language; _send_notification reads this via
+    # getattr(ctx, "user_language", "en") and sets the locale before composing
+    # the embed, so the leg-cancel prose localizes (mirrors NoticeContext).
+    user_language: str = "en"
 
 
 async def leg_cancelled_context(
-    session: AsyncSession, concert_id: int
+    session: AsyncSession, concert_id: int, user_id: int | None = None
 ) -> LegCancelledContext | None:
     concert = await session.get(Concert, concert_id)
     if concert is None:
         return None
+    user = await session.get(User, user_id) if user_id else None
+    locale = user.language if user else "en"
     return LegCancelledContext(
-        concert_id=concert.id, event_id=concert.event_id, title=concert.title
+        concert_id=concert.id,
+        event_id=concert.event_id,
+        title=loc_field(concert, "title", locale),
+        user_language=locale,
     )

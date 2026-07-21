@@ -13,8 +13,8 @@
     reference; import_commit resolves those to real ids after the days flush. -#}
 <div class="lede">
   <h1>{{ _("Review draft") }}</h1>
-  <p>{% trans %}Parsed from{% endtrans %}
-    <a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_url }}</a>.
+  <p>{% set source_link %}<a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_url }}</a>{% endset %}{% trans url=source_link %}Parsed from
+    {{ url }}.{% endtrans %}
     {% trans %}Edit anything below, then create the concert.{% endtrans %}</p>
 </div>
 
