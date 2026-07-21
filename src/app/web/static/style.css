@@ -1372,6 +1372,12 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
    (`order: -1`, summary hidden) still applied -- putting the full filters
    panel above the tiles with no toggle to collapse it. */
 @media (max-width: 760px) {
+  /* With JS (sheet mode) the fsheet is just its small Filters button, so it
+     moves ABOVE the content column, per the demo's filter row -- content is
+     still on screen one. Without JS the fsheet stays where the DOM puts it
+     (after .content): the expanded in-flow fallback must not push the tiles
+     below a screenful of filters. */
+  .fsheet.fsheet-js { order: -1; }
   .fsheet > summary {   /* the Filters button, .btnq-summary look */
     display: inline-flex; align-items: center; min-height: 36px;
     padding: .25rem .75rem; border: 1px solid var(--line); border-radius: 3px;
