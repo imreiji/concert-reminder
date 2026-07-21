@@ -35,7 +35,9 @@ demo, and an onboarding build -- a real signed-out landing page, the
 welcome wizard rebuilt on the design system and feeding into /setup,
 import preview rebuilt in the day/round/leg vocabulary with real
 multi-leg round binding, and retroactive-apply/privacy/terms reframed in
-the design system -- have shipped since).
+the design system -- and multi-language support (English/Mandarin/Japanese)
+end to end: gettext catalogues, per-user + per-visitor locale resolution,
+localized dates, and parallel-column UGC translation -- have shipped since).
 
 ## Commands
 
@@ -49,6 +51,13 @@ the design system -- have shipped since).
 - Lint: `uv run ruff check .` — MUST be clean before any commit
 - New migration: `uv run alembic revision --autogenerate -m "msg"`, then
   review it (see Migrations below), then `uv run alembic upgrade head`
+- Catalogue update after adding/changing translatable strings:
+  `uv run pybabel extract -F babel.cfg -k N_ -o messages.pot .` then
+  `uv run pybabel update -i messages.pot -d src/app/translations -l ja`
+  (and again with `-l zh`), fill in the new/fuzzy msgstrs by hand in both
+  `.po` files, then delete `messages.pot` (gitignored, regenerable). The
+  `.mo` files are never committed — `i18n.py` compiles `.po` to `.mo` in
+  memory at first use, so there's no separate build step.
 - CI (`.github/workflows/ci.yml`) runs `uv sync`, `ruff check .`, `pytest -q`
   on every push/PR to `main` — the same two gates as above, nothing extra.
 
@@ -134,6 +143,41 @@ the design system -- have shipped since).
   must call `snapshot_concert` BEFORE mutating the concert and
   `record_concert_edit` AFTER — get that order backwards and every diff
   reads as unchanged.
+- `src/app/i18n.py` — gettext plumbing, top-level (not `domain/`, since it
+  does file I/O at startup; not `web/`, since the bot imports it too).
+  `messages.po` in `src/app/translations/{ja,zh}/LC_MESSAGES/` compile to
+  `.mo` in memory at first use per locale (no `.mo` on disk, no deploy-ritual
+  change). `en` is `NullTranslations` — the identity function, so English
+  output stays byte-identical to the pre-i18n app and no EN test should ever
+  assert a translated string. Locale is an asyncio-context `ContextVar`
+  (`get_locale`/`set_locale`), set once per request by `web/app.py`'s
+  middleware and once per recipient by the scheduler. Write translatable
+  strings as `_("literal")` at the point they're rendered/looked up (`_` is
+  `gettext`); a module-level dict keyed or valued by translatable text (e.g.
+  `LABEL_BY_ROUND_KIND`) instead wraps each literal in `N_()`, a no-op marker
+  that only makes `pybabel extract` see it — the real translation happens
+  later, at lookup time, via `_`/`gettext`, never at the dict's definition
+  time. `gettext_in(locale, msg)` is the explicit-locale escape hatch for
+  text composed before a per-recipient locale is known (e.g. `NoticeContext`,
+  built once for many recipients up front). `loc_field(obj, field, locale)`
+  resolves a UGC field's viewer-locale variant: en → `{field}_en`, zh →
+  `{field}_zh`, ja → the original column (Japanese IS the source of truth,
+  there's no `_ja` column); an empty string counts as unfilled and falls
+  through; there is no cross-locale chaining (zh never falls back through en
+  to the original). Editing existing English copy must keep the msgid
+  byte-identical (or both catalogues silently lose that translation) and
+  update BOTH `messages.po` files — `tests/test_i18n_catalogues.py` extracts
+  every msgid in-process and fails on anything untranslated (fuzzy entries
+  count as untranslated, since `i18n.py` compiles with `use_fuzzy=False`).
+  Locale resolution treats the `lang` cookie as a CACHE of `users.language`,
+  never the source of truth: `web/app.py`'s middleware reads the cookie if
+  present and supported, else negotiates from `Accept-Language`
+  (`i18n.negotiate`), else `en`; the single write path is public
+  `POST /language` (`web/app.py`), which always sets the cookie and also
+  updates the DB column when signed in (Discord DMs read the column, not the
+  cookie); the OAuth callback (`web/auth.py`) seeds the column from the
+  cookie, but ONLY at account creation, since the column can't otherwise
+  distinguish "defaulted to en" from "chose en".
 - Bot and web NEVER contain business logic; they call `db/service.py`.
 - `docs/superpowers/specs/` + `plans/` — date-prefixed design specs and
   implementation plans; each recent feature (cancelled legs, Tags redesign,
@@ -255,7 +299,12 @@ deleting them.
      Jinja's `&#39;` escaping does not protect you. Put the value in a
      `data-` attribute and read it via `dataset`. Use `data-tag-name` /
      `data-preset-name`, not `data-name`: that one collides with the shared
-     `filterChips()` selector in `base.html`.
+     `filterChips()` selector in `base.html`. The i18n build hit the same
+     rule with translated `confirm()` text: `onclick="return
+     confirm(this.dataset.confirm)"` reading a `data-confirm="{{ _(...) }}"`
+     attribute, never `onclick="return confirm('{{ _(...) }}')"` -- a
+     translated string is just as user-controlled as a tag name once it can
+     contain an apostrophe.
 8. **Concert subscriptions are OVERRIDES, not records.** Whether a user
    "tracks" a concert is derived, and `tracked_concert_ids` is the single
    place that derivation lives -- do not add a second. The rule: a concert is
@@ -324,6 +373,12 @@ deleting them.
 ## UI conventions
 
 - Sentence case everywhere ("Add group", not "add group").
+- The 🌐 language switcher lives in the header's `.langmenu` (`base.html`),
+  a native `<details>` menu with one plain `<form method="post"
+  action="/language">` per language so it works with JS disabled; it renders
+  on every page, signed in or out. Language NAMES in the menu (EN/中文/日本語)
+  are never translated -- a visitor picking their language needs to
+  recognize it before they can read anything else.
 - **Theming**: the full design-token layer (`--paper`, `--accent`, the
   `*-wash` set, `--raise`, `--chip`, `--shadow`, ...) lives in `style.css`'s
   `:root`. Dark mode is defined BOTH ways -- `@media (prefers-color-scheme:
