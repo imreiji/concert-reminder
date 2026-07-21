@@ -963,6 +963,18 @@ msgstr "ディスカバー"
 msgid "Tags"
 msgstr "タグ"
 
+#: src/app/web/templates/base.html:96
+msgid "Me"
+msgstr "マイページ"
+
+#: src/app/web/templates/base.html:99
+msgid "Sign in"
+msgstr "サインイン"
+
+#: src/app/web/templates/base.html:104
+msgid "Add concert"
+msgstr "コンサートを追加"
+
 #: src/app/web/templates/base.html:44
 msgid "Toggle dark mode"
 msgstr "ダークモード切替"
