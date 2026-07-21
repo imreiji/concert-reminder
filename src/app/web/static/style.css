@@ -107,21 +107,14 @@ nav.main a[aria-current="page"] { color: var(--ink); background: var(--chip); fo
 }
 .theme-toggle:hover { color: var(--ink); background: var(--chip); }
 
-/* Language switcher: the demo's cycle chip. One bordered chip (the demo's
-   .langtoggle silhouette: --line border, 2rem height, pill radius) showing
-   the current language; a click posts the next language in the cycle. No
-   menu, no JS -- a plain one-button form. Tokens only, so dark mode is
-   covered by both theme paths for free. */
+/* Language switcher: the demo's cycle chip, dressed as a `.btn.quiet` so it
+   matches Preferences / Log out exactly in size and weight -- the dark
+   filled .btn treatment stays on + Add alone (owner's call). A click posts
+   the next language in the cycle; no menu, no JS. The shim below is only
+   what a <button> needs to wear .btn styles written for <a>. */
 .langform { display: inline-flex; }
-.langtoggle {
-  font: inherit; font-size: .8rem; line-height: 1; color: var(--dim);
-  height: 2rem; padding: 0 .7rem; display: inline-flex; align-items: center;
-  gap: .35rem; background: none; border: 1px solid var(--line);
-  border-radius: 999px; cursor: pointer;
-  transition: color 150ms ease, background 150ms ease;
-}
-.langtoggle:hover { color: var(--ink); background: var(--chip); }
-.langtoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.langtoggle { font-family: inherit; cursor: pointer; margin: 0; }
+button.langtoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; font-size: .9rem; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; }
