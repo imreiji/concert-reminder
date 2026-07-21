@@ -19,14 +19,14 @@
 <a class="card" href="/concerts/{{ c.event_id }}">
   {% if cg or ca %}
   <span class="eyebrow">
-    {%- if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
-    {%- elif cg %}{{ cg | map(attribute="name") | join(", ") }}
-    {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>{% endif -%}
+    {%- if cf and cg %}{{ cf | map("loc_name") | join(", ") }} · {{ cg | map("loc_name") | join(", ") }}
+    {%- elif cg %}{{ cg | map("loc_name") | join(", ") }}
+    {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ loc(a, "name") }}</span>{% endfor %}</span>{% endif -%}
   </span>
   {% endif %}
-  <span class="title">{{ c.title }}</span>
+  <span class="title">{{ loc(c, "title") }}</span>
   {% if variant == "landing" %}
-  {% if c.venue %}<span class="venue">📍 {{ c.venue }}</span>{% endif %}
+  {% if c.venue %}<span class="venue">📍 {{ loc(c, "venue") }}</span>{% endif %}
   {% if live_days %}<span class="when num">{{ day_month(live_days[0].starts_at_utc) }}</span>{% endif %}
   {#- Franchise + venue region minichips, the same derivation the Discover
       tiles use (region comes off the already-loaded venue tags -- no extra
@@ -34,13 +34,13 @@
   {% set tag_regions = cv | map(attribute="region") | select | unique | list %}
   {% if cf or tag_regions %}
   <div class="tagrow">
-    {% for f in cf %}<span class="minichip">{{ f.name }}</span>{% endfor %}
+    {% for f in cf %}<span class="minichip">{{ loc(f, "name") }}</span>{% endfor %}
     {% for rg in tag_regions %}<span class="minichip">{{ rg }}</span>{% endfor %}
   </div>
   {% endif %}
   {% else %}
   <span class="venue">
-    {%- if c.venue %}📍 {{ c.venue }}{% endif -%}
+    {%- if c.venue %}📍 {{ loc(c, "venue") }}{% endif -%}
     {%- if c.venue and live_days %} · {% endif -%}
     {%- if live_days %}{{ day_month(live_days[0].starts_at_utc) }}{% endif -%}
   </span>

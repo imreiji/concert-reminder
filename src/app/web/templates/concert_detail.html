@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ concert.title }} — dekimasen.app{% endblock %}
+{% block title %}{{ loc(concert, "title") }} — dekimasen.app{% endblock %}
 {% block content %}
 <article class="concert">
   {#- Four kinds of tag, four different jobs on this page. Same selectattr
@@ -17,16 +17,16 @@
         dates and different cities, so any single header summary disagrees
         with the sections below it. Both live on the leg now. -#}
     {% if cf or cg %}
-    <p class="lineage">{% if cf %}{{ cf | map(attribute="name") | join(", ") }}{% endif %}{% if cf and cg %} · {% endif %}{% if cg %}<b>{{ cg | map(attribute="name") | join(", ") }}</b>{% endif %}</p>
+    <p class="lineage">{% if cf %}{{ cf | map("loc_name") | join(", ") }}{% endif %}{% if cf and cg %} · {% endif %}{% if cg %}<b>{{ cg | map("loc_name") | join(", ") }}</b>{% endif %}</p>
     {% endif %}
     <h1>{{ display_title }}{% if concert.kind %} <span class="dim kind-tag">{{ concert.kind.value.replace("_", " ") }}</span>{% endif %}</h1>
     {% if cf or cv %}
     <p class="othertags">
       <span class="lbl">{{ _("Tags") }}</span>
-      {% for t in cf + cv %}<span class="chip kind-{{ t.kind.value }}">{{ t.name }}</span>{% endfor %}
+      {% for t in cf + cv %}<span class="chip kind-{{ t.kind.value }}">{{ loc(t, "name") }}</span>{% endfor %}
     </p>
     {% endif %}
-    {% if concert.notes %}<p class="dim">{{ concert.notes }}</p>{% endif %}
+    {% if concert.notes %}<p class="dim">{{ loc(concert, "notes") }}</p>{% endif %}
     {#- Each link names its destination. "source" said nothing; the source is
         ramen.events, which PR #39 made actually populate on import. -#}
     {% if concert.eventernote_url or concert.official_url or concert.source_url %}
@@ -71,13 +71,13 @@
   {% if cg or ca %}
   <div class="performers">
     <div class="plabel">{{ _("Performing") }}
-      <span>{% if cg and ca %}— {{ ca | length }} {{ ngettext("member", "members", ca | length) }}, {% trans names=cg | map(attribute="name") | join(", ") %}from the {{ names }}{% endtrans %} {{ ngettext("group tag", "group tags", cg | length) }}
-      {%- elif cg %}— {% trans names=cg | map(attribute="name") | join(", ") %}from the {{ names }}{% endtrans %} {{ ngettext("group tag", "group tags", cg | length) }}
+      <span>{% if cg and ca %}— {{ ca | length }} {{ ngettext("member", "members", ca | length) }}, {% trans names=cg | map("loc_name") | join(", ") %}from the {{ names }}{% endtrans %} {{ ngettext("group tag", "group tags", cg | length) }}
+      {%- elif cg %}— {% trans names=cg | map("loc_name") | join(", ") %}from the {{ names }}{% endtrans %} {{ ngettext("group tag", "group tags", cg | length) }}
       {%- else %}— {{ ca | length }} {{ ngettext("performer", "performers", ca | length) }}{% endif %}</span>
     </div>
     <div class="chips">
-      {% for g in cg %}{% if g.eventernote_url %}<a class="chip grp" href="{{ g.eventernote_url }}" target="_blank" rel="noopener">{{ g.name }}</a>{% else %}<span class="chip grp nolink" title="{{ _('No eventernote link yet') }}">{{ g.name }}</span>{% endif %}{% endfor %}
-      {% for a in ca %}{% if a.eventernote_url %}<a class="chip" href="{{ a.eventernote_url }}" target="_blank" rel="noopener">{{ a.name }}</a>{% else %}<span class="chip nolink" title="{{ _('No eventernote link yet') }}">{{ a.name }}</span>{% endif %}{% endfor %}
+      {% for g in cg %}{% if g.eventernote_url %}<a class="chip grp" href="{{ g.eventernote_url }}" target="_blank" rel="noopener">{{ loc(g, "name") }}</a>{% else %}<span class="chip grp nolink" title="{{ _('No eventernote link yet') }}">{{ loc(g, "name") }}</span>{% endif %}{% endfor %}
+      {% for a in ca %}{% if a.eventernote_url %}<a class="chip" href="{{ a.eventernote_url }}" target="_blank" rel="noopener">{{ loc(a, "name") }}</a>{% else %}<span class="chip nolink" title="{{ _('No eventernote link yet') }}">{{ loc(a, "name") }}</span>{% endif %}{% endfor %}
     </div>
   </div>
   {% endif %}

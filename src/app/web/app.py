@@ -50,6 +50,12 @@ templates.env.globals["day_month"] = lambda dt: fmt_day_month(dt, i18n.get_local
 templates.env.globals["deadline_label"] = lambda anchor: i18n.gettext(LABEL_BY_ANCHOR[anchor])
 templates.env.globals["round_kind_label"] = lambda kind: i18n.gettext(LABEL_BY_ROUND_KIND[kind])
 templates.env.globals["current_locale"] = i18n.get_locale  # {{ current_locale() }}
+# UGC parallel-column display: {{ loc(concert, "title") }} / {{ loc(tag, "name") }}
+# renders the viewer-locale variant, falling back to the original. Display
+# ONLY -- form values, data-* filter keys and URLs keep the original field.
+templates.env.globals["loc"] = lambda obj, field: i18n.loc_field(obj, field, i18n.get_locale())
+# Filter form for `| map("loc_name")` over a tag list (the "F · G" eyebrow joins).
+templates.env.filters["loc_name"] = lambda tag: i18n.loc_field(tag, "name", i18n.get_locale())
 
 COMMON_TIMEZONES = [
     "America/Moncton", "America/Halifax", "America/Toronto", "America/Vancouver",

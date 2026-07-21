@@ -80,7 +80,6 @@
       <span class="fold-hint">{{ _("Optional — title EN, organizer, kind, categories, links, performers, notes") }}</span></summary>
     <div class="fold-body">
       <div class="grid2">
-        <label>{{ _("Title (EN)") }} <input name="title_en" maxlength="200"></label>
         <label>{{ _("Artist / organizer") }} <input name="organizer" maxlength="200" placeholder="{{ _('non-series acts, etc.') }}"></label>
         <label>{{ _("Kind") }}
           <select name="kind">
@@ -95,6 +94,26 @@
       </div>
       <label>{{ _("Performers (one per line)") }} <textarea name="performers_text" rows="3"></textarea></label>
       <label>{{ _("Notes") }} <textarea name="notes" rows="2"></textarea></label>
+
+      {#- Per-language variants of the user-entered title, venue and notes;
+          shown to viewers reading that locale, falling back to the JP-side
+          originals when empty (i18n.loc_field). -#}
+      <div class="section-head trans-head">
+        <h3 class="section-sub">{{ _("Translations") }}</h3>
+        <p class="dim tiny">{{ _("Optional — shown to viewers reading in that language, falling back to the originals above.") }}</p>
+      </div>
+      <h4 class="section-sub">{{ _("English") }}</h4>
+      <div class="grid2">
+        <label>{{ _("Title") }} <input name="title_en" maxlength="200"></label>
+        <label>{{ _("Venue") }} <input name="venue_en" maxlength="200"></label>
+      </div>
+      <label>{{ _("Notes") }} <textarea name="notes_en" rows="2"></textarea></label>
+      <h4 class="section-sub">中文</h4>
+      <div class="grid2">
+        <label>{{ _("Title") }} <input name="title_zh" maxlength="200"></label>
+        <label>{{ _("Venue") }} <input name="venue_zh" maxlength="200"></label>
+      </div>
+      <label>{{ _("Notes") }} <textarea name="notes_zh" rows="2"></textarea></label>
     </div>
   </details>
 

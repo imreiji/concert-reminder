@@ -30,7 +30,7 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
 {%- set kind_label = _("performer") if is_artist else t.kind.value -%}
 <dialog id="tag-dialog-{{ t.id }}" class="tagdlg">
   <div class="dh">
-    <h3>{{ t.name }}</h3>
+    <h3>{{ loc(t, "name") }}</h3>
     <span class="pill p-quiet">{{ kind_label }}</span>
     <button type="button" class="x" onclick="document.getElementById('tag-dialog-{{ t.id }}').close()">×</button>
   </div>
@@ -44,6 +44,10 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
 
     <form id="tag-edit-{{ t.id }}" method="post" action="/tags/{{ t.id }}/edit" class="stack">
       <label class="fld"><span>{{ _("Name") }}</span><input name="name" required maxlength="100" value="{{ t.name }}"></label>
+      {#- Name variants: shown to viewers reading that locale, falling back to
+          the canonical name. No uniqueness on these (two tags may share one). -#}
+      <label class="fld"><span>{{ _("Name") }} · English</span><input name="name_en" maxlength="100" value="{{ t.name_en or '' }}"></label>
+      <label class="fld"><span>{{ _("Name") }} · 中文</span><input name="name_zh" maxlength="100" value="{{ t.name_zh or '' }}"></label>
       {% if is_group or is_artist %}
       <label class="fld"><span>{{ _("eventernote URL") }}</span>
         <input name="eventernote_url" type="url" value="{{ t.eventernote_url or '' }}"
@@ -67,7 +71,7 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
       <span>{{ _("Members") }}</span>
       <div class="memb">
         {% for m in members.get(t.id, []) %}
-        <span class="chip">{{ m.name }}
+        <span class="chip">{{ loc(m, "name") }}
           <form class="chip-x" method="post" action="/tags/{{ t.id }}/members/{{ m.id }}/delete">
             <button class="x">×</button>
           </form>
@@ -78,7 +82,7 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
       {% if artist_tags %}
       <form class="inline" method="post" action="/tags/{{ t.id }}/members">
         <select name="member_tag_id">
-          {% for a in artist_tags %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
+          {% for a in artist_tags %}<option value="{{ a.id }}">{{ loc(a, "name") }}</option>{% endfor %}
         </select>
         <button type="submit" class="chip add">{{ _("+ Add member") }}</button>
       </form>
@@ -90,7 +94,7 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
         concerts that already carry this group — expansion is materialised at the moment
         you attach it. Use this to push a new member onto active events.{% endtrans %}</div>
       {% for m, n in eligible_members.get(t.id, []) %}
-      <a class="btn quiet" href="/tags/{{ t.id }}/members/{{ m.id }}/retroactive-apply">{% trans count=n, name=m.name %}Apply {{ name }} to {{ count }} upcoming concert{% pluralize %}Apply {{ name }} to {{ count }} upcoming concerts{% endtrans %}</a>
+      <a class="btn quiet" href="/tags/{{ t.id }}/members/{{ m.id }}/retroactive-apply">{% trans count=n, name=loc(m, "name") %}Apply {{ name }} to {{ count }} upcoming concert{% pluralize %}Apply {{ name }} to {{ count }} upcoming concerts{% endtrans %}</a>
       {% endfor %}
     </div>
     {% endif %}
@@ -115,9 +119,9 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
 {%- set unused = count is not none and count == 0 -%}
 {%- if user.is_editor -%}
 <button type="button" class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}"
-        onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ t.name }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+        onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
 {%- else -%}
-<span class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}">{{ t.name }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</span>
+<span class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</span>
 {%- endif -%}
 {% endmacro %}
 
@@ -205,7 +209,7 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
       <span>{{ _("Parent franchise") }}</span>
       <select name="parent_id">
         <option value="0">{{ _("— none —") }}</option>
-        {% for f in franchise_tags %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
+        {% for f in franchise_tags %}<option value="{{ f.id }}">{{ loc(f, "name") }}</option>{% endfor %}
       </select>
     </div>
 

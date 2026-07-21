@@ -35,7 +35,7 @@
         <input type="hidden" name="shown" value="{{ t.concert.id }}">
         <span class="tick">&check;</span>
         {% if t.because %}<span class="who-t">{{ t.because | join(" · ") }}</span>{% endif %}
-        <span class="t">{{ t.concert.title }}</span>
+        <span class="t">{{ loc(t.concert, "title") }}</span>
         <span class="v">
           {%- if t.venue %}📍 {{ t.venue }}{% endif -%}
           {%- if t.venue and t.starts_at_utc %} · {% endif -%}
@@ -114,12 +114,12 @@
     <div class="pick">
       {% for row in rows %}
       {% set eyebrow = (row.concert.tags | rejectattr("kind.value", "equalto", "venue")
-                        | map(attribute="name") | list) %}
+                        | map("loc_name") | list) %}
       <label class="tile">
         <input type="checkbox" class="visually-hidden" name="applied" value="{{ row.round_.id }}">
         <span class="tick">&check;</span>
         {% if eyebrow %}<span class="who-t">{{ eyebrow[0] }}</span>{% endif %}
-        <span class="t">{{ row.concert.title }}</span>
+        <span class="t">{{ loc(row.concert, "title") }}</span>
         <span class="v">
           {{- row.round_.label -}}
           {%- if row.moment_utc %} · {% set al = dual_lines(row.moment_utc, tz) %}{{ al[0] }} {{ al[1] }}{% endif -%}
@@ -174,7 +174,7 @@
   </div>
   {% if tallies.payment_due > 0 and tallies.payment_concert %}
   <p class="lede" style="margin: 0 auto 1.5rem; color: var(--dim);">
-    {% trans title=tallies.payment_concert.title %}{{ title }} is waiting on a payment — the closest thing here to
+    {% trans title=loc(tallies.payment_concert, "title") %}{{ title }} is waiting on a payment — the closest thing here to
     losing a ticket you have already won.{% endtrans %}
   </p>
   {% endif %}

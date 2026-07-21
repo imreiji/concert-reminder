@@ -53,7 +53,7 @@ from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan
 from app.domain.timezones import utc_to_jst
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
 from app.domain.upgrades import is_upgrade_eligible
-from app.i18n import N_
+from app.i18n import N_, get_locale, loc_field
 from app.i18n import gettext as _
 
 
@@ -766,7 +766,7 @@ async def due_reminders(
                 discord_id=user.discord_id,
                 user_timezone=user.timezone,
                 user_language=user.language,
-                concert_title=concert.title,
+                concert_title=loc_field(concert, "title", user.language),
                 anchor=row.anchor,
                 fire_at_utc=row.fire_at_utc,
                 round_id=round_.id if round_ else None,
@@ -901,7 +901,8 @@ async def upcoming_deadlines(
         if concert is None:
             continue
         out.append(UpcomingDeadline(
-            concert_title=concert.title, event_id=concert.event_id, label=d.label,
+            concert_title=loc_field(concert, "title", get_locale()),
+            event_id=concert.event_id, label=d.label,
             anchor=Anchor.EVENT_START, at_utc=d.starts_at_utc,
         ))
 
@@ -920,7 +921,8 @@ async def upcoming_deadlines(
             if ts is None or ts <= now:
                 continue
             out.append(UpcomingDeadline(
-                concert_title=concert.title, event_id=concert.event_id, label=r.label,
+                concert_title=loc_field(concert, "title", get_locale()),
+                event_id=concert.event_id, label=r.label,
                 anchor=anchor, at_utc=ts, url=r.url, round_id=r.id,
             ))
 
@@ -1501,7 +1503,10 @@ async def my_deadline_rows(
         live_days = sorted(
             (day for day in concert.days if not day.cancelled), key=lambda day: day.starts_at_utc
         ) if concert else []
-        venue_tags = [t.name for t in concert.tags if t.kind is TagKind.VENUE] if concert else []
+        venue_tags = [
+            loc_field(t, "name", get_locale())
+            for t in concert.tags if t.kind is TagKind.VENUE
+        ] if concert else []
         round_ = rounds.get(d.round_id) if d.round_id is not None else None
         outcome = outcomes.get(d.round_id) if d.round_id is not None else None
         is_upgrade = round_ is not None and round_.kind is RoundKind.UPGRADE
@@ -1522,7 +1527,8 @@ async def my_deadline_rows(
             # fallback when there is no VENUE tag at all.
             venue=(
                 _("Multiple") if len(venue_tags) > 1
-                else (venue_tags[0] if venue_tags else (concert.venue if concert else None))
+                else (venue_tags[0] if venue_tags
+                      else (loc_field(concert, "venue", get_locale()) if concert else None))
             ),
             starts_at_utc=live_days[0].starts_at_utc if live_days else None,
         ))
@@ -1584,12 +1590,12 @@ class SetupTallies:
 def _setup_tile_venue(concert: Concert) -> str | None:
     """Same >1-venue rule my_deadline_rows uses: many VENUE tags collapse to
     "Multiple", one wins, the free-text venue is the fallback with no tag."""
-    venue_tags = [t.name for t in concert.tags if t.kind is TagKind.VENUE]
+    venue_tags = [t for t in concert.tags if t.kind is TagKind.VENUE]
     if len(venue_tags) > 1:
         return "Multiple"
     if venue_tags:
-        return venue_tags[0]
-    return concert.venue
+        return loc_field(venue_tags[0], "name", get_locale())
+    return loc_field(concert, "venue", get_locale())
 
 
 def _next_round_anchor(
@@ -1678,7 +1684,7 @@ async def setup_prune_tiles(
             (d for d in c.days if not d.cancelled), key=lambda d: d.starts_at_utc
         )
         because = [
-            t.name for t in sorted(
+            loc_field(t, "name", get_locale()) for t in sorted(
                 c.tags, key=lambda t: (_BECAUSE_KIND_ORDER.get(t.kind, 9), t.name)
             )
             if t.id in sub_tag_ids
@@ -2590,8 +2596,9 @@ async def user_calendar_events(
 # "lightweight". event_id is included since renaming a concert's URL handle
 # is exactly the kind of quiet, easy-to-miss edit an audit log is for.
 TRACKED_CONCERT_FIELDS = [
-    "event_id", "title", "title_en", "kind", "organizer", "categories",
+    "event_id", "title", "title_en", "title_zh", "kind", "organizer", "categories",
     "eventernote_url", "official_url", "source_url", "performers_text", "notes",
+    "notes_en", "notes_zh", "venue_en", "venue_zh",
 ]
 
 
@@ -3328,12 +3335,14 @@ async def notice_context(
         .limit(1)
     )).scalar_one_or_none() is not None
 
+    locale = user.language if user else "en"
     return NoticeContext(
         concert_id=concert_id,
         event_id=concert.event_id,
-        title=concert.title,
+        title=loc_field(concert, "title", locale),
         tags_line=" · ".join(non_venue),
-        venue=("Multiple" if len(venues) > 1 else (venues[0] if venues else concert.venue)),
+        venue=("Multiple" if len(venues) > 1
+               else (venues[0] if venues else loc_field(concert, "venue", locale))),
         first_deadline_label=first[0].label if first else None,
         first_deadline_at=first[1] if first else None,
         user_timezone=user.timezone if user else "America/Moncton",

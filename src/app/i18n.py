@@ -80,6 +80,20 @@ def N_(message: str) -> str:
 _ = gettext
 
 
+def loc_field(obj, field: str, locale: str) -> str:
+    """Viewer-locale variant of a user-entered field, else the original.
+
+    en -> <field>_en, zh -> <field>_zh, ja -> the original (the original IS
+    the Japanese-side source; there are no _ja columns). Empty string counts
+    as unfilled. No cross-locale chaining -- zh never falls back to en.
+    """
+    if locale in ("en", "zh"):
+        val = getattr(obj, f"{field}_{locale}", None)
+        if val:
+            return val
+    return getattr(obj, field)
+
+
 def negotiate(accept_language: str) -> str:
     """First supported language in an Accept-Language header, else en.
 

@@ -63,15 +63,15 @@
           so there is nothing to show without one. -#}
       {% if cg or ca %}
       <span class="eyebrow">
-        {%- if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
-        {%- elif cg %}{{ cg | map(attribute="name") | join(", ") }}
-        {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>{% endif -%}
+        {%- if cf and cg %}{{ cf | map("loc_name") | join(", ") }} · {{ cg | map("loc_name") | join(", ") }}
+        {%- elif cg %}{{ cg | map("loc_name") | join(", ") }}
+        {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ loc(a, "name") }}</span>{% endfor %}</span>{% endif -%}
       </span>
       {% endif %}
-      <span class="title">{{ card.concert.title }}</span>
+      <span class="title">{{ loc(card.concert, "title") }}</span>
       {% set live_days = card.concert.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
       <span class="venue">
-        {%- if card.concert.venue %}📍 {{ card.concert.venue }}{% endif -%}
+        {%- if card.concert.venue %}📍 {{ loc(card.concert, "venue") }}{% endif -%}
         {%- if card.concert.venue and live_days %} · {% endif -%}
         {%- if live_days %}{{ day_month(live_days[0].starts_at_utc) }}{% endif -%}
       </span>

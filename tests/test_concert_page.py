@@ -721,7 +721,11 @@ async def test_the_legacy_meta_grid_block_is_gone(client):
 
     body = client.get("/concerts/np").text
     assert "meta-grid" not in body
-    assert "EN Title" not in body
+    # The old dl duplicated the free-text organizer/categories; those are gone
+    # from the header now. (title_en is no longer a proxy for the removed grid:
+    # UGC localization intentionally surfaces it in the title/h1 for EN viewers.)
+    assert "Some Org" not in body
+    assert "meta-grid" not in body and ">Live<" not in body
 
 
 async def test_reminders_section_uses_the_row_based_layout(client):

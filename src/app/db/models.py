@@ -146,7 +146,11 @@ class Concert(Base):
     # to str(id) so old links keep resolving.
     event_id: Mapped[str] = mapped_column(String(100), unique=True)
     title: Mapped[str] = mapped_column(String(200))
+    # Viewer-locale variants of the user-entered title (en/zh); ja IS the
+    # original. All UGC-translation columns are nullable with no backfill --
+    # loc_field falls back to the original when a variant is empty.
     title_en: Mapped[str | None] = mapped_column(String(200))
+    title_zh: Mapped[str | None] = mapped_column(String(200))
     kind: Mapped[ConcertKind | None] = mapped_column(
         Enum(ConcertKind, values_callable=lambda e: [m.value for m in e])
     )
@@ -158,7 +162,11 @@ class Concert(Base):
     performers_text: Mapped[str | None] = mapped_column(Text)  # free-text, one per line
     franchise: Mapped[str | None] = mapped_column(String(100))  # "Hasunosora", "Gakumas"...
     venue: Mapped[str | None] = mapped_column(String(200))
+    venue_en: Mapped[str | None] = mapped_column(String(200))
+    venue_zh: Mapped[str | None] = mapped_column(String(200))
     notes: Mapped[str | None] = mapped_column(Text)
+    notes_en: Mapped[str | None] = mapped_column(Text)
+    notes_zh: Mapped[str | None] = mapped_column(Text)
     # SET NULL, not CASCADE: erasing the editor who filed a concert must not
     # delete the shared catalogue entry everyone else follows. NULL = the
     # author was deleted (GDPR erasure) -- see service.delete_user.
@@ -219,6 +227,10 @@ class Tag(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
+    # Viewer-locale variants of the tag name. NOT unique -- two tags may share
+    # an English/Chinese rendering (only the canonical `name` is unique).
+    name_en: Mapped[str | None] = mapped_column(String(100))
+    name_zh: Mapped[str | None] = mapped_column(String(100))
     kind: Mapped[TagKind] = mapped_column(
         Enum(TagKind, values_callable=lambda e: [m.value for m in e])
     )

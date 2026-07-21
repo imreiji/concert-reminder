@@ -127,7 +127,6 @@
       <span class="fold-hint">{{ detail_bits | join(' · ') if detail_bits else _('nothing set yet') }}</span></summary>
     <div class="fold-body">
       <div class="grid2">
-        <label>{{ _("Title (EN)") }} <input name="title_en" maxlength="200" value="{{ concert.title_en or '' }}"></label>
         <label>{{ _("Artist / organizer") }} <input name="organizer" maxlength="200" value="{{ concert.organizer or '' }}"></label>
         <label>{{ _("Categories (comma-sep)") }} <input name="categories" value="{{ concert.categories or '' }}"></label>
         <label>{{ _("eventernote URL") }} <input name="eventernote_url" type="url" value="{{ concert.eventernote_url or '' }}"></label>
@@ -136,6 +135,27 @@
       </div>
       <label>{{ _("Performers (one per line)") }} <textarea name="performers_text" rows="3">{{ concert.performers_text or '' }}</textarea></label>
       <label>{{ _("Notes") }} <textarea name="notes" rows="2">{{ concert.notes or '' }}</textarea></label>
+
+      {#- Per-language variants of the user-entered title, venue and notes.
+          The JP-side originals are the title above and the free-text venue;
+          these are shown to viewers on the matching locale, with a fallback
+          to the original when a variant is empty (i18n.loc_field). -#}
+      <div class="section-head trans-head">
+        <h3 class="section-sub">{{ _("Translations") }}</h3>
+        <p class="dim tiny">{{ _("Optional — shown to viewers reading in that language, falling back to the originals above.") }}</p>
+      </div>
+      <h4 class="section-sub">{{ _("English") }}</h4>
+      <div class="grid2">
+        <label>{{ _("Title") }} <input name="title_en" maxlength="200" value="{{ concert.title_en or '' }}"></label>
+        <label>{{ _("Venue") }} <input name="venue_en" maxlength="200" value="{{ concert.venue_en or '' }}"></label>
+      </div>
+      <label>{{ _("Notes") }} <textarea name="notes_en" rows="2">{{ concert.notes_en or '' }}</textarea></label>
+      <h4 class="section-sub">中文</h4>
+      <div class="grid2">
+        <label>{{ _("Title") }} <input name="title_zh" maxlength="200" value="{{ concert.title_zh or '' }}"></label>
+        <label>{{ _("Venue") }} <input name="venue_zh" maxlength="200" value="{{ concert.venue_zh or '' }}"></label>
+      </div>
+      <label>{{ _("Notes") }} <textarea name="notes_zh" rows="2">{{ concert.notes_zh or '' }}</textarea></label>
     </div>
   </details>
 
