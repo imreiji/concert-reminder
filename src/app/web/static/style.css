@@ -695,19 +695,6 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   .board { grid-template-columns: repeat(2, 1fr); }
   .peek { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 600px) {
-  .board, .peek { grid-template-columns: 1fr; }
-  .next, .teaser { grid-template-columns: 1fr; }
-  .next .countdown { text-align: left; }
-  .rowhead { display: none; }
-  .deadline-rows .row {
-    grid-template-columns: 1fr auto; gap: .3rem .75rem;
-    padding: .8rem .1rem; align-items: start;
-  }
-  .deadline-rows .row > :nth-child(2) { grid-row: 1; text-align: right; }
-  .row .title-c { grid-column: 1 / -1; }
-  .row .acts { grid-column: 1 / -1; justify-content: flex-start; margin-top: .25rem; }
-}
 
 /* -- Concert page ---------------------------------------------------------
    Same token vocabulary as Home; nothing new is invented here. The page has
@@ -1301,4 +1288,52 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
     box-shadow: var(--shadow); display: grid; place-items: center;
     text-decoration: none; padding-bottom: .2rem;
   }
+
+  /* Home: campaign board -> center-snap carousel (spec §4; demo .board-swipe).
+     grid-template-columns: none neutralises the desktop repeat(4, 1fr) (and
+     the 960px repeat(2, 1fr)) so grid-auto-columns below is what sizes the
+     columns; .col is the board's real column, .card the real board tile. */
+  .board {
+    grid-template-columns: none;
+    display: grid; grid-auto-flow: column; grid-auto-columns: 78%;
+    gap: .8rem; overflow-x: auto; scroll-snap-type: x mandatory;
+    padding: 0 11% .5rem; scrollbar-width: none;
+  }
+  .board::-webkit-scrollbar { display: none; }
+  .board > .col { scroll-snap-align: center; }
+
+  /* Home landing's illustrative "how it works" grid: single column, matching
+     the rest of the retrofit's collapse-everywhere rule. */
+  .howto { grid-template-columns: 1fr; }
+
+  /* Home: "Coming up" deadline rows -> two-line cards (demo .m-row). Migrated
+     and extended from the old 600px block: .rowhead hides, each .row becomes
+     a bordered card instead of a table row, and its capture buttons (real
+     classes .act/.done inside .acts, see _capture_actions.html) go full-width
+     and >=44px tall instead of the desktop's small inline pills. */
+  .rowhead { display: none; }
+  .deadline-rows { border-top: 0; }
+  .deadline-rows .row {
+    grid-template-columns: 1fr auto; gap: .3rem .75rem;
+    padding: .7rem .8rem; align-items: start;
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    margin-bottom: .55rem;
+  }
+  .deadline-rows .row:last-child { margin-bottom: 0; }
+  .deadline-rows .row > :nth-child(2) { grid-row: 1; text-align: right; }
+  .row .title-c { grid-column: 1 / -1; }
+  .row .act-c { grid-column: 1 / -1; }
+  .row .acts {
+    grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap;
+    gap: .5rem; margin-top: .4rem;
+  }
+  .row .acts form { flex: 1 1 8rem; }
+  .row .acts .act, .row .acts .done {
+    width: 100%; min-height: 44px; font-size: .8rem;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Up next + discover teaser: single column, per the demo's stacked frames. */
+  .next, .teaser, .peek { grid-template-columns: 1fr; }
+  .next .countdown { text-align: left; }
 }
