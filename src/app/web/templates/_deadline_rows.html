@@ -17,19 +17,19 @@
 {% from "_capture_actions.html" import capture_actions %}
 
 {% macro status_pill(outcome) -%}
-  {%- if outcome is none -%}<span class="pill p-quiet">Not applied</span>
-  {%- elif outcome.value == "applied" -%}<span class="pill p-ok">Applied</span>
-  {%- elif outcome.value == "won" -%}<span class="pill p-danger">Won</span>
-  {%- elif outcome.value == "paid" -%}<span class="pill p-ok">Secured</span>
-  {%- elif outcome.value == "lost" -%}<span class="pill p-quiet">Lost</span>
-  {%- else -%}<span class="pill p-quiet">Not applying</span>
+  {%- if outcome is none -%}<span class="pill p-quiet">{{ _("Not applied") }}</span>
+  {%- elif outcome.value == "applied" -%}<span class="pill p-ok">{{ _("Applied") }}</span>
+  {%- elif outcome.value == "won" -%}<span class="pill p-danger">{{ _("Won") }}</span>
+  {%- elif outcome.value == "paid" -%}<span class="pill p-ok">{{ _("Secured") }}</span>
+  {%- elif outcome.value == "lost" -%}<span class="pill p-quiet">{{ _("Lost") }}</span>
+  {%- else -%}<span class="pill p-quiet">{{ _("Not applying") }}</span>
   {%- endif -%}
 {%- endmacro %}
 
 <div class="deadline-rows" id="deadline-rows">
   <div class="rowhead">
-    <span>Your status</span><span>Closes</span><span>Concert</span>
-    <span>What happens</span><span>You</span>
+    <span>{{ _("Your status") }}</span><span>{{ _("Closes") }}</span><span>{{ _("Concert") }}</span>
+    <span>{{ _("What happens") }}</span><span>{{ _("You") }}</span>
   </div>
   {% for row in rows %}
   {% set d = row.deadline %}
@@ -57,6 +57,6 @@
     </span>
   </div>
   {% else %}
-  <p class="dim">Nothing coming up on the concerts you follow.</p>
+  <p class="dim">{{ _("Nothing coming up on the concerts you follow.") }}</p>
   {% endfor %}
 </div>

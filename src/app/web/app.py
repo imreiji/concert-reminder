@@ -2,13 +2,14 @@
 
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.sessions import SessionMiddleware
 
+from app import i18n
 from app.config import settings
 from app.db.models import User
 from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
@@ -34,12 +35,27 @@ from app.web.routes import welcome as welcome_routes
 
 _here = Path(__file__).parent
 templates = Jinja2Templates(directory=_here / "templates")
-templates.env.globals["dual"] = fmt_dual        # {{ dual(dt, tz) }}
-templates.env.globals["dual_lines"] = fmt_dual_lines  # dual_lines(dt, tz) -> (date, time)
+templates.env.add_extension("jinja2.ext.i18n")
+# newstyle=True gives {% trans %} and {{ _("...") }} that read the request's
+# ContextVar on every call -- one shared env, per-request locale.
+templates.env.install_gettext_callables(
+    gettext=i18n.gettext, ngettext=i18n.ngettext, newstyle=True
+)
+# Locale-aware wrappers: template-side signatures unchanged -- the active
+# locale is picked up here, NOT passed by templates.
+templates.env.globals["dual"] = lambda dt, tz: fmt_dual(dt, tz, i18n.get_locale())
+templates.env.globals["dual_lines"] = lambda dt, tz: fmt_dual_lines(dt, tz, i18n.get_locale())
 templates.env.globals["jst"] = utc_to_jst       # {{ jst(dt).strftime(...) }}
-templates.env.globals["day_month"] = fmt_day_month  # {{ day_month(dt) }} -> "12 Oct"
-templates.env.globals["deadline_label"] = lambda anchor: LABEL_BY_ANCHOR[anchor]
-templates.env.globals["round_kind_label"] = lambda kind: LABEL_BY_ROUND_KIND[kind]
+templates.env.globals["day_month"] = lambda dt: fmt_day_month(dt, i18n.get_locale())
+templates.env.globals["deadline_label"] = lambda anchor: i18n.gettext(LABEL_BY_ANCHOR[anchor])
+templates.env.globals["round_kind_label"] = lambda kind: i18n.gettext(LABEL_BY_ROUND_KIND[kind])
+templates.env.globals["current_locale"] = i18n.get_locale  # {{ current_locale() }}
+# UGC parallel-column display: {{ loc(concert, "title") }} / {{ loc(tag, "name") }}
+# renders the viewer-locale variant, falling back to the original. Display
+# ONLY -- form values, data-* filter keys and URLs keep the original field.
+templates.env.globals["loc"] = lambda obj, field: i18n.loc_field(obj, field, i18n.get_locale())
+# Filter form for `| map("loc_name")` over a tag list (the "F · G" eyebrow joins).
+templates.env.filters["loc_name"] = lambda tag: i18n.loc_field(tag, "name", i18n.get_locale())
 
 COMMON_TIMEZONES = [
     "America/Moncton", "America/Halifax", "America/Toronto", "America/Vancouver",
@@ -57,6 +73,19 @@ def create_app() -> FastAPI:
         https_only=settings.base_url.lower().startswith("https"),
         max_age=60 * 60 * 24 * 30,
     )
+
+    @app.middleware("http")
+    async def set_request_locale(request: Request, call_next):
+        # Cookie is a per-browser cache of users.language (synced at login and
+        # by POST /language); header detection covers first-ever visits. The
+        # ContextVar set here is visible downstream (Starlette runs call_next
+        # in a child task, which copies this context).
+        lang = request.cookies.get("lang")
+        if lang not in i18n.SUPPORTED:
+            lang = i18n.negotiate(request.headers.get("accept-language", ""))
+        i18n.set_locale(lang)
+        return await call_next(request)
+
     app.mount("/static", StaticFiles(directory=_here / "static"), name="static")
     app.include_router(auth.router)
 
@@ -100,6 +129,34 @@ def create_app() -> FastAPI:
     app.include_router(privacy_routes.router)
     terms_routes.templates = templates
     app.include_router(terms_routes.router)
+
+    @app.post("/language")
+    async def set_language(
+        user: auth.SessionUser | None = Depends(auth.current_user),
+        session: AsyncSession = Depends(get_session),
+        language: str = Form(...),
+        next_url: str = Form("/", alias="next"),
+    ):
+        """The header switcher's single write path: cookie always; the DB
+        column too when signed in (Discord DMs read the column). Public on
+        purpose -- anonymous visitors switch the landing/discover/legal pages."""
+        if language not in i18n.SUPPORTED:
+            raise HTTPException(status_code=422, detail=f"unsupported language: {language}")
+        # Local-path redirect guard: same shape as the auth callback's, but
+        # sitewide, since the switcher lives on every page.
+        if not next_url.startswith("/") or next_url.startswith("//"):
+            next_url = "/"
+        if user:
+            from app.db.service import ensure_user
+
+            db_user = await ensure_user(session, user.id, user.username)
+            db_user.language = language
+            await session.commit()
+        response = RedirectResponse(next_url, status_code=303)
+        response.set_cookie(
+            "lang", language, max_age=i18n.LANG_COOKIE_MAX_AGE, samesite="lax", path="/",
+        )
+        return response
 
     @app.get("/healthz")
     async def healthz(session: AsyncSession = Depends(get_session)) -> dict:

@@ -1,114 +1,117 @@
 {% extends "base.html" %}
-{% block title %}Terms of service — dekimasen.app{% endblock %}
+{% block title %}{{ _("Terms of service") }} — dekimasen.app{% endblock %}
 {% block content %}
+{% if current_locale() != "en" %}
+<p class="dim">{{ _("This translation is provided for convenience. The English version governs in any conflict.") }}</p>
+{% endif %}
 <article class="legal">
-  <h1>Terms of service</h1>
-  <p class="updated num">Last updated: {{ last_updated }}</p>
+  <h1>{{ _("Terms of service") }}</h1>
+  <p class="updated num">{% trans %}Last updated: {{ last_updated }}{% endtrans %}</p>
 
   <p class="lead">
-    These are the terms for using dekimasen.app. By signing in you agree to
+    {% trans %}These are the terms for using dekimasen.app. By signing in you agree to
     them. They are short on purpose: this is a free hobby project, not a
     company, and the honest version fits on one page. How your data is
     handled is a separate page — see the
-    <a href="/privacy">privacy policy</a>.
+    <a href="/privacy">privacy policy</a>.{% endtrans %}
   </p>
 
-  <h2>What this is</h2>
+  <h2>{{ _("What this is") }}</h2>
   <p>
-    dekimasen.app tracks deadlines for Japanese concerts — lottery rounds,
+    {% trans %}dekimasen.app tracks deadlines for Japanese concerts — lottery rounds,
     serial-code sales, stream tickets — and sends you a Discord DM before
     the ones you follow close. It is run by one person, for free, on a
     best-effort basis. It is not affiliated with, endorsed by, or operated
     on behalf of Discord, any artist, agency, venue, promoter, or ticketing
     operator. Names and events listed here belong to the people who run
-    them; this site only points at their deadlines.
+    them; this site only points at their deadlines.{% endtrans %}
   </p>
 
-  <h2>Who can use it</h2>
+  <h2>{{ _("Who can use it") }}</h2>
   <p>
-    You need a Discord account to sign in, and you must meet Discord's
+    {% trans %}You need a Discord account to sign in, and you must meet Discord's
     minimum age requirement for your country. Discord's own terms apply to
-    you alongside these ones — nothing here overrides them.
+    you alongside these ones — nothing here overrides them.{% endtrans %}
   </p>
 
-  <h2>No guarantees</h2>
+  <h2>{{ _("No guarantees") }}</h2>
   <p>
-    This is the part that matters, so it is stated plainly: the service is
+    {% trans %}This is the part that matters, so it is stated plainly: the service is
     provided as is, with no warranty of any kind. There is no promise that
     a reminder arrives on time, that it arrives at all, or that the deadline
-    it refers to is correct.
+    it refers to is correct.{% endtrans %}
   </p>
   <p>
-    All three fail in ordinary use. Discord can refuse or delay a DM. The
+    {% trans %}All three fail in ordinary use. Discord can refuse or delay a DM. The
     server can be down, and the scheduler can miss a tick. An editor can
     type the wrong date, or a promoter can move one after it was entered.
     Treat what you see here as a prompt to go and check, never as the
     authority. You are responsible for confirming every deadline you care
-    about with the official source before you rely on it.
+    about with the official source before you rely on it.{% endtrans %}
   </p>
 
-  <h2>Limitation of liability</h2>
+  <h2>{{ _("Limitation of liability") }}</h2>
   <p>
-    To the extent the law allows, the operator is not liable for any loss
+    {% trans %}To the extent the law allows, the operator is not liable for any loss
     arising from your use of the service — a missed deadline, a missed
     lottery, a ticket you did not get, or anything downstream of those.
     This is a free service given away as a convenience; it comes with no
-    money and no guarantees attached.
+    money and no guarantees attached.{% endtrans %}
   </p>
 
-  <h2>Acceptable use</h2>
+  <h2>{{ _("Acceptable use") }}</h2>
   <ul>
-    <li>Do not scrape the site or send automated traffic at it.</li>
+    <li>{{ _("Do not scrape the site or send automated traffic at it.") }}</li>
     <li>
-      Do not attempt to break it, disrupt it, or reach data or accounts that
-      are not yours.
+      {% trans %}Do not attempt to break it, disrupt it, or reach data or accounts that
+      are not yours.{% endtrans %}
     </li>
     <li>
-      If you have editor rights, use them in good faith: add real events,
-      keep entries accurate, and do not vandalise or spam the catalogue.
+      {% trans %}If you have editor rights, use them in good faith: add real events,
+      keep entries accurate, and do not vandalise or spam the catalogue.{% endtrans %}
     </li>
   </ul>
 
-  <h2>Editor contributions</h2>
+  <h2>{{ _("Editor contributions") }}</h2>
   <p>
-    Concerts, tags, and edits made by an editor go into a shared catalogue
+    {% trans %}Concerts, tags, and edits made by an editor go into a shared catalogue
     that everyone on the site uses. That content stays even if you stop
     using the service or ask for your account to be deleted — only your
     name is removed from it, so the events other people are following do
     not disappear because one person left. By contributing you agree to
     that arrangement. The
     <a href="/privacy">privacy policy</a> says the same thing from the data
-    side.
+    side.{% endtrans %}
   </p>
 
-  <h2>Availability and shutdown</h2>
+  <h2>{{ _("Availability and shutdown") }}</h2>
   <p>
-    The service may change, break, or shut down at any time, with or without
+    {% trans %}The service may change, break, or shut down at any time, with or without
     notice. Access may be withdrawn from anyone who abuses it or breaks
-    these terms. You can stop using it whenever you like.
+    these terms. You can stop using it whenever you like.{% endtrans %}
   </p>
 
-  <h2>Changes to these terms</h2>
+  <h2>{{ _("Changes to these terms") }}</h2>
   <p>
-    If these terms change, the date at the top of this page changes with
+    {% trans %}If these terms change, the date at the top of this page changes with
     them. Continuing to use the service after that means you accept the new
-    version.
+    version.{% endtrans %}
   </p>
 
-  <h2>Governing law</h2>
+  <h2>{{ _("Governing law") }}</h2>
   <p>
-    These terms are governed by the laws of the Province of New Brunswick
-    and the federal laws of Canada applicable therein.
+    {% trans %}These terms are governed by the laws of the Province of New Brunswick
+    and the federal laws of Canada applicable therein.{% endtrans %}
   </p>
 
-  <h2>Contact</h2>
-  <p>Questions about any of this:</p>
+  <h2>{{ _("Contact") }}</h2>
+  <p>{{ _("Questions about any of this:") }}</p>
   {% if contact_discord or contact_email %}
   <ul>
-    {% if contact_discord %}<li>Discord: {{ contact_discord }}</li>{% endif %}
+    {% if contact_discord %}<li>{% trans %}Discord: {{ contact_discord }}{% endtrans %}</li>{% endif %}
     {% if contact_email %}
     <li>
-      Email:
+      {{ _("Email:") }}
       {% if contact_email_is_linkable %}
       <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
       {% else %}
@@ -119,12 +122,12 @@
   </ul>
   {% else %}
   <p class="dim">
-    This deployment has not published contact details yet. If you reached
-    this page from a running site, contact whoever operates it.
+    {% trans %}This deployment has not published contact details yet. If you reached
+    this page from a running site, contact whoever operates it.{% endtrans %}
   </p>
   {% endif %}
 
-  <p class="dim">tl;dr: it's a helpful reminder tool built by a fan, not a ticket broker.
-    Double-check the official page before every deadline.</p>
+  <p class="dim">{% trans %}tl;dr: it's a helpful reminder tool built by a fan, not a ticket broker.
+    Double-check the official page before every deadline.{% endtrans %}</p>
 </article>
 {% endblock %}

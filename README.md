@@ -114,3 +114,4 @@ Shipped since Phase 12 (no phase numbers assigned, tracked as feature PRs instea
 - [x] Per-leg cancelled status: legs stay visible, their reminders drop, one-click reinstate
 - [x] Tags page redesign — search, hierarchy, dialog-based editing, rename, retroactive apply
 - [x] Index page reorg — open-and-upcoming bucketing + a global chronological deadline list
+- [x] Multi-language support — English/Mandarin/Japanese, gettext catalogues, per-user locale, translated UGC

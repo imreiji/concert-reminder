@@ -95,6 +95,8 @@ async def create_tag(
     user: SessionUser = Depends(require_editor),
     session: AsyncSession = Depends(get_session),
     name: str = Form(..., min_length=1, max_length=100),
+    name_en: str = Form(""),
+    name_zh: str = Form(""),
     kind: TagKind = Form(TagKind.ARTIST),
     parent_id: int = Form(0),
     location_url: str = Form(""),
@@ -118,7 +120,8 @@ async def create_tag(
             raise HTTPException(status_code=422, detail="only group tags take a franchise parent")
     await ensure_user(session, user.id, user.username)
     session.add(Tag(
-        name=name, kind=kind, created_by=user.id, parent_id=parent.id if parent else None,
+        name=name, name_en=name_en.strip() or None, name_zh=name_zh.strip() or None,
+        kind=kind, created_by=user.id, parent_id=parent.id if parent else None,
         location_url=form_url(location_url), region=region.strip() or None,
         eventernote_url=form_url(eventernote_url),
     ))
@@ -134,6 +137,8 @@ async def edit_tag(
     # max_length matches create_tag's: a rename must not be able to produce a
     # name the creation form would have rejected.
     name: str = Form("", max_length=100),
+    name_en: str = Form(""),
+    name_zh: str = Form(""),
     location_url: str = Form(""),
     region: str = Form(""),
     eventernote_url: str = Form(""),
@@ -152,6 +157,10 @@ async def edit_tag(
         if existing is not None and existing.id != tag.id:
             raise HTTPException(status_code=409, detail=f"tag {name!r} already exists")
         tag.name = name
+    # Name variants carry no uniqueness constraint -- two tags may share an
+    # English/Chinese rendering, so no collision check here (unlike `name`).
+    tag.name_en = name_en.strip() or None
+    tag.name_zh = name_zh.strip() or None
     tag.location_url = form_url(location_url)
     tag.region = region.strip() or None
     tag.eventernote_url = form_url(eventernote_url)

@@ -41,6 +41,8 @@ from app.db.service import (
 )
 from app.db.session import get_session
 from app.domain.types import ConcertKind, TagKind
+from app.i18n import N_
+from app.i18n import gettext as _
 from app.web.auth import SessionUser, current_user
 
 router = APIRouter()
@@ -50,16 +52,20 @@ templates = None  # set by web.app at startup
 # The round-status facet, in the order it renders. Keys match
 # DiscoverStatus.status, which is what each tile carries as data-status.
 STATUS_FACETS = [
-    ("open", "Open now"),
-    ("soon", "Opening soon"),
-    ("none", "Not tracking"),
+    ("open", N_("Open now")),
+    ("soon", N_("Opening soon")),
+    ("none", N_("Not tracking")),
 ]
 
 # Sort keys the page offers. "next" is handled in Python rather than SQL --
 # the soonest deadline spans four nullable timestamp columns across a
 # variable number of non-cancelled rounds, and discover_statuses has already
 # computed it for the pill by the time we sort.
-SORTS = [("event", "Event date"), ("next", "Next deadline"), ("added", "Recently added")]
+SORTS = [
+    ("event", N_("Event date")),
+    ("next", N_("Next deadline")),
+    ("added", N_("Recently added")),
+]
 
 DEADLINE_LIST_LIMIT = 10
 
@@ -111,18 +117,19 @@ def region_sidebar_links(
 
 
 def concert_search_text(c: Concert) -> str:
-    """Lowercased blob everything free-text search matches: title,
-    title_en, every attached tag's name (all four kinds count --
-    franchise/group/artist/venue), and the concert's free-text venue as a
-    fallback ONLY when no VENUE tag is attached (mirrors the tile macro's
-    own venue display fallback in discover.html exactly)."""
-    parts = [c.title]
-    if c.title_en:
-        parts.append(c.title_en)
-    parts.extend(t.name for t in c.tags)
-    if not any(t.kind is TagKind.VENUE for t in c.tags) and c.venue:
-        parts.append(c.venue)
-    return " ".join(parts).lower()
+    """Lowercased blob everything free-text search matches: title (plus its
+    en/zh variants), every attached tag's name (all four kinds count --
+    franchise/group/artist/venue -- plus each tag's en/zh variants), and the
+    concert's free-text venue (all variants) as a fallback ONLY when no VENUE
+    tag is attached (mirrors the tile macro's own venue display fallback in
+    discover.html exactly). Localizing the haystack rather than the query lets
+    a search in any language match a concert filled in any other."""
+    parts = [c.title, c.title_en, c.title_zh]
+    for t in c.tags:
+        parts += [t.name, t.name_en, t.name_zh]
+    if not any(t.kind is TagKind.VENUE for t in c.tags):
+        parts += [c.venue, c.venue_en, c.venue_zh]
+    return " ".join(p for p in parts if p).lower()
 
 
 @router.get("/discover", response_class=HTMLResponse)
@@ -173,7 +180,13 @@ async def discover(
     by_kind = grouped_tags(tags)
     selected_tags = set(tag)
     query = q.strip().lower()
-    facet = status if status in {key for key, _ in STATUS_FACETS} else ""
+    # `_label`, not `_`: binding `_` here would shadow the module-level
+    # gettext `_` for the whole function on CPython 3.12.0-3.12.4, whose
+    # PEP 709 inlined comprehensions leak the iteration variable into the
+    # enclosing scope's symbol table (fixed upstream in later 3.12.x) --
+    # the `_(label)` calls below then raise UnboundLocalError. Ubuntu
+    # 24.04's system Python (CI and the production server) is 3.12.3.
+    facet = status if status in {key for key, _label in STATUS_FACETS} else ""
 
     # Initial visibility, computed server-side so there's no flash of wrongly
     # shown tiles before JS runs on first load -- and so tag, search and facet
@@ -230,9 +243,10 @@ async def discover(
             },
             "query": q,
             "sort": sort,
-            "sorts": SORTS,
+            # Labels translated per-request (N_ marks them for extraction).
+            "sorts": [(key, _(label)) for key, label in SORTS],
             "status": facet,
-            "status_facets": STATUS_FACETS,
+            "status_facets": [(key, _(label)) for key, label in STATUS_FACETS],
             "filter_query": filter_query,
             "tz": tz,
             "tz_auto": tz_auto,

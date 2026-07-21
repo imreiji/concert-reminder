@@ -12,6 +12,8 @@ from app.db.service import DueReminder
 from app.domain.timezones import fmt_dual
 from app.domain.types import Anchor, LotteryOutcome
 from app.domain.urls import UnsafeURLError, clean_url
+from app.i18n import N_, get_locale, ngettext
+from app.i18n import gettext as _
 
 KIND_EMOJI = {
     "lottery_round": "🎟️",
@@ -27,11 +29,11 @@ KIND_EMOJI = {
 }
 
 ANCHOR_VERB = {
-    Anchor.OPENS: "opens",
-    Anchor.CLOSES: "closes",
-    Anchor.RESULTS: "results announced",
-    Anchor.PAYMENT: "payment due",
-    Anchor.EVENT_START: "starts",
+    Anchor.OPENS: N_("opens"),
+    Anchor.CLOSES: N_("closes"),
+    Anchor.RESULTS: N_("results announced"),
+    Anchor.PAYMENT: N_("payment due"),
+    Anchor.EVENT_START: N_("starts"),
 }
 
 
@@ -40,14 +42,14 @@ def relative_phrase(anchor_time: datetime, fire_at: datetime) -> str:
     delta = anchor_time - fire_at
     seconds = int(delta.total_seconds())
     if abs(seconds) < 3600:
-        return "now"
+        return _("now")
     hours = abs(seconds) // 3600
     if hours < 48:
-        unit = f"{hours} hour{'s' if hours != 1 else ''}"
+        unit = ngettext("{n} hour", "{n} hours", hours).format(n=hours)
     else:
         days = round(hours / 24)
-        unit = f"{days} day{'s' if days != 1 else ''}"
-    return f"in {unit}" if seconds > 0 else f"{unit} ago"
+        unit = ngettext("{n} day", "{n} days", days).format(n=days)
+    return _("in {unit}").format(unit=unit) if seconds > 0 else _("{unit} ago").format(unit=unit)
 
 
 def safe_button_url(raw: str | None) -> str | None:
@@ -71,13 +73,13 @@ def safe_button_url(raw: str | None) -> str | None:
 
 
 def format_reminder(item: DueReminder) -> str:
-    subject = item.round_label or item.day_label or "event"
+    subject = item.round_label or item.day_label or _("event")
     emoji = KIND_EMOJI.get(item.round_kind or "", "🗓️")
-    verb = ANCHOR_VERB[item.anchor]
+    verb = _(ANCHOR_VERB[item.anchor])
 
     lines = [f"{emoji} **{item.concert_title}** — {subject}"]
     if item.anchor_time_utc is not None:
-        when = fmt_dual(item.anchor_time_utc, item.user_timezone)
+        when = fmt_dual(item.anchor_time_utc, item.user_timezone, get_locale())
         rel = relative_phrase(item.anchor_time_utc, item.fire_at_utc)
         lines.append(f"{verb} {rel}: {when}")
     if item.url:
@@ -105,18 +107,18 @@ def build_new_event_message(ctx) -> tuple:
         color=0x4F46B8,
     )
     if ctx.venue:
-        embed.add_field(name="Venue", value=f"📍 {ctx.venue}", inline=True)
+        embed.add_field(name=_("Venue"), value=f"📍 {ctx.venue}", inline=True)
     if ctx.first_deadline_at is not None:
         embed.add_field(
-            name="First deadline",
+            name=_("First deadline"),
             value=(f"{ctx.first_deadline_label}\n"
-                   f"{fmt_dual(ctx.first_deadline_at, ctx.user_timezone)}"),
+                   f"{fmt_dual(ctx.first_deadline_at, ctx.user_timezone, get_locale())}"),
             inline=False,
         )
 
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(
-        label="Open on dekimasen.app",
+        label=_("Open on dekimasen.app"),
         url=f"{settings.base_url}/concerts/{ctx.event_id}",
     ))
     # State-aware: auto-applied subscribers get the undo; others get the apply.
@@ -137,12 +139,12 @@ def build_leg_cancelled_message(ctx) -> tuple:
 
     embed = discord.Embed(
         title=f"🚫 {ctx.title}",
-        description="A performance you had a reminder for was cancelled, and it's been cleared.",
+        description=_("A performance you had a reminder for was cancelled, and it's been cleared."),
         color=0xB3261E,
     )
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(
-        label="Open on dekimasen.app",
+        label=_("Open on dekimasen.app"),
         url=f"{settings.base_url}/concerts/{ctx.event_id}",
     ))
     view.add_item(ReinstateRemindersButton(ctx.concert_id))
@@ -164,15 +166,16 @@ def build_reminder_message(item: DueReminder) -> tuple:
     )
     from app.config import settings
 
-    subject = item.round_label or item.day_label or "event"
+    subject = item.round_label or item.day_label or _("event")
     emoji = KIND_EMOJI.get(item.round_kind or "", "🗓️")
-    verb = ANCHOR_VERB[item.anchor]
+    verb = _(ANCHOR_VERB[item.anchor])
 
     embed = discord.Embed(title=f"{emoji} {item.concert_title}", color=0x1A7F4E)
     if item.anchor_time_utc is not None:
         rel = relative_phrase(item.anchor_time_utc, item.fire_at_utc)
         embed.description = (
-            f"**{subject}** {verb} {rel}\n{fmt_dual(item.anchor_time_utc, item.user_timezone)}"
+            f"**{subject}** {verb} {rel}\n"
+            f"{fmt_dual(item.anchor_time_utc, item.user_timezone, get_locale())}"
         )
     else:
         embed.description = f"**{subject}**"
@@ -180,10 +183,10 @@ def build_reminder_message(item: DueReminder) -> tuple:
     view = discord.ui.View(timeout=None)
     ticket_url = safe_button_url(item.url)
     if ticket_url:
-        link_label = "Apply here" if item.anchor is Anchor.CLOSES else "Ticket page"
+        link_label = _("Apply here") if item.anchor is Anchor.CLOSES else _("Ticket page")
         view.add_item(discord.ui.Button(label=link_label, url=ticket_url))
     view.add_item(discord.ui.Button(
-        label="Open on dekimasen.app", url=f"{settings.base_url}"
+        label=_("Open on dekimasen.app"), url=f"{settings.base_url}"
     ))
 
     if item.round_id is not None:

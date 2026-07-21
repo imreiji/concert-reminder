@@ -91,7 +91,11 @@ def test_round_qualifiers_downgrade_round_trips(tmp_path, monkeypatch):
     assert "round_qualifiers" in _table_names(con)
     con.close()
 
-    command.downgrade(cfg, "-1")
+    # Target the fixed revision, not a head-relative "-1": this migration
+    # is no longer guaranteed to be head once later migrations land on top
+    # of it (e.g. users.language), and "-1" from head would undo those
+    # instead.
+    command.downgrade(cfg, PRE_MIGRATION_REVISION)
 
     con = _connect(db_path)
     assert "round_qualifiers" not in _table_names(con)

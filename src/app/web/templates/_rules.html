@@ -1,8 +1,8 @@
 <div id="rules">
   <div class="head">
     <span class="note">
-      {%- if default_preset %} From your default preset &mdash; <strong>{{ default_preset.name }}</strong>
-      {%- else %} No default preset set &mdash; <a href="/preferences">pick one</a>
+      {%- if default_preset %} {% trans name=default_preset.name %}From your default preset &mdash; <strong>{{ name }}</strong>{% endtrans %}
+      {%- else %} {% trans %}No default preset set &mdash; <a href="/preferences">pick one</a>{% endtrans %}
       {%- endif %}
     </span>
   </div>
@@ -12,39 +12,39 @@
     {% for r in rules %}
     <div class="row" style="grid-template-columns: 1fr auto">
       <span class="title-c">
-        {%- if r.offset_days == 0 %}Same day{% else %}{{ -r.offset_days }} day{{ "" if -r.offset_days == 1 else "s" }} before{% endif %}
-        each {{ r.anchor.value.replace("_", " ") }}
-        <small>DM &middot; applies to every round above</small>
+        {%- if r.offset_days == 0 %}{{ _("Same day") }}{% else %}{% trans count=-r.offset_days %}{{ count }} day before{% pluralize %}{{ count }} days before{% endtrans %}{% endif %}
+        {% trans anchor=r.anchor.value.replace("_", " ") %}each {{ anchor }}{% endtrans %}
+        <small>{{ _("DM &middot; applies to every round above") }}</small>
       </span>
       <span class="acts">
         <form method="post" action="/rules/{{ r.id }}/delete" hx-post="/rules/{{ r.id }}/delete"
               hx-target="#rules" hx-swap="outerHTML">
-          <button class="act no" type="submit">Remove</button>
+          <button class="act no" type="submit">{{ _("Remove") }}</button>
         </form>
       </span>
     </div>
     {% endfor %}
   </div>
   {% else %}
-  <p class="dim">No reminders for this concert yet.</p>
+  <p class="dim">{{ _("No reminders for this concert yet.") }}</p>
   {% endif %}
 
   <div class="bar">
-    <span class="tally">Rules here override your default preset for this concert only.</span>
+    <span class="tally">{{ _("Rules here override your default preset for this concert only.") }}</span>
     {#- A native disclosure, not a JS-driven reveal: no on* handler is needed
         at all, so invariant 7's "no user text in on* handlers" rule never
         comes into play here. Collapsed by default -- the old always-open
         number-input + <select> is what this replaces. -#}
     <details class="fold">
-      <summary>Add a reminder</summary>
+      <summary>{{ _("Add a reminder") }}</summary>
       <div class="fold-body">
         <form class="inline" method="post" action="/concerts/{{ concert.event_id }}/rules"
               hx-post="/concerts/{{ concert.event_id }}/rules" hx-target="#rules" hx-swap="outerHTML">
-          <label><input type="number" name="days_before" value="3" min="0" max="60" style="width:4em"> days before</label>
+          <label><input type="number" name="days_before" value="3" min="0" max="60" style="width:4em"> {{ _("days before") }}</label>
           <select name="anchor">{% for a in anchors %}
             <option value="{{ a.value }}">{{ a.value.replace("_", " ") }}</option>
           {% endfor %}</select>
-          <button type="submit">Remind me</button>
+          <button type="submit">{{ _("Remind me") }}</button>
         </form>
         {% if presets %}
         <p class="inline tiny">
@@ -52,10 +52,10 @@
           <form method="post" action="/concerts/{{ concert.event_id }}/presets/{{ p.id }}/apply"
                 hx-post="/concerts/{{ concert.event_id }}/presets/{{ p.id }}/apply"
                 hx-target="#rules" hx-swap="outerHTML">
-            <button class="btn quiet" type="submit">Apply &ldquo;{{ p.name }}&rdquo;</button>
+            <button class="btn quiet" type="submit">{% trans name=p.name %}Apply &ldquo;{{ name }}&rdquo;{% endtrans %}</button>
           </form>
           {% endfor %}
-          <a class="dim" href="/preferences">Edit presets</a>
+          <a class="dim" href="/preferences">{{ _("Edit presets") }}</a>
         </p>
         {% endif %}
       </div>

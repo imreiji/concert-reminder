@@ -26,6 +26,8 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual_lines
 from app.domain.types import Anchor, TagKind
+from app.i18n import N_
+from app.i18n import gettext as _
 from app.web.auth import SessionUser, require_user
 from app.web.routes.preferences import COMMON_TIMEZONES, all_timezones
 
@@ -56,14 +58,16 @@ OFFSET_OPTIONS = [
 # the verb phrase after "when" (a moment offset) and the noun phrase after
 # "before"/"after" (a duration offset). Covers all five real anchors.
 ANCHOR_ORDER = ["opens", "closes", "results", "payment", "event_start"]
+# N_() marks these for extraction; _() is applied per-request in the handler
+# (module dicts evaluate at import, before any request locale is set).
 ANCHOR_MOMENT = {
-    "opens": "applications open", "closes": "applications close",
-    "results": "results come out", "payment": "payment is due",
-    "event_start": "the show starts",
+    "opens": N_("applications open"), "closes": N_("applications close"),
+    "results": N_("results come out"), "payment": N_("payment is due"),
+    "event_start": N_("the show starts"),
 }
 ANCHOR_NOUN = {
-    "opens": "the opening", "closes": "the deadline", "results": "the results",
-    "payment": "the payment deadline", "event_start": "the show",
+    "opens": N_("the opening"), "closes": N_("the deadline"), "results": N_("the results"),
+    "payment": N_("the payment deadline"), "event_start": N_("the show"),
 }
 
 # The three starter presets as rule sets, defined once. Each rule is
@@ -139,15 +143,16 @@ async def welcome(
         context.update({
             "offset_options": OFFSET_OPTIONS,
             "anchor_order": ANCHOR_ORDER,
-            "anchor_moment": ANCHOR_MOMENT,
-            "anchor_noun": ANCHOR_NOUN,
+            # Translated per-request (the route runs under the request locale).
+            "anchor_moment": {k: _(v) for k, v in ANCHOR_MOMENT.items()},
+            "anchor_noun": {k: _(v) for k, v in ANCHOR_NOUN.items()},
             "preset_templates": PRESET_TEMPLATES,
             "standard_rules": PRESET_TEMPLATES["standard"],
         })
     elif step == 2:
         # A live JST/local sample so the user sees the dual render in the flesh
         # (invariant 1: JST first, both zones always present).
-        _, tz_preview = fmt_dual_lines(datetime.now(UTC), db_user.timezone)
+        _dayline, tz_preview = fmt_dual_lines(datetime.now(UTC), db_user.timezone)
         context.update({
             "tz": db_user.timezone, "tz_auto": db_user.tz_auto, "tz_preview": tz_preview,
             "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
@@ -187,7 +192,7 @@ async def create_wizard_preset(
     db_user = await ensure_user(session, user.id, user.username)
     rules: list[tuple[int, int, str, Anchor]] = []
     for off, dir_, anc in zip(offset, direction, anchor, strict=False):
-        days_str, _, hours_str = off.partition(":")
+        days_str, _sep, hours_str = off.partition(":")
         try:
             rules.append((int(days_str or 0), int(hours_str or 0), dir_, Anchor(anc)))
         except ValueError as e:

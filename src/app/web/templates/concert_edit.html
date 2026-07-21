@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}edit {{ concert.title }} — dekimasen.app{% endblock %}
+{% block title %}{{ _("edit") }} {{ concert.title }} — dekimasen.app{% endblock %}
 {% block content %}
 {#- Rounds and legs lead; everything else folds.
 
@@ -11,26 +11,26 @@
 {%- set link_count = [concert.eventernote_url, concert.official_url, concert.source_url]
       | select | list | length %}
 {%- set detail_bits = [
-      ('title EN' if concert.title_en else none),
-      ('organizer' if concert.organizer else none),
-      ('categories' if concert.categories else none),
-      ('notes' if concert.notes else none),
-      ((link_count ~ ' link' ~ ('' if link_count == 1 else 's')) if link_count else none),
+      (_('title EN') if concert.title_en else none),
+      (_('organizer') if concert.organizer else none),
+      (_('categories') if concert.categories else none),
+      (_('notes') if concert.notes else none),
+      (ngettext('%(n)s link', '%(n)s links', link_count, n=link_count) if link_count else none),
     ] | reject('none') | list %}
-<h1>Edit event</h1>
+<h1>{{ _("Edit event") }}</h1>
 
 <form class="stack wide editor" method="post" action="/concerts/{{ concert.event_id }}/edit"
       id="new-concert">
 
   <div class="ebar">
-    <label class="grow">Title (JP) <input class="title-input" name="title" required
+    <label class="grow">{{ _("Title (JP)") }} <input class="title-input" name="title" required
       maxlength="200" value="{{ concert.title }}"></label>
-    <label>Event ID <span class="dim tiny">(this event's URL — letters, digits, hyphens, underscores only)</span>
+    <label>{{ _("Event ID") }} <span class="dim tiny">{{ _("(this event's URL — letters, digits, hyphens, underscores only)") }}</span>
       <input name="event_id" required maxlength="100" pattern="[A-Za-z0-9_\-]+"
              value="{{ concert.event_id }}"></label>
-    <label>Kind
+    <label>{{ _("Kind") }}
       <select name="kind">
-        <option value="">— none —</option>
+        <option value="">{{ _("— none —") }}</option>
         {% for k in concert_kinds %}
         <option value="{{ k.value }}" {% if k == concert.kind %}selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>
         {% endfor %}
@@ -39,16 +39,16 @@
   </div>
 
   <div class="section-head">
-    <h2>Rounds and legs</h2>
-    <p class="dim tiny">Where nearly every edit happens — a round gets announced
-      and needs adding. Times are JST.</p>
+    <h2>{{ _("Rounds and legs") }}</h2>
+    <p class="dim tiny">{% trans %}Where nearly every edit happens — a round gets announced
+      and needs adding. Times are JST.{% endtrans %}</p>
   </div>
 
   <div class="editor-actions">
-    <span class="dim tiny">{{ concert.days | length }} leg{{ '' if concert.days | length == 1 else 's' }}
-      · {{ concert.rounds | length }} round{{ '' if concert.rounds | length == 1 else 's' }}</span>
-    <button type="button" class="btn" onclick="addRow('round-rows','round-row-template')">Add a round</button>
-    <button type="button" class="btn quiet" onclick="addRow('day-rows','day-row-template')">Add a leg</button>
+    <span class="dim tiny">{% trans count=concert.days | length %}{{ count }} leg{% pluralize %}{{ count }} legs{% endtrans %}
+      · {% trans count=concert.rounds | length %}{{ count }} round{% pluralize %}{{ count }} rounds{% endtrans %}</span>
+    <button type="button" class="btn" onclick="addRow('round-rows','round-row-template')">{{ _("Add a round") }}</button>
+    <button type="button" class="btn quiet" onclick="addRow('day-rows','day-row-template')">{{ _("Add a leg") }}</button>
   </div>
 
   <div id="round-rows" class="row-list">
@@ -58,36 +58,36 @@
       <div class="redit-top">
         <input class="redit-name" name="round_label" required maxlength="200"
                placeholder="1次先行抽選" value="{{ r.label }}">
-        <input name="round_label_en" maxlength="200" placeholder="1st-round advance lottery"
+        <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
                value="{{ r.label_en or '' }}">
         <select name="round_kind">{% for k in kinds %}
           <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ round_kind_label(k) }}</option>
         {% endfor %}</select>
-        <button type="button" class="x" title="Remove this round" data-remove-round>×</button>
+        <button type="button" class="x" title="{{ _('Remove this round') }}" data-remove-round>×</button>
       </div>
       {% with value = leg_value, selected = leg_ids %}{% include "_round_leg_chips.html" %}{% endwith %}
       {% with value = qual_value, selected = qual_ids, self_id = r.id, kind_value = r.kind.value %}{% include "_round_qualifier_chips.html" %}{% endwith %}
       <div class="redit-times">
-        <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"
+        <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at"
           value="{{ jst(r.opens_at_utc).strftime('%Y-%m-%dT%H:%M') if r.opens_at_utc else '' }}"></label>
-        <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"
+        <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at"
           value="{{ jst(r.closes_at_utc).strftime('%Y-%m-%dT%H:%M') if r.closes_at_utc else '' }}"></label>
-        <label>Results (JST) <input type="datetime-local" name="round_results_at"
+        <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at"
           value="{{ jst(r.results_at_utc).strftime('%Y-%m-%dT%H:%M') if r.results_at_utc else '' }}"></label>
-        <label>Payment deadline (JST) <input type="datetime-local" name="round_payment_at"
+        <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at"
           value="{{ jst(r.payment_deadline_at_utc).strftime('%Y-%m-%dT%H:%M') if r.payment_deadline_at_utc else '' }}"></label>
       </div>
       <div class="redit-extra">
-        <input name="round_url" type="url" placeholder="Apply URL (optional)" value="{{ r.url or '' }}">
-        <input name="round_notes" maxlength="300" placeholder="Notes (optional)" value="{{ r.notes or '' }}">
+        <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}" value="{{ r.url or '' }}">
+        <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}" value="{{ r.notes or '' }}">
       </div>
     </div>
     {% else %}
-    <p class="dim tiny" data-no-rounds>No rounds yet — add the first one above.</p>
+    <p class="dim tiny" data-no-rounds>{{ _("No rounds yet — add the first one above.") }}</p>
     {% endfor %}
   </div>
 
-  <h3 class="section-sub">Legs <small class="dim">(one per show / day)</small></h3>
+  <h3 class="section-sub">{{ _("Legs") }} <small class="dim">{{ _("(one per show / day)") }}</small></h3>
   <div id="day-rows" class="row-list">
     {% for d in concert.days %}
     <div class="eleg{% if d.cancelled %} cancelled{% endif %}">
@@ -98,82 +98,102 @@
           what lets a brand-new leg be assigned a round in the same save. -#}
       <input type="hidden" name="day_key" value="{{ d.id }}">
       <div class="eleg-top">
-        <input name="day_label" maxlength="100" placeholder="Day 1" value="{{ d.label }}">
-        <input name="day_city" maxlength="100" placeholder="Leg / city (e.g. Kanagawa)" value="{{ d.city or '' }}">
+        <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ d.label }}">
+        <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}" value="{{ d.city or '' }}">
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="{{ 'true' if d.cancelled else 'false' }}">
           <button type="button" class="chip{% if d.cancelled %} on{% endif %}" data-cancel-toggle
                   aria-pressed="{{ 'true' if d.cancelled else 'false' }}"
-                  title="A cancelled leg is dimmed and badged, never deleted">Cancelled</button>
+                  title="{{ _('A cancelled leg is dimmed and badged, never deleted') }}">{{ _("Cancelled") }}</button>
         </span>
-        <button type="button" class="x" title="Remove this leg" data-remove-leg>×</button>
+        <button type="button" class="x" title="{{ _('Remove this leg') }}" data-remove-leg>×</button>
       </div>
       <div class="eleg-fields">
-        <input name="day_venue" maxlength="200" placeholder="Venue" value="{{ d.venue or '' }}">
-        <input name="day_venue_address" maxlength="300" placeholder="Venue address" value="{{ d.venue_address or '' }}">
-        <label>Doors (JST) <input type="datetime-local" name="day_doors_at"
+        <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}" value="{{ d.venue or '' }}">
+        <input name="day_venue_address" maxlength="300" placeholder="{{ _('Venue address') }}" value="{{ d.venue_address or '' }}">
+        <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"
           value="{{ jst(d.doors_at_utc).strftime('%Y-%m-%dT%H:%M') if d.doors_at_utc else '' }}"></label>
-        <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required
+        <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required
           value="{{ jst(d.starts_at_utc).strftime('%Y-%m-%dT%H:%M') }}"></label>
       </div>
     </div>
     {% else %}
-    <p class="dim tiny" data-no-legs-row>No legs yet — add the first one above.</p>
+    <p class="dim tiny" data-no-legs-row>{{ _("No legs yet — add the first one above.") }}</p>
     {% endfor %}
   </div>
 
   <details class="fold">
-    <summary>Details and links
-      <span class="fold-hint">{{ detail_bits | join(' · ') if detail_bits else 'nothing set yet' }}</span></summary>
+    <summary>{{ _("Details and links") }}
+      <span class="fold-hint">{{ detail_bits | join(' · ') if detail_bits else _('nothing set yet') }}</span></summary>
     <div class="fold-body">
       <div class="grid2">
-        <label>Title (EN) <input name="title_en" maxlength="200" value="{{ concert.title_en or '' }}"></label>
-        <label>Artist / organizer <input name="organizer" maxlength="200" value="{{ concert.organizer or '' }}"></label>
-        <label>Categories (comma-sep) <input name="categories" value="{{ concert.categories or '' }}"></label>
-        <label>eventernote URL <input name="eventernote_url" type="url" value="{{ concert.eventernote_url or '' }}"></label>
-        <label>Official URL <input name="official_url" type="url" value="{{ concert.official_url or '' }}"></label>
-        <label>Source URL <input name="source_url" type="url" value="{{ concert.source_url or '' }}"></label>
+        <label>{{ _("Artist / organizer") }} <input name="organizer" maxlength="200" value="{{ concert.organizer or '' }}"></label>
+        <label>{{ _("Categories (comma-sep)") }} <input name="categories" value="{{ concert.categories or '' }}"></label>
+        <label>{{ _("eventernote URL") }} <input name="eventernote_url" type="url" value="{{ concert.eventernote_url or '' }}"></label>
+        <label>{{ _("Official URL") }} <input name="official_url" type="url" value="{{ concert.official_url or '' }}"></label>
+        <label>{{ _("Source URL") }} <input name="source_url" type="url" value="{{ concert.source_url or '' }}"></label>
       </div>
-      <label>Performers (one per line) <textarea name="performers_text" rows="3">{{ concert.performers_text or '' }}</textarea></label>
-      <label>Notes <textarea name="notes" rows="2">{{ concert.notes or '' }}</textarea></label>
+      <label>{{ _("Performers (one per line)") }} <textarea name="performers_text" rows="3">{{ concert.performers_text or '' }}</textarea></label>
+      <label>{{ _("Notes") }} <textarea name="notes" rows="2">{{ concert.notes or '' }}</textarea></label>
+
+      {#- Per-language variants of the user-entered title, venue and notes.
+          The JP-side originals are the title above and the free-text venue;
+          these are shown to viewers on the matching locale, with a fallback
+          to the original when a variant is empty (i18n.loc_field). -#}
+      <div class="section-head trans-head">
+        <h3 class="section-sub">{{ _("Translations") }}</h3>
+        <p class="dim tiny">{{ _("Optional — shown to viewers reading in that language, falling back to the originals above.") }}</p>
+      </div>
+      <h4 class="section-sub">{{ _("English") }}</h4>
+      <div class="grid2">
+        <label>{{ _("Title") }} <input name="title_en" maxlength="200" value="{{ concert.title_en or '' }}"></label>
+        <label>{{ _("Venue") }} <input name="venue_en" maxlength="200" value="{{ concert.venue_en or '' }}"></label>
+      </div>
+      <label>{{ _("Notes") }} <textarea name="notes_en" rows="2">{{ concert.notes_en or '' }}</textarea></label>
+      <h4 class="section-sub">中文</h4>
+      <div class="grid2">
+        <label>{{ _("Title") }} <input name="title_zh" maxlength="200" value="{{ concert.title_zh or '' }}"></label>
+        <label>{{ _("Venue") }} <input name="venue_zh" maxlength="200" value="{{ concert.venue_zh or '' }}"></label>
+      </div>
+      <label>{{ _("Notes") }} <textarea name="notes_zh" rows="2">{{ concert.notes_zh or '' }}</textarea></label>
     </div>
   </details>
 
   <details class="fold">
-    <summary>Tags
-      <span class="fold-hint">{% if tag_summary %}{{ tag_summary[:6] | join(' · ') }}{% if tag_summary | length > 6 %} · +{{ tag_summary | length - 6 }} more{% endif %}{% else %}no tags yet{% endif %}</span></summary>
+    <summary>{{ _("Tags") }}
+      <span class="fold-hint">{% if tag_summary %}{{ tag_summary[:6] | join(' · ') }}{% if tag_summary | length > 6 %} · {% trans n=tag_summary | length - 6 %}+{{ n }} more{% endtrans %}{% endif %}{% else %}{{ _("no tags yet") }}{% endif %}</span></summary>
     <div class="fold-body">
       {% include "_tag_picker_fields.html" %}
     </div>
   </details>
 
   <details class="fold">
-    <summary>Edit history
-      <span class="fold-hint">{% if audit_log %}{{ audit_log | length }} change{{ '' if audit_log | length == 1 else 's' }} · last by {{ audit_log[0].editor.username if audit_log[0].editor else (audit_log[0].edited_by or "deleted user") }}{% else %}no edits recorded yet{% endif %}</span></summary>
+    <summary>{{ _("Edit history") }}
+      <span class="fold-hint">{% if audit_log %}{% trans count=audit_log | length %}{{ count }} change{% pluralize %}{{ count }} changes{% endtrans %} · {% trans username=(audit_log[0].editor.username if audit_log[0].editor else (audit_log[0].edited_by or _("deleted user"))) %}last by {{ username }}{% endtrans %}{% else %}{{ _("no edits recorded yet") }}{% endif %}</span></summary>
     <div class="fold-body">
       {% if audit_log %}
       <ul class="rows">
         {% for a in audit_log %}
         <li>
           {# edited_by is NULL once that account is erased (ondelete=SET NULL) #}
-          <strong>{{ a.editor.username if a.editor else (a.edited_by or "Deleted user") }}</strong>
+          <strong>{{ a.editor.username if a.editor else (a.edited_by or _("Deleted user")) }}</strong>
           <span class="dim tiny">{{ dual(a.edited_at_utc, tz) }}</span>
           <ul class="dim tiny audit-changes">
             {% for c in a.changes %}
-            <li>{{ c.field }}: {{ c.before if c.before is not none else "(empty)" }} → {{ c.after if c.after is not none else "(empty)" }}</li>
+            <li>{{ c.field }}: {{ c.before if c.before is not none else _("(empty)") }} → {{ c.after if c.after is not none else _("(empty)") }}</li>
             {% endfor %}
           </ul>
         </li>
         {% endfor %}
       </ul>
       {% else %}
-      <p class="dim tiny">Nothing yet. Only the concert's own top-level fields are
-        tracked — day, round and tag changes are not.</p>
+      <p class="dim tiny">{% trans %}Nothing yet. Only the concert's own top-level fields are
+        tracked — day, round and tag changes are not.{% endtrans %}</p>
       {% endif %}
     </div>
   </details>
 
-  <button class="btn">Save event</button>
+  <button class="btn">{{ _("Save event") }}</button>
 </form>
 {% include "_tag_picker_script.html" %}
 
@@ -184,18 +204,19 @@
     membership). -#}
 <div class="danger-row">
   <div>
-    <strong>Duplicate or delete</strong>
-    <p class="dim tiny">Duplicating copies this event's tags and details — the
+    <strong>{{ _("Duplicate or delete") }}</strong>
+    <p class="dim tiny">{% trans %}Duplicating copies this event's tags and details — the
       exact tag set as pruned here, not a group's current membership — but
-      not rounds or legs.</p>
+      not rounds or legs.{% endtrans %}</p>
   </div>
   <span class="danger-row-actions">
     <form method="post" action="/concerts/{{ concert.event_id }}/duplicate">
-      <button class="btn quiet">Duplicate as new event</button>
+      <button class="btn quiet">{{ _("Duplicate as new event") }}</button>
     </form>
     <form method="post" action="/concerts/{{ concert.event_id }}/delete"
-          onsubmit="return confirm('Delete this concert and every reminder attached to it?')">
-      <button class="btn danger">Delete event</button>
+          data-confirm="{{ _('Delete this concert and every reminder attached to it?') }}"
+          onsubmit="return confirm(this.dataset.confirm)">
+      <button class="btn danger">{{ _("Delete event") }}</button>
     </form>
   </span>
 </div>
@@ -205,20 +226,20 @@
     <input type="hidden" name="day_id" value="">
     <input type="hidden" name="day_key" value="">
     <div class="eleg-top">
-      <input name="day_label" maxlength="100" placeholder="Day 1">
-      <input name="day_city" maxlength="100" placeholder="Leg / city (e.g. Kanagawa)">
+      <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}">
+      <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}">
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
         <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                title="A cancelled leg is dimmed and badged, never deleted">Cancelled</button>
+                title="{{ _('A cancelled leg is dimmed and badged, never deleted') }}">{{ _("Cancelled") }}</button>
       </span>
-      <button type="button" class="x" title="Remove this leg" data-remove-leg>×</button>
+      <button type="button" class="x" title="{{ _('Remove this leg') }}" data-remove-leg>×</button>
     </div>
     <div class="eleg-fields">
-      <input name="day_venue" maxlength="200" placeholder="Venue">
-      <input name="day_venue_address" maxlength="300" placeholder="Venue address">
-      <label>Doors (JST) <input type="datetime-local" name="day_doors_at"></label>
-      <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required></label>
+      <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}">
+      <input name="day_venue_address" maxlength="300" placeholder="{{ _('Venue address') }}">
+      <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
+      <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
     </div>
   </div>
 </template>
@@ -228,23 +249,23 @@
     <input type="hidden" name="round_id" value="">
     <div class="redit-top">
       <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選">
-      <input name="round_label_en" maxlength="200" placeholder="1st-round advance lottery">
+      <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}">
       <select name="round_kind">{% for k in kinds %}
         <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
       {% endfor %}</select>
-      <button type="button" class="x" title="Remove this round" data-remove-round>×</button>
+      <button type="button" class="x" title="{{ _('Remove this round') }}" data-remove-round>×</button>
     </div>
     {% with value = "", selected = none %}{% include "_round_leg_chips.html" %}{% endwith %}
     {% with value = "", selected = none, self_id = none, kind_value = "" %}{% include "_round_qualifier_chips.html" %}{% endwith %}
     <div class="redit-times">
-      <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"></label>
-      <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"></label>
-      <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
-      <label>Payment deadline (JST) <input type="datetime-local" name="round_payment_at"></label>
+      <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at"></label>
+      <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at"></label>
+      <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at"></label>
+      <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at"></label>
     </div>
     <div class="redit-extra">
-      <input name="round_url" type="url" placeholder="Apply URL (optional)">
-      <input name="round_notes" maxlength="300" placeholder="Notes (optional)">
+      <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}">
+      <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}">
     </div>
   </div>
 </template>

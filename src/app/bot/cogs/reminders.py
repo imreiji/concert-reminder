@@ -7,11 +7,13 @@ from discord import app_commands
 from discord.ext import commands
 from sqlalchemy import select
 
-from app.db.models import Concert, ReminderRule
+from app.db.models import Concert, ReminderRule, User
 from app.db.service import ensure_user, sync_rule, upcoming_rounds, user_calendar_events
 from app.db.session import SessionMaker
 from app.domain.timezones import fmt_dual
 from app.domain.types import Anchor
+from app.i18n import get_locale, loc_field, set_locale
+from app.i18n import gettext as _
 
 ANCHOR_CHOICES = [
     app_commands.Choice(name="before it closes (deadlines)", value=Anchor.CLOSES.value),
@@ -32,13 +34,16 @@ class Reminders(commands.Cog):
         days = max(1, min(days, 90))
         async with SessionMaker() as session:
             user = await ensure_user(session, interaction.user.id, interaction.user.name)
+            set_locale(user.language)
             tz = user.timezone
             pairs = await upcoming_rounds(session, horizon_days=days)
             await session.commit()
 
+        loc = get_locale()
         if not pairs:
+            none_msg = _("Nothing opens or closes in the next {days} days. 平和ですね。")
             await interaction.response.send_message(
-                f"Nothing opens or closes in the next {days} days. 平和ですね。", ephemeral=True
+                none_msg.format(days=days), ephemeral=True
             )
             return
 
@@ -47,15 +52,16 @@ class Reminders(commands.Cog):
         for concert, round_ in pairs[:20]:
             bits = []
             if round_.opens_at_utc and round_.opens_at_utc > now:
-                bits.append(f"opens {fmt_dual(round_.opens_at_utc, tz)}")
+                bits.append(f"{_('opens')} {fmt_dual(round_.opens_at_utc, tz, loc)}")
             if round_.closes_at_utc and round_.closes_at_utc > now:
-                bits.append(f"closes {fmt_dual(round_.closes_at_utc, tz)}")
+                bits.append(f"{_('closes')} {fmt_dual(round_.closes_at_utc, tz, loc)}")
             if bits:
-                lines.append(f"**{concert.title}** — {round_.label}\n{' / '.join(bits)}")
+                title = loc_field(concert, "title", loc)
+                lines.append(f"**{title}** — {round_.label}\n{' / '.join(bits)}")
 
         embed = discord.Embed(
-            title=f"Next {days} days",
-            description="\n\n".join(lines) or "Nothing upcoming.",
+            title=_("Next {days} days").format(days=days),
+            description="\n\n".join(lines) or _("Nothing upcoming."),
             color=0x5865F2,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -75,23 +81,27 @@ class Reminders(commands.Cog):
         count = max(1, min(count, 25))
         async with SessionMaker() as session:
             user = await ensure_user(session, interaction.user.id, interaction.user.name)
+            set_locale(user.language)
             tz = user.timezone
-            events = await user_calendar_events(session, interaction.user.id)
+            events = await user_calendar_events(
+                session, interaction.user.id, locale=get_locale()
+            )
             await session.commit()
 
         if not events:
             await interaction.response.send_message(
-                "No upcoming deadlines on your reminders. `/remindme` to add one.",
+                _("No upcoming deadlines on your reminders. `/remindme` to add one."),
                 ephemeral=True,
             )
             return
 
+        loc = get_locale()
         lines = [
-            f"**{e.concert_title}** — {e.label}\n{fmt_dual(e.at_utc, tz)}"
+            f"**{e.concert_title}** — {e.label}\n{fmt_dual(e.at_utc, tz, loc)}"
             for e in events[:count]
         ]
         embed = discord.Embed(
-            title="Your upcoming deadlines",
+            title=_("Your upcoming deadlines"),
             description="\n\n".join(lines),
             color=0x5865F2,
         )
@@ -114,11 +124,12 @@ class Reminders(commands.Cog):
         days_before: app_commands.Range[int, 0, 60],
     ) -> None:
         async with SessionMaker() as session:
-            await ensure_user(session, interaction.user.id, interaction.user.name)
+            user = await ensure_user(session, interaction.user.id, interaction.user.name)
+            set_locale(user.language)
             target = await session.get(Concert, concert)
             if target is None:
                 await interaction.response.send_message(
-                    "That concert doesn't exist (deleted?).", ephemeral=True
+                    _("That concert doesn't exist (deleted?)."), ephemeral=True
                 )
                 return
 
@@ -133,10 +144,11 @@ class Reminders(commands.Cog):
             await sync_rule(session, rule)
             await session.commit()
 
-        when = "same day" if days_before == 0 else f"{days_before} day(s) before"
+        when = _("same day") if days_before == 0 else _("{n} day(s) before").format(n=days_before)
         await interaction.response.send_message(
-            f"Done — I'll DM you {when} each **{anchor.name.removeprefix('before ')}** "
-            f"for **{target.title}**.",
+            _("Done — I'll DM you {when} each **{anchor}** for **{title}**.").format(
+                when=when, anchor=anchor.name.removeprefix("before "), title=target.title
+            ),
             ephemeral=True,
         )
 
@@ -157,6 +169,8 @@ class Reminders(commands.Cog):
     @app_commands.command(description="List my reminder rules")
     async def myreminders(self, interaction: discord.Interaction) -> None:
         async with SessionMaker() as session:
+            user = await session.get(User, interaction.user.id)
+            set_locale(user.language if user else "en")
             res = await session.execute(
                 select(ReminderRule, Concert)
                 .outerjoin(Concert, ReminderRule.concert_id == Concert.id)
@@ -166,16 +180,16 @@ class Reminders(commands.Cog):
 
         if not rows:
             await interaction.response.send_message(
-                "No rules yet — `/remindme` to create one.", ephemeral=True
+                _("No rules yet — `/remindme` to create one."), ephemeral=True
             )
             return
 
         lines = []
         for rule, concert in rows:
-            scope = concert.title if concert else f"round #{rule.round_id}"
+            scope = concert.title if concert else _("round #{n}").format(n=rule.round_id)
             d = abs(rule.offset_days)
-            direction = "before" if rule.offset_days < 0 else "after"
-            timing = "same-day" if d == 0 else f"{d}d {direction}"
+            direction = _("before") if rule.offset_days < 0 else _("after")
+            timing = _("same-day") if d == 0 else f"{d}d {direction}"
             lines.append(f"`#{rule.id}` **{scope}** — {timing} {rule.anchor.value}")
         await interaction.response.send_message("\n".join(lines[:25]), ephemeral=True)
 

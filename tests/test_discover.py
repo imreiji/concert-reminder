@@ -246,6 +246,30 @@ async def test_won_pill_shows_the_payment_date_and_is_urgent(client):
     assert "p-danger" in tile
 
 
+async def test_won_pill_localizes_day_month_under_ja(client):
+    """The pill's prose is translated (service._day_month must delegate to
+    the locale-aware domain.timezones.fmt_day_month) -- a ja viewer should
+    see "7月22日", never the English "22 Jul" fragment, embedded in the same
+    Japanese sentence."""
+    async def build(seed):
+        c = await seed.concert("won-one-ja", title="Won concert")
+        now = datetime.now(UTC)
+        r = await seed.round(
+            c, "R1", opens=now - timedelta(days=30), closes=now - timedelta(days=10),
+            payment=datetime(2099, 7, 22, 12, 0, tzinfo=UTC),
+        )
+        await record_round_outcome(seed.s, USER, r.id, LotteryOutcome.APPLIED)
+        await record_round_outcome(seed.s, USER, r.id, LotteryOutcome.WON)
+
+    await seeded(client.db, build)
+    login(client)
+    client.cookies.set("lang", "ja")
+
+    tile = tile_for(client.get("/discover").text, "won-one-ja")
+    assert "7月22日" in tile
+    assert "22 Jul" not in tile
+
+
 async def test_secured_pill_is_green(client):
     async def build(seed):
         c = await seed.concert("paid-one", title="Paid concert")

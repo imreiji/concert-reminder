@@ -70,3 +70,39 @@ def test_fmt_day_month_has_no_year_weekday_or_zone():
     # not a deadline -- it carries none of dual time's JST/local apparatus.
     utc = jst_to_utc(datetime(2026, 10, 12, 19, 0))
     assert fmt_day_month(utc) == "12 Oct"
+
+
+_SAT = datetime(2026, 8, 1, 10, 0, tzinfo=ZoneInfo("UTC"))  # 19:00 JST Sat
+
+
+def test_fmt_dual_lines_ja():
+    date_line, time_line = fmt_dual_lines(_SAT, "America/Moncton", locale="ja")
+    assert date_line == "8月1日(土)"
+    assert time_line.startswith("19:00 JST · ")  # time line stays numeric
+
+
+def test_fmt_dual_lines_zh():
+    date_line, _ = fmt_dual_lines(_SAT, "America/Moncton", locale="zh")
+    assert date_line == "8月1日（六）"
+
+
+def test_fmt_dual_lines_en_unchanged():
+    date_line, _ = fmt_dual_lines(_SAT, "America/Moncton")
+    assert date_line == "Sat 1 Aug"
+
+
+def test_fmt_day_month_locales():
+    assert fmt_day_month(_SAT) == "1 Aug"
+    assert fmt_day_month(_SAT, locale="ja") == "8月1日"
+    assert fmt_day_month(_SAT, locale="zh") == "8月1日"
+
+
+def test_fmt_dual_locales():
+    assert fmt_dual(_SAT, "America/Moncton").startswith("Sat 2026-08-01 19:00 JST")
+    assert fmt_dual(_SAT, "America/Moncton", locale="ja").startswith("2026-08-01(土) 19:00 JST")
+    assert fmt_dual(_SAT, "America/Moncton", locale="zh").startswith("2026-08-01（六） 19:00 JST")
+
+
+def test_unknown_locale_falls_back_to_en():
+    date_line, _ = fmt_dual_lines(_SAT, "America/Moncton", locale="xx")
+    assert date_line == "Sat 1 Aug"

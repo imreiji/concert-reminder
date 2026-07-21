@@ -1,0 +1,3565 @@
+# Japanese catalogue for dekimasen.app.
+msgid ""
+msgstr ""
+"Project-Id-Version:  dekimasen.app\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-07-20 22:14-0300\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ja\n"
+"Language-Team: ja <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: src/app/bot/cogs/admin.py:36
+msgid "Admin access required."
+msgstr "管理者権限が必要です。"
+
+#: src/app/bot/cogs/admin.py:56
+#, python-brace-format
+msgid "**{name}** is now an editor."
+msgstr "**{name}** をエディターにしました。"
+
+#: src/app/bot/cogs/admin.py:66
+#, python-brace-format
+msgid "**{name}** is env-managed (EDITOR_WHITELIST) — edit `.env` instead."
+msgstr "**{name}** は環境変数で管理されています（EDITOR_WHITELIST）— `.env` を編集してください。"
+
+#: src/app/bot/cogs/admin.py:76
+#, python-brace-format
+msgid "**{name}** is no longer an editor."
+msgstr "**{name}** はエディターではなくなりました。"
+
+#: src/app/bot/cogs/admin.py:86 src/app/web/templates/preferences.html:435
+msgid "No editors yet."
+msgstr "エディターはまだいません。"
+
+#: src/app/bot/cogs/admin.py:88
+msgid "env"
+msgstr "env"
+
+#: src/app/bot/cogs/ping.py:25 src/app/web/templates/base.html:64
+msgid "admin"
+msgstr "管理者"
+
+#: src/app/bot/cogs/ping.py:26 src/app/web/templates/base.html:64
+msgid "editor"
+msgstr "エディター"
+
+#: src/app/bot/cogs/ping.py:27
+msgid "viewer"
+msgstr "閲覧者"
+
+#: src/app/bot/cogs/ping.py:30
+#, python-brace-format
+msgid "pong — latency {ms:.0f}ms — you are a **{role}**"
+msgstr "pong — 遅延 {ms:.0f}ms — あなたは **{role}** です"
+
+#: src/app/bot/cogs/reminders.py:44
+#, python-brace-format
+msgid "Nothing opens or closes in the next {days} days. 平和ですね。"
+msgstr "今後{days}日間、受付開始も締切もありません。平和ですね。"
+
+#: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:32
+#: src/app/bot/views.py:175 src/app/db/service.py:824
+msgid "opens"
+msgstr "受付開始"
+
+#: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:33
+#: src/app/bot/views.py:177 src/app/db/service.py:825
+msgid "closes"
+msgstr "締切"
+
+#: src/app/bot/cogs/reminders.py:63
+#, python-brace-format
+msgid "Next {days} days"
+msgstr "今後{days}日間"
+
+#: src/app/bot/cogs/reminders.py:64
+msgid "Nothing upcoming."
+msgstr "予定はありません。"
+
+#: src/app/bot/cogs/reminders.py:93
+msgid "No upcoming deadlines on your reminders. `/remindme` to add one."
+msgstr "リマインダーに登録した締切はありません。`/remindme` で追加できます。"
+
+#: src/app/bot/cogs/reminders.py:104
+msgid "Your upcoming deadlines"
+msgstr "今後の締切"
+
+#: src/app/bot/cogs/reminders.py:132
+msgid "That concert doesn't exist (deleted?)."
+msgstr "そのコンサートは存在しません（削除済み？）。"
+
+#: src/app/bot/cogs/reminders.py:147
+msgid "same day"
+msgstr "当日"
+
+#: src/app/bot/cogs/reminders.py:147
+#, python-brace-format
+msgid "{n} day(s) before"
+msgstr "{n}日前"
+
+#: src/app/bot/cogs/reminders.py:149
+#, python-brace-format
+msgid "Done — I'll DM you {when} each **{anchor}** for **{title}**."
+msgstr "完了 — **{title}** の各 **{anchor}** の{when}にDMします。"
+
+#: src/app/bot/cogs/reminders.py:183
+msgid "No rules yet — `/remindme` to create one."
+msgstr "ルールはまだありません — `/remindme` で作成できます。"
+
+#: src/app/bot/cogs/reminders.py:189
+#, python-brace-format
+msgid "round #{n}"
+msgstr "第{n}回"
+
+#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:194
+#: src/app/web/templates/welcome.html:154
+msgid "before"
+msgstr "前"
+
+#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:195
+#: src/app/web/templates/welcome.html:155
+msgid "after"
+msgstr "後"
+
+#: src/app/bot/cogs/reminders.py:192
+msgid "same-day"
+msgstr "当日"
+
+#: src/app/bot/messages.py:34 src/app/db/service.py:826
+msgid "results announced"
+msgstr "当落発表"
+
+#: src/app/bot/messages.py:35 src/app/bot/views.py:182
+#: src/app/db/service.py:827 src/app/web/templates/setup.html:159
+msgid "payment due"
+msgstr "入金締切"
+
+#: src/app/bot/messages.py:36
+msgid "starts"
+msgstr "開演"
+
+#: src/app/bot/messages.py:45 src/app/web/templates/welcome.html:453
+msgid "now"
+msgstr "今"
+
+#: src/app/bot/messages.py:48
+#, python-brace-format
+msgid "{n} hour"
+msgid_plural "{n} hours"
+msgstr[0] "{n}時間"
+
+#: src/app/bot/messages.py:51
+#, python-brace-format
+msgid "{n} day"
+msgid_plural "{n} days"
+msgstr[0] "{n}日"
+
+#: src/app/bot/messages.py:52
+#, python-brace-format
+msgid "in {unit}"
+msgstr "{unit}後"
+
+#: src/app/bot/messages.py:52
+#, python-brace-format
+msgid "{unit} ago"
+msgstr "{unit}前"
+
+#: src/app/bot/messages.py:76 src/app/bot/messages.py:169
+#: src/app/db/service.py:828
+msgid "event"
+msgstr "イベント"
+
+#: src/app/bot/messages.py:110 src/app/web/templates/concert_edit.html:112
+#: src/app/web/templates/concert_edit.html:150
+#: src/app/web/templates/concert_edit.html:156
+#: src/app/web/templates/concert_edit.html:239
+#: src/app/web/templates/concert_new.html:56
+#: src/app/web/templates/concert_new.html:108
+#: src/app/web/templates/concert_new.html:114
+#: src/app/web/templates/concert_new.html:147
+#: src/app/web/templates/import_preview.html:75
+#: src/app/web/templates/import_preview.html:182
+#: src/app/web/templates/tags.html:204
+msgid "Venue"
+msgstr "会場"
+
+#: src/app/bot/messages.py:113
+msgid "First deadline"
+msgstr "最初の締切"
+
+#: src/app/bot/messages.py:121 src/app/bot/messages.py:147
+#: src/app/bot/messages.py:189
+msgid "Open on dekimasen.app"
+msgstr "dekimasen.app で開く"
+
+#: src/app/bot/messages.py:142
+msgid "A performance you had a reminder for was cancelled, and it's been cleared."
+msgstr "リマインダーを設定していた公演が中止となり、削除されました。"
+
+#: src/app/bot/messages.py:186
+msgid "Apply here"
+msgstr "こちらから申し込む"
+
+#: src/app/bot/messages.py:186
+msgid "Ticket page"
+msgstr "チケットページ"
+
+#: src/app/bot/views.py:60
+msgid "Set my reminders"
+msgstr "リマインダーを設定"
+
+#: src/app/bot/views.py:78
+#, python-brace-format
+msgid "Done — {n} reminder(s) set from your default preset."
+msgstr "完了 — デフォルトプリセットから{n}件のリマインダーを設定しました。"
+
+#: src/app/bot/views.py:79
+msgid "You already have reminders on this event."
+msgstr "このイベントにはすでにリマインダーがあります。"
+
+#: src/app/bot/views.py:80
+msgid "You have no default preset — mark one with ★ in Preferences."
+msgstr "デフォルトプリセットがありません — 設定ページで★を付けてください。"
+
+#: src/app/bot/views.py:90
+msgid "Remove these reminders"
+msgstr "これらのリマインダーを削除"
+
+#: src/app/bot/views.py:106
+#, python-brace-format
+msgid "Removed {n} reminder(s) for this event — you won't be pinged about it."
+msgstr "このイベントの{n}件のリマインダーを削除しました — 今後通知されません。"
+
+#: src/app/bot/views.py:107
+msgid "You had no reminders on this event."
+msgstr "このイベントにはリマインダーがありませんでした。"
+
+#: src/app/bot/views.py:117
+msgid "Reinstate my reminders"
+msgstr "リマインダーを元に戻す"
+
+#: src/app/bot/views.py:133
+#, python-brace-format
+msgid ""
+"Reinstated {n} reminder(s) — you'll be notified again per your existing "
+"settings for any that are still active."
+msgstr "{n}件のリマインダーを元に戻しました — まだ有効なものについて、既存の設定に従って再び通知します。"
+
+#: src/app/bot/views.py:135
+msgid "You had no reminders set up on this event."
+msgstr "このイベントにはリマインダーが設定されていませんでした。"
+
+#: src/app/bot/views.py:145
+msgid "Show all deadlines"
+msgstr "すべての締切を表示"
+
+#: src/app/bot/views.py:163
+msgid "That event no longer exists."
+msgstr "そのイベントはもう存在しません。"
+
+#: src/app/bot/views.py:170
+msgid "cancelled"
+msgstr "中止"
+
+#: src/app/bot/views.py:179
+msgid "results"
+msgstr "結果"
+
+#: src/app/bot/views.py:190
+msgid "No deadlines entered yet."
+msgstr "締切はまだ登録されていません。"
+
+#: src/app/bot/views.py:199
+msgid "Snooze 1 day"
+msgstr "1日スヌーズ"
+
+#: src/app/bot/views.py:215
+msgid "Snoozed — I'll remind you again in 24 hours."
+msgstr "スヌーズしました — 24時間後に再度通知します。"
+
+#: src/app/bot/views.py:216
+msgid "Can't snooze — the deadline is less than a day away. ⏳"
+msgstr "スヌーズできません — 締切まで1日を切っています。⏳"
+
+#: src/app/bot/views.py:217 src/app/bot/views.py:368
+msgid "That reminder isn't yours."
+msgstr "そのリマインダーはあなたのものではありません。"
+
+#: src/app/bot/views.py:218 src/app/bot/views.py:369
+msgid "That reminder no longer exists."
+msgstr "そのリマインダーはもう存在しません。"
+
+#: src/app/bot/views.py:240
+msgid "I applied"
+msgstr "申し込んだ"
+
+#: src/app/bot/views.py:251
+msgid "Got it — marked as applied!"
+msgstr "了解 — 申し込み済みにしました！"
+
+#: src/app/bot/views.py:260
+msgid "Didn't apply"
+msgstr "申し込まなかった"
+
+#: src/app/bot/views.py:272
+msgid "No worries — you won't get results/payment reminders for this one."
+msgstr "了解です — このイベントの当落・入金のリマインダーは届きません。"
+
+#: src/app/bot/views.py:281 src/app/web/templates/_deadline_rows.html:22
+#: src/app/web/templates/_round_rows.html:26
+msgid "Won"
+msgstr "当選"
+
+#: src/app/bot/views.py:293
+msgid "Congrats! I'll remind you when payment is due."
+msgstr "おめでとうございます！入金締切が近づいたら通知します。"
+
+#: src/app/bot/views.py:302 src/app/web/templates/_deadline_rows.html:24
+#: src/app/web/templates/_round_rows.html:28
+msgid "Lost"
+msgstr "落選"
+
+#: src/app/bot/views.py:314
+msgid ""
+"Sorry to hear it — no payment reminder needed, and I'll let you know when"
+" the next round opens if there is one."
+msgstr "残念でした — 入金リマインダーは不要です。次の抽選があれば受付開始をお知らせします。"
+
+#: src/app/bot/views.py:324 src/app/web/templates/_capture_actions.html:72
+#: src/app/web/templates/home.html:153 src/app/web/templates/home.html:159
+msgid "Paid"
+msgstr "入金済み"
+
+#: src/app/bot/views.py:335
+msgid "Marked as paid — all set!"
+msgstr "入金済みにしました — これで完了です！"
+
+#: src/app/bot/views.py:344 src/app/bot/views.py:379
+msgid "Remind me later"
+msgstr "後で通知"
+
+#: src/app/bot/views.py:346
+msgid "How many days?"
+msgstr "何日後にしますか？"
+
+#: src/app/bot/views.py:360
+msgid "Enter a whole number of days greater than 0."
+msgstr "0より大きい整数（日数）を入力してください。"
+
+#: src/app/bot/views.py:366
+#, python-brace-format
+msgid "Got it — I'll remind you again in {n} day(s)."
+msgstr "了解 — {n}日後に再度通知します。"
+
+#: src/app/bot/views.py:367
+msgid "Can't snooze that far — the deadline is too close. ⏳"
+msgstr "そこまでスヌーズできません — 締切が近すぎます。⏳"
+
+#: src/app/db/service.py:832
+msgid "Lottery round"
+msgstr "抽選"
+
+#: src/app/db/service.py:833
+msgid "Eligibility item sale"
+msgstr "対象商品販売"
+
+#: src/app/db/service.py:834
+msgid "Stream ticket sale"
+msgstr "配信チケット"
+
+#: src/app/db/service.py:835
+msgid "General sale"
+msgstr "一般発売"
+
+#: src/app/db/service.py:836
+msgid "Result announcement"
+msgstr "当落発表"
+
+#: src/app/db/service.py:837
+msgid "Payment deadline"
+msgstr "入金締切"
+
+#: src/app/db/service.py:838
+msgid "First come, first served"
+msgstr "先着"
+
+#: src/app/db/service.py:839
+msgid "Overseas tour package"
+msgstr "海外ツアーパッケージ"
+
+#: src/app/db/service.py:840
+msgid "Upgrade round"
+msgstr "アップグレード抽選"
+
+#: src/app/db/service.py:841
+msgid "Other"
+msgstr "その他"
+
+#: src/app/db/service.py:1529 src/app/db/service.py:1595
+#: src/app/web/templates/discover.html:116
+msgid "Multiple"
+msgstr "複数"
+
+#: src/app/db/service.py:2283
+#, python-brace-format
+msgid "{n}d"
+msgstr "{n}日"
+
+#: src/app/db/service.py:2285
+#, python-brace-format
+msgid "{n}h"
+msgstr "{n}時間"
+
+#: src/app/db/service.py:2286
+#, python-brace-format
+msgid "{n}m"
+msgstr "{n}分"
+
+#: src/app/db/service.py:2381
+#, python-brace-format
+msgid "Upgrade won — pay by {day}"
+msgstr "アップグレード当選 — {day}までに入金"
+
+#: src/app/db/service.py:2382
+msgid "Upgrade won — payment due"
+msgstr "アップグレード当選 — 入金締切"
+
+#: src/app/db/service.py:2401
+msgid "Upgrade · Applied"
+msgstr "アップグレード・申込済み"
+
+#: src/app/db/service.py:2404
+#, python-brace-format
+msgid "Upgrade · Closes in {n}"
+msgstr "アップグレード・{n}後に締切"
+
+#: src/app/db/service.py:2407
+msgid "Upgrade · Open now"
+msgstr "アップグレード・受付中"
+
+#: src/app/db/service.py:2413 src/app/web/templates/_board.html:23
+#: src/app/web/templates/_deadline_rows.html:23
+#: src/app/web/templates/_round_rows.html:27
+#: src/app/web/templates/home.html:148
+msgid "Secured"
+msgstr "確保済み"
+
+#: src/app/db/service.py:2424
+#, python-brace-format
+msgid "Won — pay by {day}"
+msgstr "当選 — {day}までに入金"
+
+#: src/app/db/service.py:2425
+msgid "Won — payment due"
+msgstr "当選 — 入金締切"
+
+#: src/app/db/service.py:2434
+#, python-brace-format
+msgid "{kind} · Applied"
+msgstr "{kind}・申込済み"
+
+#: src/app/db/service.py:2454
+#, python-brace-format
+msgid "{kind} · Closes in {n}"
+msgstr "{kind}・{n}後に締切"
+
+#: src/app/db/service.py:2459
+#, python-brace-format
+msgid "{kind} · Open now"
+msgstr "{kind}・受付中"
+
+#: src/app/db/service.py:2465
+#, python-brace-format
+msgid "{kind} · Opens in {n}"
+msgstr "{kind}・{n}後に受付開始"
+
+#: src/app/db/service.py:2472
+msgid "All rounds closed"
+msgstr "すべての抽選が終了"
+
+#: src/app/web/routes/discover.py:55 src/app/web/templates/_board.html:20
+#: src/app/web/templates/home.html:115
+msgid "Open now"
+msgstr "受付中"
+
+#: src/app/web/routes/discover.py:56
+msgid "Opening soon"
+msgstr "まもなく受付開始"
+
+#: src/app/web/routes/discover.py:57
+msgid "Not tracking"
+msgstr "未追跡"
+
+#: src/app/web/routes/discover.py:65
+msgid "Event date"
+msgstr "公演日"
+
+#: src/app/web/routes/discover.py:66
+msgid "Next deadline"
+msgstr "次の締切"
+
+#: src/app/web/routes/discover.py:67
+msgid "Recently added"
+msgstr "最近追加"
+
+#: src/app/web/routes/welcome.py:64
+msgid "applications open"
+msgstr "受付開始"
+
+#: src/app/web/routes/welcome.py:64
+msgid "applications close"
+msgstr "受付締切"
+
+#: src/app/web/routes/welcome.py:65
+msgid "results come out"
+msgstr "当落発表"
+
+#: src/app/web/routes/welcome.py:65
+msgid "payment is due"
+msgstr "入金締切"
+
+#: src/app/web/routes/welcome.py:66
+msgid "the show starts"
+msgstr "開演"
+
+#: src/app/web/routes/welcome.py:69
+msgid "the opening"
+msgstr "受付開始"
+
+#: src/app/web/routes/welcome.py:69
+msgid "the deadline"
+msgstr "締切"
+
+#: src/app/web/routes/welcome.py:69
+msgid "the results"
+msgstr "当落発表"
+
+#: src/app/web/routes/welcome.py:70
+msgid "the payment deadline"
+msgstr "入金締切"
+
+#: src/app/web/routes/welcome.py:70
+msgid "the show"
+msgstr "公演"
+
+#: src/app/web/templates/_board.html:21
+#: src/app/web/templates/_deadline_rows.html:21
+#: src/app/web/templates/_round_rows.html:25
+#: src/app/web/templates/home.html:130
+msgid "Applied"
+msgstr "申込済み"
+
+#: src/app/web/templates/_board.html:22 src/app/web/templates/home.html:139
+msgid "Won — pay"
+msgstr "当選 — 入金"
+
+#: src/app/web/templates/_board.html:28
+msgid "lost"
+msgstr "落選"
+
+#: src/app/web/templates/_board.html:29 src/app/web/templates/setup.html:158
+msgid "applied"
+msgstr "申込済み"
+
+#: src/app/web/templates/_board.html:30
+msgid "won"
+msgstr "当選"
+
+#: src/app/web/templates/_board.html:31
+msgid "paid"
+msgstr "入金済み"
+
+#: src/app/web/templates/_board.html:32
+msgid "open"
+msgstr "受付中"
+
+#: src/app/web/templates/_board.html:98
+#, python-format
+msgid "+%(n)s more →"
+msgstr "+他%(n)s件 →"
+
+#: src/app/web/templates/_board.html:100
+msgid "Nothing here yet."
+msgstr "まだ何もありません。"
+
+#: src/app/web/templates/_board.html:105
+msgid "Nothing on your board yet."
+msgstr "ボードにはまだ何もありません。"
+
+#: src/app/web/templates/_board.html:105
+msgid "Find concerts to follow →"
+msgstr "フォローするコンサートを探す →"
+
+#: src/app/web/templates/_board_summary.html:12
+#, python-format
+msgid "%(n)s open"
+msgstr "%(n)s件が受付中"
+
+#: src/app/web/templates/_board_summary.html:13
+#, python-format
+msgid "%(n)s awaiting results"
+msgstr "%(n)s件が結果待ち"
+
+#: src/app/web/templates/_board_summary.html:14
+#, python-format
+msgid "%(n)s payment due"
+msgstr "%(n)s件が入金待ち"
+
+#: src/app/web/templates/_board_summary.html:15
+#, python-format
+msgid "%(n)s secured"
+msgstr "%(n)s件確保済み"
+
+#: src/app/web/templates/_capture_actions.html:33
+msgid "Not open yet"
+msgstr "まだ受付前"
+
+#: src/app/web/templates/_capture_actions.html:38
+msgid "Entered upgrade"
+msgstr "アップグレード申込済み"
+
+#: src/app/web/templates/_capture_actions.html:38
+msgid "I have applied"
+msgstr "申し込んだ"
+
+#: src/app/web/templates/_capture_actions.html:48
+msgid "Skipping"
+msgstr "見送る"
+
+#: src/app/web/templates/_capture_actions.html:48
+#: src/app/web/templates/_deadline_rows.html:25
+#: src/app/web/templates/_round_rows.html:29
+msgid "Not applying"
+msgstr "申し込まない"
+
+#: src/app/web/templates/_capture_actions.html:60
+msgid "I won"
+msgstr "当選した"
+
+#: src/app/web/templates/_capture_actions.html:65
+msgid "I lost"
+msgstr "落選した"
+
+#: src/app/web/templates/_capture_actions.html:75
+msgid "Nothing to do"
+msgstr "対応不要"
+
+#: src/app/web/templates/_deadline_rows.html:20
+#: src/app/web/templates/_round_rows.html:24
+msgid "Not applied"
+msgstr "未申込"
+
+#: src/app/web/templates/_deadline_rows.html:31
+msgid "Your status"
+msgstr "あなたの状況"
+
+#: src/app/web/templates/_deadline_rows.html:31
+msgid "Concert"
+msgstr "コンサート"
+
+#: src/app/web/templates/_deadline_rows.html:31
+#: src/app/web/templates/preferences.html:200
+msgid "Closes"
+msgstr "締切"
+
+#: src/app/web/templates/_deadline_rows.html:32
+msgid "What happens"
+msgstr "内容"
+
+#: src/app/web/templates/_deadline_rows.html:32
+msgid "You"
+msgstr "あなた"
+
+#: src/app/web/templates/_deadline_rows.html:60
+msgid "Nothing coming up on the concerts you follow."
+msgstr "フォロー中のコンサートに今後の予定はありません。"
+
+#: src/app/web/templates/_following_toggle.html:27
+#: src/app/web/templates/_following_toggle.html:57
+#: src/app/web/templates/preferences.html:16
+#: src/app/web/templates/preferences.html:28
+#: src/app/web/templates/preferences.html:121
+msgid "Following"
+msgstr "フォロー中"
+
+#: src/app/web/templates/_following_toggle.html:28
+#: src/app/web/templates/_following_toggle.html:59
+msgid "You will be reminded about every round below."
+msgstr "以下のすべての抽選について通知します。"
+
+#: src/app/web/templates/_following_toggle.html:30
+msgid "Opt out of this concert?"
+msgstr "このコンサートを見送りますか？"
+
+#: src/app/web/templates/_following_toggle.html:31
+#: src/app/web/templates/home.html:282
+#: src/app/web/templates/preferences.html:406
+msgid "Close"
+msgstr "閉じる"
+
+#: src/app/web/templates/_following_toggle.html:35
+#, python-format
+msgid ""
+"You won this ticket. Payment is due %(when)s. Opting out stops\n"
+"      that reminder and forfeits the ticket."
+msgstr "このチケットに当選しています。入金締切は%(when)sです。見送るとリマインダーが停止し、チケットを放棄します。"
+
+#: src/app/web/templates/_following_toggle.html:38
+msgid ""
+"You hold a ticket for this concert. Opting out forfeits it and stops its "
+"reminders."
+msgstr "このコンサートのチケットを保有しています。見送ると放棄となり、リマインダーも停止します。"
+
+#: src/app/web/templates/_following_toggle.html:43
+msgid "Keep following"
+msgstr "フォローを続ける"
+
+#: src/app/web/templates/_following_toggle.html:48
+msgid "Opt out and forfeit"
+msgstr "見送って放棄する"
+
+#: src/app/web/templates/_following_toggle.html:67
+#: src/app/web/templates/setup.html:9 src/app/web/templates/welcome.html:8
+msgid "Follow"
+msgstr "フォロー"
+
+#: src/app/web/templates/_round_leg_chips.html:25
+msgid "Applies to"
+msgstr "対象"
+
+#: src/app/web/templates/_round_leg_chips.html:27
+msgid "Add a leg to assign this round to it."
+msgstr "この抽選を割り当てる公演を追加してください。"
+
+#: src/app/web/templates/_round_leg_chips.html:32
+msgid "Leg"
+msgstr "公演"
+
+#: src/app/web/templates/_round_qualifier_chips.html:27
+msgid ""
+"<b>Upgrade round.</b> Only people holding a ticket from a\n"
+"    qualifying round can enter."
+msgstr "<b>アップグレード抽選。</b>対象となる抽選のチケットを保有している人のみ申し込めます。"
+
+#: src/app/web/templates/_round_qualifier_chips.html:30
+msgid "Qualifies"
+msgstr "対象条件"
+
+#: src/app/web/templates/_round_qualifier_chips.html:33
+msgid "Save the concert first, then a saved round can be picked here."
+msgstr "先にコンサートを保存すると、保存済みの抽選をここで選べます。"
+
+#: src/app/web/templates/_round_qualifier_chips.html:41
+msgid ""
+"A round you just added becomes selectable here only\n"
+"    after you save."
+msgstr "追加したばかりの抽選は、保存後にここで選択できるようになります。"
+
+#: src/app/web/templates/_round_rows.html:70
+msgid "Add to calendar"
+msgstr "カレンダーに追加"
+
+#: src/app/web/templates/_round_rows.html:71
+msgid "Round page"
+msgstr "抽選ページ"
+
+#: src/app/web/templates/_round_rows.html:77
+#, python-format
+msgid "Requires a ticket from: %(names)s"
+msgstr "必要なチケット：%(names)s"
+
+#: src/app/web/templates/_round_rows.html:77
+msgid "Requires a ticket from an earlier round"
+msgstr "前の抽選のチケットが必要"
+
+#: src/app/web/templates/_round_rows.html:99
+msgid "Next for you"
+msgstr "あなたの次の予定"
+
+#: src/app/web/templates/_round_rows.html:101
+msgid "No date announced yet"
+msgstr "公演日未定"
+
+#: src/app/web/templates/_round_rows.html:127
+msgid "Not going"
+msgstr "不参加"
+
+#: src/app/web/templates/_round_rows.html:127
+#: src/app/web/templates/concert_edit.html:107
+#: src/app/web/templates/concert_edit.html:234
+#: src/app/web/templates/concert_new.html:51
+#: src/app/web/templates/concert_new.html:142
+#: src/app/web/templates/import_preview.html:70
+#: src/app/web/templates/import_preview.html:177
+msgid "Cancelled"
+msgstr "中止"
+
+#: src/app/web/templates/_round_rows.html:129
+#, python-format
+msgid "doors %(when)s"
+msgstr "開場 %(when)s"
+
+#: src/app/web/templates/_round_rows.html:140
+msgid "Going again"
+msgstr "また参加する"
+
+#: src/app/web/templates/_round_rows.html:140
+msgid "Not going to this day"
+msgstr "この公演には参加しない"
+
+#: src/app/web/templates/_round_rows.html:144
+msgid "No rounds yet for this leg."
+msgstr "この公演の抽選はまだありません。"
+
+#: src/app/web/templates/_round_rows.html:155
+msgid "All legs"
+msgstr "すべての公演"
+
+#: src/app/web/templates/_round_rows.html:155
+msgid "Rounds"
+msgstr "抽選"
+
+#: src/app/web/templates/_round_rows.html:161
+msgid "No performances yet."
+msgstr "公演はまだありません。"
+
+#: src/app/web/templates/_rules.html:4
+#, python-format
+msgid "From your default preset &mdash; <strong>%(name)s</strong>"
+msgstr "デフォルトプリセットより &mdash; <strong>%(name)s</strong>"
+
+#: src/app/web/templates/_rules.html:5
+msgid "No default preset set &mdash; <a href=\"/preferences\">pick one</a>"
+msgstr "デフォルトプリセット未設定 &mdash; <a href=\"/preferences\">選択する</a>"
+
+#: src/app/web/templates/_rules.html:15
+msgid "Same day"
+msgstr "当日"
+
+#: src/app/web/templates/_rules.html:15
+#, python-format
+msgid "%(count)s day before"
+msgid_plural "%(count)s days before"
+msgstr[0] "%(count)s日前"
+
+#: src/app/web/templates/_rules.html:16
+#, python-format
+msgid "each %(anchor)s"
+msgstr "各 %(anchor)s"
+
+#: src/app/web/templates/_rules.html:17
+msgid "DM &middot; applies to every round above"
+msgstr "DM &middot; 上記すべての抽選に適用"
+
+#: src/app/web/templates/_rules.html:22
+#: src/app/web/templates/preferences.html:227
+#: src/app/web/templates/preferences.html:431
+msgid "Remove"
+msgstr "削除"
+
+#: src/app/web/templates/_rules.html:29
+msgid "No reminders for this concert yet."
+msgstr "このコンサートのリマインダーはまだありません。"
+
+#: src/app/web/templates/_rules.html:33
+msgid "Rules here override your default preset for this concert only."
+msgstr "ここでのルールは、このコンサートに限りデフォルトプリセットを上書きします。"
+
+#: src/app/web/templates/_rules.html:39
+msgid "Add a reminder"
+msgstr "リマインダーを追加"
+
+#: src/app/web/templates/_rules.html:43
+msgid "days before"
+msgstr "日前"
+
+#: src/app/web/templates/_rules.html:47
+#: src/app/web/templates/preferences.html:188
+#: src/app/web/templates/welcome.html:149
+msgid "Remind me"
+msgstr "通知する"
+
+#: src/app/web/templates/_rules.html:55
+#, python-format
+msgid "Apply &ldquo;%(name)s&rdquo;"
+msgstr "「%(name)s」を適用"
+
+#: src/app/web/templates/_rules.html:58
+msgid "Edit presets"
+msgstr "プリセットを編集"
+
+#: src/app/web/templates/_tag_picker_fields.html:4
+#: src/app/web/templates/discover.html:46
+msgid "Franchises"
+msgstr "フランチャイズ"
+
+#: src/app/web/templates/_tag_picker_fields.html:6
+msgid "+ Add franchise"
+msgstr "+ フランチャイズを追加"
+
+#: src/app/web/templates/_tag_picker_fields.html:8
+#: src/app/web/templates/discover.html:46
+msgid "Groups"
+msgstr "グループ"
+
+#: src/app/web/templates/_tag_picker_fields.html:10
+msgid "+ Add group"
+msgstr "+ グループを追加"
+
+#: src/app/web/templates/_tag_picker_fields.html:12
+msgid "(auto-filled from groups — × anyone not performing)"
+msgstr "（グループから自動入力 — 出演しない人は×）"
+
+#: src/app/web/templates/_tag_picker_fields.html:12
+#: src/app/web/templates/discover.html:46
+msgid "Artists"
+msgstr "アーティスト"
+
+#: src/app/web/templates/_tag_picker_fields.html:14
+msgid "+ Add artist"
+msgstr "+ アーティストを追加"
+
+#: src/app/web/templates/_tag_picker_fields.html:16
+#, python-format
+msgid "(suggested: %(venue)s)"
+msgstr "（候補：%(venue)s）"
+
+#: src/app/web/templates/_tag_picker_fields.html:16
+#: src/app/web/templates/preferences.html:160
+#: src/app/web/templates/tags.html:164 src/app/web/templates/welcome.html:74
+msgid "Venues"
+msgstr "会場"
+
+#: src/app/web/templates/_tag_picker_fields.html:18
+msgid "+ Add venue"
+msgstr "+ 会場を追加"
+
+#: src/app/web/templates/_tag_picker_fields.html:19
+msgid ""
+"Missing a tag? Create it on the <a href=\"/tags\">tags page</a> first — "
+"concerts are tag-driven."
+msgstr "タグがありませんか？先に<a href=\"/tags\">タグページ</a>で作成してください — コンサートはタグ駆動です。"
+
+#: src/app/web/templates/base.html:35
+msgid "Home"
+msgstr "ホーム"
+
+#: src/app/web/templates/base.html:35 src/app/web/templates/home.html:251
+msgid "Discover"
+msgstr "ディスカバー"
+
+#: src/app/web/templates/base.html:36
+#: src/app/web/templates/concert_detail.html:25
+#: src/app/web/templates/concert_edit.html:163
+#: src/app/web/templates/concert_new.html:121
+#: src/app/web/templates/import_preview.html:155
+#: src/app/web/templates/tags.html:5
+msgid "Tags"
+msgstr "タグ"
+
+#: src/app/web/templates/base.html:44
+msgid "Toggle dark mode"
+msgstr "ダークモード切替"
+
+#: src/app/web/templates/base.html:51
+#: src/app/web/templates/preferences.html:302
+#: src/app/web/templates/welcome.html:413
+msgid "Language"
+msgstr "言語"
+
+#: src/app/web/templates/base.html:65
+msgid "+ Add"
+msgstr "+ 追加"
+
+#: src/app/web/templates/base.html:66 src/app/web/templates/preferences.html:11
+#: src/app/web/templates/setup.html:13
+msgid "Preferences"
+msgstr "設定"
+
+#: src/app/web/templates/base.html:67
+msgid "Log out"
+msgstr "ログアウト"
+
+#: src/app/web/templates/base.html:69 src/app/web/templates/home.html:70
+#: src/app/web/templates/home.html:183
+msgid "Sign in with Discord"
+msgstr "Discordでサインイン"
+
+#: src/app/web/templates/base.html:76
+msgid ""
+"Your last Discord DM couldn't be delivered — check your Discord privacy\n"
+"    settings to allow DMs from server members, or\n"
+"    <a href=\"/preferences\">test it from Preferences</a>."
+msgstr ""
+"前回のDiscord DMを配信できませんでした — サーバーメンバーからのDMを許可するようDiscordのプライバシー設定を確認するか、<a "
+"href=\"/preferences\">設定からテスト</a>してください。"
+
+#: src/app/web/templates/base.html:83
+msgid ""
+"Times are entered in <strong>JST</strong> and shown as JST + your local "
+"time."
+msgstr "時刻は<strong>JST</strong>で入力し、JSTとお使いのローカル時刻で表示されます。"
+
+#: src/app/web/templates/base.html:84 src/app/web/templates/privacy.html:2
+#: src/app/web/templates/privacy.html:8
+msgid "Privacy policy"
+msgstr "プライバシーポリシー"
+
+#: src/app/web/templates/base.html:85 src/app/web/templates/terms.html:2
+#: src/app/web/templates/terms.html:8
+msgid "Terms of service"
+msgstr "利用規約"
+
+#: src/app/web/templates/base.html:132
+#, python-brace-format
+msgid "Delete tag {name} everywhere?"
+msgstr "タグ {name} をすべての場所から削除しますか？"
+
+#: src/app/web/templates/base.html:133
+#, python-brace-format
+msgid "Delete preset {name}?"
+msgstr "プリセット {name} を削除しますか？"
+
+#: src/app/web/templates/concert_detail.html:34
+msgid "Links"
+msgstr "リンク"
+
+#: src/app/web/templates/concert_detail.html:36
+msgid "official site"
+msgstr "公式サイト"
+
+#: src/app/web/templates/concert_detail.html:51
+#: src/app/web/templates/concert_edit.html:20
+msgid "Edit event"
+msgstr "イベントを編集"
+
+#: src/app/web/templates/concert_detail.html:52
+msgid "Export YAML"
+msgstr "YAMLをエクスポート"
+
+#: src/app/web/templates/concert_detail.html:73
+msgid "Performing"
+msgstr "出演"
+
+#: src/app/web/templates/concert_detail.html:74
+msgid "member"
+msgid_plural "members"
+msgstr[0] "メンバー"
+
+#: src/app/web/templates/concert_detail.html:74
+#: src/app/web/templates/concert_detail.html:75
+#, python-format
+msgid "from the %(names)s"
+msgstr "%(names)s より"
+
+#: src/app/web/templates/concert_detail.html:74
+#: src/app/web/templates/concert_detail.html:75
+msgid "group tag"
+msgid_plural "group tags"
+msgstr[0] "グループタグ"
+
+#: src/app/web/templates/concert_detail.html:76
+#: src/app/web/templates/tags.html:40
+msgid "performer"
+msgid_plural "performers"
+msgstr[0] "出演者"
+
+#: src/app/web/templates/concert_detail.html:79
+#: src/app/web/templates/concert_detail.html:80
+msgid "No eventernote link yet"
+msgstr "eventernoteリンクはまだありません"
+
+#: src/app/web/templates/concert_detail.html:89
+msgid "My reminders"
+msgstr "マイリマインダー"
+
+#: src/app/web/templates/concert_detail.html:95
+#, python-format
+msgid "Edit history (%(n)s)"
+msgstr "編集履歴（%(n)s）"
+
+#: src/app/web/templates/concert_detail.html:101
+#: src/app/web/templates/concert_edit.html:179
+msgid "Deleted user"
+msgstr "削除済みユーザー"
+
+#: src/app/web/templates/concert_detail.html:105
+#: src/app/web/templates/concert_edit.html:183
+msgid "(empty)"
+msgstr "（空）"
+
+#: src/app/web/templates/concert_edit.html:2
+msgid "edit"
+msgstr "編集"
+
+#: src/app/web/templates/concert_edit.html:14
+msgid "title EN"
+msgstr "タイトルEN"
+
+#: src/app/web/templates/concert_edit.html:15
+msgid "organizer"
+msgstr "主催"
+
+#: src/app/web/templates/concert_edit.html:16
+msgid "categories"
+msgstr "カテゴリー"
+
+#: src/app/web/templates/concert_edit.html:17
+msgid "notes"
+msgstr "メモ"
+
+#: src/app/web/templates/concert_edit.html:18
+#, python-format
+msgid "%(n)s link"
+msgid_plural "%(n)s links"
+msgstr[0] "%(n)s件のリンク"
+
+#: src/app/web/templates/concert_edit.html:26
+#: src/app/web/templates/concert_new.html:21
+#: src/app/web/templates/import_preview.html:42
+msgid "Title (JP)"
+msgstr "タイトル（日本語）"
+
+#: src/app/web/templates/concert_edit.html:28
+#: src/app/web/templates/concert_new.html:23
+msgid "Event ID"
+msgstr "イベントID"
+
+#: src/app/web/templates/concert_edit.html:28
+#: src/app/web/templates/concert_new.html:23
+msgid "(this event's URL — letters, digits, hyphens, underscores only)"
+msgstr "（このイベントのURL — 英数字・ハイフン・アンダースコアのみ）"
+
+#: src/app/web/templates/concert_edit.html:31
+#: src/app/web/templates/concert_new.html:84
+#: src/app/web/templates/import_preview.html:44
+#: src/app/web/templates/tags.html:199
+msgid "Kind"
+msgstr "種別"
+
+#: src/app/web/templates/concert_edit.html:33
+#: src/app/web/templates/concert_new.html:86
+#: src/app/web/templates/import_preview.html:46
+#: src/app/web/templates/tags.html:221
+msgid "— none —"
+msgstr "— なし —"
+
+#: src/app/web/templates/concert_edit.html:42
+msgid "Rounds and legs"
+msgstr "抽選と公演"
+
+#: src/app/web/templates/concert_edit.html:43
+msgid ""
+"Where nearly every edit happens — a round gets announced\n"
+"      and needs adding. Times are JST."
+msgstr "ほとんどの編集はここで行います — 抽選が発表されたら追加します。時刻はJSTです。"
+
+#: src/app/web/templates/concert_edit.html:48
+#, python-format
+msgid "%(count)s leg"
+msgid_plural "%(count)s legs"
+msgstr[0] "%(count)s公演"
+
+#: src/app/web/templates/concert_edit.html:49
+#, python-format
+msgid "%(count)s round"
+msgid_plural "%(count)s rounds"
+msgstr[0] "%(count)s抽選"
+
+#: src/app/web/templates/concert_edit.html:50
+#: src/app/web/templates/concert_new.html:71
+#: src/app/web/templates/import_preview.html:132
+msgid "Add a round"
+msgstr "抽選を追加"
+
+#: src/app/web/templates/concert_edit.html:51
+msgid "Add a leg"
+msgstr "公演を追加"
+
+#: src/app/web/templates/concert_edit.html:61
+#: src/app/web/templates/concert_edit.html:252
+#: src/app/web/templates/concert_new.html:160
+#: src/app/web/templates/import_preview.html:104
+#: src/app/web/templates/import_preview.html:195
+msgid "1st-round advance lottery"
+msgstr "第1次先行抽選"
+
+#: src/app/web/templates/concert_edit.html:66
+#: src/app/web/templates/concert_edit.html:256
+#: src/app/web/templates/concert_new.html:164
+#: src/app/web/templates/import_preview.html:108
+#: src/app/web/templates/import_preview.html:199
+msgid "Remove this round"
+msgstr "この抽選を削除"
+
+#: src/app/web/templates/concert_edit.html:71
+#: src/app/web/templates/concert_edit.html:261
+#: src/app/web/templates/concert_new.html:169
+#: src/app/web/templates/import_preview.html:114
+#: src/app/web/templates/import_preview.html:203
+msgid "Apply opens (JST)"
+msgstr "受付開始（JST）"
+
+#: src/app/web/templates/concert_edit.html:73
+#: src/app/web/templates/concert_edit.html:262
+#: src/app/web/templates/concert_new.html:170
+#: src/app/web/templates/import_preview.html:116
+#: src/app/web/templates/import_preview.html:204
+msgid "Apply deadline (JST)"
+msgstr "受付締切（JST）"
+
+#: src/app/web/templates/concert_edit.html:75
+#: src/app/web/templates/concert_edit.html:263
+#: src/app/web/templates/concert_new.html:171
+#: src/app/web/templates/import_preview.html:118
+#: src/app/web/templates/import_preview.html:205
+msgid "Results (JST)"
+msgstr "当落発表（JST）"
+
+#: src/app/web/templates/concert_edit.html:77
+#: src/app/web/templates/concert_edit.html:264
+#: src/app/web/templates/concert_new.html:172
+#: src/app/web/templates/import_preview.html:119
+#: src/app/web/templates/import_preview.html:206
+msgid "Payment deadline (JST)"
+msgstr "入金締切（JST）"
+
+#: src/app/web/templates/concert_edit.html:81
+#: src/app/web/templates/concert_edit.html:267
+#: src/app/web/templates/concert_new.html:175
+#: src/app/web/templates/import_preview.html:122
+#: src/app/web/templates/import_preview.html:209
+msgid "Apply URL (optional)"
+msgstr "申込URL（任意）"
+
+#: src/app/web/templates/concert_edit.html:82
+#: src/app/web/templates/concert_edit.html:268
+#: src/app/web/templates/concert_new.html:176
+#: src/app/web/templates/import_preview.html:123
+#: src/app/web/templates/import_preview.html:210
+msgid "Notes (optional)"
+msgstr "メモ（任意）"
+
+#: src/app/web/templates/concert_edit.html:86
+#: src/app/web/templates/concert_new.html:75
+msgid "No rounds yet — add the first one above."
+msgstr "抽選はまだありません — 上で最初の1件を追加してください。"
+
+#: src/app/web/templates/concert_edit.html:90
+msgid "Legs"
+msgstr "公演"
+
+#: src/app/web/templates/concert_edit.html:90
+msgid "(one per show / day)"
+msgstr "（公演／日ごとに1つ）"
+
+#: src/app/web/templates/concert_edit.html:101
+#: src/app/web/templates/concert_edit.html:229
+#: src/app/web/templates/concert_new.html:46
+#: src/app/web/templates/concert_new.html:137
+#: src/app/web/templates/import_preview.html:65
+#: src/app/web/templates/import_preview.html:172
+msgid "Day 1"
+msgstr "1日目"
+
+#: src/app/web/templates/concert_edit.html:102
+#: src/app/web/templates/concert_edit.html:230
+#: src/app/web/templates/concert_new.html:47
+#: src/app/web/templates/concert_new.html:138
+#: src/app/web/templates/import_preview.html:66
+#: src/app/web/templates/import_preview.html:173
+msgid "Leg / city (e.g. Kanagawa)"
+msgstr "公演／都市（例：神奈川）"
+
+#: src/app/web/templates/concert_edit.html:107
+#: src/app/web/templates/concert_edit.html:234
+#: src/app/web/templates/concert_new.html:51
+#: src/app/web/templates/concert_new.html:142
+#: src/app/web/templates/import_preview.html:70
+#: src/app/web/templates/import_preview.html:177
+msgid "A cancelled leg is dimmed and badged, never deleted"
+msgstr "中止した公演は淡色表示とバッジ付きになり、削除はされません"
+
+#: src/app/web/templates/concert_edit.html:109
+#: src/app/web/templates/concert_edit.html:236
+msgid "Remove this leg"
+msgstr "この公演を削除"
+
+#: src/app/web/templates/concert_edit.html:113
+#: src/app/web/templates/concert_edit.html:240
+#: src/app/web/templates/concert_new.html:57
+#: src/app/web/templates/concert_new.html:148
+#: src/app/web/templates/import_preview.html:76
+#: src/app/web/templates/import_preview.html:183
+msgid "Venue address"
+msgstr "会場住所"
+
+#: src/app/web/templates/concert_edit.html:114
+#: src/app/web/templates/concert_edit.html:241
+#: src/app/web/templates/concert_new.html:58
+#: src/app/web/templates/concert_new.html:149
+#: src/app/web/templates/import_preview.html:77
+#: src/app/web/templates/import_preview.html:184
+msgid "Doors (JST)"
+msgstr "開場（JST）"
+
+#: src/app/web/templates/concert_edit.html:116
+#: src/app/web/templates/concert_edit.html:242
+#: src/app/web/templates/concert_new.html:59
+#: src/app/web/templates/concert_new.html:150
+#: src/app/web/templates/import_preview.html:78
+#: src/app/web/templates/import_preview.html:185
+msgid "Starts (JST)"
+msgstr "開演（JST）"
+
+#: src/app/web/templates/concert_edit.html:121
+msgid "No legs yet — add the first one above."
+msgstr "公演はまだありません — 上で最初の1件を追加してください。"
+
+#: src/app/web/templates/concert_edit.html:126
+#: src/app/web/templates/concert_new.html:79
+#: src/app/web/templates/import_preview.html:141
+msgid "Details and links"
+msgstr "詳細とリンク"
+
+#: src/app/web/templates/concert_edit.html:127
+msgid "nothing set yet"
+msgstr "まだ何も設定されていません"
+
+#: src/app/web/templates/concert_edit.html:130
+#: src/app/web/templates/concert_new.html:83
+#: src/app/web/templates/import_preview.html:146
+msgid "Artist / organizer"
+msgstr "アーティスト／主催"
+
+#: src/app/web/templates/concert_edit.html:131
+#: src/app/web/templates/concert_new.html:90
+msgid "Categories (comma-sep)"
+msgstr "カテゴリー（カンマ区切り）"
+
+#: src/app/web/templates/concert_edit.html:132
+#: src/app/web/templates/concert_new.html:91 src/app/web/templates/tags.html:62
+#: src/app/web/templates/tags.html:227
+msgid "eventernote URL"
+msgstr "eventernote URL"
+
+#: src/app/web/templates/concert_edit.html:133
+#: src/app/web/templates/concert_new.html:92
+msgid "Official URL"
+msgstr "公式URL"
+
+#: src/app/web/templates/concert_edit.html:134
+#: src/app/web/templates/concert_new.html:93
+#: src/app/web/templates/import_preview.html:147
+msgid "Source URL"
+msgstr "ソースURL"
+
+#: src/app/web/templates/concert_edit.html:136
+#: src/app/web/templates/concert_new.html:95
+msgid "Performers (one per line)"
+msgstr "出演者（1行に1名）"
+
+#: src/app/web/templates/concert_edit.html:137
+#: src/app/web/templates/concert_edit.html:152
+#: src/app/web/templates/concert_edit.html:158
+#: src/app/web/templates/concert_new.html:96
+#: src/app/web/templates/concert_new.html:110
+#: src/app/web/templates/concert_new.html:116
+#: src/app/web/templates/import_preview.html:150
+msgid "Notes"
+msgstr "メモ"
+
+#: src/app/web/templates/concert_edit.html:144
+#: src/app/web/templates/concert_new.html:102
+msgid "Translations"
+msgstr "翻訳"
+
+#: src/app/web/templates/concert_edit.html:145
+#: src/app/web/templates/concert_new.html:103
+msgid ""
+"Optional — shown to viewers reading in that language, falling back to the"
+" originals above."
+msgstr "任意 — その言語で閲覧する人に表示され、未入力の場合は上記の原文にフォールバックします。"
+
+#: src/app/web/templates/concert_edit.html:147
+#: src/app/web/templates/concert_new.html:105
+msgid "English"
+msgstr "英語"
+
+#: src/app/web/templates/concert_edit.html:149
+#: src/app/web/templates/concert_edit.html:155
+#: src/app/web/templates/concert_new.html:107
+#: src/app/web/templates/concert_new.html:113
+msgid "Title"
+msgstr "タイトル"
+
+#: src/app/web/templates/concert_edit.html:164
+#, python-format
+msgid "+%(n)s more"
+msgstr "+他%(n)s件"
+
+#: src/app/web/templates/concert_edit.html:164
+msgid "no tags yet"
+msgstr "タグはまだありません"
+
+#: src/app/web/templates/concert_edit.html:171
+msgid "Edit history"
+msgstr "編集履歴"
+
+#: src/app/web/templates/concert_edit.html:172
+#, python-format
+msgid "%(count)s change"
+msgid_plural "%(count)s changes"
+msgstr[0] "%(count)s件の変更"
+
+#: src/app/web/templates/concert_edit.html:172
+#, python-format
+msgid "last by %(username)s"
+msgstr "最終編集：%(username)s"
+
+#: src/app/web/templates/concert_edit.html:172
+msgid "deleted user"
+msgstr "削除済みユーザー"
+
+#: src/app/web/templates/concert_edit.html:172
+msgid "no edits recorded yet"
+msgstr "編集履歴はまだありません"
+
+#: src/app/web/templates/concert_edit.html:190
+msgid ""
+"Nothing yet. Only the concert's own top-level fields are\n"
+"        tracked — day, round and tag changes are not."
+msgstr "まだ何もありません。追跡されるのはコンサート自体のトップレベル項目のみで、公演・抽選・タグの変更は含まれません。"
+
+#: src/app/web/templates/concert_edit.html:196
+msgid "Save event"
+msgstr "イベントを保存"
+
+#: src/app/web/templates/concert_edit.html:207
+msgid "Duplicate or delete"
+msgstr "複製または削除"
+
+#: src/app/web/templates/concert_edit.html:208
+msgid ""
+"Duplicating copies this event's tags and details — the\n"
+"      exact tag set as pruned here, not a group's current membership — "
+"but\n"
+"      not rounds or legs."
+msgstr "複製すると、このイベントのタグと詳細（グループの現在のメンバーではなく、ここで整理したとおりのタグ一式）がコピーされますが、抽選や公演はコピーされません。"
+
+#: src/app/web/templates/concert_edit.html:214
+msgid "Duplicate as new event"
+msgstr "新しいイベントとして複製"
+
+#: src/app/web/templates/concert_edit.html:217
+msgid "Delete this concert and every reminder attached to it?"
+msgstr "このコンサートと、それに紐づくすべてのリマインダーを削除しますか？"
+
+#: src/app/web/templates/concert_edit.html:219
+msgid "Delete event"
+msgstr "イベントを削除"
+
+#: src/app/web/templates/concert_new.html:2
+msgid "new event"
+msgstr "新規イベント"
+
+#: src/app/web/templates/concert_new.html:15
+msgid "Add an event"
+msgstr "イベントを追加"
+
+#: src/app/web/templates/concert_new.html:16
+msgid "Prefer to import from a ramen.events URL instead? →"
+msgstr "代わりにramen.eventsのURLからインポートしますか？ →"
+
+#: src/app/web/templates/concert_new.html:22
+msgid "Hasunosora 6th Live"
+msgstr "蓮ノ空 6thライブ"
+
+#: src/app/web/templates/concert_new.html:25
+msgid "hasunosora-6th-live"
+msgstr "hasunosora-6th-live"
+
+#: src/app/web/templates/concert_new.html:29
+msgid "Performances"
+msgstr "公演"
+
+#: src/app/web/templates/concert_new.html:30
+msgid "One per show / day — the first is open below. Times are JST."
+msgstr "公演／日ごとに1つ — 最初の1件は下で開いています。時刻はJSTです。"
+
+#: src/app/web/templates/concert_new.html:34
+msgid "Add performance"
+msgstr "公演を追加"
+
+#: src/app/web/templates/concert_new.html:53
+#: src/app/web/templates/concert_new.html:144
+#: src/app/web/templates/import_preview.html:72
+#: src/app/web/templates/import_preview.html:179
+msgid "Remove this performance"
+msgstr "この公演を削除"
+
+#: src/app/web/templates/concert_new.html:65
+msgid "Lottery rounds"
+msgstr "抽選"
+
+#: src/app/web/templates/concert_new.html:66
+msgid ""
+"Tick the performances each round applies to — leave none ticked\n"
+"      for a whole-event round. Times are JST."
+msgstr "各抽選が対象とする公演にチェックを入れてください — イベント全体が対象なら何もチェックしないでください。時刻はJSTです。"
+
+#: src/app/web/templates/concert_new.html:80
+msgid "Optional — title EN, organizer, kind, categories, links, performers, notes"
+msgstr "任意 — タイトルEN、主催、種別、カテゴリー、リンク、出演者、メモ"
+
+#: src/app/web/templates/concert_new.html:83
+#: src/app/web/templates/import_preview.html:146
+msgid "non-series acts, etc."
+msgstr "シリーズ外の出演者など"
+
+#: src/app/web/templates/concert_new.html:90
+msgid "concert, tour"
+msgstr "コンサート、ツアー"
+
+#: src/app/web/templates/concert_new.html:93
+#: src/app/web/templates/import_preview.html:148
+msgid "where this was sourced from"
+msgstr "情報の出典元"
+
+#: src/app/web/templates/concert_new.html:122
+msgid "Franchise, group, artists, venue — optional"
+msgstr "フランチャイズ、グループ、アーティスト、会場 — 任意"
+
+#: src/app/web/templates/concert_new.html:128
+msgid "Create event"
+msgstr "イベントを作成"
+
+#: src/app/web/templates/discover.html:10
+msgid "Sort"
+msgstr "並び替え"
+
+#: src/app/web/templates/discover.html:26
+msgid "Round status"
+msgstr "抽選状況"
+
+#: src/app/web/templates/discover.html:36
+msgid "Filter by tag"
+msgstr "タグで絞り込み"
+
+#: src/app/web/templates/discover.html:37
+#: src/app/web/templates/preferences.html:114
+msgid "Search tags…"
+msgstr "タグを検索…"
+
+#: src/app/web/templates/discover.html:57
+msgid "Regions"
+msgstr "地域"
+
+#: src/app/web/templates/discover.html:69
+msgid "Clear filters"
+msgstr "フィルターをクリア"
+
+#: src/app/web/templates/discover.html:71
+msgid "Manage tags"
+msgstr "タグを管理"
+
+#: src/app/web/templates/discover.html:76
+msgid "Concerts"
+msgstr "コンサート"
+
+#: src/app/web/templates/discover.html:78 src/app/web/templates/tags.html:10
+#, python-format
+msgid "%(count)s concert"
+msgid_plural "%(count)s concerts"
+msgstr[0] "%(count)s件のコンサート"
+
+#: src/app/web/templates/discover.html:79
+#, python-format
+msgid "%(n)s with a round still open"
+msgstr "%(n)s件が受付中"
+
+#: src/app/web/templates/discover.html:88
+msgid "Search concerts…"
+msgstr "コンサートを検索…"
+
+#: src/app/web/templates/discover.html:89
+msgid "Search"
+msgstr "検索"
+
+#: src/app/web/templates/discover.html:119
+#, python-format
+msgid "%(day)s JST"
+msgstr "%(day)s JST"
+
+#: src/app/web/templates/discover.html:155
+msgid "Open &amp; upcoming"
+msgstr "受付中 &amp; 今後"
+
+#: src/app/web/templates/discover.html:161
+msgid "Upcoming"
+msgstr "今後"
+
+#: src/app/web/templates/discover.html:167
+#: src/app/web/templates/discover.html:169
+msgid "No concerts match."
+msgstr "一致するコンサートはありません。"
+
+#: src/app/web/templates/discover.html:169
+msgid "Create the first one →"
+msgstr "最初の1件を作成 →"
+
+#: src/app/web/templates/discover.html:173
+msgid "Coming up soon"
+msgstr "まもなく開始"
+
+#: src/app/web/templates/home.html:62
+msgid "dekimasen.app · Japanese concert ticketing, tracked"
+msgstr "dekimasen.app · 日本のコンサートチケットを追跡"
+
+#: src/app/web/templates/home.html:63
+msgid "Never say <em>dekimasen deshita</em> again."
+msgstr "もう二度と<em>できませんでした</em>と言わないために。"
+
+#: src/app/web/templates/home.html:65
+msgid ""
+"Every Japanese ticket is a <b>campaign</b>, not a date — fan-club "
+"presale, lottery\n"
+"      round 1, round 2 if you lose, a first-come sale, an upgrade round "
+"riding on the\n"
+"      seat you already hold. We track the whole ladder and tell you "
+"exactly where you stand."
+msgstr ""
+"日本のチケットは日付ではなく<b>キャンペーン</b>です — "
+"ファンクラブ先行、抽選第1回、外れたら第2回、先着販売、すでに持っている席に乗るアップグレード抽選。その全段階を追跡し、あなたが今どこにいるかを正確にお伝えします。"
+
+#: src/app/web/templates/home.html:71
+msgid "Free · we DM you on Discord · no card, no spam"
+msgstr "無料 · DiscordでDM · カード不要、スパムなし"
+
+#: src/app/web/templates/home.html:74
+msgid "concerts tracked"
+msgstr "追跡中のコンサート"
+
+#: src/app/web/templates/home.html:75
+msgid "with a round open now"
+msgstr "現在受付中の抽選あり"
+
+#: src/app/web/templates/home.html:76
+msgid "franchises"
+msgstr "フランチャイズ"
+
+#: src/app/web/templates/home.html:77
+msgid "performers tagged"
+msgstr "タグ付き出演者"
+
+#: src/app/web/templates/home.html:82
+msgid "How it works"
+msgstr "仕組み"
+
+#: src/app/web/templates/home.html:82
+msgid "Three steps, then it runs itself"
+msgstr "3ステップ、あとは自動で動きます"
+
+#: src/app/web/templates/home.html:86
+msgid "Follow your artists"
+msgstr "アーティストをフォロー"
+
+#: src/app/web/templates/home.html:87
+msgid ""
+"Tap a franchise, a group, or one performer. New events for anyone you "
+"follow\n"
+"          show up on your board <b>automatically</b>."
+msgstr "フランチャイズ、グループ、または1人の出演者をタップ。フォローした対象の新イベントは<b>自動的に</b>ボードに表示されます。"
+
+#: src/app/web/templates/home.html:92
+msgid "We track every round's deadline"
+msgstr "すべての抽選の締切を追跡"
+
+#: src/app/web/templates/home.html:93
+msgid ""
+"Presale opens, lottery closes, results land, payment is due. All times "
+"shown\n"
+"          <b>JST and yours</b>, always both — no mental arithmetic at 3am."
+msgstr ""
+"先行受付開始、抽選締切、結果発表、入金締切。すべての時刻を<b>JSTとあなたの時刻</b>で常に両方表示 — "
+"深夜3時に頭で計算する必要はありません。"
+
+#: src/app/web/templates/home.html:98
+msgid "You get a DM, and you know where you stand"
+msgstr "DMが届き、自分の状況がわかる"
+
+#: src/app/web/templates/home.html:99
+msgid ""
+"A Discord reminder before each deadline, plus a campaign board that says "
+"whether the\n"
+"          ball is <b>in your court</b> or you are already covered."
+msgstr "各締切前のDiscordリマインダーに加え、<b>ボールがあなたにある</b>のか、すでに対応済みなのかを示すキャンペーンボード。"
+
+#: src/app/web/templates/home.html:107
+msgid "The whole campaign, one board"
+msgstr "キャンペーン全体を1つのボードで"
+
+#: src/app/web/templates/home.html:108
+msgid "One card moves left to right as you apply, win, and pay"
+msgstr "申し込み、当選、入金するにつれて、1枚のカードが左から右へ動きます"
+
+#: src/app/web/templates/home.html:120
+msgid "FC presale · 6h left"
+msgstr "FC先行 · 残り6時間"
+
+#: src/app/web/templates/home.html:126
+msgid "General presale · 4d"
+msgstr "一般先行 · 4日"
+
+#: src/app/web/templates/home.html:135
+msgid "Lottery R1 · result 21 Jul"
+msgstr "抽選R1 · 結果7月21日"
+
+#: src/app/web/templates/home.html:144
+msgid "Pay by 22 Jul"
+msgstr "7月22日までに入金"
+
+#: src/app/web/templates/home.html:167
+msgid "Discover what's on"
+msgstr "開催中の公演を探す"
+
+#: src/app/web/templates/home.html:168
+msgid "The catalogue is public — browse before you sign in"
+msgstr "カタログは公開されています — サインイン前に閲覧できます"
+
+#: src/app/web/templates/home.html:169
+msgid "Sign in to track →"
+msgstr "サインインして追跡 →"
+
+#: src/app/web/templates/home.html:179
+msgid "Ready when you are"
+msgstr "準備はいつでも"
+
+#: src/app/web/templates/home.html:180
+msgid "Follow four groups in a minute. Miss nothing after that."
+msgstr "1分で4組をフォロー。あとは何も見逃しません。"
+
+#: src/app/web/templates/home.html:181
+msgid ""
+"Sign in with the Discord account you already have. We only ever DM you "
+"about deadlines\n"
+"      for artists you chose to follow."
+msgstr "すでにお持ちのDiscordアカウントでサインイン。フォローを選んだアーティストの締切についてのみDMします。"
+
+#: src/app/web/templates/home.html:187
+msgid ""
+"<b>Signed out, this is the whole product in one screen.</b> Sign in and "
+"it becomes your\n"
+"    board — your rounds, your outcomes, your deadlines. Everything above "
+"is a taste of what\n"
+"    fills in once you follow someone."
+msgstr ""
+"<b>サインアウト状態では、これが1画面に収まった製品の全体像です。</b>サインインすると、あなたのボード — あなたの抽選、結果、締切 — "
+"になります。上に表示されているのはすべて、誰かをフォローすると埋まっていく内容の一例です。"
+
+#: src/app/web/templates/home.html:208
+msgid "Up next"
+msgstr "次はこれ"
+
+#: src/app/web/templates/home.html:227
+msgid "Your campaigns"
+msgstr "あなたのキャンペーン"
+
+#: src/app/web/templates/home.html:240
+msgid "Coming up"
+msgstr "今後の予定"
+
+#: src/app/web/templates/home.html:241
+msgid "All times JST and yours, always both"
+msgstr "時刻はJSTとあなたの時刻、常に両方"
+
+#: src/app/web/templates/home.html:250
+msgid "Not tracking these yet"
+msgstr "これらはまだ追跡していません"
+
+#: src/app/web/templates/home.html:253
+#, python-format
+msgid "%(count)s concert in the catalogue,"
+msgid_plural "%(count)s concerts in the catalogue,"
+msgstr[0] "カタログには%(count)s件のコンサート、"
+
+#: src/app/web/templates/home.html:256
+#, python-format
+msgid "%(n)s with a round still open."
+msgstr "うち%(n)s件は抽選受付中。"
+
+#: src/app/web/templates/home.html:257
+msgid "Browse by franchise, group, artist or region — or search everything."
+msgstr "フランチャイズ、グループ、アーティスト、地域で閲覧 — またはすべてを検索。"
+
+#: src/app/web/templates/home.html:260
+msgid "Open discover →"
+msgstr "ディスカバーを開く →"
+
+#: src/app/web/templates/home.html:274
+msgid ""
+"<b>Home answers \"where do I stand\".</b> Everything above is yours — "
+"your rounds, your outcomes,\n"
+"  your deadlines. Discovery sits at the bottom as a door out, not as the "
+"page itself."
+msgstr ""
+"<b>ホームは「自分が今どこにいるか」に答えます。</b>上に表示されているのはすべてあなたのもの — "
+"あなたの抽選、結果、締切です。ディスカバーは出口として一番下にあり、このページの主役ではありません。"
+
+#: src/app/web/templates/home.html:281
+msgid "Not applying to this round"
+msgstr "この抽選には申し込まない"
+
+#: src/app/web/templates/home.html:284
+msgid ""
+"Done — you won't be reminded about this round. Later rounds for\n"
+"    <b id=\"pruneName\">this concert</b> will still reach you."
+msgstr "完了 — この抽選については通知されません。<b id=\"pruneName\">このコンサート</b>の今後の抽選は引き続きお届けします。"
+
+#: src/app/web/templates/home.html:288
+msgid "That's right"
+msgstr "そのとおり"
+
+#: src/app/web/templates/home.html:296
+msgid "Skip this concert entirely"
+msgstr "このコンサートを完全にスキップ"
+
+#: src/app/web/templates/home.html:298
+msgid "Manage this concert →"
+msgstr "このコンサートを管理 →"
+
+#: src/app/web/templates/import_form.html:2
+msgid "import concert"
+msgstr "コンサートをインポート"
+
+#: src/app/web/templates/import_form.html:6
+msgid "Import from a URL"
+msgstr "URLからインポート"
+
+#: src/app/web/templates/import_form.html:7
+msgid ""
+"Paste a <code>ramen.events</code> event page — it'll fetch the title, "
+"tags, performance\n"
+"    days and lottery rounds as a draft. Nothing is saved until you review"
+" and submit the\n"
+"    next page."
+msgstr ""
+"<code>ramen.events</code>のイベントページを貼り付けてください — "
+"タイトル、タグ、公演日、抽選を下書きとして取得します。次のページで確認して送信するまで、何も保存されません。"
+
+#: src/app/web/templates/import_form.html:15
+#, python-format
+msgid ""
+"Couldn't parse that page: %(error)s. You can still\n"
+"    <a href=\"/\">create the concert manually</a>."
+msgstr "そのページを解析できませんでした：%(error)s。<a href=\"/\">手動でコンサートを作成</a>することもできます。"
+
+#: src/app/web/templates/import_form.html:22
+msgid "ramen.events URL"
+msgstr "ramen.events URL"
+
+#: src/app/web/templates/import_form.html:25
+msgid "Fetch draft"
+msgstr "下書きを取得"
+
+#: src/app/web/templates/import_form.html:30
+msgid ""
+"Only <b>https ramen.events</b> URLs are accepted. The fetch is size-"
+"capped and\n"
+"    re-checked on every redirect — an editor safety rail, not a general "
+"web fetcher."
+msgstr ""
+"受け付けるのは<b>https の ramen.events</b> "
+"URLのみです。取得にはサイズ上限があり、リダイレクトのたびに再チェックされます — 汎用のWeb取得ではなく、エディター向けの安全策です。"
+
+#: src/app/web/templates/import_form.html:35
+msgid ""
+"No ramen.events page? <a class=\"more\" href=\"/\">Create the concert "
+"manually</a> instead."
+msgstr ""
+"ramen.eventsのページがない場合は、代わりに<a class=\"more\" "
+"href=\"/\">手動でコンサートを作成</a>してください。"
+
+#: src/app/web/templates/import_preview.html:2
+msgid "review import"
+msgstr "インポートを確認"
+
+#: src/app/web/templates/import_preview.html:15
+msgid "Review draft"
+msgstr "下書きを確認"
+
+#: src/app/web/templates/import_preview.html:16
+#, python-format
+msgid ""
+"Parsed from\n"
+"    %(url)s."
+msgstr "%(url)s から解析しました。"
+
+#: src/app/web/templates/import_preview.html:18
+msgid "Edit anything below, then create the concert."
+msgstr "下記を編集してから、コンサートを作成してください。"
+
+#: src/app/web/templates/import_preview.html:23
+msgid ""
+"<b>Nothing is saved yet.</b> This is a draft in your browser. It becomes "
+"a real\n"
+"    concert only when you press <b>Create concert</b> at the bottom."
+msgstr "<b>まだ何も保存されていません。</b>これはブラウザ内の下書きです。一番下の<b>コンサートを作成</b>を押したときにのみ、実際のコンサートになります。"
+
+#: src/app/web/templates/import_preview.html:53
+msgid "Performance days"
+msgstr "公演日"
+
+#: src/app/web/templates/import_preview.html:54
+msgid "Each parsed day becomes a leg you can attach rounds to. Times are JST."
+msgstr "解析された各日は、抽選を割り当てられる公演になります。時刻はJSTです。"
+
+#: src/app/web/templates/import_preview.html:83
+msgid "No days parsed — add the first one below."
+msgstr "解析された公演日はありません — 下で最初の1件を追加してください。"
+
+#: src/app/web/templates/import_preview.html:88
+msgid "Add day"
+msgstr "日を追加"
+
+#: src/app/web/templates/import_preview.html:92
+msgid "Lottery / sale rounds"
+msgstr "抽選／販売"
+
+#: src/app/web/templates/import_preview.html:93
+msgid ""
+"Tick the days each round applies to — leave none ticked\n"
+"      for a whole-event round. Times are JST."
+msgstr "各抽選が対象とする日にチェックを入れてください — イベント全体が対象なら何もチェックしないでください。時刻はJSTです。"
+
+#: src/app/web/templates/import_preview.html:127
+msgid "No rounds yet — add the first one below."
+msgstr "抽選はまだありません — 下で最初の1件を追加してください。"
+
+#: src/app/web/templates/import_preview.html:142
+msgid "Optional — title EN, organizer, source URL, notes"
+msgstr "任意 — タイトルEN、主催、ソースURL、メモ"
+
+#: src/app/web/templates/import_preview.html:145
+msgid "Title (EN)"
+msgstr "タイトル（EN）"
+
+#: src/app/web/templates/import_preview.html:156
+msgid "Franchise, group, artists, venue — parsed, editable"
+msgstr "フランチャイズ、グループ、アーティスト、会場 — 解析済み、編集可能"
+
+#: src/app/web/templates/import_preview.html:163
+msgid "Create concert"
+msgstr "コンサートを作成"
+
+#: src/app/web/templates/preferences.html:2
+msgid "preferences"
+msgstr "設定"
+
+#: src/app/web/templates/preferences.html:17
+#: src/app/web/templates/preferences.html:181
+#: src/app/web/templates/setup.html:11 src/app/web/templates/welcome.html:8
+msgid "Reminders"
+msgstr "リマインダー"
+
+#: src/app/web/templates/preferences.html:18
+msgid "Time"
+msgstr "時刻"
+
+#: src/app/web/templates/preferences.html:19
+#: src/app/web/templates/preferences.html:317
+msgid "Delivery"
+msgstr "配信"
+
+#: src/app/web/templates/preferences.html:20
+#: src/app/web/templates/preferences.html:374
+msgid "Account"
+msgstr "アカウント"
+
+#: src/app/web/templates/preferences.html:21
+#: src/app/web/templates/preferences.html:422
+msgid "Editors"
+msgstr "エディター"
+
+#: src/app/web/templates/preferences.html:30
+msgid ""
+"Following a tag subscribes you to <b>every future concert</b> carrying "
+"it.\n"
+"      Notify sends a DM when a new one appears; Auto-apply adds your "
+"default\n"
+"      preset to it. Drop individual concerts from the concert page or a\n"
+"      reminder DM."
+msgstr "タグをフォローすると、それを持つ<b>今後のすべてのコンサート</b>に登録されます。「通知」は新しいものが現れたときにDMを送り、「自動適用」はデフォルトプリセットを追加します。個別のコンサートはコンサートページやリマインダーDMから除外できます。"
+
+#: src/app/web/templates/preferences.html:37
+#, python-format
+msgid "%(sub_count)s tags followed"
+msgstr "%(sub_count)s件のタグをフォロー中"
+
+#: src/app/web/templates/preferences.html:38
+#, python-format
+msgid ""
+"%(tracked)s tracked &middot; %(upcoming)s upcoming\n"
+"        &middot; %(pruned)s you pruned"
+msgstr "%(tracked)s件追跡中 &middot; %(upcoming)s件今後 &middot; %(pruned)s件除外済み"
+
+#: src/app/web/templates/preferences.html:50
+#, python-format
+msgid "<b>%(count)s</b> concert"
+msgid_plural "<b>%(count)s</b> concerts"
+msgstr[0] "<b>%(count)s</b>件のコンサート"
+
+#: src/app/web/templates/preferences.html:51
+#, python-format
+msgid "%(upcoming)s upcoming"
+msgstr "%(upcoming)s件今後"
+
+#: src/app/web/templates/preferences.html:55
+msgid "DM me when a new matching concert appears"
+msgstr "一致する新しいコンサートが現れたらDMする"
+
+#: src/app/web/templates/preferences.html:55
+msgid "Notify"
+msgstr "通知"
+
+#: src/app/web/templates/preferences.html:60
+msgid "Add my default preset to new matching concerts"
+msgstr "一致する新しいコンサートにデフォルトプリセットを追加"
+
+#: src/app/web/templates/preferences.html:60
+msgid "Auto-apply"
+msgstr "自動適用"
+
+#: src/app/web/templates/preferences.html:63
+msgid "Stop following this tag"
+msgstr "このタグのフォローを解除"
+
+#: src/app/web/templates/preferences.html:63
+msgid "Unfollow"
+msgstr "フォロー解除"
+
+#: src/app/web/templates/preferences.html:68
+msgid "You are not following any tags yet."
+msgstr "まだタグをフォローしていません。"
+
+#: src/app/web/templates/preferences.html:73
+msgid "Pruned concerts"
+msgstr "除外したコンサート"
+
+#: src/app/web/templates/preferences.html:74
+msgid ""
+"You skipped these individually.\n"
+"        Restoring one returns it to whatever its tags say by default."
+msgstr "これらを個別にスキップしました。1つを復元すると、そのタグのデフォルトに戻ります。"
+
+#: src/app/web/templates/preferences.html:87
+msgid "Restore to the tag default"
+msgstr "タグのデフォルトに戻す"
+
+#: src/app/web/templates/preferences.html:87
+msgid "Restore"
+msgstr "復元"
+
+#: src/app/web/templates/preferences.html:100
+msgid "Follow another tag"
+msgstr "別のタグをフォロー"
+
+#: src/app/web/templates/preferences.html:103
+msgid "When I follow a tag:"
+msgstr "タグをフォローしたとき："
+
+#: src/app/web/templates/preferences.html:105
+msgid "Apply preset"
+msgstr "プリセットを適用"
+
+#: src/app/web/templates/preferences.html:107
+msgid "None"
+msgstr "なし"
+
+#: src/app/web/templates/preferences.html:110
+msgid "DM me on new events"
+msgstr "新イベントでDMする"
+
+#: src/app/web/templates/preferences.html:121
+msgid "preset linked"
+msgstr "プリセット連携済み"
+
+#: src/app/web/templates/preferences.html:121
+msgid "— click to unfollow"
+msgstr "— クリックでフォロー解除"
+
+#: src/app/web/templates/preferences.html:147
+#: src/app/web/templates/welcome.html:61
+msgid "Other groups"
+msgstr "その他のグループ"
+
+#: src/app/web/templates/preferences.html:155
+#: src/app/web/templates/welcome.html:69
+msgid "Solo artists"
+msgstr "ソロアーティスト"
+
+#: src/app/web/templates/preferences.html:183
+msgid ""
+"A preset is a set of reminder rules applied to concerts you follow. Rules"
+"\n"
+"      on an individual concert override these."
+msgstr "プリセットは、フォロー中のコンサートに適用されるリマインダールールのセットです。個別のコンサートのルールはこれを上書きします。"
+
+#: src/app/web/templates/preferences.html:190
+msgid "day(s)"
+msgstr "日"
+
+#: src/app/web/templates/preferences.html:192
+msgid "hour(s)"
+msgstr "時間"
+
+#: src/app/web/templates/preferences.html:197
+msgid "each"
+msgstr "各"
+
+#: src/app/web/templates/preferences.html:200
+msgid "Opens"
+msgstr "受付開始"
+
+#: src/app/web/templates/preferences.html:200
+msgid "Results"
+msgstr "当落発表"
+
+#: src/app/web/templates/preferences.html:200
+msgid "Payment"
+msgstr "入金"
+
+#: src/app/web/templates/preferences.html:200
+msgid "Event start"
+msgstr "開演"
+
+#: src/app/web/templates/preferences.html:209
+msgid "Rename"
+msgstr "名前を変更"
+
+#: src/app/web/templates/preferences.html:211
+msgid "The Discord 'Set my reminders' button applies this preset"
+msgstr "Discordの「リマインダーを設定」ボタンがこのプリセットを適用します"
+
+#: src/app/web/templates/preferences.html:211
+msgid "Default"
+msgstr "デフォルト"
+
+#: src/app/web/templates/preferences.html:213
+msgid "Make this the preset the Discord button applies"
+msgstr "Discordボタンが適用するプリセットにする"
+
+#: src/app/web/templates/preferences.html:213
+msgid "Make default"
+msgstr "デフォルトにする"
+
+#: src/app/web/templates/preferences.html:216
+msgid "Delete preset"
+msgstr "プリセットを削除"
+
+#: src/app/web/templates/preferences.html:216
+msgid "Delete"
+msgstr "削除"
+
+#: src/app/web/templates/preferences.html:225
+#: src/app/web/templates/preferences.html:275
+#: src/app/web/templates/tags.html:113
+msgid "Save"
+msgstr "保存"
+
+#: src/app/web/templates/preferences.html:227
+msgid "Remove rule"
+msgstr "ルールを削除"
+
+#: src/app/web/templates/preferences.html:231
+msgid "Add a rule"
+msgstr "ルールを追加"
+
+#: src/app/web/templates/preferences.html:235
+msgid "Add rule"
+msgstr "ルールを追加"
+
+#: src/app/web/templates/preferences.html:243
+msgid ""
+"Presets apply to future concerts. Existing ones keep the rules they "
+"already have."
+msgstr "プリセットは今後のコンサートに適用されます。既存のコンサートはすでに持つルールを維持します。"
+
+#: src/app/web/templates/preferences.html:245
+msgid "New preset"
+msgstr "新規プリセット"
+
+#: src/app/web/templates/preferences.html:248
+msgid "standard lottery coverage"
+msgstr "標準的な抽選カバー"
+
+#: src/app/web/templates/preferences.html:248
+#: src/app/web/templates/tags.html:56 src/app/web/templates/tags.html:59
+#: src/app/web/templates/tags.html:60 src/app/web/templates/tags.html:209
+msgid "Name"
+msgstr "名前"
+
+#: src/app/web/templates/preferences.html:250
+msgid "Create preset"
+msgstr "プリセットを作成"
+
+#: src/app/web/templates/preferences.html:251
+msgid "Created with this first rule — add more after."
+msgstr "この最初のルールで作成 — あとで追加できます。"
+
+#: src/app/web/templates/preferences.html:260
+msgid "Time & language"
+msgstr "時刻と言語"
+
+#: src/app/web/templates/preferences.html:261
+msgid "Every deadline shows JST first, then yours. This sets the second one."
+msgstr "すべての締切はJSTを先に、次にあなたの時刻を表示します。これは後者を設定します。"
+
+#: src/app/web/templates/preferences.html:266
+#: src/app/web/templates/welcome.html:370
+msgid "Your timezone"
+msgstr "あなたのタイムゾーン"
+
+#: src/app/web/templates/preferences.html:268
+#: src/app/web/templates/welcome.html:372
+msgid "Common"
+msgstr "主要"
+
+#: src/app/web/templates/preferences.html:271
+#: src/app/web/templates/welcome.html:375
+msgid "All zones (IANA)"
+msgstr "すべてのゾーン（IANA）"
+
+#: src/app/web/templates/preferences.html:282
+#: src/app/web/templates/welcome.html:381
+msgid "Detection"
+msgstr "検出"
+
+#: src/app/web/templates/preferences.html:283
+#: src/app/web/templates/welcome.html:382
+msgid "Timezone detection mode"
+msgstr "タイムゾーン検出モード"
+
+#: src/app/web/templates/preferences.html:284
+#: src/app/web/templates/welcome.html:383
+msgid "Follow my browser"
+msgstr "ブラウザに従う"
+
+#: src/app/web/templates/preferences.html:285
+#: src/app/web/templates/welcome.html:384
+msgid "Keep what I picked"
+msgstr "選択したものを維持"
+
+#: src/app/web/templates/preferences.html:294
+#, python-format
+msgid "Detected <b>%(tz)s</b> from your browser."
+msgstr "ブラウザから<b>%(tz)s</b>を検出しました。"
+
+#: src/app/web/templates/preferences.html:294
+#, python-format
+msgid "Using <b>%(tz)s</b>."
+msgstr "<b>%(tz)s</b>を使用中。"
+
+#: src/app/web/templates/preferences.html:295
+#, python-format
+msgid "Right now that reads <span class=\"num\">%(tz_preview)s</span>."
+msgstr "現在の表示は<span class=\"num\">%(tz_preview)s</span>です。"
+
+#: src/app/web/templates/preferences.html:318
+msgid "Where reminders actually arrive."
+msgstr "リマインダーが実際に届く先。"
+
+#: src/app/web/templates/preferences.html:324
+msgid "Discord DMs blocked"
+msgstr "Discord DMがブロックされています"
+
+#: src/app/web/templates/preferences.html:325
+msgid "Check your Discord privacy settings to allow DMs from server members."
+msgstr "サーバーメンバーからのDMを許可するよう、Discordのプライバシー設定を確認してください。"
+
+#: src/app/web/templates/preferences.html:327
+msgid "Discord DMs reaching you"
+msgstr "Discord DMが届いています"
+
+#: src/app/web/templates/preferences.html:330
+#: src/app/web/templates/welcome.html:439
+msgid "Send a test DM"
+msgstr "テストDMを送信"
+
+#: src/app/web/templates/preferences.html:333
+msgid "Bot not running here (dev mode) — DMs can't be tested."
+msgstr "ここではボットが稼働していません（開発モード）— DMをテストできません。"
+
+#: src/app/web/templates/preferences.html:341
+msgid "Calendar feed active"
+msgstr "カレンダーフィードが有効"
+
+#: src/app/web/templates/preferences.html:342
+msgid "Subscribe by URL in Google or Apple Calendar."
+msgstr "GoogleまたはAppleカレンダーでURLから登録してください。"
+
+#: src/app/web/templates/preferences.html:344
+msgid "No calendar feed"
+msgstr "カレンダーフィードなし"
+
+#: src/app/web/templates/preferences.html:350
+msgid "Your feed link is ready — save it now, it won't be shown again."
+msgstr "フィードリンクの準備ができました — 今すぐ保存してください。再表示されません。"
+
+#: src/app/web/templates/preferences.html:353
+#: src/app/web/templates/welcome.html:485
+msgid "Copy link"
+msgstr "リンクをコピー"
+
+#: src/app/web/templates/preferences.html:354
+msgid ""
+"Google Calendar: Settings &rarr; Add calendar &rarr; From URL.\n"
+"        Apple Calendar: File &rarr; New Calendar Subscription."
+msgstr ""
+"Googleカレンダー：設定 &rarr; カレンダーを追加 &rarr; URLで追加。Appleカレンダー：ファイル &rarr; "
+"新規カレンダー購読。"
+
+#: src/app/web/templates/preferences.html:360
+msgid ""
+"This invalidates your current feed link — your calendar app will need the"
+" new one."
+msgstr "これにより現在のフィードリンクが無効になります — カレンダーアプリで新しいものが必要になります。"
+
+#: src/app/web/templates/preferences.html:361
+msgid "Generate a new one"
+msgstr "新しく生成する"
+
+#: src/app/web/templates/preferences.html:364
+#: src/app/web/templates/welcome.html:494
+msgid "Generate feed link"
+msgstr "フィードリンクを生成"
+
+#: src/app/web/templates/preferences.html:367
+msgid ""
+"Generating a new link revokes the old one immediately. Anyone still\n"
+"      subscribed to it stops receiving updates."
+msgstr "新しいリンクを生成すると、古いものは即座に無効になります。まだ購読している人には更新が届かなくなります。"
+
+#: src/app/web/templates/preferences.html:375
+#, python-format
+msgid "Signed in with Discord as <b>%(username)s</b>."
+msgstr "Discordで<b>%(username)s</b>としてサインイン中。"
+
+#: src/app/web/templates/preferences.html:380
+msgid "Re-run first-time setup"
+msgstr "初回セットアップを再実行"
+
+#: src/app/web/templates/preferences.html:381
+msgid ""
+"Walks you back through your concerts so you can prune the ones you\n"
+"          are not going for and mark what you have already applied to. "
+"Nothing is reset —\n"
+"          your existing choices are the starting point."
+msgstr "コンサートをもう一度見直して、行かないものを整理し、すでに申し込んだものをマークできます。何もリセットされません — 既存の選択が出発点です。"
+
+#: src/app/web/templates/preferences.html:385
+msgid "Run setup"
+msgstr "セットアップを実行"
+
+#: src/app/web/templates/preferences.html:396
+#: src/app/web/templates/preferences.html:413
+msgid "Delete my account"
+msgstr "アカウントを削除"
+
+#: src/app/web/templates/preferences.html:397
+msgid ""
+"Your reminders, subscriptions, and preferences are deleted. Concerts and "
+"tags you authored stay, with your name removed."
+msgstr "あなたのリマインダー、購読、設定は削除されます。あなたが作成したコンサートやタグは、名前が削除された状態で残ります。"
+
+#: src/app/web/templates/preferences.html:401
+msgid "Delete account"
+msgstr "アカウントを削除"
+
+#: src/app/web/templates/preferences.html:405
+msgid "Delete your account?"
+msgstr "アカウントを削除しますか？"
+
+#: src/app/web/templates/preferences.html:408
+msgid ""
+"Your reminders, subscriptions, and preferences are deleted. Concerts and "
+"tags you authored stay, with your name removed. This cannot be undone."
+msgstr "あなたのリマインダー、購読、設定は削除されます。あなたが作成したコンサートやタグは、名前が削除された状態で残ります。この操作は取り消せません。"
+
+#: src/app/web/templates/preferences.html:411
+msgid "Keep my account"
+msgstr "アカウントを保持"
+
+#: src/app/web/templates/preferences.html:422
+msgid "admin only"
+msgstr "管理者のみ"
+
+#: src/app/web/templates/preferences.html:423
+msgid ""
+"Discord users allowed to create and edit concerts, rounds and tags.\n"
+"      Env-managed editors (<code>EDITOR_WHITELIST</code>) can't be "
+"removed here — edit\n"
+"      <code>.env</code> instead."
+msgstr ""
+"コンサート、抽選、タグを作成・編集できるDiscordユーザー。環境変数で管理されるエディター（<code>EDITOR_WHITELIST</code>）はここでは削除できません"
+" — <code>.env</code>を編集してください。"
+
+#: src/app/web/templates/preferences.html:428
+msgid "from env"
+msgstr "環境変数から"
+
+#: src/app/web/templates/preferences.html:430
+msgid "cannot be removed here"
+msgstr "ここでは削除できません"
+
+#: src/app/web/templates/preferences.html:431
+msgid "Remove editor"
+msgstr "エディターを削除"
+
+#: src/app/web/templates/preferences.html:438
+msgid ""
+"Whitelisted editors live in the server env and cannot be removed from "
+"here."
+msgstr "ホワイトリストのエディターはサーバーの環境変数にあり、ここからは削除できません。"
+
+#: src/app/web/templates/preferences.html:440
+msgid "Discord user ID"
+msgstr "DiscordユーザーID"
+
+#: src/app/web/templates/preferences.html:441
+msgid "Add an editor"
+msgstr "エディターを追加"
+
+#: src/app/web/templates/privacy.html:5 src/app/web/templates/terms.html:5
+msgid ""
+"This translation is provided for convenience. The English version governs"
+" in any conflict."
+msgstr "この翻訳は便宜のために提供されています。相違がある場合は英語版が優先されます。"
+
+#: src/app/web/templates/privacy.html:9 src/app/web/templates/terms.html:9
+#, python-format
+msgid "Last updated: %(last_updated)s"
+msgstr "最終更新：%(last_updated)s"
+
+#: src/app/web/templates/privacy.html:12
+msgid ""
+"dekimasen.app tracks deadlines for Japanese concerts and sends you a\n"
+"    Discord DM before the ones you care about close. To do that it has to"
+"\n"
+"    store a small amount of information about you. This page says exactly"
+"\n"
+"    what, why, and for how long, in plain language. The rules for using "
+"the\n"
+"    service itself are on a separate page — see the\n"
+"    <a href=\"/terms\">terms of service</a>."
+msgstr ""
+"dekimasen.app は日本のコンサートの締切を追跡し、あなたが気にかけているものが締め切られる前にDiscord "
+"DMを送ります。そのために、あなたに関するわずかな情報を保存する必要があります。このページでは、その内容・理由・保存期間を平易な言葉で正確に説明します。サービス自体の利用ルールは別ページにあります"
+" — <a href=\"/terms\">利用規約</a>をご覧ください。"
+
+#: src/app/web/templates/privacy.html:20
+msgid "What we collect"
+msgstr "収集する情報"
+
+#: src/app/web/templates/privacy.html:23
+msgid ""
+"<strong>Your Discord account basics</strong> — your Discord user ID,\n"
+"      your display name, and your avatar hash. We ask Discord for the\n"
+"      <code>identify</code> scope only, which is the minimum available."
+msgstr ""
+"<strong>あなたのDiscordアカウントの基本情報</strong> — "
+"DiscordユーザーID、表示名、アバターのハッシュ。Discordには利用可能な最小範囲である<code>identify</code>スコープのみを要求します。"
+
+#: src/app/web/templates/privacy.html:28
+msgid ""
+"<strong>Your timezone</strong> — either the one you picked, or the one\n"
+"      your browser reported, so deadlines show in your local time "
+"alongside\n"
+"      JST."
+msgstr ""
+"<strong>あなたのタイムゾーン</strong> — "
+"あなたが選んだもの、またはブラウザが報告したもの。締切をJSTと並べてあなたの現地時刻で表示するためです。"
+
+#: src/app/web/templates/privacy.html:33
+msgid ""
+"<strong>Your reminder settings</strong> — the reminder rules you\n"
+"      create, your reminder presets, the tags you subscribe to, and any\n"
+"      lottery outcomes you record (applied, won, lost, paid), which the "
+"app\n"
+"      uses to stop reminding you about rounds you are done with."
+msgstr ""
+"<strong>あなたのリマインダー設定</strong> — "
+"作成したリマインダールール、リマインダープリセット、購読しているタグ、記録した抽選結果（申込・当選・落選・入金）。これらは、あなたが終えた抽選についての通知を止めるために使われます。"
+
+#: src/app/web/templates/privacy.html:39
+msgid ""
+"<strong>Pending and sent reminders</strong> — the queue of reminders\n"
+"      scheduled for you, and whether each has been delivered."
+msgstr ""
+"<strong>保留中および送信済みのリマインダー</strong> — "
+"あなた宛にスケジュールされたリマインダーのキューと、それぞれが配信されたかどうか。"
+
+#: src/app/web/templates/privacy.html:43
+msgid ""
+"<strong>Login sessions</strong> — a random session token per login.\n"
+"      Only its SHA-256 hash is stored, never the token itself."
+msgstr ""
+"<strong>ログインセッション</strong> — "
+"ログインごとのランダムなセッショントークン。保存されるのはそのSHA-256ハッシュのみで、トークン自体は保存されません。"
+
+#: src/app/web/templates/privacy.html:47
+msgid ""
+"<strong>A calendar feed token</strong>, if you generate one. Also\n"
+"      stored only as a SHA-256 hash. Anyone holding the raw feed URL can\n"
+"      read your upcoming deadlines, so treat it as a password; if you "
+"lose\n"
+"      it or want to revoke it, generate a new one and the old URL stops\n"
+"      working."
+msgstr "<strong>カレンダーフィードトークン</strong>（生成した場合）。こちらもSHA-256ハッシュとしてのみ保存されます。生のフィードURLを持つ人は誰でもあなたの今後の締切を読めるため、パスワードのように扱ってください。紛失または無効化したい場合は、新しく生成すれば古いURLは使えなくなります。"
+
+#: src/app/web/templates/privacy.html:54
+msgid ""
+"<strong>Whether your DMs are reachable</strong> — a single flag, set\n"
+"      when Discord refuses a DM, so the site can tell you why reminders\n"
+"      stopped arriving."
+msgstr ""
+"<strong>DMが届くかどうか</strong> — "
+"DiscordがDMを拒否したときに設定される単一のフラグ。サイトがリマインダーの停止理由をお知らせするためです。"
+
+#: src/app/web/templates/privacy.html:59
+msgid ""
+"<strong>What you contributed</strong> — if you have editor rights,\n"
+"      the concerts, tags, and edits you made are recorded with you as the"
+"\n"
+"      author."
+msgstr ""
+"<strong>あなたが貢献した内容</strong> — "
+"エディター権限がある場合、作成したコンサート・タグ・編集が、あなたを作成者として記録されます。"
+
+#: src/app/web/templates/privacy.html:65
+msgid "What we do not collect"
+msgstr "収集しない情報"
+
+#: src/app/web/templates/privacy.html:67
+msgid "No email address. Discord login never hands us one."
+msgstr "メールアドレス。Discordログインでは一切渡されません。"
+
+#: src/app/web/templates/privacy.html:68
+msgid "No IP addresses in the database."
+msgstr "データベース内のIPアドレス。"
+
+#: src/app/web/templates/privacy.html:70
+msgid ""
+"No message content. The bot uses no privileged intents, so it cannot\n"
+"      read your messages, your server list, or your friends."
+msgstr "メッセージ内容。ボットは特権インテントを使用しないため、あなたのメッセージ、サーバー一覧、フレンドを読むことはできません。"
+
+#: src/app/web/templates/privacy.html:73
+msgid "No analytics, no third-party trackers, no advertising."
+msgstr "アナリティクス、サードパーティのトラッカー、広告。"
+
+#: src/app/web/templates/privacy.html:76
+msgid "Why we collect it"
+msgstr "収集する理由"
+
+#: src/app/web/templates/privacy.html:78
+msgid ""
+"Solely to send you the concert-deadline reminders you asked for, and to\n"
+"    show your own settings back to you. There is no other use. Nothing "
+"here\n"
+"    is profiled, scored, or used to make automated decisions about you."
+msgstr "あなたが依頼したコンサートの締切リマインダーを送るため、そしてあなた自身の設定を表示するためだけです。他の用途はありません。ここにあるものは、プロファイリング、スコアリング、あなたに関する自動的な意思決定には使われません。"
+
+#: src/app/web/templates/privacy.html:83
+msgid "Sharing"
+msgstr "共有について"
+
+#: src/app/web/templates/privacy.html:85
+msgid ""
+"We share nothing. Your data is not sold, rented, or given to third "
+"parties. The\n"
+"    only outbound traffic carrying anything about you is the Discord API\n"
+"    call that delivers your DM, which is the service you signed up for."
+msgstr ""
+"何も共有しません。あなたのデータは販売・貸与・第三者への提供を行いません。あなたに関する情報を運ぶ唯一の送信は、DMを配信するDiscord "
+"APIの呼び出しであり、それはあなたが申し込んだサービスそのものです。"
+
+#: src/app/web/templates/privacy.html:90
+msgid "How long we keep it"
+msgstr "保存期間"
+
+#: src/app/web/templates/privacy.html:92
+msgid ""
+"Your data is kept while your account exists. The database is backed up\n"
+"    nightly to a private, non-public storage bucket (encrypted at rest by"
+"\n"
+"    the storage provider), and those backups expire automatically after "
+"30\n"
+"    days. So after a deletion, your data is gone from the live site\n"
+"    immediately but can persist in backups for up to 30 more days. We "
+"would\n"
+"    rather say that than claim instant erasure."
+msgstr "あなたのデータはアカウントが存在する間保持されます。データベースは毎晩、非公開のストレージバケット（ストレージ提供者により保存時に暗号化）にバックアップされ、それらのバックアップは30日後に自動的に期限切れになります。したがって削除後、あなたのデータはライブサイトからは直ちに消えますが、バックアップには最大30日間残る場合があります。即時消去を主張するより、そう述べることを選びます。"
+
+#: src/app/web/templates/privacy.html:100
+msgid "Cookies"
+msgstr "クッキー"
+
+#: src/app/web/templates/privacy.html:102
+msgid ""
+"One cookie: your login session. It is strictly necessary — without it\n"
+"    you cannot stay signed in. There are no analytics or tracking "
+"cookies,\n"
+"    which is why you are not being asked to click through a consent "
+"banner."
+msgstr "クッキーは1つだけ：ログインセッションです。これは厳密に必要で、これがないとサインイン状態を維持できません。アナリティクスやトラッキングのクッキーはありません。だからこそ同意バナーをクリックさせられることもありません。"
+
+#: src/app/web/templates/privacy.html:107
+msgid "Your rights"
+msgstr "あなたの権利"
+
+#: src/app/web/templates/privacy.html:109
+msgid ""
+"You can ask for a copy of your data, ask for it to be corrected, or ask\n"
+"    for it to be deleted. Just get in touch:"
+msgstr "データのコピーの請求、訂正の請求、削除の請求ができます。お気軽にご連絡ください："
+
+#: src/app/web/templates/privacy.html:114 src/app/web/templates/terms.html:111
+#, python-format
+msgid "Discord: %(contact_discord)s"
+msgstr "Discord：%(contact_discord)s"
+
+#: src/app/web/templates/privacy.html:117 src/app/web/templates/terms.html:114
+msgid "Email:"
+msgstr "メール："
+
+#: src/app/web/templates/privacy.html:128 src/app/web/templates/terms.html:125
+msgid ""
+"This deployment has not published contact details yet. If you reached\n"
+"    this page from a running site, contact whoever operates it."
+msgstr "この配備ではまだ連絡先が公開されていません。稼働中のサイトからこのページに来た場合は、運営者にご連絡ください。"
+
+#: src/app/web/templates/privacy.html:133
+msgid ""
+"Deleting your account removes everything personal listed above: your\n"
+"    account row, your sessions, your reminder rules, presets and preset\n"
+"    items, your tag subscriptions, your recorded lottery outcomes, your\n"
+"    queued reminders, and your pending notifications. What stays is the\n"
+"    shared catalogue — concerts, tags, and edit history you contributed —"
+"\n"
+"    with the author field blanked out, so the events everyone else is\n"
+"    following do not disappear because one person left."
+msgstr ""
+"アカウントを削除すると、上記のすべての個人情報が削除されます：アカウント行、セッション、リマインダールール、プリセットとプリセット項目、タグ購読、記録した抽選結果、キュー内のリマインダー、保留中の通知。残るのは共有カタログ"
+" — あなたが貢献したコンサート、タグ、編集履歴 — "
+"で、作成者欄は空欄になります。1人が去ったことで、他の全員がフォローしているイベントが消えないようにするためです。"
+
+#: src/app/web/templates/privacy.html:142
+msgid "Changes to this policy"
+msgstr "このポリシーの変更"
+
+#: src/app/web/templates/privacy.html:144
+msgid ""
+"If this policy changes, the date at the top of this page changes with\n"
+"    it. There is no mailing list to notify, since we do not have your "
+"email\n"
+"    address."
+msgstr "このポリシーが変更された場合、このページ上部の日付もそれに合わせて変わります。メールアドレスをお預かりしていないため、通知するメーリングリストはありません。"
+
+#: src/app/web/templates/retroactive_apply.html:2
+msgid "confirm"
+msgstr "確認"
+
+#: src/app/web/templates/retroactive_apply.html:8
+#, python-format
+msgid "Add %(name)s to active events?"
+msgstr "%(name)s をアクティブなイベントに追加しますか？"
+
+#: src/app/web/templates/retroactive_apply.html:10
+#, python-format
+msgid ""
+"%(member_name)s was just added to the <b>%(group_name)s</b> group tag. "
+"Group membership\n"
+"    is materialised when a group is attached to a concert, so existing "
+"concerts are not touched\n"
+"    automatically. These %(count)s active event(s) already carry "
+"%(group_name)s\n"
+"    but not %(member_name)s individually:"
+msgstr ""
+"%(member_name)s "
+"が<b>%(group_name)s</b>グループタグに追加されました。グループのメンバーはグループがコンサートに付与された時点で反映されるため、既存のコンサートは自動的には変更されません。以下の%(count)s件のアクティブなイベントはすでに%(group_name)sを含んでいますが、%(member_name)s個人は含まれていません："
+
+#: src/app/web/templates/retroactive_apply.html:23
+#, python-format
+msgid ""
+"Applying adds %(name)s as a performer chip on each concert below. It does"
+"\n"
+"    <b>not</b> re-expand the group or restore performers an editor pruned"
+" — only this one new\n"
+"    member is added."
+msgstr ""
+"適用すると、以下の各コンサートに%(name)sが出演者チップとして追加されます。グループを再展開したり、エディターが整理した出演者を復元したりは<b>しません</b>"
+" — 追加されるのはこの新しいメンバー1名のみです。"
+
+#: src/app/web/templates/retroactive_apply.html:35
+#, python-format
+msgid ""
+"<b>%(count)s</b> active event(s) will gain %(name)s.\n"
+"    Concerts already carrying %(name)s are skipped."
+msgstr "<b>%(count)s</b>件のアクティブなイベントに%(name)sが追加されます。すでに%(name)sを含むコンサートはスキップされます。"
+
+#: src/app/web/templates/retroactive_apply.html:37
+msgid "Skip"
+msgstr "スキップ"
+
+#: src/app/web/templates/retroactive_apply.html:38
+#, python-format
+msgid "Apply to all %(count)s"
+msgstr "%(count)s件すべてに適用"
+
+#: src/app/web/templates/retroactive_apply.html:41
+#, python-format
+msgid ""
+"Nothing to apply — every active event with %(group_name)s already has "
+"%(member_name)s."
+msgstr "適用するものはありません — %(group_name)sを含むすべてのアクティブなイベントにはすでに%(member_name)sがいます。"
+
+#: src/app/web/templates/retroactive_apply.html:42
+msgid "Back to tags"
+msgstr "タグに戻る"
+
+#: src/app/web/templates/setup.html:2
+msgid "setup"
+msgstr "セットアップ"
+
+#: src/app/web/templates/setup.html:10 src/app/web/templates/welcome.html:8
+msgid "Timezone"
+msgstr "タイムゾーン"
+
+#: src/app/web/templates/setup.html:12 src/app/web/templates/welcome.html:8
+msgid "Test DM"
+msgstr "テストDM"
+
+#: src/app/web/templates/setup.html:14
+msgid "Your concerts"
+msgstr "あなたのコンサート"
+
+#: src/app/web/templates/setup.html:15
+msgid "Applications"
+msgstr "申し込み"
+
+#: src/app/web/templates/setup.html:22
+#, python-format
+msgid "We found %(count)s upcoming concert for you"
+msgid_plural "We found %(count)s upcoming concerts for you"
+msgstr[0] "あなたに%(count)s件の今後のコンサートが見つかりました"
+
+#: src/app/web/templates/setup.html:24
+#, python-format
+msgid "Because you follow %(because)s. "
+msgstr "%(because)sをフォローしているためです。"
+
+#: src/app/web/templates/setup.html:24
+msgid ""
+"Most people\n"
+"      cannot get to every date — switch off the ones you are not going "
+"for and we will not\n"
+"      chase you about them. You can change any of this later."
+msgstr "ほとんどの人はすべての日程には行けません — 行かないものをオフにすれば、それについて催促しません。これらは後でいつでも変更できます。"
+
+#: src/app/web/templates/setup.html:58
+#, python-format
+msgid "<b id=\"keepCount\">%(kept)s</b> of %(total)s kept"
+msgstr "%(total)s件中<b id=\"keepCount\">%(kept)s</b>件を保持"
+
+#: src/app/web/templates/setup.html:59
+msgid "Turn all off"
+msgstr "すべてオフ"
+
+#: src/app/web/templates/setup.html:60 src/app/web/templates/setup.html:98
+#: src/app/web/templates/welcome.html:84 src/app/web/templates/welcome.html:467
+msgid "Continue"
+msgstr "続ける"
+
+#: src/app/web/templates/setup.html:90
+msgid "No upcoming concerts yet"
+msgstr "今後のコンサートはまだありません"
+
+#: src/app/web/templates/setup.html:92
+msgid ""
+"We didn't find any upcoming concerts for the tags you follow yet.\n"
+"      <a href=\"/discover\">Browse what's on</a> to find some — or "
+"continue, and your board\n"
+"      will fill in as new events drop."
+msgstr ""
+"フォロー中のタグについて、今後のコンサートはまだ見つかりませんでした。<a "
+"href=\"/discover\">開催中の公演を見る</a>で探すか、そのまま続けてください。新しいイベントが出ればボードに追加されていきます。"
+
+#: src/app/web/templates/setup.html:106
+msgid "Already applied to any of these?"
+msgstr "これらのいずれかにすでに申し込みましたか？"
+
+#: src/app/web/templates/setup.html:108
+msgid ""
+"Only the rounds you could still be in — open now, or closed and waiting "
+"on a result. A\n"
+"      past round you lost does not change what happens next, so we do not"
+" ask."
+msgstr "まだあなたが関われる抽選のみ — 受付中、または締め切られて結果待ちのものです。落選した過去の抽選は次に起こることを変えないため、お尋ねしません。"
+
+#: src/app/web/templates/setup.html:127
+msgid "Still open"
+msgstr "受付中"
+
+#: src/app/web/templates/setup.html:127
+msgid "Awaiting result"
+msgstr "結果待ち"
+
+#: src/app/web/templates/setup.html:133
+msgid "Anything you skip, we will ask about by DM when its result lands."
+msgstr "スキップしたものは、結果が出たときにDMでお尋ねします。"
+
+#: src/app/web/templates/setup.html:134
+msgid "Back"
+msgstr "戻る"
+
+#: src/app/web/templates/setup.html:135 src/app/web/templates/setup.html:147
+msgid "Finish"
+msgstr "完了"
+
+#: src/app/web/templates/setup.html:140
+msgid "Nothing to ask right now"
+msgstr "今お尋ねすることはありません"
+
+#: src/app/web/templates/setup.html:142
+msgid ""
+"None of the concerts you are tracking has a round still waiting on you. "
+"We will ask by\n"
+"      DM the moment one does."
+msgstr "あなたが追跡しているコンサートで、あなたを待っている抽選はありません。出てき次第、DMでお尋ねします。"
+
+#: src/app/web/templates/setup.html:154
+msgid "Setup complete"
+msgstr "セットアップ完了"
+
+#: src/app/web/templates/setup.html:155
+msgid "Your board is ready"
+msgstr "ボードの準備ができました"
+
+#: src/app/web/templates/setup.html:157
+msgid "tracking"
+msgstr "追跡中"
+
+#: src/app/web/templates/setup.html:172
+msgid "next deadline"
+msgstr "次の締切"
+
+#: src/app/web/templates/setup.html:177
+#, python-format
+msgid ""
+"%(title)s is waiting on a payment — the closest thing here to\n"
+"    losing a ticket you have already won."
+msgstr "%(title)s は入金待ちです — ここにあるもので、すでに当選したチケットを失うことに最も近い状況です。"
+
+#: src/app/web/templates/setup.html:181
+msgid "Go to my board"
+msgstr "ボードへ移動"
+
+#: src/app/web/templates/tags.html:2
+msgid "tags"
+msgstr "タグ"
+
+#: src/app/web/templates/tags.html:11
+#, python-format
+msgid "%(count)s franchise"
+msgid_plural "%(count)s franchises"
+msgstr[0] "%(count)s件のフランチャイズ"
+
+#: src/app/web/templates/tags.html:12
+#, python-format
+msgid "%(count)s group"
+msgid_plural "%(count)s groups"
+msgstr[0] "%(count)s件のグループ"
+
+#: src/app/web/templates/tags.html:13
+#, python-format
+msgid "%(count)s performer"
+msgid_plural "%(count)s performers"
+msgstr[0] "%(count)s名の出演者"
+
+#: src/app/web/templates/tags.html:14
+#, python-format
+msgid "%(count)s venue"
+msgid_plural "%(count)s venues"
+msgstr[0] "%(count)s件の会場"
+
+#: src/app/web/templates/tags.html:15
+#, python-format
+msgid ""
+"%(concerts)s\n"
+"    across %(franchises)s,\n"
+"    %(groups)s,\n"
+"    %(performers)s,\n"
+"    %(venues)s"
+msgstr ""
+"%(concerts)sが\n"
+"    %(franchises)s、\n"
+"    %(groups)s、\n"
+"    %(performers)s、\n"
+"    %(venues)sにわたって"
+
+#: src/app/web/templates/tags.html:22
+msgid "+ New tag"
+msgstr "+ 新規タグ"
+
+#: src/app/web/templates/tags.html:25
+msgid ""
+"Following a tag subscribes you to every future concert carrying it, so "
+"counts\n"
+"here are what a rename or delete actually touches."
+msgstr "タグをフォローすると、それを持つ今後のすべてのコンサートに登録されます。ここでの件数は、名前の変更や削除が実際に影響する対象です。"
+
+#: src/app/web/templates/tags.html:28
+msgid "Search franchises, groups, performers, venues…"
+msgstr "フランチャイズ、グループ、出演者、会場を検索…"
+
+#: src/app/web/templates/tags.html:40
+msgid "franchise"
+msgstr "フランチャイズ"
+
+#: src/app/web/templates/tags.html:40
+msgid "group"
+msgstr "グループ"
+
+#: src/app/web/templates/tags.html:40
+msgid "venue"
+msgstr "会場"
+
+#: src/app/web/templates/tags.html:49 src/app/web/templates/tags.html:273
+msgid "concerts"
+msgstr "コンサート"
+
+#: src/app/web/templates/tags.html:50 src/app/web/templates/tags.html:275
+msgid "followers"
+msgstr "フォロワー"
+
+#: src/app/web/templates/tags.html:51
+msgid "members"
+msgstr "メンバー"
+
+#: src/app/web/templates/tags.html:52
+msgid "upcoming"
+msgstr "今後"
+
+#: src/app/web/templates/tags.html:67
+msgid "Location link"
+msgstr "場所リンク"
+
+#: src/app/web/templates/tags.html:69 src/app/web/templates/tags.html:232
+msgid "Region"
+msgstr "地域"
+
+#: src/app/web/templates/tags.html:81
+msgid "Members"
+msgstr "メンバー"
+
+#: src/app/web/templates/tags.html:89
+msgid "none yet"
+msgstr "まだありません"
+
+#: src/app/web/templates/tags.html:97
+msgid "+ Add member"
+msgstr "+ メンバーを追加"
+
+#: src/app/web/templates/tags.html:103
+msgid ""
+"<b>Apply to existing concerts.</b> Adding a member does not touch\n"
+"        concerts that already carry this group — expansion is "
+"materialised at the moment\n"
+"        you attach it. Use this to push a new member onto active events."
+msgstr ""
+"<b>既存のコンサートに適用。</b>メンバーの追加は、すでにこのグループを含むコンサートには影響しません — "
+"展開は付与した時点で反映されます。新しいメンバーをアクティブなイベントに反映させるにはこれを使ってください。"
+
+#: src/app/web/templates/tags.html:107
+#, python-format
+msgid "Apply %(name)s to %(count)s upcoming concert"
+msgid_plural "Apply %(name)s to %(count)s upcoming concerts"
+msgstr[0] "%(name)sを%(count)s件の今後のコンサートに適用"
+
+#: src/app/web/templates/tags.html:114 src/app/web/templates/tags.html:253
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: src/app/web/templates/tags.html:117
+msgid "Delete tag"
+msgstr "タグを削除"
+
+#: src/app/web/templates/tags.html:141
+msgid "no members yet"
+msgstr "メンバーはまだいません"
+
+#: src/app/web/templates/tags.html:147
+msgid "Franchises and groups"
+msgstr "フランチャイズとグループ"
+
+#: src/app/web/templates/tags.html:147
+msgid "— click any tag to edit"
+msgstr "— 編集するにはタグをクリック"
+
+#: src/app/web/templates/tags.html:156
+msgid "No franchise"
+msgstr "フランチャイズなし"
+
+#: src/app/web/templates/tags.html:164
+msgid "— grouped by the region used in the Discover sidebar"
+msgstr "— Discoverサイドバーで使われる地域でグループ化"
+
+#: src/app/web/templates/tags.html:177
+msgid "Performers with no group"
+msgstr "グループに属さない出演者"
+
+#: src/app/web/templates/tags.html:177
+msgid "— solo artists, or members not yet attached"
+msgstr "— ソロアーティスト、またはまだ所属していないメンバー"
+
+#: src/app/web/templates/tags.html:193
+msgid "New tag"
+msgstr "新規タグ"
+
+#: src/app/web/templates/tags.html:201
+msgid "Franchise"
+msgstr "フランチャイズ"
+
+#: src/app/web/templates/tags.html:202
+msgid "Group"
+msgstr "グループ"
+
+#: src/app/web/templates/tags.html:203
+msgid "Performer"
+msgstr "出演者"
+
+#: src/app/web/templates/tags.html:206 src/app/web/templates/tags.html:267
+msgid "A group contains performers. Attaching it to a concert adds its members."
+msgstr "グループには出演者が含まれます。コンサートに付与すると、そのメンバーが追加されます。"
+
+#: src/app/web/templates/tags.html:211
+msgid "As it is written on the official site"
+msgstr "公式サイトに記載されているとおり"
+
+#: src/app/web/templates/tags.html:215
+msgid "Already exists."
+msgstr "すでに存在します。"
+
+#: src/app/web/templates/tags.html:219
+msgid "Parent franchise"
+msgstr "親フランチャイズ"
+
+#: src/app/web/templates/tags.html:227 src/app/web/templates/tags.html:243
+msgid "(optional)"
+msgstr "（任意）"
+
+#: src/app/web/templates/tags.html:239
+msgid ""
+"Discover groups venues by region. Without one it lands in “No region” and"
+" drops out of region filtering."
+msgstr "Discoverは会場を地域でグループ化します。地域がないと「地域なし」に入り、地域フィルターから外れます。"
+
+#: src/app/web/templates/tags.html:243
+msgid "Map or venue URL"
+msgstr "地図または会場のURL"
+
+#: src/app/web/templates/tags.html:248
+msgid "A franchise is just a parent for groups — nothing else to set."
+msgstr "フランチャイズはグループの親でしかありません — 他に設定するものはありません。"
+
+#: src/app/web/templates/tags.html:252
+msgid "Create tag"
+msgstr "タグを作成"
+
+#: src/app/web/templates/tags.html:266
+msgid "A franchise is the top level. Groups hang off it."
+msgstr "フランチャイズは最上位です。グループがその下にぶら下がります。"
+
+#: src/app/web/templates/tags.html:268
+msgid "A single performer. Can belong to a group, or stand alone."
+msgstr "1人の出演者。グループに属することも、単独でいることもできます。"
+
+#: src/app/web/templates/tags.html:269
+msgid "A place. Discover filters venues by region, not individually."
+msgstr "場所。Discoverは会場を地域で絞り込み、個別では絞り込みません。"
+
+#: src/app/web/templates/tags.html:271
+#, python-brace-format
+msgid ""
+"A {kind} tag with this name is on {concerts} with {followers}. Adding a "
+"second one splits them — there is no merge yet."
+msgstr ""
+"この名前の{kind}タグは{concerts}に{followers}とともに付いています。2つ目を追加すると分割されます — "
+"まだマージ機能はありません。"
+
+#: src/app/web/templates/tags.html:272
+msgid "concert"
+msgstr "コンサート"
+
+#: src/app/web/templates/tags.html:274
+msgid "follower"
+msgstr "フォロワー"
+
+#: src/app/web/templates/terms.html:12
+msgid ""
+"These are the terms for using dekimasen.app. By signing in you agree to\n"
+"    them. They are short on purpose: this is a free hobby project, not a\n"
+"    company, and the honest version fits on one page. How your data is\n"
+"    handled is a separate page — see the\n"
+"    <a href=\"/privacy\">privacy policy</a>."
+msgstr ""
+"これはdekimasen.appの利用規約です。サインインすることでこれらに同意したことになります。これらは意図的に短くしています：これは無料の趣味プロジェクトであり、会社ではなく、正直な内容は1ページに収まります。データの取り扱いは別ページです"
+" — <a href=\"/privacy\">プライバシーポリシー</a>をご覧ください。"
+
+#: src/app/web/templates/terms.html:19
+msgid "What this is"
+msgstr "これは何か"
+
+#: src/app/web/templates/terms.html:21
+msgid ""
+"dekimasen.app tracks deadlines for Japanese concerts — lottery rounds,\n"
+"    serial-code sales, stream tickets — and sends you a Discord DM before"
+"\n"
+"    the ones you follow close. It is run by one person, for free, on a\n"
+"    best-effort basis. It is not affiliated with, endorsed by, or "
+"operated\n"
+"    on behalf of Discord, any artist, agency, venue, promoter, or "
+"ticketing\n"
+"    operator. Names and events listed here belong to the people who run\n"
+"    them; this site only points at their deadlines."
+msgstr ""
+"dekimasen.app は日本のコンサートの締切 — 抽選、シリアルコード販売、配信チケット — "
+"を追跡し、あなたがフォローするものが締め切られる前にDiscord "
+"DMを送ります。1人が無料で、ベストエフォートで運営しています。Discord、いかなるアーティスト、事務所、会場、プロモーター、チケット運営者とも提携・承認・代行の関係にありません。ここに掲載される名称やイベントは、それらを運営する人々に帰属します。このサイトはそれらの締切を指し示すだけです。"
+
+#: src/app/web/templates/terms.html:30
+msgid "Who can use it"
+msgstr "誰が使えるか"
+
+#: src/app/web/templates/terms.html:32
+msgid ""
+"You need a Discord account to sign in, and you must meet Discord's\n"
+"    minimum age requirement for your country. Discord's own terms apply "
+"to\n"
+"    you alongside these ones — nothing here overrides them."
+msgstr ""
+"サインインにはDiscordアカウントが必要で、お住まいの国におけるDiscordの最低年齢要件を満たす必要があります。Discord自身の規約もこれらと併せて適用されます"
+" — ここにある内容がそれらを上書きすることはありません。"
+
+#: src/app/web/templates/terms.html:37
+msgid "No guarantees"
+msgstr "保証はありません"
+
+#: src/app/web/templates/terms.html:39
+msgid ""
+"This is the part that matters, so it is stated plainly: the service is\n"
+"    provided as is, with no warranty of any kind. There is no promise "
+"that\n"
+"    a reminder arrives on time, that it arrives at all, or that the "
+"deadline\n"
+"    it refers to is correct."
+msgstr "これは重要な部分なので、はっきりと述べます：本サービスは現状有姿で提供され、いかなる種類の保証もありません。リマインダーが時間どおりに届くこと、そもそも届くこと、あるいはそれが指す締切が正しいことを約束するものではありません。"
+
+#: src/app/web/templates/terms.html:45
+msgid ""
+"All three fail in ordinary use. Discord can refuse or delay a DM. The\n"
+"    server can be down, and the scheduler can miss a tick. An editor can\n"
+"    type the wrong date, or a promoter can move one after it was entered."
+"\n"
+"    Treat what you see here as a prompt to go and check, never as the\n"
+"    authority. You are responsible for confirming every deadline you care"
+"\n"
+"    about with the official source before you rely on it."
+msgstr "この3つはいずれも通常の利用の中で起こり得ます。DiscordはDMを拒否したり遅らせたりできます。サーバーが停止することも、スケジューラーが1回のティックを取りこぼすこともあります。エディターが日付を打ち間違えることも、プロモーターが入力後に日程を動かすこともあります。ここで見えるものは確認しに行くきっかけとして扱い、決して権威として扱わないでください。頼りにする前に、気にかけているすべての締切を公式の情報源で確認する責任はあなたにあります。"
+
+#: src/app/web/templates/terms.html:53
+msgid "Limitation of liability"
+msgstr "責任の制限"
+
+#: src/app/web/templates/terms.html:55
+msgid ""
+"To the extent the law allows, the operator is not liable for any loss\n"
+"    arising from your use of the service — a missed deadline, a missed\n"
+"    lottery, a ticket you did not get, or anything downstream of those.\n"
+"    This is a free service given away as a convenience; it comes with no\n"
+"    money and no guarantees attached."
+msgstr ""
+"法律が認める範囲において、運営者は本サービスの利用から生じるいかなる損失 — "
+"逃した締切、外れた抽選、取れなかったチケット、あるいはそれらに起因するもの — "
+"についても責任を負いません。これは便宜のために無償で提供される無料のサービスであり、金銭も保証も一切付いていません。"
+
+#: src/app/web/templates/terms.html:62
+msgid "Acceptable use"
+msgstr "許容される利用"
+
+#: src/app/web/templates/terms.html:64
+msgid "Do not scrape the site or send automated traffic at it."
+msgstr "サイトをスクレイピングしたり、自動化されたトラフィックを送りつけたりしないでください。"
+
+#: src/app/web/templates/terms.html:66
+msgid ""
+"Do not attempt to break it, disrupt it, or reach data or accounts that\n"
+"      are not yours."
+msgstr "壊そうとしたり、妨害したり、あなたのものではないデータやアカウントにアクセスしようとしたりしないでください。"
+
+#: src/app/web/templates/terms.html:70
+msgid ""
+"If you have editor rights, use them in good faith: add real events,\n"
+"      keep entries accurate, and do not vandalise or spam the catalogue."
+msgstr "エディター権限がある場合は、誠実に使ってください：実在するイベントを追加し、項目を正確に保ち、カタログを荒らしたりスパムしたりしないでください。"
+
+#: src/app/web/templates/terms.html:75
+msgid "Editor contributions"
+msgstr "エディターによる貢献"
+
+#: src/app/web/templates/terms.html:77
+msgid ""
+"Concerts, tags, and edits made by an editor go into a shared catalogue\n"
+"    that everyone on the site uses. That content stays even if you stop\n"
+"    using the service or ask for your account to be deleted — only your\n"
+"    name is removed from it, so the events other people are following do\n"
+"    not disappear because one person left. By contributing you agree to\n"
+"    that arrangement. The\n"
+"    <a href=\"/privacy\">privacy policy</a> says the same thing from the "
+"data\n"
+"    side."
+msgstr ""
+"エディターが作成したコンサート、タグ、編集は、サイト上の全員が使う共有カタログに入ります。そのコンテンツは、あなたがサービスの利用をやめたりアカウントの削除を求めたりしても残ります"
+" — "
+"削除されるのはあなたの名前だけで、1人が去ったことで他の人々がフォローしているイベントが消えないようにするためです。貢献することで、あなたはこの取り決めに同意したことになります。<a"
+" href=\"/privacy\">プライバシーポリシー</a>はデータの側から同じことを述べています。"
+
+#: src/app/web/templates/terms.html:87
+msgid "Availability and shutdown"
+msgstr "提供状況と終了"
+
+#: src/app/web/templates/terms.html:89
+msgid ""
+"The service may change, break, or shut down at any time, with or without\n"
+"    notice. Access may be withdrawn from anyone who abuses it or breaks\n"
+"    these terms. You can stop using it whenever you like."
+msgstr "本サービスは、予告の有無にかかわらず、いつでも変更・故障・終了することがあります。サービスを悪用したり、これらの規約に違反したりする者に対しては、アクセスを取り消すことがあります。あなたはいつでも利用をやめることができます。"
+
+#: src/app/web/templates/terms.html:94
+msgid "Changes to these terms"
+msgstr "これらの規約の変更"
+
+#: src/app/web/templates/terms.html:96
+msgid ""
+"If these terms change, the date at the top of this page changes with\n"
+"    them. Continuing to use the service after that means you accept the "
+"new\n"
+"    version."
+msgstr "これらの規約が変更された場合、このページ上部の日付もそれに合わせて変わります。その後もサービスを利用し続けることは、新しいバージョンに同意することを意味します。"
+
+#: src/app/web/templates/terms.html:101
+msgid "Governing law"
+msgstr "準拠法"
+
+#: src/app/web/templates/terms.html:103
+msgid ""
+"These terms are governed by the laws of the Province of New Brunswick\n"
+"    and the federal laws of Canada applicable therein."
+msgstr "これらの規約は、ニューブランズウィック州の法律およびそこに適用されるカナダの連邦法に準拠します。"
+
+#: src/app/web/templates/terms.html:107
+msgid "Contact"
+msgstr "お問い合わせ"
+
+#: src/app/web/templates/terms.html:108
+msgid "Questions about any of this:"
+msgstr "これらに関するご質問は："
+
+#: src/app/web/templates/terms.html:130
+msgid ""
+"tl;dr: it's a helpful reminder tool built by a fan, not a ticket broker.\n"
+"    Double-check the official page before every deadline."
+msgstr "要するに：これはファンが作った便利なリマインダーツールであり、チケットブローカーではありません。締切のたびに公式ページを再確認してください。"
+
+#: src/app/web/templates/welcome.html:2
+msgid "welcome"
+msgstr "ようこそ"
+
+#: src/app/web/templates/welcome.html:8
+msgid "Calendar"
+msgstr "カレンダー"
+
+#: src/app/web/templates/welcome.html:13
+msgid "Skip setup entirely"
+msgstr "セットアップをすべてスキップ"
+
+#: src/app/web/templates/welcome.html:19
+msgid "Follow some artists"
+msgstr "アーティストをフォローしましょう"
+
+#: src/app/web/templates/welcome.html:20
+msgid ""
+"Get a DM the moment a new event drops for anyone you follow. Pick a "
+"franchise to cover\n"
+"    everyone under it, a group, or a single performer — you can change "
+"any of this later. Tap\n"
+"    to follow."
+msgstr ""
+"フォローした人に新しいイベントが出た瞬間にDMが届きます。フランチャイズを選べばその下の全員を、グループ、または1人の出演者をカバーできます — "
+"これらは後でいつでも変更できます。タップしてフォロー。"
+
+#: src/app/web/templates/welcome.html:25
+msgid "Search franchises, groups, performers…"
+msgstr "フランチャイズ、グループ、出演者を検索…"
+
+#: src/app/web/templates/welcome.html:26
+msgid "Search tags"
+msgstr "タグを検索"
+
+#: src/app/web/templates/welcome.html:34
+msgid "Following — click to unfollow"
+msgstr "フォロー中 — クリックでフォロー解除"
+
+#: src/app/web/templates/welcome.html:83
+#, python-format
+msgid "<b>%(count)s</b> tag followed"
+msgid_plural "<b>%(count)s</b> tags followed"
+msgstr[0] "<b>%(count)s</b>件のタグをフォロー中"
+
+#: src/app/web/templates/welcome.html:91
+msgid "Pick a default reminder preset"
+msgstr "デフォルトのリマインダープリセットを選択"
+
+#: src/app/web/templates/welcome.html:92
+msgid ""
+"This is what fires when you tap \"Set my reminders\" on a concert, or "
+"press the Discord DM\n"
+"    button — a standard loadout you won't have to rebuild every time. "
+"Rules on a single concert\n"
+"    always override it."
+msgstr ""
+"これは、コンサートで「リマインダーを設定」をタップしたとき、またはDiscordのDMボタンを押したときに発動するもの — "
+"毎回作り直さずに済む標準セットです。個別のコンサートのルールは常にこれを上書きします。"
+
+#: src/app/web/templates/welcome.html:105
+msgid "Light touch"
+msgstr "軽め"
+
+#: src/app/web/templates/welcome.html:106
+msgid "Relaxed"
+msgstr "リラックス"
+
+#: src/app/web/templates/welcome.html:108
+#: src/app/web/templates/welcome.html:122
+msgid "Opens — when applications open"
+msgstr "受付開始 — 申込が始まるとき"
+
+#: src/app/web/templates/welcome.html:109
+msgid "Closes — 1 day before"
+msgstr "締切 — 1日前"
+
+#: src/app/web/templates/welcome.html:110
+#: src/app/web/templates/welcome.html:124
+#: src/app/web/templates/welcome.html:135
+msgid "Results — when results come out"
+msgstr "結果 — 結果が出るとき"
+
+#: src/app/web/templates/welcome.html:111
+msgid "Payment — when payment is due"
+msgstr "入金 — 入金締切のとき"
+
+#: src/app/web/templates/welcome.html:116
+msgid "Balanced"
+msgstr "バランス型"
+
+#: src/app/web/templates/welcome.html:118
+msgid "Standard"
+msgstr "標準"
+
+#: src/app/web/templates/welcome.html:119
+msgid "Recommended"
+msgstr "おすすめ"
+
+#: src/app/web/templates/welcome.html:123
+msgid "Closes — 3 days &amp; 1 day before"
+msgstr "締切 — 3日前 &amp; 1日前"
+
+#: src/app/web/templates/welcome.html:125
+msgid "Payment — 1 day before"
+msgstr "入金 — 1日前"
+
+#: src/app/web/templates/welcome.html:130
+msgid "Maximum coverage"
+msgstr "最大カバー"
+
+#: src/app/web/templates/welcome.html:131
+msgid "On the ball"
+msgstr "抜かりなく"
+
+#: src/app/web/templates/welcome.html:133
+msgid "Opens — 1 day before &amp; when applications open"
+msgstr "受付開始 — 1日前 &amp; 申込が始まるとき"
+
+#: src/app/web/templates/welcome.html:134
+msgid "Closes — 5, 3 &amp; 1 days before"
+msgstr "締切 — 5日、3日 &amp; 1日前"
+
+#: src/app/web/templates/welcome.html:136
+msgid "Payment — 3 &amp; 1 days before"
+msgstr "入金 — 3日 &amp; 1日前"
+
+#: src/app/web/templates/welcome.html:141
+msgid ""
+"One reminder for each single moment — opens, results, payment — plus a\n"
+"    couple of nudges before closes, since that's the one with an action "
+"to take. Fine-tune any of\n"
+"    these below, or later in Preferences."
+msgstr ""
+"単一の瞬間ごとに1件のリマインダー — 受付開始、結果、入金 — "
+"に加え、締切前には数回の念押し。締切は対応が必要な唯一のものだからです。以下で、または後で設定ページで、これらを微調整できます。"
+
+#: src/app/web/templates/welcome.html:150
+msgid "Offset"
+msgstr "オフセット"
+
+#: src/app/web/templates/welcome.html:153
+msgid "Before or after"
+msgstr "前または後"
+
+#: src/app/web/templates/welcome.html:157
+msgid "Anchor"
+msgstr "基準"
+
+#: src/app/web/templates/welcome.html:161
+msgid "Remove this reminder"
+msgstr "このリマインダーを削除"
+
+#: src/app/web/templates/welcome.html:167
+msgid "Fine-tune these reminders"
+msgstr "これらのリマインダーを微調整"
+
+#: src/app/web/templates/welcome.html:168
+msgid "Change any dropdown — each row stays a real sentence."
+msgstr "いずれかのドロップダウンを変更 — 各行は自然な文のままです。"
+
+#: src/app/web/templates/welcome.html:176
+msgid "+ Add a reminder"
+msgstr "+ リマインダーを追加"
+
+#: src/app/web/templates/welcome.html:181
+msgid "Rules on a single concert always override this."
+msgstr "個別のコンサートのルールは常にこれを上書きします。"
+
+#: src/app/web/templates/welcome.html:182
+msgid "Skip this step"
+msgstr "このステップをスキップ"
+
+#: src/app/web/templates/welcome.html:183
+msgid "Create preset &amp; continue"
+msgstr "プリセットを作成して続ける"
+
+#: src/app/web/templates/welcome.html:353
+msgid "Confirm your timezone"
+msgstr "タイムゾーンを確認"
+
+#: src/app/web/templates/welcome.html:354
+msgid ""
+"Deadlines always show JST first, then this timezone — so you never have "
+"to convert a\n"
+"    23:59 JST close in your head."
+msgstr "締切は常にJSTを先に、次にこのタイムゾーンで表示します — 23:59 JSTの締切を頭の中で変換する必要がなくなります。"
+
+#: src/app/web/templates/welcome.html:358
+#, python-format
+msgid "Detected <strong>%(tz)s</strong>"
+msgstr "<strong>%(tz)s</strong>を検出しました"
+
+#: src/app/web/templates/welcome.html:359
+msgid "(auto-detected from your browser)"
+msgstr "（ブラウザから自動検出）"
+
+#: src/app/web/templates/welcome.html:379
+msgid "Use this timezone"
+msgstr "このタイムゾーンを使う"
+
+#: src/app/web/templates/welcome.html:427
+#, python-format
+msgid ""
+"Right now that reads\n"
+"  <span class=\"num\">%(tz_preview)s</span> for you."
+msgstr ""
+"現在、あなたにとっては\n"
+"  <span class=\"num\">%(tz_preview)s</span>と表示されます。"
+
+#: src/app/web/templates/welcome.html:432
+msgid "Looks right, continue"
+msgstr "問題なければ続ける"
+
+#: src/app/web/templates/welcome.html:440
+msgid ""
+"Confirm reminders can actually reach you on Discord before you rely on "
+"them. If your DMs\n"
+"    are closed, this is where you find out — not the night a lottery "
+"closes."
+msgstr "頼りにする前に、リマインダーが実際にDiscordであなたに届くことを確認してください。DMが閉じている場合は、抽選が締め切られる夜ではなく、ここで気づけます。"
+
+#: src/app/web/templates/welcome.html:446
+msgid "Send test DM"
+msgstr "テストDMを送信"
+
+#: src/app/web/templates/welcome.html:455
+msgid ""
+"✅ <b>Test reminder.</b> If you can read this, your deadline DMs will "
+"reach you — you'll\n"
+"      get messages like a presale closing in 3 days, with the time in JST"
+" and your own zone."
+msgstr ""
+"✅ <b>テストリマインダー。</b>これが読めれば、締切のDMはあなたに届きます — "
+"先行が3日後に締め切る、といったメッセージが、JSTとあなた自身のゾーンの時刻付きで届きます。"
+
+#: src/app/web/templates/welcome.html:461
+msgid ""
+"The Discord bot isn't running in this environment\n"
+"  (dev mode), so DMs can't be tested here."
+msgstr ""
+"この環境ではDiscordボットが稼働していない\n"
+"  （開発モード）ため、ここではDMをテストできません。"
+
+#: src/app/web/templates/welcome.html:474
+msgid "Get your calendar feed"
+msgstr "カレンダーフィードを取得"
+
+#: src/app/web/templates/welcome.html:475
+msgid ""
+"Subscribe once in your phone or calendar app and every deadline you have "
+"a reminder for\n"
+"    stays in sync automatically — a belt to the DM's braces."
+msgstr "スマホやカレンダーアプリで一度購読すれば、リマインダーを設定したすべての締切が自動的に同期され続けます — DMの保険としてのもう一本の綱です。"
+
+#: src/app/web/templates/welcome.html:481
+msgid "✓ Your feed link is ready — save it now, it won't be shown again."
+msgstr "✓ フィードリンクの準備ができました — 今すぐ保存してください。再表示されません。"
+
+#: src/app/web/templates/welcome.html:486
+msgid "Add it in Google Calendar, Apple Calendar, or Outlook."
+msgstr "Google カレンダー、Apple カレンダー、または Outlook で追加してください。"
+
+#: src/app/web/templates/welcome.html:490
+msgid "Your feed is active."
+msgstr "フィードは有効です。"
+
+#: src/app/web/templates/welcome.html:500
+msgid "You're set — next we'll tidy up which concerts you're actually going for."
+msgstr "準備完了 — 次に、実際に行くコンサートを整理します。"
+
+#: src/app/web/templates/welcome.html:501
+msgid "Continue to my concerts"
+msgstr "コンサートへ進む"
+

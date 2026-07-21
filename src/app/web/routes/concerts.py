@@ -65,6 +65,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
 from app.domain.types import Anchor, ConcertKind, LotteryOutcome, RoundKind, TagKind
+from app.i18n import get_locale, loc_field
 from app.web.auth import SessionUser, require_editor, require_user
 from app.web.forms import form_url
 
@@ -524,6 +525,7 @@ async def create_concert(
     event_id: str = Form(..., max_length=100),
     title: str = Form(..., min_length=1, max_length=200),
     title_en: str = Form(""),
+    title_zh: str = Form(""),
     kind: str = Form(""),
     organizer: str = Form(""),
     categories: str = Form(""),
@@ -532,6 +534,10 @@ async def create_concert(
     source_url: str = Form(""),
     performers_text: str = Form(""),
     notes: str = Form(""),
+    notes_en: str = Form(""),
+    notes_zh: str = Form(""),
+    venue_en: str = Form(""),
+    venue_zh: str = Form(""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
@@ -571,6 +577,7 @@ async def create_concert(
         kind=ConcertKind(kind) if kind else None,
     )
     concert.title_en = title_en.strip() or None
+    concert.title_zh = title_zh.strip() or None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
     concert.eventernote_url = form_url(eventernote_url)
@@ -578,6 +585,10 @@ async def create_concert(
     concert.source_url = form_url(source_url)
     concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
+    concert.notes_en = notes_en.strip() or None
+    concert.notes_zh = notes_zh.strip() or None
+    concert.venue_en = venue_en.strip() or None
+    concert.venue_zh = venue_zh.strip() or None
 
     # day_cancelled is newer than the other day_* fields; a submitter that
     # omits it entirely (rather than one row per day) means "not cancelled"
@@ -786,7 +797,8 @@ async def concert_detail(
     # The lineage line above the title carries the group, so the title itself
     # does not repeat it (see title_without_lineage).
     display_title = title_without_lineage(
-        concert.title, [t.name for t in concert.tags if t.kind is TagKind.GROUP]
+        loc_field(concert, "title", get_locale()),
+        [loc_field(t, "name", get_locale()) for t in concert.tags if t.kind is TagKind.GROUP],
     )
     # Editor-only, and only fetched for editors -- viewers have no use for
     # who-changed-what, and it's one extra query worth skipping for them.
@@ -904,6 +916,7 @@ async def edit_concert(
     new_event_id: str = Form(..., alias="event_id", max_length=100),
     title: str = Form(..., min_length=1, max_length=200),
     title_en: str = Form(""),
+    title_zh: str = Form(""),
     kind: str = Form(""),
     organizer: str = Form(""),
     categories: str = Form(""),
@@ -912,6 +925,10 @@ async def edit_concert(
     source_url: str = Form(""),
     performers_text: str = Form(""),
     notes: str = Form(""),
+    notes_en: str = Form(""),
+    notes_zh: str = Form(""),
+    venue_en: str = Form(""),
+    venue_zh: str = Form(""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
@@ -949,6 +966,7 @@ async def edit_concert(
     concert.event_id = await validate_event_id(session, new_event_id, exclude_concert_id=concert.id)
     concert.title = title.strip()
     concert.title_en = title_en.strip() or None
+    concert.title_zh = title_zh.strip() or None
     concert.kind = ConcertKind(kind) if kind else None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
@@ -957,6 +975,10 @@ async def edit_concert(
     concert.source_url = form_url(source_url)
     concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
+    concert.notes_en = notes_en.strip() or None
+    concert.notes_zh = notes_zh.strip() or None
+    concert.venue_en = venue_en.strip() or None
+    concert.venue_zh = venue_zh.strip() or None
 
     # -- Tags: diff before/after, detach dropped ids, attach new ones only.
     # An unchanged, already-attached group is never re-touched, so its

@@ -50,9 +50,11 @@ from app.db.models import (
 )
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
-from app.domain.timezones import utc_to_jst
+from app.domain.timezones import fmt_day_month
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
 from app.domain.upgrades import is_upgrade_eligible
+from app.i18n import N_, get_locale, gettext_in, loc_field
+from app.i18n import gettext as _
 
 
 def _now() -> datetime:
@@ -680,6 +682,11 @@ class DueReminder:
     concert_title: str
     anchor: Anchor
     fire_at_utc: datetime
+    # Recipient's DM language; the scheduler sets the locale from it before
+    # composing. Defaulted so this leads the dataclass's default-valued block
+    # (a required field cannot follow a defaulted one) -- every caller passes
+    # it by keyword anyway.
+    user_language: str = "en"
     # round-anchored:
     round_id: int | None = None
     round_label: str | None = None
@@ -758,7 +765,8 @@ async def due_reminders(
                 queue_id=row.id,
                 discord_id=user.discord_id,
                 user_timezone=user.timezone,
-                concert_title=concert.title,
+                user_language=user.language,
+                concert_title=loc_field(concert, "title", user.language),
                 anchor=row.anchor,
                 fire_at_utc=row.fire_at_utc,
                 round_id=round_.id if round_ else None,
@@ -813,24 +821,24 @@ async def upcoming_rounds(
 
 
 LABEL_BY_ANCHOR: dict[Anchor, str] = {
-    Anchor.OPENS: "opens",
-    Anchor.CLOSES: "closes",
-    Anchor.RESULTS: "results announced",
-    Anchor.PAYMENT: "payment due",
-    Anchor.EVENT_START: "event",
+    Anchor.OPENS: N_("opens"),
+    Anchor.CLOSES: N_("closes"),
+    Anchor.RESULTS: N_("results announced"),
+    Anchor.PAYMENT: N_("payment due"),
+    Anchor.EVENT_START: N_("event"),
 }
 
 LABEL_BY_ROUND_KIND: dict[RoundKind, str] = {
-    RoundKind.LOTTERY_ROUND: "Lottery round",
-    RoundKind.ELIGIBILITY_ITEM_SALE: "Eligibility item sale",
-    RoundKind.STREAM_TICKET_SALE: "Stream ticket sale",
-    RoundKind.GENERAL_SALE: "General sale",
-    RoundKind.RESULT_ANNOUNCEMENT: "Result announcement",
-    RoundKind.PAYMENT_DEADLINE: "Payment deadline",
-    RoundKind.FCFS_SALE: "First come, first served",
-    RoundKind.TOUR_PACKAGE: "Overseas tour package",
-    RoundKind.UPGRADE: "Upgrade round",
-    RoundKind.OTHER: "Other",
+    RoundKind.LOTTERY_ROUND: N_("Lottery round"),
+    RoundKind.ELIGIBILITY_ITEM_SALE: N_("Eligibility item sale"),
+    RoundKind.STREAM_TICKET_SALE: N_("Stream ticket sale"),
+    RoundKind.GENERAL_SALE: N_("General sale"),
+    RoundKind.RESULT_ANNOUNCEMENT: N_("Result announcement"),
+    RoundKind.PAYMENT_DEADLINE: N_("Payment deadline"),
+    RoundKind.FCFS_SALE: N_("First come, first served"),
+    RoundKind.TOUR_PACKAGE: N_("Overseas tour package"),
+    RoundKind.UPGRADE: N_("Upgrade round"),
+    RoundKind.OTHER: N_("Other"),
 }
 
 
@@ -893,7 +901,8 @@ async def upcoming_deadlines(
         if concert is None:
             continue
         out.append(UpcomingDeadline(
-            concert_title=concert.title, event_id=concert.event_id, label=d.label,
+            concert_title=loc_field(concert, "title", get_locale()),
+            event_id=concert.event_id, label=d.label,
             anchor=Anchor.EVENT_START, at_utc=d.starts_at_utc,
         ))
 
@@ -912,7 +921,8 @@ async def upcoming_deadlines(
             if ts is None or ts <= now:
                 continue
             out.append(UpcomingDeadline(
-                concert_title=concert.title, event_id=concert.event_id, label=r.label,
+                concert_title=loc_field(concert, "title", get_locale()),
+                event_id=concert.event_id, label=r.label,
                 anchor=anchor, at_utc=ts, url=r.url, round_id=r.id,
             ))
 
@@ -1493,7 +1503,10 @@ async def my_deadline_rows(
         live_days = sorted(
             (day for day in concert.days if not day.cancelled), key=lambda day: day.starts_at_utc
         ) if concert else []
-        venue_tags = [t.name for t in concert.tags if t.kind is TagKind.VENUE] if concert else []
+        venue_tags = [
+            loc_field(t, "name", get_locale())
+            for t in concert.tags if t.kind is TagKind.VENUE
+        ] if concert else []
         round_ = rounds.get(d.round_id) if d.round_id is not None else None
         outcome = outcomes.get(d.round_id) if d.round_id is not None else None
         is_upgrade = round_ is not None and round_.kind is RoundKind.UPGRADE
@@ -1513,8 +1526,9 @@ async def my_deadline_rows(
             # "Multiple", one wins outright, and the free-text venue is only a
             # fallback when there is no VENUE tag at all.
             venue=(
-                "Multiple" if len(venue_tags) > 1
-                else (venue_tags[0] if venue_tags else (concert.venue if concert else None))
+                _("Multiple") if len(venue_tags) > 1
+                else (venue_tags[0] if venue_tags
+                      else (loc_field(concert, "venue", get_locale()) if concert else None))
             ),
             starts_at_utc=live_days[0].starts_at_utc if live_days else None,
         ))
@@ -1576,12 +1590,12 @@ class SetupTallies:
 def _setup_tile_venue(concert: Concert) -> str | None:
     """Same >1-venue rule my_deadline_rows uses: many VENUE tags collapse to
     "Multiple", one wins, the free-text venue is the fallback with no tag."""
-    venue_tags = [t.name for t in concert.tags if t.kind is TagKind.VENUE]
+    venue_tags = [t for t in concert.tags if t.kind is TagKind.VENUE]
     if len(venue_tags) > 1:
-        return "Multiple"
+        return _("Multiple")
     if venue_tags:
-        return venue_tags[0]
-    return concert.venue
+        return loc_field(venue_tags[0], "name", get_locale())
+    return loc_field(concert, "venue", get_locale())
 
 
 def _next_round_anchor(
@@ -1670,7 +1684,7 @@ async def setup_prune_tiles(
             (d for d in c.days if not d.cancelled), key=lambda d: d.starts_at_utc
         )
         because = [
-            t.name for t in sorted(
+            loc_field(t, "name", get_locale()) for t in sorted(
                 c.tags, key=lambda t: (_BECAUSE_KIND_ORDER.get(t.kind, 9), t.name)
             )
             if t.id in sub_tag_ids
@@ -2266,17 +2280,19 @@ def _humanize_until(then: datetime, now: datetime) -> str:
     the page is refreshed."""
     minutes = max(int((then - now).total_seconds()) // 60, 0)
     if minutes >= 1440:
-        return f"{int(minutes / 1440 + 0.5)}d"
+        return _("{n}d").format(n=int(minutes / 1440 + 0.5))
     if minutes >= 60:
-        return f"{int(minutes / 60 + 0.5)}h"
-    return f"{max(minutes, 1)}m"
+        return _("{n}h").format(n=int(minutes / 60 + 0.5))
+    return _("{n}m").format(n=max(minutes, 1))
 
 
 def _day_month(when: datetime) -> str:
-    """"22 Jul", in JST like every other date this app shows. strftime("%-d")
-    is not portable to Windows, which the owner develops on."""
-    jst = utc_to_jst(when)
-    return f"{jst.day} {jst.strftime('%b')}"
+    """"22 Jul" / "7月22日", in JST like every other date this app shows,
+    localized to the current request's locale (discover_statuses renders
+    this into prose that is itself translated -- a ja viewer should never
+    see an English day-month fragment). Delegates to the pure
+    domain.timezones.fmt_day_month, which owns the actual formatting."""
+    return fmt_day_month(when, get_locale())
 
 
 async def discover_statuses(
@@ -2364,7 +2380,8 @@ async def discover_statuses(
             due = won_up.payment_deadline_at_utc
             out[concert.id] = DiscoverStatus(
                 status,
-                f"Upgrade won — pay by {_day_month(due)}" if due else "Upgrade won — payment due",
+                _("Upgrade won — pay by {day}").format(day=_day_month(due))
+                if due else _("Upgrade won — payment due"),
                 "danger", due, _next_deadline(rounds, now),
             )
             continue
@@ -2383,17 +2400,19 @@ async def discover_statuses(
             None,
         )
         if applied_up:
-            upgrade_text, upgrade_tone = "Upgrade · Applied", "accent"
+            upgrade_text, upgrade_tone = _("Upgrade · Applied"), "accent"
         elif open_up is not None:
             upgrade_text = (
-                f"Upgrade · Closes in {_humanize_until(open_up.closes_at_utc, now)}"
-                if open_up.closes_at_utc else "Upgrade · Open now"
+                _("Upgrade · Closes in {n}").format(
+                    n=_humanize_until(open_up.closes_at_utc, now)
+                )
+                if open_up.closes_at_utc else _("Upgrade · Open now")
             )
             upgrade_tone = "accent"
 
         if standing is Column.SECURED:
             out[concert.id] = DiscoverStatus(
-                status, "Secured", "ok", None, _next_deadline(rounds, now),
+                status, _("Secured"), "ok", None, _next_deadline(rounds, now),
                 upgrade_text, upgrade_tone,
             )
             continue
@@ -2404,7 +2423,8 @@ async def discover_statuses(
             )
             out[concert.id] = DiscoverStatus(
                 status,
-                f"Won — pay by {_day_month(due)}" if due else "Won — payment due",
+                _("Won — pay by {day}").format(day=_day_month(due))
+                if due else _("Won — payment due"),
                 "danger", due, _next_deadline(rounds, now),
                 upgrade_text, upgrade_tone,
             )
@@ -2412,8 +2432,9 @@ async def discover_statuses(
         if standing is Column.APPLIED:
             applied = next(r for r in rounds if card_outcomes.get(r.id) is LotteryOutcome.APPLIED)
             out[concert.id] = DiscoverStatus(
-                status, f"{LABEL_BY_ROUND_KIND[applied.kind]} · Applied", "ok",
-                None, _next_deadline(rounds, now), upgrade_text, upgrade_tone,
+                status,
+                _("{kind} · Applied").format(kind=_(LABEL_BY_ROUND_KIND[applied.kind])),
+                "ok", None, _next_deadline(rounds, now), upgrade_text, upgrade_tone,
             )
             continue
 
@@ -2432,19 +2453,25 @@ async def discover_statuses(
             )
             r = closing[0] if closing else pool[0]
             text = (
-                f"{LABEL_BY_ROUND_KIND[r.kind]} · Closes in {_humanize_until(r.closes_at_utc, now)}"
-                if r.closes_at_utc else f"{LABEL_BY_ROUND_KIND[r.kind]} · Open now"
+                _("{kind} · Closes in {n}").format(
+                    kind=_(LABEL_BY_ROUND_KIND[r.kind]),
+                    n=_humanize_until(r.closes_at_utc, now),
+                )
+                if r.closes_at_utc
+                else _("{kind} · Open now").format(kind=_(LABEL_BY_ROUND_KIND[r.kind]))
             )
             at = r.closes_at_utc
         elif opening_soon:
             r = min(opening_soon, key=lambda r: r.opens_at_utc)
             at = r.opens_at_utc
-            text = f"{LABEL_BY_ROUND_KIND[r.kind]} · Opens in {_humanize_until(at, now)}"
+            text = _("{kind} · Opens in {n}").format(
+                kind=_(LABEL_BY_ROUND_KIND[r.kind]), n=_humanize_until(at, now)
+            )
         else:
             # Covers both "every round has closed" and "no rounds entered
             # yet" -- from a browser's point of view they are the same thing:
             # there is nothing here you can act on.
-            text, at = "All rounds closed", None
+            text, at = _("All rounds closed"), None
         out[concert.id] = DiscoverStatus(
             status, text, "quiet", at, _next_deadline(rounds, now),
             upgrade_text, upgrade_tone,
@@ -2498,7 +2525,8 @@ class CalendarEvent:
 
 
 async def user_calendar_events(
-    session: AsyncSession, user_id: int, now: datetime | None = None
+    session: AsyncSession, user_id: int, now: datetime | None = None,
+    locale: str | None = None,
 ) -> list[CalendarEvent]:
     """Every round/day the user currently has an active reminder rule
     covering (concert-wide or round-specific), each producing ONE event at
@@ -2506,8 +2534,18 @@ async def user_calendar_events(
     exactly which rounds/days are in scope per rule (sync_rule/plan_for_rule
     already did the anchor-specific filtering). Future-only: a round/day
     whose deadline already passed is left off the feed.
+
+    `locale` localizes the concert title for a locale-aware caller (the
+    /mydeadlines cog passes the recipient's language). Left None by the .ics
+    feed, which has no viewer locale -- that path keeps the canonical title,
+    byte-identical to before.
     """
     now = now or _now()
+
+    def _title(concert: Concert | None) -> str:
+        if concert is None:
+            return "Concert"
+        return loc_field(concert, "title", locale) if locale else concert.title
     round_ids = set((await session.execute(
         select(ReminderQueue.round_id)
         .join(ReminderRule, ReminderQueue.rule_id == ReminderRule.id)
@@ -2538,7 +2576,7 @@ async def user_calendar_events(
                 continue
             concert = concerts.get(r.concert_id)
             events.append(CalendarEvent(
-                concert_title=concert.title if concert else "Concert",
+                concert_title=_title(concert),
                 label=r.label, at_utc=at, url=r.url, notes=r.notes,
             ))
 
@@ -2556,7 +2594,7 @@ async def user_calendar_events(
                 continue
             concert = concerts.get(d.concert_id)
             events.append(CalendarEvent(
-                concert_title=concert.title if concert else "Concert",
+                concert_title=_title(concert),
                 label=d.label, at_utc=d.starts_at_utc,
             ))
 
@@ -2571,8 +2609,9 @@ async def user_calendar_events(
 # "lightweight". event_id is included since renaming a concert's URL handle
 # is exactly the kind of quiet, easy-to-miss edit an audit log is for.
 TRACKED_CONCERT_FIELDS = [
-    "event_id", "title", "title_en", "kind", "organizer", "categories",
+    "event_id", "title", "title_en", "title_zh", "kind", "organizer", "categories",
     "eventernote_url", "official_url", "source_url", "performers_text", "notes",
+    "notes_en", "notes_zh", "venue_en", "venue_zh",
 ]
 
 
@@ -3279,8 +3318,9 @@ class NoticeContext:
     first_deadline_label: str | None
     first_deadline_at: datetime | None
     user_timezone: str
-    user_has_rules: bool
-    user_has_default_preset: bool
+    user_language: str = "en"
+    user_has_rules: bool = False
+    user_has_default_preset: bool = False
 
 
 async def notice_context(
@@ -3308,15 +3348,18 @@ async def notice_context(
         .limit(1)
     )).scalar_one_or_none() is not None
 
+    locale = user.language if user else "en"
     return NoticeContext(
         concert_id=concert_id,
         event_id=concert.event_id,
-        title=concert.title,
+        title=loc_field(concert, "title", locale),
         tags_line=" · ".join(non_venue),
-        venue=("Multiple" if len(venues) > 1 else (venues[0] if venues else concert.venue)),
+        venue=(gettext_in(locale, "Multiple") if len(venues) > 1
+               else (venues[0] if venues else loc_field(concert, "venue", locale))),
         first_deadline_label=first[0].label if first else None,
         first_deadline_at=first[1] if first else None,
         user_timezone=user.timezone if user else "America/Moncton",
+        user_language=user.language if user else "en",
         user_has_rules=has_rules,
         user_has_default_preset=await get_default_preset(session, user_id) is not None,
     )
@@ -3329,14 +3372,23 @@ class LegCancelledContext:
     concert_id: int
     event_id: str
     title: str
+    # Recipient's DM language; _send_notification reads this via
+    # getattr(ctx, "user_language", "en") and sets the locale before composing
+    # the embed, so the leg-cancel prose localizes (mirrors NoticeContext).
+    user_language: str = "en"
 
 
 async def leg_cancelled_context(
-    session: AsyncSession, concert_id: int
+    session: AsyncSession, concert_id: int, user_id: int | None = None
 ) -> LegCancelledContext | None:
     concert = await session.get(Concert, concert_id)
     if concert is None:
         return None
+    user = await session.get(User, user_id) if user_id else None
+    locale = user.language if user else "en"
     return LegCancelledContext(
-        concert_id=concert.id, event_id=concert.event_id, title=concert.title
+        concert_id=concert.id,
+        event_id=concert.event_id,
+        title=loc_field(concert, "title", locale),
+        user_language=locale,
     )

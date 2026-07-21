@@ -24,28 +24,28 @@
 {% if following %}
   {% if holds_ticket %}
   <button type="button" class="btn follow on"
-          onclick="document.getElementById('unfollowConfirm').showModal()">Following</button>
-  <span class="clock">You will be reminded about every round below.</span>
+          onclick="document.getElementById('unfollowConfirm').showModal()">{{ _("Following") }}</button>
+  <span class="clock">{{ _("You will be reminded about every round below.") }}</span>
   <dialog id="unfollowConfirm" class="prune">
-    <div class="dh">Opt out of this concert?
-      <button type="button" class="x" aria-label="Close"
+    <div class="dh">{{ _("Opt out of this concert?") }}
+      <button type="button" class="x" aria-label="{{ _('Close') }}"
               onclick="document.getElementById('unfollowConfirm').close()">×</button></div>
     <p>
       {% if won_payment_at_utc %}
-      You won this ticket. Payment is due {{ dual(won_payment_at_utc, tz) }}. Opting out stops
-      that reminder and forfeits the ticket.
+      {% trans when=dual(won_payment_at_utc, tz) %}You won this ticket. Payment is due {{ when }}. Opting out stops
+      that reminder and forfeits the ticket.{% endtrans %}
       {% else %}
-      You hold a ticket for this concert. Opting out forfeits it and stops its reminders.
+      {{ _("You hold a ticket for this concert. Opting out forfeits it and stops its reminders.") }}
       {% endif %}
     </p>
     <div class="da">
       <button class="btn quiet" type="button"
-              onclick="document.getElementById('unfollowConfirm').close()">Keep following</button>
+              onclick="document.getElementById('unfollowConfirm').close()">{{ _("Keep following") }}</button>
       <form hx-post="/concerts/{{ concert.event_id }}/subscription"
             hx-target="#following-toggle" hx-swap="outerHTML"
             method="post" action="/concerts/{{ concert.event_id }}/subscription">
         <input type="hidden" name="state" value="opted_out">
-        <button class="btn danger" type="submit">Opt out and forfeit</button>
+        <button class="btn danger" type="submit">{{ _("Opt out and forfeit") }}</button>
       </form>
     </div>
   </dialog>
@@ -54,9 +54,9 @@
         hx-target="#following-toggle" hx-swap="outerHTML"
         method="post" action="/concerts/{{ concert.event_id }}/subscription">
     <input type="hidden" name="state" value="opted_out">
-    <button class="btn follow on" type="submit">Following</button>
+    <button class="btn follow on" type="submit">{{ _("Following") }}</button>
   </form>
-  <span class="clock">You will be reminded about every round below.</span>
+  <span class="clock">{{ _("You will be reminded about every round below.") }}</span>
   {% endif %}
 {% else %}
   {% set next_state = "default" if sub_state and sub_state.value == "opted_out" else "subscribed" %}
@@ -64,7 +64,7 @@
         hx-target="#following-toggle" hx-swap="outerHTML"
         method="post" action="/concerts/{{ concert.event_id }}/subscription">
     <input type="hidden" name="state" value="{{ next_state }}">
-    <button class="btn quiet follow" type="submit">Follow</button>
+    <button class="btn quiet follow" type="submit">{{ _("Follow") }}</button>
   </form>
 {% endif %}
 </div>

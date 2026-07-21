@@ -32,6 +32,11 @@ fine-tune option for the same reason (`PresetItem` has no minutes column),
 so the gap now visibly shows up in a second surface, not just FCFS sales.
 Stays #1.
 
+Re-reviewed 2026-07-20 (i18n build): whichever "N minutes before" copy this
+eventually ships (fine-tune option labels, sentence-style rule descriptions)
+will need both catalogues filled in alongside the schema/form work -- one
+more small addition to effort, not a reason to re-rank.
+
 ### 2. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
@@ -59,30 +64,7 @@ with an upgrade the row budget is tighter still - though only for a viewer
 eligible to enter it, since `my_deadline_rows` drops the upgrade's rows for
 everyone else.
 
-### 3. Multi-language support (English / Mandarin / Japanese)
-
-Impact: medium - effort: large. Raised: 2026-07-20 (onboarding-pages build).
-
-The concept demo carries a placeholder language switcher (three labels, no
-translation behind them) that the onboarding build's landing and welcome
-pages deliberately left unwired -- the plan scoped it out explicitly ("no
-i18n, out of scope, see spec") rather than half-build it. Real i18n is its
-own large project, not an extension of any single page task: locale
-catalogues, extracting every user-visible string out of the ~30 Jinja
-templates (most copy is inline, not routed through a translation helper
-today), a per-user language preference (the same shape as the existing
-timezone preference), actually-translated copy for English, Mandarin, and
-Japanese, and localized date/number formatting layered on top of the
-existing dual JST/local-timezone rendering (invariant 1) rather than
-replacing it. Rated medium rather than low because the concert domain
-(J-pop/anime/idol live events) has a genuinely large non-English-reading
-audience, both Mandarin- and English-speaking; rated large effort, and
-ranked behind the two small/medium-effort medium-impact entries above,
-because it touches every template at once instead of one surface at a
-time, and there is no user complaint behind it yet, only the demo's
-unfulfilled placeholder.
-
-### 4. Minor demo-parity cosmetics
+### 3. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -98,7 +80,12 @@ keyboard-reachable now but use a visually-hidden checkbox where the demo
 uses a real `<button aria-pressed>`, and `.lede h1` lacks `text-wrap:
 balance`. The cheapest of the open items - one small pass closes all of it.
 
-### 5. Discover sort in the content head, plus the catalogue-count note
+Re-reviewed 2026-07-20 (i18n build): every string this entry touches or adds
+now needs both catalogues updated (`tests/test_i18n_catalogues.py` fails
+otherwise), a small but real addition to "small" effort that didn't exist
+when this was raised.
+
+### 4. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -112,7 +99,12 @@ reconciliation, but not this filtered one. Deferred rather than done because
 moving sort is a real DOM restructure and it is debatable whether the
 sidebar is actually worse.
 
-### 6. Editor page parity with the demo
+Re-reviewed 2026-07-20 (i18n build): the per-filter result note is new
+user-visible copy with an embedded count, so whoever builds this owes both
+catalogues an `ngettext`-shaped entry (singular/plural), not just an
+English string, on top of the DOM work already scoped.
+
+### 5. Editor page parity with the demo
 
 Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -129,12 +121,52 @@ inputs; plus minor add-button order and a "1 upgrade" tally count. Lowest
 priority because a parity pass here would mostly re-litigate justified
 decisions.
 
+Re-reviewed 2026-07-20 (i18n build): the "1 upgrade" tally and any new
+read-only summary copy are user-visible strings too -- same catalogue-update
+cost as the two entries above, folded into this one's existing medium
+effort rather than raising it.
+
 (The former "Eventernote links on performer chips" entry was dropped in the
 2026-07-19 revision pass: it already shipped inside the Tags page redesign,
 which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Multi-language support (English / Mandarin / Japanese) (2026-07-20)
+
+Shipped as: end-to-end i18n across web and Discord. gettext catalogues
+(`messages.po`, ~704 msgids each) for ja and zh, compiled to `.mo` in memory
+at startup -- no `.mo` on disk, no deploy-ritual change -- with `en` mapped
+to `NullTranslations` so English stays byte-identical to the pre-i18n app
+(existing render tests needed no changes beyond two legitimately-retargeted
+ones). Locale resolution reuses the shape of the existing timezone
+preference: a `lang` cookie caches `users.language` (never the source of
+truth), `Accept-Language` covers first-ever visits, a public `POST
+/language` is the single write path (cookie always, DB column when signed
+in, since Discord DMs read the column not the cookie), and the OAuth
+callback seeds the column from the cookie at account creation only. A 🌐
+header switcher, a Preferences "Time & language" row, and a welcome-wizard
+language step are the three surfaces that set it. All ~28 templates,
+service-layer prose, and the Discord side (embeds, views, cogs, plus
+per-recipient locale threaded through `DueReminder.user_language` /
+`NoticeContext.user_language` / `LegCancelledContext.user_language`) are
+gettext-wrapped; date formatting grew hand-built locale-aware ja/zh patterns
+in `domain/timezones.py` layered on top of the existing dual JST/local
+rendering (invariant 1 unchanged). UGC gained parallel translation columns
+(`Concert.title_zh/notes_en/notes_zh/venue_en/venue_zh`, `Tag.name_en/
+name_zh`, alongside the pre-existing `title_en`), a display-vs-identity
+rule (read surfaces localize via `loc_field`/`loc`; search/edit/match stay
+canonical), and an editor "Translations" fold -- two migrations, no
+backfill. The legal pages got a full translation plus a non-EN-only
+"English version governs" note. A hygiene test
+(`tests/test_i18n_catalogues.py`) extracts every msgid in-process and fails
+CI if either catalogue has an untranslated or fuzzy entry, whitelist
+intentionally empty. The ja/zh strings themselves are a competent-bilingual,
+machine-assisted translation pass, not a native-speaker-reviewed one --
+flagged here for the owner to spot-check before treating any string as
+final. Closes the "Multi-language support" entry the onboarding build
+deliberately scoped out and logged on 2026-07-20.
 
 ### Onboarding and untouched-pages build (2026-07-20)
 

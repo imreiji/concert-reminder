@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+from app import i18n
 from app.bot.messages import (
     build_new_event_message,
     build_reminder_message,
@@ -14,6 +15,49 @@ from app.domain.types import Anchor, LotteryOutcome
 
 def dt(month, day, hour=12):
     return datetime(2026, month, day, hour, tzinfo=UTC)
+
+
+def _closes_item_3_days_out(language="en"):
+    """A CLOSES-anchor reminder whose deadline is exactly 3 days after fire."""
+    return DueReminder(
+        queue_id=1,
+        discord_id=42,
+        user_timezone="America/Moncton",
+        user_language=language,
+        concert_title="Hasunosora 5th",
+        anchor=Anchor.CLOSES,
+        fire_at_utc=dt(6, 22, 14),
+        round_label="最速先行 Round 1",
+        round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25, 14),
+    )
+
+
+def test_reminder_message_translates_verb():
+    """With a ja catalogue live, the anchor verb and relative phrase localize."""
+    i18n._catalog_cache["ja"] = i18n._translations_from_po_text(
+        'msgid ""\nmsgstr ""\n"Content-Type: text/plain; charset=utf-8\\n"\n'
+        '"Plural-Forms: nplurals=1; plural=0;\\n"\n\n'
+        'msgid "closes"\nmsgstr "締切"\n\n'
+        'msgid "in {unit}"\nmsgstr "{unit}後"\n\n'
+        'msgid "{n} day"\nmsgid_plural "{n} days"\nmsgstr[0] "{n}日"\n',
+        "ja",
+    )
+    i18n.set_locale("ja")
+    try:
+        text = format_reminder(_closes_item_3_days_out())
+        assert "締切" in text
+        assert "3日後" in text
+    finally:
+        i18n.set_locale("en")
+        i18n.reset_catalog_cache()
+
+
+def test_reminder_message_en_unchanged():
+    """EN default stays byte-identical to the pre-i18n output."""
+    i18n.set_locale("en")
+    text = format_reminder(_closes_item_3_days_out())
+    assert "closes in 3 days:" in text
 
 
 def test_relative_phrase():

@@ -7,7 +7,7 @@
    runs at all). #}
 <div class="layout">
   <aside class="sidebar">
-    <h3>Sort</h3>
+    <h3>{{ _("Sort") }}</h3>
     <nav class="sorts discover-sorts">
       {% for key, label in sorts %}
       <a data-sort="{{ key }}" href="/discover?{{ filter_query(key, selected_tags, status) }}"
@@ -23,7 +23,7 @@
        Counts come from status_counts -- the same statuses dict already built
        for the tile pills, just tallied by facet key, so this costs no extra
        query. #}
-    <h3>Round status</h3>
+    <h3>{{ _("Round status") }}</h3>
     <nav class="sorts facets discover-sorts">
       {% for key, label in status_facets %}
       <a data-status="{{ key }}"
@@ -33,17 +33,17 @@
       {% endfor %}
     </nav>
 
-    <h3>Filter by tag</h3>
-    <input class="tag-search filter-search" type="search" placeholder="Search tags…"
+    <h3>{{ _("Filter by tag") }}</h3>
+    <input class="tag-search filter-search" type="search" placeholder="{{ _('Search tags…') }}"
            oninput="filterChips(this, '.sidebar')">
     {% macro chiplink(t) -%}
       {%- set active = t.id in selected_tags -%}
       {%- set others = selected_tags | reject("equalto", t.id) | list -%}
       <a class="chip kind-{{ t.kind.value }} {% if active %}on{% endif %}" data-name="{{ t.name | lower }}"
          data-tag-ids="{{ t.id }}" onclick="return toggleTagFilter(event, this)"
-         href="/discover?{{ filter_query(sort, (others if active else others + [t.id]), status) }}">{{ t.name }}<span class="n">{{ tag_counts.get(t.id, 0) }}</span></a>
+         href="/discover?{{ filter_query(sort, (others if active else others + [t.id]), status) }}">{{ loc(t, "name") }}<span class="n">{{ tag_counts.get(t.id, 0) }}</span></a>
     {%- endmacro %}
-    {% for section, kindname in [("Franchises","franchise"),("Groups","group"),("Artists","artist")] %}
+    {% for section, kindname in [(_("Franchises"),"franchise"),(_("Groups"),"group"),(_("Artists"),"artist")] %}
       {% set ktags = by_kind.get(kindname, []) %}
       {% if ktags %}
       <details open class="tag-section">
@@ -54,7 +54,7 @@
     {% endfor %}
     {% if region_links %}
     <details open class="tag-section">
-      <summary>Regions <span class="dim">({{ region_links | length }})</span></summary>
+      <summary>{{ _("Regions") }} <span class="dim">({{ region_links | length }})</span></summary>
       <div class="taglist">
         {% for r in region_links %}
         <a class="chip kind-venue {% if r.active %}on{% endif %}" data-name="{{ r.name | lower }}"
@@ -66,17 +66,17 @@
     {% endif %}
     <p id="clear-filters" {% if not selected_tags %}style="display:none"{% endif %}>
       <a class="dim" href="/discover?{{ filter_query(sort, [], status) }}"
-         onclick="return clearTagFilters(event)">Clear filters</a>
+         onclick="return clearTagFilters(event)">{{ _("Clear filters") }}</a>
     </p>
-    {% if user %}<p><a class="btn quiet" href="/tags">Manage tags</a></p>{% endif %}
+    {% if user %}<p><a class="btn quiet" href="/tags">{{ _("Manage tags") }}</a></p>{% endif %}
   </aside>
 
   <section class="content">
     <div class="toolbar">
-      <h1>Concerts</h1>
+      <h1>{{ _("Concerts") }}</h1>
       <span class="note">
-        <strong>{{ catalogue_count }} concert{{ "" if catalogue_count == 1 else "s" }}</strong>
-        &middot; {{ open_round_count }} with a round still open
+        <strong>{% trans count=catalogue_count %}{{ count }} concert{% pluralize %}{{ count }} concerts{% endtrans %}</strong>
+        &middot; {% trans n=open_round_count %}{{ n }} with a round still open{% endtrans %}
       </span>
     </div>
 
@@ -85,8 +85,8 @@
       {% for tid in selected_tags %}<input type="hidden" name="tag" value="{{ tid }}">{% endfor %}
       {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
       <input type="search" name="q" id="concert-search" value="{{ query }}"
-             placeholder="Search concerts…" oninput="return liveSearch(this)">
-      <button class="quiet" type="submit">Search</button>
+             placeholder="{{ _('Search concerts…') }}" oninput="return liveSearch(this)">
+      <button class="quiet" type="submit">{{ _("Search") }}</button>
     </form>
 
     {% macro tile(c) %}
@@ -107,23 +107,23 @@
           wherever it appears. -#}
       {% if cg or ca %}
       <span class="eyebrow">
-        {%- if cf and cg %}{{ cf | map(attribute="name") | join(", ") }} · {{ cg | map(attribute="name") | join(", ") }}
-        {%- elif cg %}{{ cg | map(attribute="name") | join(", ") }}
-        {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ a.name }}</span>{% endfor %}</span>{% endif -%}
+        {%- if cf and cg %}{{ cf | map("loc_name") | join(", ") }} · {{ cg | map("loc_name") | join(", ") }}
+        {%- elif cg %}{{ cg | map("loc_name") | join(", ") }}
+        {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ loc(a, "name") }}</span>{% endfor %}</span>{% endif -%}
       </span>
       {% endif %}
-      <strong>{{ c.title }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
-      {% if cv | length > 1 %}<span class="dim">📍 Multiple</span>
-      {% elif cv or c.venue %}<span class="dim">📍 {{ (cv | map(attribute="name") | join(", ")) or c.venue }}</span>{% endif %}
+      <strong>{{ loc(c, "title") }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
+      {% if cv | length > 1 %}<span class="dim">📍 {{ _("Multiple") }}</span>
+      {% elif cv or c.venue %}<span class="dim">📍 {{ (cv | map("loc_name") | join(", ")) or loc(c, "venue") }}</span>{% endif %}
       {% set live_days = c.days | rejectattr("cancelled") | list %}
-      {% if live_days %}<span class="when dim">{{ day_month(live_days[0].starts_at_utc) }} JST</span>{% endif %}
+      {% if live_days %}<span class="when dim">{% trans day=day_month(live_days[0].starts_at_utc) %}{{ day }} JST{% endtrans %}</span>{% endif %}
       {#- Tag-row minichips: franchise + region at a glance (demo .tagrow/
           .minichip), below the venue/date line. Region comes off the venue
           tag(s) already loaded on the concert -- no extra query. -#}
       {% set tag_regions = cv | map(attribute="region") | select | unique | list %}
       {% if cf or tag_regions %}
       <div class="tagrow">
-        {% for f in cf %}<span class="minichip">{{ f.name }}</span>{% endfor %}
+        {% for f in cf %}<span class="minichip">{{ loc(f, "name") }}</span>{% endfor %}
         {% for rg in tag_regions %}<span class="minichip">{{ rg }}</span>{% endfor %}
       </div>
       {% endif %}
@@ -152,25 +152,25 @@
     {% set open_concerts = concerts | selectattr("id", "in", open_concert_ids) | list %}
     {% set upcoming_concerts = concerts | rejectattr("id", "in", open_concert_ids) | list %}
     {% if open_concerts %}
-    <h2>Open &amp; upcoming</h2>
+    <h2>{{ _("Open &amp; upcoming") }}</h2>
     <div class="tiles">
       {% for c in open_concerts %}{{ tile(c) }}{% endfor %}
     </div>
     {% endif %}
     {% if upcoming_concerts %}
-    <h2>Upcoming</h2>
+    <h2>{{ _("Upcoming") }}</h2>
     <div class="tiles">
       {% for c in upcoming_concerts %}{{ tile(c) }}{% endfor %}
     </div>
     {% endif %}
     <p class="dim" id="no-match"
-       {% if visible_concert_ids or (not selected_tags and not query and not status) %}style="display:none"{% endif %}>No concerts match.</p>
+       {% if visible_concert_ids or (not selected_tags and not query and not status) %}style="display:none"{% endif %}>{{ _("No concerts match.") }}</p>
     {% else %}
-    <p class="dim">No concerts match.{% if user and user.is_editor and not selected_tags and not query %} <a href="/concerts/new">Create the first one →</a>{% endif %}</p>
+    <p class="dim">{{ _("No concerts match.") }}{% if user and user.is_editor and not selected_tags and not query %} <a href="/concerts/new">{{ _("Create the first one →") }}</a>{% endif %}</p>
     {% endif %}
 
     {% if deadlines %}
-    <h2>Coming up soon</h2>
+    <h2>{{ _("Coming up soon") }}</h2>
     <ul class="rows" id="deadline-list">
       {% for d in deadlines %}
       {% set dtags = concert_tags_by_event_id.get(d.event_id, []) %}

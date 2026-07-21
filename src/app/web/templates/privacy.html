@@ -1,117 +1,120 @@
 {% extends "base.html" %}
-{% block title %}Privacy policy — dekimasen.app{% endblock %}
+{% block title %}{{ _("Privacy policy") }} — dekimasen.app{% endblock %}
 {% block content %}
+{% if current_locale() != "en" %}
+<p class="dim">{{ _("This translation is provided for convenience. The English version governs in any conflict.") }}</p>
+{% endif %}
 <article class="legal">
-  <h1>Privacy policy</h1>
-  <p class="updated num">Last updated: {{ last_updated }}</p>
+  <h1>{{ _("Privacy policy") }}</h1>
+  <p class="updated num">{% trans %}Last updated: {{ last_updated }}{% endtrans %}</p>
 
   <p class="lead">
-    dekimasen.app tracks deadlines for Japanese concerts and sends you a
+    {% trans %}dekimasen.app tracks deadlines for Japanese concerts and sends you a
     Discord DM before the ones you care about close. To do that it has to
     store a small amount of information about you. This page says exactly
     what, why, and for how long, in plain language. The rules for using the
     service itself are on a separate page — see the
-    <a href="/terms">terms of service</a>.
+    <a href="/terms">terms of service</a>.{% endtrans %}
   </p>
 
-  <h2>What we collect</h2>
+  <h2>{{ _("What we collect") }}</h2>
   <ul>
     <li>
-      <strong>Your Discord account basics</strong> — your Discord user ID,
+      {% trans %}<strong>Your Discord account basics</strong> — your Discord user ID,
       your display name, and your avatar hash. We ask Discord for the
-      <code>identify</code> scope only, which is the minimum available.
+      <code>identify</code> scope only, which is the minimum available.{% endtrans %}
     </li>
     <li>
-      <strong>Your timezone</strong> — either the one you picked, or the one
+      {% trans %}<strong>Your timezone</strong> — either the one you picked, or the one
       your browser reported, so deadlines show in your local time alongside
-      JST.
+      JST.{% endtrans %}
     </li>
     <li>
-      <strong>Your reminder settings</strong> — the reminder rules you
+      {% trans %}<strong>Your reminder settings</strong> — the reminder rules you
       create, your reminder presets, the tags you subscribe to, and any
       lottery outcomes you record (applied, won, lost, paid), which the app
-      uses to stop reminding you about rounds you are done with.
+      uses to stop reminding you about rounds you are done with.{% endtrans %}
     </li>
     <li>
-      <strong>Pending and sent reminders</strong> — the queue of reminders
-      scheduled for you, and whether each has been delivered.
+      {% trans %}<strong>Pending and sent reminders</strong> — the queue of reminders
+      scheduled for you, and whether each has been delivered.{% endtrans %}
     </li>
     <li>
-      <strong>Login sessions</strong> — a random session token per login.
-      Only its SHA-256 hash is stored, never the token itself.
+      {% trans %}<strong>Login sessions</strong> — a random session token per login.
+      Only its SHA-256 hash is stored, never the token itself.{% endtrans %}
     </li>
     <li>
-      <strong>A calendar feed token</strong>, if you generate one. Also
+      {% trans %}<strong>A calendar feed token</strong>, if you generate one. Also
       stored only as a SHA-256 hash. Anyone holding the raw feed URL can
       read your upcoming deadlines, so treat it as a password; if you lose
       it or want to revoke it, generate a new one and the old URL stops
-      working.
+      working.{% endtrans %}
     </li>
     <li>
-      <strong>Whether your DMs are reachable</strong> — a single flag, set
+      {% trans %}<strong>Whether your DMs are reachable</strong> — a single flag, set
       when Discord refuses a DM, so the site can tell you why reminders
-      stopped arriving.
+      stopped arriving.{% endtrans %}
     </li>
     <li>
-      <strong>What you contributed</strong> — if you have editor rights,
+      {% trans %}<strong>What you contributed</strong> — if you have editor rights,
       the concerts, tags, and edits you made are recorded with you as the
-      author.
+      author.{% endtrans %}
     </li>
   </ul>
 
-  <h2>What we do not collect</h2>
+  <h2>{{ _("What we do not collect") }}</h2>
   <ul>
-    <li>No email address. Discord login never hands us one.</li>
-    <li>No IP addresses in the database.</li>
+    <li>{{ _("No email address. Discord login never hands us one.") }}</li>
+    <li>{{ _("No IP addresses in the database.") }}</li>
     <li>
-      No message content. The bot uses no privileged intents, so it cannot
-      read your messages, your server list, or your friends.
+      {% trans %}No message content. The bot uses no privileged intents, so it cannot
+      read your messages, your server list, or your friends.{% endtrans %}
     </li>
-    <li>No analytics, no third-party trackers, no advertising.</li>
+    <li>{{ _("No analytics, no third-party trackers, no advertising.") }}</li>
   </ul>
 
-  <h2>Why we collect it</h2>
+  <h2>{{ _("Why we collect it") }}</h2>
   <p>
-    Solely to send you the concert-deadline reminders you asked for, and to
+    {% trans %}Solely to send you the concert-deadline reminders you asked for, and to
     show your own settings back to you. There is no other use. Nothing here
-    is profiled, scored, or used to make automated decisions about you.
+    is profiled, scored, or used to make automated decisions about you.{% endtrans %}
   </p>
 
-  <h2>Sharing</h2>
+  <h2>{{ _("Sharing") }}</h2>
   <p>
-    We share nothing. Your data is not sold, rented, or given to third parties. The
+    {% trans %}We share nothing. Your data is not sold, rented, or given to third parties. The
     only outbound traffic carrying anything about you is the Discord API
-    call that delivers your DM, which is the service you signed up for.
+    call that delivers your DM, which is the service you signed up for.{% endtrans %}
   </p>
 
-  <h2>How long we keep it</h2>
+  <h2>{{ _("How long we keep it") }}</h2>
   <p>
-    Your data is kept while your account exists. The database is backed up
+    {% trans %}Your data is kept while your account exists. The database is backed up
     nightly to a private, non-public storage bucket (encrypted at rest by
     the storage provider), and those backups expire automatically after 30
     days. So after a deletion, your data is gone from the live site
     immediately but can persist in backups for up to 30 more days. We would
-    rather say that than claim instant erasure.
+    rather say that than claim instant erasure.{% endtrans %}
   </p>
 
-  <h2>Cookies</h2>
+  <h2>{{ _("Cookies") }}</h2>
   <p>
-    One cookie: your login session. It is strictly necessary — without it
+    {% trans %}One cookie: your login session. It is strictly necessary — without it
     you cannot stay signed in. There are no analytics or tracking cookies,
-    which is why you are not being asked to click through a consent banner.
+    which is why you are not being asked to click through a consent banner.{% endtrans %}
   </p>
 
-  <h2>Your rights</h2>
+  <h2>{{ _("Your rights") }}</h2>
   <p>
-    You can ask for a copy of your data, ask for it to be corrected, or ask
-    for it to be deleted. Just get in touch:
+    {% trans %}You can ask for a copy of your data, ask for it to be corrected, or ask
+    for it to be deleted. Just get in touch:{% endtrans %}
   </p>
   {% if contact_discord or contact_email %}
   <ul>
-    {% if contact_discord %}<li>Discord: {{ contact_discord }}</li>{% endif %}
+    {% if contact_discord %}<li>{% trans %}Discord: {{ contact_discord }}{% endtrans %}</li>{% endif %}
     {% if contact_email %}
     <li>
-      Email:
+      {{ _("Email:") }}
       {% if contact_email_is_linkable %}
       <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
       {% else %}
@@ -122,25 +125,25 @@
   </ul>
   {% else %}
   <p class="dim">
-    This deployment has not published contact details yet. If you reached
-    this page from a running site, contact whoever operates it.
+    {% trans %}This deployment has not published contact details yet. If you reached
+    this page from a running site, contact whoever operates it.{% endtrans %}
   </p>
   {% endif %}
   <p>
-    Deleting your account removes everything personal listed above: your
+    {% trans %}Deleting your account removes everything personal listed above: your
     account row, your sessions, your reminder rules, presets and preset
     items, your tag subscriptions, your recorded lottery outcomes, your
     queued reminders, and your pending notifications. What stays is the
     shared catalogue — concerts, tags, and edit history you contributed —
     with the author field blanked out, so the events everyone else is
-    following do not disappear because one person left.
+    following do not disappear because one person left.{% endtrans %}
   </p>
 
-  <h2>Changes to this policy</h2>
+  <h2>{{ _("Changes to this policy") }}</h2>
   <p>
-    If this policy changes, the date at the top of this page changes with
+    {% trans %}If this policy changes, the date at the top of this page changes with
     it. There is no mailing list to notify, since we do not have your email
-    address.
+    address.{% endtrans %}
   </p>
 </article>
 {% endblock %}

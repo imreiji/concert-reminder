@@ -474,6 +474,20 @@ async def test_leg_cancelled_context_none_for_missing_concert(session):
     assert await leg_cancelled_context(session, 999) is None
 
 
+async def test_leg_cancelled_context_carries_recipient_language(session):
+    """The leg-cancel DM localizes: the context carries the recipient's
+    language so _send_notification sets the locale before composing the embed.
+    Passing no user_id keeps the English default (the plain fallback path)."""
+    concert, *_ = await seed_two_legs(session)
+    user = await session.get(User, 42)
+    user.language = "ja"
+    await session.flush()
+    ctx = await leg_cancelled_context(session, concert.id, 42)
+    assert ctx.user_language == "ja"
+    ctx_default = await leg_cancelled_context(session, concert.id)
+    assert ctx_default.user_language == "en"
+
+
 # ── Concert edit history ─────────────────────────────────────────────────
 
 

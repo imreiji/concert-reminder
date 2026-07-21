@@ -12,6 +12,9 @@ __pycache__/
 .ruff_cache/
 dist/
 
+# i18n
+messages.pot
+
 # editors
 .vscode/
 .idea/

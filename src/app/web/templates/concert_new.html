@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}new event — dekimasen.app{% endblock %}
+{% block title %}{{ _("new event") }} — dekimasen.app{% endblock %}
 {% block content %}
 {#- Identity-first, the inverse of the editor's rounds-first fold.
 
@@ -12,26 +12,26 @@
     is exactly the id-less case those components were built for. The old
     free-text round_leg <select> is gone -- it silently collapsed a two-leg
     round to one on save. -#}
-<h1>Add an event</h1>
-<p class="dim tiny"><a href="/concerts/import">Prefer to import from a ramen.events URL instead? →</a></p>
+<h1>{{ _("Add an event") }}</h1>
+<p class="dim tiny"><a href="/concerts/import">{{ _("Prefer to import from a ramen.events URL instead? →") }}</a></p>
 
 <form class="stack wide editor" method="post" action="/concerts" id="new-concert">
 
   <div class="ebar">
-    <label class="grow">Title (JP) <input class="title-input" name="title" id="ec-title" required
-      maxlength="200" placeholder="Hasunosora 6th Live"></label>
-    <label>Event ID <span class="dim tiny">(this event's URL — letters, digits, hyphens, underscores only)</span>
+    <label class="grow">{{ _("Title (JP)") }} <input class="title-input" name="title" id="ec-title" required
+      maxlength="200" placeholder="{{ _('Hasunosora 6th Live') }}"></label>
+    <label>{{ _("Event ID") }} <span class="dim tiny">{{ _("(this event's URL — letters, digits, hyphens, underscores only)") }}</span>
       <input name="event_id" id="ec-event-id" required maxlength="100" pattern="[A-Za-z0-9_\-]+"
-             placeholder="hasunosora-6th-live"></label>
+             placeholder="{{ _('hasunosora-6th-live') }}"></label>
   </div>
 
   <div class="section-head">
-    <h2>Performances</h2>
-    <p class="dim tiny">One per show / day — the first is open below. Times are JST.</p>
+    <h2>{{ _("Performances") }}</h2>
+    <p class="dim tiny">{{ _("One per show / day — the first is open below. Times are JST.") }}</p>
   </div>
 
   <div class="editor-actions">
-    <button type="button" class="btn quiet" onclick="addRow('day-rows','day-row-template')">Add performance</button>
+    <button type="button" class="btn quiet" onclick="addRow('day-rows','day-row-template')">{{ _("Add performance") }}</button>
   </div>
 
   {#- One performance card open by default: an event has at least one show, and
@@ -43,70 +43,89 @@
       <input type="hidden" name="day_id" value="">
       <input type="hidden" name="day_key" value="new-first">
       <div class="eleg-top">
-        <input name="day_label" maxlength="100" placeholder="Day 1">
-        <input name="day_city" maxlength="100" placeholder="Leg / city (e.g. Kanagawa)">
+        <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}">
+        <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}">
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="false">
           <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                  title="A cancelled leg is dimmed and badged, never deleted">Cancelled</button>
+                  title="{{ _('A cancelled leg is dimmed and badged, never deleted') }}">{{ _("Cancelled") }}</button>
         </span>
-        <button type="button" class="x" title="Remove this performance" data-remove-leg>×</button>
+        <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
       </div>
       <div class="eleg-fields">
-        <input name="day_venue" maxlength="200" placeholder="Venue">
-        <input name="day_venue_address" maxlength="300" placeholder="Venue address">
-        <label>Doors (JST) <input type="datetime-local" name="day_doors_at"></label>
-        <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required></label>
+        <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}">
+        <input name="day_venue_address" maxlength="300" placeholder="{{ _('Venue address') }}">
+        <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
+        <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
       </div>
     </div>
   </div>
 
   <div class="section-head">
-    <h2>Lottery rounds</h2>
-    <p class="dim tiny">Tick the performances each round applies to — leave none ticked
-      for a whole-event round. Times are JST.</p>
+    <h2>{{ _("Lottery rounds") }}</h2>
+    <p class="dim tiny">{% trans %}Tick the performances each round applies to — leave none ticked
+      for a whole-event round. Times are JST.{% endtrans %}</p>
   </div>
 
   <div class="editor-actions">
-    <button type="button" class="btn" onclick="addRow('round-rows','round-row-template')">Add a round</button>
+    <button type="button" class="btn" onclick="addRow('round-rows','round-row-template')">{{ _("Add a round") }}</button>
   </div>
 
   <div id="round-rows" class="row-list">
-    <p class="dim tiny" data-no-rounds>No rounds yet — add the first one above.</p>
+    <p class="dim tiny" data-no-rounds>{{ _("No rounds yet — add the first one above.") }}</p>
   </div>
 
   <details class="fold">
-    <summary>Details and links
-      <span class="fold-hint">Optional — title EN, organizer, kind, categories, links, performers, notes</span></summary>
+    <summary>{{ _("Details and links") }}
+      <span class="fold-hint">{{ _("Optional — title EN, organizer, kind, categories, links, performers, notes") }}</span></summary>
     <div class="fold-body">
       <div class="grid2">
-        <label>Title (EN) <input name="title_en" maxlength="200"></label>
-        <label>Artist / organizer <input name="organizer" maxlength="200" placeholder="non-series acts, etc."></label>
-        <label>Kind
+        <label>{{ _("Artist / organizer") }} <input name="organizer" maxlength="200" placeholder="{{ _('non-series acts, etc.') }}"></label>
+        <label>{{ _("Kind") }}
           <select name="kind">
-            <option value="">— none —</option>
+            <option value="">{{ _("— none —") }}</option>
             {% for k in concert_kinds %}<option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>{% endfor %}
           </select>
         </label>
-        <label>Categories (comma-sep) <input name="categories" placeholder="concert, tour"></label>
-        <label>eventernote URL <input name="eventernote_url" type="url"></label>
-        <label>Official URL <input name="official_url" type="url"></label>
-        <label>Source URL <input name="source_url" type="url" placeholder="where this was sourced from"></label>
+        <label>{{ _("Categories (comma-sep)") }} <input name="categories" placeholder="{{ _('concert, tour') }}"></label>
+        <label>{{ _("eventernote URL") }} <input name="eventernote_url" type="url"></label>
+        <label>{{ _("Official URL") }} <input name="official_url" type="url"></label>
+        <label>{{ _("Source URL") }} <input name="source_url" type="url" placeholder="{{ _('where this was sourced from') }}"></label>
       </div>
-      <label>Performers (one per line) <textarea name="performers_text" rows="3"></textarea></label>
-      <label>Notes <textarea name="notes" rows="2"></textarea></label>
+      <label>{{ _("Performers (one per line)") }} <textarea name="performers_text" rows="3"></textarea></label>
+      <label>{{ _("Notes") }} <textarea name="notes" rows="2"></textarea></label>
+
+      {#- Per-language variants of the user-entered title, venue and notes;
+          shown to viewers reading that locale, falling back to the JP-side
+          originals when empty (i18n.loc_field). -#}
+      <div class="section-head trans-head">
+        <h3 class="section-sub">{{ _("Translations") }}</h3>
+        <p class="dim tiny">{{ _("Optional — shown to viewers reading in that language, falling back to the originals above.") }}</p>
+      </div>
+      <h4 class="section-sub">{{ _("English") }}</h4>
+      <div class="grid2">
+        <label>{{ _("Title") }} <input name="title_en" maxlength="200"></label>
+        <label>{{ _("Venue") }} <input name="venue_en" maxlength="200"></label>
+      </div>
+      <label>{{ _("Notes") }} <textarea name="notes_en" rows="2"></textarea></label>
+      <h4 class="section-sub">中文</h4>
+      <div class="grid2">
+        <label>{{ _("Title") }} <input name="title_zh" maxlength="200"></label>
+        <label>{{ _("Venue") }} <input name="venue_zh" maxlength="200"></label>
+      </div>
+      <label>{{ _("Notes") }} <textarea name="notes_zh" rows="2"></textarea></label>
     </div>
   </details>
 
   <details class="fold">
-    <summary>Tags
-      <span class="fold-hint">Franchise, group, artists, venue — optional</span></summary>
+    <summary>{{ _("Tags") }}
+      <span class="fold-hint">{{ _("Franchise, group, artists, venue — optional") }}</span></summary>
     <div class="fold-body">
       {% include "_tag_picker_fields.html" %}
     </div>
   </details>
 
-  <button class="btn">Create event</button>
+  <button class="btn">{{ _("Create event") }}</button>
 </form>
 {% include "_tag_picker_script.html" %}
 
@@ -115,20 +134,20 @@
     <input type="hidden" name="day_id" value="">
     <input type="hidden" name="day_key" value="">
     <div class="eleg-top">
-      <input name="day_label" maxlength="100" placeholder="Day 1">
-      <input name="day_city" maxlength="100" placeholder="Leg / city (e.g. Kanagawa)">
+      <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}">
+      <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}">
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
         <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                title="A cancelled leg is dimmed and badged, never deleted">Cancelled</button>
+                title="{{ _('A cancelled leg is dimmed and badged, never deleted') }}">{{ _("Cancelled") }}</button>
       </span>
-      <button type="button" class="x" title="Remove this performance" data-remove-leg>×</button>
+      <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
     </div>
     <div class="eleg-fields">
-      <input name="day_venue" maxlength="200" placeholder="Venue">
-      <input name="day_venue_address" maxlength="300" placeholder="Venue address">
-      <label>Doors (JST) <input type="datetime-local" name="day_doors_at"></label>
-      <label>Starts (JST) <input type="datetime-local" name="day_starts_at" required></label>
+      <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}">
+      <input name="day_venue_address" maxlength="300" placeholder="{{ _('Venue address') }}">
+      <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
+      <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
     </div>
   </div>
 </template>
@@ -138,23 +157,23 @@
     <input type="hidden" name="round_id" value="">
     <div class="redit-top">
       <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選">
-      <input name="round_label_en" maxlength="200" placeholder="1st-round advance lottery">
+      <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}">
       <select name="round_kind">{% for k in kinds %}
         <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
       {% endfor %}</select>
-      <button type="button" class="x" title="Remove this round" data-remove-round>×</button>
+      <button type="button" class="x" title="{{ _('Remove this round') }}" data-remove-round>×</button>
     </div>
     {% with value = "", selected = none %}{% include "_round_leg_chips.html" %}{% endwith %}
     {% with value = "", selected = none, self_id = none, kind_value = "" %}{% include "_round_qualifier_chips.html" %}{% endwith %}
     <div class="redit-times">
-      <label>Apply opens (JST) <input type="datetime-local" name="round_opens_at"></label>
-      <label>Apply deadline (JST) <input type="datetime-local" name="round_closes_at"></label>
-      <label>Results (JST) <input type="datetime-local" name="round_results_at"></label>
-      <label>Payment deadline (JST) <input type="datetime-local" name="round_payment_at"></label>
+      <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at"></label>
+      <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at"></label>
+      <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at"></label>
+      <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at"></label>
     </div>
     <div class="redit-extra">
-      <input name="round_url" type="url" placeholder="Apply URL (optional)">
-      <input name="round_notes" maxlength="300" placeholder="Notes (optional)">
+      <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}">
+      <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}">
     </div>
   </div>
 </template>

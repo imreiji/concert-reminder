@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ current_locale() }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -32,8 +32,8 @@
 
        Discover renders signed out too, because it is public: it is the one
        piece of content the header can offer an anonymous visitor. #}
-    {% set nav_items = [("/", "Home", "home"), ("/discover", "Discover", "discover")]
-       + ([("/tags", "Tags", "tags")] if user else []) %}
+    {% set nav_items = [("/", _("Home"), "home"), ("/discover", _("Discover"), "discover")]
+       + ([("/tags", _("Tags"), "tags")] if user else []) %}
     <nav class="main">
       {% for href, label, key in nav_items %}
       <a href="{{ href }}"{% if nav_page == key %} aria-current="page"{% endif %}>{{ label }}</a>
@@ -41,31 +41,48 @@
     </nav>
     <nav class="auth">
       <button type="button" class="theme-toggle" data-theme-toggle
-              aria-label="Toggle dark mode" title="Toggle dark mode">◐</button>
+              aria-label="{{ _('Toggle dark mode') }}" title="{{ _('Toggle dark mode') }}">◐</button>
+      {# Language switcher: a native <details> menu, one <form> per language so
+         it works with JS disabled. `next` is prefilled with the current path
+         so POST /language (Task 3) returns here after setting the cookie
+         (and the users.language column, for a signed-in user). Language
+         NAMES stay in their own language -- never translated. #}
+      <details class="langmenu">
+        <summary class="langtoggle" title="{{ _('Language') }}">🌐 <span>{{ {"en": "EN", "zh": "中文", "ja": "日本語"}[current_locale()] }}</span></summary>
+        <div class="langlist">
+          {% for code, label in [("en", "English"), ("zh", "中文"), ("ja", "日本語")] %}
+          <form method="post" action="/language">
+            <input type="hidden" name="language" value="{{ code }}">
+            <input type="hidden" name="next" value="{{ request.url.path }}">
+            <button type="submit" {% if current_locale() == code %}aria-current="true"{% endif %}>{{ label }}</button>
+          </form>
+          {% endfor %}
+        </div>
+      </details>
       {% if user %}
         <img class="avatar" src="{{ user.avatar_url }}" alt="">
-        <span>{{ user.username }}{% if user.is_admin %} <em class="badge">admin</em>{% elif user.is_editor %} <em class="badge">editor</em>{% endif %}</span>
-        {% if user.is_editor %}<a class="btn" href="/concerts/new">+ Add</a>{% endif %}
-        <a class="btn quiet" href="/preferences">Preferences</a>
-        <a class="btn quiet" href="/auth/logout">Log out</a>
+        <span>{{ user.username }}{% if user.is_admin %} <em class="badge">{{ _("admin") }}</em>{% elif user.is_editor %} <em class="badge">{{ _("editor") }}</em>{% endif %}</span>
+        {% if user.is_editor %}<a class="btn" href="/concerts/new">{{ _("+ Add") }}</a>{% endif %}
+        <a class="btn quiet" href="/preferences">{{ _("Preferences") }}</a>
+        <a class="btn quiet" href="/auth/logout">{{ _("Log out") }}</a>
       {% else %}
-        <a class="btn" href="/auth/login">Sign in with Discord</a>
+        <a class="btn" href="/auth/login">{{ _("Sign in with Discord") }}</a>
       {% endif %}
     </nav>
     </div>
   </header>
   {% if user and user.dm_blocked %}
   <div class="banner-warn">
-    Your last Discord DM couldn't be delivered — check your Discord privacy
+    {% trans %}Your last Discord DM couldn't be delivered — check your Discord privacy
     settings to allow DMs from server members, or
-    <a href="/preferences">test it from Preferences</a>.
+    <a href="/preferences">test it from Preferences</a>.{% endtrans %}
   </div>
   {% endif %}
   <main>{% block content %}{% endblock %}</main>
   <footer>
-    Times are entered in <strong>JST</strong> and shown as JST + your local time.
-    · <a href="/privacy">Privacy policy</a>
-    · <a href="/terms">Terms of service</a>
+    {% trans %}Times are entered in <strong>JST</strong> and shown as JST + your local time.{% endtrans %}
+    · <a href="/privacy">{{ _("Privacy policy") }}</a>
+    · <a href="/terms">{{ _("Terms of service") }}</a>
   </footer>
 <script>
     // Theme toggle: flip light<->dark, stamp <html data-theme>, persist. An
@@ -88,6 +105,13 @@
     document.addEventListener("click", (e) => {
       if (e.target instanceof HTMLDialogElement && e.target.open) e.target.close();
     });
+    // shared: clicking outside an open <details class="langmenu"> closes it
+    // (Esc and a second summary click already work natively).
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll("details.langmenu[open]").forEach((d) => {
+        if (!d.contains(e.target)) d.removeAttribute("open");
+      });
+    });
     // shared: live-filter chips by their data-name within a container
     function filterChips(input, scope) {
       const q = input.value.trim().toLowerCase();
@@ -102,11 +126,16 @@
     // itself: the browser HTML-decodes an attribute value before parsing it
     // as JS, so Jinja's &#39; escaping is undone first and a name like
     // "'); alert(1); //" would execute. Read this way it stays a string.
+    // Translated templates carry a {name} placeholder; the editor-/user-
+    // authored name still arrives via dataset (invariant 7), swapped in with a
+    // function replacer so a "$" in the name is never a special replacement.
+    var DELETE_TAG_MSG = {{ _("Delete tag {name} everywhere?") | tojson }};
+    var DELETE_PRESET_MSG = {{ _("Delete preset {name}?") | tojson }};
     function confirmDeleteTag(form) {
-      return confirm("Delete tag " + form.dataset.tagName + " everywhere?");
+      return confirm(DELETE_TAG_MSG.replace("{name}", function () { return form.dataset.tagName; }));
     }
     function confirmDeletePreset(form) {
-      return confirm("Delete preset " + form.dataset.presetName + "?");
+      return confirm(DELETE_PRESET_MSG.replace("{name}", function () { return form.dataset.presetName; }));
     }
     // shared: refresh every [data-countdown][data-iso] span with a live
     // "Xd Yh" / "Zh Wm" / "Nm" countdown to that ISO timestamp.
