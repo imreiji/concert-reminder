@@ -154,7 +154,9 @@ async def test_paid_without_a_prior_won_behaves_as_the_service_defines(client):
 async def test_requires_login(client):
     rid = await seed_round(client.db)
     r = post_outcome(client, rid, "applied")
-    assert r.status_code == 401
+    # htmx request: HX-Redirect, not a 303 the XHR would follow and swap in.
+    assert r.status_code == 204
+    assert r.headers["hx-redirect"] == "/"
     assert await outcome_for(client.db, USER_A, rid) is None
 
 

@@ -179,7 +179,7 @@ async def test_round_ics_downloads_valid_vevent_for_future_round(client):
 
 async def test_round_ics_requires_login(client):
     client.post("/concerts", data={"title": "C"})
-    assert client.get("/rounds/1/ics").status_code == 401
+    assert client.get("/rounds/1/ics").status_code == 303
 
 
 async def test_past_round_has_no_ics_link_and_is_marked_past(client):

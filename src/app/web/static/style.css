@@ -203,6 +203,18 @@ h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 2.2rem; }
   font-size: .9rem;
 }
 .banner-warn a { color: var(--off); font-weight: 600; }
+/* Bounced off a signed-in-only page, explaining the redirect Home. Accent
+   and not --off on purpose: nothing has gone wrong, the visitor just needs
+   to sign in first. Both tokens are defined in the dark blocks too. */
+.signin-note {
+  border: 1px solid var(--accent);
+  background: var(--accent-wash);
+  border-radius: 3px;
+  padding: .6rem 1rem;
+  margin: 0 auto 1rem;
+  max-width: 60rem;
+  font-size: .9rem;
+}
 .stack { display: grid; gap: .55rem; max-width: 26rem; margin-top: .6rem; }
 .stack label { display: grid; gap: .2rem; font-size: .85rem; color: var(--dim); }
 .stack.wide { max-width: 44rem; }
@@ -851,6 +863,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .prail a {
   text-decoration: none; color: var(--dim); font-size: .875rem; font-weight: 550;
   padding: .4rem .6rem; border-radius: 3px; border-left: 2px solid transparent;
+  white-space: nowrap;   /* see the 860px strip rule: a label is one line */
 }
 .prail a:hover { color: var(--ink); background: var(--chip); }
 .prail a.on { color: var(--ink); border-left-color: var(--accent); background: var(--chip); }
@@ -872,6 +885,10 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .subrow .cnt { font-size: .8125rem; color: var(--dim); font-variant-numeric: tabular-nums; }
 .subrow .cnt b { color: var(--ink); font-weight: 600; }
 .subrow .sw { display: flex; gap: .35rem; justify-content: flex-end; }
+/* The editors row (admin only) has no count column, so it runs 2-up. Carried
+   as a class, never an inline style -- inline wins over media queries too, so
+   an inline copy is a row the phone collapse can never reach. */
+.subrow.two { grid-template-columns: 1fr auto; }
 .swb {
   font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
   padding: .22rem .5rem; border-radius: 3px; cursor: pointer;
@@ -911,7 +928,19 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 
 @media (max-width: 860px) {
   .plyt { grid-template-columns: 1fr; gap: 1.25rem; }
-  .prail { position: static; grid-auto-flow: column; overflow-x: auto; }
+  /* The rail becomes a horizontal strip. `grid-auto-columns` must be pinned
+     to max-content: the default `auto` track is FLEXIBLE, so when the labels
+     don't fit it shrinks each one toward min-content rather than letting the
+     strip scroll. In Latin that floors at the longest word (the strip just
+     overflows), but in Japanese min-content is ONE CHARACTER -- CJK breaks
+     between characters -- so every label squashed into a 2-3 character column
+     and stacked vertically (measured at 320px: five 3-line labels, rail 80px
+     tall instead of 35px). max-content + the nowrap on `.prail a` keep each
+     label whole in every language and let overflow-x do what it intended. */
+  .prail {
+    position: static; grid-auto-flow: column; grid-auto-columns: max-content;
+    overflow-x: auto;
+  }
   .subrow { grid-template-columns: 1fr; gap: .3rem; }
   .subrow .sw { justify-content: flex-start; }
 }
@@ -1281,6 +1310,23 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   header.site nav.auth > span,
   header.site nav.auth > .btn { display: none; }  /* theme + lang chip stay */
 
+  /* The language chip is the ONE header item whose width changes with the
+     language (EN → 中文 → 日本語), and 日本語 is the widest. Because .site-in
+     is nowrap, a too-narrow bar squeezes the auth cluster rather than
+     overflowing it, and a CJK label breaks between characters — so the chip
+     folded onto a second line and grew the whole header a row. Pin it: the
+     cluster never shrinks and the label never wraps, whatever the language. */
+  header.site nav.auth { flex: 0 0 auto; }
+  button.langtoggle { white-space: nowrap; }
+
+  /* Under ~380px 日本語 no longer fits beside the full logotype, so the
+     wordmark gives way and the できません mark carries the header alone —
+     the only other outcome is the chip wrapping again. Nested so the mobile
+     retrofit stays one block (see the banner comment above). */
+  @media (max-width: 380px) {
+    header.site a.home .wordmark { display: none; }
+  }
+
   body.has-tabbar { padding-bottom: 4.6rem; }     /* content clears the bar */
 
   .tabbar {
@@ -1427,6 +1473,34 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      informational, so they get the same >=34px floor as other dense
      action chips at phone width. */
   .subrow .sw .swb, .subrow .sw .act { min-height: 34px; }
+
+  /* Two independent things used to push this page wider than the phone.
+     Both measured in Chrome against a dump of the real page; the numbers
+     below are observed, not estimated.
+
+     1. The "New preset" reveal. `.bar details.fold` is pinned `flex: 0 0
+        auto` (line ~1162) so it cannot shrink, and its body is a `.stack`
+        capped at 26rem -- together a floor of 444px that overflowed the
+        344px column from ~470px down. Note it only shows when the fold is
+        OPEN, which is why a page with a preset already saved (fold closed)
+        looks fine. Let it take the bar's full width and shrink instead.
+
+     2. The editors row (admin only). Its min-content is set by `.nm3`,
+        which is a flex row with NO wrap, and an env-whitelisted editor has
+        no username so the template prints the Discord id TWICE -- id + id
+        + the "from env" pill = 389px of unbreakable digits, flooring the
+        `1fr` track and blowing the document out to 470px even at a 320px
+        viewport. Wrapping `.nm3` drops its min-content to one id (~142px).
+        The row also had to stop carrying its 2-up grid inline before any
+        of this could apply -- see `.subrow.two` up in the desktop block.
+
+     A `<select>` is NOT one of the causes: Chrome sizes the timezone select
+     to the available width, not to its widest option, so all 565 IANA zones
+     measured 344px -- the same as every other card. */
+  .bar details.fold { flex: 1 1 100%; min-width: 0; }
+  .bar .stack { max-width: none; }
+  .subrow.two { grid-template-columns: 1fr; }
+  .subrow .nm3 { flex-wrap: wrap; overflow-wrap: anywhere; }
 
   /* ── Setup + welcome wizard ────────────────────────────────────────────
      Both grids already auto-collapse via their auto-fill/auto-fit minmax

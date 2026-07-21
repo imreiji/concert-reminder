@@ -64,7 +64,7 @@
         <a class="btn quiet" href="/preferences">{{ _("Preferences") }}</a>
         <a class="btn quiet" href="/auth/logout">{{ _("Log out") }}</a>
       {% else %}
-        <a class="btn" href="/auth/login">{{ _("Sign in with Discord") }}</a>
+        <a class="btn" href="{{ login_url(request) }}">{{ _("Sign in with Discord") }}</a>
       {% endif %}
     </nav>
     </div>
@@ -90,7 +90,7 @@
     <a class="tab" href="/preferences">
       {% if user.avatar_url %}<img class="ava" src="{{ user.avatar_url }}" alt="">{% else %}<span class="ava"></span>{% endif %}{{ _("Me") }}</a>
     {% else %}
-    <a class="tab" href="/auth/login">
+    <a class="tab" href="{{ login_url(request) }}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 6-5 8-5s6.5 1 8 5"/></svg>{{ _("Sign in") }}</a>
     {% endif %}
   </nav>

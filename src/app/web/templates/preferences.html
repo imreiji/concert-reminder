@@ -424,7 +424,10 @@
       Env-managed editors (<code>EDITOR_WHITELIST</code>) can't be removed here — edit
       <code>.env</code> instead.{% endtrans %}</p>
     {% for e in editors %}
-    <div class="subrow" style="grid-template-columns: 1fr auto">
+    {# `.two` rather than an inline grid-template-columns: an inline style beats
+       every stylesheet rule INCLUDING media queries, so the inline version was
+       the one .subrow row the phone collapse could never reach. #}
+    <div class="subrow two">
       <span class="nm3">{{ e.username or e.id }} <span class="clock">({{ e.id }})</span>{% if e.env %} <span class="pill p-quiet">{{ _("from env") }}</span>{% endif %}</span>
       <span class="sw">
         {% if e.env %}<span class="clock">{{ _("cannot be removed here") }}</span>

@@ -96,9 +96,9 @@ async def _all(db, model):
 
 
 def test_anonymous_is_rejected(client):
-    assert client.get("/concerts/import").status_code == 401
-    assert client.post("/concerts/import/preview", data={"url": GRADUATION_URL}).status_code == 401
-    assert client.post("/concerts/import/commit", data={"title": "X"}).status_code == 401
+    assert client.get("/concerts/import").status_code == 303
+    assert client.post("/concerts/import/preview", data={"url": GRADUATION_URL}).status_code == 303
+    assert client.post("/concerts/import/commit", data={"title": "X"}).status_code == 303
 
 
 def test_non_editor_is_forbidden(client):

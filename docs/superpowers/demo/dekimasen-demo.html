@@ -587,6 +587,7 @@
   .prail a {
     text-decoration: none; color: var(--dim); font-size: .875rem; font-weight: 550;
     padding: .4rem .6rem; border-radius: 3px; border-left: 2px solid transparent;
+    white-space: nowrap;   /* see the 860px strip rule: a label is one line */
   }
   .prail a:hover { color: var(--ink); background: var(--chip); }
   .prail a.on { color: var(--ink); border-left-color: var(--accent); background: var(--chip); }
@@ -631,7 +632,14 @@
 
   @media (max-width: 860px) {
     .plyt { grid-template-columns: 1fr; gap: 1.25rem; }
-    .prail { position: static; grid-auto-flow: column; overflow-x: auto; }
+    /* max-content, not the default flexible `auto` track: an auto track
+       shrinks toward min-content instead of letting the strip scroll, and in
+       Japanese min-content is a single character, so every label stacked
+       vertically at phone width. See style.css's copy of this rule. */
+    .prail {
+      position: static; grid-auto-flow: column; grid-auto-columns: max-content;
+      overflow-x: auto;
+    }
     .subrow { grid-template-columns: 1fr; gap: .3rem; }
     .subrow .sw { justify-content: flex-start; }
   }

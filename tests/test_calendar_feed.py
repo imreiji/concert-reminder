@@ -90,7 +90,7 @@ def create_round_with_rule(client, closes_at: str, event_id: str = "c") -> None:
 
 
 def test_generate_feed_requires_login(client):
-    assert client.post("/me/calendar-feed").status_code == 401
+    assert client.post("/me/calendar-feed").status_code == 303
 
 
 def test_generate_feed_creates_token_and_redirects_with_it(client):

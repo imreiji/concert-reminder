@@ -24,7 +24,7 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +33,7 @@ from app.config import settings
 from app.db.models import User, WebSession
 from app.db.service import ensure_user
 from app.db.session import get_session
+from app.domain.urls import safe_next
 from app.i18n import LANG_COOKIE_MAX_AGE
 from app.i18n import SUPPORTED as SUPPORTED_LANGUAGES
 
@@ -133,9 +134,14 @@ async def validate_web_session(db: AsyncSession, token: str) -> WebSession | Non
 
 
 @router.get("/login")
-async def login(request: Request) -> RedirectResponse:
+async def login(request: Request, next_: str = Query("", alias="next")) -> RedirectResponse:
     state = secrets.token_urlsafe(24)
     request.session["oauth_state"] = state
+    # The return path rides in OUR signed session cookie, exactly like
+    # oauth_state -- it is never handed to Discord as a query param, so it
+    # cannot come back attacker-controlled. Always assign (not just on a
+    # hit), or a stale destination from an abandoned login outlives it.
+    request.session["oauth_next"] = safe_next(next_) or ""
     params = urlencode({
         "client_id": settings.discord_client_id,
         "redirect_uri": f"{settings.base_url}/auth/callback",
@@ -155,6 +161,9 @@ async def callback(
     db: AsyncSession = Depends(get_session),
 ) -> RedirectResponse:
     expected = request.session.pop("oauth_state", None)
+    # Pop unconditionally: a failed callback must not leave a destination
+    # behind for whatever login attempt comes next.
+    destination = safe_next(request.session.pop("oauth_next", None))
     if not code or not state or state != expected:
         raise HTTPException(status_code=400, detail="OAuth state mismatch — try logging in again")
 
@@ -177,7 +186,10 @@ async def callback(
     request.session["sid"] = sid
     request.session["user"] = {"id": user_id, "username": username, "avatar": me.get("avatar")}
     log.info("login: %s (%s)", username, user_id)
-    response = RedirectResponse("/welcome" if is_new_user else "/")
+    # A brand-new account goes through the wizard no matter what asked for the
+    # login: someone who has not picked a single tag yet is not served by
+    # landing on the concert page that happened to bounce them here.
+    response = RedirectResponse("/welcome" if is_new_user else (destination or "/"))
     # Set the cookie from the (possibly just-seeded, possibly pre-existing)
     # column so this browser now matches the account.
     response.set_cookie(
@@ -234,9 +246,19 @@ async def current_user(
     )
 
 
+class LoginRequired(Exception):
+    """A signed-out visitor reached a signed-in-only route.
+
+    Deliberately NOT an HTTPException: a bare 401 is a dead end in a browser
+    (no auth challenge this app can answer, just an error page). `web/app.py`
+    registers a handler that sends the visitor to Home instead, which signed
+    out IS the landing page, sign-in CTA and all.
+    """
+
+
 async def require_user(user: SessionUser | None = Depends(current_user)) -> SessionUser:
     if user is None:
-        raise HTTPException(status_code=401, detail="Login required")
+        raise LoginRequired
     return user
 
 

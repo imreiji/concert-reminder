@@ -105,8 +105,8 @@ async def test_delete_erases_caller_and_revokes_session(client):
         rows = list((await s.execute(select(WebSession))).scalars())
         assert rows == []  # session cascaded away: no live token remains
 
-    # The session no longer resolves -- require_user now rejects the caller.
-    assert client.get("/preferences").status_code == 401
+    # The session no longer resolves -- require_user now sends the caller home.
+    assert client.get("/preferences").status_code == 303
 
 
 async def test_authored_concert_survives_anonymised(client):
@@ -145,10 +145,11 @@ async def test_delete_ignores_user_id_from_request(client):
 
 
 async def test_delete_requires_login(client):
-    """require_user: an anonymous POST is rejected, never a silent no-op."""
+    """require_user: an anonymous POST is redirected home, never a silent no-op."""
     await seed_user(client.db, USER_A, "reiji")
     r = client.post("/me/delete")
-    assert r.status_code == 401
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"
     async with client.db() as s:
         assert await s.get(User, USER_A) is not None  # nothing erased
 
