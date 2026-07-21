@@ -1281,6 +1281,23 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   header.site nav.auth > span,
   header.site nav.auth > .btn { display: none; }  /* theme + lang chip stay */
 
+  /* The language chip is the ONE header item whose width changes with the
+     language (EN → 中文 → 日本語), and 日本語 is the widest. Because .site-in
+     is nowrap, a too-narrow bar squeezes the auth cluster rather than
+     overflowing it, and a CJK label breaks between characters — so the chip
+     folded onto a second line and grew the whole header a row. Pin it: the
+     cluster never shrinks and the label never wraps, whatever the language. */
+  header.site nav.auth { flex: 0 0 auto; }
+  button.langtoggle { white-space: nowrap; }
+
+  /* Under ~380px 日本語 no longer fits beside the full logotype, so the
+     wordmark gives way and the できません mark carries the header alone —
+     the only other outcome is the chip wrapping again. Nested so the mobile
+     retrofit stays one block (see the banner comment above). */
+  @media (max-width: 380px) {
+    header.site a.home .wordmark { display: none; }
+  }
+
   body.has-tabbar { padding-bottom: 4.6rem; }     /* content clears the bar */
 
   .tabbar {
