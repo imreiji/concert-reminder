@@ -263,6 +263,14 @@ deleting them.
    `/demote-editor` Discord commands. Admins automatically pass editor
    checks too. Sessions are DB-backed sha256 token hashes (revocable).
    Ownership checks 404, not 403, on other users' presets/subscriptions.
+   Being SIGNED OUT is not an error: `require_user` raises `LoginRequired`
+   (not an HTTPException), and `web/app.py`'s handler sends the visitor to
+   `/`, which signed out is the real landing page with the sign-in CTA --
+   303, never 307, so a signed-out POST is not replayed against `/`, and
+   `HX-Redirect` + 204 for htmx requests, since an XHR would follow a 303
+   and swap the whole landing page into a fragment target. Being signed in
+   and unauthorized IS an error and stays 403 (`require_editor`/
+   `require_admin`) -- don't fold the two together.
    No separate CSRF token: mutating routes rely on `SameSite=Lax` cookies
    (`web/app.py`'s `SessionMiddleware`). Deliberate for an app this size —
    don't read it as a gap to fill or bolt a token system onto.

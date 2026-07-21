@@ -278,8 +278,10 @@ async def test_bad_day_404s(client):
 
 async def test_requires_login(client):
     ids = await seed(client.db)
-    assert post_sub(client, ids.event_id, "opted_out").status_code == 401
-    assert post_leg(client, ids.event_id, ids.day_id, "true").status_code == 401
+    # htmx requests: HX-Redirect home, not a 303 the XHR would follow and swap in.
+    r = post_sub(client, ids.event_id, "opted_out")
+    assert (r.status_code, r.headers["hx-redirect"]) == (204, "/")
+    assert post_leg(client, ids.event_id, ids.day_id, "true").status_code == 204
     assert await sub_state(client.db, USER_A, ids.concert_id) is None
 
 

@@ -234,9 +234,19 @@ async def current_user(
     )
 
 
+class LoginRequired(Exception):
+    """A signed-out visitor reached a signed-in-only route.
+
+    Deliberately NOT an HTTPException: a bare 401 is a dead end in a browser
+    (no auth challenge this app can answer, just an error page). `web/app.py`
+    registers a handler that sends the visitor to Home instead, which signed
+    out IS the landing page, sign-in CTA and all.
+    """
+
+
 async def require_user(user: SessionUser | None = Depends(current_user)) -> SessionUser:
     if user is None:
-        raise HTTPException(status_code=401, detail="Login required")
+        raise LoginRequired
     return user
 
 

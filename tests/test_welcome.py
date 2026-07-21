@@ -73,7 +73,7 @@ async def _onboarding_step(client, discord_id: int) -> int:
 
 
 def test_welcome_requires_login(client):
-    assert client.get("/welcome").status_code == 401
+    assert client.get("/welcome").status_code == 303
 
 
 def test_welcome_shows_step_0_for_a_brand_new_user(client):

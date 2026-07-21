@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -86,6 +86,19 @@ def create_app() -> FastAPI:
             lang = i18n.negotiate(request.headers.get("accept-language", ""))
         i18n.set_locale(lang)
         return await call_next(request)
+
+    @app.exception_handler(auth.LoginRequired)
+    async def login_required(request: Request, exc: auth.LoginRequired) -> Response:
+        # Signed out, Home IS the landing page (hero + sign-in CTA), so send
+        # them there rather than dead-ending on a 401 error page. 303 and not
+        # 307: a signed-out POST must not be replayed against /.
+        if request.headers.get("hx-request"):
+            # An htmx XHR would FOLLOW a 303 and swap the whole landing page
+            # into whatever fragment target the request had. HX-Redirect makes
+            # the browser navigate instead, which is what a session that
+            # expired mid-page actually needs.
+            return Response(status_code=204, headers={"HX-Redirect": "/"})
+        return RedirectResponse("/", status_code=303)
 
     app.mount("/static", StaticFiles(directory=_here / "static"), name="static")
     app.include_router(auth.router)

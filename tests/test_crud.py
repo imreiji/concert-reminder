@@ -101,8 +101,8 @@ def create_with_round(client, title="C", event_id="c", closes_at="2099-06-25T23:
 
 
 def test_anonymous_cannot_view_concert_pages(client):
-    assert client.post("/concerts", data={"title": "X"}).status_code == 401
-    assert client.get("/concerts/1").status_code == 401
+    assert client.post("/concerts", data={"title": "X"}).status_code == 303
+    assert client.get("/concerts/1").status_code == 303
 
 
 def test_viewer_cannot_create_concert(client):
@@ -601,8 +601,8 @@ async def test_detail_page_nests_performances_and_their_rounds_together(client):
 
 
 async def test_export_yaml_requires_login(client):
-    client.post("/concerts", data={"title": "C"})  # will 401 anyway, no login yet
-    assert client.get("/concerts/1/export.yaml").status_code == 401
+    client.post("/concerts", data={"title": "C"})  # goes home anyway, no login yet
+    assert client.get("/concerts/1/export.yaml").status_code == 303
 
 
 async def test_export_yaml_shape(client):
@@ -648,7 +648,7 @@ async def test_export_yaml_shape(client):
 
 
 def test_new_concert_page_is_editor_only(client):
-    assert client.get("/concerts/new").status_code == 401  # anonymous
+    assert client.get("/concerts/new").status_code == 303  # anonymous: home
 
     login_as(client, VIEWER_ID, "viewer")
     assert client.get("/concerts/new").status_code == 403

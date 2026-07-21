@@ -166,7 +166,35 @@ def test_each_login_rotates_the_token(client):
 
 
 def test_anonymous_is_rejected_by_protected_routes(client):
-    assert client.post("/concerts", data={"title": "X"}).status_code == 401
+    # Signed out is not an error, it is a wrong turn: 303 home, not 401.
+    r = client.post("/concerts", data={"title": "X"})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"
+
+
+def test_anonymous_get_lands_on_a_rendered_home_page(client):
+    """The redirect has to go somewhere real: following it renders Home's
+    signed-out landing page, which carries the sign-in CTA."""
+    r = client.get("/preferences", follow_redirects=True)
+    assert r.status_code == 200
+    assert "/auth/login" in r.text  # the sign-in CTA the visitor actually needs
+
+
+def test_anonymous_htmx_request_gets_hx_redirect(client):
+    """An htmx XHR would FOLLOW a 303 and swap the landing page into a
+    fragment target. HX-Redirect makes the browser navigate instead."""
+    r = client.post("/concerts", data={"title": "X"}, headers={"HX-Request": "true"})
+    assert r.status_code == 204
+    assert r.headers["hx-redirect"] == "/"
+    assert r.text == ""  # nothing for htmx to swap
+
+
+def test_signed_in_but_unauthorized_still_403s(client, monkeypatch):
+    """Only ANONYMOUS is a wrong turn. A signed-in non-editor asked for
+    something they may not have -- that stays an error, not a redirect."""
+    monkeypatch.setattr(settings, "editor_whitelist", "999")
+    do_login(client)
+    assert client.get("/concerts/new").status_code == 403
 
 
 def test_non_editor_is_forbidden(client, monkeypatch):
