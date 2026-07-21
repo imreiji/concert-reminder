@@ -26,7 +26,7 @@ Full text of the eight invariants. Each exists because breaking it shipped (or n
    when they hold a secured (WON/PAID) ticket in one of the round's
    `round_qualifiers` (an empty qualifier set means any secured ticket on the
    concert, mirroring `applies_to`'s empty-means-all). Eligibility is pure
-   (`domain/upgrades.py:is_eligible`) and threaded through the same per-user
+   (`domain/upgrades.py:is_upgrade_eligible`) and threaded through the same per-user
    seams — `_apply_outcome_suppression` (exempt from the secured-elsewhere
    suppression, then re-suppressed when ineligible), auto-arm, `column_for`,
    and every capture surface — not the pure planner. Editors set the

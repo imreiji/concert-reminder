@@ -89,7 +89,7 @@ def main() -> int:
 
     # 3. ASCII-only configs (GBK locale on the owner's Windows machine).
     for path in (rev, REPO_ROOT / "alembic.ini"):
-        for i, line in enumerate(non_ascii_lines(path), 1):
+        for line in non_ascii_lines(path):
             problems.append(
                 f"{path.name}:{line[0]}: non-ASCII byte(s): {line[1]!r}"
             )

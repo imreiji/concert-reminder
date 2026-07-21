@@ -1,9 +1,25 @@
 # Workflows — the rituals that keep the repo coherent
 
-Three recurring processes. Each step exists because skipping it has caused
-(or visibly nearly caused) a real problem. The migration ritual lives in
-`migrations.md` and the i18n string-change ritual in `i18n.md`; this file
-holds the rest.
+The recurring processes that keep the repo coherent day to day. Each step
+exists because skipping it has caused (or visibly nearly caused) a real
+problem. The migration ritual lives in `migrations.md` and the i18n
+string-change ritual in `i18n.md`; this file holds the rest.
+
+## Everyday commands
+
+- Run everything: `uv run python -m app.main` — in dev, leave `DISCORD_TOKEN`
+  empty in `.env` to get web-only mode (bot and scheduler DMs disabled), so
+  you can work on the web app with no live bot token.
+- Iterating on bot/slash-command changes: set `DEV_GUILD_ID` to your test
+  server's ID — commands then sync to that one guild in seconds, instead of
+  Discord's up-to-an-hour global sync. Leave it unset (the production
+  default) to keep the global sync.
+- Tests: `uv run pytest -q` — MUST pass before any commit. Single test:
+  `uv run pytest tests/test_service.py::test_name -q`.
+- Lint: `uv run ruff check .` — MUST be clean before any commit.
+- CI (`.github/workflows/ci.yml`) runs `uv sync`, `ruff check .`, `pytest -q`
+  on every push/PR to `main` — exactly the same two gates above, nothing
+  extra, so a clean local run predicts a green CI run.
 
 ## Shipping a feature (the full ritual)
 

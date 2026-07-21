@@ -24,8 +24,10 @@ Read this before touching templates, style.css, or any user-facing copy or layou
   flashes the wrong theme on load. Style new components against both
   directions, not just light.
 - Deadline TIMES render as two lines via `fmt_dual_lines`/the `dual_lines`
-  Jinja global -- a bold weekday+day+month line, then a "HH:MM JST, HH:MM
-  local" time line -- never a flat one-line string on the web (that shape is
+  Jinja global -- a bold weekday+day+month line, then a
+  "HH:MM JST · HH:MM local" time line (a middle dot, not a comma; see
+  `fmt_dual_lines` in `domain/timezones.py`) -- never a flat one-line
+  string on the web (that shape is
   `fmt_dual`, kept only for Discord embeds/plain text, which can't do two
   lines). Performance DATES (a concert's start day, not a deadline) use
   `fmt_day_month`/`day_month` instead: day-month only, no zone, no dual
@@ -101,6 +103,11 @@ Read this before touching templates, style.css, or any user-facing copy or layou
   `style.css`'s single `@media (max-width: 700px)` section at the end of
   the file (banner comment marks its start) -- desktop pixels stay
   untouched by construction, since nothing outside that block may change.
+  The one thing that sits just outside it, immediately under the banner
+  comment, is `.tabbar, .fab { display: none }` -- the desktop-side default
+  the block then overrides. That is the pattern for any future phone-only
+  component: declare it hidden there, reveal it inside the media query;
+  don't scatter the default back into the desktop rules above.
   The one documented exception is `.fsheet` (Discover's filter sheet),
   which switches at 760px instead because it must track `.layout`'s own
   collapse point exactly (also 760px) -- splitting the two breakpoints
