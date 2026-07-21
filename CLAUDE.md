@@ -475,6 +475,18 @@ deleting them.
   collapse point exactly (also 760px) -- splitting the two breakpoints
   would open a 701-760px band where `.layout` has already stacked to one
   column but `.fsheet` still thinks it's in two-column desktop mode.
+  Narrow phones (<=380px) get a NESTED `@media (max-width: 380px)` inside
+  that same 700px block rather than a second top-level one, so the retrofit
+  stays one section. It currently holds a single rule: drop the header's
+  `dekimasen.app` wordmark, keeping the `できません` mark. That exists for the
+  language chip -- it is the one header item whose width follows the
+  language (EN -> 中文 -> 日本語), and since `.site-in` is `nowrap` a
+  too-narrow bar squeezes the auth cluster instead of overflowing it, so a
+  CJK label breaks between characters and the chip folds onto a second line,
+  growing the whole header a row (measured: 59px -> 77px at 365px, -> 112px
+  at 320px). `nav.auth { flex: 0 0 auto }` + `white-space: nowrap` on the
+  chip pin it; hiding the wordmark is what buys them the room. Don't remove
+  any of the three.
   Three phone-only patterns recur: a fixed bottom `.tabbar` (Home/Discover/
   Tags/Me or Sign in, `aria-current` on the active tab exactly like the
   desktop nav, keyed off the same `nav_page`) replacing the header nav; an
