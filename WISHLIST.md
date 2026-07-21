@@ -88,7 +88,29 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 4. Minor demo-parity cosmetics
+### 4. Cache-bust static assets so deploys can't serve stale CSS
+
+Impact: medium (every CSS-touching deploy is silently defaced until the
+cache expires or someone purges) - effort: small. Raised: 2026-07-21
+(i18n deploy: the live language switcher rendered completely unstyled).
+
+`base.html` links `/static/style.css` with no version marker, and
+Cloudflare caches it at the edge (`cf-cache-status: HIT`). The i18n deploy
+shipped new templates against the OLD cached stylesheet: the language
+switcher rendered as a naked `<details>` (visible marker, header reflow,
+unstyled buttons) until a manual purge. Any future deploy that adds CSS
+for new markup has the same window, and nothing in the deploy ritual
+mentions purging.
+
+Fix shape: version the asset URL so the cache key changes with the file -
+e.g. a `static_url("style.css")` Jinja global appending `?v=<hash>` (hash
+of file contents, computed once at startup), applied to `style.css` and
+any future static asset the templates reference. Cloudflare then treats
+each deploy's CSS as a fresh URL and the purge step disappears entirely.
+Until this ships, the deploy runbook should at least say "purge Cloudflare
+cache after any static/ change".
+
+### 5. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -109,7 +131,7 @@ now needs both catalogues updated (`tests/test_i18n_catalogues.py` fails
 otherwise), a small but real addition to "small" effort that didn't exist
 when this was raised.
 
-### 5. Discover sort in the content head, plus the catalogue-count note
+### 6. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -128,7 +150,7 @@ user-visible copy with an embedded count, so whoever builds this owes both
 catalogues an `ngettext`-shaped entry (singular/plural), not just an
 English string, on top of the DOM work already scoped.
 
-### 6. Editor page parity with the demo
+### 7. Editor page parity with the demo
 
 Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
 re-review).
