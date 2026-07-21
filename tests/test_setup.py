@@ -116,7 +116,7 @@ async def seed_followed_concert(
 
 
 def test_setup_requires_login(client):
-    assert client.get("/setup").status_code == 401
+    assert client.get("/setup").status_code == 303
 
 
 async def test_setup_renders_found_tiles(client):
@@ -265,11 +265,11 @@ async def prune(client, concert_id: int) -> None:
 
 
 def test_applications_requires_login(client):
-    assert client.get("/setup/applications").status_code == 401
+    assert client.get("/setup/applications").status_code == 303
 
 
 def test_ready_requires_login(client):
-    assert client.get("/setup/ready").status_code == 401
+    assert client.get("/setup/ready").status_code == 303
 
 
 async def test_applications_renders_only_qualifying_rounds(client):

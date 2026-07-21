@@ -203,6 +203,18 @@ h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 2.2rem; }
   font-size: .9rem;
 }
 .banner-warn a { color: var(--off); font-weight: 600; }
+/* Bounced off a signed-in-only page, explaining the redirect Home. Accent
+   and not --off on purpose: nothing has gone wrong, the visitor just needs
+   to sign in first. Both tokens are defined in the dark blocks too. */
+.signin-note {
+  border: 1px solid var(--accent);
+  background: var(--accent-wash);
+  border-radius: 3px;
+  padding: .6rem 1rem;
+  margin: 0 auto 1rem;
+  max-width: 60rem;
+  font-size: .9rem;
+}
 .stack { display: grid; gap: .55rem; max-width: 26rem; margin-top: .6rem; }
 .stack label { display: grid; gap: .2rem; font-size: .85rem; color: var(--dim); }
 .stack.wide { max-width: 44rem; }

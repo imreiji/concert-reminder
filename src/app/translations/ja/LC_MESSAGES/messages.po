@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-20 22:14-0300\n"
+"POT-Creation-Date: 2026-07-21 16:42-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -14,55 +14,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/app/bot/cogs/admin.py:36
-msgid "Admin access required."
-msgstr "管理者権限が必要です。"
-
-#: src/app/bot/cogs/admin.py:56
-#, python-brace-format
-msgid "**{name}** is now an editor."
-msgstr "**{name}** をエディターにしました。"
-
-#: src/app/bot/cogs/admin.py:66
-#, python-brace-format
-msgid "**{name}** is env-managed (EDITOR_WHITELIST) — edit `.env` instead."
-msgstr "**{name}** は環境変数で管理されています（EDITOR_WHITELIST）— `.env` を編集してください。"
-
-#: src/app/bot/cogs/admin.py:76
-#, python-brace-format
-msgid "**{name}** is no longer an editor."
-msgstr "**{name}** はエディターではなくなりました。"
-
-#: src/app/bot/cogs/admin.py:86 src/app/web/templates/preferences.html:435
-msgid "No editors yet."
-msgstr "エディターはまだいません。"
-
-#: src/app/bot/cogs/admin.py:88
-msgid "env"
-msgstr "env"
-
-#: src/app/bot/cogs/ping.py:25 src/app/web/templates/base.html:64
-msgid "admin"
-msgstr "管理者"
-
-#: src/app/bot/cogs/ping.py:26 src/app/web/templates/base.html:64
-msgid "editor"
-msgstr "エディター"
-
-#: src/app/bot/cogs/ping.py:27
-msgid "viewer"
-msgstr "閲覧者"
-
-#: src/app/bot/cogs/ping.py:30
-#, python-brace-format
-msgid "pong — latency {ms:.0f}ms — you are a **{role}**"
-msgstr "pong — 遅延 {ms:.0f}ms — あなたは **{role}** です"
-
-#: src/app/bot/cogs/reminders.py:44
-#, python-brace-format
-msgid "Nothing opens or closes in the next {days} days. 平和ですね。"
-msgstr "今後{days}日間、受付開始も締切もありません。平和ですね。"
-
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:32
 #: src/app/bot/views.py:175 src/app/db/service.py:824
 msgid "opens"
@@ -72,64 +23,6 @@ msgstr "受付開始"
 #: src/app/bot/views.py:177 src/app/db/service.py:825
 msgid "closes"
 msgstr "締切"
-
-#: src/app/bot/cogs/reminders.py:63
-#, python-brace-format
-msgid "Next {days} days"
-msgstr "今後{days}日間"
-
-#: src/app/bot/cogs/reminders.py:64
-msgid "Nothing upcoming."
-msgstr "予定はありません。"
-
-#: src/app/bot/cogs/reminders.py:93
-msgid "No upcoming deadlines on your reminders. `/remindme` to add one."
-msgstr "リマインダーに登録した締切はありません。`/remindme` で追加できます。"
-
-#: src/app/bot/cogs/reminders.py:104
-msgid "Your upcoming deadlines"
-msgstr "今後の締切"
-
-#: src/app/bot/cogs/reminders.py:132
-msgid "That concert doesn't exist (deleted?)."
-msgstr "そのコンサートは存在しません（削除済み？）。"
-
-#: src/app/bot/cogs/reminders.py:147
-msgid "same day"
-msgstr "当日"
-
-#: src/app/bot/cogs/reminders.py:147
-#, python-brace-format
-msgid "{n} day(s) before"
-msgstr "{n}日前"
-
-#: src/app/bot/cogs/reminders.py:149
-#, python-brace-format
-msgid "Done — I'll DM you {when} each **{anchor}** for **{title}**."
-msgstr "完了 — **{title}** の各 **{anchor}** の{when}にDMします。"
-
-#: src/app/bot/cogs/reminders.py:183
-msgid "No rules yet — `/remindme` to create one."
-msgstr "ルールはまだありません — `/remindme` で作成できます。"
-
-#: src/app/bot/cogs/reminders.py:189
-#, python-brace-format
-msgid "round #{n}"
-msgstr "第{n}回"
-
-#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:194
-#: src/app/web/templates/welcome.html:154
-msgid "before"
-msgstr "前"
-
-#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:195
-#: src/app/web/templates/welcome.html:155
-msgid "after"
-msgstr "後"
-
-#: src/app/bot/cogs/reminders.py:192
-msgid "same-day"
-msgstr "当日"
 
 #: src/app/bot/messages.py:34 src/app/db/service.py:826
 msgid "results announced"
@@ -332,7 +225,7 @@ msgid ""
 msgstr "残念でした — 入金リマインダーは不要です。次の抽選があれば受付開始をお知らせします。"
 
 #: src/app/bot/views.py:324 src/app/web/templates/_capture_actions.html:72
-#: src/app/web/templates/home.html:153 src/app/web/templates/home.html:159
+#: src/app/web/templates/home.html:159 src/app/web/templates/home.html:165
 msgid "Paid"
 msgstr "入金済み"
 
@@ -360,6 +253,113 @@ msgstr "了解 — {n}日後に再度通知します。"
 #: src/app/bot/views.py:367
 msgid "Can't snooze that far — the deadline is too close. ⏳"
 msgstr "そこまでスヌーズできません — 締切が近すぎます。⏳"
+
+#: src/app/bot/cogs/admin.py:36
+msgid "Admin access required."
+msgstr "管理者権限が必要です。"
+
+#: src/app/bot/cogs/admin.py:56
+#, python-brace-format
+msgid "**{name}** is now an editor."
+msgstr "**{name}** をエディターにしました。"
+
+#: src/app/bot/cogs/admin.py:66
+#, python-brace-format
+msgid "**{name}** is env-managed (EDITOR_WHITELIST) — edit `.env` instead."
+msgstr "**{name}** は環境変数で管理されています（EDITOR_WHITELIST）— `.env` を編集してください。"
+
+#: src/app/bot/cogs/admin.py:76
+#, python-brace-format
+msgid "**{name}** is no longer an editor."
+msgstr "**{name}** はエディターではなくなりました。"
+
+#: src/app/bot/cogs/admin.py:86 src/app/web/templates/preferences.html:438
+msgid "No editors yet."
+msgstr "エディターはまだいません。"
+
+#: src/app/bot/cogs/admin.py:88
+msgid "env"
+msgstr "env"
+
+#: src/app/bot/cogs/ping.py:25 src/app/web/templates/base.html:62
+msgid "admin"
+msgstr "管理者"
+
+#: src/app/bot/cogs/ping.py:26 src/app/web/templates/base.html:62
+msgid "editor"
+msgstr "エディター"
+
+#: src/app/bot/cogs/ping.py:27
+msgid "viewer"
+msgstr "閲覧者"
+
+#: src/app/bot/cogs/ping.py:30
+#, python-brace-format
+msgid "pong — latency {ms:.0f}ms — you are a **{role}**"
+msgstr "pong — 遅延 {ms:.0f}ms — あなたは **{role}** です"
+
+#: src/app/bot/cogs/reminders.py:44
+#, python-brace-format
+msgid "Nothing opens or closes in the next {days} days. 平和ですね。"
+msgstr "今後{days}日間、受付開始も締切もありません。平和ですね。"
+
+#: src/app/bot/cogs/reminders.py:63
+#, python-brace-format
+msgid "Next {days} days"
+msgstr "今後{days}日間"
+
+#: src/app/bot/cogs/reminders.py:64
+msgid "Nothing upcoming."
+msgstr "予定はありません。"
+
+#: src/app/bot/cogs/reminders.py:93
+msgid "No upcoming deadlines on your reminders. `/remindme` to add one."
+msgstr "リマインダーに登録した締切はありません。`/remindme` で追加できます。"
+
+#: src/app/bot/cogs/reminders.py:104
+msgid "Your upcoming deadlines"
+msgstr "今後の締切"
+
+#: src/app/bot/cogs/reminders.py:132
+msgid "That concert doesn't exist (deleted?)."
+msgstr "そのコンサートは存在しません（削除済み？）。"
+
+#: src/app/bot/cogs/reminders.py:147
+msgid "same day"
+msgstr "当日"
+
+#: src/app/bot/cogs/reminders.py:147
+#, python-brace-format
+msgid "{n} day(s) before"
+msgstr "{n}日前"
+
+#: src/app/bot/cogs/reminders.py:149
+#, python-brace-format
+msgid "Done — I'll DM you {when} each **{anchor}** for **{title}**."
+msgstr "完了 — **{title}** の各 **{anchor}** の{when}にDMします。"
+
+#: src/app/bot/cogs/reminders.py:183
+msgid "No rules yet — `/remindme` to create one."
+msgstr "ルールはまだありません — `/remindme` で作成できます。"
+
+#: src/app/bot/cogs/reminders.py:189
+#, python-brace-format
+msgid "round #{n}"
+msgstr "第{n}回"
+
+#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:194
+#: src/app/web/templates/welcome.html:154
+msgid "before"
+msgstr "前"
+
+#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:195
+#: src/app/web/templates/welcome.html:155
+msgid "after"
+msgstr "後"
+
+#: src/app/bot/cogs/reminders.py:192
+msgid "same-day"
+msgstr "当日"
 
 #: src/app/db/service.py:832
 msgid "Lottery round"
@@ -402,7 +402,7 @@ msgid "Other"
 msgstr "その他"
 
 #: src/app/db/service.py:1529 src/app/db/service.py:1595
-#: src/app/web/templates/discover.html:116
+#: src/app/web/templates/discover.html:55
 msgid "Multiple"
 msgstr "複数"
 
@@ -421,70 +421,70 @@ msgstr "{n}時間"
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/service.py:2381
+#: src/app/db/service.py:2383
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "アップグレード当選 — {day}までに入金"
 
-#: src/app/db/service.py:2382
+#: src/app/db/service.py:2384
 msgid "Upgrade won — payment due"
 msgstr "アップグレード当選 — 入金締切"
 
-#: src/app/db/service.py:2401
+#: src/app/db/service.py:2403
 msgid "Upgrade · Applied"
 msgstr "アップグレード・申込済み"
 
-#: src/app/db/service.py:2404
+#: src/app/db/service.py:2406
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "アップグレード・{n}後に締切"
 
-#: src/app/db/service.py:2407
+#: src/app/db/service.py:2409
 msgid "Upgrade · Open now"
 msgstr "アップグレード・受付中"
 
-#: src/app/db/service.py:2413 src/app/web/templates/_board.html:23
+#: src/app/db/service.py:2415 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:23
 #: src/app/web/templates/_round_rows.html:27
-#: src/app/web/templates/home.html:148
+#: src/app/web/templates/home.html:154
 msgid "Secured"
 msgstr "確保済み"
 
-#: src/app/db/service.py:2424
+#: src/app/db/service.py:2426
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "当選 — {day}までに入金"
 
-#: src/app/db/service.py:2425
+#: src/app/db/service.py:2427
 msgid "Won — payment due"
 msgstr "当選 — 入金締切"
 
-#: src/app/db/service.py:2434
+#: src/app/db/service.py:2436
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind}・申込済み"
 
-#: src/app/db/service.py:2454
+#: src/app/db/service.py:2456
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind}・{n}後に締切"
 
-#: src/app/db/service.py:2459
+#: src/app/db/service.py:2461
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind}・受付中"
 
-#: src/app/db/service.py:2465
+#: src/app/db/service.py:2467
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind}・{n}後に受付開始"
 
-#: src/app/db/service.py:2472
+#: src/app/db/service.py:2474
 msgid "All rounds closed"
 msgstr "すべての抽選が終了"
 
 #: src/app/web/routes/discover.py:55 src/app/web/templates/_board.html:20
-#: src/app/web/templates/home.html:115
+#: src/app/web/templates/home.html:121
 msgid "Open now"
 msgstr "受付中"
 
@@ -551,11 +551,11 @@ msgstr "公演"
 #: src/app/web/templates/_board.html:21
 #: src/app/web/templates/_deadline_rows.html:21
 #: src/app/web/templates/_round_rows.html:25
-#: src/app/web/templates/home.html:130
+#: src/app/web/templates/home.html:136
 msgid "Applied"
 msgstr "申込済み"
 
-#: src/app/web/templates/_board.html:22 src/app/web/templates/home.html:139
+#: src/app/web/templates/_board.html:22 src/app/web/templates/home.html:145
 msgid "Won — pay"
 msgstr "当選 — 入金"
 
@@ -660,13 +660,13 @@ msgid "Your status"
 msgstr "あなたの状況"
 
 #: src/app/web/templates/_deadline_rows.html:31
-msgid "Concert"
-msgstr "コンサート"
-
-#: src/app/web/templates/_deadline_rows.html:31
 #: src/app/web/templates/preferences.html:200
 msgid "Closes"
 msgstr "締切"
+
+#: src/app/web/templates/_deadline_rows.html:31
+msgid "Concert"
+msgstr "コンサート"
 
 #: src/app/web/templates/_deadline_rows.html:32
 msgid "What happens"
@@ -698,7 +698,7 @@ msgid "Opt out of this concert?"
 msgstr "このコンサートを見送りますか？"
 
 #: src/app/web/templates/_following_toggle.html:31
-#: src/app/web/templates/home.html:282
+#: src/app/web/templates/home.html:288
 #: src/app/web/templates/preferences.html:406
 msgid "Close"
 msgstr "閉じる"
@@ -787,10 +787,6 @@ msgid "No date announced yet"
 msgstr "公演日未定"
 
 #: src/app/web/templates/_round_rows.html:127
-msgid "Not going"
-msgstr "不参加"
-
-#: src/app/web/templates/_round_rows.html:127
 #: src/app/web/templates/concert_edit.html:107
 #: src/app/web/templates/concert_edit.html:234
 #: src/app/web/templates/concert_new.html:51
@@ -799,6 +795,10 @@ msgstr "不参加"
 #: src/app/web/templates/import_preview.html:177
 msgid "Cancelled"
 msgstr "中止"
+
+#: src/app/web/templates/_round_rows.html:127
+msgid "Not going"
+msgstr "不参加"
 
 #: src/app/web/templates/_round_rows.html:129
 #, python-format
@@ -859,7 +859,7 @@ msgstr "DM &middot; 上記すべての抽選に適用"
 
 #: src/app/web/templates/_rules.html:22
 #: src/app/web/templates/preferences.html:227
-#: src/app/web/templates/preferences.html:431
+#: src/app/web/templates/preferences.html:434
 msgid "Remove"
 msgstr "削除"
 
@@ -895,7 +895,7 @@ msgid "Edit presets"
 msgstr "プリセットを編集"
 
 #: src/app/web/templates/_tag_picker_fields.html:4
-#: src/app/web/templates/discover.html:46
+#: src/app/web/templates/discover.html:182
 msgid "Franchises"
 msgstr "フランチャイズ"
 
@@ -904,7 +904,7 @@ msgid "+ Add franchise"
 msgstr "+ フランチャイズを追加"
 
 #: src/app/web/templates/_tag_picker_fields.html:8
-#: src/app/web/templates/discover.html:46
+#: src/app/web/templates/discover.html:182
 msgid "Groups"
 msgstr "グループ"
 
@@ -913,28 +913,28 @@ msgid "+ Add group"
 msgstr "+ グループを追加"
 
 #: src/app/web/templates/_tag_picker_fields.html:12
-msgid "(auto-filled from groups — × anyone not performing)"
-msgstr "（グループから自動入力 — 出演しない人は×）"
-
-#: src/app/web/templates/_tag_picker_fields.html:12
-#: src/app/web/templates/discover.html:46
+#: src/app/web/templates/discover.html:182
 msgid "Artists"
 msgstr "アーティスト"
+
+#: src/app/web/templates/_tag_picker_fields.html:12
+msgid "(auto-filled from groups — × anyone not performing)"
+msgstr "（グループから自動入力 — 出演しない人は×）"
 
 #: src/app/web/templates/_tag_picker_fields.html:14
 msgid "+ Add artist"
 msgstr "+ アーティストを追加"
 
 #: src/app/web/templates/_tag_picker_fields.html:16
-#, python-format
-msgid "(suggested: %(venue)s)"
-msgstr "（候補：%(venue)s）"
-
-#: src/app/web/templates/_tag_picker_fields.html:16
 #: src/app/web/templates/preferences.html:160
 #: src/app/web/templates/tags.html:164 src/app/web/templates/welcome.html:74
 msgid "Venues"
 msgstr "会場"
+
+#: src/app/web/templates/_tag_picker_fields.html:16
+#, python-format
+msgid "(suggested: %(venue)s)"
+msgstr "（候補：%(venue)s）"
 
 #: src/app/web/templates/_tag_picker_fields.html:18
 msgid "+ Add venue"
@@ -946,15 +946,16 @@ msgid ""
 "concerts are tag-driven."
 msgstr "タグがありませんか？先に<a href=\"/tags\">タグページ</a>で作成してください — コンサートはタグ駆動です。"
 
-#: src/app/web/templates/base.html:35
+#: src/app/web/templates/base.html:35 src/app/web/templates/base.html:84
 msgid "Home"
 msgstr "ホーム"
 
-#: src/app/web/templates/base.html:35 src/app/web/templates/home.html:251
+#: src/app/web/templates/base.html:35 src/app/web/templates/base.html:86
+#: src/app/web/templates/home.html:257
 msgid "Discover"
 msgstr "ディスカバー"
 
-#: src/app/web/templates/base.html:36
+#: src/app/web/templates/base.html:36 src/app/web/templates/base.html:89
 #: src/app/web/templates/concert_detail.html:25
 #: src/app/web/templates/concert_edit.html:163
 #: src/app/web/templates/concert_new.html:121
@@ -963,47 +964,35 @@ msgstr "ディスカバー"
 msgid "Tags"
 msgstr "タグ"
 
-#: src/app/web/templates/base.html:96
-msgid "Me"
-msgstr "マイページ"
-
-#: src/app/web/templates/base.html:99
-msgid "Sign in"
-msgstr "サインイン"
-
-#: src/app/web/templates/base.html:104
-msgid "Add concert"
-msgstr "コンサートを追加"
-
 #: src/app/web/templates/base.html:44
 msgid "Toggle dark mode"
 msgstr "ダークモード切替"
 
-#: src/app/web/templates/base.html:51
+#: src/app/web/templates/base.html:58
 #: src/app/web/templates/preferences.html:302
 #: src/app/web/templates/welcome.html:413
 msgid "Language"
 msgstr "言語"
 
-#: src/app/web/templates/base.html:65
+#: src/app/web/templates/base.html:63
 msgid "+ Add"
 msgstr "+ 追加"
 
-#: src/app/web/templates/base.html:66 src/app/web/templates/preferences.html:11
+#: src/app/web/templates/base.html:64 src/app/web/templates/preferences.html:11
 #: src/app/web/templates/setup.html:13
 msgid "Preferences"
 msgstr "設定"
 
-#: src/app/web/templates/base.html:67
+#: src/app/web/templates/base.html:65
 msgid "Log out"
 msgstr "ログアウト"
 
-#: src/app/web/templates/base.html:69 src/app/web/templates/home.html:70
-#: src/app/web/templates/home.html:183
+#: src/app/web/templates/base.html:67 src/app/web/templates/home.html:76
+#: src/app/web/templates/home.html:189
 msgid "Sign in with Discord"
 msgstr "Discordでサインイン"
 
-#: src/app/web/templates/base.html:76
+#: src/app/web/templates/base.html:74
 msgid ""
 "Your last Discord DM couldn't be delivered — check your Discord privacy\n"
 "    settings to allow DMs from server members, or\n"
@@ -1012,28 +1001,40 @@ msgstr ""
 "前回のDiscord DMを配信できませんでした — サーバーメンバーからのDMを許可するようDiscordのプライバシー設定を確認するか、<a "
 "href=\"/preferences\">設定からテスト</a>してください。"
 
-#: src/app/web/templates/base.html:83
+#: src/app/web/templates/base.html:91
+msgid "Me"
+msgstr "マイページ"
+
+#: src/app/web/templates/base.html:94
+msgid "Sign in"
+msgstr "サインイン"
+
+#: src/app/web/templates/base.html:98
+msgid "Add concert"
+msgstr "コンサートを追加"
+
+#: src/app/web/templates/base.html:102
 msgid ""
 "Times are entered in <strong>JST</strong> and shown as JST + your local "
 "time."
 msgstr "時刻は<strong>JST</strong>で入力し、JSTとお使いのローカル時刻で表示されます。"
 
-#: src/app/web/templates/base.html:84 src/app/web/templates/privacy.html:2
+#: src/app/web/templates/base.html:103 src/app/web/templates/privacy.html:2
 #: src/app/web/templates/privacy.html:8
 msgid "Privacy policy"
 msgstr "プライバシーポリシー"
 
-#: src/app/web/templates/base.html:85 src/app/web/templates/terms.html:2
+#: src/app/web/templates/base.html:104 src/app/web/templates/terms.html:2
 #: src/app/web/templates/terms.html:8
 msgid "Terms of service"
 msgstr "利用規約"
 
-#: src/app/web/templates/base.html:132
+#: src/app/web/templates/base.html:144
 #, python-brace-format
 msgid "Delete tag {name} everywhere?"
 msgstr "タグ {name} をすべての場所から削除しますか？"
 
-#: src/app/web/templates/base.html:133
+#: src/app/web/templates/base.html:145
 #, python-brace-format
 msgid "Delete preset {name}?"
 msgstr "プリセット {name} を削除しますか？"
@@ -1552,97 +1553,101 @@ msgstr "フランチャイズ、グループ、アーティスト、会場 — �
 msgid "Create event"
 msgstr "イベントを作成"
 
-#: src/app/web/templates/discover.html:10
-msgid "Sort"
-msgstr "並び替え"
-
-#: src/app/web/templates/discover.html:26
-msgid "Round status"
-msgstr "抽選状況"
-
-#: src/app/web/templates/discover.html:144
-msgid "Filters"
-msgstr "絞り込み"
-
-#: src/app/web/templates/discover.html:36
-msgid "Filter by tag"
-msgstr "タグで絞り込み"
-
-#: src/app/web/templates/discover.html:37
-#: src/app/web/templates/preferences.html:114
-msgid "Search tags…"
-msgstr "タグを検索…"
-
-#: src/app/web/templates/discover.html:57
-msgid "Regions"
-msgstr "地域"
-
-#: src/app/web/templates/discover.html:69
-msgid "Clear filters"
-msgstr "フィルターをクリア"
-
-#: src/app/web/templates/discover.html:71
-msgid "Manage tags"
-msgstr "タグを管理"
-
-#: src/app/web/templates/discover.html:76
+#: src/app/web/templates/discover.html:15
 msgid "Concerts"
 msgstr "コンサート"
 
-#: src/app/web/templates/discover.html:78 src/app/web/templates/tags.html:10
+#: src/app/web/templates/discover.html:17 src/app/web/templates/tags.html:10
 #, python-format
 msgid "%(count)s concert"
 msgid_plural "%(count)s concerts"
 msgstr[0] "%(count)s件のコンサート"
 
-#: src/app/web/templates/discover.html:79
+#: src/app/web/templates/discover.html:18
 #, python-format
 msgid "%(n)s with a round still open"
 msgstr "%(n)s件が受付中"
 
-#: src/app/web/templates/discover.html:88
+#: src/app/web/templates/discover.html:27
 msgid "Search concerts…"
 msgstr "コンサートを検索…"
 
-#: src/app/web/templates/discover.html:89
+#: src/app/web/templates/discover.html:28
 msgid "Search"
 msgstr "検索"
 
-#: src/app/web/templates/discover.html:119
+#: src/app/web/templates/discover.html:58
 #, python-format
 msgid "%(day)s JST"
 msgstr "%(day)s JST"
 
-#: src/app/web/templates/discover.html:155
+#: src/app/web/templates/discover.html:94
 msgid "Open &amp; upcoming"
 msgstr "受付中 &amp; 今後"
 
-#: src/app/web/templates/discover.html:161
+#: src/app/web/templates/discover.html:100
 msgid "Upcoming"
 msgstr "今後"
 
-#: src/app/web/templates/discover.html:167
-#: src/app/web/templates/discover.html:169
+#: src/app/web/templates/discover.html:106
+#: src/app/web/templates/discover.html:108
 msgid "No concerts match."
 msgstr "一致するコンサートはありません。"
 
-#: src/app/web/templates/discover.html:169
+#: src/app/web/templates/discover.html:108
 msgid "Create the first one →"
 msgstr "最初の1件を作成 →"
 
-#: src/app/web/templates/discover.html:173
+#: src/app/web/templates/discover.html:112
 msgid "Coming up soon"
 msgstr "まもなく開始"
 
-#: src/app/web/templates/home.html:62
+#: src/app/web/templates/discover.html:144
+msgid "Filters"
+msgstr "絞り込み"
+
+#: src/app/web/templates/discover.html:146
+msgid "Sort"
+msgstr "並び替え"
+
+#: src/app/web/templates/discover.html:162
+msgid "Round status"
+msgstr "抽選状況"
+
+#: src/app/web/templates/discover.html:172
+msgid "Filter by tag"
+msgstr "タグで絞り込み"
+
+#: src/app/web/templates/discover.html:173
+#: src/app/web/templates/preferences.html:114
+msgid "Search tags…"
+msgstr "タグを検索…"
+
+#: src/app/web/templates/discover.html:193
+msgid "Regions"
+msgstr "地域"
+
+#: src/app/web/templates/discover.html:205
+msgid "Clear filters"
+msgstr "フィルターをクリア"
+
+#: src/app/web/templates/discover.html:207
+msgid "Manage tags"
+msgstr "タグを管理"
+
+#: src/app/web/templates/home.html:65
+msgid "Sign in to continue to the page you asked for."
+msgstr "ログインすると、お探しのページに進めます。"
+
+#: src/app/web/templates/home.html:68
 msgid "dekimasen.app · Japanese concert ticketing, tracked"
 msgstr "dekimasen.app · 日本のコンサートチケットを追跡"
 
-#: src/app/web/templates/home.html:63
+#: src/app/web/templates/home.html:69
 msgid "Never say <em>dekimasen deshita</em> again."
 msgstr "もう二度と<em>できませんでした</em>と言わないために。"
 
-#: src/app/web/templates/home.html:65
+#: src/app/web/templates/home.html:71
 msgid ""
 "Every Japanese ticket is a <b>campaign</b>, not a date — fan-club "
 "presale, lottery\n"
@@ -1654,50 +1659,50 @@ msgstr ""
 "日本のチケットは日付ではなく<b>キャンペーン</b>です — "
 "ファンクラブ先行、抽選第1回、外れたら第2回、先着販売、すでに持っている席に乗るアップグレード抽選。その全段階を追跡し、あなたが今どこにいるかを正確にお伝えします。"
 
-#: src/app/web/templates/home.html:71
+#: src/app/web/templates/home.html:77
 msgid "Free · we DM you on Discord · no card, no spam"
 msgstr "無料 · DiscordでDM · カード不要、スパムなし"
 
-#: src/app/web/templates/home.html:74
+#: src/app/web/templates/home.html:80
 msgid "concerts tracked"
 msgstr "追跡中のコンサート"
 
-#: src/app/web/templates/home.html:75
+#: src/app/web/templates/home.html:81
 msgid "with a round open now"
 msgstr "現在受付中の抽選あり"
 
-#: src/app/web/templates/home.html:76
+#: src/app/web/templates/home.html:82
 msgid "franchises"
 msgstr "フランチャイズ"
 
-#: src/app/web/templates/home.html:77
+#: src/app/web/templates/home.html:83
 msgid "performers tagged"
 msgstr "タグ付き出演者"
 
-#: src/app/web/templates/home.html:82
+#: src/app/web/templates/home.html:88
 msgid "How it works"
 msgstr "仕組み"
 
-#: src/app/web/templates/home.html:82
+#: src/app/web/templates/home.html:88
 msgid "Three steps, then it runs itself"
 msgstr "3ステップ、あとは自動で動きます"
 
-#: src/app/web/templates/home.html:86
+#: src/app/web/templates/home.html:92
 msgid "Follow your artists"
 msgstr "アーティストをフォロー"
 
-#: src/app/web/templates/home.html:87
+#: src/app/web/templates/home.html:93
 msgid ""
 "Tap a franchise, a group, or one performer. New events for anyone you "
 "follow\n"
 "          show up on your board <b>automatically</b>."
 msgstr "フランチャイズ、グループ、または1人の出演者をタップ。フォローした対象の新イベントは<b>自動的に</b>ボードに表示されます。"
 
-#: src/app/web/templates/home.html:92
+#: src/app/web/templates/home.html:98
 msgid "We track every round's deadline"
 msgstr "すべての抽選の締切を追跡"
 
-#: src/app/web/templates/home.html:93
+#: src/app/web/templates/home.html:99
 msgid ""
 "Presale opens, lottery closes, results land, payment is due. All times "
 "shown\n"
@@ -1706,69 +1711,69 @@ msgstr ""
 "先行受付開始、抽選締切、結果発表、入金締切。すべての時刻を<b>JSTとあなたの時刻</b>で常に両方表示 — "
 "深夜3時に頭で計算する必要はありません。"
 
-#: src/app/web/templates/home.html:98
+#: src/app/web/templates/home.html:104
 msgid "You get a DM, and you know where you stand"
 msgstr "DMが届き、自分の状況がわかる"
 
-#: src/app/web/templates/home.html:99
+#: src/app/web/templates/home.html:105
 msgid ""
 "A Discord reminder before each deadline, plus a campaign board that says "
 "whether the\n"
 "          ball is <b>in your court</b> or you are already covered."
 msgstr "各締切前のDiscordリマインダーに加え、<b>ボールがあなたにある</b>のか、すでに対応済みなのかを示すキャンペーンボード。"
 
-#: src/app/web/templates/home.html:107
+#: src/app/web/templates/home.html:113
 msgid "The whole campaign, one board"
 msgstr "キャンペーン全体を1つのボードで"
 
-#: src/app/web/templates/home.html:108
+#: src/app/web/templates/home.html:114
 msgid "One card moves left to right as you apply, win, and pay"
 msgstr "申し込み、当選、入金するにつれて、1枚のカードが左から右へ動きます"
 
-#: src/app/web/templates/home.html:120
+#: src/app/web/templates/home.html:126
 msgid "FC presale · 6h left"
 msgstr "FC先行 · 残り6時間"
 
-#: src/app/web/templates/home.html:126
+#: src/app/web/templates/home.html:132
 msgid "General presale · 4d"
 msgstr "一般先行 · 4日"
 
-#: src/app/web/templates/home.html:135
+#: src/app/web/templates/home.html:141
 msgid "Lottery R1 · result 21 Jul"
 msgstr "抽選R1 · 結果7月21日"
 
-#: src/app/web/templates/home.html:144
+#: src/app/web/templates/home.html:150
 msgid "Pay by 22 Jul"
 msgstr "7月22日までに入金"
 
-#: src/app/web/templates/home.html:167
+#: src/app/web/templates/home.html:173
 msgid "Discover what's on"
 msgstr "開催中の公演を探す"
 
-#: src/app/web/templates/home.html:168
+#: src/app/web/templates/home.html:174
 msgid "The catalogue is public — browse before you sign in"
 msgstr "カタログは公開されています — サインイン前に閲覧できます"
 
-#: src/app/web/templates/home.html:169
+#: src/app/web/templates/home.html:175
 msgid "Sign in to track →"
 msgstr "サインインして追跡 →"
 
-#: src/app/web/templates/home.html:179
+#: src/app/web/templates/home.html:185
 msgid "Ready when you are"
 msgstr "準備はいつでも"
 
-#: src/app/web/templates/home.html:180
+#: src/app/web/templates/home.html:186
 msgid "Follow four groups in a minute. Miss nothing after that."
 msgstr "1分で4組をフォロー。あとは何も見逃しません。"
 
-#: src/app/web/templates/home.html:181
+#: src/app/web/templates/home.html:187
 msgid ""
 "Sign in with the Discord account you already have. We only ever DM you "
 "about deadlines\n"
 "      for artists you chose to follow."
 msgstr "すでにお持ちのDiscordアカウントでサインイン。フォローを選んだアーティストの締切についてのみDMします。"
 
-#: src/app/web/templates/home.html:187
+#: src/app/web/templates/home.html:193
 msgid ""
 "<b>Signed out, this is the whole product in one screen.</b> Sign in and "
 "it becomes your\n"
@@ -1779,46 +1784,46 @@ msgstr ""
 "<b>サインアウト状態では、これが1画面に収まった製品の全体像です。</b>サインインすると、あなたのボード — あなたの抽選、結果、締切 — "
 "になります。上に表示されているのはすべて、誰かをフォローすると埋まっていく内容の一例です。"
 
-#: src/app/web/templates/home.html:208
+#: src/app/web/templates/home.html:214
 msgid "Up next"
 msgstr "次はこれ"
 
-#: src/app/web/templates/home.html:227
+#: src/app/web/templates/home.html:233
 msgid "Your campaigns"
 msgstr "あなたのキャンペーン"
 
-#: src/app/web/templates/home.html:240
+#: src/app/web/templates/home.html:246
 msgid "Coming up"
 msgstr "今後の予定"
 
-#: src/app/web/templates/home.html:241
+#: src/app/web/templates/home.html:247
 msgid "All times JST and yours, always both"
 msgstr "時刻はJSTとあなたの時刻、常に両方"
 
-#: src/app/web/templates/home.html:250
+#: src/app/web/templates/home.html:256
 msgid "Not tracking these yet"
 msgstr "これらはまだ追跡していません"
 
-#: src/app/web/templates/home.html:253
+#: src/app/web/templates/home.html:259
 #, python-format
 msgid "%(count)s concert in the catalogue,"
 msgid_plural "%(count)s concerts in the catalogue,"
 msgstr[0] "カタログには%(count)s件のコンサート、"
 
-#: src/app/web/templates/home.html:256
+#: src/app/web/templates/home.html:262
 #, python-format
 msgid "%(n)s with a round still open."
 msgstr "うち%(n)s件は抽選受付中。"
 
-#: src/app/web/templates/home.html:257
+#: src/app/web/templates/home.html:263
 msgid "Browse by franchise, group, artist or region — or search everything."
 msgstr "フランチャイズ、グループ、アーティスト、地域で閲覧 — またはすべてを検索。"
 
-#: src/app/web/templates/home.html:260
+#: src/app/web/templates/home.html:266
 msgid "Open discover →"
 msgstr "ディスカバーを開く →"
 
-#: src/app/web/templates/home.html:274
+#: src/app/web/templates/home.html:280
 msgid ""
 "<b>Home answers \"where do I stand\".</b> Everything above is yours — "
 "your rounds, your outcomes,\n"
@@ -1828,25 +1833,25 @@ msgstr ""
 "<b>ホームは「自分が今どこにいるか」に答えます。</b>上に表示されているのはすべてあなたのもの — "
 "あなたの抽選、結果、締切です。ディスカバーは出口として一番下にあり、このページの主役ではありません。"
 
-#: src/app/web/templates/home.html:281
+#: src/app/web/templates/home.html:287
 msgid "Not applying to this round"
 msgstr "この抽選には申し込まない"
 
-#: src/app/web/templates/home.html:284
+#: src/app/web/templates/home.html:290
 msgid ""
 "Done — you won't be reminded about this round. Later rounds for\n"
 "    <b id=\"pruneName\">this concert</b> will still reach you."
 msgstr "完了 — この抽選については通知されません。<b id=\"pruneName\">このコンサート</b>の今後の抽選は引き続きお届けします。"
 
-#: src/app/web/templates/home.html:288
+#: src/app/web/templates/home.html:294
 msgid "That's right"
 msgstr "そのとおり"
 
-#: src/app/web/templates/home.html:296
+#: src/app/web/templates/home.html:302
 msgid "Skip this concert entirely"
 msgstr "このコンサートを完全にスキップ"
 
-#: src/app/web/templates/home.html:298
+#: src/app/web/templates/home.html:304
 msgid "Manage this concert →"
 msgstr "このコンサートを管理 →"
 
@@ -2212,14 +2217,14 @@ msgid "New preset"
 msgstr "新規プリセット"
 
 #: src/app/web/templates/preferences.html:248
-msgid "standard lottery coverage"
-msgstr "標準的な抽選カバー"
-
-#: src/app/web/templates/preferences.html:248
 #: src/app/web/templates/tags.html:56 src/app/web/templates/tags.html:59
 #: src/app/web/templates/tags.html:60 src/app/web/templates/tags.html:209
 msgid "Name"
 msgstr "名前"
+
+#: src/app/web/templates/preferences.html:248
+msgid "standard lottery coverage"
+msgstr "標準的な抽選カバー"
 
 #: src/app/web/templates/preferences.html:250
 msgid "Create preset"
@@ -2426,29 +2431,29 @@ msgstr ""
 "コンサート、抽選、タグを作成・編集できるDiscordユーザー。環境変数で管理されるエディター（<code>EDITOR_WHITELIST</code>）はここでは削除できません"
 " — <code>.env</code>を編集してください。"
 
-#: src/app/web/templates/preferences.html:428
+#: src/app/web/templates/preferences.html:431
 msgid "from env"
 msgstr "環境変数から"
 
-#: src/app/web/templates/preferences.html:430
+#: src/app/web/templates/preferences.html:433
 msgid "cannot be removed here"
 msgstr "ここでは削除できません"
 
-#: src/app/web/templates/preferences.html:431
+#: src/app/web/templates/preferences.html:434
 msgid "Remove editor"
 msgstr "エディターを削除"
 
-#: src/app/web/templates/preferences.html:438
+#: src/app/web/templates/preferences.html:441
 msgid ""
 "Whitelisted editors live in the server env and cannot be removed from "
 "here."
 msgstr "ホワイトリストのエディターはサーバーの環境変数にあり、ここからは削除できません。"
 
-#: src/app/web/templates/preferences.html:440
+#: src/app/web/templates/preferences.html:443
 msgid "Discord user ID"
 msgstr "DiscordユーザーID"
 
-#: src/app/web/templates/preferences.html:441
+#: src/app/web/templates/preferences.html:444
 msgid "Add an editor"
 msgstr "エディターを追加"
 
