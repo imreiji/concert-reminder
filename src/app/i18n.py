@@ -20,6 +20,10 @@ from babel.support import NullTranslations, Translations
 
 SUPPORTED = ("en", "zh", "ja")
 
+# Shared by every route that sets the "lang" cookie (the /language switcher
+# and the Discord-login callback) so the two writers can't drift apart.
+LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+
 _TRANSLATIONS_DIR = Path(__file__).parent / "translations"
 _active_locale: ContextVar[str] = ContextVar("active_locale", default="en")
 _null = NullTranslations()

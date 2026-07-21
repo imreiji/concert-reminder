@@ -120,10 +120,10 @@ async def _send_notification(bot, note, ctx) -> DeliveryOutcome:
     state-aware buttons; otherwise the plain-text fallback body. Pure
     Discord I/O -- no session access, safe to run concurrently."""
     try:
-        # Same per-Task locale discipline as deliver(). NoticeContext carries
-        # the recipient's language; LegCancelledContext does not, so its embed
-        # prose falls back to en (see the report's known-English note), and the
-        # plain-text fallback body (ctx is None) was composed at enqueue time.
+        # Same per-Task locale discipline as deliver(). Both NoticeContext and
+        # LegCancelledContext carry the recipient's language; getattr's "en"
+        # default only matters when ctx is None, in which case the plain-text
+        # fallback body was already composed at enqueue time and locale is moot.
         i18n.set_locale(getattr(ctx, "user_language", "en"))
         user = bot.get_user(note.user_id) or await bot.fetch_user(note.user_id)
         if ctx is not None and note.kind == "leg_cancelled":

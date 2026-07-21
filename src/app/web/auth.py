@@ -33,9 +33,8 @@ from app.config import settings
 from app.db.models import User, WebSession
 from app.db.service import ensure_user
 from app.db.session import get_session
+from app.i18n import LANG_COOKIE_MAX_AGE
 from app.i18n import SUPPORTED as SUPPORTED_LANGUAGES
-
-LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth")

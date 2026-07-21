@@ -130,11 +130,8 @@ def create_app() -> FastAPI:
     terms_routes.templates = templates
     app.include_router(terms_routes.router)
 
-    LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
-
     @app.post("/language")
     async def set_language(
-        request: Request,
         user: auth.SessionUser | None = Depends(auth.current_user),
         session: AsyncSession = Depends(get_session),
         language: str = Form(...),
@@ -157,7 +154,7 @@ def create_app() -> FastAPI:
             await session.commit()
         response = RedirectResponse(next_url, status_code=303)
         response.set_cookie(
-            "lang", language, max_age=LANG_COOKIE_MAX_AGE, samesite="lax", path="/",
+            "lang", language, max_age=i18n.LANG_COOKIE_MAX_AGE, samesite="lax", path="/",
         )
         return response
 

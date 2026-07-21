@@ -50,7 +50,7 @@ from app.db.models import (
 )
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
-from app.domain.timezones import utc_to_jst
+from app.domain.timezones import fmt_day_month
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
 from app.domain.upgrades import is_upgrade_eligible
 from app.i18n import N_, get_locale, gettext_in, loc_field
@@ -2287,10 +2287,12 @@ def _humanize_until(then: datetime, now: datetime) -> str:
 
 
 def _day_month(when: datetime) -> str:
-    """"22 Jul", in JST like every other date this app shows. strftime("%-d")
-    is not portable to Windows, which the owner develops on."""
-    jst = utc_to_jst(when)
-    return f"{jst.day} {jst.strftime('%b')}"
+    """"22 Jul" / "7月22日", in JST like every other date this app shows,
+    localized to the current request's locale (discover_statuses renders
+    this into prose that is itself translated -- a ja viewer should never
+    see an English day-month fragment). Delegates to the pure
+    domain.timezones.fmt_day_month, which owns the actual formatting."""
+    return fmt_day_month(when, get_locale())
 
 
 async def discover_statuses(
