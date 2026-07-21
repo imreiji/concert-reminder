@@ -197,16 +197,20 @@ async def test_date_globals_follow_active_locale(client):
 
 
 def test_switcher_present_signed_out(client):
+    """The header carries the cycle chip: current label shown, NEXT language
+    posted (en -> zh -> ja -> en)."""
     r = client.get("/")
     assert 'action="/language"' in r.text
-    assert "日本語" in r.text and "中文" in r.text
+    assert "🌐 EN" in r.text
+    assert 'name="language" value="zh"' in r.text
 
 
-def test_switcher_marks_current(client):
+def test_switcher_cycles_from_current(client):
     client.cookies.set("lang", "ja")
     r = client.get("/")
-    # the current language's submit carries aria-current
-    assert 'aria-current="true"' in r.text
+    # chip shows the current language; the hidden field posts the next one
+    assert "🌐 日本語" in r.text
+    assert 'name="language" value="en"' in r.text
 
 
 def test_preferences_language_row(client):
