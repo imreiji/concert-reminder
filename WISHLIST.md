@@ -6,10 +6,12 @@ in CLAUDE.md: fully re-evaluated and re-ranked every time a feature ships.
 Each entry notes impact and effort so re-ranking has a basis. Shipped and
 rejected ideas move to the bottom sections instead of being deleted.
 
-Full mobile parity (bottom tab bar, FAB, swipeable board, filter sheet,
-bottom-sheet dialogs) shipped 2026-07-21 as a CSS/template retrofit, not a
-Proposed entry here, so there is nothing to move to Shipped -- but the
-revision pass below reconsiders every entry it touches.
+Two 2026-07-21 builds landed without having been Proposed entries here --
+the mobile parity retrofit (bottom tab bar, FAB, swipeable board, filter
+sheet, bottom-sheet dialogs) and the signed-out redirect with its
+return-to-page login -- so neither moved up from Proposed. Both are logged
+in Shipped anyway, and the revision passes below reconsider every entry
+they touch.
 
 ## Proposed (highest impact first)
 
@@ -131,6 +133,17 @@ incident that raised it (every phone visitor would see broken layout, not
 one control). Manually purge Cloudflare after this deploys until the fix
 ships.
 
+Reinforced again, and now nearly re-ranked up, by the 2026-07-21 signed-out
+redirect: it adds a `.signin-note` rule for a NEW element that renders on
+the landing page. Against a stale stylesheet the note appears unstyled at
+the top of Home -- for exactly the audience this whole feature exists to
+serve (signed-out visitors arriving from a link), and on the page that is
+the app's entire first impression. That is three consecutive builds whose
+deploy needed a manual Cloudflare purge to look right. Held at #4 only
+because #1-#3 are unchanged and this remains a one-file fix nobody has
+scheduled; the case for just doing it is now stronger than the case for
+its rank.
+
 ### 5. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
@@ -172,6 +185,13 @@ now needs both catalogues updated (`tests/test_i18n_catalogues.py` fails
 otherwise), a small but real addition to "small" effort that didn't exist
 when this was raised.
 
+Grew one item on 2026-07-21 (signed-out redirect): the `.signin-note` that
+explains a bounce to the landing page is a new component with no counterpart
+in `dekimasen-onboarding-demo.html`, whose signed-out Home has no such
+state. Per the CLAUDE.md rule that a deliberate move should update the demo
+so it stays the reference, the demo owes this frame -- fold it into this
+entry's single polish pass rather than treating it as its own task.
+
 ### 7. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
@@ -198,7 +218,27 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 8. Editor page parity with the demo
+### 8. Name the destination on the sign-in bounce
+
+Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
+
+The note on Home when a visitor is bounced off a signed-in-only page reads
+"Sign in to continue to the page you asked for." -- deliberately vague,
+because the alternative considered at build time was interpolating the
+`next` path into the sentence, and echoing an arbitrary attacker-suppliable
+URL back into the page is a phishing-adjacent surface not worth opening for
+a cosmetic gain. Naming it properly needs a path-to-label map (`/preferences`
+-> "Preferences", `/setup` -> "First-time setup", a concert path -> that
+concert's title), which is a real little feature: a lookup that degrades
+gracefully for paths it doesn't know, plus both catalogues for every label.
+Worth doing only if the vague sentence actually reads as confusing in use --
+it is the kind of thing to leave until someone says "continue to *what*".
+
+Ranked below the demo-parity batch (#6) and the Discover head (#7) because
+those close several visible gaps each; this refines one sentence that is
+already correct.
+
+### 9. Editor page parity with the demo
 
 Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -226,6 +266,75 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Mobile parity retrofit (2026-07-21)
+
+Shipped as: a phone layer over the existing desktop design, built from a
+dedicated spec, plan and two concept demos (`dekimasen-mobile-demo.html`
+static frames, `dekimasen-mobile-live.html` interactions) across PRs #61
+and #63 plus follow-up overflow fixes. Structurally the whole retrofit
+lives in ONE `@media (max-width: 700px)` section at the end of
+`style.css`, so desktop pixels are untouched by construction -- nothing
+outside that block may change, with one documented exception
+(`.fsheet` switches at 760px to track `.layout`'s own collapse point,
+since splitting them would open a 701-760px band where the layout has
+stacked but the sheet still thinks it is in two columns). Narrow phones
+(<=380px) get a NESTED query inside it rather than a second top-level
+one. Three patterns recur: a fixed bottom `.tabbar` replacing the header
+nav (same `aria-current`/`nav_page` as desktop), an editor-only `.fab`
+replacing the header "+ Add", and every `<dialog>` becoming a bottom
+sheet (`max-height: 78dvh`, `14px 14px 0 0` corners -- the one deliberate
+deviation from the 3px-radius guard). Home's board became a swipeable
+carousel and its deadline rows became cards; Discover puts content first
+with filters in a sheet that still degrades without JS. The tail of the
+work was overflow hardening -- the language chip on one row under 370px
+(which is why the narrow query drops the wordmark), the preferences
+section rail, and a long Discord ID widening the editors row.
+
+Not a Proposed entry here, so nothing moved up from Proposed; logged
+retroactively on 2026-07-21 because the single-`@media`-section rule and
+the 760px exception are exactly the kind of constraint a later change
+breaks by accident. Reinforced entries #2 (row budget now costs scroll)
+and #4 (a large CSS-touching deploy) in its revision pass.
+
+### Signed-out redirect home, with return-to-page after login (2026-07-21)
+
+Shipped as: a replacement for the bare `401 Login required` every
+`require_user` route served an anonymous visitor -- a dead end in a browser,
+since there is no auth challenge this app can answer, and the exact response
+someone got for following a shared or bookmarked link to any concert page.
+`require_user` now raises `LoginRequired` (deliberately NOT an
+`HTTPException`, so the decision lives in one handler in `web/app.py` rather
+than FastAPI's JSON error path), and the handler 303s to `/`, which signed
+out is already a real landing page with the sign-in CTA. 303 and not 307 so
+a signed-out POST is not replayed against `/`; htmx requests instead get
+`HX-Redirect` + 204, because an XHR would follow a 303 and swap the whole
+landing page into whatever fragment target it carried. Being signed in but
+unauthorized stays 403 -- only anonymous is a wrong turn.
+
+The redirect carries `?next=<path>` so login returns the visitor where they
+were headed, which also fixed the silent-bounce problem the first pass
+introduced (Home shows a "Sign in to continue" note when it sees one, so the
+click no longer just looks broken). `next` rides to Discord in our own
+signed session cookie alongside `oauth_state` -- never as an OAuth query
+param, so it cannot return attacker-controlled -- and passes
+`domain/urls.py:safe_next` on both legs; that guard folds backslashes,
+since browsers send `/\evil.com` as scheme-relative `//evil.com` and a naive
+`startswith("/")` waves an open redirect straight through. Three carve-outs
+are load-bearing: only GETs get a `next` (a POST body is gone, so replaying
+its URL renders a form that looks like it submitted and didn't), htmx reads
+`HX-Current-URL` path-only (the fragment endpoint is not somewhere you can
+stand, and a forged origin steers nothing), and a brand-new account still
+goes to `/welcome` regardless. Templates link sign-in through a
+`login_url(request)` global rather than a bare `/auth/login`, with a test
+asserting no bare href survives -- one missed CTA would silently drop the
+destination the others keep. 26 new tests (15 of them hostile inputs to
+`safe_next`); the ~15 existing `== 401` assertions became `== 303`.
+
+Not a Proposed entry here -- raised directly by the owner on 2026-07-21 and
+built the same day -- but logged in full because the invariant it adds
+(signed-out redirects, unauthorized 403s, and the three `next` carve-outs)
+is the kind that gets flattened by a later well-meaning refactor.
 
 ### Multi-language support (English / Mandarin / Japanese) (2026-07-20)
 

@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 897 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 1003 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -37,7 +37,11 @@ import preview rebuilt in the day/round/leg vocabulary with real
 multi-leg round binding, and retroactive-apply/privacy/terms reframed in
 the design system -- and multi-language support (English/Mandarin/Japanese)
 end to end: gettext catalogues, per-user + per-visitor locale resolution,
-localized dates, and parallel-column UGC translation -- have shipped since).
+localized dates, and parallel-column UGC translation -- and a phone
+retrofit (bottom tab bar, editor FAB, bottom-sheet dialogs, Discover's
+filter sheet) confined to one `@media` section, and a signed-out
+redirect replacing the old bare 401, returning the visitor to the page
+they asked for once they log in -- have shipped since).
 
 ## Commands
 
@@ -69,7 +73,11 @@ localized dates, and parallel-column UGC translation -- have shipped since).
   string, returns a draft — no httpx call itself), `.ics`/YAML export
   formatting in `ics_export.py`/`yaml_export.py`, and editor-supplied URL
   scheme validation in `urls.py` (`clean_url` normalizes an http(s) URL or
-  raises `UnsafeURLError`; see invariant 7).
+  raises `UnsafeURLError`; see invariant 7). `urls.py` also holds
+  `safe_next`, the open-redirect guard on the post-login return path --
+  same family, opposite direction (a same-origin PATH or None, never an
+  absolute URL), and it returns None rather than raising, since a bad
+  `next` is a stale link, not an editor mistake worth a 422.
 - `src/app/db/` — models, session, and `service.py` (all business logic that
   touches the DB; discord-free so it's testable).
 - `src/app/bot/` — thin shell: cogs, embed builders (`messages.py`),
