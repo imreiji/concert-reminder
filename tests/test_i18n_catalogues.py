@@ -46,6 +46,12 @@ def _translated_msgids(locale: str) -> set[str]:
     for m in catalog:
         if not m.id:
             continue
+        # A fuzzy entry is dropped at compile (i18n.py compiles with
+        # write_mo(use_fuzzy=False)), so the page renders English. Treat it as
+        # untranslated so `pybabel update` auto-marking a changed msgid fuzzy
+        # fails the guard instead of silently shipping English.
+        if m.fuzzy:
+            continue
         msgid = m.id if isinstance(m.id, str) else m.id[0]
         string = m.string
         if isinstance(string, (list, tuple)):
