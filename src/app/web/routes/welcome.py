@@ -192,7 +192,7 @@ async def create_wizard_preset(
     db_user = await ensure_user(session, user.id, user.username)
     rules: list[tuple[int, int, str, Anchor]] = []
     for off, dir_, anc in zip(offset, direction, anchor, strict=False):
-        days_str, _, hours_str = off.partition(":")
+        days_str, _sep, hours_str = off.partition(":")
         try:
             rules.append((int(days_str or 0), int(hours_str or 0), dir_, Anchor(anc)))
         except ValueError as e:

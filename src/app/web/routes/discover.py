@@ -180,7 +180,13 @@ async def discover(
     by_kind = grouped_tags(tags)
     selected_tags = set(tag)
     query = q.strip().lower()
-    facet = status if status in {key for key, _ in STATUS_FACETS} else ""
+    # `_label`, not `_`: binding `_` here would shadow the module-level
+    # gettext `_` for the whole function on CPython 3.12.0-3.12.4, whose
+    # PEP 709 inlined comprehensions leak the iteration variable into the
+    # enclosing scope's symbol table (fixed upstream in later 3.12.x) --
+    # the `_(label)` calls below then raise UnboundLocalError. Ubuntu
+    # 24.04's system Python (CI and the production server) is 3.12.3.
+    facet = status if status in {key for key, _label in STATUS_FACETS} else ""
 
     # Initial visibility, computed server-side so there's no flash of wrongly
     # shown tiles before JS runs on first load -- and so tag, search and facet
