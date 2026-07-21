@@ -6,6 +6,11 @@ in CLAUDE.md: fully re-evaluated and re-ranked every time a feature ships.
 Each entry notes impact and effort so re-ranking has a basis. Shipped and
 rejected ideas move to the bottom sections instead of being deleted.
 
+Full mobile parity (bottom tab bar, FAB, swipeable board, filter sheet,
+bottom-sheet dialogs) shipped 2026-07-21 as a CSS/template retrofit, not a
+Proposed entry here, so there is nothing to move to Shipped -- but the
+revision pass below reconsiders every entry it touches.
+
 ## Proposed (highest impact first)
 
 
@@ -64,6 +69,14 @@ with an upgrade the row budget is tighter still - though only for a viewer
 eligible to enter it, since `my_deadline_rows` drops the upgrade's rows for
 everyone else.
 
+Reinforced, not re-ranked, by the 2026-07-21 mobile-view build: the phone
+retrofit turned each "Coming up" row into a bordered card (padding, border,
+margin-bottom) rather than a compact table row, so the same four-rows-per-
+round budget now costs several screens of scroll on a phone instead of a
+few pixels of table height on desktop. Still deferred for the same reason
+as before (collapsing changes the htmx swap shape), but the phone case is
+now the more visible motivator of the two.
+
 ### 3. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
@@ -110,7 +123,35 @@ each deploy's CSS as a fresh URL and the purge step disappears entirely.
 Until this ships, the deploy runbook should at least say "purge Cloudflare
 cache after any static/ change".
 
-### 5. Minor demo-parity cosmetics
+Reinforced, not re-ranked, by the 2026-07-21 mobile-view build: the phone
+retrofit appended a large `@media (max-width: 700px)` section to
+`style.css` in one commit -- exactly the shape of CSS-touching deploy this
+entry warns about, and a wider blast radius than the language-switcher
+incident that raised it (every phone visitor would see broken layout, not
+one control). Manually purge Cloudflare after this deploys until the fix
+ships.
+
+### 5. PWA / installability
+
+Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
+build).
+
+The phone retrofit (tab bar, FAB, bottom sheets) makes the site read like
+an app on a phone browser, but there is still no way to install it as one:
+no manifest, no service worker, no "Add to Home Screen" affordance. A
+manifest.json (name, icons, `display: standalone`, theme color matching
+the token layer) plus a minimal service worker would let a phone user add
+a real home-screen icon and launch into a browser-chrome-free window --
+the natural next step after this build, not a prerequisite for it. Impact
+stays low-medium rather than higher until it's paired with something a
+plain browser tab can't do (push notifications would need this shipped
+first, since web push requires a service worker; DM-notification parity
+for phone users who don't want the Discord app open is the case that would
+raise this). Effort is medium: the manifest and icons are small, but a
+correct service worker (cache strategy, update flow, avoiding the classic
+"stale offline shell" trap) is not.
+
+### 6. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -131,7 +172,7 @@ now needs both catalogues updated (`tests/test_i18n_catalogues.py` fails
 otherwise), a small but real addition to "small" effort that didn't exist
 when this was raised.
 
-### 6. Discover sort in the content head, plus the catalogue-count note
+### 7. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -150,7 +191,14 @@ user-visible copy with an embedded count, so whoever builds this owes both
 catalogues an `ngettext`-shaped entry (singular/plural), not just an
 English string, on top of the DOM work already scoped.
 
-### 7. Editor page parity with the demo
+Re-reviewed 2026-07-21 (mobile-view build): the sidebar controls now also
+render inside `.fsheet`, the phone filter sheet (`order: -1` above 760px,
+a "Filters" summary/button below it, tracking `.layout`'s own 760px
+collapse point) -- any future move of sort into the content head must
+carry the fsheet's relocated copy along with it, not just the desktop
+sidebar's, or the two surfaces drift.
+
+### 8. Editor page parity with the demo
 
 Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
 re-review).

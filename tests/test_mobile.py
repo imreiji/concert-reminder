@@ -91,6 +91,12 @@ def test_fab_editor_only(client):
     assert 'class="fab"' in client.get("/").text
 
 
+def test_tags_page_marks_current(client):
+    login(client)
+    r = client.get("/tags")
+    assert 'aria-current="page"' in r.text
+
+
 def test_discover_filter_sheet_contains_controls(client):
     r = client.get("/discover")
     assert 'class="fsheet"' in r.text

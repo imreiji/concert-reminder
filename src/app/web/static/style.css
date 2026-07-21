@@ -1341,7 +1341,6 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   .deadline-rows .row:last-child { margin-bottom: 0; }
   .deadline-rows .row > :nth-child(2) { grid-row: 1; text-align: right; }
   .row .title-c { grid-column: 1 / -1; }
-  .row .act-c { grid-column: 1 / -1; }
   .row .acts {
     grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap;
     gap: .5rem; margin-top: .4rem;
