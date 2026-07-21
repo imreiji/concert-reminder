@@ -42,23 +42,18 @@
     <nav class="auth">
       <button type="button" class="theme-toggle" data-theme-toggle
               aria-label="{{ _('Toggle dark mode') }}" title="{{ _('Toggle dark mode') }}">◐</button>
-      {# Language switcher: a native <details> menu, one <form> per language so
-         it works with JS disabled. `next` is prefilled with the current path
-         so POST /language (Task 3) returns here after setting the cookie
-         (and the users.language column, for a signed-in user). Language
-         NAMES stay in their own language -- never translated. #}
-      <details class="langmenu">
-        <summary class="langtoggle" title="{{ _('Language') }}">🌐 <span>{{ {"en": "EN", "zh": "中文", "ja": "日本語"}[current_locale()] }}</span></summary>
-        <div class="langlist">
-          {% for code, label in [("en", "English"), ("zh", "中文"), ("ja", "日本語")] %}
-          <form method="post" action="/language">
-            <input type="hidden" name="language" value="{{ code }}">
-            <input type="hidden" name="next" value="{{ request.url.path }}">
-            <button type="submit" {% if current_locale() == code %}aria-current="true"{% endif %}>{{ label }}</button>
-          </form>
-          {% endfor %}
-        </div>
-      </details>
+      {# Language switcher: the concept demo's cycle chip. One bordered chip
+         showing the CURRENT language; clicking posts the NEXT language in
+         the EN -> 中文 -> 日本語 cycle to POST /language (cookie always,
+         users.language too when signed in) and returns here via `next`.
+         A plain form, so it works with JS disabled. Language NAMES stay in
+         their own language -- never translated. #}
+      {% set lang_next, lang_label = {"en": ("zh", "EN"), "zh": ("ja", "中文"), "ja": ("en", "日本語")}[current_locale()] %}
+      <form method="post" action="/language" class="langform">
+        <input type="hidden" name="language" value="{{ lang_next }}">
+        <input type="hidden" name="next" value="{{ request.url.path }}">
+        <button type="submit" class="langtoggle" title="{{ _('Language') }}">🌐 {{ lang_label }}</button>
+      </form>
       {% if user %}
         <img class="avatar" src="{{ user.avatar_url }}" alt="">
         <span>{{ user.username }}{% if user.is_admin %} <em class="badge">{{ _("admin") }}</em>{% elif user.is_editor %} <em class="badge">{{ _("editor") }}</em>{% endif %}</span>
@@ -104,13 +99,6 @@
     // shared: clicking the backdrop closes any dialog (Esc works natively)
     document.addEventListener("click", (e) => {
       if (e.target instanceof HTMLDialogElement && e.target.open) e.target.close();
-    });
-    // shared: clicking outside an open <details class="langmenu"> closes it
-    // (Esc and a second summary click already work natively).
-    document.addEventListener("click", (e) => {
-      document.querySelectorAll("details.langmenu[open]").forEach((d) => {
-        if (!d.contains(e.target)) d.removeAttribute("open");
-      });
     });
     // shared: live-filter chips by their data-name within a container
     function filterChips(input, scope) {

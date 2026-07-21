@@ -373,12 +373,15 @@ deleting them.
 ## UI conventions
 
 - Sentence case everywhere ("Add group", not "add group").
-- The 🌐 language switcher lives in the header's `.langmenu` (`base.html`),
-  a native `<details>` menu with one plain `<form method="post"
-  action="/language">` per language so it works with JS disabled; it renders
-  on every page, signed in or out. Language NAMES in the menu (EN/中文/日本語)
-  are never translated -- a visitor picking their language needs to
-  recognize it before they can read anything else.
+- The 🌐 language switcher is the concept demo's CYCLE CHIP (`base.html`'s
+  `.langform`/`.langtoggle`): one bordered chip showing the current
+  language; clicking posts the NEXT language in the EN → 中文 → 日本語 cycle
+  as a plain `<form method="post" action="/language">`, so it works with JS
+  disabled and renders on every page, signed in or out. A dropdown menu
+  shipped first and was replaced at the owner's request -- don't bring it
+  back. Language NAMES (EN/中文/日本語) are never translated -- a visitor
+  picking their language needs to recognize it before they can read
+  anything else.
 - **Theming**: the full design-token layer (`--paper`, `--accent`, the
   `*-wash` set, `--raise`, `--chip`, `--shadow`, ...) lives in `style.css`'s
   `:root`. Dark mode is defined BOTH ways -- `@media (prefers-color-scheme:
