@@ -152,7 +152,12 @@ async def import_preview(
     except (IngestError, HTTPException) as e:
         detail = e.detail if isinstance(e, HTTPException) else str(e)
         return templates.TemplateResponse(
-            request, "import_form.html", {"user": user, "error": detail}
+            request,
+            "import_form.html",
+            # lang_next_url: this render is served from POST-only /preview,
+            # so the header language chip must send its 303 somewhere
+            # GET-able -- the import form we're re-rendering anyway.
+            {"user": user, "error": detail, "lang_next_url": "/concerts/import"},
         )
 
     picker = await tag_picker_context(session)
@@ -161,6 +166,9 @@ async def import_preview(
         "import_preview.html",
         {
             "user": user, "parsed": parsed, "source_url": url,
+            # Served from POST-only /preview: aim the language chip's `next`
+            # at the GET-able import form (its own path would 405).
+            "lang_next_url": "/concerts/import",
             "fmt": _fmt, "kinds": list(RoundKind),
             # Concert-level Kind selector in the .ebar (the round-kind `kinds`
             # above is a different list -- per-round, not per-concert).

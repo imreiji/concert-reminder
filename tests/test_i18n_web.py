@@ -106,6 +106,16 @@ def test_post_language_rejects_unknown(client):
     assert r.status_code == 422
 
 
+def test_post_language_falls_back_when_next_is_post_only(client):
+    # /concerts/import/preview exists only as POST -- a 303 there makes the
+    # browser GET it and 405. Anything not GET-routable falls back to /.
+    r = client.post(
+        "/language", data={"language": "ja", "next": "/concerts/import/preview"}
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"
+
+
 def test_post_language_guards_next(client):
     r = client.post("/language", data={"language": "ja", "next": "https://evil.example"})
     assert r.status_code == 303

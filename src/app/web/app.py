@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.routing import Match
 
 from app import i18n
 from app.config import settings
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
 
     @app.post("/language")
     async def set_language(
+        request: Request,
         user: auth.SessionUser | None = Depends(auth.current_user),
         session: AsyncSession = Depends(get_session),
         language: str = Form(...),
@@ -143,9 +145,16 @@ def create_app() -> FastAPI:
         if language not in i18n.SUPPORTED:
             raise HTTPException(status_code=422, detail=f"unsupported language: {language}")
         # Local-path redirect guard: same shape as the auth callback's, but
-        # sitewide, since the switcher lives on every page.
+        # sitewide, since the switcher lives on every page. Beyond locality,
+        # `next` must be GET-routable: a page rendered from a POST-only route
+        # (the import preview) would otherwise 303 the browser into a 405.
+        # Such pages should also set `lang_next_url` for a better landing.
         if not next_url.startswith("/") or next_url.startswith("//"):
             next_url = "/"
+        else:
+            probe = {"type": "http", "method": "GET", "path": next_url}
+            if all(r.matches(probe)[0] is not Match.FULL for r in app.routes):
+                next_url = "/"
         if user:
             from app.db.service import ensure_user
 
