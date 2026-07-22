@@ -43,6 +43,15 @@ def require_variants(
     all; reaching here means JS is off, or the request never came from the
     form -- and then this string is the entire error UX. 422 rather than 409:
     a gap is a structural violation, not a uniqueness conflict.
+
+    A new caller here needs its rendering template's create form or dialog
+    to carry `data-variant-guard` (see _variant_guard.html) -- data-variant-
+    guard is opt-in per form and nothing enforces the pairing, so a form left
+    unmarked silently falls back to this raw 422 instead of the inline error
+    the guard exists to give the editor. Pin the new template in
+    tests/test_variant_enforcement.py's create-boundary census
+    (CREATE_BOUNDARIES /
+    test_every_require_variants_caller_has_a_guarded_create_surface).
     """
     gaps = missing_variants(base, en, zh, mandatory=mandatory)
     if not gaps:

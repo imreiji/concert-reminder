@@ -109,7 +109,16 @@
         ];
         FIELDS.forEach(([name, value]) => {
           const input = opener.querySelector('[name="' + name + '"]');
-          if (input) input.value = value;
+          // Programmatic .value assignment does NOT fire an "input" event, so
+          // the variant guard's delegated listener (_variant_guard.html)
+          // would never see the fill and a warning painted before the dialog
+          // opened would survive under three now-full boxes. bubbles: true
+          // matters -- that listener is delegated on document, not bound
+          // per-input.
+          if (input) {
+            input.value = value;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+          }
         });
         dlg.close();
         return;

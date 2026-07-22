@@ -198,13 +198,21 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
     writes a hidden `kind` input. Fields the chosen kind does not use are
     hidden AND disabled by setTagKind so a kind switch can never submit a stale
     value. The dupe payload rides in via `| tojson` (never | safe, never
-    pre-serialised) and the warning is advisory only -- Create stays enabled. -#}
+    pre-serialised) and the warning is advisory only -- Create stays enabled.
+
+    data-variant-guard: this is a CREATE form -- create_tag calls
+    require_variants("Tag name", ..., mandatory=True), so the name trio is
+    mandatory here (unlike the edit dialog above, which is marked but never
+    blocked). Before this trio existed the form only offered `name`, so
+    every real submission 422'd on the missing English/中文 -- the create
+    boundary rejected it and the browser had no way to know until the raw
+    JSON landed. -#}
 <dialog id="new-tag-dialog" class="tagdlg">
   <div class="dh">
     <h3>{{ _("New tag") }}</h3>
     <button type="button" class="x" onclick="document.getElementById('new-tag-dialog').close()">×</button>
   </div>
-  <form method="post" action="/tags" class="db">
+  <form method="post" action="/tags" class="db" data-variant-scope data-variant-guard>
     <input type="hidden" name="kind" id="new-tag-kind" value="group">
     <div class="fld">
       <span>{{ _("Kind") }}</span>
@@ -219,7 +227,15 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
 
     <label class="fld"><span>{{ _("Name") }}</span>
       <input name="name" id="new-tag-name" required maxlength="100"
-             placeholder="{{ _('As it is written on the official site') }}"></label>
+             placeholder="{{ _('As it is written on the official site') }}"
+             data-variant-group="tag_name" data-variant-slot="ja" data-variant-mandatory
+             data-variant-label="{{ _('Name') }}"></label>
+    <label class="fld"><span>{{ _("Name") }} · English</span>
+      <input name="name_en" maxlength="100"
+             data-variant-group="tag_name" data-variant-slot="en"></label>
+    <label class="fld"><span>{{ _("Name") }} · 中文</span>
+      <input name="name_zh" maxlength="100"
+             data-variant-group="tag_name" data-variant-slot="zh"></label>
 
     <div class="dupe" id="new-tag-dupe">
       <span>⚠</span>

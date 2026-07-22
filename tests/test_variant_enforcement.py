@@ -365,6 +365,23 @@ def _editor_form_tag(body: str) -> str | None:
     return None
 
 
+def _new_tag_form_tag(body: str) -> str | None:
+    """The opening <form> tag of the create-tag dialog on /tags.
+
+    /tags also renders one edit <form id="tag-edit-{id}"> per tag, on the
+    same page -- the census test below must not conflate the two, so this
+    slices to the create dialog first (data-name-scoped by
+    `id="new-tag-dialog"`, the same trick `_preview` uses for the import
+    dialog boundary) and only then looks for its <form>.
+    """
+    dialog = body.split('id="new-tag-dialog"')
+    if len(dialog) < 2:
+        return None
+    section = dialog[1].split("</dialog>")[0]
+    m = re.search(r"<form[^>]*>", section)
+    return m.group(0) if m else None
+
+
 def _preview(client) -> str:
     html = (FIXTURES_DIR / "ramen_graduation_concert.html").read_text(encoding="utf-8")
 
@@ -464,6 +481,22 @@ def test_the_venue_dialog_checks_variants_before_its_fetch(client):
     assert guard_at < fetch_at, "the guard must run before the request goes out"
 
 
+def test_the_phrase_dialog_dispatches_input_after_filling_a_variant(client):
+    """The phrase dialog fills round_label/_en/_zh by direct .value
+    assignment, which fires no "input" event on its own -- so the variant
+    guard's delegated listener (bound on document, see _variant_guard.html)
+    would never see the fill and a warning painted before the dialog opened
+    would survive under three now-full boxes. The fix dispatches a bubbling
+    "input" event right after each assignment."""
+    body = client.get("/concerts/new").text
+    script = body.split('id="round-phrase-picker"')[1]
+    assign_at = script.find("input.value = value")
+    dispatch_at = script.find('new Event("input", { bubbles: true })')
+    assert assign_at != -1, "the dialog never fills the input"
+    assert dispatch_at != -1, "the dialog never dispatches an input event"
+    assert assign_at < dispatch_at, "the event must fire after the value is set"
+
+
 def test_the_venue_dialog_is_reachable_from_every_page_that_includes_it(client):
     """It is included by all three editor pages; the guard has to be too."""
     created = client.post("/concerts", data=_minimal_concert("dlg", full_title=True))
@@ -482,6 +515,19 @@ def test_the_import_preview_marks_and_guards_its_trios(client):
     for group in ("title", "day_label", "round_label"):
         assert sorted(set(_slots(body, group))) == ["en", "ja", "zh"], group
     assert "data-variant-guard" in _editor_form_tag(body)
+
+
+def test_the_new_tag_dialog_marks_and_guards_its_trio(client):
+    """create_tag calls require_variants("Tag name", ..., mandatory=True),
+    so the browser-side dialog has to offer name_en/name_zh AND block on a
+    gap -- without both, every real submission would 422 on the missing
+    languages with no way for the editor to know why."""
+    body = client.get("/tags").text
+    form_tag = _new_tag_form_tag(body)
+    assert form_tag is not None, "no create-tag <form> found"
+    assert sorted(set(_slots(body, "tag_name"))) == ["en", "ja", "zh"]
+    assert "data-variant-mandatory" in body.split('id="new-tag-dialog"')[1].split("</dialog>")[0]
+    assert "data-variant-guard" in form_tag, form_tag
 
 
 # The other half of the asymmetry pinned above: the EDIT pages are marked
@@ -508,10 +554,13 @@ def test_the_tag_edit_dialog_is_marked_but_never_blocked(client):
     assert created.status_code in (200, 303), created.text
     body = client.get("/tags").text
     assert sorted(set(_slots(body, "tag_name"))) == ["en", "ja", "zh"]
-    # The literal also appears in the guard script's own source, so look at
-    # the <form> tags themselves rather than the whole page.
-    forms = re.findall(r"<form[^>]*>", body)
-    guarded = [f for f in forms if "data-variant-guard" in f]
+    # The literal also appears in the guard script's own source, AND in the
+    # (correctly guarded) create-tag dialog's <form> on the same page -- so
+    # look at the EDIT form specifically (id="tag-edit-{id}"), not every
+    # <form> tag on the page indiscriminately.
+    edit_forms = re.findall(r'<form id="tag-edit-\d+"[^>]*>', body)
+    assert edit_forms, "no tag-edit form found"
+    guarded = [f for f in edit_forms if "data-variant-guard" in f]
     assert not guarded, f"editing a legacy tag must stay possible: {guarded}"
 
 
@@ -523,3 +572,87 @@ def test_the_guard_marks_its_duplication_of_the_domain_rule(client):
     assert "missing_variants" in body
     src = Path(app_translations.__file__).read_text(encoding="utf-8")
     assert "_variant_guard.html" in src
+
+
+# --- census: every require_variants caller has a guarded create surface ---
+#
+# data-variant-guard is opt-in per <form>, and nothing enforces the pairing
+# between "this route 422s on a gap" and "this route's template blocks the
+# submit before that". A route added to CREATE_BOUNDARIES below without a
+# matching guarded surface gets exactly that silent fallback: markers or no
+# markers, the editor sees a raw JSON 422 the first time they leave a
+# language blank.
+#
+# This is a MECHANICAL route -> template -> create-surface census, not a
+# page-wide substring search: _variant_guard.html's own script source
+# contains the literal string "data-variant-guard" (see its docstring and
+# its submit-hook selector), so "does data-variant-guard appear anywhere on
+# this page" would pass vacuously for every page that merely includes the
+# guard script -- which is every editor page. And /tags renders the create
+# dialog's guarded <form> alongside one unguarded edit <form> PER TAG on the
+# very same page, so a check has to isolate the create surface specifically
+# or it either false-fails on the (correctly unguarded) edit forms or passes
+# by accident depending on which form the regex happens to find first. Each
+# locator below pulls the ONE element for its route: the create <form> tag
+# itself for the three form-submit routes, or (quick_create_venue's shape,
+# since it POSTs by fetch and a <form> submit event never fires for it) the
+# ordering of its explicit checkVariantGroups() call ahead of the fetch.
+CREATE_BOUNDARIES = ("create_concert", "import_commit", "create_tag", "quick_create_venue")
+
+
+def test_every_require_variants_caller_has_a_guarded_create_surface(client):
+    covered = []
+
+    # create_concert -> POST /concerts -> concert_new.html, form#new-concert.
+    # This page also carries the venue dialog (used below for
+    # quick_create_venue), which is NOT rendered by tags.html -- fetched once
+    # here and reused, rather than re-fetched per route, so a stray reuse of
+    # this variable for a different route cannot silently paper over a
+    # missing dialog on some OTHER page.
+    concert_new_body = client.get("/concerts/new").text
+    form_tag = _editor_form_tag(concert_new_body)
+    assert form_tag is not None, "create_concert: no editor <form> found"
+    assert "data-variant-guard" in form_tag, f"create_concert: {form_tag}"
+    covered.append("create_concert")
+
+    # import_commit -> POST /concerts/import/commit -> import_preview.html,
+    # form#new-concert
+    preview_body = _preview(client)
+    form_tag = _editor_form_tag(preview_body)
+    assert form_tag is not None, "import_commit: no editor <form> found"
+    assert "data-variant-guard" in form_tag, f"import_commit: {form_tag}"
+    covered.append("import_commit")
+
+    # create_tag -> POST /tags -> tags.html, the #new-tag-dialog <form>
+    # specifically (NOT the per-tag edit dialogs sharing the same page)
+    tags_body = client.get("/tags").text
+    form_tag = _new_tag_form_tag(tags_body)
+    assert form_tag is not None, "create_tag: no create-tag <form> found"
+    assert "data-variant-guard" in form_tag, f"create_tag: {form_tag}"
+    covered.append("create_tag")
+
+    # quick_create_venue -> POST /tags/venue/quick -> _venue_create_dialog.html,
+    # #venue-create -- included by concert_new.html/concert_edit.html/
+    # import_preview.html, but NOT by tags.html, so this reads
+    # concert_new_body, not tags_body. Never a <form> submit -- it POSTs by
+    # fetch, so its guard is an explicit checkVariantGroups() call BEFORE
+    # that fetch fires (mirrors
+    # test_the_venue_dialog_checks_variants_before_its_fetch's ordering
+    # check; duplicated here so this census is self-contained per route
+    # rather than trusting an unrelated test to keep covering it).
+    assert 'id="venue-create"' in concert_new_body, (
+        "quick_create_venue: no #venue-create dialog found"
+    )
+    script = concert_new_body.split('id="venue-create"')[1]
+    guard_at = script.find("checkVariantGroups")
+    fetch_at = script.find('fetch("/tags/venue/quick"')
+    assert guard_at != -1, "quick_create_venue: the dialog never calls the guard"
+    assert fetch_at != -1, "quick_create_venue: the dialog never posts"
+    assert guard_at < fetch_at, "quick_create_venue: the guard must run before the request"
+    covered.append("quick_create_venue")
+
+    # The census itself must stay honest: every route this file exercises
+    # above has to be one of the ones actually enforced server-side, and
+    # every server-side caller has to appear above -- either drift silently
+    # narrows the coverage this test claims to have.
+    assert sorted(covered) == sorted(CREATE_BOUNDARIES)
