@@ -22,7 +22,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -3392,3 +3392,42 @@ async def leg_cancelled_context(
         title=loc_field(concert, "title", locale),
         user_language=locale,
     )
+
+
+# ── Venue rollup (legs -> concert) ───────────────────────────────────────
+
+
+async def sync_concert_venue_tags(session: AsyncSession, concert_id: int) -> None:
+    """Rewrite a concert's VENUE tag rows as the union of its legs' venues.
+
+    The leg is the single place a venue is entered, so the concert level is
+    derived and can never contradict it. Only VENUE rows are touched --
+    franchise/group/artist attachment is deliberate and materialized (invariant
+    3), and must survive untouched.
+
+    Discover's region filter reads concert_tags client-side off each tile's
+    data-tags, so keeping this rollup current is exactly what lets that filter
+    stay unchanged while venues live on legs.
+    """
+    desired = set((await session.execute(
+        select(ConcertDay.venue_tag_id).where(
+            ConcertDay.concert_id == concert_id,
+            ConcertDay.venue_tag_id.is_not(None),
+        )
+    )).scalars())
+
+    current = set((await session.execute(
+        select(ConcertTag.tag_id)
+        .join(Tag, Tag.id == ConcertTag.tag_id)
+        .where(ConcertTag.concert_id == concert_id, Tag.kind == TagKind.VENUE)
+    )).scalars())
+
+    for tag_id in current - desired:
+        await session.execute(
+            delete(ConcertTag).where(
+                ConcertTag.concert_id == concert_id, ConcertTag.tag_id == tag_id
+            )
+        )
+    for tag_id in desired - current:
+        session.add(ConcertTag(concert_id=concert_id, tag_id=tag_id))
+    await session.flush()
