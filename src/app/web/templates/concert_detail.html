@@ -26,7 +26,8 @@
       {% for t in cf + cv %}<span class="chip kind-{{ t.kind.value }}">{{ loc(t, "name") }}</span>{% endfor %}
     </p>
     {% endif %}
-    {% if concert.notes %}<p class="dim">{{ loc(concert, "notes") }}</p>{% endif %}
+    {% set notes_text = loc(concert, "notes") %}
+    {% if notes_text %}<p class="dim">{{ notes_text }}</p>{% endif %}
     {#- Each link names its destination. "source" said nothing; the source is
         ramen.events, which PR #39 made actually populate on import. -#}
     {% if concert.eventernote_url or concert.official_url or concert.source_url %}

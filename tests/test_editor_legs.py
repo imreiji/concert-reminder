@@ -144,6 +144,8 @@ def resubmit(client, event_id, *, days, rounds, title="Tour", extra=None):
             "day_id": [str(d[0]) for d in days],
             "day_key": [str(d[4]) if len(d) > 4 else str(d[0]) for d in days],
             "day_label": [d[1] for d in days],
+            "day_label_en": [""] * len(days),
+            "day_label_zh": [""] * len(days),
             "day_city": [d[2] for d in days],
             "day_starts_at": [
                 f"2099-08-{1 + i:02d}T18:00" for i in range(len(days))
@@ -155,6 +157,7 @@ def resubmit(client, event_id, *, days, rounds, title="Tour", extra=None):
             "round_id": [str(r[0]) for r in rounds],
             "round_label": [r[1] for r in rounds],
             "round_label_en": [""] * len(rounds),
+            "round_label_zh": [""] * len(rounds),
             "round_kind": ["lottery_round"] * len(rounds),
             "round_opens_at": [""] * len(rounds),
             "round_closes_at": ["2099-06-25T23:59"] * len(rounds),
@@ -922,6 +925,8 @@ def resubmit_as_the_template_does(client, event_id, *, days, rounds, title="Tour
         "day_id": [str(d[0]) for d in days],
         "day_key": [str(d[0]) for d in days],
         "day_label": [d[1] for d in days],
+        "day_label_en": [""] * len(days),
+        "day_label_zh": [""] * len(days),
         "day_venue_tag_id": [str(d[2] or "") for d in days],
         "day_starts_at": [f"2099-08-{1 + i:02d}T18:00" for i in range(len(days))],
         "day_doors_at": [""] * len(days),
@@ -929,6 +934,7 @@ def resubmit_as_the_template_does(client, event_id, *, days, rounds, title="Tour
         "round_id": [str(r[0]) for r in rounds],
         "round_label": [r[1] for r in rounds],
         "round_label_en": [""] * len(rounds),
+        "round_label_zh": [""] * len(rounds),
         "round_kind": ["lottery_round"] * len(rounds),
         "round_opens_at": [""] * len(rounds),
         "round_closes_at": ["2099-06-25T23:59"] * len(rounds),
@@ -1031,3 +1037,36 @@ async def test_day_venue_tag_fk_sets_null_on_tag_delete(db):
 
         assert day.id is not None, "deleting the tag must not delete the leg"
         assert day.venue_tag_id is None
+
+
+async def test_editor_round_trips_label_variants(client, db):
+    """The create form carries all three language variants of a leg label and
+    of a round label, and each lands in its own column."""
+    await make_editor(db)
+    login(client)
+
+    resp = client.post("/concerts", data={
+        "title": "T", "event_id": "lv1",
+        "day_label": ["2日目"], "day_label_en": ["Day 2"], "day_label_zh": ["第二天"],
+        "day_starts_at": ["2026-08-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "round_label": ["1次先行"], "round_label_en": ["1st advance"],
+        "round_label_zh": ["第一轮先行"],
+        "round_kind": ["lottery_round"], "round_closes_at": ["2026-07-01T18:00"],
+        "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
+        "round_url": [""], "round_notes": [""], "round_legs": [""],
+        "round_qualifiers": [""],
+    })
+    assert resp.status_code in (200, 303)
+
+    async with db() as session:
+        concert = (await session.execute(
+            select(Concert).where(Concert.event_id == "lv1")
+        )).scalar_one()
+        await session.refresh(concert, ["days", "rounds"])
+        day, round_ = concert.days[0], concert.rounds[0]
+
+        assert (day.label, day.label_en, day.label_zh) == ("2日目", "Day 2", "第二天")
+        assert (round_.label, round_.label_en, round_.label_zh) == (
+            "1次先行", "1st advance", "第一轮先行",
+        )

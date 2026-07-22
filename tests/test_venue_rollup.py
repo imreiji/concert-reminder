@@ -170,7 +170,9 @@ async def test_edit_form_rolls_up_changed_leg_venue(editor_client):
     resp = editor_client.post("/concerts/rollup1/edit", data={
         "title": "T", "event_id": "rollup1",
         "day_id": [str(day.id)], "day_key": [""],
-        "day_label": ["Day 1"], "day_starts_at": ["2026-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2026-08-01T18:00"],
         "day_venue_tag_id": [str(new.id)],
         "day_doors_at": [""], "day_cancelled": ["false"],
     })
@@ -188,6 +190,8 @@ async def test_create_form_rolls_up_leg_venues(editor_client):
     r = editor_client.post("/concerts", data={
         "title": "Tour", "event_id": "tour",
         "day_label": ["Day 1", "Day 2"],
+        "day_label_en": ["", ""],
+        "day_label_zh": ["", ""],
         "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
         "day_doors_at": ["", ""], "day_venue_tag_id": ["1", "2"],
     })
@@ -210,7 +214,8 @@ async def test_import_commit_rolls_up_leg_venues(editor_client):
     editor_client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})   # 1
     r = editor_client.post("/concerts/import/commit", data={
         "title": "Imported Show",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_starts_at": ["2099-08-01T18:00"],
         "day_venue_tag_id": ["1"],
     })
     assert r.status_code == 303
@@ -254,7 +259,9 @@ async def test_create_rejects_a_non_venue_leg_venue_tag(editor_client):
     editor_client.post("/tags", data={"name": "Sumire", "kind": "artist"})  # 1
     r = editor_client.post("/concerts", data={
         "title": "Bad", "event_id": "bad",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     assert r.status_code == 422
@@ -263,7 +270,9 @@ async def test_create_rejects_a_non_venue_leg_venue_tag(editor_client):
 async def test_create_rejects_a_nonexistent_leg_venue_tag(editor_client):
     r = editor_client.post("/concerts", data={
         "title": "Bad", "event_id": "bad2",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["999"],
     })
     assert r.status_code == 422
@@ -273,7 +282,9 @@ async def test_edit_rejects_a_non_venue_leg_venue_tag(editor_client):
     editor_client.post("/tags", data={"name": "Sumire", "kind": "artist"})  # 1
     editor_client.post("/concerts", data={
         "title": "T", "event_id": "edbad",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""],
     })
     async with editor_client.db() as session:
@@ -281,6 +292,8 @@ async def test_edit_rejects_a_non_venue_leg_venue_tag(editor_client):
     r = editor_client.post("/concerts/edbad/edit", data={
         "title": "T", "event_id": "edbad",
         "day_id": [str(day.id)], "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""],
         "day_starts_at": ["2099-08-01T18:00"], "day_doors_at": [""],
         "day_venue_tag_id": ["1"],
     })
@@ -291,7 +304,8 @@ async def test_import_commit_rejects_a_non_venue_leg_venue_tag(editor_client):
     editor_client.post("/tags", data={"name": "Sumire", "kind": "artist"})  # 1
     r = editor_client.post("/concerts/import/commit", data={
         "title": "Bad Import",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_starts_at": ["2099-08-01T18:00"],
         "day_venue_tag_id": ["1"],
     })
     assert r.status_code == 422
@@ -351,7 +365,9 @@ async def test_home_peek_card_shows_the_leg_venue_tag(editor_client):
     editor_client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})  # 1
     r = editor_client.post("/concerts", data={
         "title": "Peek Show", "event_id": "peek-show",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     assert r.status_code == 303
@@ -364,12 +380,15 @@ async def test_board_card_shows_the_leg_venue_tag(editor_client):
     editor_client.post("/tags", data={"name": "Zepp Namba", "kind": "venue"})  # 1
     r = editor_client.post("/concerts", data={
         "title": "Board Show", "event_id": "board-show",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["1"],
         "round_label": ["R1"], "round_kind": ["lottery_round"],
         "round_opens_at": ["2020-01-01T00:00"], "round_closes_at": ["2099-06-25T23:59"],
         "round_results_at": [""], "round_payment_at": [""],
-        "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        "round_label_en": [""],
+        "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
     })
     assert r.status_code == 303
 
@@ -397,7 +416,9 @@ async def test_board_card_shows_the_leg_venue_tag(editor_client):
 def _create_free_text_leg(client, event_id="freetext"):
     return client.post("/concerts", data={
         "title": "Free Text", "event_id": event_id,
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""],
         "day_city": ["Osaka"], "day_venue": ["Namba Hatch"],
         "day_venue_address": ["1-3-1 Minatomachi"],
@@ -432,7 +453,9 @@ async def test_yaml_export_route_uses_the_leg_venue_tag(editor_client):
         await session.commit()
     r = editor_client.post("/concerts", data={
         "title": "Export Show", "event_id": "export-show",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     assert r.status_code == 303
@@ -466,7 +489,9 @@ async def test_a_venue_subscriber_is_not_notified_twice(editor_client):
 
     r = editor_client.post("/concerts", data={
         "title": "Dup", "event_id": "dup",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     assert r.status_code == 303
@@ -479,7 +504,9 @@ async def test_a_venue_subscriber_is_not_notified_twice(editor_client):
     r = editor_client.post("/concerts/dup/edit", data={
         "title": "Dup", "event_id": "dup",
         "day_id": [str(day.id)], "day_key": [""],
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_cancelled": ["false"],
         "day_venue_tag_id": ["1"],
     })
@@ -507,7 +534,9 @@ async def test_a_venue_subscriber_is_not_notified_twice(editor_client):
 async def test_create_rejects_a_zero_leg_venue_tag(editor_client):
     r = editor_client.post("/concerts", data={
         "title": "Zero", "event_id": "zero",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["0"],
     })
     assert r.status_code == 422
@@ -516,7 +545,9 @@ async def test_create_rejects_a_zero_leg_venue_tag(editor_client):
 async def test_create_rejects_a_negative_leg_venue_tag(editor_client):
     r = editor_client.post("/concerts", data={
         "title": "Neg", "event_id": "neg",
-        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["-1"],
     })
     assert r.status_code == 422

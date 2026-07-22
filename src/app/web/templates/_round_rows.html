@@ -49,7 +49,7 @@
 {% set lead = row.primary_anchor.value if row.primary_anchor else none %}
 <div class="rnd2{% if past %} past{% endif %}">
   <span>{{ status_pill(row.outcome) }}</span>
-  <span class="nm">{{ r.label }}<em>{% if r.label_en %}{{ r.label_en }} · {% endif %}{{ round_kind_label(r.kind) }}</em></span>
+  <span class="nm">{{ loc(r, "label") }}<em>{{ round_kind_label(r.kind) }}</em></span>
   <span class="dts">
     {# The leading moment as the demo's two lines: a bold weekday+day+month
        (with its anchor label) over a smaller JST/local time line. #}
@@ -97,7 +97,7 @@
   <div class="standing">
     <div>
       <div class="l">{{ _("Next for you") }}</div>
-      <div class="w">{{ next_row.round_.label }}{% if next_row.primary_anchor %} — {{ deadline_label(next_row.primary_anchor) }}{% endif %}</div>
+      <div class="w">{{ loc(next_row.round_, "label") }}{% if next_row.primary_anchor %} — {{ deadline_label(next_row.primary_anchor) }}{% endif %}</div>
       <div class="s num">{% if next_row.primary_at_utc %}{% set sl = dual_lines(next_row.primary_at_utc, tz) %}{{ sl[0] }} {{ sl[1] }}{% else %}{{ _("No date announced yet") }}{% endif %}</div>
     </div>
     {{ status_pill(next_row.outcome) }}
@@ -124,7 +124,7 @@
       {# A leg whose date has passed is struck through on the heading only --
          putting `past` on the section would strike its rounds too, and a
          finished show's rounds still record what you did. #}
-      <h3 class="leg-heading{% if day.starts_at_utc < now %} past{% endif %}">{{ day.label }}{% if day.cancelled %} <span class="badge cancelled">{{ _("Cancelled") }}</span>{% elif skipped %} <span class="badge cancelled">{{ _("Not going") }}</span>{% endif %}</h3>
+      <h3 class="leg-heading{% if day.starts_at_utc < now %} past{% endif %}">{{ loc(day, "label") }}{% if day.cancelled %} <span class="badge cancelled">{{ _("Cancelled") }}</span>{% elif skipped %} <span class="badge cancelled">{{ _("Not going") }}</span>{% endif %}</h3>
       <span class="lv">
         {{ dual(day.starts_at_utc, tz) }}{% if day.doors_at_utc %} · {% trans when=dual(day.doors_at_utc, tz) %}doors {{ when }}{% endtrans %}{% endif %}
         {#- The venue, its address and its city come off the leg's VENUE tag

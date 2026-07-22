@@ -75,12 +75,14 @@ def test_concert_to_yaml_full_shape():
 
     assert len(data["performances"]) == 2
     assert data["performances"][0] == {
-        "label": "Day 1", "city": "Kanagawa", "venue": "K Arena Yokohama",
+        "label": "Day 1", "label_en": None, "label_zh": None,
+        "city": "Kanagawa", "venue": "K Arena Yokohama",
         "venue_address": "Yokohama, Japan", "doors_jst": "2026-08-01 17:00",
         "starts_at_jst": "2026-08-01 18:00",
     }
     assert data["performances"][1] == {
-        "label": "Day 2", "city": None, "venue": None, "venue_address": None,
+        "label": "Day 2", "label_en": None, "label_zh": None,
+        "city": None, "venue": None, "venue_address": None,
         "doors_jst": None, "starts_at_jst": "2026-08-02 18:00",
     }
 
@@ -121,6 +123,39 @@ def test_concert_to_yaml_handles_missing_optional_fields():
     assert round_["url"] is None
     assert round_["notes"] is None
     assert data["notes"] is None
+
+
+def test_yaml_export_carries_every_label_variant():
+    """YamlDay gains label_en/label_zh; YamlRound gains label_zh beside its
+    existing label_en. An export is data, not a viewer-facing render, so
+    every variant is emitted -- no locale resolution happens here."""
+    text = concert_to_yaml(
+        title="T", kind="tour", franchises=[], groups=[], artists=[], venues=[],
+        days=[
+            YamlDay(
+                label="2日目", label_en="Day 2", label_zh="第二天",
+                starts_at_utc=dt(8, 1),
+            ),
+        ],
+        rounds=[
+            YamlRound(
+                label="抽選#1", label_en="Lottery #1", label_zh="抽签#1",
+                kind="lottery_round",
+            ),
+        ],
+        notes=None,
+    )
+    data = yaml.safe_load(text)
+
+    (day,) = data["performances"]
+    assert day["label"] == "2日目"
+    assert day["label_en"] == "Day 2"
+    assert day["label_zh"] == "第二天"
+
+    (round_,) = data["rounds"]
+    assert round_["label"] == "抽選#1"
+    assert round_["label_en"] == "Lottery #1"
+    assert round_["label_zh"] == "抽签#1"
 
 
 def test_concert_to_yaml_is_deterministic():

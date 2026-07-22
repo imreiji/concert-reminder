@@ -5,7 +5,9 @@ fallback logic without a DB round-trip. The column and search tests use the
 same in-memory async-SQLite fixture shape as tests/test_service.py.
 """
 
-from datetime import UTC, datetime
+import re
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -18,7 +20,7 @@ from app import i18n
 from app.db.models import Base, Concert, ConcertDay, Round, Tag, User
 from app.db.service import ensure_user, snapshot_concert
 from app.db.session import get_session
-from app.domain.types import RoundKind, TagKind
+from app.domain.types import Anchor, RoundKind, TagKind
 from app.i18n import loc_field
 from app.web import auth
 from app.web.app import create_app
@@ -123,6 +125,32 @@ def test_loc_field_resolves_tag_city():
     # zh is unfilled and there is no cross-locale chaining -- it must NOT
     # fall through to the English variant.
     assert loc_field(tag, "city", "zh") == "横浜"
+
+
+def test_label_variant_columns_are_nullable():
+    for model, name, length in (
+        (ConcertDay, "label_en", 100), (ConcertDay, "label_zh", 100),
+        (Round, "label_zh", 200),
+    ):
+        col = model.__table__.columns.get(name)
+        assert col is not None, f"{model.__name__}.{name} missing"
+        assert col.nullable, f"{model.__name__}.{name} must be nullable"
+        assert col.type.length == length
+
+
+def test_loc_field_resolves_round_label():
+    r = Round(label="1次先行抽選", label_en="1st-round lottery", label_zh="第一轮先行")
+    assert loc_field(r, "label", "en") == "1st-round lottery"
+    assert loc_field(r, "label", "zh") == "第一轮先行"
+    assert loc_field(r, "label", "ja") == "1次先行抽選"
+
+
+def test_loc_field_resolves_day_label_without_chaining():
+    d = ConcertDay(label="2日目 夜公演", label_en="Day 2 evening")
+    assert loc_field(d, "label", "en") == "Day 2 evening"
+    # zh is unfilled; it must fall through to the ORIGINAL, never to the
+    # English variant.
+    assert loc_field(d, "label", "zh") == "2日目 夜公演"
 
 
 # ── search haystack picks up the variants ────────────────────────────────
@@ -280,6 +308,67 @@ async def test_empty_variant_saves_as_none(client, db):
         assert c.title_zh is None
 
 
+# ── editor markup: the _en and _zh boxes are told apart on sight ─────────
+
+# A leg/round row carries three label boxes: the Japanese original and the two
+# locale variants. The variants shipped with the SAME placeholder as each
+# other, so an editor saw two identical empty boxes and nothing said which was
+# which -- and Chinese landing in label_en is then served verbatim to ENGLISH
+# viewers, because loc_field trusts the column. Each variant now sits inside a
+# <label> carrying a permanent language marker (a placeholder would vanish the
+# moment the box has content, which is exactly when the mistake matters).
+
+_VFLD = re.compile(
+    r'<label class="vfld"><span class="vfld-tag">(?P<mark>[^<]+)</span>\s*'
+    r'<input name="(?P<name>\w+_label_(?:en|zh))"(?P<rest>[^>]*)>',
+)
+
+
+def _variant_fields(body: str):
+    return [(m["mark"], m["name"], m["rest"]) for m in _VFLD.finditer(body)]
+
+
+@pytest.mark.asyncio
+async def test_editor_marks_the_en_and_zh_label_boxes_distinctly(client, db):
+    await _seed_editor_concert(db, event_id="mark", title="ラブライブ")
+    login(client)
+    for url, expected in (("/concerts/new", 6), ("/concerts/mark/edit", 8)):
+        body = client.get(url).text
+        fields = _variant_fields(body)
+        # every variant input on the page is wrapped, <template>s included
+        assert body.count("_label_en") + body.count("_label_zh") == expected
+        assert len(fields) == expected, url
+
+        for mark, name, _rest in fields:
+            # Language NAMES are never translated: English and 中文 render in
+            # their own script whatever locale the page is in.
+            assert mark == ("English" if name.endswith("_en") else "中文"), (url, name)
+
+        # and the two boxes of a pair differ by more than their name attribute
+        for i in range(0, len(fields), 2):
+            en, zh = fields[i], fields[i + 1]
+            assert en[1].removesuffix("_en") == zh[1].removesuffix("_zh")
+            assert en[0] != zh[0]
+            assert (en[0], en[2]) != (zh[0], zh[2])
+
+
+def test_no_row_template_leaves_a_variant_label_box_unmarked():
+    """import_preview.html has no cheap render fixture -- guard it at source.
+
+    Missing one template leaves that one page ambiguous, which is the whole
+    bug; this catches a new row template that forgets the wrapper too.
+    """
+    tpl = Path(__file__).resolve().parents[1] / "src" / "app" / "web" / "templates"
+    seen = 0
+    for path in sorted(tpl.glob("*.html")):
+        text = path.read_text(encoding="utf-8")
+        for m in re.finditer(r'<input name="(\w+_label_(?:en|zh))"', text):
+            seen += 1
+            marker = text[:m.start()].rstrip()
+            assert marker.endswith("</span>"), f"{path.name}: {m[1]} has no language marker"
+    assert seen == 22  # 6 new + 8 edit + 8 import preview
+
+
 # ── display: a zh viewer sees the variant, an en viewer the original ──────
 
 
@@ -298,3 +387,225 @@ async def test_discover_localizes_title_for_zh_viewer(client, db):
     body_en = client.get("/discover").text
     assert "<strong>ラブライブ</strong>" in body_en  # en viewer -> original
     assert "<strong>爱与生活</strong>" not in body_en
+
+
+# ── Service-layer label copies (Task 5) ──────────────────────────────────
+#
+# These sites copy Round.label / ConcertDay.label / Tag.name OUT of the ORM
+# object into a frozen dataclass, so a loc() in a template can never reach
+# them -- the variant must be resolved where the dataclass is built. Three
+# locale sources are in play and mixing them up is silent:
+#   1. get_locale()      -- web-request paths (the request ContextVar)
+#   2. user.language     -- per-recipient paths built once for many recipients
+#   3. an explicit param -- user_calendar_events only (None = canonical .ics)
+# Each test below pins WHICH source the site must read, not merely that some
+# localization happened: the per-recipient tests set an ambient locale that
+# DIFFERS from the recipient's language, so a get_locale() slip fails loudly.
+
+
+@pytest.fixture()
+def _en_locale():
+    i18n.set_locale("en")
+    yield
+    i18n.set_locale("en")
+
+
+async def _label_fixture(session, *, event_id="lab", user_language="en"):
+    """One concert with a localized round, leg, group tag and venue tag,
+    tracked by one user whose DM language is `user_language`."""
+    from app.db.models import ConcertTag, TagSubscription
+    from app.db.service import ensure_user
+
+    user = await ensure_user(session, 7001, "recipient")
+    user.language = user_language
+    tag = Tag(name="蓮ノ空", name_en="Hasunosora", name_zh="莲之空", kind=TagKind.GROUP)
+    venue_tag = Tag(
+        name="東京ドーム", name_en="Tokyo Dome", name_zh="东京巨蛋", kind=TagKind.VENUE
+    )
+    session.add_all([tag, venue_tag])
+    concert = Concert(title="6th", event_id=event_id)
+    session.add(concert)
+    await session.flush()
+    session.add_all([
+        ConcertTag(concert_id=concert.id, tag_id=tag.id),
+        ConcertTag(concert_id=concert.id, tag_id=venue_tag.id),
+        TagSubscription(user_id=user.discord_id, tag_id=tag.id),
+    ])
+    day = ConcertDay(
+        concert_id=concert.id, label="Day 1", label_en="Day one", label_zh="第一天",
+        starts_at_utc=datetime(2030, 9, 1, 9, tzinfo=UTC),
+    )
+    round_ = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND,
+        label="1次先行抽選", label_en="1st-round lottery", label_zh="第一轮抽选",
+        opens_at_utc=datetime(2030, 7, 1, 9, tzinfo=UTC),
+        closes_at_utc=datetime(2030, 8, 1, 9, tzinfo=UTC),
+    )
+    session.add_all([day, round_])
+    await session.flush()
+    await session.commit()
+    return user, concert, round_, day
+
+
+# ── pattern 1: get_locale() (web-request paths) ──────────────────────────
+
+
+async def test_upcoming_deadlines_localize_round_and_leg_labels(session, _en_locale):
+    """Sites B and C. UpcomingDeadline.label is copied out of both ConcertDay
+    and Round; Home's "Coming up" renders it with no template hook of its own,
+    so the resolution has to happen at the copy site."""
+    from app.db.service import upcoming_deadlines
+
+    await _label_fixture(session)
+    now = datetime(2030, 6, 1, tzinfo=UTC)
+
+    i18n.set_locale("zh")
+    labels = {row.label for row in await upcoming_deadlines(session, now=now)}
+    assert labels == {"第一轮抽选", "第一天"}
+
+    i18n.set_locale("en")
+    labels_en = {row.label for row in await upcoming_deadlines(session, now=now)}
+    assert labels_en == {"1st-round lottery", "Day one"}
+
+
+async def test_board_card_rungs_localize_the_round_label(session, _en_locale):
+    """Site D: Rung.label."""
+    from app.db.service import board_cards
+
+    user, *_rest = await _label_fixture(session)
+    now = datetime(2030, 7, 15, tzinfo=UTC)
+
+    i18n.set_locale("zh")
+    columns, _total = await board_cards(session, user.discord_id, now=now)
+    rungs = [r for cards in columns.values() for c in cards for r in c.rungs]
+    assert [r.label for r in rungs] == ["第一轮抽选"]
+
+
+async def test_setup_tiles_localize_the_next_round_label(session, _en_locale):
+    """Site E: SetupTile.next_round_label, via _next_round_anchor."""
+    from app.db.service import setup_prune_tiles
+
+    user, *_rest = await _label_fixture(session)
+    now = datetime(2030, 6, 1, tzinfo=UTC)
+
+    i18n.set_locale("zh")
+    tiles = await setup_prune_tiles(session, user.discord_id, now=now)
+    assert [t.next_round_label for t in tiles] == ["第一轮抽选"]
+
+
+async def test_qualifier_labels_localize_on_the_concert_page(session, _en_locale):
+    """Site G: RoundRow.qualifier_labels, built from a label_by_id map."""
+    from app.db.models import RoundQualifier
+    from app.db.service import concert_round_rows
+
+    user, concert, round_, _day = await _label_fixture(session, event_id="qual")
+    upgrade = Round(
+        concert_id=concert.id, kind=RoundKind.UPGRADE, label="アップグレード",
+        label_en="Upgrade", label_zh="升级",
+        closes_at_utc=datetime(2030, 8, 20, 9, tzinfo=UTC),
+    )
+    session.add(upgrade)
+    await session.flush()
+    session.add(RoundQualifier(upgrade_round_id=upgrade.id, qualifying_round_id=round_.id))
+    await session.commit()
+    await session.refresh(concert, ["days", "rounds", "tags"])
+
+    i18n.set_locale("zh")
+    _by_leg, all_legs = await concert_round_rows(
+        session, user.discord_id, concert, now=datetime(2030, 6, 1, tzinfo=UTC)
+    )
+    quals = {q for row in all_legs for q in row.qualifier_labels}
+    assert quals == {"第一轮抽选"}
+
+
+# ── pattern 2: user.language (per-recipient, built once for many) ─────────
+
+
+async def test_due_reminders_use_the_recipients_language_not_the_ambient_locale(
+    session, _en_locale
+):
+    """Sites A1 and A2. The scheduler builds DueReminders for every recipient
+    in one pass, so the locale must come from the row's own user. The ambient
+    locale here is ja (which resolves to the ORIGINAL column) while the
+    recipient's language is zh -- a get_locale() slip therefore hands back the
+    Japanese label and fails loudly."""
+    from app.db.models import ReminderQueue, ReminderRule
+    from app.db.service import due_reminders
+
+    user, concert, round_, day = await _label_fixture(session, user_language="zh")
+    rule = ReminderRule(
+        user_id=user.discord_id, concert_id=concert.id,
+        anchor=Anchor.CLOSES, offset_days=-1,
+    )
+    session.add(rule)
+    await session.flush()
+    now = datetime(2030, 6, 1, tzinfo=UTC)
+    session.add_all([
+        ReminderQueue(rule_id=rule.id, round_id=round_.id, anchor=Anchor.CLOSES,
+                      fire_at_utc=now - timedelta(hours=1)),
+        ReminderQueue(rule_id=rule.id, day_id=day.id, anchor=Anchor.EVENT_START,
+                      fire_at_utc=now - timedelta(hours=1)),
+    ])
+    await session.commit()
+
+    i18n.set_locale("ja")
+    due = await due_reminders(session, now=now)
+
+    assert {d.round_label for d in due if d.round_label} == {"第一轮抽选"}
+    assert {d.day_label for d in due if d.day_label} == {"第一天"}
+
+
+async def test_notice_context_localizes_tags_venue_and_deadline_label(session, _en_locale):
+    """Site J plus the tags_line/venues fix -- tag names have had name_en/
+    name_zh since the i18n build but the DM tag line stayed raw. Same
+    ambient-vs-recipient split: ja ambient, zh recipient."""
+    from app.db.service import notice_context
+
+    user, concert, *_rest = await _label_fixture(session, user_language="zh")
+
+    i18n.set_locale("ja")
+    ctx = await notice_context(session, concert.id, user.discord_id)
+
+    assert ctx.tags_line == "莲之空"
+    assert ctx.venue == "东京巨蛋"
+    assert ctx.first_deadline_label == "第一轮抽选"
+
+
+# ── pattern 3: the explicit locale parameter (calendar feed) ─────────────
+
+
+async def test_calendar_events_follow_the_locale_parameter_not_the_contextvar(
+    session, _en_locale
+):
+    """Sites H and I. The .ics route passes no locale and must stay canonical
+    even under an ambient locale; the /mydeadlines cog passes the recipient's
+    language explicitly and must get the variant. Substituting get_locale()
+    here would start localizing the calendar feed, which is not wanted."""
+    from app.db.models import ReminderQueue, ReminderRule
+    from app.db.service import user_calendar_events
+
+    user, concert, round_, day = await _label_fixture(session, event_id="cal")
+    rule = ReminderRule(
+        user_id=user.discord_id, concert_id=concert.id,
+        anchor=Anchor.CLOSES, offset_days=-1,
+    )
+    session.add(rule)
+    await session.flush()
+    session.add_all([
+        ReminderQueue(rule_id=rule.id, round_id=round_.id, anchor=Anchor.CLOSES,
+                      fire_at_utc=datetime(2030, 7, 31, 9, tzinfo=UTC)),
+        ReminderQueue(rule_id=rule.id, day_id=day.id, anchor=Anchor.EVENT_START,
+                      fire_at_utc=datetime(2030, 8, 31, 9, tzinfo=UTC)),
+    ])
+    await session.commit()
+    now = datetime(2030, 6, 1, tzinfo=UTC)
+
+    # ambient zh, but the .ics feed passes nothing -> canonical, unchanged
+    i18n.set_locale("zh")
+    canonical = await user_calendar_events(session, user.discord_id, now=now)
+    assert {e.label for e in canonical} == {"1次先行抽選", "Day 1"}
+
+    # the cog passes the recipient's language explicitly -> variants
+    i18n.set_locale("en")
+    localized = await user_calendar_events(session, user.discord_id, now=now, locale="zh")
+    assert {e.label for e in localized} == {"第一轮抽选", "第一天"}

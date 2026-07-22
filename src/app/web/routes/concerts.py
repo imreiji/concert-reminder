@@ -163,9 +163,17 @@ def apply_day_fields(
     doors_at: str = "",
     cancelled: str = "false",
     venue_tag_id: int | None = None,
+    label_en: str = "",
+    label_zh: str = "",
 ) -> ConcertDay:
     """The JST->UTC parse + assignment shared by build_day (new rows) and
     the edit page's in-place update of existing rows.
+
+    label_en/label_zh are the viewer-locale variants of `label`. They are
+    NOT preserve-on-empty like the free-text city/venue trio below: those are
+    legacy columns no editor input still writes, while these have real inputs
+    on every row template, so an empty one means "the editor cleared it" and
+    must null the column.
 
     venue_tag_id arrives ALREADY resolved -- an int that is known to name a
     VENUE tag, or None -- from `resolve_day_venue_tags` at the route
@@ -201,6 +209,8 @@ def apply_day_fields(
     day.doors_at_utc = parse_jst(doors_at)
     day.cancelled = cancelled == "true"
     day.venue_tag_id = venue_tag_id
+    day.label_en = label_en.strip() or None
+    day.label_zh = label_zh.strip() or None
     return day
 
 
@@ -214,12 +224,14 @@ def build_day(
     doors_at: str = "",
     cancelled: str = "false",
     venue_tag_id: int | None = None,
+    label_en: str = "",
+    label_zh: str = "",
 ) -> ConcertDay:
     """New-row constructor: the rich creation form, the edit page's new
     rows, and the URL-import commit route."""
     return apply_day_fields(
         ConcertDay(concert_id=concert_id), label, starts_at, city, venue, venue_address,
-        doors_at, cancelled, venue_tag_id,
+        doors_at, cancelled, venue_tag_id, label_en, label_zh,
     )
 
 
@@ -235,6 +247,7 @@ def apply_round_fields(
     applies_to: list[int] | None = None,
     label_en: str = "",
     notes: str = "",
+    label_zh: str = "",
 ) -> Round:
     """The parse + assignment shared by build_round (new rows) and the edit
     page's in-place update of existing rows.
@@ -258,6 +271,7 @@ def apply_round_fields(
     round_.url = form_url(url)
     round_.applies_to = applies_to or None
     round_.label_en = label_en.strip() or None
+    round_.label_zh = label_zh.strip() or None
     round_.notes = notes.strip() or None
     return round_
 
@@ -274,12 +288,13 @@ def build_round(
     applies_to: list[int] | None = None,
     label_en: str = "",
     notes: str = "",
+    label_zh: str = "",
 ) -> Round:
     """New-row constructor: the rich creation form, the edit page's new
     rows, and the URL-import commit route."""
     return apply_round_fields(
         Round(concert_id=concert_id), label, kind, opens_at, closes_at, results_at,
-        payment_at, url, applies_to, label_en, notes,
+        payment_at, url, applies_to, label_en, notes, label_zh,
     )
 
 
@@ -632,6 +647,8 @@ async def create_concert(
     venue_tags: list[int] = Form(default=[]),
     day_key: list[str] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
+    day_label_en: list[str] = Form(default=[]),
+    day_label_zh: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
     day_city: list[str] = Form(default=[]),
     day_venue: list[str] = Form(default=[]),
@@ -641,6 +658,7 @@ async def create_concert(
     day_cancelled: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
     round_label_en: list[str] = Form(default=[]),
+    round_label_zh: list[str] = Form(default=[]),
     round_kind: list[RoundKind] = Form(default=[]),
     round_opens_at: list[str] = Form(default=[]),
     round_closes_at: list[str] = Form(default=[]),
@@ -707,6 +725,12 @@ async def create_concert(
     # partial array is left alone so the strict zip raises instead.
     if not day_venue_tag_id:
         day_venue_tag_id = [""] * n_days
+    # day_label_en/day_label_zh get NO padding at all -- the same rule day_label
+    # itself follows, and the same one round_label_en already follows below.
+    # Every leg-row template in this app emits all three inputs together, so the
+    # arrays arrive 1:1 by construction; leaving them unpadded means a template
+    # that ever stops emitting one trips the strict zip loudly instead of
+    # sliding one leg's English name onto the next leg.
     # Resolved (and kind-checked) once the padding above has settled the
     # array's length, so the strict zip below still sees one entry per row.
     day_venue_tags = await resolve_day_venue_tags(session, day_venue_tag_id)
@@ -716,10 +740,11 @@ async def create_concert(
     # are filled in after the flush below.
     key_rows: list[tuple[str, ConcertDay]] = []
     for (
-        key, label, starts_at, city, venue, venue_address, doors_at, cancelled, v_tag
+        key, label, label_en, label_zh, starts_at, city, venue, venue_address,
+        doors_at, cancelled, v_tag
     ) in zip(
-        day_key, day_label, day_starts_at, day_city, day_venue, day_venue_address,
-        day_doors_at, day_cancelled, day_venue_tags, strict=True,
+        day_key, day_label, day_label_en, day_label_zh, day_starts_at, day_city, day_venue,
+        day_venue_address, day_doors_at, day_cancelled, day_venue_tags, strict=True,
     ):
         # v_tag is in the guard because the next phase drops the free-text
         # city/venue inputs: without it, a row where the editor picked ONLY a
@@ -728,7 +753,7 @@ async def create_concert(
             continue  # blank trailing row from the repeatable UI -- key and all
         day = build_day(
             concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
-            v_tag,
+            v_tag, label_en, label_zh,
         )
         session.add(day)
         days.append(day)
@@ -757,12 +782,12 @@ async def create_concert(
     # edit_concert uses so a same-submit qualifier reference resolves.
     qual_jobs: list[tuple[Round, RoundKind, str]] = []
     for (
-        label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url,
+        label, label_en, label_zh, kind_, opens_at, closes_at, results_at, payment_at, url,
         notes_, legs, quals
     ) in zip(
-        round_label, round_label_en, round_kind, round_opens_at, round_closes_at,
-        round_results_at, round_payment_at, round_url, round_notes, round_legs,
-        round_qualifiers, strict=True,
+        round_label, round_label_en, round_label_zh, round_kind, round_opens_at,
+        round_closes_at, round_results_at, round_payment_at, round_url, round_notes,
+        round_legs, round_qualifiers, strict=True,
     ):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
@@ -770,7 +795,7 @@ async def create_concert(
         round_ = build_round(
             concert.id, label, kind_, opens_at, closes_at, results_at, payment_at, url,
             applies_to=parse_round_legs(legs, valid_day_ids, key_to_day_id),
-            label_en=label_en, notes=notes_,
+            label_en=label_en, notes=notes_, label_zh=label_zh,
         )
         session.add(round_)
         qual_jobs.append((round_, kind_, quals))
@@ -1082,6 +1107,8 @@ async def edit_concert(
     day_id: list[str] = Form(default=[]),
     day_key: list[str] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
+    day_label_en: list[str] = Form(default=[]),
+    day_label_zh: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
     day_city: list[str] = Form(default=[]),
     day_venue: list[str] = Form(default=[]),
@@ -1092,6 +1119,7 @@ async def edit_concert(
     round_id: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
     round_label_en: list[str] = Form(default=[]),
+    round_label_zh: list[str] = Form(default=[]),
     round_kind: list[RoundKind] = Form(default=[]),
     round_opens_at: list[str] = Form(default=[]),
     round_closes_at: list[str] = Form(default=[]),
@@ -1182,6 +1210,10 @@ async def edit_concert(
     day_venue_address = day_venue_address + [""] * (n_days - len(day_venue_address))
     if not day_venue_tag_id:
         day_venue_tag_id = [""] * n_days
+    # day_label_en/day_label_zh are NOT padded, exactly as create_concert leaves
+    # them and as round_label_en below already is: every leg-row template emits
+    # all three together, so the arrays are 1:1 by construction and the strict
+    # zip is the guard that keeps them that way.
     # Resolved (and kind-checked) after the padding, so the strict zip below
     # still sees one entry per row. See resolve_day_venue_tags for why the
     # check is here and not inside apply_day_fields.
@@ -1193,10 +1225,12 @@ async def edit_concert(
     # paired with another row's day; the ids are filled in after the flush.
     key_rows: list[tuple[str, ConcertDay]] = []
     for (
-        key, did, label, starts_at, city, venue, venue_address, doors_at, cancelled, v_tag
+        key, did, label, label_en, label_zh, starts_at, city, venue, venue_address,
+        doors_at, cancelled, v_tag
     ) in zip(
-        day_key, day_id, day_label, day_starts_at, day_city, day_venue, day_venue_address,
-        day_doors_at, day_cancelled, day_venue_tags, strict=True,
+        day_key, day_id, day_label, day_label_en, day_label_zh, day_starts_at, day_city,
+        day_venue, day_venue_address, day_doors_at, day_cancelled, day_venue_tags,
+        strict=True,
     ):
         # v_tag is in the guard because the next phase drops the free-text
         # city/venue inputs: without it, a row where the editor picked ONLY a
@@ -1207,13 +1241,13 @@ async def edit_concert(
         if did.isdigit() and int(did) in existing_days:
             day = apply_day_fields(
                 existing_days[int(did)], label, starts_at, city, venue, venue_address,
-                doors_at, cancelled, v_tag,
+                doors_at, cancelled, v_tag, label_en, label_zh,
             )
             kept_day_ids.add(day.id)
         else:
             day = build_day(
                 concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
-                v_tag,
+                v_tag, label_en, label_zh,
             )
             session.add(day)
         submitted_days.append(day)
@@ -1275,12 +1309,12 @@ async def edit_concert(
     if legs_omitted:
         round_legs = [""] * len(round_label)
     for (
-        rid, label, label_en, kind_, opens_at, closes_at, results_at, payment_at, url,
-        notes_, legs, quals
+        rid, label, label_en, label_zh, kind_, opens_at, closes_at, results_at, payment_at,
+        url, notes_, legs, quals
     ) in zip(
-        round_id, round_label, round_label_en, round_kind, round_opens_at, round_closes_at,
-        round_results_at, round_payment_at, round_url, round_notes, round_legs, round_qualifiers,
-        strict=True,
+        round_id, round_label, round_label_en, round_label_zh, round_kind, round_opens_at,
+        round_closes_at, round_results_at, round_payment_at, round_url, round_notes,
+        round_legs, round_qualifiers, strict=True,
     ):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
@@ -1300,13 +1334,13 @@ async def edit_concert(
         if existing is not None:
             round_ = apply_round_fields(
                 existing, label, kind_, opens_at, closes_at, results_at,
-                payment_at, url, applies_to, label_en, notes_,
+                payment_at, url, applies_to, label_en, notes_, label_zh,
             )
             kept_round_ids.add(round_.id)
         else:
             round_ = build_round(
                 concert.id, label, kind_, opens_at, closes_at, results_at, payment_at, url,
-                applies_to, label_en, notes_,
+                applies_to, label_en, notes_, label_zh,
             )
             session.add(round_)
         qual_jobs.append((round_, kind_, quals))
@@ -1384,7 +1418,8 @@ async def export_concert_yaml(
     # contents must not change with whoever happened to download it.
     yaml_days = [
         YamlDay(
-            label=d.label, starts_at_utc=d.starts_at_utc,
+            label=d.label, label_en=d.label_en, label_zh=d.label_zh,
+            starts_at_utc=d.starts_at_utc,
             city=d.venue_tag.city if d.venue_tag else d.city,
             venue=d.venue_tag.name if d.venue_tag else d.venue,
             venue_address=d.venue_tag.address if d.venue_tag else d.venue_address,
@@ -1394,7 +1429,7 @@ async def export_concert_yaml(
     ]
     yaml_rounds = [
         YamlRound(
-            label=r.label, label_en=r.label_en, kind=r.kind.value,
+            label=r.label, label_en=r.label_en, label_zh=r.label_zh, kind=r.kind.value,
             applies_to_labels=[days_by_id[d] for d in (r.applies_to or []) if d in days_by_id],
             opens_at_utc=r.opens_at_utc, closes_at_utc=r.closes_at_utc,
             results_at_utc=r.results_at_utc, payment_deadline_at_utc=r.payment_deadline_at_utc,

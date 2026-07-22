@@ -63,6 +63,12 @@
       <input type="hidden" name="day_key" value="d{{ loop.index0 }}">
       <div class="eleg-top">
         <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ d.label }}">
+        {#- No `value=`: the ramen.events parse produces a Japanese label only,
+            so there is nothing to pre-fill here -- same as round_label_en below. -#}
+        <label class="vfld"><span class="vfld-tag">English</span>
+          <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
+        <label class="vfld"><span class="vfld-tag">中文</span>
+          <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
         <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}">
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="false">
@@ -101,7 +107,10 @@
       <div class="redit-top">
         <input class="redit-name" name="round_label" required maxlength="200"
                placeholder="1次先行抽選" value="{{ r.label }}">
-        <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}">
+        <label class="vfld"><span class="vfld-tag">English</span>
+          <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
+        <label class="vfld"><span class="vfld-tag">中文</span>
+          <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
         <select name="round_kind">{% for k in kinds %}
           <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ round_kind_label(k) }}</option>
         {% endfor %}</select>
@@ -172,6 +181,10 @@
     <input type="hidden" name="day_key" value="">
     <div class="eleg-top">
       <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}">
+      <label class="vfld"><span class="vfld-tag">English</span>
+        <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
+      <label class="vfld"><span class="vfld-tag">中文</span>
+        <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
       <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}">
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
@@ -194,7 +207,10 @@
     <input type="hidden" name="round_id" value="">
     <div class="redit-top">
       <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選">
-      <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}">
+      <label class="vfld"><span class="vfld-tag">English</span>
+        <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
+      <label class="vfld"><span class="vfld-tag">中文</span>
+        <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
       <select name="round_kind">{% for k in kinds %}
         <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
       {% endfor %}</select>

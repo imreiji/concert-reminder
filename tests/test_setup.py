@@ -290,6 +290,28 @@ async def test_applications_renders_only_qualifying_rounds(client):
     assert "Pruned lottery" not in r.text
 
 
+async def test_applications_round_label_renders_in_viewers_language(client):
+    """Screen 2's round label must localize like the concert title one line
+    above it (setup.html's title already goes through `loc()`; only the
+    label was left as the raw `row.round_.label`). Uses a Japanese original
+    plus a zh variant so a locale-source mistake (rendering the raw column)
+    fails loudly instead of coincidentally passing -- same shape as
+    test_concert_page.py's test_round_label_renders_in_the_viewers_language."""
+    login_as(client, FAN_ID, "fan")
+    concert = await seed_concert(client, "aqours-9th", "Aqours 9th Live", "Aqours")
+    await add_round(
+        client, concert, "1次先行抽選",
+        label_zh="第一轮先行", label_en="1st-round lottery",
+        opens_at_utc=PAST, closes_at_utc=FUTURE,
+    )
+
+    client.cookies.set("lang", "zh")
+    r = client.get("/setup/applications")
+    assert r.status_code == 200
+    assert "第一轮先行" in r.text
+    assert "1次先行抽選" not in r.text, "the Japanese label must not leak to a zh viewer"
+
+
 async def test_applications_empty_state(client):
     login_as(client, FAN_ID, "fan")
     r = client.get("/setup/applications")
