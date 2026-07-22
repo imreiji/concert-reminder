@@ -400,6 +400,37 @@ class RoundQualifier(Base):
     )
 
 
+class RoundLabelPhrase(Base):
+    """A trilingual round label the editor has used before, offered as a
+    one-click suggestion on later concerts.
+
+    Round labels do not decompose into a taxonomy -- real ones carry a
+    CHANNEL (オフィシャル, ファミリーマート, 「Liella! CLUB 2025」) that is a
+    proper noun, so no enum can enumerate them. Remembering whole triples
+    sidesteps that: the app never parses a label, it just recalls one.
+
+    The unique index spans all three columns, so a corrected phrase and the
+    typo it replaces are separate rows -- forgetting the typo is a delete,
+    not an edit, and never touches concerts that already used it.
+    """
+
+    __tablename__ = "round_label_phrases"
+    __table_args__ = (
+        Index("uq_round_label_phrase", "label", "label_en", "label_zh", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(String(200))
+    label_en: Mapped[str] = mapped_column(String(200))
+    label_zh: Mapped[str] = mapped_column(String(200))
+    # Ranking inputs. used_count is bumped on every save that reuses the
+    # triple; last_used_at breaks ties so a recently-revived phrase outranks
+    # an equally-used stale one.
+    used_count: Mapped[int] = mapped_column(default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    last_used_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+
+
 class RoundOutcome(Base):
     """One user's recorded progress through a specific round's lottery:
     NOT_APPLIED (explicitly opted out) / APPLIED / WON / LOST / PAID.
