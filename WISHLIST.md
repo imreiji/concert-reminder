@@ -11,12 +11,39 @@ the mobile parity retrofit (bottom tab bar, FAB, swipeable board, filter
 sheet, bottom-sheet dialogs) and the signed-out redirect with its
 return-to-page login -- so neither moved up from Proposed. Both are logged
 in Shipped anyway, and the revision passes below reconsider every entry
-they touch.
+they touch. The same is true of the 2026-07-22 venue-to-tags build (phase 1):
+not a Proposed entry, logged in Shipped, and the entries it changed are
+re-reviewed in place -- it also ADDED three entries below, which is the more
+important half of its revision pass.
 
 ## Proposed (highest impact first)
 
 
-### 1. Minute-level reminder offsets
+### 1. Import preview has no venue select
+
+Impact: high - effort: small-medium. Raised: 2026-07-22 (venue-to-tags phase 1
+build).
+
+Phase 1 moved the venue onto the leg as a VENUE tag and removed the
+concert-level venue field, but `import_preview.html` never got the per-leg
+venue picker the editor has. So every ramen.events import now commits a concert
+with ZERO concert-level VENUE tags: no venue on Home, none on the campaign
+board, none on a Discover tile, and invisible to Discover's region filter --
+the one filter the catalogue page is built around. No data is lost yet, because
+the leg still carries the imported free-text venue and the concert page renders
+it; what is lost is every surface that reads the structured tag.
+
+Ranked #1, above everything that was here, for two reasons. It is a regression
+this build introduced rather than a gap the app has always had, and it degrades
+data on EVERY future import until it is fixed -- each imported concert becomes
+a row someone has to go back and re-edit by hand. It also has a deadline: phase
+5 drops the free-text columns, and on that day the missing venue stops being a
+display gap and becomes real data loss. The fix is not novel work -- give
+import preview the same per-leg picker and `_venue_create_dialog.html` the
+editor already has, and `import_commit`'s existing `sync_concert_venue_tags`
+call does the rest.
+
+### 2. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -44,7 +71,12 @@ eventually ships (fine-tune option labels, sentence-style rule descriptions)
 will need both catalogues filled in alongside the schema/form work -- one
 more small addition to effort, not a reason to re-rank.
 
-### 2. Collapse a round's multiple "Coming up" rows into one
+Displaced to #2 on 2026-07-22, and only by insertion: nothing about it
+weakened, but the venue-to-tags build introduced a regression that silently
+degrades data on every future import, and a regression that keeps making work
+outranks a gap that has been sitting harmless since 2026-07-18.
+
+### 3. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
 branch review). Re-ranked 2026-07-19 (twice).
@@ -64,6 +96,7 @@ concert page's per-leg round rows (2026-07-19) already render one row per
 ROUND with a single primary anchor chosen by `_primary_anchor`, so the
 collapsed shape exists and has tests behind it. What remains is deciding
 whether Home wants the same rule and re-pointing the htmx swap at it.
+(Now #3 after the 2026-07-22 insertion above it; unchanged in substance.)
 
 Nudged up one slot (from #3) by upgrade rounds shipping on 2026-07-19: an
 upgrade round is one more anchor-bearing round per concert, so on a concert
@@ -79,7 +112,47 @@ few pixels of table height on desktop. Still deferred for the same reason
 as before (collapsing changes the htmx swap shape), but the phone case is
 now the more visible motivator of the two.
 
-### 3. Pin the Python version across dev, CI and the server
+### 4. Round labels do not decompose into a taxonomy -- build a phrase library
+
+Impact: medium - effort: large. Raised: 2026-07-22 (i18n phase 2 design
+discussion).
+
+Phase 2 gives a round's label locale variants, which means an editor now types
+the same label up to three times. The obvious escape is to stop typing labels
+at all and compose them from structured parts -- and that was designed, then
+rejected against real data: of nine labels taken from Liella! campaigns
+(`「Liella! CLUB 2025」最速先行`, `いち早プレリザーブ`,
+`オフィシャル2次抽選`, `ファミリーマート先行` among them), an
+ordinal-plus-kind enum decomposes ZERO of the nine. The axis the enum is missing is CHANNEL -- which fan club, which
+reservation service, which convenience-store chain sold it -- and channels are
+proper nouns, so an enum over them is an unbounded list that goes stale the
+moment a new retailer appears.
+
+The planned approach instead (phase 3) is a self-populating phrase library: the
+labels editors actually type become the suggestion set, with their translations
+attached, so the second and third concert using the same phrase costs one click
+and no retyping, and nobody has to have predicted the phrase in advance. Ranked
+here -- above the infrastructure entries, below the two long-standing
+user-facing ones -- because it is the direct multiplier on phase 2's cost:
+without it, trilingual labels are three times the typing forever, which is
+exactly the kind of friction that quietly stops getting done.
+
+### 5. Franchise-aware round-label suggestions
+
+Impact: low-medium - effort: small, once #4 exists. Raised: 2026-07-22 (owner,
+during the phase 2 design discussion, and deferred by him in the same breath).
+
+Each franchise names its rounds its own way -- two franchises' campaigns share
+almost no phrasing -- so a flat suggestion list is noisier than it needs to be.
+Once the phrase library from #4 exists, ranking its suggestions by how often a
+phrase appears on concerts sharing this concert's FRANCHISE tag falls out
+nearly for free: the tag is already attached, the phrases are already counted,
+and the ordering is one ORDER BY away. Deliberately ranked directly under #4
+and nowhere else, because it is worth nothing on its own and cheap the moment
+#4 lands -- whoever builds the library should read this entry before choosing
+its schema, so the franchise dimension is designed in rather than retrofitted.
+
+### 6. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -103,7 +176,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 4. Cache-bust static assets so deploys can't serve stale CSS
+### 7. Cache-bust static assets so deploys can't serve stale CSS
 
 Impact: medium (every CSS-touching deploy is silently defaced until the
 cache expires or someone purges) - effort: small. Raised: 2026-07-21
@@ -144,7 +217,14 @@ because #1-#3 are unchanged and this remains a one-file fix nobody has
 scheduled; the case for just doing it is now stronger than the case for
 its rank.
 
-### 5. PWA / installability
+Not reinforced by the 2026-07-22 venue-to-tags build, which is worth recording
+as the counter-example: it added a whole new dialog
+(`_venue_create_dialog.html`) and touched eleven templates without changing one
+byte of `style.css`, because the dialog is built from existing picker and chip
+classes. That deploy needs no purge -- the first in four that doesn't -- which
+is a small point in favour of this entry's low rank rather than its urgency.
+
+### 8. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -164,7 +244,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 6. Minor demo-parity cosmetics
+### 9. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -192,7 +272,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 7. Discover sort in the content head, plus the catalogue-count note
+### 10. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -218,7 +298,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 8. Name the destination on the sign-in bounce
+### 11. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -234,11 +314,11 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#6) and the Discover head (#7) because
+Ranked below the demo-parity batch (#9) and the Discover head (#10) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
-### 9. Editor page parity with the demo
+### 12. Editor page parity with the demo
 
 Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -260,12 +340,107 @@ read-only summary copy are user-visible strings too -- same catalogue-update
 cost as the two entries above, folded into this one's existing medium
 effort rather than raising it.
 
+Grew on 2026-07-22 (venue-to-tags phase 1): each leg card now carries a VENUE
+tag picker with an inline create-a-venue dialog, and the concert-level venue
+field is gone. `dekimasen-demo.html`'s editor frame still shows the old
+concert-level free-text venue, so the demo is now WRONG rather than merely
+behind -- per the CLAUDE.md rule that a deliberate move updates the demo, that
+frame is owed regardless of whether the rest of this parity pass ever happens.
+Fold it into the demo-parity polish batch if this entry keeps sitting.
+
+### 13. `discover.html` venue guard tests the wrong column
+
+Impact: low - effort: trivial. Raised: 2026-07-22 (venue-to-tags phase 1
+review).
+
+`discover.html:55-56` guards the venue line with `{% elif cv or c.venue %}`
+while the body renders `loc(c, "venue")`. The guard therefore tests the raw
+Japanese column while the body renders the viewer's locale variant, so a
+concert with no VENUE tag and only `venue_en` filled renders its venue on Home
+and the board but silently drops it on Discover. One inconsistent surface, on a
+narrowing population (a tagless concert), and nothing renders WRONG -- it just
+goes missing.
+
+Ranked second-to-last deliberately: phase 5 drops `Concert.venue`/`venue_en`/
+`venue_zh` entirely, which deletes this branch and retires the bug for free. It
+is logged so a future reader who trips over it knows it is known and knows why
+nobody fixed it; fixing it separately is only worth doing if phase 5 slips far.
+
+### 14. Nine of ten `RoundKind` members are purely cosmetic
+
+Impact: low (code health, no user-visible change) - effort: medium. Raised:
+2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
+
+Exactly one `RoundKind` member carries behaviour: `UPGRADE`, which drives the
+eligibility gate, the suppression exemption, the auto-arm guards, the board
+column rank and the capture gating (invariant 2). The other nine differ from
+each other in a label string and an emoji and nothing else -- `LOTTERY`,
+`FCFS_SALE` and `TOUR_PACKAGE` take identical paths through the planner, the
+queue and every read surface. That is worth knowing before anyone adds a tenth
+kind expecting it to mean something, and it is an argument for collapsing the
+cosmetic nine into data (a label/emoji table) with `UPGRADE` kept as the one
+real branch.
+
+Ranked last because acting on it changes a persisted enum for zero user-visible
+benefit, and the taxonomy was corrected as recently as 2026-07-18 -- the risk
+of churning it again outweighs the tidiness. Logged rather than done, on
+purpose, so the observation is not rediscovered a third time.
+
 (The former "Eventernote links on performer chips" entry was dropped in the
 2026-07-19 revision pass: it already shipped inside the Tags page redesign,
 which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Leg venues become VENUE tags (venue-to-tags phase 1) (2026-07-22)
+
+Shipped as: the venue moved from free text on the concert AND on each leg into
+one structured place -- `ConcertDay.venue_tag_id`, an FK to a VENUE tag (ON
+DELETE SET NULL, because a venue tag is shared taxonomy and deleting one must
+never take performances down with it). This replaced a case-insensitive NAME
+match resolved at render time, which had a real failure mode: re-point a leg at
+a different venue and it kept rendering the previous one forever. The old
+`find_venue_tag` helper is gone. The tag gained `city`/`city_en`/`city_zh` and
+`address`, on the reasoning that a venue is always in ONE city, so the city
+belongs to the venue rather than being retyped on every leg that visits it;
+`address` deliberately has no locale variants, since its job is to be pasted
+into a map and `location_url` already covers the maps link.
+
+The concert level became DERIVED: `sync_concert_venue_tags` rewrites a
+concert's VENUE tags as the union of its legs' and is called from the create
+route, the edit route and `import_commit`, so the two levels can never
+contradict each other. It returns the tags it newly attached and every caller
+feeds those to `handle_newly_tagged` -- VENUE tags are subscribable, so a
+follower is owed the same notice a concert-level attach always gave them
+(invariant 4). Discover's region filter needed no change at all: it reads
+`concert_tags` off each tile's `data-tags` client-side, and the rollup is what
+keeps that current. The concert-level venue picker was removed from both forms
+(`create_concert_row` now sets `venue=None`), and `POST /tags/venue/quick` plus
+`_venue_create_dialog.html` let an editor create a venue without leaving the
+form -- 409 on a duplicate name specifically, so the dialog can say so, 422 on
+everything else.
+
+Two things about it are load-bearing and easy to undo by accident.
+`ConcertDay.venue_tag` is `lazy="raise"`, because a lazy load during async
+template rendering is a `MissingGreenlet` 500 this project has shipped once;
+every path handing legs to a template eager-loads it. And this is deliberately
+a TWO-DEPLOY migration: `ConcertDay.city`/`venue`/`venue_address` and
+`Concert.venue`/`venue_en`/`venue_zh` still exist so a leg the backfill could
+not match stays recoverable, `apply_day_fields` assigns the day columns
+preserve-on-empty so the first save of an existing concert cannot null them,
+and a later phase drops them on purpose. Migration `789bbcc95bc3` did the
+backfill by name and prints every unmatched leg; its SQL passes an explicit
+trim set including U+3000 because SQLite's `trim()` strips only U+0020 while
+the Python that wrote the data used a Unicode-aware `str.strip()`.
+
+Not a Proposed entry here -- it came out of the trilingual-concert-page design
+rather than the wishlist -- but logged in full, and its revision pass ADDED
+four entries above: #1 (the missing import-preview picker, which this build
+caused), #13 (a venue guard bug it surfaced on Discover), and #4/#5 (round
+labels and the phrase library, from the same design discussion). It also
+reinforced nothing in the cache-bust entry for once -- eleven templates changed
+and `style.css` did not.
 
 ### Mobile parity retrofit (2026-07-21)
 

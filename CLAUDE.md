@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 1003 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 1045 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -41,7 +41,10 @@ localized dates, and parallel-column UGC translation -- and a phone
 retrofit (bottom tab bar, editor FAB, bottom-sheet dialogs, Discover's
 filter sheet) confined to one `@media` section, and a signed-out
 redirect replacing the old bare 401, returning the visitor to the page
-they asked for once they log in -- have shipped since).
+they asked for once they log in, and phase 1 of the venue-to-tags move --
+a leg's venue is now a real VENUE tag FK, a concert's VENUE tags are derived
+from its legs, venue city/address live on the tag, and an editor can create a
+venue without leaving the form -- have shipped since).
 
 ## Commands
 
@@ -80,6 +83,47 @@ they asked for once they log in -- have shipped since).
   `next` is a stale link, not an editor mistake worth a 422.
 - `src/app/db/` — models, session, and `service.py` (all business logic that
   touches the DB; discord-free so it's testable).
+- **Venues live on the LEG, as a tag.** `ConcertDay.venue_tag_id` (FK ->
+  `tags.id`, ON DELETE SET NULL, indexed) is the structured venue and the ONLY
+  one anything reads for display; SET NULL rather than CASCADE because a VENUE
+  tag is shared taxonomy and deleting one must never take performances down
+  with it. It replaced a case-insensitive free-text NAME match, which left a
+  re-pointed leg rendering its previous venue forever -- the old
+  `find_venue_tag` helper is gone, don't reintroduce that shape. The tag
+  carries `city`/`city_en`/`city_zh` and `address`: a venue is always in one
+  city, so the city is a property of the VENUE, not of each leg visiting it
+  (`address` deliberately has NO locale variants -- its job is to be pasted
+  into a map, and `location_url` already covers the maps link). A concert's
+  VENUE tags are DERIVED, never typed: `sync_concert_venue_tags`
+  (`db/service.py`) rewrites them as the union of its legs' venues, and the
+  create route, the edit route and `import_commit` all call it. It returns the
+  tags it NEWLY attached and every caller MUST feed those to
+  `handle_newly_tagged` -- VENUE tags are subscribable, so someone following
+  "Zepp Haneda" is owed the same DM notice a concert-level attach gives them
+  (invariant 4). It touches VENUE rows only; franchise/group/artist attachment
+  is deliberate and materialized (invariant 3) and must survive untouched.
+  Discover's region filter is unchanged by all of this -- it still reads
+  `concert_tags` client-side off each tile's `data-tags`, and this rollup is
+  exactly what keeps that current while venues live on legs.
+  `ConcertDay.venue_tag` is `lazy="raise"` ON PURPOSE: a lazy load during async
+  template rendering is a `MissingGreenlet` 500, which this project has shipped
+  once, and raising at the seam turns that into a loud test failure instead.
+  Every path handing legs to a template must `selectinload` it, or load the
+  tags separately by id the way `concert_rounds_context`
+  (`web/routes/concerts.py`) does.
+- **Two-deploy migration, still mid-flight -- do NOT delete the "dead" venue
+  columns.** `ConcertDay.city`/`venue`/`venue_address` and
+  `Concert.venue`/`venue_en`/`venue_zh` still exist, as LEGACY READ-ONLY data:
+  they survive so a leg whose venue did not match during the backfill stays
+  recoverable, and a LATER phase drops them deliberately. Because the editor's
+  free-text venue inputs are gone, those params now arrive absent (padded to
+  `""`) on every edit POST, so `apply_day_fields` (`web/routes/concerts.py`)
+  assigns the three day columns PRESERVE-ON-EMPTY -- a non-empty value still
+  assigns, an empty one leaves the column alone. Drop that rule and the FIRST
+  save of any existing concert silently destroys exactly the data the
+  migration is keeping, worst of all on the legs the backfill could not match,
+  where the free text is the only surviving record. Migration `789bbcc95bc3`
+  did the backfill by name match and PRINTS every unmatched leg.
 - `src/app/bot/` — thin shell: cogs, embed builders (`messages.py`),
   persistent buttons (`views.py`).
 - `src/app/web/` — thin shell: routes, templates, static. `routes/imports.py`
@@ -103,6 +147,13 @@ they asked for once they log in -- have shipped since).
   `web/forms.py` holds the HTTP-boundary wrappers around domain validators
   (currently `form_url`) -- its own module so routes/concerts.py,
   routes/tags.py and routes/imports.py can all import it cheaply.
+  A venue can be created without leaving the editor: `POST /tags/venue/quick`
+  (`routes/tags.py`, editor-only, JSON) plus `_venue_create_dialog.html`,
+  included by both `concert_new.html` and `concert_edit.html`. It answers 409
+  on a duplicate name specifically, so the dialog can say "that venue already
+  exists" instead of the generic 422 everything else gets. The concert-level
+  venue picker was REMOVED from both forms -- the leg is the single place a
+  venue is entered, and `create_concert_row` sets `venue=None`.
   `routes/discover.py` is the public catalogue and `routes/outcomes.py` is
   the web half of lottery-outcome capture (`POST /rounds/{id}/outcome`) --
   it shares `record_round_outcome` with the DM buttons rather than writing
@@ -172,7 +223,26 @@ they asked for once they log in -- have shipped since).
   `{field}_zh`, ja → the original column (Japanese IS the source of truth,
   there's no `_ja` column); an empty string counts as unfilled and falls
   through; there is no cross-locale chaining (zh never falls back through en
-  to the original). Editing existing English copy must keep the msgid
+  to the original). The UGC layer now also covers venue names through tags
+  (`Tag.name_en`/`name_zh`, plus `city_en`/`city_zh`), and phase 2 (IN FLIGHT,
+  PR #75, not merged) adds `ConcertDay.label_en`/`label_zh` and
+  `Round.label_zh` (migration `a589d82c11b4`) so leg and round labels resolve
+  in the viewer's language too. `Round.label_en` CHANGES MEANING there: it
+  predates the i18n layer and used to render to EVERY viewer as an English
+  gloss beside the Japanese label, and it becomes a true locale variant
+  selected by `loc_field`.
+  THREE locale sources are in play, and choosing the wrong one is SILENT --
+  nothing raises, the text just comes out in somebody else's language.
+  `get_locale()` for anything inside a web request; `user.language` for
+  per-recipient text composed once for many recipients OUTSIDE any request
+  (scheduler DMs, `NoticeContext`); and an explicit `locale: str | None`
+  parameter where the caller must decide -- currently `user_calendar_events`
+  alone, where `None` is DELIBERATE so the `.ics` feed stays canonical rather
+  than following whoever happened to trigger the render. This bites hardest in
+  `db/service.py`, where ~10 sites COPY a label string into a dataclass before
+  it ever reaches a template: the field resolves at the copy site, not at
+  render time, so the locale has to be right there.
+  Editing existing English copy must keep the msgid
   byte-identical (or both catalogues silently lose that translation) and
   update BOTH `messages.po` files — `tests/test_i18n_catalogues.py` extracts
   every msgid in-process and fails on anything untranslated (fuzzy entries
@@ -380,6 +450,11 @@ deleting them.
   Windows machine uses a GBK locale; em-dashes in configs crash it).
 - The dedupe index on reminder_queue uses coalesce() because SQLite treats
   NULLs as distinct in unique indexes. Don't "simplify" it.
+- SQLite's `trim()` strips only U+0020; Python's `str.strip()` is
+  Unicode-aware. Any migration matching text the app wrote through `.strip()`
+  must pass an EXPLICIT trim character set including U+3000 (the ideographic
+  space) or the two disagree on exactly the Japanese data this app is full of
+  -- `789bbcc95bc3`'s venue-name backfill does.
 
 ## Testing conventions
 
@@ -439,6 +514,10 @@ deleting them.
 - VENUE tags filter by `region` (sidebar groups venues into regions like
   "Kanto"/"Kansai"/"Other"; toggling a region (de)selects every venue tag id
   in it) — filtering by one exact venue was explicitly ruled out as unhelpful.
+  A leg's venue IS a VENUE tag now (see the `src/app/db/` note above) and the
+  concert's venue tags -- which is what this filter reads -- are the rollup of
+  its legs', so a concert whose legs carry no venue tag shows no venue
+  anywhere and is invisible to this filter.
 - **Home vs Discover** -- the old combined index is split in two by the
   question each page answers. `/` (`home.html`, the handler in `web/app.py`)
   is Home: "where do I stand", personal and login-gated, four blocks in order
