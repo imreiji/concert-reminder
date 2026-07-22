@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.service import (
     handle_newly_tagged,
+    match_venue_tag_id,
     sync_concert,
     sync_concert_venue_tags,
     tag_picker_context,
@@ -33,6 +34,7 @@ from app.domain.types import ConcertKind, RoundKind
 from app.web.auth import SessionUser, require_editor
 from app.web.forms import form_url
 from app.web.routes.concerts import (
+    all_venue_tags,
     build_day,
     build_round,
     create_concert_row,
@@ -120,10 +122,10 @@ def _fmt(dt) -> str:
 # matching `.eleg` card. This shim gives `_round_leg_chips.html` the same
 # attribute surface a real ConcertDay exposes (id -> the key, plus label);
 # the round chips render unselected (all-legs), so venue_tag/starts are never
-# read. `venue_tag` is carried anyway, and left None: a parsed day has no
-# venue tag yet (the importer's leg card still takes free-text venue), and an
-# explicit None is what keeps the chip's label chain from tripping over a
-# missing attribute.
+# read. `venue_tag` is carried anyway, and left None: the leg card's venue
+# picker is a client-side selection this server-side shim never sees (the
+# chip script reads the live <select> instead), and an explicit None is what
+# keeps the chip's label chain from tripping over a missing attribute.
 _PreviewLeg = namedtuple("_PreviewLeg", "id label venue_tag starts_at_utc")
 
 
@@ -171,6 +173,11 @@ async def import_preview(
         )
 
     picker = await tag_picker_context(session)
+    # The option list behind each leg row's venue picker -- the same helper
+    # (and so the same ordering) both editor pages use. The scraped venue name
+    # is matched against it here, at the route boundary, so the template only
+    # ever compares ids.
+    venue_tags = await all_venue_tags(session)
     return templates.TemplateResponse(
         request,
         "import_preview.html",
@@ -188,6 +195,15 @@ async def import_preview(
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
             "initial_selected": {},
+            # Every VENUE tag, for the per-leg <select>.
+            "venue_tags": venue_tags,
+            # The one free-text venue the ramen.events parse scrapes for the
+            # whole event. It fills each parsed leg's free-text `day_venue`
+            # (the importer's find must not be thrown away when no tag matches)
+            # and, when it DOES match a VENUE tag by trimmed case-insensitive
+            # name, pre-selects that tag below.
+            "venue_hint": parsed.venue_name,
+            "matched_venue_tag_id": match_venue_tag_id(parsed.venue_name, venue_tags),
             # One chip target per parsed day, keyed by day_key -- the round
             # cards render their leg chips from this via _round_leg_chips.html.
             "legs": _preview_legs(parsed),

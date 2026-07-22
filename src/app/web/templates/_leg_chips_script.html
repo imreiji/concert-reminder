@@ -36,8 +36,9 @@
     // The leg's venue is a VENUE tag now, so its display name is the selected
     // option's text rather than a typed value. Index 0 is the "no venue"
     // placeholder, which is not a label. Returns "" when the row has no
-    // picker at all -- import_preview.html still renders free-text legs and
-    // falls through to the day_city/day_venue fallbacks below.
+    // picker at all. The day_venue fallback below still earns its keep on
+    // import_preview.html, whose legs keep a free-text venue alongside the
+    // picker to carry a scraped name that has no tag yet.
     function venueName(row) {
       const sel = row.querySelector("[data-venue-select]");
       if (!sel || sel.selectedIndex <= 0) return "";

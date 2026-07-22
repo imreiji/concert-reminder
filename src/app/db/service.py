@@ -18,7 +18,7 @@ Sync semantics (per rule):
 
 import hashlib
 import secrets
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -2924,6 +2924,39 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
         "summary": summary,
         "eligible_members": eligible_members,
     }
+
+
+def match_venue_tag_id(name: str | None, venue_tags: Sequence[Tag]) -> int | None:
+    """The id of the VENUE tag whose canonical `name` matches `name`, or None.
+
+    The ramen.events parse scrapes ONE free-text venue name per event
+    (`ParsedConcert.venue_name`); the import preview uses this to pre-select
+    that venue in each parsed leg's picker, so the common case -- a venue
+    that already has a tag -- needs no click. No match leaves the picker on
+    its empty option, which is the editor's cue to mint the tag inline.
+
+    Matching is deliberately narrow: trimmed, case-insensitive, against the
+    canonical `name` column ONLY. Not name_en/name_zh (the scrape is the
+    site's own rendering, and a locale variant matching by accident would
+    silently bind the wrong venue), and not fuzzy (a wrong pre-selection is
+    worse than none -- the editor has to notice it to undo it).
+
+    Trimming is Python's `str.strip()`, which drops U+3000 (ideographic
+    space) alongside U+0020 -- venue text pasted from Japanese sites carries
+    it, and exactly that mismatch bit the earlier venue migration. This is
+    also why the comparison happens HERE over an already-loaded tag list
+    rather than as a SQL `lower(trim(...))`: SQLite's trim() knows only
+    U+0020, so pushing it down would silently reintroduce the bug.
+    """
+    if not name:
+        return None
+    needle = name.strip().casefold()
+    if not needle:
+        return None
+    for tag in venue_tags:
+        if tag.name and tag.name.strip().casefold() == needle:
+            return tag.id
+    return None
 
 
 async def tag_picker_context(session: AsyncSession) -> dict:
