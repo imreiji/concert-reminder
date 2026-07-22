@@ -30,6 +30,7 @@ from app.db.service import (
     handle_newly_tagged,
     resolve_group_member,
     tag_directory_context,
+    tag_variant_gaps,
 )
 from app.db.session import get_session
 from app.domain.types import TagKind
@@ -87,6 +88,11 @@ async def tag_directory(
             "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
             "venues": [t for t in tags if t.kind is TagKind.VENUE],
             "tag_dupe_data": tag_dupe_data,
+            # Per-tag "what's missing" notice for the edit dialogs, keyed by
+            # id -- one page renders every tag's dialog, so this has to be a
+            # lookup rather than a single value. Informational only; edit_tag
+            # deliberately does not enforce the rule.
+            "tag_gaps": {t.id: tag_variant_gaps(t) for t in tags},
             **ctx,
         },
     )

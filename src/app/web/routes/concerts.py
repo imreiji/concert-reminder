@@ -51,6 +51,7 @@ from app.db.service import (
     concert_next_moment,
     concert_round_rows,
     concert_subscription_states,
+    concert_variant_gaps,
     detach_tag,
     ensure_user,
     forget_round_label_phrase,
@@ -1097,6 +1098,11 @@ async def edit_concert_form(
             # (each row excludes itself in the template).
             "saved_rounds": list(concert.rounds),
             "tag_summary": tag_summary,
+            # What this record is still missing, in the viewer's language --
+            # informational only (this route's POST twin never blocks on it).
+            # Numbered off the same collections the leg/round loops below
+            # render, so "Leg 2 label" points at the second row on screen.
+            "concert_gaps": concert_variant_gaps(concert, concert.days, concert.rounds),
             "audit_log": await concert_audit_log(session, concert.id),
             "tz": await user_tz(session, user.id),
         },

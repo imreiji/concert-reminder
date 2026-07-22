@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Tag
+from app.db.models import Base, Round, Tag
 from app.db.session import get_session
 from app.domain import translations as app_translations
 from app.web import auth
@@ -656,3 +656,105 @@ def test_every_require_variants_caller_has_a_guarded_create_surface(client):
     # every server-side caller has to appear above -- either drift silently
     # narrows the coverage this test claims to have.
     assert sorted(covered) == sorted(CREATE_BOUNDARIES)
+
+
+# --- the edit page names what is missing ---------------------------------
+#
+# The other side of the asymmetry. The edit routes never block, so the gap
+# has to be visible somewhere -- and it is computed from CURRENT DB STATE and
+# rendered on the page, not carried as a flash message (this codebase has no
+# flash mechanism, and state-derived is better anyway: you see the gap while
+# looking at the record, before deciding what to change, rather than after
+# you save).
+#
+# Every setup below goes THROUGH the edit route to create the half-translated
+# state, which is itself the proof that the save is still unblocked: if
+# require_variants were ever added to edit_concert/edit_tag, these tests
+# would fail at their setup line, not at their assertion.
+
+GAPS = "variant-gaps"  # the notice's marker class
+
+
+async def test_the_concert_edit_page_names_a_missing_language(client):
+    """A concert missing only title_zh: the notice names 中文 and the title."""
+    created = client.post("/concerts", data=_minimal_concert("gap-title", full_title=True))
+    assert created.status_code in (200, 303), created.text
+
+    saved = client.post("/concerts/gap-title/edit", data={
+        "event_id": "gap-title",
+        "title": "ラブライブ", "title_en": "Love Live", "title_zh": "",
+    })
+    assert saved.status_code in (200, 303), saved.text
+
+    body = client.get("/concerts/gap-title/edit").text
+    assert GAPS in body, "the edit page says nothing about the gap"
+    notice = body.split(GAPS)[1][:600]
+    assert "中文" in notice, notice
+    assert "Title" in notice, notice
+    # Only the one language is missing -- naming English too would be a lie.
+    assert "English" not in notice, notice
+
+
+async def test_a_fully_translated_concert_shows_no_notice(client):
+    """A notice that is always there is noise nobody reads."""
+    created = client.post("/concerts", data={
+        **_minimal_concert("no-gaps", full_title=True),
+        **_leg("1日目", "Day 1", "第一天"),
+        **_round("1次先行抽選", "1st-round lottery", "第一轮先行"),
+    })
+    assert created.status_code in (200, 303), created.text
+    assert GAPS not in client.get("/concerts/no-gaps/edit").text
+
+
+async def test_the_notice_names_the_row_a_per_row_gap_is_on(client):
+    """"Round 2 label", not "a round label" -- and numbered the way the
+    create boundary's 422 numbers it, so the two agree."""
+    created = client.post("/concerts", data={
+        **_minimal_concert("row-gap", full_title=True),
+        **_leg("1日目", "Day 1", "第一天"),
+        "round_label": ["1次先行", "2次先行"],
+        "round_label_en": ["1st-round lottery", "2nd-round lottery"],
+        "round_label_zh": ["第一轮先行", "第二轮先行"],
+        "round_kind": ["lottery_round", "lottery_round"],
+        "round_closes_at": ["2026-08-01T18:00", "2026-09-01T18:00"],
+        "round_opens_at": ["", ""], "round_results_at": ["", ""],
+        "round_payment_at": ["", ""], "round_url": ["", ""], "round_notes": ["", ""],
+    })
+    assert created.status_code in (200, 303), created.text
+
+    # Blank the SECOND round's English straight in the DB: this is exactly
+    # the shape of a legacy row, and it keeps the test off the edit form's
+    # dozen-parallel-array contract.
+    async with client.db() as s:
+        rounds = list((await s.execute(
+            select(Round).order_by(Round.id)
+        )).scalars())
+        assert len(rounds) == 2, rounds
+        rounds[1].label_en = None
+        await s.commit()
+
+    body = client.get("/concerts/row-gap/edit").text
+    assert GAPS in body
+    assert "Round 2 label" in body, "the notice must name which round"
+    assert "Round 1 label" not in body, "round 1 is fully translated"
+
+
+async def test_the_tag_edit_dialog_names_its_own_gap(client):
+    created = client.post("/tags", data={
+        "name": "蓮ノ空", "name_en": "Hasunosora", "name_zh": "莲之空", "kind": "group",
+    })
+    assert created.status_code in (200, 303), created.text
+    assert GAPS not in client.get("/tags").text, "a full tag needs no notice"
+
+    async with client.db() as s:
+        tag_id = (await s.execute(select(Tag.id))).scalars().one()
+    saved = client.post(f"/tags/{tag_id}/edit", data={
+        "name": "蓮ノ空", "name_en": "Hasunosora", "name_zh": "",
+    })
+    assert saved.status_code in (200, 303), saved.text
+
+    body = client.get("/tags").text
+    assert GAPS in body, "the tag dialog says nothing about the gap"
+    notice = body.split(GAPS)[1][:400]
+    assert "中文" in notice, notice
+    assert "Name" in notice, notice

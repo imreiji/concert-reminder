@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _("tags") }} — dekimasen.app{% endblock %}
 {% block content %}
+{%- from "_variant_gaps.html" import variant_gaps with context %}
 <div class="tags-head">
   <h1>{{ _("Tags") }}</h1>
   <span class="note dim">
@@ -57,6 +58,8 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
         before the i18n phase carries a Japanese name and nothing else, and
         blocking here would make each of them uneditable. edit_tag makes the
         same choice server-side -- only create_tag calls require_variants. -#}
+    {{ variant_gaps(tag_gaps[t.id]) }}
+
     <form id="tag-edit-{{ t.id }}" method="post" action="/tags/{{ t.id }}/edit" class="stack"
           data-variant-scope>
       <label class="fld"><span>{{ _("Name") }}</span><input name="name" required maxlength="100" value="{{ t.name }}"

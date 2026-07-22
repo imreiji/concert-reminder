@@ -1,0 +1,34 @@
+{#- The edit pages' "what's missing" notice.
+
+    Computed from CURRENT DB STATE by db/service.py's concert_variant_gaps /
+    tag_variant_gaps and rendered inline -- deliberately not a flash message
+    (this codebase has no flash mechanism, and the one sitewide banner,
+    base.html's dm_blocked warning, is state-derived for the same reason).
+    State-derived is also simply better here: the gap is visible while you
+    are looking at the record and deciding what to change, not after you have
+    already saved.
+
+    Informational ONLY. Neither edit route validates and neither edit form
+    carries data-variant-guard, because the phase ships without a backfill
+    and blocking would make every pre-i18n record uneditable. Nothing in here
+    may ever grow into a block -- see the asymmetry section in
+    tests/test_variant_enforcement.py.
+
+    `variant-gaps` on the wrapper is what those tests locate the notice by;
+    `banner-warn` is inherited from the dm_blocked banner so this adds no CSS.
+
+    Import `with context`, or the `_` in here resolves to nothing. -#}
+{% macro variant_gaps(gaps) %}
+{%- if gaps %}
+<div class="banner-warn variant-gaps">
+  <b>{{ _("Not translated everywhere yet.") }}</b>
+  {{ _("You can still save — this is a reminder, not a block.") }}
+  {%- for gap in gaps %}
+  {#- Language names (English / 中文 / 日本語) are never translated: someone
+      reading this has to recognise the language before they can read the
+      sentence around it. -#}
+  <div>{% trans language=gap.language, fields=gap.fields | join(", ") %}Missing {{ language }} for: {{ fields }}{% endtrans %}</div>
+  {%- endfor %}
+</div>
+{%- endif %}
+{% endmacro %}
