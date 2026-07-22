@@ -15,8 +15,15 @@
     does not protect a translated string containing an apostrophe
     (invariant 7). The attributes are also deliberately NOT called
     data-name -- that one collides with base.html's shared filterChips()
-    selector. -#}
-<dialog class="picker" id="venue-create"
+    selector.
+
+    THE VARIANT GUARD REACHES IN HERE. Because these inputs are outside the
+    concert <form>, the submit hook in _variant_guard.html never sees them --
+    the dialog is `data-variant-scope` and calls window.checkVariantGroups
+    itself, ahead of the fetch below. A guard scoped to form descendants
+    would skip both trios silently, which is exactly the shape of bug this
+    dialog's placement invites. -#}
+<dialog class="picker" id="venue-create" data-variant-scope
         data-err-duplicate="{{ _('That venue already exists.') }}"
         data-err-generic="{{ _('Could not add that venue.') }}">
   <div class="picker-head">
@@ -24,12 +31,20 @@
     <button type="button" class="x" data-venue-cancel>×</button>
   </div>
   <div class="picker-body">
-    <label class="fld"><span>{{ _("Name") }}</span><input name="v_name" maxlength="100"></label>
-    <label class="fld"><span>{{ _("Name") }} · English</span><input name="v_name_en" maxlength="100"></label>
-    <label class="fld"><span>{{ _("Name") }} · 中文</span><input name="v_name_zh" maxlength="100"></label>
-    <label class="fld"><span>{{ _("City") }}</span><input name="v_city" maxlength="100"></label>
-    <label class="fld"><span>{{ _("City") }} · English</span><input name="v_city_en" maxlength="100"></label>
-    <label class="fld"><span>{{ _("City") }} · 中文</span><input name="v_city_zh" maxlength="100"></label>
+    <label class="fld"><span>{{ _("Name") }}</span><input name="v_name" maxlength="100"
+      data-variant-group="v_name" data-variant-slot="ja" data-variant-mandatory
+      data-variant-label="{{ _('Name') }}"></label>
+    <label class="fld"><span>{{ _("Name") }} · English</span><input name="v_name_en" maxlength="100"
+      data-variant-group="v_name" data-variant-slot="en"></label>
+    <label class="fld"><span>{{ _("Name") }} · 中文</span><input name="v_name_zh" maxlength="100"
+      data-variant-group="v_name" data-variant-slot="zh"></label>
+    <label class="fld"><span>{{ _("City") }}</span><input name="v_city" maxlength="100"
+      data-variant-group="v_city" data-variant-slot="ja"
+      data-variant-label="{{ _('City') }}"></label>
+    <label class="fld"><span>{{ _("City") }} · English</span><input name="v_city_en" maxlength="100"
+      data-variant-group="v_city" data-variant-slot="en"></label>
+    <label class="fld"><span>{{ _("City") }} · 中文</span><input name="v_city_zh" maxlength="100"
+      data-variant-group="v_city" data-variant-slot="zh"></label>
     <label class="fld"><span>{{ _("Region") }}</span><input name="v_region" maxlength="100"></label>
     <label class="fld"><span>{{ _("Address") }}</span><input name="v_address" maxlength="300"></label>
     <label class="fld"><span>{{ _("Map link") }}</span><input name="v_location_url" maxlength="500"></label>
@@ -69,6 +84,10 @@
     dlg.addEventListener("close", function () {
       dlg.querySelector("[data-venue-err]").hidden = true;
       dlg.querySelectorAll("input").forEach((i) => { i.value = ""; });
+      // Same reason the error is hidden: an inline variant message left over
+      // from a blocked save would otherwise greet the next open of a blank
+      // form.
+      if (window.clearVariantWarnings) window.clearVariantWarnings(dlg);
       opener = null;
     });
 
@@ -81,6 +100,12 @@
 
     dlg.querySelector("[data-venue-save]").addEventListener("click", async function () {
       const err = dlg.querySelector("[data-venue-err]");
+      // The all-or-nothing variant rule, checked HERE rather than by the
+      // submit hook in _variant_guard.html: this dialog posts by fetch and
+      // never fires a submit event, and its inputs are outside the concert
+      // <form> anyway. quick_create_venue enforces the same rule server-side;
+      // this only stops the round trip that would report it as a raw 422.
+      if (window.checkVariantGroups && !window.checkVariantGroups(dlg)) return;
       const body = new FormData();
       FIELDS.forEach(([field, input]) => {
         body.append(field, dlg.querySelector('[name="' + input + '"]').value);

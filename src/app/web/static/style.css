@@ -525,6 +525,16 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .eleg-top > .vfld > input, .redit-top > .vfld > input {
   flex: 1 1 auto; min-width: 0; width: 100%;
 }
+/* The inline "you forgot a language" message the browser-side variant guard
+   paints (_variant_guard.html) -- inserted after the offending field, and
+   removed again the moment its trio is whole. flex-basis 100% so that inside
+   the flex-wrap rows above it takes a line of its own instead of squeezing
+   the three boxes; harmless in the block contexts (the Translations fold, the
+   venue dialog) where it is not a flex item at all. No @media rule: it
+   inherits the row's own wrapping on a phone. */
+.vwarn {
+  flex: 1 1 100%; margin: .2rem 0 0; font-size: .78rem; color: var(--danger);
+}
 /* var(--raise), not a hardcoded #fff -- it flips near-white in light mode
    and near-black in dark, staying legible on this --danger ground either
    way (unlike the other #fff occurrences here, which sit on the accent

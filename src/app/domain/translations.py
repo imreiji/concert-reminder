@@ -7,7 +7,15 @@ mix of languages that nobody notices is wrong -- an English viewer sees
 Japanese in the middle of an English page and assumes it is intentional.
 
 Pure by design (domain/): the browser, the route and the templates all
-apply the SAME rule, and this is the only place it is written down.
+apply the SAME rule.
+
+It is written down TWICE, deliberately. `missingVariants` in
+`web/templates/_variant_guard.html` re-implements `missing_variants` below
+in JavaScript, because the browser has to block the submit before it
+happens -- a 422 here navigates the editor to a raw JSON body and loses
+everything they typed. The duplication is accepted; going unnoticed is not.
+A change to either side is a change to both, and that file names this one
+in return.
 """
 
 _SLOTS = ("ja", "en", "zh")

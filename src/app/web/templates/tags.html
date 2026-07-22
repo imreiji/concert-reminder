@@ -52,12 +52,22 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
       <div><div class="n3">{{ c.upcoming }}</div><div class="l3">{{ _("upcoming") }}</div></div>
     </div>
 
-    <form id="tag-edit-{{ t.id }}" method="post" action="/tags/{{ t.id }}/edit" class="stack">
-      <label class="fld"><span>{{ _("Name") }}</span><input name="name" required maxlength="100" value="{{ t.name }}"></label>
+    {#- data-variant-scope but NO data-variant-guard: the name trio is marked
+        so it is enumerable, but this form is never blocked. Every tag created
+        before the i18n phase carries a Japanese name and nothing else, and
+        blocking here would make each of them uneditable. edit_tag makes the
+        same choice server-side -- only create_tag calls require_variants. -#}
+    <form id="tag-edit-{{ t.id }}" method="post" action="/tags/{{ t.id }}/edit" class="stack"
+          data-variant-scope>
+      <label class="fld"><span>{{ _("Name") }}</span><input name="name" required maxlength="100" value="{{ t.name }}"
+        data-variant-group="tag_name" data-variant-slot="ja" data-variant-mandatory
+        data-variant-label="{{ _('Name') }}"></label>
       {#- Name variants: shown to viewers reading that locale, falling back to
           the canonical name. No uniqueness on these (two tags may share one). -#}
-      <label class="fld"><span>{{ _("Name") }} · English</span><input name="name_en" maxlength="100" value="{{ t.name_en or '' }}"></label>
-      <label class="fld"><span>{{ _("Name") }} · 中文</span><input name="name_zh" maxlength="100" value="{{ t.name_zh or '' }}"></label>
+      <label class="fld"><span>{{ _("Name") }} · English</span><input name="name_en" maxlength="100" value="{{ t.name_en or '' }}"
+        data-variant-group="tag_name" data-variant-slot="en"></label>
+      <label class="fld"><span>{{ _("Name") }} · 中文</span><input name="name_zh" maxlength="100" value="{{ t.name_zh or '' }}"
+        data-variant-group="tag_name" data-variant-slot="zh"></label>
       {% if is_group or is_artist %}
       <label class="fld"><span>{{ _("eventernote URL") }}</span>
         <input name="eventernote_url" type="url" value="{{ t.eventernote_url or '' }}"
@@ -183,6 +193,7 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
 </div>
 {% if user.is_editor %}{% for t in all_tags %}{{ tag_dialog(t) }}{% endfor %}
 
+{% include "_variant_guard.html" %}
 {#- New-tag dialog. One real <form> posting to /tags; the kind pill picker
     writes a hidden `kind` input. Fields the chosen kind does not use are
     hidden AND disabled by setTagKind so a kind switch can never submit a stale

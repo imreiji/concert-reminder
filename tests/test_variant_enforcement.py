@@ -9,6 +9,9 @@ The deliberate asymmetry -- the EDIT routes stay open, so a legacy
 half-translated record can still be saved -- is pinned at the bottom.
 """
 
+import re
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -19,8 +22,10 @@ from sqlalchemy.pool import StaticPool
 from app.config import settings
 from app.db.models import Base, Tag
 from app.db.session import get_session
+from app.domain import translations as app_translations
 from app.web import auth
 from app.web.app import create_app
+from app.web.routes import imports as import_routes
 
 EDITOR_ID = 42
 
@@ -69,6 +74,9 @@ def client(db, monkeypatch):
     state = r.headers["location"].split("state=")[1].split("&")[0]
     c.get(f"/auth/callback?code=x&state={state}")
     c.db = db
+    # The import-preview markup tests below need to stub the ramen.events
+    # fetch, the same way tests/test_imports.py does.
+    c.monkeypatch = monkeypatch
     return c
 
 
@@ -321,3 +329,197 @@ async def test_editing_a_legacy_half_translated_tag_is_still_allowed(client):
         "name": "蓮ノ空", "name_en": "Hasunosora", "name_zh": "",
     })
     assert r.status_code in (200, 303), r.text
+
+
+# --- the browser-side block ----------------------------------------------
+#
+# Everything above is the backstop. These pin the markup and wiring the
+# browser guard needs, because the guard itself is JS and pytest cannot run
+# it: what CAN be asserted is that every trio is enumerable, that exactly the
+# create forms opt in, and -- the one that has bitten -- that the venue
+# dialog's trios, which live OUTSIDE the concert <form> on purpose, are still
+# in the guard's reach.
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+GRADUATION_URL = "https://ramen.events/hasunosora-103rd-class-graduation-concert/"
+
+
+def _slots(body: str, group: str) -> list[str]:
+    """The slot attributes of one variant group, in document order."""
+    return re.findall(
+        r'data-variant-group="' + group + r'"[^>]*data-variant-slot="(\w+)"', body
+    ) + re.findall(
+        r'data-variant-slot="(\w+)"[^>]*data-variant-group="' + group + r'"', body
+    )
+
+
+def _editor_form_tag(body: str) -> str | None:
+    """The opening <form> tag of the editor form on an editor page.
+
+    `data-variant-guard` also appears in the guard script's own source, so
+    "is this form guarded" has to be asked of the tag, not of the page.
+    """
+    for tag in re.findall(r"<form[^>]*>", body):
+        if 'id="new-concert"' in tag:
+            return tag
+    return None
+
+
+def _preview(client) -> str:
+    html = (FIXTURES_DIR / "ramen_graduation_concert.html").read_text(encoding="utf-8")
+
+    async def fake_fetch(url: str) -> str:
+        return html
+
+    client.monkeypatch.setattr(import_routes, "fetch_ramen_html", fake_fetch)
+    r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert r.status_code == 200, r.text
+    return r.text
+
+
+def test_the_create_form_marks_every_variant_trio(client):
+    """Each trio is findable by marker, not by guessing at input names."""
+    body = client.get("/concerts/new").text
+    for group in ("title", "notes", "day_label", "round_label"):
+        got = sorted(set(_slots(body, group)))
+        assert got == ["en", "ja", "zh"], f"{group}: {got}"
+
+
+def test_the_create_form_opts_into_the_guard(client):
+    body = client.get("/concerts/new").text
+    assert _editor_form_tag(body) is not None
+    assert "data-variant-guard" in _editor_form_tag(body)
+    assert "checkVariantGroups" in body, "the guard script must be on the page"
+
+
+def test_only_the_title_trio_is_mandatory_on_the_concert_form(client):
+    """Mirrors the server: title is mandatory, notes/labels are all-or-nothing.
+
+    Mark notes mandatory and every concert without notes becomes unsavable.
+    """
+    # The concert form only -- the venue dialog on the same page has its own
+    # mandatory group (v_name), which is checked separately below. (Slicing
+    # from the form tag, not from the top of the page: base.html's language
+    # switcher is a <form> too, and closes long before this one opens.)
+    page = client.get("/concerts/new").text
+    body = page.split(_editor_form_tag(page))[1].split("</form>")[0]
+    mandatory = re.findall(r'data-variant-group="(\w+)"[^>]*data-variant-mandatory', body)
+    assert set(mandatory) == {"title"}, mandatory
+
+
+def test_cloned_row_templates_carry_the_markers(client):
+    """Legs and rounds are added by cloning a <template>. A cloned row that
+    carried no markers would be silently exempt, which is precisely the
+    row an editor is most likely to leave half-translated."""
+    body = client.get("/concerts/new").text
+    tpl = body.split('<template id="round-row-template">')[1]
+    assert sorted(set(_slots(tpl, "round_label"))) == ["en", "ja", "zh"]
+    assert "data-variant-scope" in tpl.split("</template>")[0]
+
+    day_tpl = body.split('<template id="day-row-template">')[1].split("</template>")[0]
+    assert sorted(set(_slots(day_tpl, "day_label"))) == ["en", "ja", "zh"]
+    assert "data-variant-scope" in day_tpl
+
+
+def test_every_row_is_its_own_variant_scope(client):
+    """Two legs both hold a `day_label` group; without a per-row scope the
+    guard would merge them and read one row's English as another's."""
+    created = client.post("/concerts", data={
+        **_minimal_concert("two-legs", full_title=True),
+        "day_label": ["1日目", "2日目"],
+        "day_label_en": ["Day 1", "Day 2"],
+        "day_label_zh": ["第一天", "第二天"],
+        "day_starts_at": ["2026-09-01T18:00", "2026-09-02T18:00"],
+        "day_doors_at": ["", ""],
+    })
+    assert created.status_code in (200, 303), created.text
+
+    body = client.get("/concerts/two-legs/edit").text
+    # Two rendered legs + the clone template = three scoped `.eleg` blocks.
+    assert body.count('class="eleg" data-variant-scope') >= 3, body.count("eleg")
+
+
+# The trap: these inputs are NOT inside the concert <form>.
+
+
+def test_the_venue_dialog_trios_are_marked(client):
+    """v_name / v_city live outside the concert <form> by design, so a check
+    scoped to form descendants would skip them entirely."""
+    body = client.get("/concerts/new").text
+    dialog = body.split('id="venue-create"')[1].split("</dialog>")[0]
+    assert sorted(set(_slots(dialog, "v_name"))) == ["en", "ja", "zh"]
+    assert sorted(set(_slots(dialog, "v_city"))) == ["en", "ja", "zh"]
+    assert "data-variant-mandatory" in dialog, "a venue must have a name"
+
+
+def test_the_venue_dialog_checks_variants_before_its_fetch(client):
+    """The dialog POSTs by fetch, not by form submit, so the submit hook
+    never sees it -- it has to call the guard itself, ahead of the fetch."""
+    body = client.get("/concerts/new").text
+    script = body.split('id="venue-create"')[1]
+    guard_at = script.find("checkVariantGroups")
+    fetch_at = script.find('fetch("/tags/venue/quick"')
+    assert guard_at != -1, "the dialog never calls the guard"
+    assert fetch_at != -1
+    assert guard_at < fetch_at, "the guard must run before the request goes out"
+
+
+def test_the_venue_dialog_is_reachable_from_every_page_that_includes_it(client):
+    """It is included by all three editor pages; the guard has to be too."""
+    created = client.post("/concerts", data=_minimal_concert("dlg", full_title=True))
+    assert created.status_code in (200, 303), created.text
+    for body in (
+        client.get("/concerts/new").text,
+        client.get("/concerts/dlg/edit").text,
+        _preview(client),
+    ):
+        assert 'id="venue-create"' in body
+        assert "checkVariantGroups" in body
+
+
+def test_the_import_preview_marks_and_guards_its_trios(client):
+    body = _preview(client)
+    for group in ("title", "day_label", "round_label"):
+        assert sorted(set(_slots(body, group))) == ["en", "ja", "zh"], group
+    assert "data-variant-guard" in _editor_form_tag(body)
+
+
+# The other half of the asymmetry pinned above: the EDIT pages are marked
+# (a later task reads the markers to say what is missing) but never blocked,
+# because every pre-i18n row in the database is half-translated and blocking
+# would wall the owner out of their own data.
+
+
+def test_the_concert_edit_form_is_marked_but_never_blocked(client):
+    created = client.post("/concerts", data=_minimal_concert("legacy-edit", full_title=True))
+    assert created.status_code in (200, 303), created.text
+    body = client.get("/concerts/legacy-edit/edit").text
+    assert sorted(set(_slots(body, "title"))) == ["en", "ja", "zh"]
+    form_tag = _editor_form_tag(body)
+    assert form_tag is not None
+    assert "data-variant-scope" in form_tag, form_tag
+    assert "data-variant-guard" not in form_tag, form_tag
+
+
+def test_the_tag_edit_dialog_is_marked_but_never_blocked(client):
+    created = client.post("/tags", data={
+        "name": "蓮ノ空", "name_en": "Hasunosora", "name_zh": "莲之空", "kind": "group",
+    })
+    assert created.status_code in (200, 303), created.text
+    body = client.get("/tags").text
+    assert sorted(set(_slots(body, "tag_name"))) == ["en", "ja", "zh"]
+    # The literal also appears in the guard script's own source, so look at
+    # the <form> tags themselves rather than the whole page.
+    forms = re.findall(r"<form[^>]*>", body)
+    guarded = [f for f in forms if "data-variant-guard" in f]
+    assert not guarded, f"editing a legacy tag must stay possible: {guarded}"
+
+
+def test_the_guard_marks_its_duplication_of_the_domain_rule(client):
+    """The JS re-implements domain/translations.py:missing_variants. That is
+    accepted, but a future change to one has to be visibly a change to both,
+    so each side names the other."""
+    body = client.get("/concerts/new").text
+    assert "missing_variants" in body
+    src = Path(app_translations.__file__).read_text(encoding="utf-8")
+    assert "_variant_guard.html" in src

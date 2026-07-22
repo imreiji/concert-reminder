@@ -36,11 +36,13 @@ def require_variants(
     missing_variants (domain/) is the rule; this is only its HTTP boundary,
     the same shape form_url gives clean_url above.
 
-    The detail names the field AND the missing languages, because a caller
-    without JS sees nothing but this string -- the browser-side check that
-    normally catches this paints an inline error and never submits, so by the
-    time this fires there is no other error UI to lean on. 422 rather than
-    409: a gap is a structural violation, not a uniqueness conflict.
+    The detail names the field AND the missing languages, because by the time
+    this fires there is no other error UI to lean on. On a normal submit the
+    browser-side check (web/templates/_variant_guard.html) has already caught
+    the gap, painted an inline message beside the field and not submitted at
+    all; reaching here means JS is off, or the request never came from the
+    form -- and then this string is the entire error UX. 422 rather than 409:
+    a gap is a structural violation, not a uniqueness conflict.
     """
     gaps = missing_variants(base, en, zh, mandatory=mandatory)
     if not gaps:
