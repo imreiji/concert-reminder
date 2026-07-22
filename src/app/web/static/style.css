@@ -525,6 +525,26 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .eleg-top > .vfld > input, .redit-top > .vfld > input {
   flex: 1 1 auto; min-width: 0; width: 100%;
 }
+/* The inline "you forgot a language" message the browser-side variant guard
+   paints (_variant_guard.html) -- inserted after the offending field, and
+   removed again the moment its trio is whole. flex-basis 100% so that inside
+   the flex-wrap rows above it takes a line of its own instead of squeezing
+   the three boxes.
+   The venue dialog and the create-tag dialog paint it too, but for two
+   DIFFERENT reasons, not one shared "block context": .picker-body (the venue
+   dialog) IS a flex container (column direction), so .vwarn genuinely is a
+   flex item there -- it survives only because the container has no definite
+   height, so a percentage flex-basis resolves as auto (content-sized) per
+   the flex spec, and flex-grow has no leftover space to claim in a column
+   that hugs its content. .db under .tagdlg (the create-tag dialog) is CSS
+   grid, not flex -- flex-basis/flex-grow simply do not apply to a grid item,
+   so .vwarn really is exempt there. Don't assume a future flex parent gets
+   the same free pass as .picker-body -- one with a definite height would
+   actually stretch this to fill it. No @media rule: it inherits the row's
+   own wrapping on a phone. */
+.vwarn {
+  flex: 1 1 100%; margin: .2rem 0 0; font-size: .78rem; color: var(--danger);
+}
 /* var(--raise), not a hardcoded #fff -- it flips near-white in light mode
    and near-black in dark, staying legible on this --danger ground either
    way (unlike the other #fff occurrences here, which sit on the accent

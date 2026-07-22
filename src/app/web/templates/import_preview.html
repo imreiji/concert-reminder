@@ -32,7 +32,12 @@
 </div>
 {% endif %}
 
-<form class="stack wide editor" method="post" action="/concerts/import/commit" id="new-concert">
+{#- data-variant-guard: import_commit is a CREATE boundary and enforces the
+    same rule POST /concerts does, so the browser blocks a half-translated
+    field here too rather than letting a raw 422 throw away the whole draft --
+    which on this page is a scrape the editor cannot cheaply redo. -#}
+<form class="stack wide editor" method="post" action="/concerts/import/commit" id="new-concert"
+      data-variant-scope data-variant-guard>
   {#- The source URL the draft came from is now an editable field in the
       Details fold below (it was a hidden field). Commit is a separate request,
       so it still round-trips through the client -- re-validated server-side on
@@ -40,7 +45,9 @@
 
   <div class="ebar">
     <label class="grow">{{ _("Title (JP)") }} <input class="title-input" name="title" required
-      maxlength="200" value="{{ parsed.title }}"></label>
+      maxlength="200" value="{{ parsed.title }}"
+      data-variant-group="title" data-variant-slot="ja" data-variant-mandatory
+      data-variant-label="{{ _('Title') }}"></label>
     <label>{{ _("Kind") }}
       <select name="kind">
         <option value="">{{ _("— none —") }}</option>
@@ -64,19 +71,23 @@
 
   <div id="day-rows" class="row-list">
     {% for d in parsed.days %}
-    <div class="eleg">
+    <div class="eleg" data-variant-scope>
       <input type="hidden" name="day_id" value="">
       {#- The key a round's chips reference. Stable per parsed row; a leg the
           editor adds in the browser gets a generated key instead. -#}
       <input type="hidden" name="day_key" value="d{{ loop.index0 }}">
       <div class="eleg-top">
-        <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ d.label }}">
+        <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ d.label }}"
+               data-variant-group="day_label" data-variant-slot="ja"
+               data-variant-label="{{ _('Performance label') }}">
         {#- No `value=`: the ramen.events parse produces a Japanese label only,
             so there is nothing to pre-fill here -- same as round_label_en below. -#}
         <label class="vfld"><span class="vfld-tag">English</span>
-          <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
+          <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
+                 data-variant-group="day_label" data-variant-slot="en"></label>
         <label class="vfld"><span class="vfld-tag">中文</span>
-          <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
+          <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
+                 data-variant-group="day_label" data-variant-slot="zh"></label>
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="false">
           <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
@@ -134,15 +145,19 @@
 
   <div id="round-rows" class="row-list">
     {% for r in parsed.rounds %}
-    <div class="redit">
+    <div class="redit" data-variant-scope>
       <input type="hidden" name="round_id" value="">
       <div class="redit-top">
         <input class="redit-name" name="round_label" required maxlength="200"
-               placeholder="1次先行抽選" value="{{ r.label }}">
+               placeholder="1次先行抽選" value="{{ r.label }}"
+               data-variant-group="round_label" data-variant-slot="ja"
+               data-variant-label="{{ _('Round label') }}">
         <label class="vfld"><span class="vfld-tag">English</span>
-          <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
+          <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
+                 data-variant-group="round_label" data-variant-slot="en"></label>
         <label class="vfld"><span class="vfld-tag">中文</span>
-          <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
+          <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
+                 data-variant-group="round_label" data-variant-slot="zh"></label>
         {#- The scrape only ever fills Japanese, so this is the page where a
             remembered triple saves the most typing. -#}
         <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>
@@ -183,15 +198,33 @@
       exactly as create_concert does. -#}
   <details class="fold">
     <summary>{{ _("Details and links") }}
-      <span class="fold-hint">{{ _("Optional — title EN, organizer, source URL, notes") }}</span></summary>
+      <span class="fold-hint">{{ _("Optional — title and notes in each language, organizer, source URL") }}</span></summary>
     <div class="fold-body">
       <div class="grid2">
-        <label>{{ _("Title (EN)") }} <input name="title_en" maxlength="200"></label>
+        {#- Both title variants, never just the English one: import_commit
+            holds the title to the same all-three rule create_concert does, so
+            a form offering only title_en could not be submitted at all once a
+            title was typed into it. -#}
+        <label>{{ _("Title (EN)") }} <input name="title_en" maxlength="200"
+          data-variant-group="title" data-variant-slot="en"></label>
+        <label>{{ _("Title (中文)") }} <input name="title_zh" maxlength="200"
+          data-variant-group="title" data-variant-slot="zh"></label>
         <label>{{ _("Artist / organizer") }} <input name="organizer" maxlength="200" placeholder="{{ _('non-series acts, etc.') }}"></label>
         <label>{{ _("Source URL") }} <input name="source_url" type="url" value="{{ source_url }}"
           placeholder="{{ _('where this was sourced from') }}"></label>
       </div>
-      <label>{{ _("Notes") }} <textarea name="notes" rows="2"></textarea></label>
+      {#- All three notes variants, for the same reason the title trio above
+          carries all three: import_commit calls require_variants("Notes", ...),
+          so a form offering only the Japanese box could not be submitted once
+          anything was typed into it. Marked like every other trio so the
+          browser guard blocks the gap before the 422 can. -#}
+      <label>{{ _("Notes") }} <textarea name="notes" rows="2"
+        data-variant-group="notes" data-variant-slot="ja"
+        data-variant-label="{{ _('Notes') }}"></textarea></label>
+      <label>{{ _("Notes (EN)") }} <textarea name="notes_en" rows="2"
+        data-variant-group="notes" data-variant-slot="en"></textarea></label>
+      <label>{{ _("Notes (中文)") }} <textarea name="notes_zh" rows="2"
+        data-variant-group="notes" data-variant-slot="zh"></textarea></label>
     </div>
   </details>
 
@@ -210,20 +243,25 @@
 </form>
 {#- Outside the form on purpose: the dialog's v_* inputs are read by hand
     and must not post on the commit. Same placement concert_new.html uses. -#}
+{% include "_variant_guard.html" %}
 {% include "_venue_create_dialog.html" %}
 {% include "_round_phrase_dialog.html" %}
 {% include "_tag_picker_script.html" %}
 
 <template id="day-row-template">
-  <div class="eleg">
+  <div class="eleg" data-variant-scope>
     <input type="hidden" name="day_id" value="">
     <input type="hidden" name="day_key" value="">
     <div class="eleg-top">
-      <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}">
+      <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}"
+             data-variant-group="day_label" data-variant-slot="ja"
+             data-variant-label="{{ _('Performance label') }}">
       <label class="vfld"><span class="vfld-tag">English</span>
-        <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
+        <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
+               data-variant-group="day_label" data-variant-slot="en"></label>
       <label class="vfld"><span class="vfld-tag">中文</span>
-        <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
+        <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
+               data-variant-group="day_label" data-variant-slot="zh"></label>
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
         <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
@@ -249,14 +287,18 @@
 </template>
 
 <template id="round-row-template">
-  <div class="redit">
+  <div class="redit" data-variant-scope>
     <input type="hidden" name="round_id" value="">
     <div class="redit-top">
-      <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選">
+      <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選"
+             data-variant-group="round_label" data-variant-slot="ja"
+             data-variant-label="{{ _('Round label') }}">
       <label class="vfld"><span class="vfld-tag">English</span>
-        <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
+        <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
+               data-variant-group="round_label" data-variant-slot="en"></label>
       <label class="vfld"><span class="vfld-tag">中文</span>
-        <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
+        <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
+               data-variant-group="round_label" data-variant-slot="zh"></label>
       {#- Fills all three boxes above from a triple this editor has typed
           before -- see _round_phrase_dialog.html, included after </form>. -#}
       <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>

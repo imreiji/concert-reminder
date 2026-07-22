@@ -167,7 +167,7 @@ def test_each_login_rotates_the_token(client):
 
 def test_anonymous_is_rejected_by_protected_routes(client):
     # Signed out is not an error, it is a wrong turn: 303 home, not 401.
-    r = client.post("/concerts", data={"title": "X"})
+    r = client.post("/concerts", data={"title_en": "X", "title_zh": "X", "title": "X"})
     assert r.status_code == 303
     assert r.headers["location"] == "/"
 
@@ -186,7 +186,7 @@ def test_anonymous_get_preserves_the_query_string(client):
 def test_anonymous_post_carries_no_destination(client):
     """A POST body is gone by now, so replaying its URL after login would
     render a form that looks like it submitted and didn't."""
-    r = client.post("/concerts", data={"title": "X"})
+    r = client.post("/concerts", data={"title_en": "X", "title_zh": "X", "title": "X"})
     assert r.headers["location"] == "/"
 
 
@@ -194,7 +194,7 @@ def test_htmx_returns_to_the_page_not_the_fragment_endpoint(client):
     """The fragment URL is not somewhere you can stand -- HX-Current-URL is."""
     r = client.post(
         "/concerts",
-        data={"title": "X"},
+        data={"title_en": "X", "title_zh": "X", "title": "X"},
         headers={"HX-Request": "true", "HX-Current-URL": "http://testserver/discover?tag=3"},
     )
     assert r.status_code == 204
@@ -205,7 +205,7 @@ def test_htmx_current_url_origin_cannot_steer_the_redirect(client):
     """Only the PATH of that header survives, so a forged origin goes nowhere."""
     r = client.post(
         "/concerts",
-        data={"title": "X"},
+        data={"title_en": "X", "title_zh": "X", "title": "X"},
         headers={"HX-Request": "true", "HX-Current-URL": "https://evil.com/phish"},
     )
     assert r.headers["hx-redirect"] == "/?next=%2Fphish"
@@ -274,7 +274,9 @@ def test_anonymous_get_lands_on_a_rendered_home_page(client):
 def test_anonymous_htmx_request_gets_hx_redirect(client):
     """An htmx XHR would FOLLOW a 303 and swap the landing page into a
     fragment target. HX-Redirect makes the browser navigate instead."""
-    r = client.post("/concerts", data={"title": "X"}, headers={"HX-Request": "true"})
+    r = client.post("/concerts", data={
+        "title_en": "X", "title_zh": "X", "title": "X",
+    }, headers={"HX-Request": "true"})
     assert r.status_code == 204
     assert r.headers["hx-redirect"] == "/"
     assert r.text == ""  # nothing for htmx to swap
@@ -291,13 +293,17 @@ def test_signed_in_but_unauthorized_still_403s(client, monkeypatch):
 def test_non_editor_is_forbidden(client, monkeypatch):
     monkeypatch.setattr(settings, "editor_whitelist", "999")  # 42 not whitelisted
     do_login(client)
-    assert client.post("/concerts", data={"title": "X"}).status_code == 403
+    assert client.post("/concerts", data={
+        "title_en": "X", "title_zh": "X", "title": "X",
+    }).status_code == 403
 
 
 def test_editor_passes(client, monkeypatch):
     monkeypatch.setattr(settings, "editor_whitelist", "42")
     do_login(client)
-    assert client.post("/concerts", data={"title": "X", "event_id": "x"}).status_code == 303
+    assert client.post("/concerts", data={
+        "title_en": "X", "title_zh": "X", "title": "X", "event_id": "x",
+    }).status_code == 303
 
 
 # ── Admin gating ─────────────────────────────────────────────────────────
@@ -319,7 +325,9 @@ def test_admin_implicitly_passes_editor_routes(client, monkeypatch):
     """Admins can create/edit concerts even with no editor_whitelist/DB flag."""
     monkeypatch.setattr(settings, "admin_whitelist", "42")
     do_login(client)
-    assert client.post("/concerts", data={"title": "X", "event_id": "x"}).status_code == 303
+    assert client.post("/concerts", data={
+        "title_en": "X", "title_zh": "X", "title": "X", "event_id": "x",
+    }).status_code == 303
 
 
 async def test_promote_then_demote_round_trip(client, monkeypatch):
@@ -363,7 +371,9 @@ def test_promoted_editor_gains_access(client, monkeypatch):
 
     monkeypatch.setattr(auth, "fetch_identity", fake_identity)
     do_login(client)
-    assert client.post("/concerts", data={"title": "Y", "event_id": "y"}).status_code == 303
+    assert client.post("/concerts", data={
+        "title_en": "Y", "title_zh": "Y", "title": "Y", "event_id": "y",
+    }).status_code == 303
 
 
 def test_admin_sees_editors_panel_on_preferences_page(client, monkeypatch):

@@ -19,12 +19,23 @@
     ] | reject('none') | list %}
 <h1>{{ _("Edit event") }}</h1>
 
+{%- from "_variant_gaps.html" import variant_gaps with context %}
+{{ variant_gaps(concert_gaps) }}
+
+{#- data-variant-scope but NO data-variant-guard, on purpose. The trios below
+    are marked so they are enumerable, but this form is never blocked: the
+    phase ships without a backfill, so nearly every existing record is
+    half-translated, and blocking here would wall the owner out of their own
+    data. That mirrors the server exactly -- edit_concert does not call
+    require_variants, only create_concert does. -#}
 <form class="stack wide editor" method="post" action="/concerts/{{ concert.event_id }}/edit"
-      id="new-concert">
+      id="new-concert" data-variant-scope>
 
   <div class="ebar">
     <label class="grow">{{ _("Title (JP)") }} <input class="title-input" name="title" required
-      maxlength="200" value="{{ concert.title }}"></label>
+      maxlength="200" value="{{ concert.title }}"
+      data-variant-group="title" data-variant-slot="ja" data-variant-mandatory
+      data-variant-label="{{ _('Title') }}"></label>
     <label>{{ _("Event ID") }} <span class="dim tiny">{{ _("(this event's URL — letters, digits, hyphens, underscores only)") }}</span>
       <input name="event_id" required maxlength="100" pattern="[A-Za-z0-9_\-]+"
              value="{{ concert.event_id }}"></label>
@@ -53,17 +64,21 @@
 
   <div id="round-rows" class="row-list">
     {% for r, leg_value, leg_ids, qual_value, qual_ids in rounds_with_chips %}
-    <div class="redit">
+    <div class="redit" data-variant-scope>
       <input type="hidden" name="round_id" value="{{ r.id }}">
       <div class="redit-top">
         <input class="redit-name" name="round_label" required maxlength="200"
-               placeholder="1次先行抽選" value="{{ r.label }}">
+               placeholder="1次先行抽選" value="{{ r.label }}"
+               data-variant-group="round_label" data-variant-slot="ja"
+               data-variant-label="{{ _('Round label') }}">
         <label class="vfld"><span class="vfld-tag">English</span>
           <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-                 value="{{ r.label_en or '' }}"></label>
+                 value="{{ r.label_en or '' }}"
+                 data-variant-group="round_label" data-variant-slot="en"></label>
         <label class="vfld"><span class="vfld-tag">中文</span>
           <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-                 value="{{ r.label_zh or '' }}"></label>
+                 value="{{ r.label_zh or '' }}"
+                 data-variant-group="round_label" data-variant-slot="zh"></label>
         {#- Fills all three boxes above from a triple this editor has typed
             before -- see _round_phrase_dialog.html, included after </form>. -#}
         <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>
@@ -97,7 +112,7 @@
   <h3 class="section-sub">{{ _("Legs") }} <small class="dim">{{ _("(one per show / day)") }}</small></h3>
   <div id="day-rows" class="row-list">
     {% for d in concert.days %}
-    <div class="eleg{% if d.cancelled %} cancelled{% endif %}">
+    <div class="eleg{% if d.cancelled %} cancelled{% endif %}" data-variant-scope>
       <input type="hidden" name="day_id" value="{{ d.id }}">
       {#- day_key: the identifier a round's chips reference. A saved leg's
           key is its own id, so nothing about an existing leg depends on the
@@ -105,13 +120,17 @@
           what lets a brand-new leg be assigned a round in the same save. -#}
       <input type="hidden" name="day_key" value="{{ d.id }}">
       <div class="eleg-top">
-        <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ d.label }}">
+        <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ d.label }}"
+               data-variant-group="day_label" data-variant-slot="ja"
+               data-variant-label="{{ _('Performance label') }}">
         <label class="vfld"><span class="vfld-tag">English</span>
           <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
-                 value="{{ d.label_en or '' }}"></label>
+                 value="{{ d.label_en or '' }}"
+                 data-variant-group="day_label" data-variant-slot="en"></label>
         <label class="vfld"><span class="vfld-tag">中文</span>
           <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
-                 value="{{ d.label_zh or '' }}"></label>
+                 value="{{ d.label_zh or '' }}"
+                 data-variant-group="day_label" data-variant-slot="zh"></label>
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="{{ 'true' if d.cancelled else 'false' }}">
           <button type="button" class="chip{% if d.cancelled %} on{% endif %}" data-cancel-toggle
@@ -154,7 +173,9 @@
         <label>{{ _("Source URL") }} <input name="source_url" type="url" value="{{ concert.source_url or '' }}"></label>
       </div>
       <label>{{ _("Performers (one per line)") }} <textarea name="performers_text" rows="3">{{ concert.performers_text or '' }}</textarea></label>
-      <label>{{ _("Notes") }} <textarea name="notes" rows="2">{{ concert.notes or '' }}</textarea></label>
+      <label>{{ _("Notes") }} <textarea name="notes" rows="2"
+        data-variant-group="notes" data-variant-slot="ja"
+        data-variant-label="{{ _('Notes') }}">{{ concert.notes or '' }}</textarea></label>
 
       {#- Per-language variants of the user-entered title, venue and notes.
           The JP-side originals are the title above and the free-text venue;
@@ -166,16 +187,20 @@
       </div>
       <h4 class="section-sub">{{ _("English") }}</h4>
       <div class="grid2">
-        <label>{{ _("Title") }} <input name="title_en" maxlength="200" value="{{ concert.title_en or '' }}"></label>
+        <label>{{ _("Title") }} <input name="title_en" maxlength="200" value="{{ concert.title_en or '' }}"
+          data-variant-group="title" data-variant-slot="en"></label>
         <label>{{ _("Venue") }} <input name="venue_en" maxlength="200" value="{{ concert.venue_en or '' }}"></label>
       </div>
-      <label>{{ _("Notes") }} <textarea name="notes_en" rows="2">{{ concert.notes_en or '' }}</textarea></label>
+      <label>{{ _("Notes") }} <textarea name="notes_en" rows="2"
+        data-variant-group="notes" data-variant-slot="en">{{ concert.notes_en or '' }}</textarea></label>
       <h4 class="section-sub">中文</h4>
       <div class="grid2">
-        <label>{{ _("Title") }} <input name="title_zh" maxlength="200" value="{{ concert.title_zh or '' }}"></label>
+        <label>{{ _("Title") }} <input name="title_zh" maxlength="200" value="{{ concert.title_zh or '' }}"
+          data-variant-group="title" data-variant-slot="zh"></label>
         <label>{{ _("Venue") }} <input name="venue_zh" maxlength="200" value="{{ concert.venue_zh or '' }}"></label>
       </div>
-      <label>{{ _("Notes") }} <textarea name="notes_zh" rows="2">{{ concert.notes_zh or '' }}</textarea></label>
+      <label>{{ _("Notes") }} <textarea name="notes_zh" rows="2"
+        data-variant-group="notes" data-variant-slot="zh">{{ concert.notes_zh or '' }}</textarea></label>
     </div>
   </details>
 
@@ -217,6 +242,7 @@
 </form>
 {#- Outside the form on purpose: the dialog's v_* inputs are read by
     hand and must not ride along on the concert save. -#}
+{% include "_variant_guard.html" %}
 {% include "_venue_create_dialog.html" %}
 {% include "_round_phrase_dialog.html" %}
 {% include "_tag_picker_script.html" %}
@@ -246,15 +272,19 @@
 </div>
 
 <template id="day-row-template">
-  <div class="eleg">
+  <div class="eleg" data-variant-scope>
     <input type="hidden" name="day_id" value="">
     <input type="hidden" name="day_key" value="">
     <div class="eleg-top">
-      <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}">
+      <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}"
+             data-variant-group="day_label" data-variant-slot="ja"
+             data-variant-label="{{ _('Performance label') }}">
       <label class="vfld"><span class="vfld-tag">English</span>
-        <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
+        <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
+               data-variant-group="day_label" data-variant-slot="en"></label>
       <label class="vfld"><span class="vfld-tag">中文</span>
-        <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
+        <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
+               data-variant-group="day_label" data-variant-slot="zh"></label>
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
         <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
@@ -280,14 +310,18 @@
 </template>
 
 <template id="round-row-template">
-  <div class="redit">
+  <div class="redit" data-variant-scope>
     <input type="hidden" name="round_id" value="">
     <div class="redit-top">
-      <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選">
+      <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選"
+             data-variant-group="round_label" data-variant-slot="ja"
+             data-variant-label="{{ _('Round label') }}">
       <label class="vfld"><span class="vfld-tag">English</span>
-        <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
+        <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
+               data-variant-group="round_label" data-variant-slot="en"></label>
       <label class="vfld"><span class="vfld-tag">中文</span>
-        <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
+        <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
+               data-variant-group="round_label" data-variant-slot="zh"></label>
       {#- Fills all three boxes above from a triple this editor has typed
           before -- see _round_phrase_dialog.html, included after </form>. -#}
       <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>

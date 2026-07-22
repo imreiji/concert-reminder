@@ -158,25 +158,37 @@ def login_as(client, discord_id: int, name: str):
 
 def test_tag_creation_is_editor_only(client):
     login_as(client, VIEWER_ID, "viewer")
-    assert client.post("/tags", data={"name": "X", "kind": "artist"}).status_code == 403
+    assert client.post("/tags", data={
+        "name_en": "X", "name_zh": "X", "name": "X", "kind": "artist",
+    }).status_code == 403
     login_as(client, EDITOR_ID, "reiji")
-    assert client.post("/tags", data={"name": "X", "kind": "artist"}).status_code == 303
+    assert client.post("/tags", data={
+        "name_en": "X", "name_zh": "X", "name": "X", "kind": "artist",
+    }).status_code == 303
 
 
 def test_creating_same_name_same_kind_still_409s(client):
     """Kind-scoped duplicate rule (resolved with the owner): a second tag of
     the SAME name AND SAME kind is a real duplicate and stays blocked."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Aqours", "kind": "group"})
-    assert client.post("/tags", data={"name": "aqours", "kind": "group"}).status_code == 409
+    client.post("/tags", data={
+        "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
+    })
+    assert client.post("/tags", data={
+        "name_en": "aqours", "name_zh": "aqours", "name": "aqours", "kind": "group",
+    }).status_code == 409
 
 
 async def test_creating_same_name_tag_now_succeeds(client):
     """Replaces test_duplicate_tag_names_rejected_case_insensitively: same
     name with a DIFFERENT kind is now allowed (warn in the UI, don't block)."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Aqours", "kind": "group"})
-    r = client.post("/tags", data={"name": "aqours", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
+    })
+    r = client.post("/tags", data={
+        "name_en": "aqours", "name_zh": "aqours", "name": "aqours", "kind": "venue",
+    })
     assert r.status_code == 303
     async with client.db() as s:
         rows = (await s.execute(
@@ -187,15 +199,17 @@ async def test_creating_same_name_tag_now_succeeds(client):
 
 def test_groups_cannot_contain_groups(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "G1", "kind": "group"})
-    client.post("/tags", data={"name": "G2", "kind": "group"})
+    client.post("/tags", data={"name_en": "G1", "name_zh": "G1", "name": "G1", "kind": "group"})
+    client.post("/tags", data={"name_en": "G2", "name_zh": "G2", "name": "G2", "kind": "group"})
     r = client.post("/tags/1/members", data={"member_tag_id": 2})
     assert r.status_code == 422
 
 
 async def test_rename_tag_round_trips(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
     r = client.post("/tags/1/edit", data={"name": "Hasunosora Idols"})
     assert r.status_code == 303
 
@@ -206,15 +220,21 @@ async def test_rename_tag_round_trips(client):
 
 def test_rename_tag_rejects_case_insensitive_duplicate(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
-    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
     r = client.post("/tags/2/edit", data={"name": "hasunosora"})
     assert r.status_code == 409
 
 
 def test_rename_tag_to_its_own_current_name_is_a_noop(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
     r = client.post("/tags/1/edit", data={"name": "Hasunosora"})
     assert r.status_code == 303
 
@@ -223,7 +243,9 @@ async def test_edit_tag_without_name_field_leaves_name_unchanged(client):
     """Backward compatibility: the venue-only edit form that existed before
     this feature never sends `name` at all."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "K Arena", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "K Arena", "name_zh": "K Arena", "name": "K Arena", "kind": "venue",
+    })
     r = client.post("/tags/1/edit", data={"region": "Kanto"})
     assert r.status_code == 303
 
@@ -361,7 +383,7 @@ async def test_eventernote_url_round_trips_on_create_and_edit(client):
     """POST /tags stores an eventernote_url; POST /tags/{id}/edit replaces it;
     clearing the field nulls it."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={
+    client.post("/tags", data={"name_en": "Kozue Otomune", "name_zh": "Kozue Otomune",
         "name": "Kozue Otomune", "kind": "artist",
         "eventernote_url": "https://www.eventernote.com/actors/1234",
     })
@@ -386,12 +408,14 @@ async def test_eventernote_url_round_trips_on_create_and_edit(client):
 def test_eventernote_url_rejects_unsafe_scheme(client):
     """javascript: through create AND through edit both 422 (form_url)."""
     login_as(client, EDITOR_ID, "reiji")
-    r = client.post("/tags", data={
+    r = client.post("/tags", data={"name_en": "Kozue", "name_zh": "Kozue",
         "name": "Kozue", "kind": "artist", "eventernote_url": "javascript:alert(1)",
     })
     assert r.status_code == 422
     # a clean tag to aim the edit at
-    client.post("/tags", data={"name": "Kaho", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Kaho", "name_zh": "Kaho", "name": "Kaho", "kind": "artist",
+    })
     r = client.post("/tags/1/edit", data={
         "name": "Kaho", "eventernote_url": "javascript:alert(1)",
     })
@@ -403,11 +427,19 @@ def test_eventernote_url_rejects_unsafe_scheme(client):
 
 def test_tags_page_renders_hierarchy_and_search_box(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
-    client.post("/tags", data={"name": "Liella", "kind": "group", "parent_id": 1})
-    client.post("/tags", data={"name": "Kaho", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group", "parent_id": 1,
+    })
+    client.post("/tags", data={
+        "name_en": "Kaho", "name_zh": "Kaho", "name": "Kaho", "kind": "artist",
+    })
     client.post("/tags/2/members", data={"member_tag_id": 3})
-    client.post("/tags", data={"name": "K Arena", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "K Arena", "name_zh": "K Arena", "name": "K Arena", "kind": "venue",
+    })
 
     r = client.get("/tags")
     assert r.status_code == 200
@@ -424,7 +456,9 @@ def test_tags_page_renders_hierarchy_and_search_box(client):
 
 def test_tags_page_solo_artist_bucket(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Solo Artist", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Solo Artist", "name_zh": "Solo Artist", "name": "Solo Artist", "kind": "artist",
+    })
     r = client.get("/tags")
     assert r.status_code == 200
     assert "Performers with no group" in r.text
@@ -436,8 +470,13 @@ def test_tags_page_solo_artist_bucket(client):
 
 def test_tags_page_chips_carry_concert_counts(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
-    client.post("/concerts", data={"title": "Show", "event_id": "show", "franchise_tags": [1]})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
+    client.post("/concerts", data={
+        "title_en": "Show", "title_zh": "Show", "title": "Show", "event_id": "show",
+        "franchise_tags": [1],
+    })
     r = client.get("/tags")
     assert r.status_code == 200
     # the count sits on the chip, right after the name
@@ -446,7 +485,9 @@ def test_tags_page_chips_carry_concert_counts(client):
 
 def test_tags_page_zero_concert_tag_renders_unused(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
     r = client.get("/tags")
     assert "tchip k-franchise unused" in r.text
     assert 'Hasunosora<span class="n2">0</span>' in r.text
@@ -454,8 +495,12 @@ def test_tags_page_zero_concert_tag_renders_unused(client):
 
 def test_tags_page_member_chips_have_no_count(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Aqours", "kind": "group"})
-    client.post("/tags", data={"name": "MemberChip", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "MemberChip", "name_zh": "MemberChip", "name": "MemberChip", "kind": "artist",
+    })
     client.post("/tags/1/members", data={"member_tag_id": 2})
     r = client.get("/tags")
     # a member chip ends immediately after its name -- no <span class="n2">
@@ -464,8 +509,14 @@ def test_tags_page_member_chips_have_no_count(client):
 
 def test_tags_page_groups_venues_by_region_with_no_region_last(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Kanto Hall", "kind": "venue", "region": "Kanto"})
-    client.post("/tags", data={"name": "Mystery Venue", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "Kanto Hall", "name_zh": "Kanto Hall", "name": "Kanto Hall", "kind": "venue",
+        "region": "Kanto",
+    })
+    client.post("/tags", data={
+        "name_en": "Mystery Venue", "name_zh": "Mystery Venue", "name": "Mystery Venue",
+        "kind": "venue",
+    })
     r = client.get("/tags")
     assert "Kanto</span>" in r.text and "No region</span>" in r.text
     # the "No region" bucket sorts last
@@ -475,7 +526,10 @@ def test_tags_page_groups_venues_by_region_with_no_region_last(client):
 
 def test_tags_page_parentless_group_renders_under_no_franchise(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Orphan Group", "kind": "group"})
+    client.post("/tags", data={
+        "name_en": "Orphan Group", "name_zh": "Orphan Group", "name": "Orphan Group",
+        "kind": "group",
+    })
     r = client.get("/tags")
     assert "No franchise" in r.text
     assert r.text.index("No franchise") < r.text.index("Orphan Group")
@@ -483,14 +537,16 @@ def test_tags_page_parentless_group_renders_under_no_franchise(client):
 
 def test_tags_page_summary_line_counts_kinds(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "F1", "kind": "franchise"})
-    client.post("/tags", data={"name": "F2", "kind": "franchise"})
-    client.post("/tags", data={"name": "G1", "kind": "group"})
-    client.post("/tags", data={"name": "A1", "kind": "artist"})
-    client.post("/tags", data={"name": "A2", "kind": "artist"})
-    client.post("/tags", data={"name": "A3", "kind": "artist"})
-    client.post("/tags", data={"name": "V1", "kind": "venue"})
-    client.post("/concerts", data={"title": "Show", "event_id": "show"})
+    client.post("/tags", data={"name_en": "F1", "name_zh": "F1", "name": "F1", "kind": "franchise"})
+    client.post("/tags", data={"name_en": "F2", "name_zh": "F2", "name": "F2", "kind": "franchise"})
+    client.post("/tags", data={"name_en": "G1", "name_zh": "G1", "name": "G1", "kind": "group"})
+    client.post("/tags", data={"name_en": "A1", "name_zh": "A1", "name": "A1", "kind": "artist"})
+    client.post("/tags", data={"name_en": "A2", "name_zh": "A2", "name": "A2", "kind": "artist"})
+    client.post("/tags", data={"name_en": "A3", "name_zh": "A3", "name": "A3", "kind": "artist"})
+    client.post("/tags", data={"name_en": "V1", "name_zh": "V1", "name": "V1", "kind": "venue"})
+    client.post("/concerts", data={
+        "title_en": "Show", "title_zh": "Show", "title": "Show", "event_id": "show",
+    })
     r = client.get("/tags")
     assert "1 concert" in r.text
     assert "2 franchises" in r.text
@@ -504,8 +560,13 @@ def test_tags_page_summary_line_counts_kinds(client):
 
 def test_tag_dialog_shows_usage_counts(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Aqours", "kind": "group"})
-    client.post("/concerts", data={"title": "Show", "event_id": "show", "group_tags": [1]})
+    client.post("/tags", data={
+        "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
+    })
+    client.post("/concerts", data={
+        "title_en": "Show", "title_zh": "Show", "title": "Show", "event_id": "show",
+        "group_tags": [1],
+    })
     login_as(client, VIEWER_ID, "viewer")
     client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
     login_as(client, EDITOR_ID, "reiji")
@@ -521,8 +582,12 @@ def test_tag_dialog_shows_usage_counts(client):
 
 def test_group_dialog_shows_members_stat_and_artist_dialog_does_not(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Aqours", "kind": "group"})
-    client.post("/tags", data={"name": "Solo", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Solo", "name_zh": "Solo", "name": "Solo", "kind": "artist",
+    })
     r = client.get("/tags")
     gdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
     adlg = r.text.split('id="tag-dialog-2"')[1].split("</dialog>")[0]
@@ -533,13 +598,21 @@ def test_group_dialog_shows_members_stat_and_artist_dialog_does_not(client):
 def test_group_dialog_offers_apply_link_only_when_concerts_eligible(client):
     login_as(client, EDITOR_ID, "reiji")
     # eligible: group tagged onto a live concert, then a member added
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     create_active_concert_with_group(client, "liella-live", 1)
     client.post("/tags/1/members", data={"member_tag_id": 2})
     # not eligible: a group with a member but no concerts
-    client.post("/tags", data={"name": "Empty", "kind": "group"})
-    client.post("/tags", data={"name": "Lonely", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Empty", "name_zh": "Empty", "name": "Empty", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Lonely", "name_zh": "Lonely", "name": "Lonely", "kind": "artist",
+    })
     client.post("/tags/3/members", data={"member_tag_id": 4})
 
     r = client.get("/tags")
@@ -554,9 +627,18 @@ def test_group_dialog_offers_apply_link_only_when_concerts_eligible(client):
 
 def test_venue_dialog_region_datalist_lists_existing_regions(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Kanto Hall", "kind": "venue", "region": "Kanto"})
-    client.post("/tags", data={"name": "Kansai Hall", "kind": "venue", "region": "Kansai"})
-    client.post("/tags", data={"name": "Mystery Hall", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "Kanto Hall", "name_zh": "Kanto Hall", "name": "Kanto Hall", "kind": "venue",
+        "region": "Kanto",
+    })
+    client.post("/tags", data={
+        "name_en": "Kansai Hall", "name_zh": "Kansai Hall", "name": "Kansai Hall", "kind": "venue",
+        "region": "Kansai",
+    })
+    client.post("/tags", data={
+        "name_en": "Mystery Hall", "name_zh": "Mystery Hall", "name": "Mystery Hall",
+        "kind": "venue",
+    })
     r = client.get("/tags")
     vdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
     assert "<datalist" in vdlg
@@ -568,8 +650,12 @@ def test_venue_dialog_region_datalist_lists_existing_regions(client):
 
 def test_artist_dialog_has_eventernote_field_and_venue_dialog_does_not(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Solo", "kind": "artist"})
-    client.post("/tags", data={"name": "Hall", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "Solo", "name_zh": "Solo", "name": "Solo", "kind": "artist",
+    })
+    client.post("/tags", data={
+        "name_en": "Hall", "name_zh": "Hall", "name": "Hall", "kind": "venue",
+    })
     r = client.get("/tags")
     adlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
     vdlg = r.text.split('id="tag-dialog-2"')[1].split("</dialog>")[0]
@@ -581,7 +667,9 @@ def test_artist_dialog_has_eventernote_field_and_venue_dialog_does_not(client):
 
 def test_delete_form_uses_data_tag_name_not_inline_interpolation(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Trouble", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Trouble", "name_zh": "Trouble", "name": "Trouble", "kind": "franchise",
+    })
     r = client.get("/tags")
     dlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
     assert 'data-tag-name="Trouble"' in dlg
@@ -593,7 +681,9 @@ def test_delete_form_uses_data_tag_name_not_inline_interpolation(client):
 
 def test_tags_page_viewer_sees_no_edit_dialogs(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
     login_as(client, VIEWER_ID, "viewer")
     r = client.get("/tags")
     assert r.status_code == 200
@@ -605,9 +695,16 @@ def test_tags_page_renders_one_dialog_even_for_artist_in_multiple_groups(client)
     must still get exactly one <dialog id="tag-dialog-{id}"> in the
     rendered page, not one per group it appears under."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Group A", "kind": "group"})
-    client.post("/tags", data={"name": "Group B", "kind": "group"})
-    client.post("/tags", data={"name": "Shared Member", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Group A", "name_zh": "Group A", "name": "Group A", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Group B", "name_zh": "Group B", "name": "Group B", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Shared Member", "name_zh": "Shared Member", "name": "Shared Member",
+        "kind": "artist",
+    })
     client.post("/tags/1/members", data={"member_tag_id": 3})
     client.post("/tags/2/members", data={"member_tag_id": 3})
 
@@ -650,7 +747,10 @@ def test_new_tag_dialog_fields_are_conditional_on_kind(client):
 
 def test_dupe_payload_is_tojson_not_double_encoded(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "X</script><script>alert(1)", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "X</script><script>alert(1)", "name_zh": "X</script><script>alert(1)",
+        "name": "X</script><script>alert(1)", "kind": "artist",
+    })
     r = client.get("/tags")
     # the raw breakout sequence must never appear unescaped
     assert "</script><script>alert(1)" not in r.text
@@ -662,8 +762,12 @@ def test_rename_to_existing_name_still_409s(client):
     """Rename collision is name-only (global across kinds) and unchanged --
     only CREATE became kind-scoped."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Aqours", "kind": "group"})
-    client.post("/tags", data={"name": "Hall", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Hall", "name_zh": "Hall", "name": "Hall", "kind": "venue",
+    })
     r = client.post("/tags/2/edit", data={"name": "aqours"})
     assert r.status_code == 409
 
@@ -692,11 +796,11 @@ def create_active_concert_with_group(client, event_id, group_tag_id):
     as an eligible retroactive-apply target."""
     return client.post(
         "/concerts",
-        data={
+        data={"title_en": event_id, "title_zh": event_id,
             "title": event_id, "event_id": event_id, "group_tags": [group_tag_id],
             "day_label": ["Day 1"],
-            "day_label_en": [""],
-            "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+            "day_label_en": ["Day 1"],
+            "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             "day_cancelled": ["false"],
         },
@@ -705,8 +809,12 @@ def create_active_concert_with_group(client, event_id, group_tag_id):
 
 def test_add_member_redirects_straight_to_tags_when_nothing_eligible(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     r = client.post("/tags/1/members", data={"member_tag_id": 2})
     assert r.status_code == 303
     assert r.headers["location"] == "/tags"
@@ -714,8 +822,12 @@ def test_add_member_redirects_straight_to_tags_when_nothing_eligible(client):
 
 def test_add_member_redirects_to_confirmation_when_something_eligible(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     create_active_concert_with_group(client, "liella-live", 1)
     r = client.post("/tags/1/members", data={"member_tag_id": 2})
     assert r.status_code == 303
@@ -724,8 +836,12 @@ def test_add_member_redirects_to_confirmation_when_something_eligible(client):
 
 def test_confirmation_page_lists_eligible_concert_titles(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     create_active_concert_with_group(client, "liella-live", 1)
     client.post("/tags/1/members", data={"member_tag_id": 2})
     r = client.get("/tags/1/members/2/retroactive-apply")
@@ -736,8 +852,12 @@ def test_confirmation_page_lists_eligible_concert_titles(client):
 
 def test_confirmation_page_handles_nothing_eligible_gracefully(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     # Establish the membership first: the route only serves pairs that really
     # are (group, member). Nothing is eligible, so add_member goes back to
     # /tags -- but the page still has to render if revisited directly.
@@ -753,8 +873,12 @@ def test_confirmation_page_shows_info_callout_and_bar_actions(client):
     the group or un-pruning anything, and the actions sit in a .bar with
     the exact same POST target the plain-list version used."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     create_active_concert_with_group(client, "liella-live", 1)
     client.post("/tags/1/members", data={"member_tag_id": 2})
     r = client.get("/tags/1/members/2/retroactive-apply")
@@ -772,8 +896,12 @@ def test_confirmation_empty_case_keeps_styled_framing(client):
     """The 'nothing to apply' branch stays reachable and still uses the
     shared .dim/.btn vocabulary rather than the old bare-list markup."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     client.post("/tags/1/members", data={"member_tag_id": 2})
     r = client.get("/tags/1/members/2/retroactive-apply")
     assert r.status_code == 200
@@ -785,8 +913,12 @@ def test_confirmation_empty_case_keeps_styled_framing(client):
 
 async def test_apply_to_all_attaches_tag_and_notifies_subscriber(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     create_active_concert_with_group(client, "liella-live", 1)
 
     login_as(client, VIEWER_ID, "viewer")
@@ -818,9 +950,15 @@ async def test_apply_to_all_attaches_tag_and_notifies_subscriber(client):
 def test_mismatched_pair_404s_on_get_and_post_and_attaches_nothing(client):
     """Group 1 and artist 3 are real tags, but 3 is not a member of 1."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
-    client.post("/tags", data={"name": "Unrelated", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
+    client.post("/tags", data={
+        "name_en": "Unrelated", "name_zh": "Unrelated", "name": "Unrelated", "kind": "artist",
+    })
     create_active_concert_with_group(client, "liella-live", 1)
 
     assert client.get("/tags/1/members/3/retroactive-apply").status_code == 404
@@ -832,7 +970,9 @@ def test_mismatched_pair_404s_on_get_and_post_and_attaches_nothing(client):
 
 def test_missing_group_404s(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     assert client.get("/tags/999/members/1/retroactive-apply").status_code == 404
     assert client.post("/tags/999/members/1/retroactive-apply").status_code == 404
 
@@ -841,8 +981,12 @@ async def test_non_group_group_id_404s(client):
     """A TagMember row alone isn't enough -- the 'group' must be a GROUP tag.
     Inserted directly because add_member itself refuses a non-group parent."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     async with client.db() as s:
         s.add(TagMember(group_tag_id=1, member_tag_id=2))
         await s.commit()
@@ -855,8 +999,12 @@ async def test_legitimate_add_member_then_apply_still_works(client):
     """The real flow: add_member creates the TagMember row and redirects here,
     so the strict check must pass end to end and still attach."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     create_active_concert_with_group(client, "liella-live", 1)
 
     redirect = client.post("/tags/1/members", data={"member_tag_id": 2})
@@ -871,8 +1019,12 @@ async def test_legitimate_add_member_then_apply_still_works(client):
 
 def test_confirmation_page_requires_editor(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
 
     login_as(client, VIEWER_ID, "viewer")
     assert client.get("/tags/1/members/2/retroactive-apply").status_code == 403
@@ -881,11 +1033,16 @@ def test_confirmation_page_requires_editor(client):
 
 def test_index_filters_by_tag(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
-    client.post("/concerts", data={
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
+    client.post("/concerts", data={"title_en": "Hasu Live", "title_zh": "Hasu Live",
         "title": "Hasu Live", "event_id": "hasu-live", "franchise_tags": [1],
     })
-    client.post("/concerts", data={"title": "Gakumas Live", "event_id": "gakumas-live"})
+    client.post("/concerts", data={
+        "title_en": "Gakumas Live", "title_zh": "Gakumas Live", "title": "Gakumas Live",
+        "event_id": "gakumas-live",
+    })
 
     everything = client.get("/discover").text
     assert "Hasu Live" in everything and "Gakumas Live" in everything
@@ -904,8 +1061,14 @@ def test_index_filters_by_tag(client):
 
 def test_index_search_filters_by_title(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "Hasu Live", "event_id": "hasu-live"})
-    client.post("/concerts", data={"title": "Gakumas Live", "event_id": "gakumas-live"})
+    client.post("/concerts", data={
+        "title_en": "Hasu Live", "title_zh": "Hasu Live", "title": "Hasu Live",
+        "event_id": "hasu-live",
+    })
+    client.post("/concerts", data={
+        "title_en": "Gakumas Live", "title_zh": "Gakumas Live", "title": "Gakumas Live",
+        "event_id": "gakumas-live",
+    })
 
     filtered = client.get("/discover?q=hasu").text
     assert "Hasu Live" in filtered and "Gakumas Live" in filtered
@@ -919,7 +1082,10 @@ def test_index_search_is_case_insensitive_and_matches_title_en(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
-        data={"title": "はすのそら 5th", "event_id": "c", "title_en": "Hasunosora 5th"},
+        data={
+            "title_zh": "はすのそら 5th", "title": "はすのそら 5th", "event_id": "c",
+            "title_en": "Hasunosora 5th",
+        },
     )
     r = client.get("/discover?q=HASUNOSORA").text
     tile = r[r.index('<a class="tile"'):]
@@ -930,11 +1096,16 @@ def test_index_search_combines_with_tag_filter_as_and(client):
     """Search AND tag filter together -- a concert must satisfy both to show,
     matching the "combined AND" requirement (not either/or)."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
-    client.post("/concerts", data={
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
+    client.post("/concerts", data={"title_en": "Hasu Live", "title_zh": "Hasu Live",
         "title": "Hasu Live", "event_id": "hasu-live", "franchise_tags": [1],
     })
-    client.post("/concerts", data={"title": "Hasu Anniversary", "event_id": "hasu-anni"})
+    client.post("/concerts", data={
+        "title_en": "Hasu Anniversary", "title_zh": "Hasu Anniversary", "title": "Hasu Anniversary",
+        "event_id": "hasu-anni",
+    })
 
     # matches the search text but NOT the tag -> hidden
     r = client.get("/discover?tag=1&q=anniversary").text
@@ -955,11 +1126,17 @@ def test_index_search_box_prefills_from_query_param(client):
 
 def test_index_search_matches_artist_tag_name(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Kozue Otomune", "kind": "artist"})
-    client.post("/concerts", data={
+    client.post("/tags", data={
+        "name_en": "Kozue Otomune", "name_zh": "Kozue Otomune", "name": "Kozue Otomune",
+        "kind": "artist",
+    })
+    client.post("/concerts", data={"title_en": "Some Show", "title_zh": "Some Show",
         "title": "Some Show", "event_id": "some-show", "artist_tags": [1],
     })
-    client.post("/concerts", data={"title": "Other Show", "event_id": "other-show"})
+    client.post("/concerts", data={
+        "title_en": "Other Show", "title_zh": "Other Show", "title": "Other Show",
+        "event_id": "other-show",
+    })
 
     filtered = client.get("/discover?q=kozue").text
     some_tile = filtered[filtered.rindex('<a class="tile"', 0, filtered.index("Some Show")):]
@@ -970,8 +1147,10 @@ def test_index_search_matches_artist_tag_name(client):
 
 def test_index_search_matches_group_tag_name(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/concerts", data={
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/concerts", data={"title_en": "Some Show", "title_zh": "Some Show",
         "title": "Some Show", "event_id": "some-show", "group_tags": [1],
     })
     filtered = client.get("/discover?q=liella").text
@@ -981,8 +1160,10 @@ def test_index_search_matches_group_tag_name(client):
 
 def test_index_search_matches_franchise_tag_name(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
-    client.post("/concerts", data={
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
+    client.post("/concerts", data={"title_en": "Some Show", "title_zh": "Some Show",
         "title": "Some Show", "event_id": "some-show", "franchise_tags": [1],
     })
     filtered = client.get("/discover?q=gakumas").text
@@ -992,14 +1173,17 @@ def test_index_search_matches_franchise_tag_name(client):
 
 def test_index_search_matches_venue_tag_name(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "Yokohama Arena", "name_zh": "Yokohama Arena", "name": "Yokohama Arena",
+        "kind": "venue",
+    })
     # The venue is entered on the leg; the concert's VENUE tags are rolled up
     # from its legs, so a legless concert would carry none.
-    client.post("/concerts", data={
+    client.post("/concerts", data={"title_en": "Some Show", "title_zh": "Some Show",
         "title": "Some Show", "event_id": "some-show", "venue_tags": [1],
         "day_label": ["Day 1"],
-        "day_label_en": [""],
-        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label_en": ["Day 1"],
+        "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     filtered = client.get("/discover?q=yokohama").text
@@ -1013,7 +1197,10 @@ async def test_index_search_falls_back_to_free_text_venue_when_no_venue_tag(clie
     UI) -- set it directly at the DB layer, matching how other tests reach
     fields the form doesn't cover."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "Some Show", "event_id": "some-show"})
+    client.post("/concerts", data={
+        "title_en": "Some Show", "title_zh": "Some Show", "title": "Some Show",
+        "event_id": "some-show",
+    })
     async with client.db() as s:
         from app.db.models import Concert as ConcertModel
 
@@ -1037,13 +1224,16 @@ async def test_index_search_ignores_free_text_venue_when_venue_tag_exists(client
     test would pass identically whether the exclusion works correctly or
     search is silently broken."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "Yokohama Arena", "name_zh": "Yokohama Arena", "name": "Yokohama Arena",
+        "kind": "venue",
+    })
     # Venue on the leg -- see test_index_search_matches_venue_tag_name.
-    client.post("/concerts", data={
+    client.post("/concerts", data={"title_en": "Some Show", "title_zh": "Some Show",
         "title": "Some Show", "event_id": "some-show", "venue_tags": [1],
         "day_label": ["Day 1"],
-        "day_label_en": [""],
-        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label_en": ["Day 1"],
+        "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     async with client.db() as s:
@@ -1068,18 +1258,18 @@ async def test_index_search_ignores_free_text_venue_when_venue_tag_exists(client
 
 def test_index_sorts_by_earliest_event_day(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={
+    client.post("/concerts", data={"title_en": "AAA Later Show", "title_zh": "AAA Later Show",
         "title": "AAA Later Show", "event_id": "aaa",
         "day_label": ["Day 1"],
-        "day_label_en": [""],
-        "day_label_zh": [""], "day_starts_at": ["2099-12-01T18:00"],
+        "day_label_en": ["Day 1"],
+        "day_label_zh": ["Day 1"], "day_starts_at": ["2099-12-01T18:00"],
         "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
     })
-    client.post("/concerts", data={
+    client.post("/concerts", data={"title_en": "BBB Sooner Show", "title_zh": "BBB Sooner Show",
         "title": "BBB Sooner Show", "event_id": "bbb",
         "day_label": ["Day 1"],
-        "day_label_en": [""],
-        "day_label_zh": [""], "day_starts_at": ["2099-06-01T18:00"],
+        "day_label_en": ["Day 1"],
+        "day_label_zh": ["Day 1"], "day_starts_at": ["2099-06-01T18:00"],
         "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
     })
 
@@ -1096,10 +1286,16 @@ async def test_edit_page_can_attach_a_new_tag_to_an_existing_concert(client):
     client-side (untestable without JS), so this submits the member id
     explicitly, same as the creation form always has."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "group"})
-    client.post("/tags", data={"name": "Kozue", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Kozue", "name_zh": "Kozue", "name": "Kozue", "kind": "artist",
+    })
     client.post("/tags/1/members", data={"member_tag_id": 2})
-    client.post("/concerts", data={"title": "6th Live", "event_id": "6th-live"})
+    client.post("/concerts", data={
+        "title_en": "6th Live", "title_zh": "6th Live", "title": "6th Live", "event_id": "6th-live",
+    })
 
     r = client.post(
         "/concerts/6th-live/edit",
@@ -1119,16 +1315,25 @@ async def test_edit_resubmission_does_not_reexpand_pruned_group_member(client):
     previously-pruned non-performer would silently come back just because
     the editor changed something unrelated (like the title)."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "group"})  # 1
-    client.post("/tags", data={"name": "Kozue", "kind": "artist"})      # 2
-    client.post("/tags", data={"name": "Kaho", "kind": "artist"})       # 3
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "group",
+    })  # 1
+    client.post("/tags", data={
+        "name_en": "Kozue", "name_zh": "Kozue", "name": "Kozue", "kind": "artist",
+    })      # 2
+    client.post("/tags", data={
+        "name_en": "Kaho", "name_zh": "Kaho", "name": "Kaho", "kind": "artist",
+    })       # 3
     client.post("/tags/1/members", data={"member_tag_id": 2})
     client.post("/tags/1/members", data={"member_tag_id": 3})
 
     # created with the group but only Kozue checked -- Kaho pruned
     client.post(
         "/concerts",
-        data={"title": "6th Live", "event_id": "6th-live", "group_tags": [1], "artist_tags": [2]},
+        data={
+            "title_en": "6th Live", "title_zh": "6th Live", "title": "6th Live",
+            "event_id": "6th-live", "group_tags": [1], "artist_tags": [2],
+        },
     )
     async with client.db() as s:
         assert await tag_ids_on(s, 1) == {1, 2}
@@ -1153,22 +1358,34 @@ async def test_creation_form_respects_explicit_artist_selection(client):
     """expand=False path: editor unchecked an artist at creation -> not attached,
     even though the group tag is. The checkbox list is authoritative."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "LoveLive", "kind": "franchise"})
-    client.post("/tags", data={"name": "Hasunosora", "kind": "group", "parent_id": 1})
-    client.post("/tags", data={"name": "Kozue", "kind": "artist"})
-    client.post("/tags", data={"name": "Kaho", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "LoveLive", "name_zh": "LoveLive", "name": "LoveLive", "kind": "franchise",
+    })
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "group",
+        "parent_id": 1,
+    })
+    client.post("/tags", data={
+        "name_en": "Kozue", "name_zh": "Kozue", "name": "Kozue", "kind": "artist",
+    })
+    client.post("/tags", data={
+        "name_en": "Kaho", "name_zh": "Kaho", "name": "Kaho", "kind": "artist",
+    })
     client.post("/tags/2/members", data={"member_tag_id": 3})
     client.post("/tags/2/members", data={"member_tag_id": 4})
-    client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "Yokohama Arena", "name_zh": "Yokohama Arena", "name": "Yokohama Arena",
+        "kind": "venue",
+    })
 
     # create with group but ONLY Kozue checked (Kaho not performing)
-    r = client.post("/concerts", data={
+    r = client.post("/concerts", data={"title_en": "6th Live", "title_zh": "6th Live",
         "title": "6th Live", "event_id": "6th-live", "franchise_tags": [1], "group_tags": [2],
         "artist_tags": [3], "venue_tags": [5],
         # The venue reaches the concert by rolling up from the leg now.
         "day_label": ["Day 1"],
-        "day_label_en": [""],
-        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label_en": ["Day 1"],
+        "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["5"],
     })
     assert r.status_code == 303
@@ -1184,31 +1401,53 @@ async def test_creation_form_respects_explicit_artist_selection(client):
 
 def test_creation_rejects_wrong_kind_tags(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Kozue", "kind": "artist"})
-    r = client.post("/concerts", data={"title": "X", "franchise_tags": [1]})  # artist as franchise
+    client.post("/tags", data={
+        "name_en": "Kozue", "name_zh": "Kozue", "name": "Kozue", "kind": "artist",
+    })
+    r = client.post("/concerts", data={
+        "title_en": "X", "title_zh": "X", "title": "X", "franchise_tags": [1],
+    })  # artist as franchise
     assert r.status_code == 422
 
 
 def test_group_parent_must_be_franchise(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Kozue", "kind": "artist"})
-    r = client.post("/tags", data={"name": "G", "kind": "group", "parent_id": 1})
+    client.post("/tags", data={
+        "name_en": "Kozue", "name_zh": "Kozue", "name": "Kozue", "kind": "artist",
+    })
+    r = client.post("/tags", data={
+        "name_en": "G", "name_zh": "G", "name": "G", "kind": "group", "parent_id": 1,
+    })
     assert r.status_code == 422
 
 
 async def test_creation_supports_multiple_groups_and_franchises(client):
     """Collab events: two franchises, two groups, union of artists minus prunes."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "LoveLive", "kind": "franchise"})     # 1
-    client.post("/tags", data={"name": "Idolmaster", "kind": "franchise"})   # 2
-    client.post("/tags", data={"name": "Hasunosora", "kind": "group", "parent_id": 1})  # 3
-    client.post("/tags", data={"name": "Gakumas", "kind": "group", "parent_id": 2})     # 4
-    client.post("/tags", data={"name": "Kozue", "kind": "artist"})           # 5
-    client.post("/tags", data={"name": "Saki", "kind": "artist"})            # 6
+    client.post("/tags", data={
+        "name_en": "LoveLive", "name_zh": "LoveLive", "name": "LoveLive", "kind": "franchise",
+    })     # 1
+    client.post("/tags", data={
+        "name_en": "Idolmaster", "name_zh": "Idolmaster", "name": "Idolmaster", "kind": "franchise",
+    })   # 2
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "group",
+        "parent_id": 1,
+    })  # 3
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "group",
+        "parent_id": 2,
+    })     # 4
+    client.post("/tags", data={
+        "name_en": "Kozue", "name_zh": "Kozue", "name": "Kozue", "kind": "artist",
+    })           # 5
+    client.post("/tags", data={
+        "name_en": "Saki", "name_zh": "Saki", "name": "Saki", "kind": "artist",
+    })            # 6
     client.post("/tags/3/members", data={"member_tag_id": 5})
     client.post("/tags/4/members", data={"member_tag_id": 6})
 
-    r = client.post("/concerts", data={
+    r = client.post("/concerts", data={"title_en": "Godo Live", "title_zh": "Godo Live",
         "title": "Godo Live", "event_id": "godo-live",
         "franchise_tags": [1, 2], "group_tags": [3, 4], "artist_tags": [5, 6],
     })
@@ -1223,15 +1462,20 @@ async def test_multiple_venues_roll_up_from_legs(client):
     by rolling up from the legs, Concert.venue stays None (the join string is
     gone -- the tags are the truth), and the tile says "Multiple"."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})   # 1
-    client.post("/tags", data={"name": "K-Arena", "kind": "venue"})          # 2
+    client.post("/tags", data={
+        "name_en": "Yokohama Arena", "name_zh": "Yokohama Arena", "name": "Yokohama Arena",
+        "kind": "venue",
+    })   # 1
+    client.post("/tags", data={
+        "name_en": "K-Arena", "name_zh": "K-Arena", "name": "K-Arena", "kind": "venue",
+    })          # 2
     # One leg per venue -- the two VENUE tags reach the concert by rolling up
     # from the legs, which is what a tour actually looks like.
-    r = client.post("/concerts", data={
+    r = client.post("/concerts", data={"title_en": "Tour", "title_zh": "Tour",
         "title": "Tour", "event_id": "tour", "venue_tags": [1, 2],
         "day_label": ["Day 1", "Day 2"],
-        "day_label_en": ["", ""],
-        "day_label_zh": ["", ""],
+        "day_label_en": ["Day 1", "Day 2"],
+        "day_label_zh": ["Day 1", "Day 2"],
         "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
         "day_doors_at": ["", ""], "day_venue_tag_id": ["1", "2"],
     })
@@ -1251,17 +1495,19 @@ async def test_venue_tag_subscriber_is_notified_when_a_leg_names_it(client):
     a direct ConcertTag insert would silently drop the DM notice (invariant 4).
     """
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})  # 1
+    client.post("/tags", data={
+        "name_en": "Zepp Haneda", "name_zh": "Zepp Haneda", "name": "Zepp Haneda", "kind": "venue",
+    })  # 1
 
     login_as(client, VIEWER_ID, "viewer")
     client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
     login_as(client, EDITOR_ID, "reiji")
 
-    r = client.post("/concerts", data={
+    r = client.post("/concerts", data={"title_en": "Zepp Show", "title_zh": "Zepp Show",
         "title": "Zepp Show", "event_id": "zepp-show",
         "day_label": ["Day 1"],
-        "day_label_en": [""],
-        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+        "day_label_en": ["Day 1"],
+        "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
         "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     assert r.status_code == 303
@@ -1277,15 +1523,18 @@ async def test_index_hides_concert_whose_only_leg_is_cancelled(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "All Cancelled", "title_zh": "All Cancelled",
             "title": "All Cancelled", "event_id": "all-cancelled",
             "day_label": ["Day 1"],
-            "day_label_en": [""],
-            "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+            "day_label_en": ["Day 1"],
+            "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
         },
     )
-    client.post("/concerts", data={"title": "Still Here", "event_id": "still-here"})
+    client.post("/concerts", data={
+        "title_en": "Still Here", "title_zh": "Still Here", "title": "Still Here",
+        "event_id": "still-here",
+    })
     async with client.db() as s:
         from app.db.models import ConcertDay
 
@@ -1313,7 +1562,10 @@ async def test_index_keeps_concert_with_zero_days_visible(client):
     or duplicated as a template) is unaffected -- only a concert whose
     EXISTING legs are all cancelled gets hidden."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "No Dates Yet", "event_id": "no-dates-yet"})
+    client.post("/concerts", data={
+        "title_en": "No Dates Yet", "title_zh": "No Dates Yet", "title": "No Dates Yet",
+        "event_id": "no-dates-yet",
+    })
     assert "No Dates Yet" in client.get("/discover").text
 
 
@@ -1321,20 +1573,23 @@ async def test_index_open_upcoming_bucket_shown_first(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "Open Round Show", "title_zh": "Open Round Show",
             "title": "Open Round Show", "event_id": "open-show",
             "day_label": ["Day 1"],
-            "day_label_en": [""],
-            "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+            "day_label_en": ["Day 1"],
+            "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
-            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_label_zh": [""],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
+            "round_label_zh": ["R1"],
             "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    client.post("/concerts", data={"title": "No Open Round", "event_id": "no-open-round"})
+    client.post("/concerts", data={
+        "title_en": "No Open Round", "title_zh": "No Open Round", "title": "No Open Round",
+        "event_id": "no-open-round",
+    })
 
     r = client.get("/discover").text
     assert "Open &amp; upcoming" in r
@@ -1352,13 +1607,13 @@ async def test_index_round_with_only_results_date_is_not_open(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "Results Only Show", "title_zh": "Results Only Show",
             "title": "Results Only Show", "event_id": "results-only",
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": [""],
             "round_results_at": ["2099-06-25T23:59"], "round_payment_at": [""],
-            "round_label_en": [""],
-            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "round_label_en": ["R1"],
+            "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
     r = client.get("/discover").text
@@ -1369,21 +1624,21 @@ async def test_index_sort_key_ignores_cancelled_leg_date(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "Mixed Legs Show", "title_zh": "Mixed Legs Show",
             "title": "Mixed Legs Show", "event_id": "mixed-legs",
             "day_label": ["Day 1", "Day 2"],
-            "day_label_en": ["", ""],
-            "day_label_zh": ["", ""],
+            "day_label_en": ["Day 1", "Day 2"],
+            "day_label_zh": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-06-01T18:00", "2099-09-01T18:00"],
             "day_city": ["", ""], "day_venue": ["", ""],
             "day_venue_address": ["", ""], "day_doors_at": ["", ""],
         },
     )
-    client.post("/concerts", data={
+    client.post("/concerts", data={"title_en": "Between Show", "title_zh": "Between Show",
         "title": "Between Show", "event_id": "between-show",
         "day_label": ["Day 1"],
-        "day_label_en": [""],
-        "day_label_zh": [""], "day_starts_at": ["2099-07-01T18:00"],
+        "day_label_en": ["Day 1"],
+        "day_label_zh": ["Day 1"], "day_starts_at": ["2099-07-01T18:00"],
         "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
     })
     async with client.db() as s:
@@ -1425,12 +1680,12 @@ async def test_index_shows_chronological_deadline_list(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "Deadline Show", "title_zh": "Deadline Show",
             "title": "Deadline Show", "event_id": "deadline-show",
             "round_label": ["最速先行"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
-            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_label_zh": [""],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["最速先行"],
+            "round_label_zh": ["最速先行"],
             "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
@@ -1444,17 +1699,17 @@ async def test_index_deadline_list_excludes_cancelled_round(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "C", "title_zh": "C",
             "title": "C", "event_id": "c",
             "day_key": ["new-a"],
             "day_label": ["Day 1"],
-            "day_label_en": [""],
-            "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+            "day_label_en": ["Day 1"],
+            "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
-            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_label_zh": [""],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
+            "round_label_zh": ["R1"],
             "round_url": [""], "round_notes": [""], "round_legs": ["new-a"],
         },
     )
@@ -1499,12 +1754,12 @@ async def test_index_deadline_list_carries_tag_and_search_attributes(client):
 
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "TDS EN", "title_zh": "TDS ZH",
             "title": "Tagged Deadline Show", "event_id": "tagged-deadline",
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
-            "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
-            "round_label_zh": [""],
+            "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
+            "round_label_zh": ["R1"],
             "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
@@ -1523,7 +1778,12 @@ async def test_index_deadline_list_carries_tag_and_search_attributes(client):
     li_end = r.index("</li>", li_start)
     li_html = r[li_start:li_end]
     assert f'data-tags="{tag_id}"' in li_html
-    assert 'data-search="tagged deadline show test artist"' in li_html
+    # Exact, not piecewise: the three title variants above are deliberately
+    # DISTINCT ("Tagged Deadline Show" / "TDS EN" / "TDS ZH"), so the join
+    # concert_search_text produces is unambiguous and its format -- order,
+    # single-space join, lowercasing -- stays pinned. Mirrored variants would
+    # make the joined string repeat itself and force a weaker check.
+    assert 'data-search="tagged deadline show tds en tds zh test artist"' in li_html, li_html
 
 
 # ── Inline confirm() handler injection ───────────────────────────────────
@@ -1537,7 +1797,10 @@ _ON_ATTR_RE = re.compile(r"\son[a-z]+\s*=\s*\"([^\"]*)\"")
 
 def test_delete_confirm_does_not_execute_a_hostile_tag_name(client):
     login_as(client, EDITOR_ID, "reiji")
-    assert client.post("/tags", data={"name": HANDLER_PAYLOAD, "kind": "artist"}).status_code == 303
+    assert client.post("/tags", data={
+        "name_en": HANDLER_PAYLOAD, "name_zh": HANDLER_PAYLOAD, "name": HANDLER_PAYLOAD,
+        "kind": "artist",
+    }).status_code == 303
     html = client.get("/tags").text
     for attr in _ON_ATTR_RE.findall(html):
         assert "alert(1)" not in attr, f"payload sits raw in an inline handler: {attr}"
@@ -1546,7 +1809,9 @@ def test_delete_confirm_does_not_execute_a_hostile_tag_name(client):
 def test_delete_confirm_still_names_the_tag_and_deletes_it(client):
     """The data-attribute refactor must not change what the editor sees."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "artist",
+    })
     html = client.get("/tags").text
     assert 'data-tag-name="Hasunosora"' in html  # the confirm() reads this
     assert 'action="/tags/1/delete"' in html
@@ -1557,7 +1822,9 @@ def test_delete_confirm_still_names_the_tag_and_deletes_it(client):
 def test_rename_longer_than_the_creation_cap_is_rejected(client):
     """create_tag caps name at 100; the rename route must match it."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "artist",
+    })
     assert client.post("/tags/1/edit", data={"name": "x" * 101}).status_code == 422
     assert client.post("/tags/1/edit", data={"name": "x" * 100}).status_code == 303
 
@@ -1611,8 +1878,12 @@ def test_add_member_uses_the_add_chip_pill(client):
     "+ Add x" control in the app (the picker's .chip.add), not a bare
     default-styled <button>."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Aqours", "kind": "group"})
-    client.post("/tags", data={"name": "Chika", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Chika", "name_zh": "Chika", "name": "Chika", "kind": "artist",
+    })
     r = client.get("/tags")
     gdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
     assert 'class="chip add"' in gdlg
@@ -1624,8 +1895,12 @@ def test_retroactive_apply_styled_as_a_button(client):
     (per-member, to retroactive_apply.html) but should read as a button
     (.btn.quiet), not a bare underlined text link."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Liella", "kind": "group"})
-    client.post("/tags", data={"name": "Sumire", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Liella", "name_zh": "Liella", "name": "Liella", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Sumire", "name_zh": "Sumire", "name": "Sumire", "kind": "artist",
+    })
     create_active_concert_with_group(client, "liella-live", 1)
     client.post("/tags/1/members", data={"member_tag_id": 2})
 
@@ -1746,7 +2021,9 @@ def test_inline_venue_creation_leaves_blank_leg_rows_blank(client):
     # anything -- with zero venue tags the placeholder is the loop's ONLY
     # <option> regardless of where it sits in the template source, so
     # reordering it would go undetected.
-    client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})
+    client.post("/tags", data={
+        "name_en": "Zepp Haneda", "name_zh": "Zepp Haneda", "name": "Zepp Haneda", "kind": "venue",
+    })
 
     body = client.get("/concerts/new").text
     tpl = body.split('<template id="day-row-template">')[1].split("</template>")[0]

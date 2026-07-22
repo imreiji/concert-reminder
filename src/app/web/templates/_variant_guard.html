@@ -1,0 +1,219 @@
+{#- The browser-side half of the all-or-nothing variant rule.
+
+    A 422 in this app has no exception handler, no flash mechanism and no
+    re-render path: the browser navigates to a raw JSON body and everything
+    typed is gone. That was tolerable while 422s were rare. Making a
+    forgotten translation a rejection made it the COMMON failure, on a form
+    with dozens of fields -- so the browser has to catch it first, and the
+    server's 422 stays only as the backstop for anything that bypasses the
+    form.
+
+    DELIBERATE DUPLICATION of domain/translations.py's `missing_variants`.
+    The rule is six lines and the whole point is to never submit, so it is
+    written twice on purpose -- but a change to one is a change to BOTH.
+    domain/translations.py names this file in return; keep that pair intact.
+
+    SCOPING -- the one thing that is easy to get wrong here. The check is
+    NOT scoped to <form> descendants. _venue_create_dialog.html's v_* inputs
+    live OUTSIDE the concert <form> on purpose (they are read by hand and
+    POSTed by fetch, so nesting them would post nine stray fields on every
+    concert save), and a form-scoped check would silently skip them. So
+    groups are found by marker instead:
+
+      data-variant-scope   on the enclosing block -- each leg row, each round
+                           row, each editor form, the venue dialog. Two legs
+                           both hold a `day_label` group; the per-row scope
+                           is what keeps them apart.
+      data-variant-group   the group key, unique within its scope.
+      data-variant-slot    ja | en | zh. `ja` is the original column -- there
+                           is no _ja variant (see i18n.loc_field).
+      data-variant-label   on the ja input: the field name for the message.
+      data-variant-mandatory  on the ja input: blank in all three is NOT the
+                           escape hatch it is for an optional field.
+      data-variant-guard   on a <form>: opt in to blocking its submit.
+
+    Groups are enumerated AT SUBMIT TIME, never bound once at load, because
+    legs and rounds are added by cloning a <template> -- a listener bound at
+    load would leave every row the editor adds unchecked.
+
+    ONLY THE CREATE FORMS carry data-variant-guard. The edit pages are marked
+    but never blocked: the phase ships without a backfill, so nearly every
+    row already in the database is half-translated, and blocking edit would
+    wall the owner out of their own data. That asymmetry matches the server
+    exactly (create_concert / import_commit / create_tag / quick_create_venue
+    call require_variants; edit_concert and edit_tag deliberately do not) and
+    is pinned by tests/test_variant_enforcement.py.
+
+    Every message string rides in a JS constant fed by `| tojson` -- never
+    `| safe`, never interpolated into an inline on* handler, and it reaches
+    the DOM through textContent (invariant 7). -#}
+<script>
+  (function () {
+    // Included by four templates; the venue dialog is included by three of
+    // them. Defining the guard twice would be harmless but the submit hook
+    // would fire twice, so bail if it is already here.
+    if (window.checkVariantGroups) return;
+
+    var SLOTS = ["ja", "en", "zh"];
+    // Language NAMES are never translated (see the language-switcher rule):
+    // someone reading "needs 中文" has to recognise the language before they
+    // can read anything else.
+    var SLOT_LABEL = { ja: "日本語", en: "English", zh: "中文" };
+    var MSG_PARTIAL = {{ _("{field} is missing {languages}. Fill those in, or clear all three.") | tojson }};
+    var MSG_MANDATORY = {{ _("{field} is needed in {languages}.") | tojson }};
+
+    // Collect every marked group under `root`, keyed by (scope element, group
+    // key). querySelectorAll does not descend into <template> content, which
+    // is what we want: a template's inputs are not on the page yet, and a
+    // CLONE of one is ordinary DOM and gets picked up here like any other row.
+    function groupsIn(root) {
+      var byScope = new Map();
+      root.querySelectorAll("[data-variant-slot]").forEach(function (el) {
+        // A disabled input is not submitted, so it is not part of the group.
+        // WATCH THIS if a variant trio is ever put behind a kind toggle:
+        // skipping one slot leaves the group slot-INCOMPLETE, and
+        // missingVariants reads an incomplete group as "not a group" and
+        // passes it -- the client would then silently permit exactly what the
+        // server 422s on. Unreachable today (tags.html's setTagKind only
+        // disables inputs inside .kf wrappers, and no trio sits in one).
+        if (el.disabled) return;
+        var scope = el.closest("[data-variant-scope]") || root;
+        var keys = byScope.get(scope);
+        if (!keys) { keys = new Map(); byScope.set(scope, keys); }
+        var key = el.dataset.variantGroup;
+        var g = keys.get(key);
+        if (!g) {
+          g = { scope: scope, key: key, inputs: {}, label: key, mandatory: false };
+          keys.set(key, g);
+        }
+        g.inputs[el.dataset.variantSlot] = el;
+        if (el.dataset.variantLabel) g.label = el.dataset.variantLabel;
+        if (el.hasAttribute("data-variant-mandatory")) g.mandatory = true;
+      });
+      var all = [];
+      byScope.forEach(function (keys) {
+        keys.forEach(function (g) { all.push(g); });
+      });
+      return all;
+    }
+
+    // MIRROR of domain/translations.py's missing_variants -- same slot order,
+    // same whitespace-is-blank rule, same mandatory carve-out. Change one and
+    // change the other.
+    function missingVariants(g) {
+      // A group missing an input entirely is not a group; treating the absent
+      // slot as blank would block a form that never offered the field.
+      for (var i = 0; i < SLOTS.length; i++) {
+        if (!g.inputs[SLOTS[i]]) return [];
+      }
+      var filled = {};
+      var any = false;
+      SLOTS.forEach(function (s) {
+        filled[s] = g.inputs[s].value.trim() !== "";
+        if (filled[s]) any = true;
+      });
+      if (!g.mandatory && !any) return [];
+      return SLOTS.filter(function (s) { return !filled[s]; });
+    }
+
+    function message(g, missing) {
+      var langs = missing.map(function (s) { return SLOT_LABEL[s]; }).join(", ");
+      // Function replacers, so a "$&" in a translated field label cannot be
+      // read as a replacement pattern.
+      return (g.mandatory ? MSG_MANDATORY : MSG_PARTIAL)
+        .replace("{field}", function () { return g.label; })
+        .replace("{languages}", function () { return langs; });
+    }
+
+    function existingWarn(g) {
+      var found = null;
+      g.scope.querySelectorAll(".vwarn").forEach(function (el) {
+        // A round row nested in a guarded form would otherwise match the
+        // form's own query; only this scope's own warnings count.
+        if (el.dataset.variantFor !== g.key) return;
+        if ((el.closest("[data-variant-scope]") || g.scope) !== g.scope) return;
+        found = el;
+      });
+      return found;
+    }
+
+    function clearWarn(g) {
+      var el = existingWarn(g);
+      if (el) el.remove();
+    }
+
+    function paint(g, missing) {
+      clearWarn(g);
+      var input = g.inputs[missing[0]];
+      var el = document.createElement("p");
+      el.className = "vwarn";
+      el.setAttribute("role", "alert");
+      el.dataset.variantFor = g.key;
+      el.textContent = message(g, missing);
+      // The <label> wrapper, where there is one (.vfld), so the message lands
+      // under the whole field rather than between the marker and its box.
+      var anchor = input.closest("label") || input;
+      anchor.insertAdjacentElement("afterend", el);
+      return input;
+    }
+
+    // title_en lives inside a collapsed <details> fold while `title` sits in
+    // the bar at the top -- focusing an input inside a closed fold moves the
+    // caret somewhere invisible, which reads as the button doing nothing.
+    function reveal(input) {
+      var node = input.parentElement;
+      while (node) {
+        if (node.tagName === "DETAILS") node.open = true;
+        node = node.parentElement;
+      }
+      if (input.scrollIntoView) input.scrollIntoView({ block: "center" });
+    }
+
+    // Returns true when every group under `root` is whole. On failure it
+    // paints each offending group and focuses the first blank input.
+    window.checkVariantGroups = function (root) {
+      var firstBad = null;
+      groupsIn(root).forEach(function (g) {
+        var missing = missingVariants(g);
+        if (!missing.length) { clearWarn(g); return; }
+        var input = paint(g, missing);
+        if (!firstBad) firstBad = input;
+      });
+      if (!firstBad) return true;
+      reveal(firstBad);
+      firstBad.focus();
+      return false;
+    };
+
+    window.clearVariantWarnings = function (root) {
+      root.querySelectorAll(".vwarn").forEach(function (el) { el.remove(); });
+    };
+
+    // Only forms that opted in. Capture phase, so the submit is stopped
+    // before any other handler acts on it.
+    document.addEventListener("submit", function (e) {
+      var form = e.target;
+      if (!form || !form.matches || !form.matches("[data-variant-guard]")) return;
+      if (!window.checkVariantGroups(form)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+
+    // Clear a message as soon as its group becomes whole -- and only UPDATE an
+    // existing one otherwise. Painting fresh errors while someone is still
+    // typing the first of three boxes would be nagging, not help.
+    document.addEventListener("input", function (e) {
+      var el = e.target.closest && e.target.closest("[data-variant-slot]");
+      if (!el) return;
+      var scope = el.closest("[data-variant-scope]");
+      if (!scope) return;
+      groupsIn(scope).forEach(function (g) {
+        if (g.scope !== scope || g.key !== el.dataset.variantGroup) return;
+        var missing = missingVariants(g);
+        if (!missing.length) { clearWarn(g); return; }
+        if (existingWarn(g)) paint(g, missing);
+      });
+    });
+  })();
+</script>

@@ -9,6 +9,7 @@ and routes/imports.py need it too, and neither should have to import a
 
 from fastapi import HTTPException
 
+from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.urls import UnsafeURLError, clean_url
 
 
@@ -18,3 +19,37 @@ def form_url(raw: str | None) -> str | None:
         return clean_url(raw)
     except UnsafeURLError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def require_variants(
+    field_label: str, base: str, en: str, zh: str, *, mandatory: bool = False
+) -> None:
+    """422 unless a field is filled in all three languages or none.
+
+    missing_variants (domain/) is the rule; this is only its HTTP boundary,
+    the same shape form_url gives clean_url above.
+
+    The detail names the field AND the missing languages, because by the time
+    this fires there is no other error UI to lean on. On a normal submit the
+    browser-side check (web/templates/_variant_guard.html) has already caught
+    the gap, painted an inline message beside the field and not submitted at
+    all; reaching here means JS is off, or the request never came from the
+    form -- and then this string is the entire error UX. 422 rather than 409:
+    a gap is a structural violation, not a uniqueness conflict.
+
+    A new caller here needs its rendering template's create form or dialog
+    to carry `data-variant-guard` (see _variant_guard.html) -- data-variant-
+    guard is opt-in per form and nothing enforces the pairing, so a form left
+    unmarked silently falls back to this raw 422 instead of the inline error
+    the guard exists to give the editor. Pin the new template in
+    tests/test_variant_enforcement.py's create-boundary census
+    (CREATE_BOUNDARIES /
+    test_every_require_variants_caller_has_a_guarded_create_surface).
+    """
+    gaps = missing_variants(base, en, zh, mandatory=mandatory)
+    if not gaps:
+        return
+    raise HTTPException(
+        status_code=422,
+        detail=f"{field_label} needs {', '.join(SLOT_LABEL[g] for g in gaps)}",
+    )

@@ -34,7 +34,7 @@ from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import ConcertKind, RoundKind
 from app.web.auth import SessionUser, require_editor
-from app.web.forms import form_url
+from app.web.forms import form_url, require_variants
 from app.web.routes.concerts import (
     all_venue_tags,
     build_day,
@@ -224,10 +224,13 @@ async def import_commit(
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
     title_en: str = Form(default=""),
+    title_zh: str = Form(default=""),
     organizer: str = Form(default=""),
     categories: str = Form(default=""),
     kind: str = Form(default=""),
     notes: str = Form(default=""),
+    notes_en: str = Form(default=""),
+    notes_zh: str = Form(default=""),
     source_url: str = Form(default=""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
@@ -273,6 +276,19 @@ async def import_commit(
     # request, so it is client-supplied like any other field. Validated before
     # anything is written, so a tampered value persists nothing.
     checked_source_url = form_url(source_url)
+    # An import IS a create, so the title is held to the same all-three rule
+    # create_concert applies -- the leg and round labels below already are, and
+    # a route that rejects "Leg 1 label needs 中文" while quietly writing a
+    # title_zh-less concert would be enforcing half a rule. Ordered AFTER the
+    # source-URL check so a tampered URL still fails for the URL's reason.
+    require_variants("Title", title, title_en, title_zh, mandatory=True)
+    # Notes, same all-or-nothing rule create_concert applies -- but NOT
+    # mandatory: an imported concert with no notes at all is the normal case,
+    # and only a half-filled trio is a violation. Without this the import was
+    # the one surviving way to create a rule-breaking row, and the edit page's
+    # variant-gaps notice would then nag about a gap this form gave the editor
+    # no field to fill.
+    require_variants("Notes", notes, notes_en, notes_zh)
 
     event_id = await generate_event_id(session, title)
     concert = await create_concert_row(
@@ -281,13 +297,17 @@ async def import_commit(
         source_url=checked_source_url,
     )
     # The Details-fold scalars, set exactly as create_concert does after
-    # create_concert_row returns (title_en/organizer/categories/notes). The
+    # create_concert_row returns (title_en/title_zh/organizer/categories/notes).
+    # The
     # ramen.events parse supplies none of these, so they arrive blank unless
     # the editor filled them in.
     concert.title_en = title_en.strip() or None
+    concert.title_zh = title_zh.strip() or None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
     concert.notes = notes.strip() or None
+    concert.notes_en = notes_en.strip() or None
+    concert.notes_zh = notes_zh.strip() or None
 
     # The optional day_* fields (venue, city, doors, cancelled) round-trip in
     # full from the preview form, but a minimal client -- the older import
@@ -332,18 +352,21 @@ async def import_commit(
     # filled in after the flush below.
     days: list = []
     key_rows: list[tuple[str, object]] = []
-    for (
+    for row_no, (
         key, label, label_en, label_zh, starts_at, city, venue, venue_address,
         doors_at, cancelled, v_tag
-    ) in zip(
+    ) in enumerate(zip(
         day_key, day_label, day_label_en, day_label_zh, day_starts_at, day_city, day_venue,
         day_venue_address, day_doors_at, day_cancelled, day_venue_tags, strict=True,
-    ):
+    ), start=1):
         # v_tag is in the guard because the next phase drops the free-text
         # city/venue inputs: without it, a row where the editor picked ONLY a
         # venue would read as blank and be silently dropped.
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip(), v_tag]):
             continue  # a blank trailing row from the repeatable UI -- key and all
+        # Same create-boundary rule create_concert applies, with the same row
+        # numbering: an import is a create, so its labels are held to it too.
+        require_variants(f"Leg {row_no} label", label, label_en, label_zh)
         day = build_day(
             concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
             v_tag, label_en, label_zh,
@@ -372,17 +395,18 @@ async def import_commit(
     # contract posts only round_label plus its times.
     round_label_zh = round_label_zh + [""] * (len(round_label) - len(round_label_zh))
     round_notes = round_notes + [""] * (len(round_label) - len(round_notes))
-    for (
+    for row_no, (
         label, label_en, label_zh, kind, opens_at, closes_at, results_at, payment_at,
         r_url, notes_, legs
-    ) in zip(
+    ) in enumerate(zip(
         round_label, round_label_en, round_label_zh, round_kind, round_opens_at,
         round_closes_at, round_results_at, round_payment_at, round_url, round_notes,
         round_legs, strict=True,
-    ):
+    ), start=1):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue  # a blank trailing row from the repeatable UI
+        require_variants(f"Round {row_no} label", label, label_en, label_zh)
         session.add(build_round(
             concert.id, label, kind, opens_at, closes_at, results_at, payment_at, r_url,
             applies_to=parse_round_legs(legs, valid_day_ids, key_to_day_id),

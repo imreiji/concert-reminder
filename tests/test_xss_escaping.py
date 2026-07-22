@@ -98,13 +98,16 @@ def assert_script_block_intact(html: str) -> None:
 
 def seed_payload_group(client) -> None:
     """A GROUP tag lands in both NC_GROUPS and TAG_NAMES, covering both blobs."""
-    r = client.post("/tags", data={"name": SCRIPT_PAYLOAD, "kind": "group"})
+    r = client.post("/tags", data={
+        "name_en": SCRIPT_PAYLOAD, "name_zh": SCRIPT_PAYLOAD, "name": SCRIPT_PAYLOAD,
+        "kind": "group",
+    })
     assert r.status_code == 303
 
 
 def picker_pages(client) -> dict[str, str]:
     """Every page that includes _tag_picker_script.html, rendered."""
-    client.post("/concerts", data={"title": "C", "event_id": "c"})
+    client.post("/concerts", data={"title_en": "C", "title_zh": "C", "title": "C", "event_id": "c"})
     new = client.get("/concerts/new")
     edit = client.get("/concerts/c/edit")
 
@@ -149,8 +152,13 @@ def test_tag_picker_constants_are_objects_not_strings(client):
 def test_tag_picker_group_members_still_populate(client):
     """The picker's whole job: NC_GROUPS maps group id -> members."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "group"})
-    client.post("/tags", data={"name": "Kozue Otomune", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Kozue Otomune", "name_zh": "Kozue Otomune", "name": "Kozue Otomune",
+        "kind": "artist",
+    })
     client.post("/tags/1/members", data={"member_tag_id": 2})
     consts = js_constants(client.get("/concerts/new").text)
     assert consts["NC_GROUPS"]["1"]["members"] == [{"id": 2, "name": "Kozue Otomune"}]
