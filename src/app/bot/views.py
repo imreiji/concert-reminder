@@ -37,7 +37,7 @@ from app.db.service import (
 from app.db.session import SessionMaker
 from app.domain.timezones import fmt_dual
 from app.domain.types import LotteryOutcome
-from app.i18n import N_, get_locale, set_locale
+from app.i18n import N_, get_locale, loc_field, set_locale
 from app.i18n import gettext as _
 
 
@@ -182,10 +182,13 @@ class ShowDeadlinesButton(
                         f"{_('payment due')} {fmt_dual(r.payment_deadline_at_utc, tz, loc)}"
                     )
                 suffix = cancelled_suffix if is_round_cancelled(r, cancelled_day_ids) else ""
-                lines.append(f"**{r.label}**{suffix} — {' / '.join(bits)}")
+                lines.append(f"**{loc_field(r, 'label', loc)}**{suffix} — {' / '.join(bits)}")
             for d in concert.days:
                 suffix = cancelled_suffix if d.cancelled else ""
-                lines.append(f"🎤 **{d.label}**{suffix} — {fmt_dual(d.starts_at_utc, tz, loc)}")
+                lines.append(
+                    f"🎤 **{loc_field(d, 'label', loc)}**{suffix} — "
+                    f"{fmt_dual(d.starts_at_utc, tz, loc)}"
+                )
         await interaction.response.send_message(
             "\n".join(lines) or _("No deadlines entered yet.")
         )

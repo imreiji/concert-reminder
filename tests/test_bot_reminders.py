@@ -6,7 +6,7 @@ every other app_commands.Command), with a fake interaction object, against
 a real in-memory async SQLite (same fixture shape test_service.py uses).
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
 from sqlalchemy import event
@@ -66,6 +66,46 @@ class FakeInteraction:
 async def call_mydeadlines(interaction: FakeInteraction, count: int = 10) -> None:
     cog = reminders_cog.Reminders(bot=None)
     await reminders_cog.Reminders.mydeadlines.callback(cog, interaction, count)
+
+
+async def call_upcoming(interaction: FakeInteraction, days: int = 14) -> None:
+    cog = reminders_cog.Reminders(bot=None)
+    await reminders_cog.Reminders.upcoming.callback(cog, interaction, days)
+
+
+async def test_upcoming_localizes_round_label(db):
+    """/upcoming already localizes the concert title via loc_field(concert,
+    "title", loc) one line above -- the round label in the same f-string was
+    left as the raw `round_.label` column. The fixture user's language is
+    "zh", not the ambient "en" default, and only the Japanese original is
+    asserted absent (not merely the zh string present), so a locale-source
+    mistake fails loudly rather than coincidentally passing.
+
+    upcoming_rounds() has no injectable `now` (unlike sync_rule/due_reminders
+    above) -- it always queries against the real clock -- so this round's
+    closes_at_utc must be a real near-future timestamp, not the fixed-2099
+    dates the other tests in this file use for sync_rule's benefit."""
+    async with db() as s:
+        user = await ensure_user(s, 42, "reiji")
+        user.language = "zh"
+        concert = Concert(title="Hasunosora 5th", event_id="hasu-5th", created_by=42)
+        s.add(concert)
+        await s.flush()
+        round_ = Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND,
+            label="1次先行抽選", label_zh="第一轮先行", label_en="1st-round lottery",
+            closes_at_utc=datetime.now(UTC) + timedelta(days=5),
+        )
+        s.add(round_)
+        await s.commit()
+
+    interaction = FakeInteraction(42)
+    await call_upcoming(interaction)
+    embed = interaction.response.sent["kwargs"]["embed"]
+    assert "第一轮先行" in embed.description
+    assert "1次先行抽選" not in embed.description, (
+        "the round label must not leak the Japanese original to a zh viewer"
+    )
 
 
 async def test_mydeadlines_empty_state(db):

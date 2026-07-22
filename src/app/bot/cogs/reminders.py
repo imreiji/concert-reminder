@@ -57,7 +57,7 @@ class Reminders(commands.Cog):
                 bits.append(f"{_('closes')} {fmt_dual(round_.closes_at_utc, tz, loc)}")
             if bits:
                 title = loc_field(concert, "title", loc)
-                lines.append(f"**{title}** — {round_.label}\n{' / '.join(bits)}")
+                lines.append(f"**{title}** — {loc_field(round_, 'label', loc)}\n{' / '.join(bits)}")
 
         embed = discord.Embed(
             title=_("Next {days} days").format(days=days),

@@ -121,7 +121,7 @@
         {% if eyebrow %}<span class="who-t">{{ eyebrow[0] }}</span>{% endif %}
         <span class="t">{{ loc(row.concert, "title") }}</span>
         <span class="v">
-          {{- row.round_.label -}}
+          {{- loc(row.round_, "label") -}}
           {%- if row.moment_utc %} · {% set al = dual_lines(row.moment_utc, tz) %}{{ al[0] }} {{ al[1] }}{% endif -%}
         </span>
         <span class="rnd">{{ _("Still open") if row.status == "open" else _("Awaiting result") }}</span>
