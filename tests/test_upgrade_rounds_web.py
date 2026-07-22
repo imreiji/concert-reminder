@@ -38,7 +38,12 @@ from app.web.app import create_app
 
 USER = 6262
 OTHER = 7373
-NOW = datetime(2026, 7, 19, 12, tzinfo=UTC)
+# Relative to the real clock, not an absolute date: the HTTP tests below hit
+# real routes (discover.py, service.py's `_now()` default) that read
+# `datetime.now(UTC)` directly, so an absolute NOW eventually drifts out of
+# the seeded upgrade window and those tests start failing for timing reasons
+# having nothing to do with what they are testing.
+NOW = datetime.now(UTC)
 
 
 def dt(offset_days: float) -> datetime:
@@ -308,6 +313,10 @@ async def test_home_coming_up_hides_upgrade_rows_from_ineligible_users(client):
     login(client)
 
     html = client.get("/").text
+    # Positive control first: proves the page rendered with this concert on it,
+    # so an empty/error page could not accidentally satisfy the absence check
+    # below (this test passed vacuously once already -- see the date-bomb fix).
+    assert "Upgrade tour" in html
     # The capture button is unique to the Coming up row (the board carries none).
     assert "Entered upgrade" not in html
 
