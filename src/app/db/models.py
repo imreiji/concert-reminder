@@ -306,9 +306,12 @@ class ConcertDay(Base):
     city: Mapped[str | None] = mapped_column(String(100))  # leg/city, e.g. "Kanagawa"
     venue: Mapped[str | None] = mapped_column(String(200))  # per-day venue (tours change cities)
     venue_address: Mapped[str | None] = mapped_column(String(300))
-    # The structured venue. Replaces the free-text `venue` above, which
-    # find_venue_tag resolved by case-insensitive name match -- this is that
-    # same link made real. SET NULL rather than CASCADE: a venue tag is shared
+    # The structured venue, and the ONLY one anything reads for display. It
+    # replaces the free-text `venue` above, which the concert page used to
+    # resolve against VENUE tags by case-insensitive name match -- this is
+    # that same link made real, and made authoritative: matching by name left
+    # a re-pointed leg rendering its previous venue forever.
+    # SET NULL rather than CASCADE: a venue tag is shared
     # taxonomy, and deleting one must never take performances down with it.
     venue_tag_id: Mapped[int | None] = mapped_column(
         ForeignKey("tags.id", ondelete="SET NULL"), index=True

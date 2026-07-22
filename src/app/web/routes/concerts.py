@@ -31,6 +31,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.models import (
     Concert,
@@ -393,19 +394,6 @@ def title_without_lineage(title: str, group_names: list[str]) -> str:
             if rest:
                 return rest
     return title
-
-
-def find_venue_tag(venue_tags: list[Tag], name: str | None) -> Tag | None:
-    """Resolve a day's free-text venue against real VENUE tags by exact,
-    case-insensitive name match. No match just means no link is shown (a nudge
-    to go create that tag, not a hard requirement)."""
-    if not name:
-        return None
-    name = name.strip().lower()
-    for t in venue_tags:
-        if t.name.strip().lower() == name:
-            return t
-    return None
 
 
 # ── Reminder-rule fragment (htmx swap target) ────────────────────────────
@@ -818,9 +806,22 @@ async def concert_rounds_context(
     """
     now = now or datetime.now(UTC)
     leg_groups, all_legs_rows = await concert_round_rows(session, user_id, concert, now=now)
-    # One query for every VENUE tag, then an in-memory match per leg -- the
-    # same free-text-to-structured resolution the old per-day subtitle used.
-    venue_tags = await all_venue_tags(session)
+    # The leg's venue is a real FK now, so this is a targeted load of exactly
+    # the tags in play -- not every VENUE tag in the DB matched by name. That
+    # name match was the bug: an editor who re-pointed a leg at a different
+    # venue tag saved the new FK while this page kept rendering the OLD
+    # free-text name, with no UI path to correct it.
+    # Resolved in its own query rather than off ConcertDay.venue_tag because
+    # that relationship is lazy="raise": touching it lazily during async
+    # rendering would be a MissingGreenlet 500.
+    venue_tag_ids = {g.day.venue_tag_id for g in leg_groups if g.day.venue_tag_id}
+    venue_tags_by_id: dict[int, Tag] = {}
+    if venue_tag_ids:
+        venue_tags_by_id = {
+            t.id: t for t in (await session.execute(
+                select(Tag).where(Tag.id.in_(venue_tag_ids))
+            )).scalars()
+        }
     # This user's per-leg opt-outs over THIS concert's days, so `_round_rows`
     # can dim the legs they are not going to. Assembled here, the single place
     # that fragment's context is built, so the copy POST
@@ -839,7 +840,7 @@ async def concert_rounds_context(
         "leg_groups": leg_groups,
         "all_legs_rows": all_legs_rows,
         "day_venue_tags": {
-            g.day.id: find_venue_tag(venue_tags, g.day.venue) for g in leg_groups
+            g.day.id: venue_tags_by_id.get(g.day.venue_tag_id) for g in leg_groups
         },
         "leg_opted_out": opted_out_day_ids,
         "next_row": concert_next_moment(
@@ -974,8 +975,19 @@ async def edit_concert_form(
     # round to), but an id already pointing at one still round-trips: the
     # hidden field below carries the round's WHOLE applies_to, and
     # parse_round_legs keeps every id whose day still exists.
+    # Re-read this concert's days WITH their venue tags: each chip falls back
+    # to the leg's venue name when the leg has no label, and
+    # ConcertDay.venue_tag is lazy="raise", so a lazy touch during async
+    # rendering would be a MissingGreenlet 500. Loading every day (not just
+    # the live ones) populates the same identity-mapped objects `concert.days`
+    # hands the leg-row loop below.
+    days = list((await session.execute(
+        select(ConcertDay)
+        .where(ConcertDay.concert_id == concert.id)
+        .options(selectinload(ConcertDay.venue_tag))
+    )).scalars())
     legs = sorted(
-        (d for d in concert.days if not d.cancelled),
+        (d for d in days if not d.cancelled),
         key=lambda d: (d.starts_at_utc, d.id),
     )
     # Upgrade rounds carry a second chip row -- which OTHER rounds qualify a
@@ -1333,14 +1345,28 @@ async def export_concert_yaml(
     concert = await get_concert_by_event_id(session, event_id)
     await session.refresh(concert, ["days", "rounds", "tags"])
 
-    days_by_id = {d.id: d.label for d in concert.days}
+    # The legs, with their venue tags: the export's city/venue/venue_address
+    # come off the tag now, and ConcertDay.venue_tag is lazy="raise". The
+    # editor's free-text venue inputs are gone, so reading d.city/d.venue here
+    # would emit nulls for every newly entered concert.
+    days = list((await session.execute(
+        select(ConcertDay)
+        .where(ConcertDay.concert_id == concert.id)
+        .options(selectinload(ConcertDay.venue_tag))
+        .order_by(ConcertDay.starts_at_utc, ConcertDay.id)
+    )).scalars())
+    days_by_id = {d.id: d.label for d in days}
+    # The tag's CANONICAL columns, never loc(): an export is data, and its
+    # contents must not change with whoever happened to download it.
     yaml_days = [
         YamlDay(
             label=d.label, starts_at_utc=d.starts_at_utc,
-            city=d.city, venue=d.venue, venue_address=d.venue_address,
+            city=d.venue_tag.city if d.venue_tag else None,
+            venue=d.venue_tag.name if d.venue_tag else None,
+            venue_address=d.venue_tag.address if d.venue_tag else None,
             doors_at_utc=d.doors_at_utc,
         )
-        for d in concert.days
+        for d in days
     ]
     yaml_rounds = [
         YamlRound(

@@ -29,6 +29,6 @@
   <button type="button" class="chip{% if selected and d.id in selected %} on{% endif %}"
           data-leg-id="{{ d.id }}"
           aria-pressed="{{ 'true' if selected and d.id in selected else 'false' }}"
-    >{{ d.label or d.city or (jst(d.starts_at_utc).strftime('%b %d') if d.starts_at_utc else _('Leg')) }}</button>
+    >{{ d.label or (loc(d.venue_tag, "name") if d.venue_tag else "") or (jst(d.starts_at_utc).strftime('%b %d') if d.starts_at_utc else _('Leg')) }}</button>
   {% endfor %}
 </div>

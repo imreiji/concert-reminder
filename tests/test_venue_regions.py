@@ -1,8 +1,8 @@
 """Venue tags (region + location link), the round table's past-marking,
 .ics export, and the sidebar's region filter.
 
-Pure-function helpers (find_venue_tag, region_sidebar_links) are exercised
-directly against plain constructed ORM objects, no DB needed.
+The pure-function helper (region_sidebar_links) is exercised directly
+against plain constructed ORM objects, no DB needed.
 Everything that touches routes/templates goes through the same
 client+db+login_as fixture pattern as test_crud.py.
 """
@@ -21,7 +21,6 @@ from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web import auth
 from app.web.app import create_app
-from app.web.routes.concerts import find_venue_tag
 from app.web.routes.discover import region_sidebar_links
 
 EDITOR_ID, VIEWER_ID = 42, 777
@@ -32,26 +31,6 @@ def dt(month: int, day: int, hour: int = 12) -> datetime:
 
 
 NOW = dt(6, 15)
-
-
-# ── find_venue_tag ────────────────────────────────────────────────────────
-
-
-def test_find_venue_tag_matches_case_insensitively():
-    venue = Tag(name="K Arena Yokohama", kind=TagKind.VENUE, created_by=EDITOR_ID)
-    assert find_venue_tag([venue], "k arena yokohama") is venue
-    assert find_venue_tag([venue], "K ARENA YOKOHAMA") is venue
-
-
-def test_find_venue_tag_no_match_returns_none():
-    venue = Tag(name="K Arena Yokohama", kind=TagKind.VENUE, created_by=EDITOR_ID)
-    assert find_venue_tag([venue], "Some Other Hall") is None
-
-
-def test_find_venue_tag_blank_or_none_returns_none():
-    venue = Tag(name="K Arena Yokohama", kind=TagKind.VENUE, created_by=EDITOR_ID)
-    assert find_venue_tag([venue], "") is None
-    assert find_venue_tag([venue], None) is None
 
 
 # ── region_sidebar_links ─────────────────────────────────────────────────
@@ -219,7 +198,10 @@ async def test_past_day_marked_past(client):
     assert 'leg-heading past">Old day<' in r.text
 
 
-async def test_leg_heading_links_to_matching_venue_tag(client):
+async def test_leg_heading_links_to_its_venue_tag(client):
+    """The leg's venue is a real FK (day_venue_tag_id), not free text matched
+    by name -- so the heading's location link follows whichever tag the leg
+    actually points at."""
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/tags",
@@ -233,8 +215,7 @@ async def test_leg_heading_links_to_matching_venue_tag(client):
         data={
             "title": "C", "event_id": "c",
             "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": ["K Arena Yokohama"],
-            "day_venue_address": [""], "day_doors_at": [""],
+            "day_venue_tag_id": ["1"], "day_doors_at": [""],
         },
     )
     r = client.get("/concerts/c")

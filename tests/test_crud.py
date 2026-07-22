@@ -644,6 +644,72 @@ async def test_export_yaml_shape(client):
     assert data["rounds"][0]["apply_opens_jst"] == "2099-06-10 00:00"
 
 
+async def test_export_yaml_reads_venue_from_the_tag(client):
+    """A leg's venue is a VENUE tag now, and the editor's free-text venue
+    inputs are gone -- so an export still reading d.city/d.venue/
+    d.venue_address would silently emit nulls for every newly entered
+    concert. The export uses the tag's CANONICAL columns, not loc(): an
+    export is data, not a viewer-facing render."""
+    import yaml
+
+    from app.db.models import Tag
+    from app.domain.types import TagKind
+
+    login_as(client, EDITOR_ID, "reiji")
+    async with client.db() as s:
+        tag = Tag(
+            name="K Arena Yokohama", name_en="K Arena EN", kind=TagKind.VENUE,
+            city="Yokohama", city_en="Yokohama EN", address="Yokohama, Japan",
+        )
+        s.add(tag)
+        await s.commit()
+        venue_tag_id = tag.id
+
+    client.post(
+        "/concerts",
+        data={
+            "title": "Venue Export", "event_id": "venue-export", "kind": "concert",
+            "day_key": ["new-a"],
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_venue_tag_id": [str(venue_tag_id)], "day_doors_at": [""],
+        },
+    )
+
+    r = client.get("/concerts/venue-export/export.yaml")
+    assert r.status_code == 200
+    day = yaml.safe_load(r.text)["performances"][0]
+    assert day["venue"] == "K Arena Yokohama"
+    assert day["city"] == "Yokohama"
+    assert day["venue_address"] == "Yokohama, Japan"
+
+
+async def test_edit_page_renders_a_blank_label_legs_venue_chip(client):
+    """The leg chip's label chain is `label or venue tag name or date`, so
+    d.venue_tag is only ever evaluated for a leg with NO label -- which makes
+    this the one render that actually exercises the eager load.
+    ConcertDay.venue_tag is lazy="raise", so a missing one is a
+    MissingGreenlet 500 here, not a quiet fallback."""
+    from app.db.models import Tag
+    from app.domain.types import TagKind
+
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "chip"})
+    async with client.db() as s:
+        tag = Tag(name="Zepp Haneda", kind=TagKind.VENUE)
+        s.add(tag)
+        concert = (await s.execute(select(Concert).where(Concert.event_id == "chip"))).scalar_one()
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=concert.id, label="", venue_tag_id=tag.id,
+            starts_at_utc=datetime(2099, 8, 1, 9, tzinfo=UTC),
+        ))
+        await s.commit()
+
+    r = client.get("/concerts/chip/edit")
+    assert r.status_code == 200
+    assert "Zepp Haneda" in r.text  # the chip fell back to the venue tag's name
+
+
 # ── The rich /concerts/new page and its all-in-one POST /concerts ────────
 
 

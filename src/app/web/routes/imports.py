@@ -119,13 +119,17 @@ def _fmt(dt) -> str:
 # stable `day_key` ("d0", "d1", ...) the preview template also stamps on the
 # matching `.eleg` card. This shim gives `_round_leg_chips.html` the same
 # attribute surface a real ConcertDay exposes (id -> the key, plus label);
-# the round chips render unselected (all-legs), so city/starts are never read.
-_PreviewLeg = namedtuple("_PreviewLeg", "id label city starts_at_utc")
+# the round chips render unselected (all-legs), so venue_tag/starts are never
+# read. `venue_tag` is carried anyway, and left None: a parsed day has no
+# venue tag yet (the importer's leg card still takes free-text venue), and an
+# explicit None is what keeps the chip's label chain from tripping over a
+# missing attribute.
+_PreviewLeg = namedtuple("_PreviewLeg", "id label venue_tag starts_at_utc")
 
 
 def _preview_legs(parsed) -> list[_PreviewLeg]:
     return [
-        _PreviewLeg(id=f"d{i}", label=d.label, city=None, starts_at_utc=None)
+        _PreviewLeg(id=f"d{i}", label=d.label, venue_tag=None, starts_at_utc=None)
         for i, d in enumerate(parsed.days)
     ]
 
