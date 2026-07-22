@@ -171,19 +171,32 @@ def apply_day_fields(
     boundary. This function stays sync and I/O-free; see that function's
     docstring for why the check lives there rather than here.
 
-    The free-text city/venue/venue_address columns are still assigned even
-    though venue_tag_id is now the structured truth: this phase keeps them so
-    an unmatched venue stays recoverable across the two-deploy migration. A
-    later phase drops both the columns and these three lines.
+    The free-text city/venue/venue_address columns survive this phase so an
+    unmatched venue stays recoverable across the two-deploy migration; a later
+    phase drops them and these three lines. They are therefore now LEGACY
+    READ-ONLY data, and their assignment is PRESERVE-ON-EMPTY: a non-empty
+    incoming value still assigns, but an empty one leaves the existing column
+    untouched rather than nulling it.
+
+    That matters because the leg editor's free-text venue inputs are gone --
+    the venue is picked as a tag -- so these params now arrive absent from
+    every edit POST and are padded to "" at the route boundary. Overwriting
+    with None would make the FIRST save of any existing concert silently
+    destroy exactly the data the migration is keeping, worst of all for the
+    legs the backfill could not match, where the free text is the only
+    surviving record. Nothing in the editor writes these fields anymore, so
+    there is no "the editor cleared it" case to honour. A brand-new row starts
+    with the columns already NULL, so preserve-on-empty is a no-op on creation
+    (import_commit still supplies real values, which still assign).
     """
     starts = parse_jst(starts_at)
     if starts is None:
         raise HTTPException(status_code=422, detail="a day needs a start time")
     day.label = label.strip()
     day.starts_at_utc = starts
-    day.city = city.strip() or None
-    day.venue = venue.strip() or None
-    day.venue_address = venue_address.strip() or None
+    day.city = city.strip() or day.city
+    day.venue = venue.strip() or day.venue
+    day.venue_address = venue_address.strip() or day.venue_address
     day.doors_at_utc = parse_jst(doors_at)
     day.cancelled = cancelled == "true"
     day.venue_tag_id = venue_tag_id

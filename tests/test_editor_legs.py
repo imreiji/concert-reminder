@@ -908,6 +908,102 @@ async def test_a_blank_leg_rows_venue_select_defaults_to_no_value(client, db):
     assert r.status_code == 422
 
 
+def resubmit_as_the_template_does(client, event_id, *, days, rounds, title="Tour"):
+    """POST exactly the field set the CURRENT leg editor emits.
+
+    `resubmit` above still sends `day_city`/`day_venue`/`day_venue_address`,
+    which the templates no longer have -- so it cannot see this bug. A real
+    browser sends the keys below and nothing else. `days` is
+    (id, label, venue_tag_id).
+    """
+    data = {
+        "title": title,
+        "event_id": event_id,
+        "day_id": [str(d[0]) for d in days],
+        "day_key": [str(d[0]) for d in days],
+        "day_label": [d[1] for d in days],
+        "day_venue_tag_id": [str(d[2] or "") for d in days],
+        "day_starts_at": [f"2099-08-{1 + i:02d}T18:00" for i in range(len(days))],
+        "day_doors_at": [""] * len(days),
+        "day_cancelled": ["false"] * len(days),
+        "round_id": [str(r[0]) for r in rounds],
+        "round_label": [r[1] for r in rounds],
+        "round_label_en": [""] * len(rounds),
+        "round_kind": ["lottery_round"] * len(rounds),
+        "round_opens_at": [""] * len(rounds),
+        "round_closes_at": ["2099-06-25T23:59"] * len(rounds),
+        "round_results_at": [""] * len(rounds),
+        "round_payment_at": [""] * len(rounds),
+        "round_url": [""] * len(rounds),
+        "round_notes": [""] * len(rounds),
+        "round_legs": [r[2] for r in rounds],
+    }
+    return client.post(f"/concerts/{event_id}/edit", data=data)
+
+
+async def test_an_edit_save_does_not_destroy_a_legs_free_text_venue(client, db):
+    """The two-deploy migration's whole safety net.
+
+    `city`/`venue`/`venue_address` outlive this phase so a leg whose venue
+    string the backfill could not match to a tag stays recoverable by hand.
+    But the inputs are gone from the templates, so those params arrive absent,
+    get padded to "", and a plain assignment would write None over the only
+    surviving record of that venue -- on the FIRST save of any existing
+    concert, silently. Preserve-on-empty is what stops it.
+    """
+    await make_editor(db)
+    login(client)
+    (day1,), (round_id,) = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False)],
+        rounds=[("R", [0])],
+    )
+    async with db() as s:
+        d = await s.get(ConcertDay, day1)
+        d.venue = "Zepp Haneda"
+        d.venue_address = "1-4-8 Hanedakuko, Ota-ku, Tokyo"
+        await s.commit()
+
+    r = resubmit_as_the_template_does(
+        client,
+        "tour",
+        days=[(day1, "Day 1", None)],
+        rounds=[(round_id, "R", str(day1))],
+    )
+    assert r.status_code == 303
+
+    async with db() as s:
+        d = await s.get(ConcertDay, day1)
+        assert d.city == "Kanagawa"
+        assert d.venue == "Zepp Haneda"
+        assert d.venue_address == "1-4-8 Hanedakuko, Ota-ku, Tokyo"
+
+
+async def test_a_new_leg_with_no_free_text_still_stores_nulls(client, db):
+    """Preserve-on-empty must not resurrect anything. A brand-new row starts
+    with these columns NULL, so an empty incoming value has to leave them
+    NULL -- not invent a "" or carry another row's value in."""
+    await make_editor(db)
+    login(client)
+    venue_id = await _venue_tag(db)
+    _, (round_id,) = await seed(db, legs=[], rounds=[("R", [])])
+
+    r = resubmit_as_the_template_does(
+        client,
+        "tour",
+        days=[("", "Day 1", venue_id)],
+        rounds=[(round_id, "R", "")],
+    )
+    assert r.status_code == 303
+
+    async with db() as s:
+        d = (await s.execute(select(ConcertDay))).scalar_one()
+        assert d.venue_tag_id == venue_id
+        assert d.city is None
+        assert d.venue is None
+        assert d.venue_address is None
+
+
 async def test_day_venue_tag_fk_sets_null_on_tag_delete(db):
     """A venue tag is shared taxonomy; deleting one must not delete the legs
     that referenced it (mirrors Tag.created_by's SET NULL reasoning)."""
