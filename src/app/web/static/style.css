@@ -1180,6 +1180,11 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
    `min-width: 0` is what actually lets a flex item shrink below min-content. */
 .bar .tally { color: var(--dim); font-size: .875rem; flex: 1 1 0; min-width: 0; }
 .bar .tally b { color: var(--ink); font-weight: 650; }
+/* `.stacked` puts the hint on its own row ABOVE the control rather than
+   beside it -- for bars whose hint is a full sentence of context, where
+   sitting inline reads as a footnote to the list above the bar's rule. */
+.bar.stacked { align-items: flex-start; row-gap: .6rem; }
+.bar.stacked .tally { flex: 1 1 100%; }
 /* "Add a reminder" reveal (My reminders, concert page): a details.fold sized
    to sit inline in the bar rather than stacking with its usual block margin. */
 .bar details.fold { margin-top: 0; flex: 0 0 auto; }
