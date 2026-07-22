@@ -337,11 +337,12 @@ async def test_editor_marks_the_en_and_zh_label_boxes_distinctly(client, db):
         fields = _variant_fields(body)
         # every variant input on the page is wrapped, <template>s included.
         # <script> blocks are stripped first: the phrase-picker's fill loop
-        # builds its field names as 'round_label' + suffix specifically to
-        # avoid a literal "_label_en"/"_label_zh" substring landing in an
-        # inline script, but that workaround shouldn't be the only thing
-        # keeping this guard honest -- a script-block literal is not an
-        # unmarked input, and the count should not treat it as one.
+        # names the three fields as plain string literals, so a script block
+        # legitimately contains "_label_en"/"_label_zh" with no unmarked
+        # input anywhere. Counting those as inputs would force JS to be
+        # written around a test, which is backwards -- the count exists to
+        # catch an unmarked variant input in real markup, and a literal
+        # inside a script is not one.
         stripped = re.sub(r"<script.*?</script>", "", body, flags=re.DOTALL)
         assert stripped.count("_label_en") + stripped.count("_label_zh") == expected
         assert len(fields) == expected, url
