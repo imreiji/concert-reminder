@@ -215,8 +215,7 @@ async def test_import_commit_rolls_up_leg_venues(editor_client):
     r = editor_client.post("/concerts/import/commit", data={
         "title": "Imported Show",
         "day_label": ["Day 1"],
-        "day_label_en": [""],
-        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+        "day_starts_at": ["2099-08-01T18:00"],
         "day_venue_tag_id": ["1"],
     })
     assert r.status_code == 303
@@ -306,8 +305,7 @@ async def test_import_commit_rejects_a_non_venue_leg_venue_tag(editor_client):
     r = editor_client.post("/concerts/import/commit", data={
         "title": "Bad Import",
         "day_label": ["Day 1"],
-        "day_label_en": [""],
-        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+        "day_starts_at": ["2099-08-01T18:00"],
         "day_venue_tag_id": ["1"],
     })
     assert r.status_code == 422

@@ -486,6 +486,32 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 }
 .eleg-fields label { display: grid; gap: .2rem; font-size: .8rem; color: var(--dim); }
 .cancel-toggle { flex: 0 0 auto; }
+
+/* Locale-variant label inputs (_en / _zh) on leg and round rows. The two
+   variant boxes are otherwise identical empty text fields sitting side by
+   side, and Chinese typed into label_en is served verbatim to ENGLISH
+   viewers (loc_field trusts the column) -- so each carries a permanent
+   marker rather than a placeholder, which vanishes exactly when the box
+   has content and a mislabelled value starts mattering. The marker wraps
+   the input in a <label>, so the screen-reader association is native and
+   cannot drift out of sync with an aria-label. Language NAMES are never
+   translated (see the language-switcher rule): "English" and "中文" render
+   in their own script, matching tags.html's "Name · English" / "Name · 中文".
+   Both rows are flex-wrap, so the wrapper takes over the flex sizing its
+   bare <input> used to have -- a slightly wider basis, since it now carries
+   the marker too, which makes the row wrap one field earlier instead of
+   crushing all three. The inner input drops to min-width:0 so it shrinks
+   inside the wrapper rather than overflowing it. */
+.eleg-top > .vfld, .redit-top > .vfld {
+  display: flex; align-items: center; gap: .3rem;
+  flex: 1 1 auto; min-width: 10rem;
+}
+.vfld > .vfld-tag {
+  flex: 0 0 auto; font-size: .72rem; color: var(--dim); white-space: nowrap;
+}
+.eleg-top > .vfld > input, .redit-top > .vfld > input {
+  flex: 1 1 auto; min-width: 0; width: 100%;
+}
 /* var(--raise), not a hardcoded #fff -- it flips near-white in light mode
    and near-black in dark, staying legible on this --danger ground either
    way (unlike the other #fff occurrences here, which sit on the accent

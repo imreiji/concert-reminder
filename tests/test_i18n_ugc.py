@@ -5,7 +5,9 @@ fallback logic without a DB round-trip. The column and search tests use the
 same in-memory async-SQLite fixture shape as tests/test_service.py.
 """
 
+import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -304,6 +306,67 @@ async def test_empty_variant_saves_as_none(client, db):
     async with db() as s:
         c = (await s.execute(select(Concert).where(Concert.event_id == "ll2"))).scalar_one()
         assert c.title_zh is None
+
+
+# ── editor markup: the _en and _zh boxes are told apart on sight ─────────
+
+# A leg/round row carries three label boxes: the Japanese original and the two
+# locale variants. The variants shipped with the SAME placeholder as each
+# other, so an editor saw two identical empty boxes and nothing said which was
+# which -- and Chinese landing in label_en is then served verbatim to ENGLISH
+# viewers, because loc_field trusts the column. Each variant now sits inside a
+# <label> carrying a permanent language marker (a placeholder would vanish the
+# moment the box has content, which is exactly when the mistake matters).
+
+_VFLD = re.compile(
+    r'<label class="vfld"><span class="vfld-tag">(?P<mark>[^<]+)</span>\s*'
+    r'<input name="(?P<name>\w+_label_(?:en|zh))"(?P<rest>[^>]*)>',
+)
+
+
+def _variant_fields(body: str):
+    return [(m["mark"], m["name"], m["rest"]) for m in _VFLD.finditer(body)]
+
+
+@pytest.mark.asyncio
+async def test_editor_marks_the_en_and_zh_label_boxes_distinctly(client, db):
+    await _seed_editor_concert(db, event_id="mark", title="ラブライブ")
+    login(client)
+    for url, expected in (("/concerts/new", 6), ("/concerts/mark/edit", 8)):
+        body = client.get(url).text
+        fields = _variant_fields(body)
+        # every variant input on the page is wrapped, <template>s included
+        assert body.count("_label_en") + body.count("_label_zh") == expected
+        assert len(fields) == expected, url
+
+        for mark, name, _rest in fields:
+            # Language NAMES are never translated: English and 中文 render in
+            # their own script whatever locale the page is in.
+            assert mark == ("English" if name.endswith("_en") else "中文"), (url, name)
+
+        # and the two boxes of a pair differ by more than their name attribute
+        for i in range(0, len(fields), 2):
+            en, zh = fields[i], fields[i + 1]
+            assert en[1].removesuffix("_en") == zh[1].removesuffix("_zh")
+            assert en[0] != zh[0]
+            assert (en[0], en[2]) != (zh[0], zh[2])
+
+
+def test_no_row_template_leaves_a_variant_label_box_unmarked():
+    """import_preview.html has no cheap render fixture -- guard it at source.
+
+    Missing one template leaves that one page ambiguous, which is the whole
+    bug; this catches a new row template that forgets the wrapper too.
+    """
+    tpl = Path(__file__).resolve().parents[1] / "src" / "app" / "web" / "templates"
+    seen = 0
+    for path in sorted(tpl.glob("*.html")):
+        text = path.read_text(encoding="utf-8")
+        for m in re.finditer(r'<input name="(\w+_label_(?:en|zh))"', text):
+            seen += 1
+            marker = text[:m.start()].rstrip()
+            assert marker.endswith("</span>"), f"{path.name}: {m[1]} has no language marker"
+    assert seen == 22  # 6 new + 8 edit + 8 import preview
 
 
 # ── display: a zh viewer sees the variant, an en viewer the original ──────
