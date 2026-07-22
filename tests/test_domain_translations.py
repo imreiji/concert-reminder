@@ -9,8 +9,12 @@ from app.domain.translations import missing_variants
     ("  ", "\t", "", ()),                 # whitespace counts as blank
     ("あ", "", "", ("en", "zh")),          # started, so finish it
     ("", "a", "", ("ja", "zh")),
-    ("あ", "a", "", ("zh",)),
     ("", "", "a", ("ja", "en")),
+    # Exactly one slot missing, in each position: these are what the 422
+    # message is built from, so each must name the right single language.
+    ("あ", "a", "", ("zh",)),
+    ("あ", "", "a", ("en",)),
+    ("", "a", "a", ("ja",)),
 ])
 def test_optional_field_is_all_or_nothing(base, en, zh, expected):
     assert missing_variants(base, en, zh) == expected
