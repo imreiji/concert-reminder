@@ -20,6 +20,16 @@ in return.
 
 _SLOTS = ("ja", "en", "zh")
 
+# Language names are deliberately NOT _()-wrapped: this project never
+# translates them (see the UI conventions in CLAUDE.md) -- someone reading an
+# error about a missing 中文 value has to recognise the language before they
+# can read anything else. Public (not `_SLOT_LABEL`) because both
+# `web/forms.py` (the create-boundary 422) and `db/service.py` (the edit
+# page's "what's missing" notice) import it -- a single source so the two
+# surfaces can never name the same missing language differently.
+SLOT_LABEL = {"ja": "日本語", "en": "English", "zh": "中文"}
+assert tuple(SLOT_LABEL) == _SLOTS
+
 
 def missing_variants(
     base: str, en: str, zh: str, *, mandatory: bool = False

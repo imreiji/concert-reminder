@@ -9,7 +9,7 @@ and routes/imports.py need it too, and neither should have to import a
 
 from fastapi import HTTPException
 
-from app.domain.translations import missing_variants
+from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.urls import UnsafeURLError, clean_url
 
 
@@ -19,13 +19,6 @@ def form_url(raw: str | None) -> str | None:
         return clean_url(raw)
     except UnsafeURLError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
-# Language names are deliberately NOT _()-wrapped: this project never
-# translates them (see the UI conventions in CLAUDE.md) -- someone reading an
-# error about a missing 中文 value has to recognise the language before they
-# can read anything else.
-_SLOT_LABEL = {"ja": "日本語", "en": "English", "zh": "中文"}
 
 
 def require_variants(
@@ -58,5 +51,5 @@ def require_variants(
         return
     raise HTTPException(
         status_code=422,
-        detail=f"{field_label} needs {', '.join(_SLOT_LABEL[g] for g in gaps)}",
+        detail=f"{field_label} needs {', '.join(SLOT_LABEL[g] for g in gaps)}",
     )

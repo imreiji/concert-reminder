@@ -53,7 +53,7 @@ from app.db.models import (
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.timezones import fmt_day_month
-from app.domain.translations import missing_variants
+from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
 from app.domain.upgrades import is_upgrade_eligible
 from app.i18n import N_, get_locale, gettext_in, loc_field
@@ -3637,13 +3637,6 @@ class VariantGap:
     fields: tuple[str, ...]  # localized field labels, in record order
 
 
-# Language names are NEVER translated (CLAUDE.md's UI conventions), and this
-# mapping deliberately matches web/forms.py's _SLOT_LABEL: the create
-# boundary's 422 and this notice describe the same gap, so they must not
-# name the languages differently.
-_GAP_LANGUAGE = {"ja": "日本語", "en": "English", "zh": "中文"}
-
-
 def _regroup_gaps(pairs: Iterable[tuple[str, tuple[str, ...]]]) -> list[VariantGap]:
     """(field label, missing slots) pairs -> one VariantGap per language.
 
@@ -3656,7 +3649,7 @@ def _regroup_gaps(pairs: Iterable[tuple[str, tuple[str, ...]]]) -> list[VariantG
         for slot in missing:
             by_slot.setdefault(slot, []).append(label)
     return [
-        VariantGap(language=_GAP_LANGUAGE[slot], fields=tuple(by_slot[slot]))
+        VariantGap(language=SLOT_LABEL[slot], fields=tuple(by_slot[slot]))
         for slot in ("ja", "en", "zh")
         if slot in by_slot
     ]

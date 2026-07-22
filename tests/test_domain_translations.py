@@ -1,6 +1,6 @@
 import pytest
 
-from app.domain.translations import missing_variants
+from app.domain.translations import _SLOTS, SLOT_LABEL, missing_variants
 
 
 @pytest.mark.parametrize("base,en,zh,expected", [
@@ -31,3 +31,11 @@ def test_mandatory_field_must_be_complete(base, en, zh, expected):
 
 def test_order_is_stable_so_messages_read_the_same_every_time():
     assert missing_variants("", "", "", mandatory=True) == ("ja", "en", "zh")
+
+
+def test_slot_label_keys_match_slots_exactly():
+    # SLOT_LABEL is the single home for the ja/en/zh display names shared by
+    # web/forms.py's 422 and db/service.py's edit-page notice -- if its keys
+    # ever drifted from _SLOTS, missing_variants could return a slot with no
+    # label to render, a KeyError at the two call sites rather than here.
+    assert tuple(SLOT_LABEL) == _SLOTS
