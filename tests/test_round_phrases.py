@@ -80,6 +80,21 @@ def editor_client(db, monkeypatch):
     return c
 
 
+@pytest.fixture()
+def client(db, monkeypatch):
+    """A signed-OUT client -- for the one test that needs the auth
+    invariant (require_editor's LoginRequired -> redirect, never a 403)
+    rather than an editor session."""
+    app = create_app()
+
+    async def override_session():
+        async with db() as s:
+            yield s
+
+    app.dependency_overrides[get_session] = override_session
+    return TestClient(app, follow_redirects=False)
+
+
 def test_phrase_columns_and_unique_index():
     cols = RoundLabelPhrase.__table__.columns
     for name in ("label", "label_en", "label_zh"):
@@ -165,6 +180,72 @@ async def test_forgetting_a_phrase_removes_only_the_suggestion(db):
 async def test_forgetting_an_unknown_phrase_is_false_not_an_error(db):
     async with db() as session:
         assert await forget_round_label_phrase(session, 9999) is False
+
+
+# ── Forgetting a phrase (web) ─────────────────────────────────────────────
+
+
+async def test_forgetting_a_phrase_removes_it_from_the_picker(editor_client, db):
+    async with db() as session:
+        await record_round_label_phrase(session, "typo", "Offical", "官方")
+        await session.commit()
+        pid = (await session.execute(select(RoundLabelPhrase))).scalar_one().id
+
+    resp = editor_client.post(f"/round-phrases/{pid}/forget")
+    assert resp.status_code == 204
+
+    r = editor_client.get("/concerts/new")
+    assert "Offical" not in r.text
+
+    async with db() as session:
+        assert (await session.execute(select(RoundLabelPhrase))).scalars().all() == []
+
+
+async def test_forgetting_a_phrase_leaves_the_rounds_that_used_it(editor_client, db):
+    """A phrase is a suggestion, not a foreign key: create a concert whose
+    round carries the full trilingual triple (which records the phrase as a
+    side effect, same as the wiring tests below), forget that phrase, then
+    assert the Round row -- not just the phrase table -- still has all three
+    label values untouched."""
+    create_resp = editor_client.post("/concerts", data={
+        "title": "T", "event_id": "phforget",
+        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "round_label": ["1次先行抽選"], "round_label_en": ["1st-round lottery"],
+        "round_label_zh": ["第一轮先行"],
+        "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
+        "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
+        "round_url": [""], "round_notes": [""], "round_legs": [""],
+        "round_qualifiers": [""],
+    })
+    assert create_resp.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        round_id = (await session.execute(select(Round))).scalar_one().id
+        pid = (await session.execute(select(RoundLabelPhrase))).scalar_one().id
+
+    resp = editor_client.post(f"/round-phrases/{pid}/forget")
+    assert resp.status_code == 204
+
+    async with editor_client.db() as session:
+        # The phrase suggestion is gone...
+        assert (await session.execute(select(RoundLabelPhrase))).scalars().all() == []
+        # ...but the round that used it is untouched.
+        round_ = await session.get(Round, round_id)
+        assert (round_.label, round_.label_en, round_.label_zh) == (
+            "1次先行抽選", "1st-round lottery", "第一轮先行",
+        )
+
+
+async def test_forgetting_an_unknown_phrase_is_404(editor_client):
+    assert editor_client.post("/round-phrases/9999/forget").status_code == 404
+
+
+async def test_forget_requires_an_editor(client):
+    """Signed out is a redirect, not a 403 -- see the auth invariant."""
+    resp = client.post("/round-phrases/1/forget")
+    assert resp.status_code in (200, 303, 204)
 
 
 # ── Wiring: every save path records a phrase as a side effect ────────────

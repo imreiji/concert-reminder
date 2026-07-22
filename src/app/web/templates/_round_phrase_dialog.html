@@ -70,12 +70,19 @@
     // close-handler's reset below) so it always reflects what's currently
     // hidden.
     const noMatch = dlg.querySelector("[data-phrase-no-match]");
+    // The zero-ever-saved state, computed server-side at render from
+    // round_phrases. Forgetting the last remaining row happens client-side
+    // with no reload, so that render-time count goes stale -- reuse this
+    // element and the same .phrase-row count the no-match logic already
+    // keeps, rather than tracking a second copy of "are there any left".
+    const phraseEmpty = dlg.querySelector("[data-phrase-empty]");
     function updateNoMatchState() {
       if (!noMatch) return;
       const rows = dlg.querySelectorAll(".phrase-row");
       const anyRows = rows.length > 0;
       const anyVisible = Array.from(rows).some((row) => row.style.display !== "none");
       noMatch.hidden = !anyRows || anyVisible;
+      if (phraseEmpty) phraseEmpty.hidden = anyRows;
     }
     const searchInput = dlg.querySelector('input[type="search"]');
     if (searchInput) searchInput.addEventListener("input", updateNoMatchState);
@@ -91,20 +98,39 @@
 
     dlg.addEventListener("click", function (e) {
       const pick = e.target.closest(".phrase-pick");
-      if (!pick || !opener) return;
-      // dataset, not innerHTML/textContent: the value must survive exactly as
-      // stored, and the alt line above is a rendered "EN · ZH" summary, not
-      // either field on its own.
-      const FIELDS = [
-        ["round_label", pick.dataset.ja],
-        ["round_label_en", pick.dataset.en],
-        ["round_label_zh", pick.dataset.zh],
-      ];
-      FIELDS.forEach(([name, value]) => {
-        const input = opener.querySelector('[name="' + name + '"]');
-        if (input) input.value = value;
-      });
-      dlg.close();
+      if (pick && opener) {
+        // dataset, not innerHTML/textContent: the value must survive exactly
+        // as stored, and the alt line above is a rendered "EN · ZH" summary,
+        // not either field on its own.
+        const FIELDS = [
+          ["round_label", pick.dataset.ja],
+          ["round_label_en", pick.dataset.en],
+          ["round_label_zh", pick.dataset.zh],
+        ];
+        FIELDS.forEach(([name, value]) => {
+          const input = opener.querySelector('[name="' + name + '"]');
+          if (input) input.value = value;
+        });
+        dlg.close();
+        return;
+      }
+
+      // The × on a row: forgets the SUGGESTION only, never the rounds that
+      // already used it (db.service.forget_round_label_phrase). Read the id
+      // from data-phrase-id via dataset, never an inline on* handler
+      // (invariant 7). A failed forget is not worth interrupting the editor
+      // over -- no modal, no alert, just leave the row in place.
+      const forget = e.target.closest(".phrase-forget");
+      if (!forget) return;
+      const id = forget.dataset.phraseId;
+      fetch("/round-phrases/" + id + "/forget", { method: "POST" })
+        .then((r) => {
+          if (!r.ok) return;
+          const row = forget.closest(".phrase-row");
+          if (row) row.remove();
+          updateNoMatchState();
+        })
+        .catch(() => {});
     });
 
     // Backdrop-click is handled globally in base.html; Esc is the <dialog>

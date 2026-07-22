@@ -53,6 +53,7 @@ from app.db.service import (
     concert_subscription_states,
     detach_tag,
     ensure_user,
+    forget_round_label_phrase,
     get_default_preset,
     group_members,
     handle_newly_tagged,
@@ -1573,3 +1574,21 @@ async def round_ics(
             "Content-Disposition": f'attachment; filename="{slugify(round_.label)}.ics"'
         },
     )
+
+
+# ── Round-label phrases ────────────────────────────────────────────────────
+
+
+@router.post("/round-phrases/{phrase_id}/forget", status_code=204)
+async def forget_phrase(
+    phrase_id: int,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Stop offering a remembered label. Never touches the rounds using it --
+    a phrase is a suggestion, not a foreign key (see
+    db.service.forget_round_label_phrase)."""
+    if not await forget_round_label_phrase(session, phrase_id):
+        raise HTTPException(status_code=404, detail="no such phrase")
+    await session.commit()
+    return Response(status_code=204)
