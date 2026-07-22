@@ -53,11 +53,14 @@ from app.db.service import (
     concert_subscription_states,
     detach_tag,
     ensure_user,
+    forget_round_label_phrase,
     get_default_preset,
     group_members,
     handle_newly_tagged,
     notify_newly_cancelled_legs,
     record_concert_edit,
+    record_round_label_phrase,
+    round_label_phrases,
     snapshot_concert,
     sync_concert,
     sync_concert_venue_tags,
@@ -611,6 +614,9 @@ async def new_concert_form(
             # Every VENUE tag, for each leg row's venue picker. A leg's venue
             # is a real tag now (ConcertDay.venue_tag_id), not typed text.
             "venue_tags": await all_venue_tags(session),
+            # Trilingual round labels already typed on earlier concerts, for
+            # the picker each round row's "Remembered" chip opens.
+            "round_phrases": await round_label_phrases(session),
             # No leg or round exists yet on a create page, but the chip
             # partials the <template>s include still read these -- empty here,
             # so the client-side script builds every chip from the DOM rows.
@@ -798,6 +804,7 @@ async def create_concert(
             label_en=label_en, notes=notes_, label_zh=label_zh,
         )
         session.add(round_)
+        await record_round_label_phrase(session, label, label_en, label_zh)
         qual_jobs.append((round_, kind_, quals))
 
     await session.flush()  # new rounds now have ids, needed by parse_round_qualifiers
@@ -1067,6 +1074,9 @@ async def edit_concert_form(
             # Every VENUE tag, for each leg row's venue picker (the leg's own
             # pick is pre-selected in the template from d.venue_tag_id).
             "venue_tags": await all_venue_tags(session),
+            # Trilingual round labels already typed on earlier concerts, for
+            # the picker each round row's "Remembered" chip opens.
+            "round_phrases": await round_label_phrases(session),
             "legs": legs,
             "rounds_with_chips": rounds_with_chips,
             # Chip options for the "Qualifies" row: every already-saved round
@@ -1343,6 +1353,7 @@ async def edit_concert(
                 applies_to, label_en, notes_, label_zh,
             )
             session.add(round_)
+        await record_round_label_phrase(session, label, label_en, label_zh)
         qual_jobs.append((round_, kind_, quals))
     for rid, round_ in existing_rounds.items():
         if rid not in kept_round_ids:
@@ -1563,3 +1574,21 @@ async def round_ics(
             "Content-Disposition": f'attachment; filename="{slugify(round_.label)}.ics"'
         },
     )
+
+
+# ── Round-label phrases ────────────────────────────────────────────────────
+
+
+@router.post("/round-phrases/{phrase_id}/forget", status_code=204)
+async def forget_phrase(
+    phrase_id: int,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Stop offering a remembered label. Never touches the rounds using it --
+    a phrase is a suggestion, not a foreign key (see
+    db.service.forget_round_label_phrase)."""
+    if not await forget_round_label_phrase(session, phrase_id):
+        raise HTTPException(status_code=404, detail="no such phrase")
+    await session.commit()
+    return Response(status_code=204)

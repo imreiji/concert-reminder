@@ -41,6 +41,7 @@ from app.db.models import (
     ReminderQueue,
     ReminderRule,
     Round,
+    RoundLabelPhrase,
     RoundOutcome,
     RoundQualifier,
     Tag,
@@ -3519,3 +3520,61 @@ async def sync_concert_venue_tags(session: AsyncSession, concert_id: int) -> lis
         newly += await attach_tag(session, concert_id, desired[tag_id], expand=False)
     await session.flush()
     return newly
+
+
+# ── Round-label phrases ───────────────────────────────────────────────────
+
+
+async def record_round_label_phrase(
+    session: AsyncSession, label: str, label_en: str, label_zh: str
+) -> None:
+    """Remember a trilingual round label so later concerts can reuse it.
+
+    Only a COMPLETE triple is recorded: a suggestion that fills two of three
+    boxes still leaves the editor typing, which is the cost this exists to
+    remove. Reusing an existing triple bumps its count rather than inserting
+    a duplicate -- that count is what ranks the picker.
+    """
+    label, label_en, label_zh = label.strip(), label_en.strip(), label_zh.strip()
+    if not (label and label_en and label_zh):
+        return
+
+    existing = (await session.execute(
+        select(RoundLabelPhrase).where(
+            RoundLabelPhrase.label == label,
+            RoundLabelPhrase.label_en == label_en,
+            RoundLabelPhrase.label_zh == label_zh,
+        )
+    )).scalar_one_or_none()
+    if existing is None:
+        session.add(RoundLabelPhrase(label=label, label_en=label_en, label_zh=label_zh))
+    else:
+        existing.used_count += 1
+        existing.last_used_at = _now()
+    await session.flush()
+
+
+async def round_label_phrases(
+    session: AsyncSession, limit: int = 50
+) -> list[RoundLabelPhrase]:
+    """The picker's list: most-used first, most-recent breaking ties."""
+    return list((await session.execute(
+        select(RoundLabelPhrase)
+        .order_by(RoundLabelPhrase.used_count.desc(), RoundLabelPhrase.last_used_at.desc())
+        .limit(limit)
+    )).scalars())
+
+
+async def forget_round_label_phrase(session: AsyncSession, phrase_id: int) -> bool:
+    """Stop offering a phrase. Returns False when it was already gone.
+
+    Deliberately does NOT touch rounds that used it -- a phrase is a
+    suggestion, not a foreign key, so forgetting a typo leaves the concerts
+    that carry it exactly as they are.
+    """
+    existing = await session.get(RoundLabelPhrase, phrase_id)
+    if existing is None:
+        return False
+    await session.delete(existing)
+    await session.flush()
+    return True

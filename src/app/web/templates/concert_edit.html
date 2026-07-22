@@ -64,6 +64,9 @@
         <label class="vfld"><span class="vfld-tag">中文</span>
           <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
                  value="{{ r.label_zh or '' }}"></label>
+        {#- Fills all three boxes above from a triple this editor has typed
+            before -- see _round_phrase_dialog.html, included after </form>. -#}
+        <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>
         <select name="round_kind">{% for k in kinds %}
           <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ round_kind_label(k) }}</option>
         {% endfor %}</select>
@@ -215,6 +218,7 @@
 {#- Outside the form on purpose: the dialog's v_* inputs are read by
     hand and must not ride along on the concert save. -#}
 {% include "_venue_create_dialog.html" %}
+{% include "_round_phrase_dialog.html" %}
 {% include "_tag_picker_script.html" %}
 
 {#- Separated, and last: neither of these is an edit, and one of them is not
@@ -284,6 +288,9 @@
         <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
       <label class="vfld"><span class="vfld-tag">中文</span>
         <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"></label>
+      {#- Fills all three boxes above from a triple this editor has typed
+          before -- see _round_phrase_dialog.html, included after </form>. -#}
+      <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>
       <select name="round_kind">{% for k in kinds %}
         <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
       {% endfor %}</select>

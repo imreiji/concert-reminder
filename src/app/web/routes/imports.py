@@ -24,6 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.service import (
     handle_newly_tagged,
     match_venue_tag_id,
+    record_round_label_phrase,
+    round_label_phrases,
     sync_concert,
     sync_concert_venue_tags,
     tag_picker_context,
@@ -197,6 +199,10 @@ async def import_preview(
             "initial_selected": {},
             # Every VENUE tag, for the per-leg <select>.
             "venue_tags": venue_tags,
+            # Trilingual round labels already typed on earlier concerts, for
+            # the picker each round row's "Remembered" chip opens. The scrape
+            # fills Japanese only, so this is where they pay off most.
+            "round_phrases": await round_label_phrases(session),
             # The one free-text venue the ramen.events parse scrapes for the
             # whole event. It fills each parsed leg's free-text `day_venue`
             # (the importer's find must not be thrown away when no tag matches)
@@ -382,6 +388,7 @@ async def import_commit(
             applies_to=parse_round_legs(legs, valid_day_ids, key_to_day_id),
             label_en=label_en, notes=notes_, label_zh=label_zh,
         ))
+        await record_round_label_phrase(session, label, label_en, label_zh)
 
     await session.flush()
     # Same rollup the manual create/edit routes run: the concert's VENUE tags
