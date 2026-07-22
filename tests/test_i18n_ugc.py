@@ -19,6 +19,7 @@ from app.db.models import Base, Concert, ConcertDay, Round, Tag, User
 from app.db.service import ensure_user, snapshot_concert
 from app.db.session import get_session
 from app.domain.types import RoundKind, TagKind
+from app.i18n import loc_field
 from app.web import auth
 from app.web.app import create_app
 from app.web.routes.discover import concert_search_text
@@ -106,6 +107,22 @@ async def test_tag_name_variants_not_unique(session):
     t2 = Tag(name="ラブライブ！", kind=TagKind.FRANCHISE, name_en="Love Live", name_zh="爱")
     session.add_all([t1, t2])
     await session.commit()  # must not raise
+
+
+def test_tag_venue_detail_columns_are_nullable():
+    cols = Tag.__table__.columns
+    for name in ("city", "city_en", "city_zh", "address"):
+        assert name in cols, f"Tag.{name} missing"
+        assert cols[name].nullable, f"Tag.{name} must be nullable"
+
+
+def test_loc_field_resolves_tag_city():
+    tag = Tag(name="Kアリーナ横浜", kind=TagKind.VENUE, city="横浜", city_en="Yokohama")
+    assert loc_field(tag, "city", "en") == "Yokohama"
+    assert loc_field(tag, "city", "ja") == "横浜"
+    # zh is unfilled and there is no cross-locale chaining -- it must NOT
+    # fall through to the English variant.
+    assert loc_field(tag, "city", "zh") == "横浜"
 
 
 # ── search haystack picks up the variants ────────────────────────────────

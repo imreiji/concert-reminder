@@ -241,6 +241,14 @@ class Tag(Base):
     # of one-by-one ("Kanto", "Kansai", etc.)
     location_url: Mapped[str | None] = mapped_column(String(500))
     region: Mapped[str | None] = mapped_column(String(100))
+    # VENUE-specific: the city this venue sits in, finer-grained than `region`
+    # ("Yokohama" inside "Kanto"). Carries locale variants because a city name
+    # is user-facing text; `address` does not, because its job is to be pasted
+    # into a map and location_url already covers the maps link.
+    city: Mapped[str | None] = mapped_column(String(100))
+    city_en: Mapped[str | None] = mapped_column(String(100))
+    city_zh: Mapped[str | None] = mapped_column(String(100))
+    address: Mapped[str | None] = mapped_column(String(300))
     # ARTIST/GROUP-specific (harmless if unset on other kinds): an
     # eventernote.com link, mirroring location_url for venues so performer
     # chips can link out.
