@@ -84,6 +84,10 @@ def legacy_db(tmp_path):
             (5, 1, 'Day 5', 'Hasunosora',        '2026-08-05 09:00:00');
     """)
     conn.execute(
+        "INSERT INTO concert_days (id, concert_id, label, venue, starts_at_utc) "
+        "VALUES (6, 1, 'Day 6', 'Zepp Haneda' || char(12288), '2026-08-06 09:00:00')"
+    )
+    conn.execute(
         "INSERT INTO alembic_version (version_num) VALUES (?)", (PRE_MIGRATION_REVISION,)
     )
     conn.commit()
@@ -126,6 +130,11 @@ def test_backfill_matches_case_and_whitespace_insensitively(legacy_db, monkeypat
     assert rows[3] is None, "no such venue tag -- left NULL for reporting"
     assert rows[4] is None, "no venue at all"
     assert rows[5] is None, "a same-named GROUP tag must NOT match a venue"
+    assert rows[6] == 1, (
+        "a trailing U+3000 IDEOGRAPHIC SPACE must match too -- SQLite's "
+        "single-arg trim() strips only U+0020, but Python's str.strip() "
+        "(what find_venue_tag uses) is Unicode-aware"
+    )
 
 
 def test_backfill_preserves_free_text_columns(legacy_db, monkeypatch):
