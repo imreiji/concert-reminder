@@ -59,6 +59,7 @@ from app.db.service import (
     record_concert_edit,
     snapshot_concert,
     sync_concert,
+    sync_concert_venue_tags,
     tag_picker_context,
     tracked_concert_ids,
 )
@@ -160,9 +161,16 @@ def apply_day_fields(
     venue_address: str = "",
     doors_at: str = "",
     cancelled: str = "false",
+    venue_tag_id: str = "",
 ) -> ConcertDay:
     """The JST->UTC parse + assignment shared by build_day (new rows) and
-    the edit page's in-place update of existing rows."""
+    the edit page's in-place update of existing rows.
+
+    The free-text city/venue/venue_address columns are still assigned even
+    though venue_tag_id is now the structured truth: this phase keeps them so
+    an unmatched venue stays recoverable across the two-deploy migration. A
+    later phase drops both the columns and these three lines.
+    """
     starts = parse_jst(starts_at)
     if starts is None:
         raise HTTPException(status_code=422, detail="a day needs a start time")
@@ -173,6 +181,7 @@ def apply_day_fields(
     day.venue_address = venue_address.strip() or None
     day.doors_at_utc = parse_jst(doors_at)
     day.cancelled = cancelled == "true"
+    day.venue_tag_id = int(venue_tag_id) if venue_tag_id.strip().isdigit() else None
     return day
 
 
@@ -185,12 +194,13 @@ def build_day(
     venue_address: str = "",
     doors_at: str = "",
     cancelled: str = "false",
+    venue_tag_id: str = "",
 ) -> ConcertDay:
     """New-row constructor: the rich creation form, the edit page's new
     rows, and the URL-import commit route."""
     return apply_day_fields(
         ConcertDay(concert_id=concert_id), label, starts_at, city, venue, venue_address,
-        doors_at, cancelled,
+        doors_at, cancelled, venue_tag_id,
     )
 
 
@@ -468,7 +478,10 @@ async def create_concert_row(
         event_id=event_id,
         kind=kind,
         franchise=", ".join(t.name for t in f_tags) or None,  # denormalized display
-        venue=", ".join(t.name for t in v_tags) or None,
+        # Venue is derived from the legs by sync_concert_venue_tags, which the
+        # caller runs after the legs are added. It cannot be computed here --
+        # no leg exists yet. (Phase 5 drops this column entirely.)
+        venue=None,
         # Optional so create_concert, which assigns its own richer field set
         # (including source_url) right after this returns, is unaffected.
         # Callers pass an already-form_url-validated value.
@@ -548,6 +561,7 @@ async def create_concert(
     day_city: list[str] = Form(default=[]),
     day_venue: list[str] = Form(default=[]),
     day_venue_address: list[str] = Form(default=[]),
+    day_venue_tag_id: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
     day_cancelled: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
@@ -602,19 +616,38 @@ async def create_concert(
     # which is worse than a 500. Same rule edit_concert applies.
     if not day_key:
         day_key = [""] * len(day_label)
+    n_days = len(day_label)
+    # The free-text city/venue/venue_address arrays are on their way out (the
+    # next phase drops their form inputs), so a submitter can already
+    # legitimately omit them; end-pad to the label count exactly as
+    # imports.py has always done -- they are non-binding display text, so a
+    # trailing row losing empty text is harmless.
+    day_city = day_city + [""] * (n_days - len(day_city))
+    day_venue = day_venue + [""] * (n_days - len(day_venue))
+    day_venue_address = day_venue_address + [""] * (n_days - len(day_venue_address))
+    # day_venue_tag_id is NOT free text -- it is the leg's structured venue, so
+    # a value that slid one row would hand a leg another leg's venue, silently.
+    # It therefore follows day_key's rule, not the free-text one: padded only
+    # when omitted ENTIRELY (any submitter predating the field), while a
+    # partial array is left alone so the strict zip raises instead.
+    if not day_venue_tag_id:
+        day_venue_tag_id = [""] * n_days
     days: list[ConcertDay] = []
     # key -> the ConcertDay its row produced, built INSIDE the loop from the
     # same tuple so a key can never be paired with another row's day; the ids
     # are filled in after the flush below.
     key_rows: list[tuple[str, ConcertDay]] = []
-    for key, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
+    for (
+        key, label, starts_at, city, venue, venue_address, doors_at, cancelled, v_tag
+    ) in zip(
         day_key, day_label, day_starts_at, day_city, day_venue, day_venue_address,
-        day_doors_at, day_cancelled, strict=True,
+        day_doors_at, day_cancelled, day_venue_tag_id, strict=True,
     ):
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
             continue  # blank trailing row from the repeatable UI -- key and all
         day = build_day(
-            concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled
+            concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
+            v_tag,
         )
         session.add(day)
         days.append(day)
@@ -674,6 +707,9 @@ async def create_concert(
                 )
 
     await session.flush()
+    # The legs are the only place a venue is entered, so the concert's VENUE
+    # tags are rolled up from them here, once every leg exists.
+    await sync_concert_venue_tags(session, concert.id)
     await sync_concert(session, concert.id)
     await session.commit()
     return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)
@@ -940,6 +976,7 @@ async def edit_concert(
     day_city: list[str] = Form(default=[]),
     day_venue: list[str] = Form(default=[]),
     day_venue_address: list[str] = Form(default=[]),
+    day_venue_tag_id: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
     day_cancelled: list[str] = Form(default=[]),
     round_id: list[str] = Form(default=[]),
@@ -1015,15 +1052,28 @@ async def edit_concert(
     # which is worse than a 500.
     if not day_key:
         day_key = [""] * len(day_label)
+    # Same two padding rules create_concert applies, for the same reasons: the
+    # outgoing free-text arrays end-pad (non-binding display text), while
+    # day_venue_tag_id -- the leg's structured venue -- is padded only when
+    # omitted ENTIRELY, so a partial array trips the strict zip below rather
+    # than sliding one leg's venue onto another.
+    n_days = len(day_label)
+    day_city = day_city + [""] * (n_days - len(day_city))
+    day_venue = day_venue + [""] * (n_days - len(day_venue))
+    day_venue_address = day_venue_address + [""] * (n_days - len(day_venue_address))
+    if not day_venue_tag_id:
+        day_venue_tag_id = [""] * n_days
     kept_day_ids: set[int] = set()
     submitted_days: list[ConcertDay] = []
     # key -> the id that key's row actually got. Built INSIDE the loop below,
     # from the same tuple that produced the ConcertDay, so a key can never be
     # paired with another row's day; the ids are filled in after the flush.
     key_rows: list[tuple[str, ConcertDay]] = []
-    for key, did, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
+    for (
+        key, did, label, starts_at, city, venue, venue_address, doors_at, cancelled, v_tag
+    ) in zip(
         day_key, day_id, day_label, day_starts_at, day_city, day_venue, day_venue_address,
-        day_doors_at, day_cancelled, strict=True,
+        day_doors_at, day_cancelled, day_venue_tag_id, strict=True,
     ):
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
             continue  # blank trailing row from the repeatable UI -- key and all
@@ -1031,12 +1081,13 @@ async def edit_concert(
         if did.isdigit() and int(did) in existing_days:
             day = apply_day_fields(
                 existing_days[int(did)], label, starts_at, city, venue, venue_address,
-                doors_at, cancelled,
+                doors_at, cancelled, v_tag,
             )
             kept_day_ids.add(day.id)
         else:
             day = build_day(
-                concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled
+                concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
+                v_tag,
             )
             session.add(day)
         submitted_days.append(day)
@@ -1162,6 +1213,10 @@ async def edit_concert(
 
     if newly_cancelled_day_ids:
         await notify_newly_cancelled_legs(session, concert.id, newly_cancelled_day_ids)
+    # Re-derived from the legs as they stand after this submit -- this is the
+    # staleness fix: a changed leg venue now moves the concert's VENUE tags
+    # with it, and a dropped leg takes its venue off the concert.
+    await sync_concert_venue_tags(session, concert.id)
     await sync_concert(session, concert.id)
     await session.commit()
     return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)

@@ -973,6 +973,10 @@ async def test_duplicate_clones_scalars_and_tags_but_not_days_or_rounds(client):
             "franchise_tags": ["1"], "venue_tags": ["2"],
             "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            # The venue now lives on the leg: the concert's VENUE tags are
+            # rolled up from its legs, so a concert-level venue_tags value no
+            # leg backs would be derived straight back off again.
+            "day_venue_tag_id": ["2"],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],

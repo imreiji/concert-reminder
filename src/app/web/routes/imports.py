@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.service import sync_concert, tag_picker_context
+from app.db.service import sync_concert, sync_concert_venue_tags, tag_picker_context
 from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import ConcertKind, RoundKind
@@ -207,6 +207,7 @@ async def import_commit(
     day_city: list[str] = Form(default=[]),
     day_venue: list[str] = Form(default=[]),
     day_venue_address: list[str] = Form(default=[]),
+    day_venue_tag_id: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
     day_cancelled: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
@@ -273,19 +274,29 @@ async def import_commit(
     # empty keys. Same rule create_concert applies.
     if not day_key:
         day_key = [""] * n_days
+    # day_venue_tag_id is the leg's structured venue, not display text, so it
+    # follows day_key's rule rather than the end-padding above: a partial array
+    # is left alone (the strict zip raises) so one leg's venue can never slide
+    # onto another; only a WHOLLY-omitted array -- every submitter predating
+    # the field, including this route's older tests -- is padded to blanks.
+    if not day_venue_tag_id:
+        day_venue_tag_id = [""] * n_days
     # key -> the ConcertDay its row produced, built INSIDE the loop from the
     # same tuple so a key can never be paired with another row's day; ids are
     # filled in after the flush below.
     days: list = []
     key_rows: list[tuple[str, object]] = []
-    for key, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
+    for (
+        key, label, starts_at, city, venue, venue_address, doors_at, cancelled, v_tag
+    ) in zip(
         day_key, day_label, day_starts_at, day_city, day_venue, day_venue_address,
-        day_doors_at, day_cancelled, strict=True,
+        day_doors_at, day_cancelled, day_venue_tag_id, strict=True,
     ):
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
             continue  # a blank trailing row from the repeatable UI -- key and all
         day = build_day(
-            concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled
+            concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
+            v_tag,
         )
         session.add(day)
         days.append(day)
@@ -324,6 +335,9 @@ async def import_commit(
         ))
 
     await session.flush()
+    # Same rollup the manual create/edit routes run: the concert's VENUE tags
+    # are derived from its legs, so an import must not leave them unset.
+    await sync_concert_venue_tags(session, concert.id)
     await sync_concert(session, concert.id)
     await session.commit()
     return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)

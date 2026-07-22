@@ -991,8 +991,12 @@ def test_index_search_matches_franchise_tag_name(client):
 def test_index_search_matches_venue_tag_name(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
+    # The venue is entered on the leg; the concert's VENUE tags are rolled up
+    # from its legs, so a legless concert would carry none.
     client.post("/concerts", data={
         "title": "Some Show", "event_id": "some-show", "venue_tags": [1],
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     filtered = client.get("/discover?q=yokohama").text
     tile = filtered[filtered.index('<a class="tile"'):]
@@ -1030,8 +1034,11 @@ async def test_index_search_ignores_free_text_venue_when_venue_tag_exists(client
     search is silently broken."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
+    # Venue on the leg -- see test_index_search_matches_venue_tag_name.
     client.post("/concerts", data={
         "title": "Some Show", "event_id": "some-show", "venue_tags": [1],
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     async with client.db() as s:
         from app.db.models import Concert as ConcertModel
@@ -1148,6 +1155,9 @@ async def test_creation_form_respects_explicit_artist_selection(client):
     r = client.post("/concerts", data={
         "title": "6th Live", "event_id": "6th-live", "franchise_tags": [1], "group_tags": [2],
         "artist_tags": [3], "venue_tags": [5],
+        # The venue reaches the concert by rolling up from the leg now.
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["5"],
     })
     assert r.status_code == 303
 
@@ -1155,7 +1165,9 @@ async def test_creation_form_respects_explicit_artist_selection(client):
         ids = await tag_ids_on(s, 1)
         assert ids == {1, 2, 3, 5}  # franchise+group+Kozue+venue; NO Kaho
         c = (await s.execute(select(Concert))).scalar_one()
-        assert c.franchise == "LoveLive" and c.venue == "Yokohama Arena"
+        # Concert.venue is no longer written at creation -- the venue is the
+        # leg's, surfaced through the rolled-up VENUE tag asserted above.
+        assert c.franchise == "LoveLive"
 
 
 def test_creation_rejects_wrong_kind_tags(client):
@@ -1199,12 +1211,17 @@ async def test_multiple_venues_attach_and_join(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})   # 1
     client.post("/tags", data={"name": "K-Arena", "kind": "venue"})          # 2
-    r = client.post("/concerts", data={"title": "Tour", "event_id": "tour", "venue_tags": [1, 2]})
+    # One leg per venue -- the two VENUE tags reach the concert by rolling up
+    # from the legs, which is what a tour actually looks like.
+    r = client.post("/concerts", data={
+        "title": "Tour", "event_id": "tour", "venue_tags": [1, 2],
+        "day_label": ["Day 1", "Day 2"],
+        "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
+        "day_doors_at": ["", ""], "day_venue_tag_id": ["1", "2"],
+    })
     assert r.status_code == 303
     async with client.db() as s:
         assert await tag_ids_on(s, 1) == {1, 2}
-        c = (await s.execute(select(Concert))).scalar_one()
-        assert c.venue == "Yokohama Arena, K-Arena"
     assert "Multiple" in client.get("/discover").text  # tile shows Multiple, not the join
 
 

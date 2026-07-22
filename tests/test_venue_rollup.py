@@ -1,14 +1,22 @@
 """The concert's VENUE tags are derived from its legs, never typed."""
 from datetime import UTC, datetime
 
+import pytest
 import pytest_asyncio
+from fastapi.testclient import TestClient
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings
 from app.db.models import Base, Concert, ConcertDay, ConcertTag, Tag
 from app.db.service import sync_concert_venue_tags
+from app.db.session import get_session
 from app.domain.types import TagKind
+from app.web import auth
+from app.web.app import create_app
+
+EDITOR_ID = 42
 
 
 @pytest_asyncio.fixture()
@@ -26,6 +34,37 @@ async def db():
         await conn.run_sync(Base.metadata.create_all)
     yield async_sessionmaker(engine, expire_on_commit=False)
     await engine.dispose()
+
+
+@pytest.fixture()
+def editor_client(db, monkeypatch):
+    """The signed-in-editor HTTP client, same shape as tests/test_crud.py's
+    `client` + `login_as` pair (this suite has no shared conftest fixture for
+    it), with the login already performed."""
+    monkeypatch.setattr(settings, "editor_whitelist", str(EDITOR_ID))
+    app = create_app()
+
+    async def override_session():
+        async with db() as s:
+            yield s
+
+    app.dependency_overrides[get_session] = override_session
+
+    async def fake_exchange(code):
+        return "tok"
+
+    async def fake_identity(token):
+        return {"id": str(EDITOR_ID), "username": "ed", "global_name": "ed", "avatar": None}
+
+    monkeypatch.setattr(auth, "exchange_code", fake_exchange)
+    monkeypatch.setattr(auth, "fetch_identity", fake_identity)
+
+    c = TestClient(app, follow_redirects=False)
+    r = c.get("/auth/login")
+    state = r.headers["location"].split("state=")[1].split("&")[0]
+    c.get(f"/auth/callback?code=x&state={state}")
+    c.db = db
+    return c
 
 
 async def _venue_tag_ids(session, concert_id):
@@ -98,6 +137,75 @@ async def test_rollup_leaves_non_venue_tags_alone(db):
             select(ConcertTag.tag_id).where(ConcertTag.concert_id == concert.id)
         )).scalars())
         assert group.id in all_ids
+
+
+async def test_edit_form_rolls_up_changed_leg_venue(editor_client):
+    """The end-to-end version of the staleness fix: change a leg's venue on the
+    edit form and the concert's venue tags follow."""
+    async with editor_client.db() as session:
+        old = Tag(name="Old Hall", kind=TagKind.VENUE)
+        new = Tag(name="New Hall", kind=TagKind.VENUE)
+        session.add_all([old, new])
+        concert = Concert(title="T", event_id="rollup1")
+        session.add(concert)
+        await session.flush()
+        day = ConcertDay(
+            concert_id=concert.id, label="Day 1",
+            starts_at_utc=datetime(2026, 8, 1, 9, tzinfo=UTC), venue_tag_id=old.id,
+        )
+        session.add(day)
+        session.add(ConcertTag(concert_id=concert.id, tag_id=old.id))
+        await session.commit()
+
+    resp = editor_client.post("/concerts/rollup1/edit", data={
+        "title": "T", "event_id": "rollup1",
+        "day_id": [str(day.id)], "day_key": [""],
+        "day_label": ["Day 1"], "day_starts_at": ["2026-08-01T18:00"],
+        "day_venue_tag_id": [str(new.id)],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+    })
+    assert resp.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        assert await _venue_tag_ids(session, concert.id) == {new.id}
+
+
+async def test_create_form_rolls_up_leg_venues(editor_client):
+    """The create route is the second of the three save paths -- a concert
+    created with venues on its legs carries them at the concert level too."""
+    editor_client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})   # 1
+    editor_client.post("/tags", data={"name": "Zepp Namba", "kind": "venue"})    # 2
+    r = editor_client.post("/concerts", data={
+        "title": "Tour", "event_id": "tour",
+        "day_label": ["Day 1", "Day 2"],
+        "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
+        "day_doors_at": ["", ""], "day_venue_tag_id": ["1", "2"],
+    })
+    assert r.status_code == 303
+
+    async with editor_client.db() as session:
+        concert = (await session.execute(
+            select(Concert).where(Concert.event_id == "tour")
+        )).scalar_one()
+        assert await _venue_tag_ids(session, concert.id) == {1, 2}
+
+
+async def test_import_commit_rolls_up_leg_venues(editor_client):
+    """The third save path: the URL-import commit route builds its legs the
+    same way and must run the same rollup."""
+    editor_client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})   # 1
+    r = editor_client.post("/concerts/import/commit", data={
+        "title": "Imported Show",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_venue_tag_id": ["1"],
+    })
+    assert r.status_code == 303
+
+    async with editor_client.db() as session:
+        concert = (await session.execute(
+            select(Concert).where(Concert.title == "Imported Show")
+        )).scalar_one()
+        assert await _venue_tag_ids(session, concert.id) == {1}
 
 
 async def test_rollup_with_no_leg_venues_clears_them(db):
