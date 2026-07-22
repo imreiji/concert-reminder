@@ -188,6 +188,10 @@ async def test_create_form_rolls_up_leg_venues(editor_client):
             select(Concert).where(Concert.event_id == "tour")
         )).scalar_one()
         assert await _venue_tag_ids(session, concert.id) == {1, 2}
+        # create_concert_row no longer derives a join string; the rolled-up
+        # VENUE tags above are the only answer to "where is this". Pinned so a
+        # regression restoring ", ".join(...) is caught.
+        assert concert.venue is None
 
 
 async def test_import_commit_rolls_up_leg_venues(editor_client):
@@ -221,3 +225,89 @@ async def test_rollup_with_no_leg_venues_clears_them(db):
         await sync_concert_venue_tags(session, concert.id)
 
         assert await _venue_tag_ids(session, concert.id) == set()
+
+
+# ── The two ends of the kind guard ───────────────────────────────────────
+#
+# day_venue_tag_id is the only editor-supplied tag id that does not flow
+# through create_concert_row/edit_concert's resolve_tags call. Left
+# unguarded, an id naming a non-VENUE tag lands in the rollup's `desired`
+# set but never in its VENUE-filtered `current` set, so every save re-adds
+# it -- and the second one trips ConcertTag's composite PK, a 500 that
+# leaves the concert permanently unsavable. Both ends are closed: the
+# route rejects it, and the rollup's own query can never see it.
+
+
+async def test_create_rejects_a_non_venue_leg_venue_tag(editor_client):
+    """A non-VENUE tag id posted as day_venue_tag_id is a 422, exactly like
+    every other tag input (test_creation_rejects_wrong_kind_tags)."""
+    editor_client.post("/tags", data={"name": "Sumire", "kind": "artist"})  # 1
+    r = editor_client.post("/concerts", data={
+        "title": "Bad", "event_id": "bad",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
+    })
+    assert r.status_code == 422
+
+
+async def test_create_rejects_a_nonexistent_leg_venue_tag(editor_client):
+    r = editor_client.post("/concerts", data={
+        "title": "Bad", "event_id": "bad2",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["999"],
+    })
+    assert r.status_code == 422
+
+
+async def test_edit_rejects_a_non_venue_leg_venue_tag(editor_client):
+    editor_client.post("/tags", data={"name": "Sumire", "kind": "artist"})  # 1
+    editor_client.post("/concerts", data={
+        "title": "T", "event_id": "edbad",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""],
+    })
+    async with editor_client.db() as session:
+        day = (await session.execute(select(ConcertDay))).scalar_one()
+    r = editor_client.post("/concerts/edbad/edit", data={
+        "title": "T", "event_id": "edbad",
+        "day_id": [str(day.id)], "day_label": ["Day 1"],
+        "day_starts_at": ["2099-08-01T18:00"], "day_doors_at": [""],
+        "day_venue_tag_id": ["1"],
+    })
+    assert r.status_code == 422
+
+
+async def test_import_commit_rejects_a_non_venue_leg_venue_tag(editor_client):
+    editor_client.post("/tags", data={"name": "Sumire", "kind": "artist"})  # 1
+    r = editor_client.post("/concerts/import/commit", data={
+        "title": "Bad Import",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_venue_tag_id": ["1"],
+    })
+    assert r.status_code == 422
+
+
+async def test_rollup_desired_ignores_a_non_venue_id(db):
+    """Belt to the route's braces: even if a non-VENUE id somehow reaches the
+    column, the rollup's `desired` query must not pick it up -- otherwise it
+    is re-added on every save and the second one dies on the composite PK."""
+    async with db() as session:
+        concert, _ = await _setup(session, ["Zepp Haneda"])
+        artist = Tag(name="Sumire", kind=TagKind.ARTIST)
+        session.add(artist)
+        await session.flush()
+        session.add(ConcertDay(
+            concert_id=concert.id, label="Day 1",
+            starts_at_utc=datetime(2026, 8, 1, 9, tzinfo=UTC),
+            venue_tag_id=artist.id,
+        ))
+        await session.flush()
+
+        await sync_concert_venue_tags(session, concert.id)
+        # The killer: a second run must not raise on the composite PK.
+        await sync_concert_venue_tags(session, concert.id)
+
+        all_ids = set((await session.execute(
+            select(ConcertTag.tag_id).where(ConcertTag.concert_id == concert.id)
+        )).scalars())
+        assert artist.id not in all_ids

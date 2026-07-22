@@ -961,7 +961,10 @@ def test_nav_add_link_shown_only_to_editors(client):
 # ── Duplicate concert as template ────────────────────────────────────────
 
 
-async def test_duplicate_clones_scalars_and_tags_but_not_days_or_rounds(client):
+async def test_duplicate_clones_scalars_and_tags_but_not_days_rounds_or_venues(client):
+    """The clone carries the scalars and the source's already-pruned
+    franchise/group/artist tags, but not its days, rounds, or VENUE tags:
+    a venue is derived from the legs, and a clone has none."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
     client.post("/tags", data={"name": "K Arena", "kind": "venue"})
@@ -1000,7 +1003,11 @@ async def test_duplicate_clones_scalars_and_tags_but_not_days_or_rounds(client):
     assert clone.kind.value == "concert"
     assert clone.organizer == "LustQueen"
     assert clone.categories == "concert, tour"
-    assert {t.name for t in clone.tags} == {"Hasunosora", "K Arena"}
+    # The source's VENUE tag stays behind: it is derived from legs the clone
+    # does not have. Keeping it would contradict the empty leg set from birth,
+    # and the editor's first save (duplicate lands on /edit) would strip it.
+    assert {t.name for t in clone.tags} == {"Hasunosora"}
+    assert clone.venue is None
     assert clone.days == []
     assert clone.rounds == []
 

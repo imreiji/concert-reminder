@@ -1206,8 +1206,10 @@ async def test_creation_supports_multiple_groups_and_franchises(client):
         c = (await s.execute(select(Concert))).scalar_one()
         assert c.franchise == "LoveLive, Idolmaster"
 
-async def test_multiple_venues_attach_and_join(client):
-    """Tour legs: two venues on one event; display string joins, tiles say Multiple."""
+async def test_multiple_venues_roll_up_from_legs(client):
+    """Tour legs: two venues on one event. Both VENUE tags reach the concert
+    by rolling up from the legs, Concert.venue stays None (the join string is
+    gone -- the tags are the truth), and the tile says "Multiple"."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})   # 1
     client.post("/tags", data={"name": "K-Arena", "kind": "venue"})          # 2
@@ -1222,7 +1224,37 @@ async def test_multiple_venues_attach_and_join(client):
     assert r.status_code == 303
     async with client.db() as s:
         assert await tag_ids_on(s, 1) == {1, 2}
+        c = (await s.execute(select(Concert).where(Concert.event_id == "tour"))).scalar_one()
+        # Pins the new contract: create_concert_row no longer writes a join
+        # string; the venue lives in the rolled-up VENUE tags above.
+        assert c.venue is None
     assert "Multiple" in client.get("/discover").text  # tile shows Multiple, not the join
+
+
+async def test_venue_tag_subscriber_is_notified_when_a_leg_names_it(client):
+    """VENUE tags are subscribable, so rolling one up from a leg must go
+    through the same notify-and-apply pipeline a concert-level attach does --
+    a direct ConcertTag insert would silently drop the DM notice (invariant 4).
+    """
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})  # 1
+
+    login_as(client, VIEWER_ID, "viewer")
+    client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
+    login_as(client, EDITOR_ID, "reiji")
+
+    r = client.post("/concerts", data={
+        "title": "Zepp Show", "event_id": "zepp-show",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
+    })
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        from app.db.models import Notification
+
+        notes = (await s.execute(select(Notification))).scalars().all()
+        assert any(n.user_id == VIEWER_ID for n in notes)
 
 
 async def test_index_hides_concert_whose_only_leg_is_cancelled(client):
