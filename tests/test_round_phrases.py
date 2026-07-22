@@ -346,6 +346,36 @@ async def test_the_phrase_picker_lists_remembered_triples(editor_client, db):
     assert 'data-name="1次先行抽選 1st-round lottery 第一轮先行"' in dialog
 
 
+async def test_the_picker_can_show_a_no_match_state(editor_client, db):
+    """data-phrase-empty (the zero-ever-saved state) is computed server-side
+    from round_phrases and carries no data-name, so the shared filterChips
+    helper (base.html) never touches it -- a search matching nothing left
+    the list silently blank. The fix is a second, JS-driven paragraph the
+    dialog's own script toggles after every filterChips call. This suite
+    has no JS runtime, so it pins the markup and wiring statically: the
+    hidden-by-default paragraph exists, and the script both reacts to the
+    search box's input event and clears the state on close."""
+    async with db() as session:
+        await record_round_label_phrase(session, "1次先行抽選", "1st-round lottery", "第一轮先行")
+        await session.commit()
+
+    r = editor_client.get("/concerts/new")
+    start = r.text.index('id="round-phrase-picker"')
+    dialog = r.text[start : r.text.index("</dialog>", start)]
+    script = r.text[r.text.index("</dialog>", start) : r.text.index("</script>", start)]
+
+    # Distinct from data-phrase-empty -- reusing that paragraph for a
+    # no-match search would tell someone with saved labels that none exist.
+    assert "data-phrase-empty" in dialog
+    assert re.search(r"data-phrase-no-match\s+hidden", dialog), dialog
+
+    assert 'querySelector("[data-phrase-no-match]")' in script
+    assert re.search(r'searchInput\.addEventListener\("input",\s*updateNoMatchState\)', script)
+    # Reopening after a search must not carry a stale no-match state, same
+    # as the existing close handler already does for the search box itself.
+    assert "updateNoMatchState()" in script
+
+
 async def test_every_round_row_can_open_the_phrase_picker(editor_client):
     r = editor_client.get("/concerts/new")
     tpl_start = r.text.index('id="round-row-template"')
@@ -373,11 +403,24 @@ async def test_the_edit_page_offers_the_picker_on_saved_and_blank_rows(editor_cl
     r = editor_client.get("/concerts/ph5/edit")
     assert r.status_code == 200
     assert 'id="round-phrase-picker"' in r.text
-    assert r.text.count("data-open-phrases") >= 2, "saved row and <template> both need it"
+
+    # Slice the page so each shape is pinned independently. A bare count()
+    # over the whole page is satisfied by the dialog's OWN script, which
+    # also contains the literal "data-open-phrases" string (it is the
+    # delegated click-listener's selector) -- that let one opener plus the
+    # script pass a ">= 2" threshold while the other shape had none.
+    # (base.html's header carries its own <form>/</form> for the language
+    # toggle, ahead of the concert form -- anchor on id="new-concert" rather
+    # than the first "</form>" in the page, or the slice ends before the
+    # round row is even reached.)
+    form_start = r.text.index('id="new-concert"')
+    form_end = r.text.index("</form>", form_start)
+    form = r.text[form_start:form_end]
+    assert "data-open-phrases" in form, "the pre-filled saved round row needs it"
 
     tpl_start = r.text.index('id="round-row-template"')
     tpl = r.text[tpl_start : r.text.index("</template>", tpl_start)]
-    assert "data-open-phrases" in tpl
+    assert "data-open-phrases" in tpl, "the blank <template> row needs it"
 
 
 async def test_the_import_preview_offers_the_picker_on_every_round_row(
@@ -395,4 +438,56 @@ async def test_the_import_preview_offers_the_picker_on_every_round_row(
     r = editor_client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
     assert r.status_code == 200
     assert 'id="round-phrase-picker"' in r.text
-    assert r.text.count("data-open-phrases") >= 2, "parsed rows and <template> both need it"
+
+    # Same slicing as the edit-page test above -- a bare count() is
+    # satisfied by the dialog's own script even if the parsed row's opener
+    # is missing entirely.
+    form_start = r.text.index('id="new-concert"')
+    form_end = r.text.index("</form>", form_start)
+    form = r.text[form_start:form_end]
+    assert "data-open-phrases" in form, "the parsed round row needs it"
+
+    tpl_start = r.text.index('id="round-row-template"')
+    tpl = r.text[tpl_start : r.text.index("</template>", tpl_start)]
+    assert "data-open-phrases" in tpl, "the blank <template> row needs it"
+
+
+async def test_the_phrase_dialog_sits_outside_the_form_on_every_page(
+    editor_client, monkeypatch
+):
+    """The dialog is all buttons today, but the venue dialog next door proves
+    how quickly one grows inputs -- anything inside the concert <form> rides
+    along on save. Currently correct by placement on all three pages, but
+    untested, so a future include moved above </form> would fail silently.
+
+    base.html's header carries its own <form>/</form> for the language
+    toggle, ahead of the concert form on every page, so the first "</form>"
+    in the page is always that one -- checking against it would pass
+    trivially no matter where the dialog landed. Anchor on the CONCERT
+    form's own close instead, found from its id="new-concert" open tag."""
+
+    def assert_dialog_after_concert_form(page: str):
+        form_start = page.index('id="new-concert"')
+        form_end = page.index("</form>", form_start)
+        assert page.index('id="round-phrase-picker"') > form_end
+
+    assert_dialog_after_concert_form(editor_client.get("/concerts/new").text)
+
+    create_resp = editor_client.post("/concerts", data={
+        "title": "T", "event_id": "ph6",
+        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+    })
+    assert create_resp.status_code in (200, 303)
+    assert_dialog_after_concert_form(editor_client.get("/concerts/ph6/edit").text)
+
+    html2 = (FIXTURES / "ramen_graduation_concert.html").read_text(encoding="utf-8")
+
+    async def fake_fetch2(url: str) -> str:
+        return html2
+
+    monkeypatch.setattr(import_routes, "fetch_ramen_html", fake_fetch2)
+    assert_dialog_after_concert_form(
+        editor_client.post("/concerts/import/preview", data={"url": GRADUATION_URL}).text
+    )

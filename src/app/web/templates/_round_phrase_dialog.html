@@ -41,6 +41,15 @@
       <p class="dim tiny" data-phrase-empty {% if round_phrases %}hidden{% endif %}>
         {{ _("Labels you fill in all three languages are remembered here.") }}
       </p>
+      {#- Distinct from data-phrase-empty above: that one is the
+          zero-ever-saved state (computed server-side from round_phrases).
+          This one is "you have saved labels, but none match what you typed"
+          -- purely client-side, since only the browser knows what filterChips
+          just hid. Reusing the same paragraph for both would tell someone
+          with saved labels that none exist. -#}
+      <p class="dim tiny" data-phrase-no-match hidden>
+        {{ _("No labels match your search.") }}
+      </p>
     </div>
   </div>
 </dialog>
@@ -53,6 +62,23 @@
     // Set by the delegated listener below -- never read out of an inline
     // on* handler, and never assumed to be the last row rendered.
     let opener = null;
+
+    // filterChips (base.html) only knows about [data-name] elements, so it
+    // never touches data-phrase-no-match -- a search matching nothing would
+    // otherwise leave the list silently blank with no explanation. Runs
+    // after every filterChips call (the search box's oninput, and the
+    // close-handler's reset below) so it always reflects what's currently
+    // hidden.
+    const noMatch = dlg.querySelector("[data-phrase-no-match]");
+    function updateNoMatchState() {
+      if (!noMatch) return;
+      const rows = dlg.querySelectorAll(".phrase-row");
+      const anyRows = rows.length > 0;
+      const anyVisible = Array.from(rows).some((row) => row.style.display !== "none");
+      noMatch.hidden = !anyRows || anyVisible;
+    }
+    const searchInput = dlg.querySelector('input[type="search"]');
+    if (searchInput) searchInput.addEventListener("input", updateNoMatchState);
 
     // Delegated, because round rows are cloned from a <template> at runtime:
     // a listener bound per button would miss every row added after load.
@@ -69,15 +95,13 @@
       // dataset, not innerHTML/textContent: the value must survive exactly as
       // stored, and the alt line above is a rendered "EN · ZH" summary, not
       // either field on its own.
-      //
-      // The names are built from a suffix rather than written out in full on
-      // purpose: tests/test_i18n_ugc.py counts the per-language label-input
-      // names on each page to prove every variant box is language-marked, and
-      // a literal one here is a false positive it cannot tell apart from a
-      // real unmarked input.
-      const FIELDS = [["", pick.dataset.ja], ["_en", pick.dataset.en], ["_zh", pick.dataset.zh]];
-      FIELDS.forEach(([suffix, value]) => {
-        const input = opener.querySelector('[name="round_label' + suffix + '"]');
+      const FIELDS = [
+        ["round_label", pick.dataset.ja],
+        ["round_label_en", pick.dataset.en],
+        ["round_label_zh", pick.dataset.zh],
+      ];
+      FIELDS.forEach(([name, value]) => {
+        const input = opener.querySelector('[name="' + name + '"]');
         if (input) input.value = value;
       });
       dlg.close();
@@ -91,10 +115,10 @@
     // behave identically: without it a search typed last time survives, and
     // the next open shows a list filtered by a query the box no longer shows.
     dlg.addEventListener("close", function () {
-      const search = dlg.querySelector('input[type="search"]');
-      if (search) {
-        search.value = "";
-        filterChips(search, "#round-phrase-picker");
+      if (searchInput) {
+        searchInput.value = "";
+        filterChips(searchInput, "#round-phrase-picker");
+        updateNoMatchState();
       }
       opener = null;
     });

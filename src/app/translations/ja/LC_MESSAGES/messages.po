@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-22 16:20-0300\n"
+"POT-Creation-Date: 2026-07-22 16:41-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -753,6 +753,10 @@ msgstr "このラベルを削除"
 #: src/app/web/templates/_round_phrase_dialog.html:42
 msgid "Labels you fill in all three languages are remembered here."
 msgstr "3言語すべてを入力したラベルがここに保存されます。"
+
+#: src/app/web/templates/_round_phrase_dialog.html:51
+msgid "No labels match your search."
+msgstr "検索に一致するラベルがありません。"
 
 #: src/app/web/templates/_round_qualifier_chips.html:27
 msgid ""
