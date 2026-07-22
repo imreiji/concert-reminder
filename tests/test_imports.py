@@ -619,6 +619,19 @@ async def test_preview_without_a_matching_tag_leaves_select_empty_and_hints(clie
     assert "Nippon Budokan" in body
 
 
+async def test_preview_venue_hint_appears_once_for_multi_leg_import(client):
+    """venue_hint/matched_venue_tag_id are computed once per parse (a single
+    scraped venue_name for the whole event), not once per leg -- so the hint
+    must render exactly once even though the graduation fixture parses to
+    two days/legs. Regression guard for the hint being duplicated per leg."""
+    login_as(client, EDITOR_ID, "reiji")
+    await _venue_tag(client.db, "Saitama Super Arena")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    body = client.post("/concerts/import/preview", data={"url": GRADUATION_URL}).text
+
+    assert body.count("No venue tag matches") == 1
+
+
 @pytest.mark.parametrize(
     "tag_name, scraped",
     [

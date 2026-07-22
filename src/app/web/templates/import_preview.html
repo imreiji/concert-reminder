@@ -54,6 +54,14 @@
     <p class="dim tiny">{{ _("Each parsed day becomes a leg you can attach rounds to. Times are JST.") }}</p>
   </div>
 
+  {#- Event-level, not per-leg: the ramen.events parse yields a single
+      venue_name for the whole event (venue_hint/matched_venue_tag_id are
+      computed once per parse in the route), so this note belongs here, once,
+      rather than repeated inside the per-leg loop below. -#}
+  {% if venue_hint and not matched_venue_tag_id %}
+  <p class="dim tiny">{% trans venue=venue_hint %}No venue tag matches “{{ venue }}” yet — add it with + New venue.{% endtrans %}</p>
+  {% endif %}
+
   <div id="day-rows" class="row-list">
     {% for d in parsed.days %}
     <div class="eleg">
@@ -108,9 +116,6 @@
         <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required
           value="{{ fmt(d.starts_at_jst) }}"></label>
       </div>
-      {% if venue_hint and not matched_venue_tag_id %}
-      <p class="dim tiny">{% trans venue=venue_hint %}No venue tag matches “{{ venue }}” yet — add it with + New venue.{% endtrans %}</p>
-      {% endif %}
     </div>
     {% else %}
     <p class="dim tiny" data-no-legs-row>{{ _("No days parsed — add the first one below.") }}</p>
