@@ -186,7 +186,12 @@
       <span class="fold-hint">{{ _("Optional — title EN, organizer, source URL, notes") }}</span></summary>
     <div class="fold-body">
       <div class="grid2">
+        {#- Both title variants, never just the English one: import_commit
+            holds the title to the same all-three rule create_concert does, so
+            a form offering only title_en could not be submitted at all once a
+            title was typed into it. -#}
         <label>{{ _("Title (EN)") }} <input name="title_en" maxlength="200"></label>
+        <label>{{ _("Title (中文)") }} <input name="title_zh" maxlength="200"></label>
         <label>{{ _("Artist / organizer") }} <input name="organizer" maxlength="200" placeholder="{{ _('non-series acts, etc.') }}"></label>
         <label>{{ _("Source URL") }} <input name="source_url" type="url" value="{{ source_url }}"
           placeholder="{{ _('where this was sourced from') }}"></label>

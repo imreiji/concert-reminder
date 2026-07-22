@@ -95,7 +95,25 @@
         return;
       }
       if (!resp.ok) {
-        err.textContent = resp.status === 409 ? dlg.dataset.errDuplicate : dlg.dataset.errGeneric;
+        // 409 is the one status with a message of its own (duplicate name).
+        // Everything else -- above all the 422 require_variants raises, which
+        // names WHICH of the six inputs is short a language -- carries its
+        // reason in the JSON body's `detail`, and the generic string is only
+        // the fallback for when there isn't one. `detail` is a string from
+        // HTTPException but a list of error objects from FastAPI's own
+        // RequestValidationError; the list case has no single sentence to
+        // show, so it falls back rather than rendering [object Object]. The
+        // parse is guarded: an error response need not be JSON at all.
+        let detail = null;
+        if (resp.status !== 409) {
+          try {
+            const parsed = await resp.json();
+            if (parsed && typeof parsed.detail === "string") detail = parsed.detail;
+          } catch (_) { /* not JSON -- fall back below */ }
+        }
+        err.textContent = resp.status === 409
+          ? dlg.dataset.errDuplicate
+          : (detail || dlg.dataset.errGeneric);
         err.hidden = false;
         return;
       }

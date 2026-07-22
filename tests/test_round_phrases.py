@@ -524,7 +524,7 @@ async def test_import_commit_records_its_round_phrase(editor_client):
     """The third save path: the URL-import commit route builds rounds the
     same way and must run the same recording."""
     resp = editor_client.post("/concerts/import/commit", data={
-        "title": "Imported Show",
+        "title": "Imported Show", "title_en": "Imported Show", "title_zh": "导入的演出",
         "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-08-01T18:00"],
         "round_label": ["1次先行抽選"], "round_label_en": ["1st-round lottery"],

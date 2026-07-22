@@ -220,6 +220,7 @@ async def test_import_commit_rolls_up_leg_venues(editor_client):
     })   # 1
     r = editor_client.post("/concerts/import/commit", data={
         "day_label_zh": ["Day 1"], "day_label_en": ["Day 1"], "title": "Imported Show",
+        "title_en": "Imported Show", "title_zh": "导入的演出",
         "day_label": ["Day 1"],
         "day_starts_at": ["2099-08-01T18:00"],
         "day_venue_tag_id": ["1"],
@@ -316,6 +317,10 @@ async def test_import_commit_rejects_a_non_venue_leg_venue_tag(editor_client):
     })  # 1
     r = editor_client.post("/concerts/import/commit", data={
         "day_label_zh": ["Day 1"], "day_label_en": ["Day 1"], "title": "Bad Import",
+        # Fully translated on purpose: import_commit's title check fires
+        # before the venue-id check, so a half-translated title here would
+        # give this test a 422 for the wrong reason.
+        "title_en": "Bad Import", "title_zh": "错误的导入",
         "day_label": ["Day 1"],
         "day_starts_at": ["2099-08-01T18:00"],
         "day_venue_tag_id": ["1"],

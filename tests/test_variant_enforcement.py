@@ -12,12 +12,12 @@ half-translated record can still be saved -- is pinned at the bottom.
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base
+from app.db.models import Base, Tag
 from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
@@ -218,6 +218,68 @@ async def test_a_quick_venue_with_no_city_at_all_is_fine(client):
     assert r.status_code == 200, r.text
 
 
+# --- import commit --------------------------------------------------------
+#
+# The import route is a create boundary like POST /concerts, and enforces the
+# same rule -- but through its OWN require_variants calls, so nothing above
+# covers it. Note it end-pads the label-variant arrays (its minimal-client
+# contract), which is exactly why a half-translated row has to be caught by
+# the check and not by the strict zip.
+
+
+def _import_payload(title: str, **over) -> dict:
+    """The established import-commit shape (see tests/test_imports.py), fully
+    translated, so a test can knock out one variant and know that is the only
+    reason it fails."""
+    data: dict = {
+        "title": title, "title_en": title, "title_zh": "中文标题",
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["第一天"],
+        "day_starts_at": ["2027-01-23T17:00"],
+        "round_label": ["1次先行抽選"], "round_label_en": ["1st-round lottery"],
+        "round_label_zh": ["第一轮先行"],
+        "round_kind": ["lottery_round"],
+        "round_opens_at": [""], "round_closes_at": ["2026-11-08T23:59"],
+        "round_results_at": [""], "round_payment_at": [""], "round_url": [""],
+    }
+    return data | over
+
+
+async def test_import_commit_with_a_fully_translated_draft_saves(client):
+    """The control: without it, a payload that 422'd for an unrelated reason
+    would make all three tests below pass for nothing."""
+    r = client.post("/concerts/import/commit", data=_import_payload("Good Import"))
+    assert r.status_code in (200, 303), r.text
+
+
+async def test_import_commit_with_a_half_translated_title_is_422(client):
+    r = client.post("/concerts/import/commit", data=_import_payload(
+        "Half Title", title_zh="",
+    ))
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert "title" in detail.lower() and "中文" in detail, detail
+
+
+async def test_import_commit_with_a_half_translated_leg_label_is_422(client):
+    r = client.post("/concerts/import/commit", data=_import_payload(
+        "Half Leg", day_label_zh=[""],
+    ))
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert "中文" in detail, detail
+    assert "leg" in detail.lower() and "1" in detail, detail
+
+
+async def test_import_commit_with_a_half_translated_round_label_is_422(client):
+    r = client.post("/concerts/import/commit", data=_import_payload(
+        "Half Round", round_label_en=[""],
+    ))
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert "English" in detail, detail
+    assert "round" in detail.lower() and "1" in detail, detail
+
+
 # --- the deliberate asymmetry --------------------------------------------
 
 async def test_editing_a_legacy_half_translated_record_is_still_allowed(client):
@@ -236,5 +298,26 @@ async def test_editing_a_legacy_half_translated_record_is_still_allowed(client):
         "event_id": "legacy",
         "title": "ラブライブ", "title_en": "Love Live", "title_zh": "",
         "notes": "備考", "notes_en": "", "notes_zh": "",
+    })
+    assert r.status_code in (200, 303), r.text
+
+
+async def test_editing_a_legacy_half_translated_tag_is_still_allowed(client):
+    """The same asymmetry, on the OTHER edit route.
+
+    edit_tag is the second half of the canary: create_tag enforces the rule,
+    edit_tag deliberately does not, and without this test require_variants
+    could be added there and nothing would notice.
+    """
+    created = client.post("/tags", data={
+        "name": "蓮ノ空", "name_en": "Hasunosora", "name_zh": "莲之空", "kind": "group",
+    })
+    assert created.status_code in (200, 303), created.text
+
+    async with client.db() as s:
+        tag_id = (await s.execute(select(Tag.id))).scalars().one()
+
+    r = client.post(f"/tags/{tag_id}/edit", data={
+        "name": "蓮ノ空", "name_en": "Hasunosora", "name_zh": "",
     })
     assert r.status_code in (200, 303), r.text

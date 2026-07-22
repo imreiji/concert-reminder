@@ -150,6 +150,11 @@ async def test_create_concert_rejects_javascript_url(client, db):
     login_as(client, EDITOR_ID, "reiji")
     r = client.post("/concerts", data=concert_form(official_url="javascript:alert(1)"))
     assert r.status_code == 422
+    # Pin WHY. require_variants runs before form_url in create_concert, so a
+    # payload that drifted out of full title/notes coverage would still 422 --
+    # for the translation reason -- and the "nothing was written" assertion
+    # below cannot tell the two apart, since neither path writes.
+    assert "http://" in r.json()["detail"], r.json()
     async with db() as s:
         assert (await s.execute(select(Concert))).scalars().first() is None
 

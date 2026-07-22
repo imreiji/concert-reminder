@@ -224,6 +224,7 @@ async def import_commit(
     session: AsyncSession = Depends(get_session),
     title: str = Form(..., min_length=1, max_length=200),
     title_en: str = Form(default=""),
+    title_zh: str = Form(default=""),
     organizer: str = Form(default=""),
     categories: str = Form(default=""),
     kind: str = Form(default=""),
@@ -273,6 +274,12 @@ async def import_commit(
     # request, so it is client-supplied like any other field. Validated before
     # anything is written, so a tampered value persists nothing.
     checked_source_url = form_url(source_url)
+    # An import IS a create, so the title is held to the same all-three rule
+    # create_concert applies -- the leg and round labels below already are, and
+    # a route that rejects "Leg 1 label needs 中文" while quietly writing a
+    # title_zh-less concert would be enforcing half a rule. Ordered AFTER the
+    # source-URL check so a tampered URL still fails for the URL's reason.
+    require_variants("Title", title, title_en, title_zh, mandatory=True)
 
     event_id = await generate_event_id(session, title)
     concert = await create_concert_row(
@@ -281,10 +288,12 @@ async def import_commit(
         source_url=checked_source_url,
     )
     # The Details-fold scalars, set exactly as create_concert does after
-    # create_concert_row returns (title_en/organizer/categories/notes). The
+    # create_concert_row returns (title_en/title_zh/organizer/categories/notes).
+    # The
     # ramen.events parse supplies none of these, so they arrive blank unless
     # the editor filled them in.
     concert.title_en = title_en.strip() or None
+    concert.title_zh = title_zh.strip() or None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
     concert.notes = notes.strip() or None

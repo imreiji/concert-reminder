@@ -135,16 +135,24 @@ def test_event_id_rejects_bad_characters(client):
         "title_en": "X", "title_zh": "X", "title": "X", "event_id": "bad id!",
     })
     assert r.status_code == 422
+    # Pin WHY: require_variants runs before validate_event_id in
+    # create_concert, so a payload drifting out of full title coverage would
+    # keep this test green for the translation reason instead.
+    assert "event id may only contain" in r.json()["detail"], r.json()
 
 
 def test_event_id_rejects_reserved_words(client):
     login_as(client, EDITOR_ID, "reiji")
-    assert client.post("/concerts", data={
+    r = client.post("/concerts", data={
         "title_en": "X", "title_zh": "X", "title": "X", "event_id": "new",
-    }).status_code == 422
-    assert client.post("/concerts", data={
+    })
+    assert r.status_code == 422
+    assert "is reserved" in r.json()["detail"], r.json()
+    r = client.post("/concerts", data={
         "title_en": "X", "title_zh": "X", "title": "X", "event_id": "Import",
-    }).status_code == 422
+    })
+    assert r.status_code == 422
+    assert "is reserved" in r.json()["detail"], r.json()
 
 
 def test_event_id_must_be_unique_on_create(client):

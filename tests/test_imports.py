@@ -241,6 +241,8 @@ async def test_commit_creates_concert_days_and_rounds(client):
             "round_label_en": ["Day 1 Lottery", "Day 2 Lottery"],
             "day_label_zh": ["Day 1", "Day 2"], "day_label_en": ["Day 1", "Day 2"],
             "title": "Hasunosora 103rd Class Graduation Concert",
+            "title_en": "Hasunosora 103rd Class Graduation Concert",
+            "title_zh": "莲之空103期毕业演唱会",
             "day_label": ["Day 1", "Day 2"],
             "day_starts_at": ["2027-01-23T17:00", "2027-01-24T15:30"],
             "round_label": ["Day 1 Lottery", "Day 2 Lottery"],
@@ -277,7 +279,7 @@ async def test_commit_binds_a_round_to_multiple_legs(client):
         data={
             "round_label_zh": ["Nationwide lottery"], "round_label_en": ["Nationwide lottery"],
             "day_label_zh": ["Osaka", "Tokyo"], "day_label_en": ["Osaka", "Tokyo"],
-            "title": "Two Leg Tour",
+            "title": "Two Leg Tour", "title_en": "Two Leg Tour", "title_zh": "两地巡演",
             "day_key": ["d0", "d1"],
             "day_label": ["Osaka", "Tokyo"],
             "day_starts_at": ["2027-01-23T17:00", "2027-01-24T15:30"],
@@ -309,6 +311,7 @@ async def test_commit_round_with_no_legs_is_all_legs(client):
         data={
             "round_label_zh": ["Fan club presale"], "round_label_en": ["Fan club presale"],
             "day_label_zh": ["Day 1"], "day_label_en": ["Day 1"], "title": "Whole Event Round",
+            "title_en": "Whole Event Round", "title_zh": "全场轮次",
             "day_key": ["d0"],
             "day_label": ["Day 1"],
             "day_starts_at": ["2027-01-23T17:00"],
@@ -335,7 +338,7 @@ async def test_commit_tolerates_blank_trailing_rows(client):
     r = client.post(
         "/concerts/import/commit",
         data={
-            "title": "Some Concert",
+            "title": "Some Concert", "title_en": "Some Concert", "title_zh": "某场演出",
             "day_label": [""],
             "day_starts_at": [""],
             "round_label": [""],
@@ -374,6 +377,10 @@ def test_preview_shows_kind_selector_and_details_fold(client):
     assert 'name="kind"' in r.text        # concert Kind selector in the .ebar
     assert "Details and links" in r.text  # the new fold
     assert 'name="title_en"' in r.text
+    # Both variants, not just EN: import_commit holds the title to the same
+    # all-three rule create_concert does, so a form offering only title_en
+    # would be unsubmittable the moment an editor typed an English title.
+    assert 'name="title_zh"' in r.text
     assert 'name="organizer"' in r.text
 
 
@@ -386,6 +393,7 @@ async def test_commit_persists_details_fold_fields(client):
         data={
             "title": "Detailed Concert",
             "title_en": "Detailed Concert (English)",
+            "title_zh": "详细演出（中文）",
             "organizer": "Some Organizer",
             "kind": "tour",
             "notes": "spotted on ramen.events",
@@ -422,6 +430,8 @@ async def test_commit_persists_source_url(client):
     r = client.post(
         "/concerts/import/commit",
         data={"title": "Hasunosora 103rd Class Graduation Concert",
+              "title_en": "Hasunosora 103rd Class Graduation Concert",
+              "title_zh": "莲之空103期毕业演唱会",
               "source_url": GRADUATION_URL},
     )
     assert r.status_code == 303
@@ -523,6 +533,7 @@ async def test_commit_with_venue_tag_rolls_up_to_concert_venue_tags(client):
         data={
             "round_label_zh": ["Lottery"], "round_label_en": ["Lottery"], "day_label_zh": ["Day 1"],
             "day_label_en": ["Day 1"], "title": "Budokan Show",
+            "title_en": "Budokan Show", "title_zh": "武道馆演出",
             "day_key": ["d0"],
             "day_label": ["Day 1"],
             "day_starts_at": ["2027-01-23T17:00"],
@@ -562,7 +573,7 @@ async def test_commit_without_any_venue_tag_field_still_works(client):
         data={
             "round_label_zh": ["Lottery"], "round_label_en": ["Lottery"],
             "day_label_zh": ["Day 1", "Day 2"], "day_label_en": ["Day 1", "Day 2"],
-            "title": "No Venue Show",
+            "title": "No Venue Show", "title_en": "No Venue Show", "title_zh": "无场馆演出",
             "day_label": ["Day 1", "Day 2"],
             "day_starts_at": ["2027-01-23T17:00", "2027-01-24T15:30"],
             "round_label": ["Lottery"],

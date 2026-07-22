@@ -2037,9 +2037,13 @@ msgstr "还没有轮次 — 请在下方添加第一个。"
 msgid "Optional — title EN, organizer, source URL, notes"
 msgstr "可选 — 英文标题、主办、来源链接、备注"
 
-#: src/app/web/templates/import_preview.html:189
+#: src/app/web/templates/import_preview.html:193
 msgid "Title (EN)"
 msgstr "标题（英文）"
+
+#: src/app/web/templates/import_preview.html:194
+msgid "Title (中文)"
+msgstr "标题（中文）"
 
 #: src/app/web/templates/import_preview.html:200
 msgid "Franchise, group, artists, venue — parsed, editable"
