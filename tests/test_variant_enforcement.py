@@ -28,7 +28,6 @@ from app.web import auth
 from app.web.app import create_app
 from app.web.routes import concerts as concert_routes
 from app.web.routes import imports as import_routes
-from app.web.routes import tags as tag_routes
 
 EDITOR_ID = 42
 
@@ -632,10 +631,14 @@ def test_the_guard_marks_its_duplication_of_the_domain_rule(client):
 # ordering of its explicit checkVariantGroups() call ahead of the fetch.
 CREATE_BOUNDARIES = ("create_concert", "import_commit", "create_tag", "quick_create_venue")
 
-# The route modules that may legitimately hold a require_variants call. Only
-# the web layer can: it is an HTTP boundary (web/forms.py), so a caller
-# anywhere else would be a layering mistake, not a fifth boundary.
-_ROUTE_MODULES = (concert_routes, tag_routes, import_routes)
+# Globbed, not a hand-listed tuple: naming the three modules we happen to
+# know about today would reopen the exact hole this census closes one level
+# up -- a require_variants call in a FOURTH route module would go
+# undetected, and that route's form would silently fall back to the raw 422.
+# Only the web layer can legitimately call it (it is an HTTP boundary living
+# in web/forms.py), so this glob is the whole legitimate surface.
+_ROUTE_DIR = Path(concert_routes.__file__).parent
+_ROUTE_SOURCES = sorted(p for p in _ROUTE_DIR.glob("*.py") if p.name != "__init__.py")
 
 
 def _require_variants_callers() -> set[str]:
@@ -653,8 +656,8 @@ def _require_variants_callers() -> set[str]:
     instead of silently crediting the route around it.
     """
     callers: set[str] = set()
-    for module in _ROUTE_MODULES:
-        tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
+    for source in _ROUTE_SOURCES:
+        tree = ast.parse(source.read_text(encoding="utf-8"))
         funcs = [
             n for n in ast.walk(tree)
             if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)
