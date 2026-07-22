@@ -3,13 +3,23 @@ from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
+import yaml
 from fastapi.testclient import TestClient
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, ConcertTag, Tag
+from app.db.models import (
+    Base,
+    Concert,
+    ConcertDay,
+    ConcertTag,
+    Notification,
+    Tag,
+    TagSubscription,
+    User,
+)
 from app.db.service import sync_concert_venue_tags
 from app.db.session import get_session
 from app.domain.types import TagKind
@@ -311,3 +321,202 @@ async def test_rollup_desired_ignores_a_non_venue_id(db):
             select(ConcertTag.tag_id).where(ConcertTag.concert_id == concert.id)
         )).scalars())
         assert artist.id not in all_ids
+
+
+# ── The rollup is the SOLE writer of a concert's VENUE rows ──────────────
+#
+# Everything below pins the read side of the same rule the rollup owns: a
+# concert's venue is derived from its legs, so every surface answering
+# "where is this" must read the VENUE tags, and no second write path may
+# touch them.
+
+
+async def _subscribe(session, user_id: int, tag_id: int, *, notify: bool = True):
+    """A plain notify-only subscriber: NO preset, so handle_newly_tagged never
+    gives them rules on the concert and its "already has rules here" guard
+    cannot mask a duplicate notice."""
+    session.add(User(discord_id=user_id, username=f"u{user_id}"))
+    await session.flush()
+    session.add(TagSubscription(user_id=user_id, tag_id=tag_id, notify=notify))
+    await session.flush()
+
+
+# Finding 1: Home and the campaign board must read the VENUE tags.
+
+
+async def test_home_peek_card_shows_the_leg_venue_tag(editor_client):
+    """The peek grid below Home's Discover teaser. Created THROUGH the route,
+    which is the only way the bug shows: create_concert_row writes
+    Concert.venue = None, so a template reading that column renders nothing."""
+    editor_client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})  # 1
+    r = editor_client.post("/concerts", data={
+        "title": "Peek Show", "event_id": "peek-show",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
+    })
+    assert r.status_code == 303
+
+    assert "Zepp Haneda" in editor_client.get("/").text
+
+
+async def test_board_card_shows_the_leg_venue_tag(editor_client):
+    """The campaign board -- same bug, in the app's most-viewed block."""
+    editor_client.post("/tags", data={"name": "Zepp Namba", "kind": "venue"})  # 1
+    r = editor_client.post("/concerts", data={
+        "title": "Board Show", "event_id": "board-show",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
+        "round_label": ["R1"], "round_kind": ["lottery_round"],
+        "round_opens_at": ["2020-01-01T00:00"], "round_closes_at": ["2099-06-25T23:59"],
+        "round_results_at": [""], "round_payment_at": [""],
+        "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+    })
+    assert r.status_code == 303
+
+    # Following the venue tag is what puts the concert on the editor's board --
+    # and takes it OUT of the peek grid, so the assertion below can only be
+    # satisfied by the board itself.
+    async with editor_client.db() as session:
+        session.add(TagSubscription(user_id=EDITOR_ID, tag_id=1, notify=False))
+        await session.commit()
+
+    page = editor_client.get("/").text
+    board = page.split('id="board"', 1)[1].split("Coming up", 1)[0]
+    assert "Zepp Namba" in board
+
+
+# Finding 2: an unmatched free-text venue must stay visible and exportable.
+#
+# The old free-text columns survive this phase by design (a two-deploy
+# migration keeps an unmatched venue recoverable). If nothing renders them,
+# the operator cannot spot an affected concert by browsing -- and every
+# ramen.events import, whose preview posts no day_venue_tag_id at all,
+# silently loses its venue.
+
+
+def _create_free_text_leg(client, event_id="freetext"):
+    return client.post("/concerts", data={
+        "title": "Free Text", "event_id": event_id,
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""],
+        "day_city": ["Osaka"], "day_venue": ["Namba Hatch"],
+        "day_venue_address": ["1-3-1 Minatomachi"],
+    })
+
+
+async def test_concert_page_falls_back_to_free_text_venue(editor_client):
+    assert _create_free_text_leg(editor_client).status_code == 303
+    assert "Namba Hatch" in editor_client.get("/concerts/freetext").text
+
+
+async def test_yaml_export_falls_back_to_free_text_venue(editor_client):
+    assert _create_free_text_leg(editor_client, "freetext2").status_code == 303
+    data = yaml.safe_load(editor_client.get("/concerts/freetext2/export.yaml").text)
+    day = data["performances"][0]
+    assert day["venue"] == "Namba Hatch"
+    assert day["city"] == "Osaka"
+    assert day["venue_address"] == "1-3-1 Minatomachi"
+
+
+# Finding 5: the export ROUTE, not just the pure serializer. `venue_tag` is
+# lazy="raise", so a missing selectinload here is a 500 on an editor-facing
+# endpoint that the pure-function tests could never see.
+
+
+async def test_yaml_export_route_uses_the_leg_venue_tag(editor_client):
+    async with editor_client.db() as session:
+        session.add(Tag(
+            name="K Arena Yokohama", kind=TagKind.VENUE,
+            city="Kanagawa", address="Yokohama, Japan",
+        ))
+        await session.commit()
+    r = editor_client.post("/concerts", data={
+        "title": "Export Show", "event_id": "export-show",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
+    })
+    assert r.status_code == 303
+
+    resp = editor_client.get("/concerts/export-show/export.yaml")
+    assert resp.status_code == 200
+    data = yaml.safe_load(resp.text)
+    day = data["performances"][0]
+    assert day["venue"] == "K Arena Yokohama"
+    assert day["city"] == "Kanagawa"
+    assert day["venue_address"] == "Yokohama, Japan"
+    # The concert-level rollup lands in the export's `venues` list too.
+    assert data["venues"] == ["K Arena Yokohama"]
+
+
+# Finding 3: no second VENUE write path.
+#
+# The concert-level venue picker used to run its own attach/detach diff
+# immediately before the rollup overwrote the result. A save that drops a
+# venue chip whose leg still carries it means detach -> rollup re-attach ->
+# the tag lands in `newly` a second time -> a DUPLICATE "New event" DM for
+# any subscriber with notify=True and no preset (no preset means no rules,
+# so handle_newly_tagged's "already has rules here" guard never fires).
+
+
+async def test_a_venue_subscriber_is_not_notified_twice(editor_client):
+    editor_client.post("/tags", data={"name": "Zepp Sapporo", "kind": "venue"})  # 1
+    async with editor_client.db() as session:
+        await _subscribe(session, 9001, 1)
+        await session.commit()
+
+    r = editor_client.post("/concerts", data={
+        "title": "Dup", "event_id": "dup",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
+    })
+    assert r.status_code == 303
+
+    async with editor_client.db() as session:
+        day = (await session.execute(select(ConcertDay))).scalar_one()
+
+    # The save: no venue_tags in the concert-level picker, while the leg still
+    # points at the same venue.
+    r = editor_client.post("/concerts/dup/edit", data={
+        "title": "Dup", "event_id": "dup",
+        "day_id": [str(day.id)], "day_key": [""],
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "day_venue_tag_id": ["1"],
+    })
+    assert r.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        notices = (await session.execute(
+            select(Notification).where(Notification.user_id == 9001)
+        )).scalars().all()
+        assert len(notices) == 1
+        concert = (await session.execute(
+            select(Concert).where(Concert.event_id == "dup")
+        )).scalar_one()
+        # ... and the venue survived the save.
+        assert await _venue_tag_ids(session, concert.id) == {1}
+
+
+# Finding 4: tag_id "0" is a live 500.
+#
+# "0".isdigit() is True, but resolve_tags skips falsy ids, so it returns []
+# and the (tag,) unpack raises ValueError. It must 422 like every other bad
+# id.
+
+
+async def test_create_rejects_a_zero_leg_venue_tag(editor_client):
+    r = editor_client.post("/concerts", data={
+        "title": "Zero", "event_id": "zero",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["0"],
+    })
+    assert r.status_code == 422
+
+
+async def test_create_rejects_a_negative_leg_venue_tag(editor_client):
+    r = editor_client.post("/concerts", data={
+        "title": "Neg", "event_id": "neg",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["-1"],
+    })
+    assert r.status_code == 422

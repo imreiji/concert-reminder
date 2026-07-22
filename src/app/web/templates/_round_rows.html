@@ -127,13 +127,19 @@
       <h3 class="leg-heading{% if day.starts_at_utc < now %} past{% endif %}">{{ day.label }}{% if day.cancelled %} <span class="badge cancelled">{{ _("Cancelled") }}</span>{% elif skipped %} <span class="badge cancelled">{{ _("Not going") }}</span>{% endif %}</h3>
       <span class="lv">
         {{ dual(day.starts_at_utc, tz) }}{% if day.doors_at_utc %} · {% trans when=dual(day.doors_at_utc, tz) %}doors {{ when }}{% endtrans %}{% endif %}
-        {#- The venue, its address and its city all come off the leg's VENUE
-            tag now, so one entry renders in every language. The leg's old
-            free-text `venue`/`venue_address`/`city` columns still exist (a
-            two-deploy migration keeps an unmatched venue recoverable) but
-            nothing reads them for display any more -- reading them is what
-            let a re-pointed leg keep showing its previous venue. -#}
-        <span class="lvenue">{% if vtag %}📍 {% if vtag.location_url %}<a href="{{ vtag.location_url }}" target="_blank" rel="noopener">{{ loc(vtag, "name") }}</a>{% else %}{{ loc(vtag, "name") }}{% endif %}{% if vtag.address %} — {{ vtag.address }}{% endif %}{% if loc(vtag, "city") %} · {{ loc(vtag, "city") }}{% endif %}{% if vtag.region %} · {{ vtag.region }}{% endif %}{% endif %}</span>
+        {#- The venue, its address and its city come off the leg's VENUE tag
+            when it has one, so a single entry renders in every language.
+            The leg's old free-text `venue`/`venue_address`/`city` columns
+            still exist -- a two-deploy migration keeps an unmatched venue
+            recoverable -- and they are read ONLY when there is no tag. That
+            gating is the whole point: an untagged leg (every ramen.events
+            import, plus anything the backfill could not match) would
+            otherwise show no venue at all, which also hides exactly the
+            concerts the operator needs to find and re-point. A leg WITH a
+            tag never falls through here, so a re-pointed leg can never keep
+            showing its previous venue. A later phase drops the columns and
+            this branch with them. -#}
+        <span class="lvenue">{% if vtag %}📍 {% if vtag.location_url %}<a href="{{ vtag.location_url }}" target="_blank" rel="noopener">{{ loc(vtag, "name") }}</a>{% else %}{{ loc(vtag, "name") }}{% endif %}{% if vtag.address %} — {{ vtag.address }}{% endif %}{% if loc(vtag, "city") %} · {{ loc(vtag, "city") }}{% endif %}{% if vtag.region %} · {{ vtag.region }}{% endif %}{% elif day.venue or day.city %}📍 {% if day.venue %}{{ day.venue }}{% endif %}{% if day.venue and day.venue_address %} — {{ day.venue_address }}{% endif %}{% if day.venue and day.city %} · {% endif %}{% if day.city %}{{ day.city }}{% endif %}{% endif %}</span>
       </span>
       {# The per-leg opt-out. Not editor-gated (personal), and not tied to
          cancellation. Posts to the subscriptions router and swaps this whole

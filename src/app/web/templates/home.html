@@ -15,6 +15,17 @@
 {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
 {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
 {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
+{#- The venue line reads the concert's VENUE TAGS first -- they are derived
+    from its legs by sync_concert_venue_tags, so they are the only answer
+    that cannot go stale. `Concert.venue` is the legacy free-text column,
+    written as NULL by every new concert and kept only until a later phase
+    drops it, so it is a fallback and never the primary. Same rule as a
+    Discover tile (discover.html): more than one venue collapses to
+    "Multiple", since a tour's cities do not fit on a card. Reading the
+    tags also fixes the old guard's blind spot -- `{% raw %}{% if c.venue %}{% endraw %}` tested
+    the Japanese column, so a venue filled only in venue_en/venue_zh
+    rendered nothing. -#}
+{% set venue_text = _("Multiple") if cv | length > 1 else ((cv | map("loc_name") | join(", ")) or loc(c, "venue")) %}
 {% set live_days = c.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
 <a class="card" href="/concerts/{{ c.event_id }}">
   {% if cg or ca %}
@@ -26,7 +37,7 @@
   {% endif %}
   <span class="title">{{ loc(c, "title") }}</span>
   {% if variant == "landing" %}
-  {% if c.venue %}<span class="venue">📍 {{ loc(c, "venue") }}</span>{% endif %}
+  {% if venue_text %}<span class="venue">📍 {{ venue_text }}</span>{% endif %}
   {% if live_days %}<span class="when num">{{ day_month(live_days[0].starts_at_utc) }}</span>{% endif %}
   {#- Franchise + venue region minichips, the same derivation the Discover
       tiles use (region comes off the already-loaded venue tags -- no extra
@@ -40,8 +51,8 @@
   {% endif %}
   {% else %}
   <span class="venue">
-    {%- if c.venue %}📍 {{ loc(c, "venue") }}{% endif -%}
-    {%- if c.venue and live_days %} · {% endif -%}
+    {%- if venue_text %}📍 {{ venue_text }}{% endif -%}
+    {%- if venue_text and live_days %} · {% endif -%}
     {%- if live_days %}{{ day_month(live_days[0].starts_at_utc) }}{% endif -%}
   </span>
   {% endif %}

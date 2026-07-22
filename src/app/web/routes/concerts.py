@@ -497,7 +497,12 @@ async def resolve_day_venue_tags(
         if not raw:
             out.append(None)
             continue
-        if not raw.isdigit():
+        # `<= 0` is checked alongside the non-digit branch, not folded into it:
+        # "0".isdigit() is True, but resolve_tags skips falsy ids, so "0" came
+        # back as an empty list and the single-value unpack below raised
+        # ValueError -- a 500 on an ordinary bad form value. A negative id is
+        # already caught by isdigit(); the comparison states the real rule.
+        if not raw.isdigit() or int(raw) <= 0:
             raise HTTPException(status_code=422, detail="invalid venue tag")
         tag_id = int(raw)
         if tag_id not in resolved:
@@ -531,7 +536,14 @@ async def create_concert_row(
     f_tags = await resolve_tags(session, franchise_tags, TagKind.FRANCHISE)
     g_tags = await resolve_tags(session, group_tags, TagKind.GROUP)
     a_tags = await resolve_tags(session, artist_tags, TagKind.ARTIST)
-    v_tags = await resolve_tags(session, venue_tags, TagKind.VENUE)
+    # VENUE ids are validated and then DROPPED. sync_concert_venue_tags, which
+    # the caller runs once the legs exist, is the sole writer of this
+    # concert's VENUE rows (the leg is where a venue is entered, so the
+    # concert level is derived). Attaching one here would fire
+    # handle_newly_tagged -- DM notices and preset auto-apply to that venue's
+    # subscribers -- for a tag the rollup may delete before the transaction
+    # ends. Still resolved, so a bad or wrong-kind id 422s exactly as before.
+    await resolve_tags(session, venue_tags, TagKind.VENUE)
 
     concert = Concert(
         title=title.strip(),
@@ -552,7 +564,7 @@ async def create_concert_row(
     await session.flush()
 
     newly: list[Tag] = []
-    for tag in [*f_tags, *g_tags, *v_tags]:
+    for tag in [*f_tags, *g_tags]:
         newly += await attach_tag(session, concert.id, tag, expand=False)
     for artist in a_tags:
         newly += await attach_tag(session, concert.id, artist)
@@ -1122,11 +1134,20 @@ async def edit_concert(
     f_tags = await resolve_tags(session, franchise_tags, TagKind.FRANCHISE)
     g_tags = await resolve_tags(session, group_tags, TagKind.GROUP)
     a_tags = await resolve_tags(session, artist_tags, TagKind.ARTIST)
-    v_tags = await resolve_tags(session, venue_tags, TagKind.VENUE)
-    desired_tags = {t.id: t for t in [*f_tags, *g_tags, *a_tags, *v_tags]}
+    # VENUE is excluded from BOTH sides of the diff below, so the leg-driven
+    # rollup (sync_concert_venue_tags, further down) stays the only writer of
+    # this concert's VENUE rows. Leaving them in produced two real bugs: a
+    # venue added here was attached, notified about, then deleted by the
+    # rollup in the same request; and a venue dropped here while a leg still
+    # carried it was detached and re-attached, landing in `newly` a second
+    # time and DM-ing a second "New event" to any subscriber without a preset
+    # (the "already has rules on this concert" guard never fires for them).
+    # Still resolved, so a bad or wrong-kind id 422s exactly as before.
+    await resolve_tags(session, venue_tags, TagKind.VENUE)
+    desired_tags = {t.id: t for t in [*f_tags, *g_tags, *a_tags]}
 
     await session.refresh(concert, ["tags"])
-    before_ids = {t.id for t in concert.tags}
+    before_ids = {t.id for t in concert.tags if t.kind is not TagKind.VENUE}
     after_ids = set(desired_tags)
     for tid in before_ids - after_ids:
         await detach_tag(session, concert.id, tid)
@@ -1346,9 +1367,12 @@ async def export_concert_yaml(
     await session.refresh(concert, ["days", "rounds", "tags"])
 
     # The legs, with their venue tags: the export's city/venue/venue_address
-    # come off the tag now, and ConcertDay.venue_tag is lazy="raise". The
-    # editor's free-text venue inputs are gone, so reading d.city/d.venue here
-    # would emit nulls for every newly entered concert.
+    # come off the tag when the leg has one, and ConcertDay.venue_tag is
+    # lazy="raise", so the eager load below is load-bearing -- without it every
+    # export is a MissingGreenlet 500. A leg with NO tag falls back to its old
+    # free-text columns (see the YamlDay build): those still hold the venue for
+    # every ramen.events import and for anything the backfill could not match,
+    # and exporting null for them would lose data the DB still has.
     days = list((await session.execute(
         select(ConcertDay)
         .where(ConcertDay.concert_id == concert.id)
@@ -1361,9 +1385,9 @@ async def export_concert_yaml(
     yaml_days = [
         YamlDay(
             label=d.label, starts_at_utc=d.starts_at_utc,
-            city=d.venue_tag.city if d.venue_tag else None,
-            venue=d.venue_tag.name if d.venue_tag else None,
-            venue_address=d.venue_tag.address if d.venue_tag else None,
+            city=d.venue_tag.city if d.venue_tag else d.city,
+            venue=d.venue_tag.name if d.venue_tag else d.venue,
+            venue_address=d.venue_tag.address if d.venue_tag else d.venue_address,
             doors_at_utc=d.doors_at_utc,
         )
         for d in days

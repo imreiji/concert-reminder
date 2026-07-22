@@ -8,8 +8,12 @@
     below serializes them itself and escapes < > & ' as \uXXXX, so an
     editor-authored tag name containing "</script>" cannot break out of
     this block. Pass json.dumps output instead and each constant silently
-    becomes a JS string, which parses fine but leaves the picker dead. -#}
-{% for kindname in ["franchise", "group", "artist", "venue"] %}
+    becomes a JS string, which parses fine but leaves the picker dead.
+    NO venue kind here: a concert's VENUE tags are derived from its legs
+    (sync_concert_venue_tags is their sole writer), so there is no chip row
+    to render and no venue_tags hidden input to submit. See
+    _tag_picker_fields.html. -#}
+{% for kindname in ["franchise", "group", "artist"] %}
 <dialog id="picker-{{ kindname }}" class="picker">
   <div class="picker-head">
     <h3>Add {{ kindname }}s</h3>
@@ -36,7 +40,6 @@
     franchise: new Set(INITIAL_SELECTED.franchise || []),
     group: new Set(INITIAL_SELECTED.group || []),
     artist: new Set(),
-    venue: new Set(INITIAL_SELECTED.venue || []),
   };
   const artistExcluded = new Set(INITIAL_SELECTED.artist_excluded || []); // auto-added artists the editor removed
   const artistManual = new Set(INITIAL_SELECTED.artist || []);     // artists added explicitly via the picker
@@ -66,7 +69,7 @@
   }
   function renderAll() {
     recomputeArtists();
-    ["franchise", "group", "artist", "venue"].forEach(renderRow);
+    ["franchise", "group", "artist"].forEach(renderRow);
     syncHidden();
   }
   function removePick(kind, id) {
@@ -106,7 +109,6 @@
     put("franchise_tags", sel.franchise);
     put("group_tags", sel.group);
     put("artist_tags", sel.artist);
-    put("venue_tags", sel.venue);
   }
   renderAll();
 </script>
