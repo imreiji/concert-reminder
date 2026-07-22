@@ -1,5 +1,8 @@
 """The remembered round-label triples behind the phrase picker."""
 
+import re
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -17,8 +20,11 @@ from app.db.service import (
 from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
+from app.web.routes import imports as import_routes
 
 EDITOR_ID = 42
+FIXTURES = Path(__file__).parent / "fixtures"
+GRADUATION_URL = "https://ramen.events/hasunosora-103rd-class-graduation-concert/"
 
 
 @pytest_asyncio.fixture()
@@ -314,3 +320,79 @@ async def test_import_commit_records_its_round_phrase(editor_client):
         assert (row.label, row.label_en, row.label_zh) == (
             "1次先行抽選", "1st-round lottery", "第一轮先行",
         )
+
+
+# ── The picker dialog ────────────────────────────────────────────────────
+
+
+async def test_the_phrase_picker_lists_remembered_triples(editor_client, db):
+    async with db() as session:
+        await record_round_label_phrase(session, "1次先行抽選", "1st-round lottery", "第一轮先行")
+        await session.commit()
+
+    r = editor_client.get("/concerts/new")
+    assert r.status_code == 200
+
+    start = r.text.index('id="round-phrase-picker"')
+    dialog = r.text[start : r.text.index("</dialog>", start)]
+
+    # All three languages visible before you pick.
+    assert "1次先行抽選" in dialog
+    assert "1st-round lottery" in dialog
+    assert "第一轮先行" in dialog
+    # Invariant 7: no inline on* handler may carry user-controlled text.
+    assert not re.search(r"\son(?!input)\w+\s*=", dialog), dialog
+    # Searchable in any language via the shared filterChips helper.
+    assert 'data-name="1次先行抽選 1st-round lottery 第一轮先行"' in dialog
+
+
+async def test_every_round_row_can_open_the_phrase_picker(editor_client):
+    r = editor_client.get("/concerts/new")
+    tpl_start = r.text.index('id="round-row-template"')
+    tpl = r.text[tpl_start : r.text.index("</template>", tpl_start)]
+    assert "data-open-phrases" in tpl, "a JS-added round row must offer the picker too"
+
+
+async def test_the_edit_page_offers_the_picker_on_saved_and_blank_rows(editor_client):
+    """The opener has to reach BOTH round-row shapes on this page -- the
+    pre-filled loop row and the blank <template> -- or it silently goes
+    missing on whichever half the editor happens to use."""
+    resp = editor_client.post("/concerts", data={
+        "title": "T", "event_id": "ph5",
+        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "round_label": ["1次先行抽選"], "round_label_en": [""], "round_label_zh": [""],
+        "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
+        "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
+        "round_url": [""], "round_notes": [""], "round_legs": [""],
+        "round_qualifiers": [""],
+    })
+    assert resp.status_code in (200, 303)
+
+    r = editor_client.get("/concerts/ph5/edit")
+    assert r.status_code == 200
+    assert 'id="round-phrase-picker"' in r.text
+    assert r.text.count("data-open-phrases") >= 2, "saved row and <template> both need it"
+
+    tpl_start = r.text.index('id="round-row-template"')
+    tpl = r.text[tpl_start : r.text.index("</template>", tpl_start)]
+    assert "data-open-phrases" in tpl
+
+
+async def test_the_import_preview_offers_the_picker_on_every_round_row(
+    editor_client, monkeypatch
+):
+    """The third editor surface. Its parsed rows are where a remembered
+    translation is most valuable -- the scrape only ever fills Japanese."""
+    html = (FIXTURES / "ramen_graduation_concert.html").read_text(encoding="utf-8")
+
+    async def fake_fetch(url: str) -> str:
+        return html
+
+    monkeypatch.setattr(import_routes, "fetch_ramen_html", fake_fetch)
+
+    r = editor_client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
+    assert r.status_code == 200
+    assert 'id="round-phrase-picker"' in r.text
+    assert r.text.count("data-open-phrases") >= 2, "parsed rows and <template> both need it"

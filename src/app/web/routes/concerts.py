@@ -59,6 +59,7 @@ from app.db.service import (
     notify_newly_cancelled_legs,
     record_concert_edit,
     record_round_label_phrase,
+    round_label_phrases,
     snapshot_concert,
     sync_concert,
     sync_concert_venue_tags,
@@ -612,6 +613,9 @@ async def new_concert_form(
             # Every VENUE tag, for each leg row's venue picker. A leg's venue
             # is a real tag now (ConcertDay.venue_tag_id), not typed text.
             "venue_tags": await all_venue_tags(session),
+            # Trilingual round labels already typed on earlier concerts, for
+            # the picker each round row's "Remembered" chip opens.
+            "round_phrases": await round_label_phrases(session),
             # No leg or round exists yet on a create page, but the chip
             # partials the <template>s include still read these -- empty here,
             # so the client-side script builds every chip from the DOM rows.
@@ -1069,6 +1073,9 @@ async def edit_concert_form(
             # Every VENUE tag, for each leg row's venue picker (the leg's own
             # pick is pre-selected in the template from d.venue_tag_id).
             "venue_tags": await all_venue_tags(session),
+            # Trilingual round labels already typed on earlier concerts, for
+            # the picker each round row's "Remembered" chip opens.
+            "round_phrases": await round_label_phrases(session),
             "legs": legs,
             "rounds_with_chips": rounds_with_chips,
             # Chip options for the "Qualifies" row: every already-saved round

@@ -1,0 +1,102 @@
+{#- Remembered round labels. Clicking a row fills all three inputs of the
+    round row that opened it.
+
+    Same shape as the tag pickers and _venue_create_dialog.html (.picker:
+    header with title and ×, no footer, backdrop-click and Esc close). Under
+    700px style.css's mobile retrofit turns every <dialog> into a bottom
+    sheet, so there is no @media here.
+
+    MUST be included OUTSIDE the concert <form>: it is all buttons today, but
+    the venue dialog next door proves how quickly a dialog grows inputs, and
+    anything in here would ride along on save.
+
+    The three labels ride in data-ja / data-en / data-zh and are read via
+    `dataset`, never interpolated into an inline on* handler: the browser
+    HTML-decodes an attribute before parsing it as JS, so Jinja's &#39; does
+    not protect a remembered label containing an apostrophe (invariant 7).
+    They are deliberately NOT called data-name -- that one is reserved
+    app-wide for base.html's shared filterChips() selector, which is exactly
+    what the search box below drives. Holding all three languages, lowercased
+    and space-joined, is what makes the list searchable in any of them. -#}
+<dialog class="picker" id="round-phrase-picker">
+  <div class="picker-head">
+    <h3>{{ _("Remembered labels") }}</h3>
+    <button type="button" class="x" data-phrase-cancel>×</button>
+  </div>
+  <div class="picker-body">
+    <input type="search" placeholder="{{ _('Search…') }}"
+           oninput="filterChips(this, '#round-phrase-picker')">
+    <div class="taglist phrase-list">
+      {% for p in round_phrases %}
+      <div class="phrase-row" data-name="{{ (p.label ~ ' ' ~ p.label_en ~ ' ' ~ p.label_zh) | lower }}">
+        <button type="button" class="chip phrase-pick"
+                data-ja="{{ p.label }}" data-en="{{ p.label_en }}" data-zh="{{ p.label_zh }}">
+          <span class="ph-ja">{{ p.label }}</span>
+          <span class="ph-alt dim tiny">{{ p.label_en }} · {{ p.label_zh }}</span>
+        </button>
+        <button type="button" class="x phrase-forget" data-phrase-id="{{ p.id }}"
+                title="{{ _('Forget this label') }}">×</button>
+      </div>
+      {% endfor %}
+      <p class="dim tiny" data-phrase-empty {% if round_phrases %}hidden{% endif %}>
+        {{ _("Labels you fill in all three languages are remembered here.") }}
+      </p>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  (function () {
+    const dlg = document.getElementById("round-phrase-picker");
+    if (!dlg) return;
+    // Which round row asked, so the picked triple lands in the right one.
+    // Set by the delegated listener below -- never read out of an inline
+    // on* handler, and never assumed to be the last row rendered.
+    let opener = null;
+
+    // Delegated, because round rows are cloned from a <template> at runtime:
+    // a listener bound per button would miss every row added after load.
+    document.addEventListener("click", function (e) {
+      const btn = e.target.closest("[data-open-phrases]");
+      if (!btn) return;
+      opener = btn.closest(".redit");
+      dlg.showModal();
+    });
+
+    dlg.addEventListener("click", function (e) {
+      const pick = e.target.closest(".phrase-pick");
+      if (!pick || !opener) return;
+      // dataset, not innerHTML/textContent: the value must survive exactly as
+      // stored, and the alt line above is a rendered "EN · ZH" summary, not
+      // either field on its own.
+      //
+      // The names are built from a suffix rather than written out in full on
+      // purpose: tests/test_i18n_ugc.py counts the per-language label-input
+      // names on each page to prove every variant box is language-marked, and
+      // a literal one here is a false positive it cannot tell apart from a
+      // real unmarked input.
+      const FIELDS = [["", pick.dataset.ja], ["_en", pick.dataset.en], ["_zh", pick.dataset.zh]];
+      FIELDS.forEach(([suffix, value]) => {
+        const input = opener.querySelector('[name="round_label' + suffix + '"]');
+        if (input) input.value = value;
+      });
+      dlg.close();
+    });
+
+    // Backdrop-click is handled globally in base.html; Esc is the <dialog>
+    // default. Only the × needs its own wiring.
+    dlg.querySelector("[data-phrase-cancel]").addEventListener("click", () => dlg.close());
+
+    // One handler for all four close paths (×, backdrop, Esc, a pick) so they
+    // behave identically: without it a search typed last time survives, and
+    // the next open shows a list filtered by a query the box no longer shows.
+    dlg.addEventListener("close", function () {
+      const search = dlg.querySelector('input[type="search"]');
+      if (search) {
+        search.value = "";
+        filterChips(search, "#round-phrase-picker");
+      }
+      opener = null;
+    });
+  })();
+</script>

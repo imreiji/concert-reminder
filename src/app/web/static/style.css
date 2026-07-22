@@ -407,6 +407,19 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .chip .x { margin-left: .1rem; }
 .chip.on .x { color: #fff; }
 
+/* Remembered round labels. The only picker whose rows are not chips: each
+   one is a full-width, TWO-line pick (Japanese, then the EN · ZH it would
+   fill in) plus a forget ×, so .taglist's wrapping chip row and .chip's own
+   inline-flex both have to turn a column here. Everything else -- padding,
+   hover, radius, the 44vh scroll -- is inherited from .picker unchanged. */
+.phrase-list { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+.phrase-row { display: flex; align-items: center; gap: .3rem; }
+.picker-body .phrase-row .phrase-pick {
+  flex: 1; flex-direction: column; align-items: flex-start; gap: 0;
+  border-radius: 3px; text-align: left; cursor: pointer;
+}
+.ph-alt { line-height: 1.3; }
+
 /* Add-buttons are chips, full stop: identical border, background, color, metrics. */
 .chip.add {
   border: 1px solid var(--line); background: var(--raise); color: var(--ink);
