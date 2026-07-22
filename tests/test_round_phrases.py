@@ -137,6 +137,44 @@ async def test_recording_a_phrase_twice_bumps_its_use_count(db):
         assert row.used_count == 2, "the second save reuses the row, not a duplicate"
 
 
+async def test_a_racing_duplicate_insert_bumps_instead_of_exploding(db, monkeypatch):
+    """Simulate the race: the pre-check finds nothing, but the row exists by
+    the time we flush. The editor's save must survive.
+
+    Remembering a phrase rides inside the transaction of the concert save
+    that triggered it, so an unguarded IntegrityError here rolls back the
+    editor's actual work for the sake of a convenience feature.
+    """
+    async with db() as session:
+        session.add(RoundLabelPhrase(label="A", label_en="A", label_zh="A"))
+        await session.commit()
+
+    async with db() as session:
+        # Force the check-then-insert path even though the row now exists,
+        # which is exactly what a concurrent writer produces.
+        real_execute = session.execute
+        state = {"blinded": False}
+
+        class _Blind:
+            def scalar_one_or_none(self):
+                return None
+
+        async def blind_first_lookup(stmt, *a, **kw):
+            if not state["blinded"]:
+                state["blinded"] = True
+                return _Blind()
+            return await real_execute(stmt, *a, **kw)
+
+        monkeypatch.setattr(session, "execute", blind_first_lookup)
+        await record_round_label_phrase(session, "A", "A", "A")
+        await session.commit()
+
+    async with db() as session:
+        rows = (await session.execute(select(RoundLabelPhrase))).scalars().all()
+        assert len(rows) == 1, "no duplicate row"
+        assert rows[0].used_count == 2, "the loser of the race still counts the use"
+
+
 async def test_a_partial_triple_is_not_recorded(db):
     """A phrase is only worth remembering when all three languages are there —
     a half-filled triple would be offered as a suggestion that leaves the

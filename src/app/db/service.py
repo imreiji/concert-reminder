@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, exists, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -3547,8 +3548,33 @@ async def record_round_label_phrase(
         )
     )).scalar_one_or_none()
     if existing is None:
-        session.add(RoundLabelPhrase(label=label, label_en=label_en, label_zh=label_zh))
-    else:
+        # The only try/except IntegrityError in the app -- everywhere else
+        # pre-checks instead, and the pre-check above is still the normal
+        # path. The catch exists ONLY for the race: two editors saving the
+        # same never-before-seen triple in one flush window, where the loser
+        # hits the unique index. What makes this site different from the
+        # others is the cost of not catching. This runs inside the
+        # transaction of whatever concert save triggered it, so an escaping
+        # IntegrityError rolls back that editor's ENTIRE save -- their real
+        # work destroyed by a convenience feature. A savepoint keeps the
+        # blast radius to the insert, and losing the race means someone else
+        # already remembered this triple, so falling through to the bump is
+        # the correct outcome, not a consolation prize.
+        try:
+            async with session.begin_nested():
+                session.add(
+                    RoundLabelPhrase(label=label, label_en=label_en, label_zh=label_zh)
+                )
+        except IntegrityError:
+            existing = (await session.execute(
+                select(RoundLabelPhrase).where(
+                    RoundLabelPhrase.label == label,
+                    RoundLabelPhrase.label_en == label_en,
+                    RoundLabelPhrase.label_zh == label_zh,
+                )
+            )).scalar_one_or_none()
+
+    if existing is not None:
         existing.used_count += 1
         existing.last_used_at = _now()
     await session.flush()
