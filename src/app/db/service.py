@@ -1172,6 +1172,7 @@ async def board_cards(
     with `my_deadline_rows`; None resolves it here.
     """
     now = now or _now()
+    locale = get_locale()
     columns: dict[Column, list[BoardCard]] = {c: [] for c in Column}
 
     ids = concert_ids if concert_ids is not None else await tracked_concert_ids(
@@ -1238,7 +1239,7 @@ async def board_cards(
                 round_id=r.id,
                 # Copied out of the ORM object, so resolve here (web request
                 # -> get_locale()); the template only sees the string.
-                label=loc_field(r, "label", get_locale()),
+                label=loc_field(r, "label", locale),
                 state=_rung_state(card_outcomes.get(r.id), _round_is_open(r, now)),
                 detail=(
                     r.payment_deadline_at_utc
@@ -1980,6 +1981,7 @@ async def concert_round_rows(
     for the whole concert, not one per round.
     """
     now = now or _now()
+    locale = get_locale()
     days = list((await session.execute(
         select(ConcertDay)
         .where(ConcertDay.concert_id == concert.id)
@@ -2019,7 +2021,7 @@ async def concert_round_rows(
     # The qualifier requirement line names other rounds by label, and those
     # labels are copied into RoundRow.qualifier_labels -- resolve the viewer's
     # variant here (concert page = web request).
-    label_by_id = {r.id: loc_field(r, "label", get_locale()) for r in rounds}
+    label_by_id = {r.id: loc_field(r, "label", locale) for r in rounds}
 
     day_ids = {d.id for d in days}
     live_leg_ids = {d.id for d in days if not d.cancelled}
@@ -2564,11 +2566,12 @@ async def user_calendar_events(
             return "Concert"
         return loc_field(concert, "title", locale) if locale else concert.title
 
-    def _label(obj) -> str:
+    def _label(obj: Round | ConcertDay) -> str:
         """Same rule as _title, for the round/leg label: an explicit caller
         locale localizes it, None (the .ics feed) keeps the canonical text.
         Deliberately NOT get_locale() -- the feed must stay byte-identical."""
         return loc_field(obj, "label", locale) if locale else obj.label
+
     round_ids = set((await session.execute(
         select(ReminderQueue.round_id)
         .join(ReminderRule, ReminderQueue.rule_id == ReminderRule.id)

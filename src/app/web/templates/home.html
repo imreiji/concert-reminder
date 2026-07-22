@@ -224,7 +224,7 @@
   <div>
     <div class="label">{{ _("Up next") }}</div>
     <div class="what">
-      <a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a> — {{ loc(d, "label") }}
+      <a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a> — {{ d.label }}
     </div>
     <div class="when num">{% set wl = dual_lines(d.at_utc, tz) %}<b>{{ deadline_label(d.anchor) | capitalize }} {{ wl[0] }}</b>{{ wl[1] }}</div>
   </div>
