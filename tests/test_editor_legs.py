@@ -25,10 +25,10 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.db.models import Base, Concert, ConcertDay, Round, User
+from app.db.models import Base, Concert, ConcertDay, Round, Tag, User
 from app.db.service import ensure_user
 from app.db.session import get_session
-from app.domain.types import RoundKind
+from app.domain.types import RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -781,3 +781,35 @@ async def test_saving_the_restructured_form_still_records_a_real_diff(client, db
     assert changes["title"] == ("Tour", "Tour, renamed")
     assert changes["organizer"] == (None, "Aqours")
     assert changes["notes"] == (None, "moved to a bigger hall")
+
+
+# ── venue_tag_id: the structured venue FK ────────────────────────────────
+
+
+async def test_day_venue_tag_fk_sets_null_on_tag_delete(db):
+    """A venue tag is shared taxonomy; deleting one must not delete the legs
+    that referenced it (mirrors Tag.created_by's SET NULL reasoning)."""
+    async with db() as session:
+        tag = Tag(name="Zepp Haneda", kind=TagKind.VENUE)
+        session.add(tag)
+        await session.flush()
+
+        concert = Concert(title="t", event_id="ev1", created_by=None)
+        session.add(concert)
+        await session.flush()
+
+        day = ConcertDay(
+            concert_id=concert.id,
+            label="Day 1",
+            starts_at_utc=datetime(2026, 8, 1, 9, 0, tzinfo=UTC),
+            venue_tag_id=tag.id,
+        )
+        session.add(day)
+        await session.flush()
+
+        await session.delete(tag)
+        await session.flush()
+        await session.refresh(day)
+
+        assert day.id is not None, "deleting the tag must not delete the leg"
+        assert day.venue_tag_id is None

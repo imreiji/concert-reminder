@@ -306,6 +306,13 @@ class ConcertDay(Base):
     city: Mapped[str | None] = mapped_column(String(100))  # leg/city, e.g. "Kanagawa"
     venue: Mapped[str | None] = mapped_column(String(200))  # per-day venue (tours change cities)
     venue_address: Mapped[str | None] = mapped_column(String(300))
+    # The structured venue. Replaces the free-text `venue` above, which
+    # find_venue_tag resolved by case-insensitive name match -- this is that
+    # same link made real. SET NULL rather than CASCADE: a venue tag is shared
+    # taxonomy, and deleting one must never take performances down with it.
+    venue_tag_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tags.id", ondelete="SET NULL"), index=True
+    )
     doors_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     starts_at_utc: Mapped[datetime] = mapped_column(UTCDateTime)
     # A cancelled leg is never deleted (its rounds' applies_to would dangle --
@@ -317,6 +324,10 @@ class ConcertDay(Base):
     cancelled: Mapped[bool] = mapped_column(default=False, server_default="0")
 
     concert: Mapped[Concert] = relationship(back_populates="days")
+    # Always eager-load this before handing a day to a template -- a lazy load
+    # during async rendering raises MissingGreenlet (a 500). See
+    # concerts.py's concert_rounds_context.
+    venue_tag: Mapped["Tag | None"] = relationship(lazy="raise")
 
 
 class Round(Base):
