@@ -351,6 +351,19 @@ async def test_the_source_link_names_ramen_events(client):
     assert ">source<" not in links
 
 
+async def test_notes_render_when_only_a_variant_is_filled(client):
+    """The guard used to test `concert.notes` (the Japanese column) while the
+    body rendered `loc(concert, "notes")` -- so notes filled ONLY in
+    `notes_en` (original left NULL) rendered nothing at all for an EN
+    viewer."""
+    await seed_concert(client.db, notes=None, notes_en="Doors open early.")
+    login(client)
+
+    client.cookies.set("lang", "en")
+    body = client.get("/concerts/np").text
+    assert "Doors open early." in body
+
+
 async def test_a_non_editor_sees_no_editor_controls(client):
     await seed_concert(client.db)
     login(client)

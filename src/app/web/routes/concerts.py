@@ -1418,7 +1418,8 @@ async def export_concert_yaml(
     # contents must not change with whoever happened to download it.
     yaml_days = [
         YamlDay(
-            label=d.label, starts_at_utc=d.starts_at_utc,
+            label=d.label, label_en=d.label_en, label_zh=d.label_zh,
+            starts_at_utc=d.starts_at_utc,
             city=d.venue_tag.city if d.venue_tag else d.city,
             venue=d.venue_tag.name if d.venue_tag else d.venue,
             venue_address=d.venue_tag.address if d.venue_tag else d.venue_address,
@@ -1428,7 +1429,7 @@ async def export_concert_yaml(
     ]
     yaml_rounds = [
         YamlRound(
-            label=r.label, label_en=r.label_en, kind=r.kind.value,
+            label=r.label, label_en=r.label_en, label_zh=r.label_zh, kind=r.kind.value,
             applies_to_labels=[days_by_id[d] for d in (r.applies_to or []) if d in days_by_id],
             opens_at_utc=r.opens_at_utc, closes_at_utc=r.closes_at_utc,
             results_at_utc=r.results_at_utc, payment_deadline_at_utc=r.payment_deadline_at_utc,

@@ -22,6 +22,8 @@ from app.domain.timezones import utc_to_jst
 class YamlDay:
     label: str
     starts_at_utc: datetime
+    label_en: str | None = None
+    label_zh: str | None = None
     city: str | None = None
     venue: str | None = None
     venue_address: str | None = None
@@ -33,6 +35,7 @@ class YamlRound:
     label: str
     kind: str
     label_en: str | None = None
+    label_zh: str | None = None
     applies_to_labels: list[str] = field(default_factory=list)
     opens_at_utc: datetime | None = None
     closes_at_utc: datetime | None = None
@@ -94,6 +97,8 @@ def concert_to_yaml(
         "performances": [
             {
                 "label": d.label,
+                "label_en": d.label_en,
+                "label_zh": d.label_zh,
                 "city": d.city,
                 "venue": d.venue,
                 "venue_address": d.venue_address,
@@ -106,6 +111,7 @@ def concert_to_yaml(
             {
                 "label": r.label,
                 "label_en": r.label_en,
+                "label_zh": r.label_zh,
                 "kind": r.kind,
                 "applies_to": r.applies_to_labels,
                 "apply_opens_jst": _jst_str(r.opens_at_utc),
