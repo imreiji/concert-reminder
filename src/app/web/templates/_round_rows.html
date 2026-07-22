@@ -124,7 +124,7 @@
       {# A leg whose date has passed is struck through on the heading only --
          putting `past` on the section would strike its rounds too, and a
          finished show's rounds still record what you did. #}
-      <h3 class="leg-heading{% if day.starts_at_utc < now %} past{% endif %}">{{ day.label }}{% if day.cancelled %} <span class="badge cancelled">{{ _("Cancelled") }}</span>{% elif skipped %} <span class="badge cancelled">{{ _("Not going") }}</span>{% endif %}</h3>
+      <h3 class="leg-heading{% if day.starts_at_utc < now %} past{% endif %}">{{ loc(day, "label") }}{% if day.cancelled %} <span class="badge cancelled">{{ _("Cancelled") }}</span>{% elif skipped %} <span class="badge cancelled">{{ _("Not going") }}</span>{% endif %}</h3>
       <span class="lv">
         {{ dual(day.starts_at_utc, tz) }}{% if day.doors_at_utc %} · {% trans when=dual(day.doors_at_utc, tz) %}doors {{ when }}{% endtrans %}{% endif %}
         {#- The venue, its address and its city come off the leg's VENUE tag
