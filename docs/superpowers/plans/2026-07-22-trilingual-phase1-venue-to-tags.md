@@ -1275,4 +1275,8 @@ git commit -m "feat: render a leg's venue from its tag in the viewer's language"
 
 ## Deploy note
 
-After `git pull && uv sync && uv run alembic upgrade head`, **read the migration output**. Any leg listed as unmatched needs its venue tag created and the leg re-pointed before phase 5 drops the free-text columns.
+After `git pull && uv sync && uv run alembic upgrade head`, **read the migration output**. Any leg listed as unmatched needs its venue tag created and the leg re-pointed.
+
+**Do this immediately after the upgrade, before any editor saves those concerts — not merely "before phase 5".** The rollup is unconditional: a concert whose legs' venues did not match a tag has `desired = {}`, so the first save of that concert deletes its concert-level VENUE tags, dropping it out of Discover's region filter with no on-site trace. The free-text columns still hold the original value, so it is recoverable — but only by someone who knows to look.
+
+The unmatched report is printed once, at upgrade time. Capture it.
