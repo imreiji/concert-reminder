@@ -1,16 +1,24 @@
 """The remembered round-label triples behind the phrase picker."""
 
+import pytest
 import pytest_asyncio
+from fastapi.testclient import TestClient
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.db.models import Base, RoundLabelPhrase
+from app.config import settings
+from app.db.models import Base, ConcertDay, Round, RoundLabelPhrase
 from app.db.service import (
     forget_round_label_phrase,
     record_round_label_phrase,
     round_label_phrases,
 )
+from app.db.session import get_session
+from app.web import auth
+from app.web.app import create_app
+
+EDITOR_ID = 42
 
 
 @pytest_asyncio.fixture()
@@ -28,6 +36,42 @@ async def db():
         await conn.run_sync(Base.metadata.create_all)
     yield async_sessionmaker(engine, expire_on_commit=False)
     await engine.dispose()
+
+
+@pytest.fixture()
+def editor_client(db, monkeypatch):
+    """The signed-in-editor HTTP client, same shape as tests/test_crud.py's
+    `client` + `login_as` pair / tests/test_venue_rollup.py's `editor_client`
+    (this suite has no shared conftest fixture for it), with the login
+    already performed. The brief's test code assumed an async httpx client;
+    this codebase's web-route tests instead use a sync TestClient wrapped in
+    `async def test_...` functions (bodies call `.post()`/`.get()`
+    unawaited), so that is the shape used here -- every assertion from the
+    brief is kept identical."""
+    monkeypatch.setattr(settings, "editor_whitelist", str(EDITOR_ID))
+    app = create_app()
+
+    async def override_session():
+        async with db() as s:
+            yield s
+
+    app.dependency_overrides[get_session] = override_session
+
+    async def fake_exchange(code):
+        return "tok"
+
+    async def fake_identity(token):
+        return {"id": str(EDITOR_ID), "username": "ed", "global_name": "ed", "avatar": None}
+
+    monkeypatch.setattr(auth, "exchange_code", fake_exchange)
+    monkeypatch.setattr(auth, "fetch_identity", fake_identity)
+
+    c = TestClient(app, follow_redirects=False)
+    r = c.get("/auth/login")
+    state = r.headers["location"].split("state=")[1].split("&")[0]
+    c.get(f"/auth/callback?code=x&state={state}")
+    c.db = db
+    return c
 
 
 def test_phrase_columns_and_unique_index():
@@ -115,3 +159,158 @@ async def test_forgetting_a_phrase_removes_only_the_suggestion(db):
 async def test_forgetting_an_unknown_phrase_is_false_not_an_error(db):
     async with db() as session:
         assert await forget_round_label_phrase(session, 9999) is False
+
+
+# ── Wiring: every save path records a phrase as a side effect ────────────
+
+
+async def test_saving_a_concert_records_its_round_phrases(editor_client, db):
+    resp = editor_client.post("/concerts", data={
+        "title": "T", "event_id": "ph1",
+        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "round_label": ["1次先行抽選"], "round_label_en": ["1st-round lottery"],
+        "round_label_zh": ["第一轮先行"],
+        "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
+        "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
+        "round_url": [""], "round_notes": [""], "round_legs": [""],
+        "round_qualifiers": [""],
+    })
+    assert resp.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        row = (await session.execute(select(RoundLabelPhrase))).scalar_one()
+        assert (row.label, row.label_en, row.label_zh) == (
+            "1次先行抽選", "1st-round lottery", "第一轮先行",
+        )
+
+
+async def test_a_round_saved_in_japanese_only_records_nothing(editor_client, db):
+    """The common case today. It must not litter the picker with unusable
+    partial suggestions."""
+    resp = editor_client.post("/concerts", data={
+        "title": "T", "event_id": "ph2",
+        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "round_label": ["1次先行抽選"], "round_label_en": [""], "round_label_zh": [""],
+        "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
+        "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
+        "round_url": [""], "round_notes": [""], "round_legs": [""],
+        "round_qualifiers": [""],
+    })
+    assert resp.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        assert (await session.execute(select(RoundLabelPhrase))).scalars().all() == []
+
+
+async def test_editing_an_existing_round_records_its_phrase(editor_client):
+    """The edit route's UPDATE branch (apply_round_fields, for a round id
+    the submit already carries) is a separate call site from create's
+    build_round -- covered here since it is the one most likely to be
+    missed."""
+    create_resp = editor_client.post("/concerts", data={
+        "title": "T", "event_id": "ph3",
+        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "round_label": ["1次先行抽選"], "round_label_en": [""], "round_label_zh": [""],
+        "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
+        "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
+        "round_url": [""], "round_notes": [""], "round_legs": [""],
+        "round_qualifiers": [""],
+    })
+    assert create_resp.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        round_id = (await session.execute(select(Round))).scalar_one().id
+        day_id = (await session.execute(select(ConcertDay))).scalar_one().id
+        # Nothing recorded yet -- the create above only filled the Japanese
+        # label, matching the common-case test above.
+        assert (await session.execute(select(RoundLabelPhrase))).scalars().all() == []
+
+    edit_resp = editor_client.post("/concerts/ph3/edit", data={
+        "title": "T", "event_id": "ph3",
+        "day_id": [str(day_id)],
+        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "round_id": [str(round_id)],
+        "round_label": ["1次先行抽選"], "round_label_en": ["1st-round lottery"],
+        "round_label_zh": ["第一轮先行"],
+        "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
+        "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
+        "round_url": [""], "round_notes": [""], "round_legs": [""],
+        "round_qualifiers": [""],
+    })
+    assert edit_resp.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        row = (await session.execute(select(RoundLabelPhrase))).scalar_one()
+        assert (row.label, row.label_en, row.label_zh) == (
+            "1次先行抽選", "1st-round lottery", "第一轮先行",
+        )
+        # The update branch must not have deleted and recreated the round.
+        assert (await session.execute(select(Round))).scalar_one().id == round_id
+
+
+async def test_adding_a_round_via_edit_records_its_phrase(editor_client):
+    """The edit route's INSERT branch (build_round, for a round with no id
+    in the submit -- a newly added row on an existing concert) is the fourth
+    call site."""
+    create_resp = editor_client.post("/concerts", data={
+        "title": "T", "event_id": "ph4",
+        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+    })
+    assert create_resp.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        day_id = (await session.execute(select(ConcertDay))).scalar_one().id
+
+    edit_resp = editor_client.post("/concerts/ph4/edit", data={
+        "title": "T", "event_id": "ph4",
+        "day_id": [str(day_id)],
+        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "round_id": [""],
+        "round_label": ["2次先行抽選"], "round_label_en": ["2nd-round lottery"],
+        "round_label_zh": ["第二轮先行"],
+        "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
+        "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
+        "round_url": [""], "round_notes": [""], "round_legs": [""],
+        "round_qualifiers": [""],
+    })
+    assert edit_resp.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        row = (await session.execute(select(RoundLabelPhrase))).scalar_one()
+        assert (row.label, row.label_en, row.label_zh) == (
+            "2次先行抽選", "2nd-round lottery", "第二轮先行",
+        )
+
+
+async def test_import_commit_records_its_round_phrase(editor_client):
+    """The third save path: the URL-import commit route builds rounds the
+    same way and must run the same recording."""
+    resp = editor_client.post("/concerts/import/commit", data={
+        "title": "Imported Show",
+        "day_label": ["Day 1"],
+        "day_starts_at": ["2026-08-01T18:00"],
+        "round_label": ["1次先行抽選"], "round_label_en": ["1st-round lottery"],
+        "round_label_zh": ["第一轮先行"],
+        "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
+        "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
+        "round_url": [""], "round_notes": [""], "round_legs": [""],
+    })
+    assert resp.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        row = (await session.execute(select(RoundLabelPhrase))).scalar_one()
+        assert (row.label, row.label_en, row.label_zh) == (
+            "1次先行抽選", "1st-round lottery", "第一轮先行",
+        )

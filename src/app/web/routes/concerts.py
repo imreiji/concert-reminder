@@ -58,6 +58,7 @@ from app.db.service import (
     handle_newly_tagged,
     notify_newly_cancelled_legs,
     record_concert_edit,
+    record_round_label_phrase,
     snapshot_concert,
     sync_concert,
     sync_concert_venue_tags,
@@ -798,6 +799,7 @@ async def create_concert(
             label_en=label_en, notes=notes_, label_zh=label_zh,
         )
         session.add(round_)
+        await record_round_label_phrase(session, label, label_en, label_zh)
         qual_jobs.append((round_, kind_, quals))
 
     await session.flush()  # new rounds now have ids, needed by parse_round_qualifiers
@@ -1343,6 +1345,7 @@ async def edit_concert(
                 applies_to, label_en, notes_, label_zh,
             )
             session.add(round_)
+        await record_round_label_phrase(session, label, label_en, label_zh)
         qual_jobs.append((round_, kind_, quals))
     for rid, round_ in existing_rounds.items():
         if rid not in kept_round_ids:
