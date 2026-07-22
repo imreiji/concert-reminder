@@ -2812,7 +2812,8 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
       no_franchise_groups-- [(group Tag, [member Tag, ...]), ...] for parentless groups
       venue_regions      -- [(region_name, [venue Tag, ...]), ...] alpha, "No region" last
       ungrouped_performers -- ARTIST tags that are no group's member, name order
-      summary            -- {concerts, franchises, groups, performers, venues}
+      summary            -- {concerts, franchises, groups, performers, venues,
+                            untranslated}
       eligible_members   -- {group_id: [(member Tag, n_eligible_concerts), ...]}
     """
     now = now or _now()
@@ -2916,6 +2917,18 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
         "groups": len(groups),
         "performers": len(artists),
         "venues": len(venues),
+        # How many tags still have a hole in their NAME trio -- the backlog,
+        # made countable. Deliberately the name only: a VENUE's city trio is
+        # all-or-nothing AND optional, so a venue with no city at all is
+        # legitimately complete, and folding it in would make one number mean
+        # two different things. Same rule the create backstop, the browser
+        # guard and the edit-page notice use -- never re-implemented here.
+        "untranslated": sum(
+            1 for t in tags
+            if missing_variants(
+                t.name or "", t.name_en or "", t.name_zh or "", mandatory=True,
+            )
+        ),
     }
 
     return {

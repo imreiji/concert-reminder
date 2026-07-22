@@ -19,6 +19,18 @@
     {{ performers }},
     {{ venues }}{% endtrans -%}
   </span>
+  {#- The untranslated backlog, made countable. Rendered ONLY when non-zero:
+      a permanent "0 tags" is noise, and its absence is the signal that the
+      backlog is clear. Counted in db/service.py's tag_directory_context over
+      the NAME trio only -- see the note there for why a venue's city is out.
+      Not a link: the Tags page's only filter is the free-text chip search,
+      which matches visible tag text, and "untranslated" is text on no chip --
+      linking it would mean inventing a second filter mechanism. -#}
+  {%- if summary.untranslated %}
+  <span class="note dim untranslated-count">
+    {%- trans count=summary.untranslated %}{{ count }} tag is not translated everywhere yet{% pluralize %}{{ count }} tags are not translated everywhere yet{% endtrans -%}
+  </span>
+  {%- endif %}
   {% if user.is_editor %}<button type="button" class="btn" id="newTagBtn"
     onclick="document.getElementById('new-tag-dialog').showModal()">{{ _("+ New tag") }}</button>{% endif %}
 </div>

@@ -758,3 +758,84 @@ async def test_the_tag_edit_dialog_names_its_own_gap(client):
     notice = body.split(GAPS)[1][:400]
     assert "中文" in notice, notice
     assert "Name" in notice, notice
+
+
+# --- the untranslated backlog is countable -------------------------------
+#
+# The per-tag notice above tells you about the tag you happen to have open.
+# The Tags page needs the other reading: how much is left. The count is
+# computed in db/service.py's tag_directory_context alongside the other
+# summary counts (not in the template, not in the route) and rendered only
+# when it is non-zero -- a permanent "0 tags" is noise, and its ABSENCE is
+# the signal that the backlog is clear.
+#
+# It counts the NAME trio only. A VENUE's city trio is deliberately excluded:
+# city is all-or-nothing and optional, so a venue with no city at all is
+# legitimately complete, and folding it in would make one number mean two
+# different things.
+
+BACKLOG = "untranslated-count"  # the count's marker class
+
+
+def _full_tag(client, name: str, kind: str = "group") -> None:
+    created = client.post("/tags", data={
+        "name": name, "name_en": f"{name}-en", "name_zh": f"{name}-zh", "kind": kind,
+    })
+    assert created.status_code in (200, 303), created.text
+
+
+async def _break_zh(client, name: str) -> None:
+    """Blank one variant THROUGH the edit route -- which is also the proof
+    that the edit path is still unblocked."""
+    async with client.db() as s:
+        tag_id = (await s.execute(select(Tag.id).where(Tag.name == name))).scalar_one()
+    saved = client.post(f"/tags/{tag_id}/edit", data={
+        "name": name, "name_en": f"{name}-en", "name_zh": "",
+    })
+    assert saved.status_code in (200, 303), saved.text
+
+
+async def test_a_fully_translated_catalogue_shows_no_count(client):
+    _full_tag(client, "alpha")
+    _full_tag(client, "beta")
+    assert BACKLOG not in client.get("/tags").text, "zero is not worth showing"
+
+
+async def test_the_tags_page_counts_untranslated_tags(client):
+    _full_tag(client, "alpha")
+    _full_tag(client, "beta")
+    await _break_zh(client, "alpha")
+
+    body = client.get("/tags").text
+    assert BACKLOG in body, "the Tags page never mentions the backlog"
+    note = body.split(BACKLOG)[1][:300]
+    assert "1 tag" in note, note
+    assert "2 tag" not in note, note
+
+
+async def test_the_count_is_the_number_of_tags_with_a_gap(client):
+    _full_tag(client, "alpha")
+    _full_tag(client, "beta")
+    _full_tag(client, "gamma")
+    await _break_zh(client, "alpha")
+    await _break_zh(client, "beta")
+
+    note = client.get("/tags").text.split(BACKLOG)[1][:300]
+    assert "2 tags" in note, note
+
+
+async def test_a_venue_without_a_city_is_not_counted_as_untranslated(client):
+    """City is optional and all-or-nothing; a venue with none is complete."""
+    _full_tag(client, "Zepp", kind="venue")
+    assert BACKLOG not in client.get("/tags").text, "a blank city is not a gap"
+
+
+async def test_the_backlog_count_lives_in_the_service_summary(client):
+    """Computed alongside the other summary counts, not in the template."""
+    from app.db import service
+
+    _full_tag(client, "alpha")
+    await _break_zh(client, "alpha")
+    async with client.db() as s:
+        ctx = await service.tag_directory_context(s)
+    assert ctx["summary"]["untranslated"] == 1
