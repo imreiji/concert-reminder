@@ -867,3 +867,42 @@ async def test_reminders_note_names_the_default_preset(client):
     rules = body.split('id="rules"', 1)[1].split("</div>\n</article>", 1)[0]
     assert "From your default preset" in rules
     assert "Standard" in rules
+
+
+async def test_round_label_renders_in_the_viewers_language(client):
+    """`Round.label_en`/`label_zh` are true locale variants now (Task 3), not
+    a gloss shown to everyone alongside the Japanese label -- the negative
+    assertions are the point: they pin that only ONE label reaches each
+    viewer, and that zh never falls back through en to the original
+    (invariant: no cross-locale chaining, see i18n.loc_field)."""
+    async with client.db() as s:
+        await ensure_user(s, USER, "reiji")
+        concert = Concert(title="T", event_id="rl1", created_by=USER)
+        s.add(concert)
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=concert.id, label="Day 1",
+            starts_at_utc=datetime(2026, 8, 1, 9, tzinfo=UTC),
+        ))
+        s.add(Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND,
+            label="1次先行抽選", label_en="1st-round lottery", label_zh="第一轮先行",
+            closes_at_utc=datetime(2026, 7, 1, 9, tzinfo=UTC),
+        ))
+        await s.commit()
+    login(client)
+
+    client.cookies.set("lang", "en")
+    en = client.get("/concerts/rl1")
+    assert "1st-round lottery" in en.text
+    assert "1次先行抽選" not in en.text, "the Japanese label must not leak to an EN viewer"
+
+    client.cookies.set("lang", "zh")
+    zh = client.get("/concerts/rl1")
+    assert "第一轮先行" in zh.text
+    assert "1st-round lottery" not in zh.text, "no cross-locale chaining"
+
+    client.cookies.set("lang", "ja")
+    ja = client.get("/concerts/rl1")
+    assert "1次先行抽選" in ja.text
+    assert "1st-round lottery" not in ja.text

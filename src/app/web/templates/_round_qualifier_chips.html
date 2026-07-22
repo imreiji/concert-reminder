@@ -35,7 +35,7 @@
     <button type="button" class="chip{% if selected and other.id in selected %} on{% endif %}"
             data-qualifier-id="{{ other.id }}"
             aria-pressed="{{ 'true' if selected and other.id in selected else 'false' }}"
-      >{{ other.label }}</button>
+      >{{ loc(other, "label") }}</button>
     {% endfor %}
   </div>
   <span class="dim tiny">{% trans %}A round you just added becomes selectable here only
