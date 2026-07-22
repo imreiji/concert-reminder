@@ -3540,13 +3540,16 @@ async def record_round_label_phrase(
     if not (label and label_en and label_zh):
         return
 
-    existing = (await session.execute(
-        select(RoundLabelPhrase).where(
-            RoundLabelPhrase.label == label,
-            RoundLabelPhrase.label_en == label_en,
-            RoundLabelPhrase.label_zh == label_zh,
-        )
-    )).scalar_one_or_none()
+    # One statement, used by both the pre-check and the post-race re-select:
+    # if the two ever drifted apart, the re-select would stop finding the
+    # winner's row and the bump would be silently skipped.
+    lookup = select(RoundLabelPhrase).where(
+        RoundLabelPhrase.label == label,
+        RoundLabelPhrase.label_en == label_en,
+        RoundLabelPhrase.label_zh == label_zh,
+    )
+
+    existing = (await session.execute(lookup)).scalar_one_or_none()
     if existing is None:
         # The only try/except IntegrityError in the app -- everywhere else
         # pre-checks instead, and the pre-check above is still the normal
@@ -3556,23 +3559,21 @@ async def record_round_label_phrase(
         # others is the cost of not catching. This runs inside the
         # transaction of whatever concert save triggered it, so an escaping
         # IntegrityError rolls back that editor's ENTIRE save -- their real
-        # work destroyed by a convenience feature. A savepoint keeps the
-        # blast radius to the insert, and losing the race means someone else
-        # already remembered this triple, so falling through to the bump is
-        # the correct outcome, not a consolation prize.
+        # work destroyed by a convenience feature. A savepoint keeps the blast
+        # radius to this insert -- SQLAlchemy flushes the session when the
+        # nested transaction opens, so the caller's pending rows are already
+        # persistent and ROLLBACK TO SAVEPOINT cannot reach them (pinned by
+        # test_a_lost_race_does_not_take_the_callers_pending_work_with_it).
+        # And losing the race means someone else already remembered this
+        # triple, so falling through to the bump is the correct outcome, not
+        # a consolation prize.
         try:
             async with session.begin_nested():
                 session.add(
                     RoundLabelPhrase(label=label, label_en=label_en, label_zh=label_zh)
                 )
         except IntegrityError:
-            existing = (await session.execute(
-                select(RoundLabelPhrase).where(
-                    RoundLabelPhrase.label == label,
-                    RoundLabelPhrase.label_en == label_en,
-                    RoundLabelPhrase.label_zh == label_zh,
-                )
-            )).scalar_one_or_none()
+            existing = (await session.execute(lookup)).scalar_one_or_none()
 
     if existing is not None:
         existing.used_count += 1

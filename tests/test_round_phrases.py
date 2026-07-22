@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, ConcertDay, Round, RoundLabelPhrase
+from app.db.models import Base, Concert, ConcertDay, Round, RoundKind, RoundLabelPhrase
 from app.db.service import (
     forget_round_label_phrase,
     record_round_label_phrase,
@@ -173,6 +173,69 @@ async def test_a_racing_duplicate_insert_bumps_instead_of_exploding(db, monkeypa
         rows = (await session.execute(select(RoundLabelPhrase))).scalars().all()
         assert len(rows) == 1, "no duplicate row"
         assert rows[0].used_count == 2, "the loser of the race still counts the use"
+
+
+async def test_a_lost_race_does_not_take_the_callers_pending_work_with_it(db, monkeypatch):
+    """The race guard must not cost the editor the round they were saving.
+
+    Every production call site does `session.add(round_)` and then calls
+    `record_round_label_phrase` in the same session, so a pending Round is
+    always in flight when the savepoint opens. The previous race test called
+    the function as the only work in its session, so nothing was pending and
+    this property went untested.
+
+    It holds because SQLAlchemy's `SessionTransaction._take_snapshot` flushes
+    the session when a nested transaction opens, BEFORE snapshotting -- so
+    the caller's Round is already persistent by the time the SAVEPOINT is
+    emitted, and `ROLLBACK TO SAVEPOINT` cannot reach an INSERT issued before
+    it. Verified against emitted SQL: the `rounds` INSERT lands outside the
+    savepoint, and the Round survives as persistent with a real id.
+
+    That is a load-bearing dependency on library internals, which is why it
+    is pinned here: if `_take_snapshot` ever stopped flushing, the rollback's
+    expunge set would include the caller's work and a concert would silently
+    save minus a round.
+    """
+    async with db() as session:
+        session.add(Concert(event_id="race1", title="Race"))
+        session.add(RoundLabelPhrase(label="A", label_en="A", label_zh="A"))
+        await session.commit()
+        concert_id = (await session.execute(select(Concert))).scalar_one().id
+
+    async with db() as session:
+        # The caller's real work: a round pending in the same session, exactly
+        # as create_concert/edit_concert/import_commit leave it.
+        session.add(Round(
+            concert_id=concert_id, kind=RoundKind.LOTTERY_ROUND, label="A",
+            label_en="A", label_zh="A",
+        ))
+
+        # Force the check-then-insert path even though the row now exists.
+        real_execute = session.execute
+        state = {"blinded": False}
+
+        class _Blind:
+            def scalar_one_or_none(self):
+                return None
+
+        async def blind_first_lookup(stmt, *a, **kw):
+            if not state["blinded"]:
+                state["blinded"] = True
+                return _Blind()
+            return await real_execute(stmt, *a, **kw)
+
+        monkeypatch.setattr(session, "execute", blind_first_lookup)
+        await record_round_label_phrase(session, "A", "A", "A")
+        await session.commit()
+
+    async with db() as session:
+        rows = (await session.execute(select(RoundLabelPhrase))).scalars().all()
+        assert len(rows) == 1, "no duplicate row"
+        assert rows[0].used_count == 2, "the loser of the race still counts the use"
+        # The point of the test: the editor's actual work survived.
+        rounds = (await session.execute(select(Round))).scalars().all()
+        assert len(rounds) == 1, "the caller's pending round must not be expunged"
+        assert rounds[0].label == "A"
 
 
 async def test_a_partial_triple_is_not_recorded(db):
