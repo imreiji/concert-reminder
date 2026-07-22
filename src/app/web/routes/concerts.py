@@ -452,6 +452,18 @@ async def resolve_tags(session: AsyncSession, tag_ids: list[int], kind) -> list[
     return out
 
 
+async def all_venue_tags(session: AsyncSession) -> list[Tag]:
+    """Every VENUE tag, name-ordered -- the option list behind each leg row's
+    venue picker on both editor pages."""
+    return list(
+        (
+            await session.execute(
+                select(Tag).where(Tag.kind == TagKind.VENUE).order_by(Tag.name)
+            )
+        ).scalars()
+    )
+
+
 async def resolve_day_venue_tags(
     session: AsyncSession, values: list[str]
 ) -> list[int | None]:
@@ -568,6 +580,9 @@ async def new_concert_form(
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
             "initial_selected": {},
+            # Every VENUE tag, for each leg row's venue picker. A leg's venue
+            # is a real tag now (ConcertDay.venue_tag_id), not typed text.
+            "venue_tags": await all_venue_tags(session),
             # No leg or round exists yet on a create page, but the chip
             # partials the <template>s include still read these -- empty here,
             # so the client-side script builds every chip from the DOM rows.
@@ -792,9 +807,7 @@ async def concert_rounds_context(
     leg_groups, all_legs_rows = await concert_round_rows(session, user_id, concert, now=now)
     # One query for every VENUE tag, then an in-memory match per leg -- the
     # same free-text-to-structured resolution the old per-day subtitle used.
-    venue_tags = list(
-        (await session.execute(select(Tag).where(Tag.kind == TagKind.VENUE))).scalars()
-    )
+    venue_tags = await all_venue_tags(session)
     # This user's per-leg opt-outs over THIS concert's days, so `_round_rows`
     # can dim the legs they are not going to. Assembled here, the single place
     # that fragment's context is built, so the copy POST
@@ -989,6 +1002,9 @@ async def edit_concert_form(
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
             "initial_selected": initial_selected,
+            # Every VENUE tag, for each leg row's venue picker (the leg's own
+            # pick is pre-selected in the template from d.venue_tag_id).
+            "venue_tags": await all_venue_tags(session),
             "legs": legs,
             "rounds_with_chips": rounds_with_chips,
             # Chip options for the "Qualifies" row: every already-saved round

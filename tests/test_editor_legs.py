@@ -786,6 +786,128 @@ async def test_saving_the_restructured_form_still_records_a_real_diff(client, db
 # ── venue_tag_id: the structured venue FK ────────────────────────────────
 
 
+async def _venue_tag(db, name="Zepp Haneda"):
+    async with db() as s:
+        t = Tag(name=name, kind=TagKind.VENUE)
+        s.add(t)
+        await s.commit()
+        return t.id
+
+
+async def test_leg_editor_offers_venue_tags(client, db):
+    """The leg's venue is picked from real VENUE tags, not typed free-hand."""
+    await make_editor(db)
+    login(client)
+    await _venue_tag(db)
+
+    resp = client.get("/concerts/new")
+
+    assert resp.status_code == 200
+    assert 'name="day_venue_tag_id"' in resp.text
+    assert "Zepp Haneda" in resp.text
+    # the free-text venue/city inputs are gone from the leg editor
+    assert 'name="day_venue"' not in resp.text
+    assert 'name="day_city"' not in resp.text
+
+
+async def test_the_edit_page_preselects_each_legs_venue_tag(client, db):
+    await make_editor(db)
+    login(client)
+    venue_id = await _venue_tag(db)
+    other_id = await _venue_tag(db, "Makuhari Messe")
+    (day1, day2), _ = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False), ("Day 2", "Osaka", False)],
+        rounds=[("R", [0])],
+    )
+    async with db() as s:
+        (await s.get(ConcertDay, day1)).venue_tag_id = venue_id
+        await s.commit()
+
+    body = client.get("/concerts/tour/edit").text
+    assert f'<option value="{venue_id}" selected>' in body
+    # the OTHER leg picked nothing, and neither did the unassigned tag
+    assert f'<option value="{other_id}" selected>' not in body
+
+
+async def test_every_leg_row_emits_exactly_one_venue_tag_field(client, db):
+    """`day_venue_tag_id` is padded only when the WHOLE array is omitted; a
+    short-but-nonempty array trips the strict zip. So the form must emit one
+    value per leg row -- never fewer. Pinned against `day_id`, which already
+    has exactly one field per row (including the JS row template; `day_key`
+    would over-count, it is also named inside _leg_chips_script.html)."""
+    await make_editor(db)
+    login(client)
+    await _venue_tag(db)
+    await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False), ("Day 2", "Osaka", False)],
+        rounds=[("R", [0])],
+    )
+
+    for page in ("/concerts/tour/edit", "/concerts/new"):
+        body = client.get(page).text
+        assert body.count('name="day_venue_tag_id"') == body.count('name="day_id"'), page
+
+
+async def test_a_blank_leg_rows_venue_select_defaults_to_no_value(client, db):
+    """A blank trailing row must submit an EMPTY venue value.
+
+    The blank-row guard counts the venue pick, so a row carrying only a venue
+    and no start time reaches validation and 422s. If the picker ever
+    pre-selected a tag on an empty row, every trailing blank row would become
+    a 422 and the editor could not save at all. The "no venue" option is
+    therefore first, valued "", and nothing else may carry `selected`.
+    """
+    await make_editor(db)
+    login(client)
+    venue_id = await _venue_tag(db)
+    (day1,), (round_id,) = await seed(
+        db,
+        legs=[("Day 1", "Kanagawa", False)],
+        rounds=[("R", [0])],
+    )
+
+    # The JS row template -- the markup a browser clones for a new blank row.
+    tpl = client.get("/concerts/tour/edit").text.split('<template id="day-row-template">')[1]
+    tpl = tpl.split("</template>")[0]
+    picker = tpl.split('name="day_venue_tag_id"')[1].split("</select>")[0]
+    assert 'value=""' in picker        # the "no venue" option exists
+    assert "selected" not in picker    # and nothing overrides it
+
+    # And end-to-end, both directions. An untouched trailing row -- empty
+    # venue included -- is skipped and the save goes through:
+    blank_row = [(day1, "Day 1", "Kanagawa", False), ("", "", "", False, "new-blank")]
+    r = resubmit(
+        client,
+        "tour",
+        days=blank_row,
+        rounds=[(round_id, "R", str(day1))],
+        extra={
+            "day_venue_tag_id": ["", ""],
+            "day_starts_at": ["2099-08-01T18:00", ""],
+        },
+    )
+    assert r.status_code == 303
+    async with db() as s:
+        assert len((await s.execute(select(ConcertDay))).scalars().all()) == 1
+
+    # ...whereas the SAME row with a venue pre-selected is no longer blank,
+    # reaches validation without a start time, and 422s. This is why the
+    # picker must never pre-select anything on an empty row.
+    r = resubmit(
+        client,
+        "tour",
+        days=blank_row,
+        rounds=[(round_id, "R", str(day1))],
+        extra={
+            "day_venue_tag_id": ["", str(venue_id)],
+            "day_starts_at": ["2099-08-01T18:00", ""],
+        },
+    )
+    assert r.status_code == 422
+
+
 async def test_day_venue_tag_fk_sets_null_on_tag_delete(db):
     """A venue tag is shared taxonomy; deleting one must not delete the legs
     that referenced it (mirrors Tag.created_by's SET NULL reasoning)."""

@@ -33,6 +33,17 @@
       return el ? el.value.trim() : "";
     }
 
+    // The leg's venue is a VENUE tag now, so its display name is the selected
+    // option's text rather than a typed value. Index 0 is the "no venue"
+    // placeholder, which is not a label. Returns "" when the row has no
+    // picker at all -- import_preview.html still renders free-text legs and
+    // falls through to the day_city/day_venue fallbacks below.
+    function venueName(row) {
+      const sel = row.querySelector("[data-venue-select]");
+      if (!sel || sel.selectedIndex <= 0) return "";
+      return sel.options[sel.selectedIndex].textContent.trim();
+    }
+
     // Live legs only: a cancelled one gets no chip, exactly as the
     // server-rendered pass does.
     function legsInDom() {
@@ -42,6 +53,7 @@
           key: fieldValue(row, "day_key"),
           label:
             fieldValue(row, "day_label") ||
+            venueName(row) ||
             fieldValue(row, "day_city") ||
             fieldValue(row, "day_venue") ||
             "New leg",
@@ -131,7 +143,9 @@
       card.classList.toggle("cancelled", on);
       renderAllChips();
     });
-    // A leg's chip label follows whatever the editor is typing into it.
+    // A leg's chip label follows whatever the editor is typing into it -- and
+    // "change" as well as "input", for the venue <select>.
     days?.addEventListener("input", renderAllChips);
+    days?.addEventListener("change", renderAllChips);
   })();
 </script>
