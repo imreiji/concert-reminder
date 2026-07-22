@@ -2,10 +2,16 @@
 
 Test DBs are built from Base.metadata, so every constraint is named and the
 divergence from the live server (anonymous constraints on tables created by
-older migrations) is invisible to the rest of the suite. `concert_days` and
-`rounds` both predate the naming convention, so this fixture writes the real
-server DDL by hand and the batch rebuild is exercised the way production will
-exercise it.
+older migrations) is invisible to the rest of the suite. `rounds` was last
+rebuilt by `df44c9169cc7` without the naming convention, so it is still
+anonymous on the live server and this fixture writes its real DDL by hand.
+`concert_days` is modelled anonymous here too, but that is deliberately the
+STRICTER case rather than a faithful copy: `789bbcc95bc3` rebuilt that table
+in batch mode WITH `naming_convention=NAMING_CONVENTION`, which names
+anonymous constraints during reflection, so production's `concert_days` has
+most likely carried named constraints since that migration ran. Surviving
+the anonymous fixture implies surviving the named production shape too, so
+the harder case is the one worth testing.
 """
 
 import sqlite3
@@ -56,6 +62,7 @@ CREATE TABLE concert_days (
     FOREIGN KEY(venue_tag_id) REFERENCES tags (id) ON DELETE SET NULL
 );
 CREATE INDEX ix_concert_days_venue_tag_id ON concert_days (venue_tag_id);
+CREATE INDEX ix_concert_days_concert_id ON concert_days (concert_id);
 CREATE TABLE rounds (
     id INTEGER NOT NULL,
     concert_id INTEGER NOT NULL,
@@ -114,18 +121,37 @@ def legacy_db(tmp_path):
 def _run_upgrade(db_path, monkeypatch):
     """Point alembic at the scratch file and run the one migration.
 
-    env.py resolves the URL from app settings, so overriding the setting is
-    what actually guarantees the migration cannot touch the repo's app.db.
-    Pinned to MIGRATION_REVISION rather than "head" so a later revision does
-    not silently retarget this file.
+    alembic/env.py computes its URL from `settings.database_url` at import
+    time and never reads the Config we build here, so
+    `cfg.set_main_option("sqlalchemy.url", ...)` would be a no-op -- the
+    monkeypatch below is the ONLY thing that keeps this migration off the
+    repo's real app.db. Pinned to MIGRATION_REVISION rather than "head" so a
+    later revision does not silently retarget this file.
     """
     monkeypatch.setattr(
         settings, "database_url", f"sqlite+aiosqlite:///{Path(db_path).as_posix()}"
     )
     cfg = Config(str(REPO_ROOT / "alembic.ini"))
     cfg.set_main_option("script_location", str(REPO_ROOT / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{Path(db_path).as_posix()}")
     command.upgrade(cfg, MIGRATION_REVISION)
+
+
+def _run_downgrade(db_path, monkeypatch):
+    """Point alembic at the scratch file and downgrade past the migration.
+
+    Same trap as `_run_upgrade`: alembic/env.py reads `settings.database_url`
+    and ignores this Config's `sqlalchemy.url`, so the monkeypatch is what
+    actually aims the downgrade at the scratch file rather than the repo's
+    real app.db. This helper exists so that guarantee is local to the call
+    site instead of depending on a prior `_run_upgrade` call's monkeypatch
+    still being in effect for the rest of the test.
+    """
+    monkeypatch.setattr(
+        settings, "database_url", f"sqlite+aiosqlite:///{Path(db_path).as_posix()}"
+    )
+    cfg = Config(str(REPO_ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(REPO_ROOT / "alembic"))
+    command.downgrade(cfg, PRE_MIGRATION_REVISION)
 
 
 def test_label_variant_columns_land_on_legacy_shaped_tables(legacy_db, monkeypatch):
@@ -136,7 +162,10 @@ def test_label_variant_columns_land_on_legacy_shaped_tables(legacy_db, monkeypat
     round_cols = {row[1] for row in conn.execute("PRAGMA table_info(rounds)")}
     conn.close()
     assert {"label_en", "label_zh"} <= day_cols
-    assert {"label_en", "label_zh"} <= round_cols
+    assert "label_zh" in round_cols, "the migration must add rounds.label_zh"
+    assert "label_en" in round_cols, (
+        "the pre-existing rounds.label_en must survive the batch rebuild"
+    )
 
 
 def test_migration_preserves_rows_and_existing_english_labels(legacy_db, monkeypatch):
@@ -182,16 +211,14 @@ def test_rebuild_keeps_foreign_keys_and_indexes_intact(legacy_db, monkeypatch):
     assert day_fks["venue_tag_id"] == ("tags", "SET NULL")
     assert round_fks["concert_id"] == ("concerts", "CASCADE")
     assert "ix_concert_days_venue_tag_id" in day_indexes
+    assert "ix_concert_days_concert_id" in day_indexes
     assert "ix_rounds_concert_id" in round_indexes
     assert check == []
 
 
 def test_downgrade_removes_the_new_columns(legacy_db, monkeypatch):
     _run_upgrade(legacy_db, monkeypatch)
-    cfg = Config(str(REPO_ROOT / "alembic.ini"))
-    cfg.set_main_option("script_location", str(REPO_ROOT / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{Path(legacy_db).as_posix()}")
-    command.downgrade(cfg, PRE_MIGRATION_REVISION)
+    _run_downgrade(legacy_db, monkeypatch)
 
     conn = sqlite3.connect(legacy_db)
     day_cols = {row[1] for row in conn.execute("PRAGMA table_info(concert_days)")}
