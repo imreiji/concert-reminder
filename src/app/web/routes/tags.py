@@ -3,6 +3,7 @@
 Endpoints:
   GET  /tags                            tag directory (anyone signed in)
   POST /tags                            create tag                (editor)
+  POST /tags/venue/quick                create a VENUE tag, JSON  (editor)
   POST /tags/{id}/edit                  update location_url/region(editor)
   POST /tags/{id}/delete                delete tag everywhere     (editor)
   POST /tags/{id}/members               add member to a group     (editor)
@@ -128,6 +129,63 @@ async def create_tag(
     ))
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
+
+
+@router.post("/tags/venue/quick")
+async def quick_create_venue(
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+    name: str = Form(..., max_length=100),
+    name_en: str = Form(""),
+    name_zh: str = Form(""),
+    city: str = Form(""),
+    city_en: str = Form(""),
+    city_zh: str = Form(""),
+    region: str = Form(""),
+    address: str = Form(""),
+    location_url: str = Form(""),
+) -> dict:
+    """Create a VENUE tag without leaving the concert editor. Returns JSON so
+    the caller can select the new tag into the leg it was creating it for.
+
+    Deliberately NOT a second write path in any meaningful sense: it builds the
+    same Tag row `create_tag` above does, through the same
+    `find_tag_by_name_and_kind` duplicate check and the same `form_url`
+    boundary. It CREATES ONLY -- it never attaches anything to a concert. The
+    new venue reaches the concert's VENUE rollup the normal way, by being
+    selected into a leg and picked up by `sync_concert_venue_tags` when the
+    editor finally saves.
+
+    The duplicate answer is 422, not `create_tag`'s 409: this is a fetch() from
+    a dialog that reports the failure inline, and the dialog treats every
+    4xx/5xx the same way anyway -- one status for "the form was wrong" keeps
+    the client side honest.
+
+    Route path note: `/tags/venue/quick` cannot be swallowed by
+    `/tags/{tag_id}/...` -- those all carry a different literal third segment.
+    """
+    name = name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="a venue needs a name")
+    if await find_tag_by_name_and_kind(session, name, TagKind.VENUE) is not None:
+        raise HTTPException(status_code=422, detail=f"a venue named {name!r} already exists")
+    await ensure_user(session, user.id, user.username)
+    tag = Tag(
+        name=name,
+        name_en=name_en.strip() or None,
+        name_zh=name_zh.strip() or None,
+        kind=TagKind.VENUE,
+        city=city.strip() or None,
+        city_en=city_en.strip() or None,
+        city_zh=city_zh.strip() or None,
+        region=region.strip() or None,
+        address=address.strip() or None,
+        location_url=form_url(location_url),
+        created_by=user.id,
+    )
+    session.add(tag)
+    await session.commit()
+    return {"id": tag.id, "name": tag.name}
 
 
 @router.post("/tags/{tag_id}/edit")

@@ -117,6 +117,7 @@
           <option value="{{ v.id }}"{% if d.venue_tag_id == v.id %} selected{% endif %}>{{ loc(v, "name") }}</option>
           {% endfor %}
         </select>
+        <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
         <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"
           value="{{ jst(d.doors_at_utc).strftime('%Y-%m-%dT%H:%M') if d.doors_at_utc else '' }}"></label>
         <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required
@@ -201,6 +202,9 @@
 
   <button class="btn">{{ _("Save event") }}</button>
 </form>
+{#- Outside the form on purpose: the dialog's v_* inputs are read by
+    hand and must not ride along on the concert save. -#}
+{% include "_venue_create_dialog.html" %}
 {% include "_tag_picker_script.html" %}
 
 {#- Separated, and last: neither of these is an edit, and one of them is not
@@ -250,6 +254,7 @@
         <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
         {% endfor %}
       </select>
+      <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
       <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
       <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
     </div>

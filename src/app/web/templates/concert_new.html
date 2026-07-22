@@ -62,6 +62,7 @@
           <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
           {% endfor %}
         </select>
+        <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
         <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
         <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
       </div>
@@ -134,6 +135,9 @@
 
   <button class="btn">{{ _("Create event") }}</button>
 </form>
+{#- Outside the form on purpose: the dialog's v_* inputs are read by
+    hand and must not ride along on the concert save. -#}
+{% include "_venue_create_dialog.html" %}
 {% include "_tag_picker_script.html" %}
 
 <template id="day-row-template">
@@ -158,6 +162,7 @@
         <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
         {% endfor %}
       </select>
+      <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
       <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
       <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
     </div>

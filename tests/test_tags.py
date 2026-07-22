@@ -1599,3 +1599,94 @@ def test_retroactive_apply_styled_as_a_button(client):
     apply_link = gdlg[gdlg.index("<a ") : gdlg.index("</a>") + len("</a>")]
     assert 'href="/tags/1/members/2/retroactive-apply"' in apply_link
     assert "btn quiet" in apply_link.split(">", 1)[0]
+
+
+# ── Inline venue creation from the leg editor ────────────────────────────
+
+
+async def test_quick_venue_create_returns_the_new_tag(client):
+    login_as(client, EDITOR_ID, "reiji")
+    resp = client.post("/tags/venue/quick", data={
+        "name": "Zepp Haneda", "name_en": "Zepp Haneda", "name_zh": "Zepp 羽田",
+        "city": "東京", "city_en": "Tokyo", "city_zh": "东京",
+        "region": "Kanto", "address": "", "location_url": "",
+    })
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "Zepp Haneda"
+
+    async with client.db() as s:
+        tag = await s.get(Tag, body["id"])
+        assert tag.kind is TagKind.VENUE
+        assert tag.city_en == "Tokyo"
+        assert tag.city == "東京"
+        assert tag.region == "Kanto"
+
+
+async def test_quick_venue_create_rejects_a_duplicate_name(client):
+    login_as(client, EDITOR_ID, "reiji")
+    async with client.db() as s:
+        s.add(Tag(name="Zepp Haneda", kind=TagKind.VENUE))
+        await s.commit()
+
+    resp = client.post("/tags/venue/quick", data={
+        "name": "Zepp Haneda", "name_en": "Zepp Haneda", "name_zh": "Zepp 羽田",
+    })
+
+    assert resp.status_code == 422
+
+
+def test_quick_venue_create_rejects_an_unsafe_map_link(client):
+    """location_url lands in an href -- invariant 7 sends it through form_url."""
+    login_as(client, EDITOR_ID, "reiji")
+    resp = client.post("/tags/venue/quick", data={
+        "name": "Budokan", "location_url": "javascript:alert(1)",
+    })
+    assert resp.status_code == 422
+
+
+def test_quick_venue_create_requires_editor(client):
+    """Signed out is not an error -- require_editor's LoginRequired sends the
+    visitor to `/` (invariant 5), so this must not be a 403."""
+    resp = client.post("/tags/venue/quick", data={"name": "X"})
+    assert resp.status_code in (200, 303, 204)
+    assert "/tags/venue/quick" not in resp.headers.get("location", "")
+
+
+def test_quick_venue_create_is_403_for_a_signed_in_non_editor(client):
+    login_as(client, VIEWER_ID, "viewer")
+    assert client.post("/tags/venue/quick", data={"name": "X"}).status_code == 403
+
+
+def test_leg_editor_offers_inline_venue_creation(client):
+    """The editor should no longer dead-end at "go to the tags page"."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/concerts/new")
+    assert r.status_code == 200
+    assert "data-new-venue" in r.text
+    assert 'id="venue-create"' in r.text
+    # Error copy rides in data- attributes, never interpolated into an on*
+    # handler (invariant 7).
+    assert "data-err-duplicate=" in r.text
+    assert "confirm('" not in r.text.split('id="venue-create"')[1]
+
+
+def test_inline_venue_creation_leaves_blank_leg_rows_blank(client):
+    """The blank trailing leg row must still post an EMPTY day_venue_tag_id.
+    Two structural guarantees back that up, and both are cheap to break:
+    the cloned row's <select> carries no `selected`, and the dialog's script
+    assigns a value to exactly one <select> -- `opener`, the row whose own
+    button was clicked. (Measured in a browser harness too: appending an
+    <option> to a <select> whose placeholder is already selected does not
+    move the selection.)"""
+    login_as(client, EDITOR_ID, "reiji")
+    body = client.get("/concerts/new").text
+    tpl = body.split('<template id="day-row-template">')[1].split("</template>")[0]
+    venue_sel = tpl[tpl.index("<select name=\"day_venue_tag_id\"") : tpl.index("</select>")]
+    assert "selected" not in venue_sel
+
+    script = body.split('id="venue-create"')[1]
+    assert script.count("opener.value = tag.id") == 1
+    # the append loop touches the new <option>, never the <select>'s value
+    assert "sel.value" not in script
