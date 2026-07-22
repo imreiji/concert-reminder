@@ -92,8 +92,11 @@ def build_concert_with_deadlines(client, **extra_tags) -> None:
             "round_label": ["最速先行"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
-            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "round_label_en": [""],
+            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "day_label": ["Day 1"],
+            "day_label_en": [""],
+            "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             **extra_tags,
         },
@@ -696,7 +699,8 @@ async def test_snooze_rearms_with_deadline_cap(client):
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "round_label_en": [""],
+            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
     client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
@@ -760,7 +764,8 @@ async def test_snooze_reminder_accepts_custom_day_count(client):
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "round_label_en": [""],
+            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
     client.post("/concerts/c2/rules", data={"anchor": "closes", "days_before": 3})
@@ -786,7 +791,8 @@ async def test_snooze_reminder_default_days_matches_existing_behavior(client):
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "round_label_en": [""],
+            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
     client.post("/concerts/c3/rules", data={"anchor": "closes", "days_before": 3})

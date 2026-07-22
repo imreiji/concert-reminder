@@ -144,7 +144,8 @@ async def test_round_ics_downloads_valid_vevent_for_future_round(client):
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "round_label_en": [""],
+            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
     r = client.get("/rounds/1/ics")
@@ -172,7 +173,8 @@ async def test_past_round_has_no_ics_link_and_is_marked_past(client):
             "round_opens_at": ["", ""],
             "round_closes_at": ["2000-01-01T00:00", "2099-06-25T23:59"],
             "round_results_at": ["", ""], "round_payment_at": ["", ""],
-            "round_label_en": ["", ""], "round_url": ["", ""], "round_notes": ["", ""],
+            "round_label_en": ["", ""],
+            "round_label_zh": ["", ""], "round_url": ["", ""], "round_notes": ["", ""],
             "round_leg": ["", ""],
         },
     )
@@ -189,7 +191,9 @@ async def test_past_day_marked_past(client):
         "/concerts",
         data={
             "title": "C", "event_id": "c",
-            "day_label": ["Old day"], "day_starts_at": ["2000-01-01T00:00"],
+            "day_label": ["Old day"],
+            "day_label_en": [""],
+            "day_label_zh": [""], "day_starts_at": ["2000-01-01T00:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
         },
     )
@@ -214,7 +218,9 @@ async def test_leg_heading_links_to_its_venue_tag(client):
         "/concerts",
         data={
             "title": "C", "event_id": "c",
-            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_label": ["Day 1"],
+            "day_label_en": [""],
+            "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
             "day_venue_tag_id": ["1"], "day_doors_at": [""],
         },
     )

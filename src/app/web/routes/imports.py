@@ -213,6 +213,8 @@ async def import_commit(
     venue_tags: list[int] = Form(default=[]),
     day_key: list[str] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
+    day_label_en: list[str] = Form(default=[]),
+    day_label_zh: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
     day_city: list[str] = Form(default=[]),
     day_venue: list[str] = Form(default=[]),
@@ -222,6 +224,7 @@ async def import_commit(
     day_cancelled: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
     round_label_en: list[str] = Form(default=[]),
+    round_label_zh: list[str] = Form(default=[]),
     round_kind: list[RoundKind] = Form(default=[]),
     round_opens_at: list[str] = Form(default=[]),
     round_closes_at: list[str] = Form(default=[]),
@@ -272,6 +275,13 @@ async def import_commit(
     # strict zip below. Safe because they are non-binding display text: a
     # trailing row losing empty text is harmless.
     n_days = len(day_label)
+    # day_label_en/day_label_zh join that same end-padded group -- non-binding
+    # display text, and the minimal client above supplies neither. This is the
+    # rule round_label_en already follows in THIS route (and only here: the
+    # manual create/edit routes leave every label variant unpadded, because
+    # they have no minimal-client contract to honour).
+    day_label_en = day_label_en + [""] * (n_days - len(day_label_en))
+    day_label_zh = day_label_zh + [""] * (n_days - len(day_label_zh))
     day_city = day_city + [""] * (n_days - len(day_city))
     day_venue = day_venue + [""] * (n_days - len(day_venue))
     day_venue_address = day_venue_address + [""] * (n_days - len(day_venue_address))
@@ -301,10 +311,11 @@ async def import_commit(
     days: list = []
     key_rows: list[tuple[str, object]] = []
     for (
-        key, label, starts_at, city, venue, venue_address, doors_at, cancelled, v_tag
+        key, label, label_en, label_zh, starts_at, city, venue, venue_address,
+        doors_at, cancelled, v_tag
     ) in zip(
-        day_key, day_label, day_starts_at, day_city, day_venue, day_venue_address,
-        day_doors_at, day_cancelled, day_venue_tags, strict=True,
+        day_key, day_label, day_label_en, day_label_zh, day_starts_at, day_city, day_venue,
+        day_venue_address, day_doors_at, day_cancelled, day_venue_tags, strict=True,
     ):
         # v_tag is in the guard because the next phase drops the free-text
         # city/venue inputs: without it, a row where the editor picked ONLY a
@@ -313,7 +324,7 @@ async def import_commit(
             continue  # a blank trailing row from the repeatable UI -- key and all
         day = build_day(
             concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
-            v_tag,
+            v_tag, label_en, label_zh,
         )
         session.add(day)
         days.append(day)
@@ -335,12 +346,17 @@ async def import_commit(
     if not round_legs:
         round_legs = [""] * len(round_label)
     round_label_en = round_label_en + [""] * (len(round_label) - len(round_label_en))
+    # Same end-pad round_label_en gets, for the same reason: the minimal import
+    # contract posts only round_label plus its times.
+    round_label_zh = round_label_zh + [""] * (len(round_label) - len(round_label_zh))
     round_notes = round_notes + [""] * (len(round_label) - len(round_notes))
     for (
-        label, label_en, kind, opens_at, closes_at, results_at, payment_at, r_url, notes_, legs
+        label, label_en, label_zh, kind, opens_at, closes_at, results_at, payment_at,
+        r_url, notes_, legs
     ) in zip(
-        round_label, round_label_en, round_kind, round_opens_at, round_closes_at,
-        round_results_at, round_payment_at, round_url, round_notes, round_legs, strict=True,
+        round_label, round_label_en, round_label_zh, round_kind, round_opens_at,
+        round_closes_at, round_results_at, round_payment_at, round_url, round_notes,
+        round_legs, strict=True,
     ):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
@@ -348,7 +364,7 @@ async def import_commit(
         session.add(build_round(
             concert.id, label, kind, opens_at, closes_at, results_at, payment_at, r_url,
             applies_to=parse_round_legs(legs, valid_day_ids, key_to_day_id),
-            label_en=label_en, notes=notes_,
+            label_en=label_en, notes=notes_, label_zh=label_zh,
         ))
 
     await session.flush()
