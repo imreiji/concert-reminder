@@ -140,7 +140,9 @@ def test_skip_all_still_lands_on_index(client):
 
 async def test_step_0_subscribe_form_returns_to_welcome(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
     login_as(client, FAN_ID, "fan")
     r = client.post("/subscriptions", data={"tag_id": 1, "next": "/welcome"})
     assert r.headers["location"] == "/welcome"

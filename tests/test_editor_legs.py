@@ -1045,7 +1045,7 @@ async def test_editor_round_trips_label_variants(client, db):
     await make_editor(db)
     login(client)
 
-    resp = client.post("/concerts", data={
+    resp = client.post("/concerts", data={"title_en": "T", "title_zh": "T",
         "title": "T", "event_id": "lv1",
         "day_label": ["2日目"], "day_label_en": ["Day 2"], "day_label_zh": ["第二天"],
         "day_starts_at": ["2026-08-01T18:00"], "day_venue_tag_id": [""],

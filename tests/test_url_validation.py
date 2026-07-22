@@ -135,12 +135,12 @@ def login_as(client, discord_id: int, name: str):
 
 def concert_form(**overrides):
     data = {
-        "title": "C", "event_id": "c",
+        "title": "C", "title_en": "C", "title_zh": "C", "event_id": "c",
         "round_label": ["R1"], "round_kind": ["lottery_round"],
         "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
         "round_results_at": [""], "round_payment_at": [""],
-        "round_label_en": [""],
-        "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+        "round_label_en": ["R1"],
+        "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
     }
     data.update(overrides)
     return data
@@ -180,7 +180,7 @@ async def test_edit_concert_rejects_javascript_url_and_keeps_original(client, db
 
 async def test_create_tag_rejects_javascript_location_url(client, db):
     login_as(client, EDITOR_ID, "reiji")
-    r = client.post("/tags", data={
+    r = client.post("/tags", data={"name_en": "Budokan", "name_zh": "Budokan",
         "name": "Budokan", "kind": "venue", "location_url": "javascript:alert(1)",
     })
     assert r.status_code == 422
@@ -190,7 +190,7 @@ async def test_create_tag_rejects_javascript_location_url(client, db):
 
 async def test_edit_tag_rejects_javascript_location_url_and_keeps_original(client, db):
     login_as(client, EDITOR_ID, "reiji")
-    assert client.post("/tags", data={
+    assert client.post("/tags", data={"name_en": "Budokan", "name_zh": "Budokan",
         "name": "Budokan", "kind": "venue", "location_url": "https://maps.example/budokan",
     }).status_code == 303
     async with db() as s:

@@ -72,7 +72,7 @@ from app.domain.timezones import jst_to_utc
 from app.domain.types import Anchor, ConcertKind, LotteryOutcome, RoundKind, TagKind
 from app.i18n import get_locale, loc_field
 from app.web.auth import SessionUser, require_editor, require_user
-from app.web.forms import form_url
+from app.web.forms import form_url, require_variants
 
 router = APIRouter()
 
@@ -684,7 +684,16 @@ async def create_concert(
     brand-new here (no id until the flush), so its row carries a client-side
     `day_key` that the round's `round_legs` value references, resolved to real
     ids through key_to_day_id after the days flush. The old single-value
-    `round_leg` <select> could only ever store one leg of a multi-leg round."""
+    `round_leg` <select> could only ever store one leg of a multi-leg round.
+
+    Translation variants are enforced HERE and never on the edit route: a new
+    record has no legacy to be trapped by, while most existing rows predate
+    the rule and their editor must stay able to save them."""
+    # Checked before anything is written, so a rejected submit persists
+    # nothing. Rows the loops below skip as blank are checked inside those
+    # loops instead -- a trailing empty row is not a missing translation.
+    require_variants("Title", title, title_en, title_zh, mandatory=True)
+    require_variants("Notes", notes, notes_en, notes_zh)
     concert = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
         kind=ConcertKind(kind) if kind else None,
@@ -745,18 +754,22 @@ async def create_concert(
     # same tuple so a key can never be paired with another row's day; the ids
     # are filled in after the flush below.
     key_rows: list[tuple[str, ConcertDay]] = []
-    for (
+    for row_no, (
         key, label, label_en, label_zh, starts_at, city, venue, venue_address,
         doors_at, cancelled, v_tag
-    ) in zip(
+    ) in enumerate(zip(
         day_key, day_label, day_label_en, day_label_zh, day_starts_at, day_city, day_venue,
         day_venue_address, day_doors_at, day_cancelled, day_venue_tags, strict=True,
-    ):
+    ), start=1):
         # v_tag is in the guard because the next phase drops the free-text
         # city/venue inputs: without it, a row where the editor picked ONLY a
         # venue would read as blank and be silently dropped.
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip(), v_tag]):
             continue  # blank trailing row from the repeatable UI -- key and all
+        # Numbered from the submitted row order (blank rows included), so an
+        # editor with six legs is told WHICH one to fix rather than that
+        # something, somewhere, is half-translated.
+        require_variants(f"Leg {row_no} label", label, label_en, label_zh)
         day = build_day(
             concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
             v_tag, label_en, label_zh,
@@ -787,17 +800,18 @@ async def create_concert(
     # below hands the new rounds their ids -- the same post-flush ordering
     # edit_concert uses so a same-submit qualifier reference resolves.
     qual_jobs: list[tuple[Round, RoundKind, str]] = []
-    for (
+    for row_no, (
         label, label_en, label_zh, kind_, opens_at, closes_at, results_at, payment_at, url,
         notes_, legs, quals
-    ) in zip(
+    ) in enumerate(zip(
         round_label, round_label_en, round_label_zh, round_kind, round_opens_at,
         round_closes_at, round_results_at, round_payment_at, round_url, round_notes,
         round_legs, round_qualifiers, strict=True,
-    ):
+    ), start=1):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue
+        require_variants(f"Round {row_no} label", label, label_en, label_zh)
         round_ = build_round(
             concert.id, label, kind_, opens_at, closes_at, results_at, payment_at, url,
             applies_to=parse_round_legs(legs, valid_day_ids, key_to_day_id),

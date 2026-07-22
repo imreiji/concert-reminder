@@ -87,16 +87,17 @@ def build_concert_with_deadlines(client, **extra_tags) -> None:
     no more separate add_round/add_day calls."""
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "Hasunosora 6th", "title_zh": "Hasunosora 6th",
             "title": "Hasunosora 6th", "event_id": "hasunosora-6th",
             "round_label": ["最速先行"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": [""],
-            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "round_label_en": ["最速先行"],
+            "round_label_zh": ["最速先行"], "round_url": [""], "round_notes": [""],
+            "round_leg": [""],
             "day_label": ["Day 1"],
-            "day_label_en": [""],
-            "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+            "day_label_en": ["Day 1"],
+            "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
             **extra_tags,
         },
@@ -168,8 +169,12 @@ async def test_new_tagged_event_auto_applies_and_notifies(client):
     fan's reminders exist and a DM notice is queued — untouched by the fan."""
     # editor creates the tag universe first
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "group"})
-    client.post("/tags", data={"name": "Kozue", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name_en": "Kozue", "name_zh": "Kozue", "name": "Kozue", "kind": "artist",
+    })
     client.post("/tags/1/members", data={"member_tag_id": 2})
 
     # fan sets up: preset + subscription to the ARTIST with notify+preset
@@ -195,11 +200,16 @@ async def test_new_tagged_event_auto_applies_and_notifies(client):
 
 async def test_subscriber_without_preset_gets_notification_only(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
     login_as(client, FAN_ID, "fan")
     client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "Gakumas 3rd", "event_id": "gakumas-3rd"})
+    client.post("/concerts", data={
+        "title_en": "Gakumas 3rd", "title_zh": "Gakumas 3rd", "title": "Gakumas 3rd",
+        "event_id": "gakumas-3rd",
+    })
     await attach_tag_to_concert(client, 1, 1)
 
     assert [r for r in await _all(client.db, ReminderRule) if r.user_id == FAN_ID] == []
@@ -209,7 +219,9 @@ async def test_subscriber_without_preset_gets_notification_only(client):
 
 async def test_subscribe_default_redirect_is_unchanged(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
     login_as(client, FAN_ID, "fan")
     r = client.post("/subscriptions", data={"tag_id": 1})
     assert r.headers["location"] == "/preferences"
@@ -217,7 +229,9 @@ async def test_subscribe_default_redirect_is_unchanged(client):
 
 async def test_subscribe_honors_next_param(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
     login_as(client, FAN_ID, "fan")
     r = client.post("/subscriptions", data={"tag_id": 1, "next": "/welcome"})
     assert r.headers["location"] == "/welcome"
@@ -225,7 +239,9 @@ async def test_subscribe_honors_next_param(client):
 
 async def test_subscribe_rejects_an_unrecognized_next_value(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Gakumas", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
     login_as(client, FAN_ID, "fan")
     r = client.post("/subscriptions", data={"tag_id": 1, "next": "https://evil.example"})
     assert r.headers["location"] == "/preferences"
@@ -246,8 +262,12 @@ async def test_set_timezone_honors_next_param(client):
 async def test_user_with_existing_rules_is_skipped(client):
     """Second matching tag on the same concert must not double-apply or re-notify."""
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
-    client.post("/tags", data={"name": "Kozue", "kind": "artist"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
+    client.post("/tags", data={
+        "name_en": "Kozue", "name_zh": "Kozue", "name": "Kozue", "kind": "artist",
+    })
     login_as(client, FAN_ID, "fan")
     build_standard_preset(client)
     client.post("/subscriptions", data={"tag_id": 1, "preset_id": 1, "notify": "true"})
@@ -267,11 +287,15 @@ async def test_scheduler_delivers_notifications(client):
     from app.scheduler.loop import tick
 
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
     login_as(client, FAN_ID, "fan")
     client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "6th", "event_id": "6th"})
+    client.post("/concerts", data={
+        "title_en": "6th", "title_zh": "6th", "title": "6th", "event_id": "6th",
+    })
     await attach_tag_to_concert(client, 1, 1)
 
     sent = []
@@ -303,7 +327,10 @@ async def test_scheduler_delivers_leg_cancelled_notice_with_reinstate_button(cli
     from app.scheduler.loop import tick
 
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "Cancelled Tour", "event_id": "cancelled-tour"})
+    client.post("/concerts", data={
+        "title_en": "Cancelled Tour", "title_zh": "Cancelled Tour", "title": "Cancelled Tour",
+        "event_id": "cancelled-tour",
+    })
     login_as(client, FAN_ID, "fan")  # creates the User row the Notification FK needs
     async with client.db() as s:
         concert = (await s.execute(select(Concert))).scalar_one()
@@ -694,13 +721,13 @@ async def test_snooze_rearms_with_deadline_cap(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "C", "title_zh": "C",
             "title": "C", "event_id": "c",
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": [""],
-            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "round_label_en": ["R1"],
+            "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
     client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
@@ -759,13 +786,13 @@ async def test_snooze_reminder_accepts_custom_day_count(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "C2", "title_zh": "C2",
             "title": "C2", "event_id": "c2",
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": [""],
-            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "round_label_en": ["R1"],
+            "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
     client.post("/concerts/c2/rules", data={"anchor": "closes", "days_before": 3})
@@ -786,13 +813,13 @@ async def test_snooze_reminder_default_days_matches_existing_behavior(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "C3", "title_zh": "C3",
             "title": "C3", "event_id": "c3",
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": [""],
-            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "round_label_en": ["R1"],
+            "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
     client.post("/concerts/c3/rules", data={"anchor": "closes", "days_before": 3})
@@ -837,11 +864,15 @@ async def test_snooze_reminder_custom_days_still_capped_at_deadline(client):
 
 async def test_notifications_carry_structured_payload(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
     login_as(client, FAN_ID, "fan")
     client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "6th", "event_id": "6th"})
+    client.post("/concerts", data={
+        "title_en": "6th", "title_zh": "6th", "title": "6th", "event_id": "6th",
+    })
     await attach_tag_to_concert(client, 1, 1)
 
     (note,) = await _all(client.db, Notification)

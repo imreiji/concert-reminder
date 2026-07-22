@@ -308,9 +308,9 @@ async def test_forgetting_a_phrase_leaves_the_rounds_that_used_it(editor_client,
     side effect, same as the wiring tests below), forget that phrase, then
     assert the Round row -- not just the phrase table -- still has all three
     label values untouched."""
-    create_resp = editor_client.post("/concerts", data={
+    create_resp = editor_client.post("/concerts", data={"title_en": "T", "title_zh": "T",
         "title": "T", "event_id": "phforget",
-        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
         "day_doors_at": [""], "day_cancelled": ["false"],
         "round_label": ["1次先行抽選"], "round_label_en": ["1st-round lottery"],
@@ -353,9 +353,9 @@ async def test_forget_requires_an_editor(client):
 
 
 async def test_saving_a_concert_records_its_round_phrases(editor_client, db):
-    resp = editor_client.post("/concerts", data={
+    resp = editor_client.post("/concerts", data={"title_en": "T", "title_zh": "T",
         "title": "T", "event_id": "ph1",
-        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
         "day_doors_at": [""], "day_cancelled": ["false"],
         "round_label": ["1次先行抽選"], "round_label_en": ["1st-round lottery"],
@@ -375,20 +375,40 @@ async def test_saving_a_concert_records_its_round_phrases(editor_client, db):
 
 
 async def test_a_round_saved_in_japanese_only_records_nothing(editor_client, db):
-    """The common case today. It must not litter the picker with unusable
-    partial suggestions."""
-    resp = editor_client.post("/concerts", data={
-        "title": "T", "event_id": "ph2",
-        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+    """A partial triple must not litter the picker with unusable suggestions.
+
+    Rewritten for the create-boundary variant rule: this used to save the
+    Japanese-only round through POST /concerts, which now 422s (see
+    tests/test_variant_enforcement.py). The EDIT route is deliberately left
+    open so legacy records stay editable, so that is the surface a partial
+    triple can still arrive through -- and the point being pinned is
+    unchanged, since the guard belongs to the recorder, not to the create
+    route's validation.
+    """
+    assert editor_client.post("/concerts", data={
+        "title": "T", "title_en": "T", "title_zh": "T", "event_id": "ph2",
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
         "day_doors_at": [""], "day_cancelled": ["false"],
+    }).status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        day_id = (await session.execute(select(ConcertDay))).scalar_one().id
+
+    edit_resp = editor_client.post("/concerts/ph2/edit", data={
+        "title": "T", "event_id": "ph2",
+        "day_id": [str(day_id)],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "round_id": [""],
         "round_label": ["1次先行抽選"], "round_label_en": [""], "round_label_zh": [""],
         "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
         "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
         "round_url": [""], "round_notes": [""], "round_legs": [""],
         "round_qualifiers": [""],
     })
-    assert resp.status_code in (200, 303)
+    assert edit_resp.status_code in (200, 303)
 
     async with editor_client.db() as session:
         assert (await session.execute(select(RoundLabelPhrase))).scalars().all() == []
@@ -398,31 +418,49 @@ async def test_editing_an_existing_round_records_its_phrase(editor_client):
     """The edit route's UPDATE branch (apply_round_fields, for a round id
     the submit already carries) is a separate call site from create's
     build_round -- covered here since it is the one most likely to be
-    missed."""
+    missed.
+
+    The Japanese-only round this starts from is now planted through the EDIT
+    route rather than through create, which rejects a half-translated label
+    (see tests/test_variant_enforcement.py). That is exactly the shape of the
+    legacy rows this update branch exists to fix up.
+    """
     create_resp = editor_client.post("/concerts", data={
-        "title": "T", "event_id": "ph3",
-        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "title": "T", "title_en": "T", "title_zh": "T", "event_id": "ph3",
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
         "day_doors_at": [""], "day_cancelled": ["false"],
+    })
+    assert create_resp.status_code in (200, 303)
+
+    async with editor_client.db() as session:
+        day_id = (await session.execute(select(ConcertDay))).scalar_one().id
+
+    plant = editor_client.post("/concerts/ph3/edit", data={
+        "title": "T", "event_id": "ph3",
+        "day_id": [str(day_id)],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
+        "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "round_id": [""],
         "round_label": ["1次先行抽選"], "round_label_en": [""], "round_label_zh": [""],
         "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
         "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
         "round_url": [""], "round_notes": [""], "round_legs": [""],
         "round_qualifiers": [""],
     })
-    assert create_resp.status_code in (200, 303)
+    assert plant.status_code in (200, 303)
 
     async with editor_client.db() as session:
         round_id = (await session.execute(select(Round))).scalar_one().id
-        day_id = (await session.execute(select(ConcertDay))).scalar_one().id
-        # Nothing recorded yet -- the create above only filled the Japanese
-        # label, matching the common-case test above.
+        # Nothing recorded yet -- the round planted above has only its
+        # Japanese label, matching the common-case test above.
         assert (await session.execute(select(RoundLabelPhrase))).scalars().all() == []
 
     edit_resp = editor_client.post("/concerts/ph3/edit", data={
         "title": "T", "event_id": "ph3",
         "day_id": [str(day_id)],
-        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
         "day_doors_at": [""], "day_cancelled": ["false"],
         "round_id": [str(round_id)],
@@ -448,9 +486,9 @@ async def test_adding_a_round_via_edit_records_its_phrase(editor_client):
     """The edit route's INSERT branch (build_round, for a round with no id
     in the submit -- a newly added row on an existing concert) is the fourth
     call site."""
-    create_resp = editor_client.post("/concerts", data={
+    create_resp = editor_client.post("/concerts", data={"title_en": "T", "title_zh": "T",
         "title": "T", "event_id": "ph4",
-        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
         "day_doors_at": [""], "day_cancelled": ["false"],
     })
@@ -462,7 +500,7 @@ async def test_adding_a_round_via_edit_records_its_phrase(editor_client):
     edit_resp = editor_client.post("/concerts/ph4/edit", data={
         "title": "T", "event_id": "ph4",
         "day_id": [str(day_id)],
-        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
         "day_doors_at": [""], "day_cancelled": ["false"],
         "round_id": [""],
@@ -487,7 +525,7 @@ async def test_import_commit_records_its_round_phrase(editor_client):
     same way and must run the same recording."""
     resp = editor_client.post("/concerts/import/commit", data={
         "title": "Imported Show",
-        "day_label": ["Day 1"],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-08-01T18:00"],
         "round_label": ["1次先行抽選"], "round_label_en": ["1st-round lottery"],
         "round_label_zh": ["第一轮先行"],
@@ -569,12 +607,13 @@ async def test_the_edit_page_offers_the_picker_on_saved_and_blank_rows(editor_cl
     """The opener has to reach BOTH round-row shapes on this page -- the
     pre-filled loop row and the blank <template> -- or it silently goes
     missing on whichever half the editor happens to use."""
-    resp = editor_client.post("/concerts", data={
+    resp = editor_client.post("/concerts", data={"title_en": "T", "title_zh": "T",
         "title": "T", "event_id": "ph5",
-        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
         "day_doors_at": [""], "day_cancelled": ["false"],
-        "round_label": ["1次先行抽選"], "round_label_en": [""], "round_label_zh": [""],
+        "round_label": ["1次先行抽選"], "round_label_en": ["1st-round lottery"],
+        "round_label_zh": ["第一轮先行"],
         "round_kind": ["lottery_round"], "round_closes_at": ["2026-08-01T18:00"],
         "round_opens_at": [""], "round_results_at": [""], "round_payment_at": [""],
         "round_url": [""], "round_notes": [""], "round_legs": [""],
@@ -655,9 +694,9 @@ async def test_the_phrase_dialog_sits_outside_the_form_on_every_page(
 
     assert_dialog_after_concert_form(editor_client.get("/concerts/new").text)
 
-    create_resp = editor_client.post("/concerts", data={
+    create_resp = editor_client.post("/concerts", data={"title_en": "T", "title_zh": "T",
         "title": "T", "event_id": "ph6",
-        "day_label": ["Day 1"], "day_label_en": [""], "day_label_zh": [""],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
         "day_starts_at": ["2026-09-01T18:00"], "day_venue_tag_id": [""],
         "day_doors_at": [""], "day_cancelled": ["false"],
     })

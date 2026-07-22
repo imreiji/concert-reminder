@@ -34,7 +34,7 @@ from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import ConcertKind, RoundKind
 from app.web.auth import SessionUser, require_editor
-from app.web.forms import form_url
+from app.web.forms import form_url, require_variants
 from app.web.routes.concerts import (
     all_venue_tags,
     build_day,
@@ -332,18 +332,21 @@ async def import_commit(
     # filled in after the flush below.
     days: list = []
     key_rows: list[tuple[str, object]] = []
-    for (
+    for row_no, (
         key, label, label_en, label_zh, starts_at, city, venue, venue_address,
         doors_at, cancelled, v_tag
-    ) in zip(
+    ) in enumerate(zip(
         day_key, day_label, day_label_en, day_label_zh, day_starts_at, day_city, day_venue,
         day_venue_address, day_doors_at, day_cancelled, day_venue_tags, strict=True,
-    ):
+    ), start=1):
         # v_tag is in the guard because the next phase drops the free-text
         # city/venue inputs: without it, a row where the editor picked ONLY a
         # venue would read as blank and be silently dropped.
         if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip(), v_tag]):
             continue  # a blank trailing row from the repeatable UI -- key and all
+        # Same create-boundary rule create_concert applies, with the same row
+        # numbering: an import is a create, so its labels are held to it too.
+        require_variants(f"Leg {row_no} label", label, label_en, label_zh)
         day = build_day(
             concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
             v_tag, label_en, label_zh,
@@ -372,17 +375,18 @@ async def import_commit(
     # contract posts only round_label plus its times.
     round_label_zh = round_label_zh + [""] * (len(round_label) - len(round_label_zh))
     round_notes = round_notes + [""] * (len(round_label) - len(round_notes))
-    for (
+    for row_no, (
         label, label_en, label_zh, kind, opens_at, closes_at, results_at, payment_at,
         r_url, notes_, legs
-    ) in zip(
+    ) in enumerate(zip(
         round_label, round_label_en, round_label_zh, round_kind, round_opens_at,
         round_closes_at, round_results_at, round_payment_at, round_url, round_notes,
         round_legs, strict=True,
-    ):
+    ), start=1):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue  # a blank trailing row from the repeatable UI
+        require_variants(f"Round {row_no} label", label, label_en, label_zh)
         session.add(build_round(
             concert.id, label, kind, opens_at, closes_at, results_at, payment_at, r_url,
             applies_to=parse_round_legs(legs, valid_day_ids, key_to_day_id),

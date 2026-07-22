@@ -181,7 +181,9 @@ async def test_deleting_an_unknown_user_is_a_no_op(session):
 
 async def test_concert_detail_renders_with_an_anonymised_audit_row(client):
     login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={"title": "C", "event_id": "c", "organizer": "Old"})
+    client.post("/concerts", data={
+        "title_en": "C", "title_zh": "C", "title": "C", "event_id": "c", "organizer": "Old",
+    })
     client.post("/concerts/c/edit", data={"title": "C", "event_id": "c", "organizer": "New"})
 
     async with client.db() as s:

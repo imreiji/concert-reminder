@@ -34,7 +34,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web.auth import SessionUser, require_editor, require_user
-from app.web.forms import form_url
+from app.web.forms import form_url, require_variants
 
 router = APIRouter()
 
@@ -106,6 +106,12 @@ async def create_tag(
     eventernote_url: str = Form(""),
 ):
     name = name.strip()
+    # A tag name cannot render at all without a value, so it is mandatory in
+    # all three -- checked here, at the create boundary only: edit_tag below
+    # stays open so the pre-i18n tags already in the DB remain editable.
+    # (This form has no city inputs; the VENUE city rule lives in
+    # quick_create_venue, the only route that collects one on create.)
+    require_variants("Tag name", name, name_en, name_zh, mandatory=True)
     # Kind-scoped duplicate rule (resolved with the owner): block only a tag of
     # the same name AND same kind; same name across kinds is allowed and the
     # dialog warns about it client-side. Rename keeps its name-only collision.
@@ -169,6 +175,11 @@ async def quick_create_venue(
     name = name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="a venue needs a name")
+    # The other half of create_tag's rule, plus the city: a venue is the one
+    # tag that carries one, and it is all-or-nothing rather than mandatory --
+    # a venue with no city recorded at all is a normal, complete row.
+    require_variants("Venue name", name, name_en, name_zh, mandatory=True)
+    require_variants("Venue city", city, city_en, city_zh)
     if await find_tag_by_name_and_kind(session, name, TagKind.VENUE) is not None:
         raise HTTPException(status_code=409, detail=f"a venue named {name!r} already exists")
     await ensure_user(session, user.id, user.username)

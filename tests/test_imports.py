@@ -237,6 +237,9 @@ async def test_commit_creates_concert_days_and_rounds(client):
     r = client.post(
         "/concerts/import/commit",
         data={
+            "round_label_zh": ["Day 1 Lottery", "Day 2 Lottery"],
+            "round_label_en": ["Day 1 Lottery", "Day 2 Lottery"],
+            "day_label_zh": ["Day 1", "Day 2"], "day_label_en": ["Day 1", "Day 2"],
             "title": "Hasunosora 103rd Class Graduation Concert",
             "day_label": ["Day 1", "Day 2"],
             "day_starts_at": ["2027-01-23T17:00", "2027-01-24T15:30"],
@@ -272,6 +275,8 @@ async def test_commit_binds_a_round_to_multiple_legs(client):
     r = client.post(
         "/concerts/import/commit",
         data={
+            "round_label_zh": ["Nationwide lottery"], "round_label_en": ["Nationwide lottery"],
+            "day_label_zh": ["Osaka", "Tokyo"], "day_label_en": ["Osaka", "Tokyo"],
             "title": "Two Leg Tour",
             "day_key": ["d0", "d1"],
             "day_label": ["Osaka", "Tokyo"],
@@ -302,7 +307,8 @@ async def test_commit_round_with_no_legs_is_all_legs(client):
     r = client.post(
         "/concerts/import/commit",
         data={
-            "title": "Whole Event Round",
+            "round_label_zh": ["Fan club presale"], "round_label_en": ["Fan club presale"],
+            "day_label_zh": ["Day 1"], "day_label_en": ["Day 1"], "title": "Whole Event Round",
             "day_key": ["d0"],
             "day_label": ["Day 1"],
             "day_starts_at": ["2027-01-23T17:00"],
@@ -515,7 +521,8 @@ async def test_commit_with_venue_tag_rolls_up_to_concert_venue_tags(client):
     r = client.post(
         "/concerts/import/commit",
         data={
-            "title": "Budokan Show",
+            "round_label_zh": ["Lottery"], "round_label_en": ["Lottery"], "day_label_zh": ["Day 1"],
+            "day_label_en": ["Day 1"], "title": "Budokan Show",
             "day_key": ["d0"],
             "day_label": ["Day 1"],
             "day_starts_at": ["2027-01-23T17:00"],
@@ -553,6 +560,8 @@ async def test_commit_without_any_venue_tag_field_still_works(client):
     r = client.post(
         "/concerts/import/commit",
         data={
+            "round_label_zh": ["Lottery"], "round_label_en": ["Lottery"],
+            "day_label_zh": ["Day 1", "Day 2"], "day_label_en": ["Day 1", "Day 2"],
             "title": "No Venue Show",
             "day_label": ["Day 1", "Day 2"],
             "day_starts_at": ["2027-01-23T17:00", "2027-01-24T15:30"],

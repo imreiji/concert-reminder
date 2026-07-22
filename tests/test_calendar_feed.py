@@ -78,13 +78,13 @@ def generate_feed_token(client) -> str:
 def create_round_with_rule(client, closes_at: str, event_id: str = "c") -> None:
     client.post(
         "/concerts",
-        data={
+        data={"title_en": "C", "title_zh": "C",
             "title": "C", "event_id": event_id,
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": [closes_at],
             "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": [""],
-            "round_label_zh": [""], "round_url": [""], "round_notes": [""], "round_leg": [""],
+            "round_label_en": ["R1"],
+            "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
     client.post(f"/concerts/{event_id}/rules", data={"anchor": "closes", "days_before": 3})
