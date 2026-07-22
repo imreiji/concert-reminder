@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, Round
+from app.db.models import Base, Concert, ConcertDay, ConcertTag, Round, Tag, TagKind
 from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
@@ -486,3 +486,168 @@ async def test_fetch_ramen_html_aborts_oversized_response(monkeypatch):
             "https://ramen.events/big-page/", transport=httpx.MockTransport(handler)
         )
     assert exc_info.value.status_code == 502
+
+
+# ── Per-leg venue picker ─────────────────────────────────────────────────
+#
+# The import path used to emit free-text venue only, so every imported
+# concert landed with venue_tag_id NULL on every leg -- and since a
+# concert's VENUE tags are DERIVED from its legs (sync_concert_venue_tags),
+# the rollup computed an empty set and the concert showed no venue anywhere
+# and was invisible to Discover's region filter. These cover the picker that
+# closes that gap.
+
+
+async def _venue_tag(db, name: str, **kw) -> int:
+    async with db() as s:
+        tag = Tag(name=name, kind=TagKind.VENUE, **kw)
+        s.add(tag)
+        await s.commit()
+        return tag.id
+
+
+async def test_commit_with_venue_tag_rolls_up_to_concert_venue_tags(client):
+    """The actual bug, end to end: a leg carrying a VENUE tag must produce a
+    concert-level VENUE tag via sync_concert_venue_tags."""
+    login_as(client, EDITOR_ID, "reiji")
+    venue_id = await _venue_tag(client.db, "Nippon Budokan", region="Kanto")
+
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "Budokan Show",
+            "day_key": ["d0"],
+            "day_label": ["Day 1"],
+            "day_starts_at": ["2027-01-23T17:00"],
+            "day_venue_tag_id": [str(venue_id)],
+            "round_label": ["Lottery"],
+            "round_kind": ["lottery_round"],
+            "round_opens_at": ["2026-10-14T12:00"],
+            "round_closes_at": ["2026-11-08T23:59"],
+            "round_results_at": [""],
+            "round_payment_at": [""],
+            "round_url": [""],
+        },
+    )
+    assert r.status_code == 303
+
+    days = await _all(client.db, ConcertDay)
+    assert [d.venue_tag_id for d in days] == [venue_id]
+
+    async with client.db() as s:
+        concert = (await s.execute(select(Concert))).scalars().one()
+        rows = list(
+            (
+                await s.execute(
+                    select(ConcertTag).where(ConcertTag.concert_id == concert.id)
+                )
+            ).scalars()
+        )
+    assert venue_id in {row.tag_id for row in rows}
+
+
+async def test_commit_without_any_venue_tag_field_still_works(client):
+    """The minimal-client contract: a submitter that omits day_venue_tag_id
+    ENTIRELY is padded to blanks, not 422'd by the strict zip."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "No Venue Show",
+            "day_label": ["Day 1", "Day 2"],
+            "day_starts_at": ["2027-01-23T17:00", "2027-01-24T15:30"],
+            "round_label": ["Lottery"],
+            "round_kind": ["lottery_round"],
+            "round_opens_at": ["2026-10-14T12:00"],
+            "round_closes_at": ["2026-11-08T23:59"],
+            "round_results_at": [""],
+            "round_payment_at": [""],
+            "round_url": [""],
+        },
+    )
+    assert r.status_code == 303
+    days = await _all(client.db, ConcertDay)
+    assert [d.venue_tag_id for d in days] == [None, None]
+
+
+async def test_preview_renders_a_venue_select_on_leg_and_template_rows(client):
+    login_as(client, EDITOR_ID, "reiji")
+    await _venue_tag(client.db, "Nippon Budokan")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    body = client.post("/concerts/import/preview", data={"url": GRADUATION_URL}).text
+
+    # One select per parsed leg AND one in the blank-row <template>.
+    assert body.count('name="day_venue_tag_id"') >= 2
+    assert "data-venue-select" in body
+    assert "data-new-venue" in body
+    # The inline create dialog rides along so a missing venue can be minted.
+    assert 'id="venue-create"' in body
+    # Never value="0" -- resolve_day_venue_tags 422s on it.
+    assert 'value="0"' not in body
+
+
+async def test_preview_preselects_a_matching_venue_tag(client):
+    login_as(client, EDITOR_ID, "reiji")
+    venue_id = await _venue_tag(client.db, "Nippon Budokan")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    body = client.post("/concerts/import/preview", data={"url": GRADUATION_URL}).text
+
+    assert f'value="{venue_id}" selected' in body
+
+
+async def test_preview_blank_template_row_never_preselects_a_venue(client):
+    """A cloned trailing row carrying a venue but no start time reaches
+    validation and 422s -- the template's select must stay on "" ."""
+    login_as(client, EDITOR_ID, "reiji")
+    venue_id = await _venue_tag(client.db, "Nippon Budokan")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    body = client.post("/concerts/import/preview", data={"url": GRADUATION_URL}).text
+
+    template = body.split('<template id="day-row-template">', 1)[1].split("</template>", 1)[0]
+    assert f'value="{venue_id}" selected' not in template
+    assert 'value=""' in template
+
+
+async def test_preview_without_a_matching_tag_leaves_select_empty_and_hints(client):
+    login_as(client, EDITOR_ID, "reiji")
+    await _venue_tag(client.db, "Saitama Super Arena")
+    mock_fetch(client, load("ramen_graduation_concert.html"))
+    body = client.post("/concerts/import/preview", data={"url": GRADUATION_URL}).text
+
+    assert "selected" not in body.split('name="day_venue_tag_id"', 1)[1].split("</select>", 1)[0]
+    # The scraped name still reaches the editor: the hint plus the free text.
+    assert "Nippon Budokan" in body
+
+
+@pytest.mark.parametrize(
+    "tag_name, scraped",
+    [
+        ("Nippon Budokan", "nippon budokan"),
+        ("Nippon Budokan", "  Nippon Budokan  "),
+        ("日本武道館", "　日本武道館　"),  # U+3000 ideographic space
+        ("日本武道館", "日本武道館　"),
+    ],
+)
+async def test_venue_match_is_case_and_whitespace_insensitive(db, tag_name, scraped):
+    """Trimming must handle U+3000, not just U+0020 -- venue text pasted from
+    Japanese sites carries it, and that exact mismatch bit the earlier
+    migration."""
+    from app.db.service import match_venue_tag_id
+
+    async with db() as s:
+        s.add(Tag(name=tag_name, kind=TagKind.VENUE))
+        await s.commit()
+        tags = list((await s.execute(select(Tag))).scalars())
+    assert match_venue_tag_id(scraped, tags) is not None
+
+
+async def test_venue_match_returns_none_when_nothing_matches(db):
+    from app.db.service import match_venue_tag_id
+
+    async with db() as s:
+        s.add(Tag(name="Nippon Budokan", kind=TagKind.VENUE))
+        await s.commit()
+        tags = list((await s.execute(select(Tag))).scalars())
+    assert match_venue_tag_id("Saitama Super Arena", tags) is None
+    assert match_venue_tag_id(None, tags) is None
+    assert match_venue_tag_id("   ", tags) is None

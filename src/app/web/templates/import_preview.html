@@ -69,7 +69,6 @@
           <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
         <label class="vfld"><span class="vfld-tag">中文</span>
           <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
-        <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}">
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="false">
           <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
@@ -78,12 +77,40 @@
         <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
       </div>
       <div class="eleg-fields">
-        <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}">
-        <input name="day_venue_address" maxlength="300" placeholder="{{ _('Venue address') }}">
+        {#- Same picker both editor pages carry, with one import-only twist:
+            when the scraped venue name matches an existing VENUE tag by
+            trimmed, case-insensitive name, that tag is PRE-SELECTED
+            (matched_venue_tag_id, resolved server-side in the route). A
+            derived match, not a copied value -- which is why it pre-fills
+            here even though round_label_en deliberately does not.
+
+            The blank option MUST stay first and valued "" for the no-match
+            case: the leg blank-row guard counts a venue pick, so a row
+            carrying a venue but no start time is not blank any more and
+            would 422 the whole commit. Never value="0" -- that reaches
+            resolve_day_venue_tags as an invalid id. -#}
+        <select name="day_venue_tag_id" data-venue-select>
+          <option value="">{{ _("No venue yet") }}</option>
+          {% for v in venue_tags %}
+          <option value="{{ v.id }}"{% if matched_venue_tag_id == v.id %} selected{% endif %}>{{ loc(v, "name") }}</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
+        {#- The free-text venue survives HERE and nowhere else in the app.
+            Both editor pages dropped theirs because nothing writes into them;
+            import is the one path that SCRAPES a venue name, and a name with
+            no tag yet would otherwise be lost between the parse and the save.
+            `day_city`/`day_venue_address` are gone, though: the parse fills
+            neither, and a venue tag already carries both. -#}
+        <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}"
+               value="{{ venue_hint or '' }}">
         <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
         <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required
           value="{{ fmt(d.starts_at_jst) }}"></label>
       </div>
+      {% if venue_hint and not matched_venue_tag_id %}
+      <p class="dim tiny">{% trans venue=venue_hint %}No venue tag matches “{{ venue }}” yet — add it with + New venue.{% endtrans %}</p>
+      {% endif %}
     </div>
     {% else %}
     <p class="dim tiny" data-no-legs-row>{{ _("No days parsed — add the first one below.") }}</p>
@@ -164,15 +191,18 @@
     <summary>{{ _("Tags") }}
       <span class="fold-hint">{{ _("Franchise, group, artists, venue — parsed, editable") }}</span></summary>
     <div class="fold-body">
-      {#- No venue_hint is set any more: the partial's venue row is gone,
-          because a concert's VENUE tags are derived from its legs. The
-          parsed venue reaches the leg cards above instead. -#}
+      {#- No venue row here: a concert's VENUE tags are DERIVED from its legs
+          (sync_concert_venue_tags), so the parsed venue is picked on the leg
+          cards above and rolls up from there. -#}
       {% include "_tag_picker_fields.html" %}
     </div>
   </details>
 
   <button class="btn">{{ _("Create concert") }}</button>
 </form>
+{#- Outside the form on purpose: the dialog's v_* inputs are read by hand
+    and must not post on the commit. Same placement concert_new.html uses. -#}
+{% include "_venue_create_dialog.html" %}
 {% include "_tag_picker_script.html" %}
 
 <template id="day-row-template">
@@ -185,7 +215,6 @@
         <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
       <label class="vfld"><span class="vfld-tag">中文</span>
         <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"></label>
-      <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}">
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
         <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
@@ -194,8 +223,16 @@
       <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
     </div>
     <div class="eleg-fields">
+      {#- A cloned row starts blank, venue included -- see the note on the
+          parsed leg row above for why a pre-selection here would 422. -#}
+      <select name="day_venue_tag_id" data-venue-select>
+        <option value="">{{ _("No venue yet") }}</option>
+        {% for v in venue_tags %}
+        <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
       <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}">
-      <input name="day_venue_address" maxlength="300" placeholder="{{ _('Venue address') }}">
       <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
       <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
     </div>
