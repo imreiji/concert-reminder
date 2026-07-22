@@ -164,10 +164,23 @@ async def add_member_to_group_later(db, group_id, name):
         await s.commit()
 
 
-async def add_day(db, concert_id, label, *, days_ahead=60, venue=None, cancelled=False):
+async def add_venue_tag(db, name, **kw):
+    """A VENUE tag on its own, NOT attached to any concert -- a leg points at
+    one through ConcertDay.venue_tag_id, which is independent of the concert's
+    own tag list."""
+    async with db() as s:
+        t = Tag(name=name, kind=TagKind.VENUE, **kw)
+        s.add(t)
+        await s.commit()
+        return t.id
+
+
+async def add_day(db, concert_id, label, *, days_ahead=60, venue=None, cancelled=False,
+                  venue_tag_id=None):
     async with db() as s:
         d = ConcertDay(
             concert_id=concert_id, label=label, venue=venue, cancelled=cancelled,
+            venue_tag_id=venue_tag_id,
             starts_at_utc=datetime.now(UTC) + timedelta(days=days_ahead),
             doors_at_utc=datetime.now(UTC) + timedelta(days=days_ahead, hours=-1),
         )
@@ -362,8 +375,10 @@ async def test_the_header_carries_no_date_range_and_no_single_venue(client):
     """A tour's legs disagree with any single header summary, so there is no
     header summary."""
     cid = await seed_concert(client.db, venue="Header Venue")
-    await add_day(client.db, cid, "Osaka", days_ahead=30, venue="Osaka-jo Hall")
-    await add_day(client.db, cid, "Tokyo", days_ahead=31, venue="Tokyo Dome")
+    osaka = await add_venue_tag(client.db, "Osaka-jo Hall")
+    tokyo = await add_venue_tag(client.db, "Tokyo Dome")
+    await add_day(client.db, cid, "Osaka", days_ahead=30, venue_tag_id=osaka)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31, venue_tag_id=tokyo)
     login(client)
 
     body = client.get("/concerts/np").text
@@ -379,13 +394,81 @@ async def test_a_two_venue_concert_renders_two_different_venues(client):
     """The reason the header venue had to go: on a tour the legs disagree
     with any single summary, so each leg carries its own."""
     cid = await seed_concert(client.db)
-    await add_day(client.db, cid, "Osaka", days_ahead=30, venue="Osaka-jo Hall")
-    await add_day(client.db, cid, "Tokyo", days_ahead=31, venue="Tokyo Dome")
+    osaka = await add_venue_tag(client.db, "Osaka-jo Hall")
+    tokyo = await add_venue_tag(client.db, "Tokyo Dome")
+    await add_day(client.db, cid, "Osaka", days_ahead=30, venue_tag_id=osaka)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31, venue_tag_id=tokyo)
     login(client)
 
     body = client.get("/concerts/np").text
     assert "Osaka-jo Hall" in body
     assert "Tokyo Dome" in body
+
+
+async def test_a_leg_venue_renders_from_its_tag_in_each_locale(client):
+    """The leg's venue is a real VENUE tag now, so one entry renders in three
+    languages -- `loc()` off the tag, not the leg's free text."""
+    cid = await seed_concert(client.db)
+    vid = await add_venue_tag(
+        client.db, "Kアリーナ横浜", name_en="K Arena Yokohama", name_zh="K竞技场横滨",
+        city="横浜", city_en="Yokohama", city_zh="横滨",
+    )
+    await add_day(client.db, cid, "Day 1", days_ahead=30, venue_tag_id=vid)
+    login(client)
+
+    client.cookies.set("lang", "en")
+    en = client.get("/concerts/np").text
+    assert "K Arena Yokohama" in en
+    assert "Yokohama" in en
+    assert "Kアリーナ横浜" not in en
+
+    client.cookies.set("lang", "zh")
+    zh = client.get("/concerts/np").text
+    assert "K竞技场横滨" in zh
+    assert "K Arena Yokohama" not in zh
+
+    client.cookies.set("lang", "ja")
+    ja = client.get("/concerts/np").text
+    assert "Kアリーナ横浜" in ja
+    assert "横浜" in ja
+
+
+async def test_changing_a_legs_venue_tag_changes_what_the_page_renders(client):
+    """The stale-render bug this task closes: the page used to resolve the
+    venue from the leg's FREE TEXT by name. Combined with the preserve-on-empty
+    rule (an edit save no longer nulls day.venue), re-pointing a leg at a new
+    venue tag left the OLD name on screen with no UI path to correct it -- a
+    confidently wrong venue, not a missing one. The stale free text is left in
+    place here deliberately, because that is the live shape."""
+    cid = await seed_concert(client.db)
+    old = await add_venue_tag(client.db, "Osaka-jo Hall")
+    new = await add_venue_tag(client.db, "Tokyo Dome")
+    day_id = await add_day(
+        client.db, cid, "Day 1", days_ahead=30, venue="Osaka-jo Hall", venue_tag_id=old
+    )
+    login(client)
+    assert "Osaka-jo Hall" in client.get("/concerts/np").text
+
+    async with client.db() as s:
+        day = await s.get(ConcertDay, day_id)
+        day.venue_tag_id = new
+        await s.commit()
+
+    body = client.get("/concerts/np").text
+    assert "Tokyo Dome" in body
+    assert "Osaka-jo Hall" not in body
+
+
+async def test_a_leg_venue_does_not_lazy_load(client):
+    """ConcertDay.venue_tag is lazy="raise" on purpose: a lazy load during
+    async rendering is a MissingGreenlet 500, which this project has shipped
+    once. A missing eager load fails loudly here instead of in production."""
+    cid = await seed_concert(client.db)
+    vid = await add_venue_tag(client.db, "Zepp Haneda")
+    await add_day(client.db, cid, "Day 1", days_ahead=30, venue_tag_id=vid)
+    login(client)
+
+    assert client.get("/concerts/np").status_code == 200
 
 
 async def test_a_cancelled_leg_is_dimmed_but_keeps_its_own_date_and_rounds(client):

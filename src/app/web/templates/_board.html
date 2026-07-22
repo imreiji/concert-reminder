@@ -59,6 +59,14 @@
       {% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
       {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
       {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
+      {#- The venue line reads the concert's VENUE TAGS first: they are
+          derived from its legs by sync_concert_venue_tags, while
+          `Concert.venue` is the legacy free-text column every new concert
+          leaves NULL. Same collapse rule as a Discover tile -- more than one
+          venue is "Multiple". `concert.tags` is already eager-loaded by
+          board_cards, so this costs no query. -#}
+      {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
+      {% set venue_text = _("Multiple") if cv | length > 1 else ((cv | map("loc_name") | join(", ")) or loc(card.concert, "venue")) %}
       {#- A franchise alone is not an eyebrow: it only ever qualifies a group,
           so there is nothing to show without one. -#}
       {% if cg or ca %}
@@ -71,8 +79,8 @@
       <span class="title">{{ loc(card.concert, "title") }}</span>
       {% set live_days = card.concert.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
       <span class="venue">
-        {%- if card.concert.venue %}📍 {{ loc(card.concert, "venue") }}{% endif -%}
-        {%- if card.concert.venue and live_days %} · {% endif -%}
+        {%- if venue_text %}📍 {{ venue_text }}{% endif -%}
+        {%- if venue_text and live_days %} · {% endif -%}
         {%- if live_days %}{{ day_month(live_days[0].starts_at_utc) }}{% endif -%}
       </span>
       {% if card.rungs %}

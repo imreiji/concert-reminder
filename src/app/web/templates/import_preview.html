@@ -155,7 +155,9 @@
     <summary>{{ _("Tags") }}
       <span class="fold-hint">{{ _("Franchise, group, artists, venue — parsed, editable") }}</span></summary>
     <div class="fold-body">
-      {% set venue_hint = parsed.venue_name %}
+      {#- No venue_hint is set any more: the partial's venue row is gone,
+          because a concert's VENUE tags are derived from its legs. The
+          parsed venue reaches the leg cards above instead. -#}
       {% include "_tag_picker_fields.html" %}
     </div>
   </details>

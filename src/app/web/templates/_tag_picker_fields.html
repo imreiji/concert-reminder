@@ -1,6 +1,15 @@
-{#- Tag-picker form fields: franchise/group/artist/venue chip rows.
+{#- Tag-picker form fields: franchise/group/artist chip rows.
     Include INSIDE a <form id="new-concert">; pair with _tag_picker_script.html
-    right after the form closes. Caller provides by_kind. -#}
+    right after the form closes. Caller provides by_kind.
+
+    There is deliberately NO venue row. A concert's VENUE tags are DERIVED
+    from its legs by sync_concert_venue_tags, which is their sole writer --
+    a picker here was a second, contradicting write path whose result the
+    rollup overwrote in the same request. Pick a venue on the leg instead
+    (the per-leg <select name="day_venue_tag_id"> in concert_new.html /
+    concert_edit.html). All three includers of this partial -- concert_new,
+    concert_edit and import_preview -- are concert forms, so none of them
+    wants one. -#}
 <label>{{ _("Franchises") }}</label>
 <div class="pickrow"><span class="taglist" id="sel-franchise"></span>
   <button type="button" class="chip add" onclick="openPicker('franchise')">{{ _("+ Add franchise") }}</button></div>
@@ -13,7 +22,4 @@
 <div class="pickrow"><span class="taglist" id="sel-artist"></span>
   <button type="button" class="chip add" onclick="openPicker('artist')">{{ _("+ Add artist") }}</button></div>
 
-<label>{{ _("Venues") }}{% if venue_hint %} <span class="dim tiny">{% trans venue=venue_hint %}(suggested: {{ venue }}){% endtrans %}</span>{% endif %}</label>
-<div class="pickrow"><span class="taglist" id="sel-venue"></span>
-  <button type="button" class="chip add" onclick="openPicker('venue')">{{ _("+ Add venue") }}</button></div>
 <p class="dim tiny">{% trans %}Missing a tag? Create it on the <a href="/tags">tags page</a> first — concerts are tag-driven.{% endtrans %}</p>

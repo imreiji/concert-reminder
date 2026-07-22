@@ -644,6 +644,72 @@ async def test_export_yaml_shape(client):
     assert data["rounds"][0]["apply_opens_jst"] == "2099-06-10 00:00"
 
 
+async def test_export_yaml_reads_venue_from_the_tag(client):
+    """A leg's venue is a VENUE tag now, and the editor's free-text venue
+    inputs are gone -- so an export still reading d.city/d.venue/
+    d.venue_address would silently emit nulls for every newly entered
+    concert. The export uses the tag's CANONICAL columns, not loc(): an
+    export is data, not a viewer-facing render."""
+    import yaml
+
+    from app.db.models import Tag
+    from app.domain.types import TagKind
+
+    login_as(client, EDITOR_ID, "reiji")
+    async with client.db() as s:
+        tag = Tag(
+            name="K Arena Yokohama", name_en="K Arena EN", kind=TagKind.VENUE,
+            city="Yokohama", city_en="Yokohama EN", address="Yokohama, Japan",
+        )
+        s.add(tag)
+        await s.commit()
+        venue_tag_id = tag.id
+
+    client.post(
+        "/concerts",
+        data={
+            "title": "Venue Export", "event_id": "venue-export", "kind": "concert",
+            "day_key": ["new-a"],
+            "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_venue_tag_id": [str(venue_tag_id)], "day_doors_at": [""],
+        },
+    )
+
+    r = client.get("/concerts/venue-export/export.yaml")
+    assert r.status_code == 200
+    day = yaml.safe_load(r.text)["performances"][0]
+    assert day["venue"] == "K Arena Yokohama"
+    assert day["city"] == "Yokohama"
+    assert day["venue_address"] == "Yokohama, Japan"
+
+
+async def test_edit_page_renders_a_blank_label_legs_venue_chip(client):
+    """The leg chip's label chain is `label or venue tag name or date`, so
+    d.venue_tag is only ever evaluated for a leg with NO label -- which makes
+    this the one render that actually exercises the eager load.
+    ConcertDay.venue_tag is lazy="raise", so a missing one is a
+    MissingGreenlet 500 here, not a quiet fallback."""
+    from app.db.models import Tag
+    from app.domain.types import TagKind
+
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={"title": "C", "event_id": "chip"})
+    async with client.db() as s:
+        tag = Tag(name="Zepp Haneda", kind=TagKind.VENUE)
+        s.add(tag)
+        concert = (await s.execute(select(Concert).where(Concert.event_id == "chip"))).scalar_one()
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=concert.id, label="", venue_tag_id=tag.id,
+            starts_at_utc=datetime(2099, 8, 1, 9, tzinfo=UTC),
+        ))
+        await s.commit()
+
+    r = client.get("/concerts/chip/edit")
+    assert r.status_code == 200
+    assert "Zepp Haneda" in r.text  # the chip fell back to the venue tag's name
+
+
 # ── The rich /concerts/new page and its all-in-one POST /concerts ────────
 
 
@@ -961,7 +1027,10 @@ def test_nav_add_link_shown_only_to_editors(client):
 # ── Duplicate concert as template ────────────────────────────────────────
 
 
-async def test_duplicate_clones_scalars_and_tags_but_not_days_or_rounds(client):
+async def test_duplicate_clones_scalars_and_tags_but_not_days_rounds_or_venues(client):
+    """The clone carries the scalars and the source's already-pruned
+    franchise/group/artist tags, but not its days, rounds, or VENUE tags:
+    a venue is derived from the legs, and a clone has none."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Hasunosora", "kind": "franchise"})
     client.post("/tags", data={"name": "K Arena", "kind": "venue"})
@@ -973,6 +1042,10 @@ async def test_duplicate_clones_scalars_and_tags_but_not_days_or_rounds(client):
             "franchise_tags": ["1"], "venue_tags": ["2"],
             "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
             "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            # The venue now lives on the leg: the concert's VENUE tags are
+            # rolled up from its legs, so a concert-level venue_tags value no
+            # leg backs would be derived straight back off again.
+            "day_venue_tag_id": ["2"],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": [""],
@@ -996,7 +1069,11 @@ async def test_duplicate_clones_scalars_and_tags_but_not_days_or_rounds(client):
     assert clone.kind.value == "concert"
     assert clone.organizer == "LustQueen"
     assert clone.categories == "concert, tour"
-    assert {t.name for t in clone.tags} == {"Hasunosora", "K Arena"}
+    # The source's VENUE tag stays behind: it is derived from legs the clone
+    # does not have. Keeping it would contradict the empty leg set from birth,
+    # and the editor's first save (duplicate lands on /edit) would strip it.
+    assert {t.name for t in clone.tags} == {"Hasunosora"}
+    assert clone.venue is None
     assert clone.days == []
     assert clone.rounds == []
 

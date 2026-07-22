@@ -44,7 +44,6 @@
       <input type="hidden" name="day_key" value="new-first">
       <div class="eleg-top">
         <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}">
-        <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}">
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="false">
           <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
@@ -53,8 +52,17 @@
         <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
       </div>
       <div class="eleg-fields">
-        <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}">
-        <input name="day_venue_address" maxlength="300" placeholder="{{ _('Venue address') }}">
+        {#- The blank first option MUST stay first and valued "": a leg row
+            carrying a venue but no start time is not blank any more, so a
+            pre-selected venue on an untouched trailing row would 422 the
+            whole save. See _leg_chips_script.html's addRow(). -#}
+        <select name="day_venue_tag_id" data-venue-select>
+          <option value="">{{ _("No venue yet") }}</option>
+          {% for v in venue_tags %}
+          <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
         <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
         <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
       </div>
@@ -127,6 +135,9 @@
 
   <button class="btn">{{ _("Create event") }}</button>
 </form>
+{#- Outside the form on purpose: the dialog's v_* inputs are read by
+    hand and must not ride along on the concert save. -#}
+{% include "_venue_create_dialog.html" %}
 {% include "_tag_picker_script.html" %}
 
 <template id="day-row-template">
@@ -135,7 +146,6 @@
     <input type="hidden" name="day_key" value="">
     <div class="eleg-top">
       <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}">
-      <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}">
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
         <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
@@ -144,8 +154,15 @@
       <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
     </div>
     <div class="eleg-fields">
-      <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}">
-      <input name="day_venue_address" maxlength="300" placeholder="{{ _('Venue address') }}">
+      {#- Cloned rows start blank, venue included -- see the note on the first
+          leg row above. -#}
+      <select name="day_venue_tag_id" data-venue-select>
+        <option value="">{{ _("No venue yet") }}</option>
+        {% for v in venue_tags %}
+        <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
       <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
       <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
     </div>

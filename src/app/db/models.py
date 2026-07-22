@@ -241,6 +241,14 @@ class Tag(Base):
     # of one-by-one ("Kanto", "Kansai", etc.)
     location_url: Mapped[str | None] = mapped_column(String(500))
     region: Mapped[str | None] = mapped_column(String(100))
+    # VENUE-specific: the city this venue sits in, finer-grained than `region`
+    # ("Yokohama" inside "Kanto"). Carries locale variants because a city name
+    # is user-facing text; `address` does not, because its job is to be pasted
+    # into a map and location_url already covers the maps link.
+    city: Mapped[str | None] = mapped_column(String(100))
+    city_en: Mapped[str | None] = mapped_column(String(100))
+    city_zh: Mapped[str | None] = mapped_column(String(100))
+    address: Mapped[str | None] = mapped_column(String(300))
     # ARTIST/GROUP-specific (harmless if unset on other kinds): an
     # eventernote.com link, mirroring location_url for venues so performer
     # chips can link out.
@@ -298,6 +306,16 @@ class ConcertDay(Base):
     city: Mapped[str | None] = mapped_column(String(100))  # leg/city, e.g. "Kanagawa"
     venue: Mapped[str | None] = mapped_column(String(200))  # per-day venue (tours change cities)
     venue_address: Mapped[str | None] = mapped_column(String(300))
+    # The structured venue, and the ONLY one anything reads for display. It
+    # replaces the free-text `venue` above, which the concert page used to
+    # resolve against VENUE tags by case-insensitive name match -- this is
+    # that same link made real, and made authoritative: matching by name left
+    # a re-pointed leg rendering its previous venue forever.
+    # SET NULL rather than CASCADE: a venue tag is shared
+    # taxonomy, and deleting one must never take performances down with it.
+    venue_tag_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tags.id", ondelete="SET NULL"), index=True
+    )
     doors_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     starts_at_utc: Mapped[datetime] = mapped_column(UTCDateTime)
     # A cancelled leg is never deleted (its rounds' applies_to would dangle --
@@ -309,6 +327,10 @@ class ConcertDay(Base):
     cancelled: Mapped[bool] = mapped_column(default=False, server_default="0")
 
     concert: Mapped[Concert] = relationship(back_populates="days")
+    # Always eager-load this before handing a day to a template -- a lazy load
+    # during async rendering raises MissingGreenlet (a 500). See
+    # concerts.py's concert_rounds_context.
+    venue_tag: Mapped["Tag | None"] = relationship(lazy="raise")
 
 
 class Round(Base):

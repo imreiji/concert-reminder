@@ -991,8 +991,12 @@ def test_index_search_matches_franchise_tag_name(client):
 def test_index_search_matches_venue_tag_name(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
+    # The venue is entered on the leg; the concert's VENUE tags are rolled up
+    # from its legs, so a legless concert would carry none.
     client.post("/concerts", data={
         "title": "Some Show", "event_id": "some-show", "venue_tags": [1],
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     filtered = client.get("/discover?q=yokohama").text
     tile = filtered[filtered.index('<a class="tile"'):]
@@ -1030,8 +1034,11 @@ async def test_index_search_ignores_free_text_venue_when_venue_tag_exists(client
     search is silently broken."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})
+    # Venue on the leg -- see test_index_search_matches_venue_tag_name.
     client.post("/concerts", data={
         "title": "Some Show", "event_id": "some-show", "venue_tags": [1],
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
     })
     async with client.db() as s:
         from app.db.models import Concert as ConcertModel
@@ -1148,6 +1155,9 @@ async def test_creation_form_respects_explicit_artist_selection(client):
     r = client.post("/concerts", data={
         "title": "6th Live", "event_id": "6th-live", "franchise_tags": [1], "group_tags": [2],
         "artist_tags": [3], "venue_tags": [5],
+        # The venue reaches the concert by rolling up from the leg now.
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["5"],
     })
     assert r.status_code == 303
 
@@ -1155,7 +1165,9 @@ async def test_creation_form_respects_explicit_artist_selection(client):
         ids = await tag_ids_on(s, 1)
         assert ids == {1, 2, 3, 5}  # franchise+group+Kozue+venue; NO Kaho
         c = (await s.execute(select(Concert))).scalar_one()
-        assert c.franchise == "LoveLive" and c.venue == "Yokohama Arena"
+        # Concert.venue is no longer written at creation -- the venue is the
+        # leg's, surfaced through the rolled-up VENUE tag asserted above.
+        assert c.franchise == "LoveLive"
 
 
 def test_creation_rejects_wrong_kind_tags(client):
@@ -1194,18 +1206,55 @@ async def test_creation_supports_multiple_groups_and_franchises(client):
         c = (await s.execute(select(Concert))).scalar_one()
         assert c.franchise == "LoveLive, Idolmaster"
 
-async def test_multiple_venues_attach_and_join(client):
-    """Tour legs: two venues on one event; display string joins, tiles say Multiple."""
+async def test_multiple_venues_roll_up_from_legs(client):
+    """Tour legs: two venues on one event. Both VENUE tags reach the concert
+    by rolling up from the legs, Concert.venue stays None (the join string is
+    gone -- the tags are the truth), and the tile says "Multiple"."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={"name": "Yokohama Arena", "kind": "venue"})   # 1
     client.post("/tags", data={"name": "K-Arena", "kind": "venue"})          # 2
-    r = client.post("/concerts", data={"title": "Tour", "event_id": "tour", "venue_tags": [1, 2]})
+    # One leg per venue -- the two VENUE tags reach the concert by rolling up
+    # from the legs, which is what a tour actually looks like.
+    r = client.post("/concerts", data={
+        "title": "Tour", "event_id": "tour", "venue_tags": [1, 2],
+        "day_label": ["Day 1", "Day 2"],
+        "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
+        "day_doors_at": ["", ""], "day_venue_tag_id": ["1", "2"],
+    })
     assert r.status_code == 303
     async with client.db() as s:
         assert await tag_ids_on(s, 1) == {1, 2}
-        c = (await s.execute(select(Concert))).scalar_one()
-        assert c.venue == "Yokohama Arena, K-Arena"
+        c = (await s.execute(select(Concert).where(Concert.event_id == "tour"))).scalar_one()
+        # Pins the new contract: create_concert_row no longer writes a join
+        # string; the venue lives in the rolled-up VENUE tags above.
+        assert c.venue is None
     assert "Multiple" in client.get("/discover").text  # tile shows Multiple, not the join
+
+
+async def test_venue_tag_subscriber_is_notified_when_a_leg_names_it(client):
+    """VENUE tags are subscribable, so rolling one up from a leg must go
+    through the same notify-and-apply pipeline a concert-level attach does --
+    a direct ConcertTag insert would silently drop the DM notice (invariant 4).
+    """
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})  # 1
+
+    login_as(client, VIEWER_ID, "viewer")
+    client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
+    login_as(client, EDITOR_ID, "reiji")
+
+    r = client.post("/concerts", data={
+        "title": "Zepp Show", "event_id": "zepp-show",
+        "day_label": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
+    })
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        from app.db.models import Notification
+
+        notes = (await s.execute(select(Notification))).scalars().all()
+        assert any(n.user_id == VIEWER_ID for n in notes)
 
 
 async def test_index_hides_concert_whose_only_leg_is_cancelled(client):
@@ -1550,3 +1599,141 @@ def test_retroactive_apply_styled_as_a_button(client):
     apply_link = gdlg[gdlg.index("<a ") : gdlg.index("</a>") + len("</a>")]
     assert 'href="/tags/1/members/2/retroactive-apply"' in apply_link
     assert "btn quiet" in apply_link.split(">", 1)[0]
+
+
+# ── Inline venue creation from the leg editor ────────────────────────────
+
+
+async def test_quick_venue_create_returns_the_new_tag(client):
+    login_as(client, EDITOR_ID, "reiji")
+    resp = client.post("/tags/venue/quick", data={
+        "name": "Zepp Haneda", "name_en": "Zepp Haneda", "name_zh": "Zepp 羽田",
+        "city": "東京", "city_en": "Tokyo", "city_zh": "东京",
+        "region": "Kanto", "address": "", "location_url": "",
+    })
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "Zepp Haneda"
+
+    async with client.db() as s:
+        tag = await s.get(Tag, body["id"])
+        assert tag.kind is TagKind.VENUE
+        assert tag.city_en == "Tokyo"
+        assert tag.city == "東京"
+        assert tag.region == "Kanto"
+
+
+async def test_quick_venue_create_rejects_a_duplicate_name(client):
+    login_as(client, EDITOR_ID, "reiji")
+    async with client.db() as s:
+        s.add(Tag(name="Zepp Haneda", kind=TagKind.VENUE))
+        await s.commit()
+
+    resp = client.post("/tags/venue/quick", data={
+        "name": "Zepp Haneda", "name_en": "Zepp Haneda", "name_zh": "Zepp 羽田",
+    })
+
+    # Matches create_tag's duplicate answer in this same module (409) -- the
+    # dialog's JS maps 409 -> "already exists" and anything else -> a generic
+    # error, so a name collision must be distinguishable from every other
+    # 4xx the endpoint can raise (blank name, an unsafe location_url, a
+    # name over max_length).
+    assert resp.status_code == 409
+
+
+def test_quick_venue_create_rejects_an_unsafe_map_link(client):
+    """location_url lands in an href -- invariant 7 sends it through form_url.
+    Must stay 422, NOT 409 -- 409 is reserved for the duplicate-name case so
+    the client can tell the two apart."""
+    login_as(client, EDITOR_ID, "reiji")
+    resp = client.post("/tags/venue/quick", data={
+        "name": "Budokan", "location_url": "javascript:alert(1)",
+    })
+    assert resp.status_code == 422
+    assert resp.status_code != 409
+
+
+def test_quick_venue_create_requires_editor(client):
+    """Signed out is not an error -- require_editor's LoginRequired sends the
+    visitor to `/` (invariant 5), so this must not be a 403."""
+    resp = client.post("/tags/venue/quick", data={"name": "X"})
+    assert resp.status_code in (200, 303, 204)
+    assert "/tags/venue/quick" not in resp.headers.get("location", "")
+
+
+def test_quick_venue_create_is_403_for_a_signed_in_non_editor(client):
+    login_as(client, VIEWER_ID, "viewer")
+    assert client.post("/tags/venue/quick", data={"name": "X"}).status_code == 403
+
+
+def test_leg_editor_offers_inline_venue_creation(client):
+    """The editor should no longer dead-end at "go to the tags page"."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/concerts/new")
+    assert r.status_code == 200
+    assert "data-new-venue" in r.text
+    assert 'id="venue-create"' in r.text
+    # Error copy rides in data- attributes, never interpolated into an on*
+    # handler (invariant 7). This feature never uses confirm(), so a bare
+    # "confirm(' not in ..." check guards nothing -- assert the actual
+    # invariant instead: the dialog's markup carries NO inline on* handler
+    # at all (onclick, onchange, onsubmit, ...), since the browser HTML-
+    # decodes an attribute before parsing it as JS and Jinja's escaping
+    # can't protect one that holds user- or translator-supplied text.
+    assert "data-err-duplicate=" in r.text
+    dialog_start = r.text.index('id="venue-create"')
+    dialog_html = r.text[dialog_start : r.text.index("</dialog>", dialog_start)]
+    assert not re.search(r"\son\w+\s*=", dialog_html), dialog_html
+    # The error paragraph must be announced to screen readers on a failed
+    # save, not just shown visually.
+    assert 'data-venue-err hidden role="alert"' in dialog_html
+    # Closing via ×/backdrop/Esc must reset state too, not just a successful
+    # save -- one "close" listener covers all three paths plus dlg.close()
+    # on success.
+    script_html = r.text[r.text.index("</dialog>", dialog_start) :]
+    assert 'dlg.addEventListener("close"' in script_html
+
+
+def test_inline_venue_creation_leaves_blank_leg_rows_blank(client):
+    """The blank trailing leg row must still post an EMPTY day_venue_tag_id.
+    Two structural guarantees back that up, and both are cheap to break:
+    the cloned row's <select> carries no `selected`, and the dialog's script
+    assigns a value to exactly one <select> -- `opener`, the row whose own
+    button was clicked. (Measured in a browser harness too: appending an
+    <option> to a <select> whose placeholder is already selected does not
+    move the selection.)"""
+    login_as(client, EDITOR_ID, "reiji")
+    # A real venue tag is required for the ordering assertion below to mean
+    # anything -- with zero venue tags the placeholder is the loop's ONLY
+    # <option> regardless of where it sits in the template source, so
+    # reordering it would go undetected.
+    client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})
+
+    body = client.get("/concerts/new").text
+    tpl = body.split('<template id="day-row-template">')[1].split("</template>")[0]
+    venue_sel = tpl[tpl.index("<select name=\"day_venue_tag_id\"") : tpl.index("</select>")]
+    assert "selected" not in venue_sel
+
+    # The "no selected attribute" guarantee above is worthless if the empty
+    # placeholder isn't the FIRST <option> -- a <select> with no `selected`
+    # attribute defaults to whichever <option> comes first in source order.
+    # Check every venue <select> on the page (the visible first leg row and
+    # the <template> clone source), not just the template one, since both
+    # must hold the guarantee.
+    selects = re.findall(
+        r'<select name="day_venue_tag_id" data-venue-select>.*?</select>', body, re.S
+    )
+    assert selects, "expected at least one venue <select> on the page"
+    for sel in selects:
+        first_option = re.search(r"<option[^>]*>", sel).group(0)
+        assert 'value=""' in first_option, (
+            "the empty-valued placeholder must be the first <option> -- "
+            "otherwise a blank trailing leg row defaults to a real venue "
+            "and 422s on save"
+        )
+
+    script = body.split('id="venue-create"')[1]
+    assert script.count("opener.value = tag.id") == 1
+    # the append loop touches the new <option>, never the <select>'s value
+    assert "sel.value" not in script

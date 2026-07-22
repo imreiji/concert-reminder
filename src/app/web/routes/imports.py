@@ -21,7 +21,12 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.service import sync_concert, tag_picker_context
+from app.db.service import (
+    handle_newly_tagged,
+    sync_concert,
+    sync_concert_venue_tags,
+    tag_picker_context,
+)
 from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import ConcertKind, RoundKind
@@ -33,6 +38,7 @@ from app.web.routes.concerts import (
     create_concert_row,
     generate_event_id,
     parse_round_legs,
+    resolve_day_venue_tags,
 )
 
 log = logging.getLogger(__name__)
@@ -113,13 +119,17 @@ def _fmt(dt) -> str:
 # stable `day_key` ("d0", "d1", ...) the preview template also stamps on the
 # matching `.eleg` card. This shim gives `_round_leg_chips.html` the same
 # attribute surface a real ConcertDay exposes (id -> the key, plus label);
-# the round chips render unselected (all-legs), so city/starts are never read.
-_PreviewLeg = namedtuple("_PreviewLeg", "id label city starts_at_utc")
+# the round chips render unselected (all-legs), so venue_tag/starts are never
+# read. `venue_tag` is carried anyway, and left None: a parsed day has no
+# venue tag yet (the importer's leg card still takes free-text venue), and an
+# explicit None is what keeps the chip's label chain from tripping over a
+# missing attribute.
+_PreviewLeg = namedtuple("_PreviewLeg", "id label venue_tag starts_at_utc")
 
 
 def _preview_legs(parsed) -> list[_PreviewLeg]:
     return [
-        _PreviewLeg(id=f"d{i}", label=d.label, city=None, starts_at_utc=None)
+        _PreviewLeg(id=f"d{i}", label=d.label, venue_tag=None, starts_at_utc=None)
         for i, d in enumerate(parsed.days)
     ]
 
@@ -207,6 +217,7 @@ async def import_commit(
     day_city: list[str] = Form(default=[]),
     day_venue: list[str] = Form(default=[]),
     day_venue_address: list[str] = Form(default=[]),
+    day_venue_tag_id: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
     day_cancelled: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
@@ -273,19 +284,36 @@ async def import_commit(
     # empty keys. Same rule create_concert applies.
     if not day_key:
         day_key = [""] * n_days
+    # day_venue_tag_id is the leg's structured venue, not display text, so it
+    # follows day_key's rule rather than the end-padding above: a partial array
+    # is left alone (the strict zip raises) so one leg's venue can never slide
+    # onto another; only a WHOLLY-omitted array -- every submitter predating
+    # the field, including this route's older tests -- is padded to blanks.
+    if not day_venue_tag_id:
+        day_venue_tag_id = [""] * n_days
+    # Resolved (and kind-checked) after the padding, so the strict zip below
+    # still sees one entry per row. Same route-boundary check the manual
+    # create/edit paths run -- see resolve_day_venue_tags.
+    day_venue_tags = await resolve_day_venue_tags(session, day_venue_tag_id)
     # key -> the ConcertDay its row produced, built INSIDE the loop from the
     # same tuple so a key can never be paired with another row's day; ids are
     # filled in after the flush below.
     days: list = []
     key_rows: list[tuple[str, object]] = []
-    for key, label, starts_at, city, venue, venue_address, doors_at, cancelled in zip(
+    for (
+        key, label, starts_at, city, venue, venue_address, doors_at, cancelled, v_tag
+    ) in zip(
         day_key, day_label, day_starts_at, day_city, day_venue, day_venue_address,
-        day_doors_at, day_cancelled, strict=True,
+        day_doors_at, day_cancelled, day_venue_tags, strict=True,
     ):
-        if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip()]):
+        # v_tag is in the guard because the next phase drops the free-text
+        # city/venue inputs: without it, a row where the editor picked ONLY a
+        # venue would read as blank and be silently dropped.
+        if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip(), v_tag]):
             continue  # a blank trailing row from the repeatable UI -- key and all
         day = build_day(
-            concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled
+            concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
+            v_tag,
         )
         session.add(day)
         days.append(day)
@@ -324,6 +352,12 @@ async def import_commit(
         ))
 
     await session.flush()
+    # Same rollup the manual create/edit routes run: the concert's VENUE tags
+    # are derived from its legs, so an import must not leave them unset -- and
+    # the newly attached ones go through the same notify-and-apply pipeline,
+    # since VENUE tags are subscribable (invariant 4).
+    newly_venues = await sync_concert_venue_tags(session, concert.id)
+    await handle_newly_tagged(session, concert, newly_venues)
     await sync_concert(session, concert.id)
     await session.commit()
     return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)

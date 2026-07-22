@@ -99,7 +99,6 @@
       <input type="hidden" name="day_key" value="{{ d.id }}">
       <div class="eleg-top">
         <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ d.label }}">
-        <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}" value="{{ d.city or '' }}">
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="{{ 'true' if d.cancelled else 'false' }}">
           <button type="button" class="chip{% if d.cancelled %} on{% endif %}" data-cancel-toggle
@@ -109,8 +108,16 @@
         <button type="button" class="x" title="{{ _('Remove this leg') }}" data-remove-leg>×</button>
       </div>
       <div class="eleg-fields">
-        <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}" value="{{ d.venue or '' }}">
-        <input name="day_venue_address" maxlength="300" placeholder="{{ _('Venue address') }}" value="{{ d.venue_address or '' }}">
+        {#- One <select> per leg row, ALWAYS: `day_venue_tag_id` is padded only
+            when the whole array is omitted, so a row that emitted no field
+            would shorten the array and trip the route's strict zip. -#}
+        <select name="day_venue_tag_id" data-venue-select>
+          <option value="">{{ _("No venue yet") }}</option>
+          {% for v in venue_tags %}
+          <option value="{{ v.id }}"{% if d.venue_tag_id == v.id %} selected{% endif %}>{{ loc(v, "name") }}</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
         <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"
           value="{{ jst(d.doors_at_utc).strftime('%Y-%m-%dT%H:%M') if d.doors_at_utc else '' }}"></label>
         <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required
@@ -195,6 +202,9 @@
 
   <button class="btn">{{ _("Save event") }}</button>
 </form>
+{#- Outside the form on purpose: the dialog's v_* inputs are read by
+    hand and must not ride along on the concert save. -#}
+{% include "_venue_create_dialog.html" %}
 {% include "_tag_picker_script.html" %}
 
 {#- Separated, and last: neither of these is an edit, and one of them is not
@@ -227,7 +237,6 @@
     <input type="hidden" name="day_key" value="">
     <div class="eleg-top">
       <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}">
-      <input name="day_city" maxlength="100" placeholder="{{ _('Leg / city (e.g. Kanagawa)') }}">
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
         <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
@@ -236,8 +245,16 @@
       <button type="button" class="x" title="{{ _('Remove this leg') }}" data-remove-leg>×</button>
     </div>
     <div class="eleg-fields">
-      <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}">
-      <input name="day_venue_address" maxlength="300" placeholder="{{ _('Venue address') }}">
+      {#- No `selected` anywhere: a cloned row is blank, and a pre-picked
+          venue would make an untouched trailing row fail the start-time
+          check instead of being skipped as empty. -#}
+      <select name="day_venue_tag_id" data-venue-select>
+        <option value="">{{ _("No venue yet") }}</option>
+        {% for v in venue_tags %}
+        <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
       <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
       <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
     </div>
