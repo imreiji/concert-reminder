@@ -303,6 +303,11 @@ class ConcertDay(Base):
         ForeignKey("concerts.id", ondelete="CASCADE"), index=True
     )
     label: Mapped[str] = mapped_column(String(100))  # "Day 1", "Day 2 夜公演"
+    # Viewer-locale variants of the leg label; ja IS the original column (see
+    # i18n.loc_field). Nullable and never backfilled -- an unfilled variant
+    # falls through to the original.
+    label_en: Mapped[str | None] = mapped_column(String(100))
+    label_zh: Mapped[str | None] = mapped_column(String(100))
     city: Mapped[str | None] = mapped_column(String(100))  # leg/city, e.g. "Kanagawa"
     venue: Mapped[str | None] = mapped_column(String(200))  # per-day venue (tours change cities)
     venue_address: Mapped[str | None] = mapped_column(String(300))
@@ -350,7 +355,12 @@ class Round(Base):
         Enum(RoundKind, values_callable=lambda e: [m.value for m in e])
     )
     label: Mapped[str] = mapped_column(String(200))  # "最速先行 Round 1", "Day 2 配信"
+    # Viewer-locale variants. label_en PREDATES the i18n layer -- it was an
+    # English gloss rendered to every viewer at once. It is now a true locale
+    # variant selected by loc_field; existing values are already English, so
+    # they carry over unchanged.
     label_en: Mapped[str | None] = mapped_column(String(200))
+    label_zh: Mapped[str | None] = mapped_column(String(200))
     opens_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     closes_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     results_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)

@@ -125,6 +125,32 @@ def test_loc_field_resolves_tag_city():
     assert loc_field(tag, "city", "zh") == "横浜"
 
 
+def test_label_variant_columns_are_nullable():
+    for model, name, length in (
+        (ConcertDay, "label_en", 100), (ConcertDay, "label_zh", 100),
+        (Round, "label_zh", 200),
+    ):
+        col = model.__table__.columns.get(name)
+        assert col is not None, f"{model.__name__}.{name} missing"
+        assert col.nullable, f"{model.__name__}.{name} must be nullable"
+        assert col.type.length == length
+
+
+def test_loc_field_resolves_round_label():
+    r = Round(label="1次先行抽選", label_en="1st-round lottery", label_zh="第一轮先行")
+    assert loc_field(r, "label", "en") == "1st-round lottery"
+    assert loc_field(r, "label", "zh") == "第一轮先行"
+    assert loc_field(r, "label", "ja") == "1次先行抽選"
+
+
+def test_loc_field_resolves_day_label_without_chaining():
+    d = ConcertDay(label="2日目 夜公演", label_en="Day 2 evening")
+    assert loc_field(d, "label", "en") == "Day 2 evening"
+    # zh is unfilled; it must fall through to the ORIGINAL, never to the
+    # English variant.
+    assert loc_field(d, "label", "zh") == "2日目 夜公演"
+
+
 # ── search haystack picks up the variants ────────────────────────────────
 
 
