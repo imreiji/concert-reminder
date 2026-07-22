@@ -33,7 +33,7 @@
     <label class="fld"><span>{{ _("Region") }}</span><input name="v_region" maxlength="100"></label>
     <label class="fld"><span>{{ _("Address") }}</span><input name="v_address" maxlength="300"></label>
     <label class="fld"><span>{{ _("Map link") }}</span><input name="v_location_url" maxlength="500"></label>
-    <p class="dim tiny" data-venue-err hidden></p>
+    <p class="dim tiny" data-venue-err hidden role="alert"></p>
     <button type="button" class="chip add" data-venue-save>{{ _("Add venue") }}</button>
   </div>
 </dialog>
@@ -61,6 +61,17 @@
     });
     dlg.querySelector("[data-venue-cancel]").addEventListener("click", () => dlg.close());
 
+    // One handler for all three close paths (×, backdrop click, Esc) plus
+    // the save success path below (dlg.close() there fires this too) --
+    // without it, closing on a failed save leaves the stale error visible
+    // and every input still populated, so reopening shows old state over a
+    // blank form.
+    dlg.addEventListener("close", function () {
+      dlg.querySelector("[data-venue-err]").hidden = true;
+      dlg.querySelectorAll("input").forEach((i) => { i.value = ""; });
+      opener = null;
+    });
+
     const FIELDS = [
       ["name", "v_name"], ["name_en", "v_name_en"], ["name_zh", "v_name_zh"],
       ["city", "v_city"], ["city_en", "v_city_en"], ["city_zh", "v_city_zh"],
@@ -84,7 +95,7 @@
         return;
       }
       if (!resp.ok) {
-        err.textContent = resp.status === 422 ? dlg.dataset.errDuplicate : dlg.dataset.errGeneric;
+        err.textContent = resp.status === 409 ? dlg.dataset.errDuplicate : dlg.dataset.errGeneric;
         err.hidden = false;
         return;
       }
@@ -116,9 +127,8 @@
         opener.dispatchEvent(new Event("change", { bubbles: true }));
       }
 
-      err.hidden = true;
-      dlg.querySelectorAll("input").forEach((i) => { i.value = ""; });
-      opener = null;
+      // dlg.close() fires the "close" listener above, which hides the error
+      // and clears the inputs -- no need to repeat that here.
       dlg.close();
     });
   })();

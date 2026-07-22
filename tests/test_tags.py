@@ -1634,16 +1634,24 @@ async def test_quick_venue_create_rejects_a_duplicate_name(client):
         "name": "Zepp Haneda", "name_en": "Zepp Haneda", "name_zh": "Zepp 羽田",
     })
 
-    assert resp.status_code == 422
+    # Matches create_tag's duplicate answer in this same module (409) -- the
+    # dialog's JS maps 409 -> "already exists" and anything else -> a generic
+    # error, so a name collision must be distinguishable from every other
+    # 4xx the endpoint can raise (blank name, an unsafe location_url, a
+    # name over max_length).
+    assert resp.status_code == 409
 
 
 def test_quick_venue_create_rejects_an_unsafe_map_link(client):
-    """location_url lands in an href -- invariant 7 sends it through form_url."""
+    """location_url lands in an href -- invariant 7 sends it through form_url.
+    Must stay 422, NOT 409 -- 409 is reserved for the duplicate-name case so
+    the client can tell the two apart."""
     login_as(client, EDITOR_ID, "reiji")
     resp = client.post("/tags/venue/quick", data={
         "name": "Budokan", "location_url": "javascript:alert(1)",
     })
     assert resp.status_code == 422
+    assert resp.status_code != 409
 
 
 def test_quick_venue_create_requires_editor(client):
@@ -1667,9 +1675,24 @@ def test_leg_editor_offers_inline_venue_creation(client):
     assert "data-new-venue" in r.text
     assert 'id="venue-create"' in r.text
     # Error copy rides in data- attributes, never interpolated into an on*
-    # handler (invariant 7).
+    # handler (invariant 7). This feature never uses confirm(), so a bare
+    # "confirm(' not in ..." check guards nothing -- assert the actual
+    # invariant instead: the dialog's markup carries NO inline on* handler
+    # at all (onclick, onchange, onsubmit, ...), since the browser HTML-
+    # decodes an attribute before parsing it as JS and Jinja's escaping
+    # can't protect one that holds user- or translator-supplied text.
     assert "data-err-duplicate=" in r.text
-    assert "confirm('" not in r.text.split('id="venue-create"')[1]
+    dialog_start = r.text.index('id="venue-create"')
+    dialog_html = r.text[dialog_start : r.text.index("</dialog>", dialog_start)]
+    assert not re.search(r"\son\w+\s*=", dialog_html), dialog_html
+    # The error paragraph must be announced to screen readers on a failed
+    # save, not just shown visually.
+    assert 'data-venue-err hidden role="alert"' in dialog_html
+    # Closing via ×/backdrop/Esc must reset state too, not just a successful
+    # save -- one "close" listener covers all three paths plus dlg.close()
+    # on success.
+    script_html = r.text[r.text.index("</dialog>", dialog_start) :]
+    assert 'dlg.addEventListener("close"' in script_html
 
 
 def test_inline_venue_creation_leaves_blank_leg_rows_blank(client):
@@ -1681,10 +1704,34 @@ def test_inline_venue_creation_leaves_blank_leg_rows_blank(client):
     <option> to a <select> whose placeholder is already selected does not
     move the selection.)"""
     login_as(client, EDITOR_ID, "reiji")
+    # A real venue tag is required for the ordering assertion below to mean
+    # anything -- with zero venue tags the placeholder is the loop's ONLY
+    # <option> regardless of where it sits in the template source, so
+    # reordering it would go undetected.
+    client.post("/tags", data={"name": "Zepp Haneda", "kind": "venue"})
+
     body = client.get("/concerts/new").text
     tpl = body.split('<template id="day-row-template">')[1].split("</template>")[0]
     venue_sel = tpl[tpl.index("<select name=\"day_venue_tag_id\"") : tpl.index("</select>")]
     assert "selected" not in venue_sel
+
+    # The "no selected attribute" guarantee above is worthless if the empty
+    # placeholder isn't the FIRST <option> -- a <select> with no `selected`
+    # attribute defaults to whichever <option> comes first in source order.
+    # Check every venue <select> on the page (the visible first leg row and
+    # the <template> clone source), not just the template one, since both
+    # must hold the guarantee.
+    selects = re.findall(
+        r'<select name="day_venue_tag_id" data-venue-select>.*?</select>', body, re.S
+    )
+    assert selects, "expected at least one venue <select> on the page"
+    for sel in selects:
+        first_option = re.search(r"<option[^>]*>", sel).group(0)
+        assert 'value=""' in first_option, (
+            "the empty-valued placeholder must be the first <option> -- "
+            "otherwise a blank trailing leg row defaults to a real venue "
+            "and 422s on save"
+        )
 
     script = body.split('id="venue-create"')[1]
     assert script.count("opener.value = tag.id") == 1

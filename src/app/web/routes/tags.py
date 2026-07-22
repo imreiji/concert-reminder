@@ -156,10 +156,12 @@ async def quick_create_venue(
     selected into a leg and picked up by `sync_concert_venue_tags` when the
     editor finally saves.
 
-    The duplicate answer is 422, not `create_tag`'s 409: this is a fetch() from
-    a dialog that reports the failure inline, and the dialog treats every
-    4xx/5xx the same way anyway -- one status for "the form was wrong" keeps
-    the client side honest.
+    The duplicate answer is 409, matching `create_tag`'s answer for exactly
+    the same condition (same module, two endpoints, one status for "this name
+    already exists"). Every other failure here (blank name, an unsafe
+    location_url via `form_url`, a name over `max_length`) stays 422 -- the
+    dialog's JS relies on 409 being distinguishable from the rest to pick the
+    right error copy (see `_venue_create_dialog.html`).
 
     Route path note: `/tags/venue/quick` cannot be swallowed by
     `/tags/{tag_id}/...` -- those all carry a different literal third segment.
@@ -168,7 +170,7 @@ async def quick_create_venue(
     if not name:
         raise HTTPException(status_code=422, detail="a venue needs a name")
     if await find_tag_by_name_and_kind(session, name, TagKind.VENUE) is not None:
-        raise HTTPException(status_code=422, detail=f"a venue named {name!r} already exists")
+        raise HTTPException(status_code=409, detail=f"a venue named {name!r} already exists")
     await ensure_user(session, user.id, user.username)
     tag = Tag(
         name=name,
