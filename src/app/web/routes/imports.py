@@ -229,6 +229,8 @@ async def import_commit(
     categories: str = Form(default=""),
     kind: str = Form(default=""),
     notes: str = Form(default=""),
+    notes_en: str = Form(default=""),
+    notes_zh: str = Form(default=""),
     source_url: str = Form(default=""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
@@ -280,6 +282,13 @@ async def import_commit(
     # title_zh-less concert would be enforcing half a rule. Ordered AFTER the
     # source-URL check so a tampered URL still fails for the URL's reason.
     require_variants("Title", title, title_en, title_zh, mandatory=True)
+    # Notes, same all-or-nothing rule create_concert applies -- but NOT
+    # mandatory: an imported concert with no notes at all is the normal case,
+    # and only a half-filled trio is a violation. Without this the import was
+    # the one surviving way to create a rule-breaking row, and the edit page's
+    # variant-gaps notice would then nag about a gap this form gave the editor
+    # no field to fill.
+    require_variants("Notes", notes, notes_en, notes_zh)
 
     event_id = await generate_event_id(session, title)
     concert = await create_concert_row(
@@ -297,6 +306,8 @@ async def import_commit(
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
     concert.notes = notes.strip() or None
+    concert.notes_en = notes_en.strip() or None
+    concert.notes_zh = notes_zh.strip() or None
 
     # The optional day_* fields (venue, city, doors, cancelled) round-trip in
     # full from the preview form, but a minimal client -- the older import

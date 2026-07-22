@@ -9,6 +9,7 @@ The deliberate asymmetry -- the EDIT routes stay open, so a legacy
 half-translated record can still be saved -- is pinned at the bottom.
 """
 
+import ast
 import re
 from pathlib import Path
 
@@ -25,7 +26,9 @@ from app.db.session import get_session
 from app.domain import translations as app_translations
 from app.web import auth
 from app.web.app import create_app
+from app.web.routes import concerts as concert_routes
 from app.web.routes import imports as import_routes
+from app.web.routes import tags as tag_routes
 
 EDITOR_ID = 42
 
@@ -286,6 +289,36 @@ async def test_import_commit_with_a_half_translated_round_label_is_422(client):
     detail = r.json()["detail"]
     assert "English" in detail, detail
     assert "round" in detail.lower() and "1" in detail, detail
+
+
+async def test_import_commit_with_half_translated_notes_is_422(client):
+    """Notes was the last gap: the route collected only `notes`, so an import
+    could write a Japanese-only note no other create path allows -- and the
+    edit page's variant-gaps notice would then nag forever about a field the
+    import form never offered in three languages."""
+    r = client.post("/concerts/import/commit", data=_import_payload(
+        "Half Notes", notes="日本語のみ", notes_en="", notes_zh="",
+    ))
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert "notes" in detail.lower(), detail
+    assert "English" in detail and "中文" in detail, detail
+
+
+async def test_import_commit_with_notes_blank_in_all_three_saves(client):
+    """Notes is all-or-nothing, NOT mandatory -- an import with no notes at
+    all is the normal case and must stay a 303."""
+    r = client.post("/concerts/import/commit", data=_import_payload("No Notes"))
+    assert r.status_code in (200, 303), r.text
+
+
+def test_the_import_preview_offers_all_three_notes_boxes(client):
+    """The server-side rule above is only reachable if the form can satisfy
+    it: a fold with `notes` alone would 422 the moment anything was typed."""
+    body = _preview(client)
+    assert sorted(set(_slots(body, "notes"))) == ["en", "ja", "zh"]
+    for field in ("notes", "notes_en", "notes_zh"):
+        assert f'name="{field}"' in body, field
 
 
 # --- the deliberate asymmetry --------------------------------------------
@@ -598,6 +631,54 @@ def test_the_guard_marks_its_duplication_of_the_domain_rule(client):
 # since it POSTs by fetch and a <form> submit event never fires for it) the
 # ordering of its explicit checkVariantGroups() call ahead of the fetch.
 CREATE_BOUNDARIES = ("create_concert", "import_commit", "create_tag", "quick_create_venue")
+
+# The route modules that may legitimately hold a require_variants call. Only
+# the web layer can: it is an HTTP boundary (web/forms.py), so a caller
+# anywhere else would be a layering mistake, not a fifth boundary.
+_ROUTE_MODULES = (concert_routes, tag_routes, import_routes)
+
+
+def _require_variants_callers() -> set[str]:
+    """Every function in the route modules that calls require_variants.
+
+    DERIVED from source rather than listed by hand, because the census below
+    can only be honest if "what the server enforces" comes from the server.
+    The hand-written CREATE_BOUNDARIES tuple compared against itself checks
+    nothing: a fifth route added later with a require_variants call and no
+    guarded template gets exactly the silent raw-422 fallback this whole
+    section exists to prevent, and no test would have moved.
+
+    ast, not a regex over the text: a call is attributed to the INNERMOST
+    enclosing def, so a helper closure would be reported under its own name
+    instead of silently crediting the route around it.
+    """
+    callers: set[str] = set()
+    for module in _ROUTE_MODULES:
+        tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
+        funcs = [
+            n for n in ast.walk(tree)
+            if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)
+        ]
+        for call in ast.walk(tree):
+            if not isinstance(call, ast.Call):
+                continue
+            if not (isinstance(call.func, ast.Name) and call.func.id == "require_variants"):
+                continue
+            enclosing = [
+                f for f in funcs
+                if f.lineno <= call.lineno and call.lineno <= (f.end_lineno or f.lineno)
+            ]
+            assert enclosing, f"require_variants call outside any def at line {call.lineno}"
+            # Innermost wins: the narrowest span containing the call.
+            callers.add(min(enclosing, key=lambda f: (f.end_lineno or f.lineno) - f.lineno).name)
+    return callers
+
+
+def test_the_create_boundary_list_matches_the_routes_that_actually_enforce():
+    """CREATE_BOUNDARIES is the census's contract, so it has to be checked
+    against the source, not against itself. Add a require_variants call in a
+    new function and this fails until that route is censused below."""
+    assert _require_variants_callers() == set(CREATE_BOUNDARIES)
 
 
 def test_every_require_variants_caller_has_a_guarded_create_surface(client):

@@ -1509,7 +1509,18 @@ async def duplicate_concert(
     now derived from the legs (sync_concert_venue_tags), and this clone has
     none. Carrying them over would give the clone venue tags its empty leg
     set contradicts from birth -- and since duplicate redirects to /edit,
-    the editor's very first save would strip them again anyway."""
+    the editor's very first save would strip them again anyway.
+
+    DELIBERATELY NOT a require_variants boundary, despite creating a row. It
+    writes no editor-supplied text: every field is COPIED from a concert that
+    may predate the i18n layer, and half of the database does. Enforcing here
+    would reject duplicating exactly the legacy records this phase already
+    decided to leave editable (the same reasoning that keeps edit_concert
+    open) -- and it would reject them with no form to fix them in, since this
+    route has no fields at all. The clone lands on /edit, where the
+    variant-gaps notice names the gap instead. Do not "fix" this by adding
+    enforcement; the create boundaries are the four in
+    tests/test_variant_enforcement.py's census."""
     source = await get_concert_by_event_id(session, event_id)
     await session.refresh(source, ["tags"])
     await ensure_user(session, user.id, user.username)

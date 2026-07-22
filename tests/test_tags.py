@@ -1754,7 +1754,7 @@ async def test_index_deadline_list_carries_tag_and_search_attributes(client):
 
     client.post(
         "/concerts",
-        data={"title_en": "Tagged Deadline Show", "title_zh": "Tagged Deadline Show",
+        data={"title_en": "TDS EN", "title_zh": "TDS ZH",
             "title": "Tagged Deadline Show", "event_id": "tagged-deadline",
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
@@ -1778,12 +1778,12 @@ async def test_index_deadline_list_carries_tag_and_search_attributes(client):
     li_end = r.index("</li>", li_start)
     li_html = r[li_start:li_end]
     assert f'data-tags="{tag_id}"' in li_html
-    # Matched piecewise rather than as one exact string: data-search now joins
-    # title + title_en + title_zh, and this concert's three variants are the
-    # same words, so the exact join repeats them. What matters is unchanged --
-    # the title text AND the tag name both reach the attribute.
-    search = li_html.split('data-search="')[1].split('"')[0]
-    assert "tagged deadline show" in search and "test artist" in search, search
+    # Exact, not piecewise: the three title variants above are deliberately
+    # DISTINCT ("Tagged Deadline Show" / "TDS EN" / "TDS ZH"), so the join
+    # concert_search_text produces is unambiguous and its format -- order,
+    # single-space join, lowercasing -- stays pinned. Mirrored variants would
+    # make the joined string repeat itself and force a weaker check.
+    assert 'data-search="tagged deadline show tds en tds zh test artist"' in li_html, li_html
 
 
 # ── Inline confirm() handler injection ───────────────────────────────────

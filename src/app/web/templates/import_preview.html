@@ -198,7 +198,7 @@
       exactly as create_concert does. -#}
   <details class="fold">
     <summary>{{ _("Details and links") }}
-      <span class="fold-hint">{{ _("Optional — title EN, organizer, source URL, notes") }}</span></summary>
+      <span class="fold-hint">{{ _("Optional — title and notes in each language, organizer, source URL") }}</span></summary>
     <div class="fold-body">
       <div class="grid2">
         {#- Both title variants, never just the English one: import_commit
@@ -213,7 +213,18 @@
         <label>{{ _("Source URL") }} <input name="source_url" type="url" value="{{ source_url }}"
           placeholder="{{ _('where this was sourced from') }}"></label>
       </div>
-      <label>{{ _("Notes") }} <textarea name="notes" rows="2"></textarea></label>
+      {#- All three notes variants, for the same reason the title trio above
+          carries all three: import_commit calls require_variants("Notes", ...),
+          so a form offering only the Japanese box could not be submitted once
+          anything was typed into it. Marked like every other trio so the
+          browser guard blocks the gap before the 422 can. -#}
+      <label>{{ _("Notes") }} <textarea name="notes" rows="2"
+        data-variant-group="notes" data-variant-slot="ja"
+        data-variant-label="{{ _('Notes') }}"></textarea></label>
+      <label>{{ _("Notes (EN)") }} <textarea name="notes_en" rows="2"
+        data-variant-group="notes" data-variant-slot="en"></textarea></label>
+      <label>{{ _("Notes (中文)") }} <textarea name="notes_zh" rows="2"
+        data-variant-group="notes" data-variant-slot="zh"></textarea></label>
     </div>
   </details>
 

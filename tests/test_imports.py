@@ -396,7 +396,12 @@ async def test_commit_persists_details_fold_fields(client):
             "title_zh": "详细演出（中文）",
             "organizer": "Some Organizer",
             "kind": "tour",
+            # All three notes variants: import_commit holds Notes to the same
+            # all-or-nothing rule create_concert does, so a Japanese-only note
+            # is a 422 here now (see test_variant_enforcement.py).
             "notes": "spotted on ramen.events",
+            "notes_en": "spotted on ramen.events (EN)",
+            "notes_zh": "在 ramen.events 上发现",
         },
     )
     assert r.status_code == 303
@@ -407,6 +412,8 @@ async def test_commit_persists_details_fold_fields(client):
     assert c.organizer == "Some Organizer"
     assert c.kind is not None and c.kind.value == "tour"
     assert c.notes == "spotted on ramen.events"
+    assert c.notes_en == "spotted on ramen.events (EN)"
+    assert c.notes_zh == "在 ramen.events 上发现"
 
 
 async def test_commit_edited_source_url_still_revalidates(client):

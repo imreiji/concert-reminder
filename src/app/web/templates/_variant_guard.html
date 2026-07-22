@@ -69,6 +69,13 @@
     function groupsIn(root) {
       var byScope = new Map();
       root.querySelectorAll("[data-variant-slot]").forEach(function (el) {
+        // A disabled input is not submitted, so it is not part of the group.
+        // WATCH THIS if a variant trio is ever put behind a kind toggle:
+        // skipping one slot leaves the group slot-INCOMPLETE, and
+        // missingVariants reads an incomplete group as "not a group" and
+        // passes it -- the client would then silently permit exactly what the
+        // server 422s on. Unreachable today (tags.html's setTagKind only
+        // disables inputs inside .kf wrappers, and no trio sits in one).
         if (el.disabled) return;
         var scope = el.closest("[data-variant-scope]") || root;
         var keys = byScope.get(scope);
