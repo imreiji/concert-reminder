@@ -952,3 +952,30 @@ async def test_up_next_countdown_is_two_tier(client):
     html = client.get("/").text
     assert "data-countdown-big" in html
     assert 'class="unit"' in html
+
+
+# ── Task 5: Coming up localizes with no template change ──────────────────
+
+
+async def test_coming_up_rows_render_the_localized_round_label(client):
+    """End-to-end proof that resolving the label at the SERVICE copy site is
+    enough: `_deadline_rows.html` renders a bare `{{ d.label }}` with no loc()
+    of its own, because UpcomingDeadline.label already carries the viewer's
+    variant by the time the template sees it. If this ever regresses, the
+    fix belongs in `upcoming_deadlines`, not here."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        r = await seed.open_round(c, "1次先行抽選")
+        r.label_zh = "第一轮抽选"
+        r.label_en = "1st-round lottery"
+
+    await seeded(client.db, build)
+    login(client)
+
+    client.cookies.set("lang", "zh")
+    assert "第一轮抽选" in client.get("/").text
+
+    client.cookies.set("lang", "en")
+    html_en = client.get("/").text
+    assert "1st-round lottery" in html_en
+    assert "第一轮抽选" not in html_en

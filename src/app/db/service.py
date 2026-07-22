@@ -770,7 +770,10 @@ async def due_reminders(
                 anchor=row.anchor,
                 fire_at_utc=row.fire_at_utc,
                 round_id=round_.id if round_ else None,
-                round_label=round_.label if round_ else None,
+                # Per-RECIPIENT locale, not get_locale(): one due_reminders
+                # pass builds rows for many users outside any request, so the
+                # ContextVar would hand everyone the same language.
+                round_label=loc_field(round_, "label", user.language) if round_ else None,
                 round_kind=round_.kind.value if round_ else None,
                 outcome=outcomes.get((user.discord_id, round_.id)) if round_ else None,
                 anchor_time_utc=(
@@ -779,7 +782,7 @@ async def due_reminders(
                     else (day.starts_at_utc if day else None)
                 ),
                 url=round_.url if round_ else None,
-                day_label=day.label if day else None,
+                day_label=loc_field(day, "label", user.language) if day else None,
             )
         )
     return out
@@ -893,6 +896,10 @@ async def upcoming_deadlines(
         (await session.execute(select(Concert).where(Concert.id.in_(concert_ids)))).scalars()
     } if concert_ids else {}
 
+    # The label is COPIED into the dataclass here, so a loc() in the template
+    # can never reach it -- resolve the viewer's variant at the copy site.
+    # Web-request path: the request ContextVar is the right locale source.
+    locale = get_locale()
     out: list[UpcomingDeadline] = []
     for d in days:
         if d.cancelled or d.starts_at_utc <= now:
@@ -901,8 +908,8 @@ async def upcoming_deadlines(
         if concert is None:
             continue
         out.append(UpcomingDeadline(
-            concert_title=loc_field(concert, "title", get_locale()),
-            event_id=concert.event_id, label=d.label,
+            concert_title=loc_field(concert, "title", locale),
+            event_id=concert.event_id, label=loc_field(d, "label", locale),
             anchor=Anchor.EVENT_START, at_utc=d.starts_at_utc,
         ))
 
@@ -921,8 +928,8 @@ async def upcoming_deadlines(
             if ts is None or ts <= now:
                 continue
             out.append(UpcomingDeadline(
-                concert_title=loc_field(concert, "title", get_locale()),
-                event_id=concert.event_id, label=r.label,
+                concert_title=loc_field(concert, "title", locale),
+                event_id=concert.event_id, label=loc_field(r, "label", locale),
                 anchor=anchor, at_utc=ts, url=r.url, round_id=r.id,
             ))
 
@@ -1229,7 +1236,9 @@ async def board_cards(
         rungs = [
             Rung(
                 round_id=r.id,
-                label=r.label,
+                # Copied out of the ORM object, so resolve here (web request
+                # -> get_locale()); the template only sees the string.
+                label=loc_field(r, "label", get_locale()),
                 state=_rung_state(card_outcomes.get(r.id), _round_is_open(r, now)),
                 detail=(
                     r.payment_deadline_at_utc
@@ -1604,7 +1613,12 @@ def _next_round_anchor(
     """The soonest FUTURE round anchor across a concert's live rounds, as
     (round label, anchor, moment). None when no live round has a future
     anchor. Mirrors _next_deadline's four-anchor sweep, but keeps the label
-    and anchor so the tile can say WHICH moment ("FC presale closes …")."""
+    and anchor so the tile can say WHICH moment ("FC presale closes ...").
+
+    The label is copied out of the Round here, so the viewer's variant is
+    resolved now -- setup is a web-request path, hence get_locale().
+    """
+    locale = get_locale()
     best: tuple[str, Anchor, datetime] | None = None
     for r in live_rounds:
         for anchor, ts in (
@@ -1616,7 +1630,7 @@ def _next_round_anchor(
             if ts is None or ts <= now:
                 continue
             if best is None or ts < best[2]:
-                best = (r.label, anchor, ts)
+                best = (loc_field(r, "label", locale), anchor, ts)
     return best
 
 
@@ -2002,7 +2016,10 @@ async def concert_round_rows(
     upgrade_ids = [r.id for r in rounds if r.kind is RoundKind.UPGRADE]
     qualifiers_by_round = await _qualifiers_by_upgrade_round(session, upgrade_ids)
     eligible_up = _eligible_upgrade_ids(rounds, outcomes, qualifiers_by_round)
-    label_by_id = {r.id: r.label for r in rounds}
+    # The qualifier requirement line names other rounds by label, and those
+    # labels are copied into RoundRow.qualifier_labels -- resolve the viewer's
+    # variant here (concert page = web request).
+    label_by_id = {r.id: loc_field(r, "label", get_locale()) for r in rounds}
 
     day_ids = {d.id for d in days}
     live_leg_ids = {d.id for d in days if not d.cancelled}
@@ -2546,6 +2563,12 @@ async def user_calendar_events(
         if concert is None:
             return "Concert"
         return loc_field(concert, "title", locale) if locale else concert.title
+
+    def _label(obj) -> str:
+        """Same rule as _title, for the round/leg label: an explicit caller
+        locale localizes it, None (the .ics feed) keeps the canonical text.
+        Deliberately NOT get_locale() -- the feed must stay byte-identical."""
+        return loc_field(obj, "label", locale) if locale else obj.label
     round_ids = set((await session.execute(
         select(ReminderQueue.round_id)
         .join(ReminderRule, ReminderQueue.rule_id == ReminderRule.id)
@@ -2577,7 +2600,7 @@ async def user_calendar_events(
             concert = concerts.get(r.concert_id)
             events.append(CalendarEvent(
                 concert_title=_title(concert),
-                label=r.label, at_utc=at, url=r.url, notes=r.notes,
+                label=_label(r), at_utc=at, url=r.url, notes=r.notes,
             ))
 
     if day_ids:
@@ -2595,7 +2618,7 @@ async def user_calendar_events(
             concert = concerts.get(d.concert_id)
             events.append(CalendarEvent(
                 concert_title=_title(concert),
-                label=d.label, at_utc=d.starts_at_utc,
+                label=_label(d), at_utc=d.starts_at_utc,
             ))
 
     events.sort(key=lambda e: e.at_utc)
@@ -3339,16 +3362,25 @@ async def notice_context(
     upcoming.sort(key=lambda pair: pair[1])
     first = upcoming[0] if upcoming else None
 
-    non_venue = [t.name for t in concert.tags if t.kind.value != "venue"]
-    venues = [t.name for t in concert.tags if t.kind.value == "venue"]
     user = await session.get(User, user_id)
+    # Per-RECIPIENT locale: this context is built once per (concert, user)
+    # outside any request, so get_locale() would be the sender's language.
+    # Resolved BEFORE the tag lists -- tag names have had name_en/name_zh
+    # since the i18n build, but the DM tag line was still reading the raw
+    # column while the title one line below went through loc_field.
+    locale = user.language if user else "en"
+    non_venue = [
+        loc_field(t, "name", locale) for t in concert.tags if t.kind.value != "venue"
+    ]
+    venues = [
+        loc_field(t, "name", locale) for t in concert.tags if t.kind.value == "venue"
+    ]
     has_rules = (await session.execute(
         select(ReminderRule.id)
         .where(ReminderRule.user_id == user_id, ReminderRule.concert_id == concert_id)
         .limit(1)
     )).scalar_one_or_none() is not None
 
-    locale = user.language if user else "en"
     return NoticeContext(
         concert_id=concert_id,
         event_id=concert.event_id,
@@ -3356,7 +3388,7 @@ async def notice_context(
         tags_line=" · ".join(non_venue),
         venue=(gettext_in(locale, "Multiple") if len(venues) > 1
                else (venues[0] if venues else loc_field(concert, "venue", locale))),
-        first_deadline_label=first[0].label if first else None,
+        first_deadline_label=loc_field(first[0], "label", locale) if first else None,
         first_deadline_at=first[1] if first else None,
         user_timezone=user.timezone if user else "America/Moncton",
         user_language=user.language if user else "en",
