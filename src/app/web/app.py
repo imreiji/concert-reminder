@@ -35,6 +35,7 @@ from app.web.routes import subscriptions as subscription_routes
 from app.web.routes import tags as tag_routes
 from app.web.routes import terms as terms_routes
 from app.web.routes import welcome as welcome_routes
+from app.web.static_assets import static_url
 
 _here = Path(__file__).parent
 templates = Jinja2Templates(directory=_here / "templates")
@@ -59,6 +60,9 @@ templates.env.globals["current_locale"] = i18n.get_locale  # {{ current_locale()
 templates.env.globals["loc"] = lambda obj, field: i18n.loc_field(obj, field, i18n.get_locale())
 # Filter form for `| map("loc_name")` over a tag list (the "F · G" eyebrow joins).
 templates.env.filters["loc_name"] = lambda tag: i18n.loc_field(tag, "name", i18n.get_locale())
+# Cache-busting: {{ static_url("style.css") }} -> /static/style.css?v=<hash>.
+# Content hash, memoized per file at first use -- see web/static_assets.py.
+templates.env.globals["static_url"] = static_url
 
 def home_with_next(target: str | None) -> str:
     """Home, carrying the page the visitor actually asked for (if any)."""
