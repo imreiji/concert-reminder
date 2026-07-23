@@ -42,6 +42,8 @@ performances:
     label_en: Day 2
     label_zh: 第2天
     venue: 幻の新会場
+    city: 幻都
+    venue_address: 幻都1-2-3
     starts_at_jst: 2026-11-08 17:00
 rounds:
   - label: 最速先行
@@ -172,6 +174,14 @@ async def test_draft_renders_fully_prefilled_preview(client, db):
     assert f'<option value="{ids["Kアリーナ横浜"]}" selected>' in text
     # unmatched venue -> visible per-leg hint, not silence
     assert "幻の新会場" in text
+    # unmatched venue's scraped facts ride the + New venue button as
+    # dialog prefill hints (rendered rows only -- the clone template
+    # stays hint-free)
+    assert 'data-hint-venue="幻の新会場"' in text
+    assert 'data-hint-city="幻都"' in text
+    assert 'data-hint-address="幻都1-2-3"' in text
+    assert '<template id="day-row-template">' in text
+    assert text.split('<template id="day-row-template">')[1].count("data-hint-venue") == 0
     # matched tags pre-selected for the picker script
     assert f'"{ids["Love Live!"]}"' in text
     assert f'"{ids["日野下花帆"]}"' in text

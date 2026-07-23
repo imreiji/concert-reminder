@@ -114,7 +114,10 @@
           <option value="{{ v.id }}"{% if d.matched_venue_tag_id == v.id %} selected{% endif %}>{{ loc(v, "name") }}</option>
           {% endfor %}
         </select>
-        <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
+        <button type="button" class="chip add" data-new-venue
+                data-hint-venue="{{ d.venue_name or '' }}"
+                data-hint-city="{{ d.venue_city or '' }}"
+                data-hint-address="{{ d.venue_address or '' }}">{{ _("+ New venue") }}</button>
         {% if d.venue_name and not d.matched_venue_tag_id %}
         <span class="dim tiny">{% trans venue=d.venue_name %}No venue tag matches “{{ venue }}” yet — add it with + New venue.{% endtrans %}</span>
         {% endif %}
