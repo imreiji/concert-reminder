@@ -176,55 +176,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 7. Cache-bust static assets so deploys can't serve stale CSS
-
-Impact: medium (every CSS-touching deploy is silently defaced until the
-cache expires or someone purges) - effort: small. Raised: 2026-07-21
-(i18n deploy: the live language switcher rendered completely unstyled).
-
-`base.html` links `/static/style.css` with no version marker, and
-Cloudflare caches it at the edge (`cf-cache-status: HIT`). The i18n deploy
-shipped new templates against the OLD cached stylesheet: the language
-switcher rendered as a naked `<details>` (visible marker, header reflow,
-unstyled buttons) until a manual purge. Any future deploy that adds CSS
-for new markup has the same window, and nothing in the deploy ritual
-mentions purging.
-
-Fix shape: version the asset URL so the cache key changes with the file -
-e.g. a `static_url("style.css")` Jinja global appending `?v=<hash>` (hash
-of file contents, computed once at startup), applied to `style.css` and
-any future static asset the templates reference. Cloudflare then treats
-each deploy's CSS as a fresh URL and the purge step disappears entirely.
-Until this ships, the deploy runbook should at least say "purge Cloudflare
-cache after any static/ change".
-
-Reinforced, not re-ranked, by the 2026-07-21 mobile-view build: the phone
-retrofit appended a large `@media (max-width: 700px)` section to
-`style.css` in one commit -- exactly the shape of CSS-touching deploy this
-entry warns about, and a wider blast radius than the language-switcher
-incident that raised it (every phone visitor would see broken layout, not
-one control). Manually purge Cloudflare after this deploys until the fix
-ships.
-
-Reinforced again, and now nearly re-ranked up, by the 2026-07-21 signed-out
-redirect: it adds a `.signin-note` rule for a NEW element that renders on
-the landing page. Against a stale stylesheet the note appears unstyled at
-the top of Home -- for exactly the audience this whole feature exists to
-serve (signed-out visitors arriving from a link), and on the page that is
-the app's entire first impression. That is three consecutive builds whose
-deploy needed a manual Cloudflare purge to look right. Held at #4 only
-because #1-#3 are unchanged and this remains a one-file fix nobody has
-scheduled; the case for just doing it is now stronger than the case for
-its rank.
-
-Not reinforced by the 2026-07-22 venue-to-tags build, which is worth recording
-as the counter-example: it added a whole new dialog
-(`_venue_create_dialog.html`) and touched eleven templates without changing one
-byte of `style.css`, because the dialog is built from existing picker and chip
-classes. That deploy needs no purge -- the first in four that doesn't -- which
-is a small point in favour of this entry's low rank rather than its urgency.
-
-### 8. PWA / installability
+### 7. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -244,7 +196,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 9. Minor demo-parity cosmetics
+### 8. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -272,7 +224,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 10. Discover sort in the content head, plus the catalogue-count note
+### 9. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -298,7 +250,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 11. Name the destination on the sign-in bounce
+### 10. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -318,7 +270,7 @@ Ranked below the demo-parity batch (#9) and the Discover head (#10) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
-### 12. Editor page parity with the demo
+### 11. Editor page parity with the demo
 
 Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -348,7 +300,7 @@ behind -- per the CLAUDE.md rule that a deliberate move updates the demo, that
 frame is owed regardless of whether the rest of this parity pass ever happens.
 Fold it into the demo-parity polish batch if this entry keeps sitting.
 
-### 13. `discover.html` venue guard tests the wrong column
+### 12. `discover.html` venue guard tests the wrong column
 
 Impact: low - effort: trivial. Raised: 2026-07-22 (venue-to-tags phase 1
 review).
@@ -366,7 +318,7 @@ Ranked second-to-last deliberately: phase 5 drops `Concert.venue`/`venue_en`/
 is logged so a future reader who trips over it knows it is known and knows why
 nobody fixed it; fixing it separately is only worth doing if phase 5 slips far.
 
-### 14. Nine of ten `RoundKind` members are purely cosmetic
+### 13. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -392,6 +344,25 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Cache-bust static assets so deploys can't serve stale CSS (2026-07-22)
+
+Shipped as: a `static_url("style.css")` Jinja global (registered in
+`web/app.py` beside the other `templates.env.globals[...]`) that appends
+`?v=<content-hash>` to each static URL, so a changed file gets a new cache
+key and Cloudflare treats it as a fresh URL. The hash is the first 12 hex
+chars of the file's sha256, computed at most ONCE per file per process and
+memoized in a module-level dict -- not mtime (unreliable across checkouts)
+and not a startup/random value (which would bust the cache on every restart
+and defeat the point). Per-FILE, so changing `style.css` leaves
+`favicon.ico`'s URL untouched. A missing file DEGRADES to the bare
+`/static/<name>` with no query rather than 500ing template rendering. The
+logic lives in a small `web/static_assets.py` (not `domain/`, which forbids
+I/O), and `base.html`'s stylesheet and favicon links now go through it.
+This closes the three-consecutive-deploys-defaced streak (the language
+switcher, the mobile retrofit, the signed-out landing note) -- and the
+deploy runbook no longer needs a manual Cloudflare purge after a static/
+change.
 
 ### Leg venues become VENUE tags (venue-to-tags phase 1) (2026-07-22)
 
