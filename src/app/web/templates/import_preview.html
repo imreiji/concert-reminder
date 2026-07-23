@@ -13,8 +13,8 @@
     reference; import_commit resolves those to real ids after the days flush. -#}
 <div class="lede">
   <h1>{{ _("Review draft") }}</h1>
-  <p>{% set source_link %}<a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_url }}</a>{% endset %}{% trans url=source_link %}Parsed from
-    {{ url }}.{% endtrans %}
+  <p>{% if source_url %}{% set source_link %}<a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_url }}</a>{% endset %}{% trans url=source_link %}Parsed from
+    {{ url }}.{% endtrans %}{% else %}{{ _("Reviewing a pasted draft.") }}{% endif %}
     {% trans %}Edit anything below, then create the concert.{% endtrans %}</p>
 </div>
 
@@ -51,7 +51,7 @@
     <label>{{ _("Kind") }}
       <select name="kind">
         <option value="">{{ _("— none —") }}</option>
-        {% for k in concert_kinds %}<option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>{% endfor %}
+        {% for k in concert_kinds %}<option value="{{ k.value }}"{% if parsed.kind == k %} selected{% endif %}>{{ k.value.replace("_", " ") | capitalize }}</option>{% endfor %}
       </select>
     </label>
   </div>
@@ -80,13 +80,13 @@
         <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ d.label }}"
                data-variant-group="day_label" data-variant-slot="ja"
                data-variant-label="{{ _('Performance label') }}">
-        {#- No `value=`: the ramen.events parse produces a Japanese label only,
-            so there is nothing to pre-fill here -- same as round_label_en below. -#}
         <label class="vfld"><span class="vfld-tag">English</span>
           <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
+                 value="{{ d.label_en or '' }}"
                  data-variant-group="day_label" data-variant-slot="en"></label>
         <label class="vfld"><span class="vfld-tag">中文</span>
           <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
+                 value="{{ d.label_zh or '' }}"
                  data-variant-group="day_label" data-variant-slot="zh"></label>
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="false">
@@ -111,11 +111,15 @@
         <select name="day_venue_tag_id" data-venue-select>
           <option value="">{{ _("No venue yet") }}</option>
           {% for v in venue_tags %}
-          <option value="{{ v.id }}"{% if matched_venue_tag_id == v.id %} selected{% endif %}>{{ loc(v, "name") }}</option>
+          <option value="{{ v.id }}"{% if d.matched_venue_tag_id == v.id %} selected{% endif %}>{{ loc(v, "name") }}</option>
           {% endfor %}
         </select>
         <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
-        <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
+        {% if d.venue_name and not d.matched_venue_tag_id %}
+        <span class="dim tiny">{% trans venue=d.venue_name %}No venue tag matches “{{ venue }}” yet — add it with + New venue.{% endtrans %}</span>
+        {% endif %}
+        <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"
+          value="{{ fmt(d.doors_at_jst) }}"></label>
         <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required
           value="{{ fmt(d.starts_at_jst) }}"></label>
       </div>
@@ -146,9 +150,11 @@
                data-variant-label="{{ _('Round label') }}">
         <label class="vfld"><span class="vfld-tag">English</span>
           <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
+                 value="{{ r.label_en or '' }}"
                  data-variant-group="round_label" data-variant-slot="en"></label>
         <label class="vfld"><span class="vfld-tag">中文</span>
           <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
+                 value="{{ r.label_zh or '' }}"
                  data-variant-group="round_label" data-variant-slot="zh"></label>
         {#- The scrape only ever fills Japanese, so this is the page where a
             remembered triple saves the most typing. -#}
@@ -160,18 +166,20 @@
       </div>
       {#- No leg info from the parse, so nothing pre-selected (all-legs). The
           chips are built for the parsed days via the shared partial. -#}
-      {% with value = "", selected = none %}{% include "_round_leg_chips.html" %}{% endwith %}
+      {% with value = r.leg_keys, selected = r.leg_keys_selected or none %}{% include "_round_leg_chips.html" %}{% endwith %}
       <div class="redit-times">
         <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at"
           value="{{ fmt(r.opens_at_jst) }}"></label>
         <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at"
           value="{{ fmt(r.closes_at_jst) }}"></label>
-        <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at"></label>
-        <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at"></label>
+        <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at"
+          value="{{ fmt(r.results_at_jst) }}"></label>
+        <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at"
+          value="{{ fmt(r.payment_at_jst) }}"></label>
       </div>
       <div class="redit-extra">
         <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}" value="{{ r.url or '' }}">
-        <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}">
+        <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}" value="{{ r.notes or '' }}">
       </div>
     </div>
     {% else %}
@@ -198,13 +206,24 @@
             a form offering only title_en could not be submitted at all once a
             title was typed into it. -#}
         <label>{{ _("Title (EN)") }} <input name="title_en" maxlength="200"
+          value="{{ parsed.title_en or '' }}"
           data-variant-group="title" data-variant-slot="en"></label>
         <label>{{ _("Title (中文)") }} <input name="title_zh" maxlength="200"
+          value="{{ parsed.title_zh or '' }}"
           data-variant-group="title" data-variant-slot="zh"></label>
-        <label>{{ _("Artist / organizer") }} <input name="organizer" maxlength="200" placeholder="{{ _('non-series acts, etc.') }}"></label>
+        <label>{{ _("Artist / organizer") }} <input name="organizer" maxlength="200"
+          value="{{ parsed.organizer or '' }}" placeholder="{{ _('non-series acts, etc.') }}"></label>
+        <label>{{ _("Categories (comma-sep)") }} <input name="categories" maxlength="200"
+          value="{{ parsed.categories or '' }}" placeholder="{{ _('concert, tour') }}"></label>
+        <label>{{ _("eventernote URL") }} <input name="eventernote_url" type="url"
+          value="{{ parsed.eventernote_url or '' }}"></label>
+        <label>{{ _("Official URL") }} <input name="official_url" type="url"
+          value="{{ parsed.official_url or '' }}"></label>
         <label>{{ _("Source URL") }} <input name="source_url" type="url" value="{{ source_url }}"
           placeholder="{{ _('where this was sourced from') }}"></label>
       </div>
+      <label>{{ _("Performers (one per line)") }} <textarea name="performers_text"
+        rows="3">{{ parsed.performers_text or '' }}</textarea></label>
       {#- All three notes variants, for the same reason the title trio above
           carries all three: import_commit calls require_variants("Notes", ...),
           so a form offering only the Japanese box could not be submitted once
@@ -212,11 +231,11 @@
           browser guard blocks the gap before the 422 can. -#}
       <label>{{ _("Notes") }} <textarea name="notes" rows="2"
         data-variant-group="notes" data-variant-slot="ja"
-        data-variant-label="{{ _('Notes') }}"></textarea></label>
+        data-variant-label="{{ _('Notes') }}">{{ parsed.notes or '' }}</textarea></label>
       <label>{{ _("Notes (EN)") }} <textarea name="notes_en" rows="2"
-        data-variant-group="notes" data-variant-slot="en"></textarea></label>
+        data-variant-group="notes" data-variant-slot="en">{{ parsed.notes_en or '' }}</textarea></label>
       <label>{{ _("Notes (中文)") }} <textarea name="notes_zh" rows="2"
-        data-variant-group="notes" data-variant-slot="zh"></textarea></label>
+        data-variant-group="notes" data-variant-slot="zh">{{ parsed.notes_zh or '' }}</textarea></label>
     </div>
   </details>
 
@@ -227,6 +246,9 @@
       {#- No venue row here: a concert's VENUE tags are DERIVED from its legs
           (sync_concert_venue_tags), so the parsed venue is picked on the leg
           cards above and rolls up from there. -#}
+      {% if unmatched_tag_names %}
+      <p class="dim tiny">{% trans names=unmatched_tag_names | join(", ") %}No tag yet for: {{ names }} — create them on the <a href="/tags">tags page</a>, then re-paste, or pick by hand.{% endtrans %}</p>
+      {% endif %}
       {% include "_tag_picker_fields.html" %}
     </div>
   </details>

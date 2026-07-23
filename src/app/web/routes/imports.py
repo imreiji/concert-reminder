@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.service import (
     handle_newly_tagged,
+    match_tag_ids_by_name,
     match_venue_tag_id,
     record_round_label_phrase,
     round_label_phrases,
@@ -33,6 +34,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import ConcertKind, RoundKind
+from app.domain.yaml_import import DraftError, parse_draft
 from app.web.auth import SessionUser, require_editor
 from app.web.forms import form_url, require_variants
 from app.web.routes.concerts import (
@@ -54,6 +56,7 @@ ALLOWED_HOST = "ramen.events"
 FETCH_TIMEOUT = 10.0
 MAX_RESPONSE_BYTES = 2_000_000
 MAX_REDIRECTS = 5
+MAX_DRAFT_CHARS = 200_000
 
 
 def _check_host(url: str) -> None:
@@ -180,6 +183,11 @@ async def import_preview(
     # is matched against it here, at the route boundary, so the template only
     # ever compares ids.
     venue_tags = await all_venue_tags(session)
+    # One scraped venue for the whole event: stamp the match onto every day so
+    # the template reads a single per-day attribute for both paths.
+    matched = match_venue_tag_id(parsed.venue_name, venue_tags)
+    for d in parsed.days:
+        d.matched_venue_tag_id = matched
     return templates.TemplateResponse(
         request,
         "import_preview.html",
@@ -209,10 +217,109 @@ async def import_preview(
             # and, when it DOES match a VENUE tag by trimmed case-insensitive
             # name, pre-selects that tag below.
             "venue_hint": parsed.venue_name,
-            "matched_venue_tag_id": match_venue_tag_id(parsed.venue_name, venue_tags),
+            "matched_venue_tag_id": matched,
+            "unmatched_tag_names": [],
             # One chip target per parsed day, keyed by day_key -- the round
             # cards render their leg chips from this via _round_leg_chips.html.
             "legs": _preview_legs(parsed),
+        },
+    )
+
+
+@router.post("/draft", response_class=HTMLResponse)
+async def import_draft(
+    request: Request,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+    draft: str = Form(...),
+):
+    """Paste an agent-authored YAML draft, get the SAME preview the URL path
+    renders -- fully prefilled. Renders only; import_commit stays the one
+    write path, and every commit-boundary gate (variants rule, form_url,
+    venue rollup) applies to this data exactly as to typed data.
+
+    Tag and venue NAMES resolve to ids here, at the route boundary, the same
+    place the URL path matches its scraped venue name -- the draft never
+    carries database ids.
+    """
+
+    def form_error(message: str):
+        return templates.TemplateResponse(
+            request,
+            "import_form.html",
+            # lang_next_url: POST-only render, same reason as import_preview.
+            {"user": user, "error": message, "lang_next_url": "/concerts/import"},
+        )
+
+    if len(draft) > MAX_DRAFT_CHARS:
+        return form_error("draft too large -- pastes are capped at 200k characters")
+    try:
+        parsed = parse_draft(draft)
+    except DraftError as e:
+        return form_error(str(e))
+
+    picker = await tag_picker_context(session)
+    venue_tags = await all_venue_tags(session)
+
+    # Per-leg venue resolution: a draft names a venue on each performance.
+    for d in parsed.days:
+        d.matched_venue_tag_id = match_venue_tag_id(d.venue_name, venue_tags)
+
+    # Tag names -> picker pre-selection. Unmatched names surface as one hint
+    # in the Tags fold rather than vanishing.
+    initial_selected: dict[str, list[str]] = {}
+    unmatched_tag_names: list[str] = []
+    for kind_name, names in (
+        ("franchise", parsed.franchise_names),
+        ("group", parsed.group_names),
+        ("artist", parsed.artist_names),
+    ):
+        ids, missing = match_tag_ids_by_name(names, picker["by_kind"].get(kind_name, []))
+        if ids:
+            initial_selected[kind_name] = [str(i) for i in ids]
+        unmatched_tag_names.extend(missing)
+
+    # applies_to leg labels -> the preview's day_key scheme ("d0", "d1", ...),
+    # first row claiming a duplicate label keeps it (same rule as
+    # import_commit's key_to_day_id).
+    label_to_key: dict[str, str] = {}
+    for i, d in enumerate(parsed.days):
+        label_to_key.setdefault(d.label.strip(), f"d{i}")
+    for r in parsed.rounds:
+        keys = []
+        for lbl in r.applies_to_labels:
+            key = label_to_key.get(lbl.strip())
+            if key is None:
+                parsed.warnings.append(
+                    f"round {r.label!r}: no performance labelled {lbl!r} -- "
+                    "that leg reference was dropped, tick it by hand"
+                )
+            else:
+                keys.append(key)
+        r.leg_keys = " ".join(keys)
+        r.leg_keys_selected = set(keys)
+
+    return templates.TemplateResponse(
+        request,
+        "import_preview.html",
+        {
+            "user": user, "parsed": parsed,
+            "source_url": parsed.source_url or "",
+            "lang_next_url": "/concerts/import",
+            "fmt": _fmt, "kinds": list(RoundKind),
+            "concert_kinds": list(ConcertKind),
+            "by_kind": picker["by_kind"],
+            "groups": picker["groups"],
+            "tag_names": picker["tag_names"],
+            "initial_selected": initial_selected,
+            "venue_tags": venue_tags,
+            "round_phrases": await round_label_phrases(session),
+            # Event-level venue hint is the URL path's concept; drafts carry
+            # venues per leg and hint per leg instead.
+            "venue_hint": None,
+            "matched_venue_tag_id": None,
+            "legs": _preview_legs(parsed),
+            "unmatched_tag_names": unmatched_tag_names,
         },
     )
 
@@ -232,6 +339,9 @@ async def import_commit(
     notes_en: str = Form(default=""),
     notes_zh: str = Form(default=""),
     source_url: str = Form(default=""),
+    eventernote_url: str = Form(default=""),
+    official_url: str = Form(default=""),
+    performers_text: str = Form(default=""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
@@ -302,6 +412,9 @@ async def import_commit(
     concert.title_zh = title_zh.strip() or None
     concert.organizer = organizer.strip() or None
     concert.categories = categories.strip() or None
+    concert.eventernote_url = form_url(eventernote_url)
+    concert.official_url = form_url(official_url)
+    concert.performers_text = performers_text.strip() or None
     concert.notes = notes.strip() or None
     concert.notes_en = notes_en.strip() or None
     concert.notes_zh = notes_zh.strip() or None

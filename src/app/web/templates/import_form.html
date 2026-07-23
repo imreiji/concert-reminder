@@ -31,6 +31,21 @@
     re-checked on every redirect — an editor safety rail, not a general web fetcher.{% endtrans %}</span>
 </div>
 
+<div class="section-head" style="max-width:42rem; margin-top:2.25rem">
+  <h2>{{ _("Or paste an agent draft") }}</h2>
+  <p class="dim tiny">{% trans %}Produced by the <code>add-concert</code> skill — the agent merges the
+    official ticket page and eventernote into one trilingual draft. Nothing is saved
+    until you review and submit the next page.{% endtrans %}</p>
+</div>
+
+<form class="stack" method="post" action="/concerts/import/draft"
+      style="max-width:42rem; margin-top:1rem; display:grid; gap:1rem">
+  <label class="fld"><span>{{ _("Draft YAML") }}</span>
+    <textarea name="draft" rows="10" required
+              placeholder="title: …&#10;performances:&#10;  - label: Day 1"></textarea></label>
+  <div><button class="btn" type="submit">{{ _("Preview draft") }}</button></div>
+</form>
+
 <p class="clock" style="display:block; margin-top:1.5rem">
   {% trans %}No ramen.events page? <a class="more" href="/">Create the concert manually</a> instead.{% endtrans %}
 </p>
