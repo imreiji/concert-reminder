@@ -198,7 +198,7 @@ async def test_past_day_marked_past(client):
             "day_label": ["Old day"],
             "day_label_en": ["Old day"],
             "day_label_zh": ["Old day"], "day_starts_at": ["2000-01-01T00:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
         },
     )
     r = client.get("/concerts/c")

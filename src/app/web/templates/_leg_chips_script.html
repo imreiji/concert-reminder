@@ -36,9 +36,7 @@
     // The leg's venue is a VENUE tag now, so its display name is the selected
     // option's text rather than a typed value. Index 0 is the "no venue"
     // placeholder, which is not a label. Returns "" when the row has no
-    // picker at all. The day_venue fallback below still earns its keep on
-    // import_preview.html, whose legs keep a free-text venue alongside the
-    // picker to carry a scraped name that has no tag yet.
+    // picker at all.
     function venueName(row) {
       const sel = row.querySelector("[data-venue-select]");
       if (!sel || sel.selectedIndex <= 0) return "";
@@ -55,8 +53,6 @@
           label:
             fieldValue(row, "day_label") ||
             venueName(row) ||
-            fieldValue(row, "day_city") ||
-            fieldValue(row, "day_venue") ||
             "New leg",
         }))
         .filter((leg) => leg.key);

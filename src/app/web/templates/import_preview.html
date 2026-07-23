@@ -115,14 +115,6 @@
           {% endfor %}
         </select>
         <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
-        {#- The free-text venue survives HERE and nowhere else in the app.
-            Both editor pages dropped theirs because nothing writes into them;
-            import is the one path that SCRAPES a venue name, and a name with
-            no tag yet would otherwise be lost between the parse and the save.
-            `day_city`/`day_venue_address` are gone, though: the parse fills
-            neither, and a venue tag already carries both. -#}
-        <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}"
-               value="{{ venue_hint or '' }}">
         <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
         <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required
           value="{{ fmt(d.starts_at_jst) }}"></label>
@@ -279,7 +271,6 @@
         {% endfor %}
       </select>
       <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
-      <input name="day_venue" maxlength="200" placeholder="{{ _('Venue') }}">
       <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
       <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
     </div>

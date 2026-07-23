@@ -801,7 +801,7 @@ def create_active_concert_with_group(client, event_id, group_tag_id):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["false"],
         },
     )
@@ -1239,14 +1239,14 @@ def test_index_sorts_by_earliest_event_day(client):
         "day_label": ["Day 1"],
         "day_label_en": ["Day 1"],
         "day_label_zh": ["Day 1"], "day_starts_at": ["2099-12-01T18:00"],
-        "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        "day_doors_at": [""],
     })
     client.post("/concerts", data={"title_en": "BBB Sooner Show", "title_zh": "BBB Sooner Show",
         "title": "BBB Sooner Show", "event_id": "bbb",
         "day_label": ["Day 1"],
         "day_label_en": ["Day 1"],
         "day_label_zh": ["Day 1"], "day_starts_at": ["2099-06-01T18:00"],
-        "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        "day_doors_at": [""],
     })
 
     by_event = client.get("/discover?sort=event").text
@@ -1504,7 +1504,7 @@ async def test_index_hides_concert_whose_only_leg_is_cancelled(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
         },
     )
     client.post("/concerts", data={
@@ -1522,7 +1522,7 @@ async def test_index_hides_concert_whose_only_leg_is_cancelled(client):
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["true"],
         },
     )
@@ -1554,7 +1554,7 @@ async def test_index_open_upcoming_bucket_shown_first(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
@@ -1606,8 +1606,7 @@ async def test_index_sort_key_ignores_cancelled_leg_date(client):
             "day_label_en": ["Day 1", "Day 2"],
             "day_label_zh": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-06-01T18:00", "2099-09-01T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_doors_at": ["", ""],
         },
     )
     client.post("/concerts", data={"title_en": "Between Show", "title_zh": "Between Show",
@@ -1615,7 +1614,7 @@ async def test_index_sort_key_ignores_cancelled_leg_date(client):
         "day_label": ["Day 1"],
         "day_label_en": ["Day 1"],
         "day_label_zh": ["Day 1"], "day_starts_at": ["2099-07-01T18:00"],
-        "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        "day_doors_at": [""],
     })
     async with client.db() as s:
         from app.db.models import Concert as ConcertModel
@@ -1640,8 +1639,7 @@ async def test_index_sort_key_ignores_cancelled_leg_date(client):
             "day_label_en": ["", ""],
             "day_label_zh": ["", ""],
             "day_starts_at": ["2099-06-01T18:00", "2099-09-01T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_doors_at": ["", ""],
             "day_cancelled": ["true", "false"],
         },
     )
@@ -1681,7 +1679,7 @@ async def test_index_deadline_list_excludes_cancelled_round(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
@@ -1700,7 +1698,7 @@ async def test_index_deadline_list_excludes_cancelled_round(client):
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["true"],
             "round_id": [str(round_id)], "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],

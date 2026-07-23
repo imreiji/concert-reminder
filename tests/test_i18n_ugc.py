@@ -273,15 +273,12 @@ async def test_edit_form_persists_translation_variants(client, db):
         "title_zh": "爱与生活",
         "notes_en": "EN note",
         "notes_zh": "中文备注",
-        "venue_en": "Shibuya",
-        "venue_zh": "涩谷",
     })
     assert r.status_code == 303
     async with db() as s:
         c = (await s.execute(select(Concert).where(Concert.event_id == "ll"))).scalar_one()
         assert c.title_zh == "爱与生活"
         assert c.notes_en == "EN note" and c.notes_zh == "中文备注"
-        assert c.venue_en == "Shibuya" and c.venue_zh == "涩谷"
         # an empty variant round-trips to None, never ""
         await s.refresh(c, ["audits"])
     # the edit recorded an audit row (snapshot tracks the new columns)
