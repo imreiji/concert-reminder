@@ -115,3 +115,7 @@ Shipped since Phase 12 (no phase numbers assigned, tracked as feature PRs instea
 - [x] Tags page redesign — search, hierarchy, dialog-based editing, rename, retroactive apply
 - [x] Index page reorg — open-and-upcoming bucketing + a global chronological deadline list
 - [x] Multi-language support — English/Mandarin/Japanese, gettext catalogues, per-user locale, translated UGC
+- [x] Mobile retrofit — bottom tab bar, editor FAB, bottom-sheet dialogs, Discover filter sheet, all in one `@media` block
+- [x] Signed-out redirect home — a real landing page instead of a bare 401, returning you to the page you asked for after login
+- [x] Venue-to-tags — a leg's venue is a VENUE tag (city/address live on the tag); a concert's venues derive from its legs; create a venue without leaving the editor; the legacy free-text venue columns are gone
+- [x] Trilingual concert pages — leg and round labels render in the viewer's language; a self-populating round-label phrase library (typed triples become one-click suggestions); every translatable field is filled in all three languages or none; the import preview's per-leg venue picker

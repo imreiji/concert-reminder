@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 1045 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 1165 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -41,10 +41,17 @@ localized dates, and parallel-column UGC translation -- and a phone
 retrofit (bottom tab bar, editor FAB, bottom-sheet dialogs, Discover's
 filter sheet) confined to one `@media` section, and a signed-out
 redirect replacing the old bare 401, returning the visitor to the page
-they asked for once they log in, and phase 1 of the venue-to-tags move --
-a leg's venue is now a real VENUE tag FK, a concert's VENUE tags are derived
-from its legs, venue city/address live on the tag, and an editor can create a
-venue without leaving the form -- have shipped since).
+they asked for once they log in, and the venue-to-tags move complete -- a
+leg's venue is now a real VENUE tag FK, a concert's VENUE tags are derived
+from its legs, venue city/address live on the tag, an editor can create a
+venue without leaving the form, and the legacy free-text venue columns have
+been dropped -- and a trilingual-concert-page arc on top of it: the import
+preview's per-leg venue picker, leg/round label localization in the viewer's
+language, a self-populating round-label phrase library (typed triples become
+one-click suggestions, since real labels don't decompose into a taxonomy), and
+all-three-languages-or-none variant enforcement (one pure rule, a 422 at create
+boundaries with an inline browser-side block, edit-page gap notices, a
+Tags-page untranslated count) -- have shipped since).
 
 ## Commands
 
