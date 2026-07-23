@@ -4,12 +4,13 @@ Pure-domain tests -- no DB, no routes (route coverage is
 tests/test_draft_import.py). Mirrors test_ingest.py's style.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
 from app.domain.draft import ParsedConcert, ParsedDay, ParsedRound
 from app.domain.types import ConcertKind, RoundKind
+from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml
 from app.domain.yaml_import import DraftError, parse_draft
 
 
@@ -228,3 +229,54 @@ def test_container_value_for_scalar_field_blanks():
     assert p.organizer is None
     assert p.days[0].starts_at_jst is None
     assert any("starts_at_jst" in w for w in p.warnings)
+
+
+def _utc(y, mo, d, h, mi):
+    """The export takes aware UTC; 17:00 JST == 08:00 UTC."""
+    return datetime(y, mo, d, h, mi, tzinfo=UTC)
+
+
+def test_export_then_parse_round_trips():
+    text = concert_to_yaml(
+        title="6thライブ", kind="tour",
+        franchises=["Love Live!"], groups=["蓮ノ空"], artists=["日野下花帆"],
+        venues=["Kアリーナ横浜"],
+        days=[YamlDay(
+            label="Day 1", label_en="Day 1", label_zh="第1天",
+            starts_at_utc=_utc(2026, 11, 7, 8, 0),
+            city="横浜", venue="Kアリーナ横浜", venue_address="みなとみらい6-2-14",
+            doors_at_utc=_utc(2026, 11, 7, 6, 30),
+        )],
+        rounds=[YamlRound(
+            label="最速先行", label_en="Earliest", label_zh="最速先行(中)",
+            kind="lottery_round", applies_to_labels=["Day 1"],
+            opens_at_utc=_utc(2026, 8, 1, 3, 0), closes_at_utc=_utc(2026, 8, 16, 14, 59),
+            results_at_utc=_utc(2026, 8, 22, 6, 0),
+            payment_deadline_at_utc=_utc(2026, 8, 25, 14, 0),
+            url="https://eplus.jp/x/", notes="シリアル",
+        )],
+        notes="全席指定", title_en="6th Live", organizer="バンナム",
+        categories="anime", eventernote_url="https://www.eventernote.com/events/1",
+        official_url="https://example.jp/", source_url="https://example.jp/t/",
+        performers=["日野下花帆"],
+        title_zh="6th 演唱会", notes_en="All reserved", notes_zh="全指定席",
+    )
+    p = parse_draft(text)
+    assert p.warnings == []
+    assert (p.title, p.title_en, p.title_zh) == ("6thライブ", "6th Live", "6th 演唱会")
+    assert (p.notes, p.notes_en, p.notes_zh) == ("全席指定", "All reserved", "全指定席")
+    assert p.kind is ConcertKind.TOUR
+    assert p.franchise_names == ["Love Live!"] and p.artist_names == ["日野下花帆"]
+    assert p.performers_text == "日野下花帆"
+    d = p.days[0]
+    assert d.starts_at_jst == datetime(2026, 11, 7, 17, 0)   # 08:00 UTC -> 17:00 JST
+    assert d.doors_at_jst == datetime(2026, 11, 7, 15, 30)
+    assert d.venue_name == "Kアリーナ横浜" and d.venue_city == "横浜"
+    r = p.rounds[0]
+    assert (r.label, r.label_en, r.label_zh) == ("最速先行", "Earliest", "最速先行(中)")
+    assert r.kind is RoundKind.LOTTERY_ROUND
+    assert r.applies_to_labels == ["Day 1"]
+    assert r.closes_at_jst == datetime(2026, 8, 16, 23, 59)
+    assert r.results_at_jst == datetime(2026, 8, 22, 15, 0)
+    assert r.payment_at_jst == datetime(2026, 8, 25, 23, 0)
+    assert r.url == "https://eplus.jp/x/" and r.notes == "シリアル"

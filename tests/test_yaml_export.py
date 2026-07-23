@@ -158,6 +158,18 @@ def test_yaml_export_carries_every_label_variant():
     assert round_["label_zh"] == "抽签#1"
 
 
+def test_title_zh_and_notes_variants_export():
+    text = concert_to_yaml(
+        title="T", kind=None, franchises=[], groups=[], artists=[], venues=[],
+        days=[], rounds=[], notes="メモ",
+        title_zh="T中文", notes_en="note", notes_zh="笔记",
+    )
+    data = yaml.safe_load(text)
+    assert data["title_zh"] == "T中文"
+    assert data["notes_en"] == "note"
+    assert data["notes_zh"] == "笔记"
+
+
 def test_concert_to_yaml_is_deterministic():
     kwargs = dict(
         title="C", kind="tour", franchises=[], groups=[], artists=[], venues=[],
