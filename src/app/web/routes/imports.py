@@ -12,13 +12,16 @@ only the editor's final submit on that draft writes anything.
 """
 
 import asyncio
+import io
 import logging
+import zipfile
 from collections import namedtuple
+from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.service import (
@@ -321,6 +324,34 @@ async def import_draft(
             "legs": _preview_legs(parsed),
             "unmatched_tag_names": unmatched_tag_names,
         },
+    )
+
+
+SKILL_DIST_DIR = Path(__file__).resolve().parents[1] / "skill_dist" / "add-concert"
+
+
+@router.get("/skill.zip")
+async def download_skill_zip(user: SessionUser = Depends(require_editor)):
+    """The add-concert agent skill, zipped for distribution to other
+    editors. Built from src/app/web/skill_dist/ at request time -- a
+    committed binary zip would go stale the moment the skill changed,
+    and this way the only drift risk (the schema example) is pinned by
+    test to the repo skill's copy. Editor-gated like the import page
+    that links it. The zip is a few KB, so building it inline on the
+    event loop is fine -- unlike the BS4 parse above, there is nothing
+    here worth a thread hop.
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in sorted(SKILL_DIST_DIR.rglob("*")):
+            if path.is_file():
+                # as_posix(): zip entries use forward slashes; str(Path)
+                # would bake backslashes in on Windows dev machines.
+                zf.write(path, arcname="add-concert/" + path.relative_to(SKILL_DIST_DIR).as_posix())
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="add-concert-skill.zip"'},
     )
 
 

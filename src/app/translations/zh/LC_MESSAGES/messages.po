@@ -2051,6 +2051,15 @@ msgstr "预览草稿"
 
 #: src/app/web/templates/import_form.html:50
 msgid ""
+"Drafting with an agent elsewhere? <a class=\"more\" "
+"href=\"/concerts/import/skill.zip\">Download the add-concert skill</a> "
+"(zip)."
+msgstr ""
+"在其他环境用代理写草稿？<a class=\"more\" "
+"href=\"/concerts/import/skill.zip\">下载 add-concert 技能</a>（zip）。"
+
+#: src/app/web/templates/import_form.html:53
+msgid ""
 "No ramen.events page? <a class=\"more\" href=\"/\">Create the concert "
 "manually</a> instead."
 msgstr "没有 ramen.events 页面？那就改为<a class=\"more\" href=\"/\">手动创建演出</a>。"

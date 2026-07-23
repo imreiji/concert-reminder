@@ -5,6 +5,10 @@ this file owns the pasted-draft path. No network anywhere -- the draft
 route never fetches.
 """
 
+import io
+import zipfile
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -245,3 +249,43 @@ async def test_full_paste_then_commit_flow(client, db):
         assert concert.eventernote_url == "https://www.eventernote.com/events/465358"
         assert concert.official_url == "https://example.jp/6th/"
         assert concert.performers_text == "日野下花帆"
+
+
+# ── Skill download ───────────────────────────────────────────────────────
+
+
+def test_skill_zip_is_editor_gated(client):
+    assert client.get("/concerts/import/skill.zip").status_code == 303
+    login_as(client, FAN_ID, "fan")
+    assert client.get("/concerts/import/skill.zip").status_code == 403
+
+
+def test_skill_zip_downloads_the_skill(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/concerts/import/skill.zip")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        names = set(zf.namelist())
+        assert "add-concert/SKILL.md" in names
+        assert "add-concert/references/example-draft.yaml" in names
+        skill_md = zf.read("add-concert/SKILL.md").decode("utf-8")
+        assert "dekimasen.app/concerts/import" in skill_md
+
+
+def test_import_form_links_the_skill_zip(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.get("/concerts/import")
+    assert 'href="/concerts/import/skill.zip"' in r.text
+
+
+def test_dist_example_draft_is_byte_identical_to_repo_skill():
+    """The distribution copy's schema example must never fork from the repo
+    skill's -- that one file IS the schema contract both copies teach."""
+    root = Path(__file__).parent.parent
+    repo = root / ".claude" / "skills" / "add-concert" / "references" / "example-draft.yaml"
+    dist = (
+        root / "src" / "app" / "web" / "skill_dist" / "add-concert"
+        / "references" / "example-draft.yaml"
+    )
+    assert dist.read_bytes() == repo.read_bytes()

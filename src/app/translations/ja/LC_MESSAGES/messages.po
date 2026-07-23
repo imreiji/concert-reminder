@@ -2055,6 +2055,16 @@ msgstr "下書きをプレビュー"
 
 #: src/app/web/templates/import_form.html:50
 msgid ""
+"Drafting with an agent elsewhere? <a class=\"more\" "
+"href=\"/concerts/import/skill.zip\">Download the add-concert skill</a> "
+"(zip)."
+msgstr ""
+"別の環境のエージェントで下書きを作りますか？<a class=\"more\" "
+"href=\"/concerts/import/skill.zip\">add-concert スキルをダウンロード</a>"
+"（zip）。"
+
+#: src/app/web/templates/import_form.html:53
+msgid ""
 "No ramen.events page? <a class=\"more\" href=\"/\">Create the concert "
 "manually</a> instead."
 msgstr ""
