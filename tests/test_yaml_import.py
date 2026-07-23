@@ -5,6 +5,7 @@ tests/test_draft_import.py). Mirrors test_ingest.py's style.
 """
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -312,3 +313,22 @@ def test_match_tag_ids_by_name_dedupes_ids():
     tags = [_tag(4, "Aqours", name_en="Aqours")]
     ids, missing = match_tag_ids_by_name(["Aqours", "aqours"], tags)
     assert ids == [4] and missing == []
+
+
+# -- The add-concert skill's example draft --------------------------------
+
+SKILL_EXAMPLE = (
+    Path(__file__).parent.parent / ".claude" / "skills" / "add-concert"
+    / "references" / "example-draft.yaml"
+)
+
+
+def test_skill_example_draft_parses_clean():
+    """The example the add-concert skill shows agents MUST parse with zero
+    warnings -- a warning here means the skill and parser have drifted."""
+    p = parse_draft(SKILL_EXAMPLE.read_text(encoding="utf-8"))
+    assert p.warnings == []
+    assert p.title and p.title_en and p.title_zh
+    assert p.days and p.rounds
+    assert all(d.venue_name for d in p.days)
+    assert all(r.label_en and r.label_zh for r in p.rounds)
