@@ -1,0 +1,4 @@
+# .python-version is read by uv on Linux (CI + the server); a stray CRLF
+# would arrive as "3.14\r" and fail to resolve. Force LF regardless of the
+# committer's platform (the owner is on Windows).
+.python-version text eol=lf
