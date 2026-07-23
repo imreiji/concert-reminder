@@ -1,0 +1,56 @@
+# A complete draft the add-concert skill produces. Paste-ready at
+# https://dekimasen.app/concerts/import -- every field here is optional
+# except title, but a field you fill must respect the trilingual rule
+# (ja+en+zh or none for title/notes and every label).
+title: 蓮ノ空女学院スクールアイドルクラブ 6thライブツアー
+title_en: Hasunosora Jogakuin School Idol Club 6th Live Tour
+title_zh: 莲之空女学院学园偶像社 6th 演唱会巡回
+kind: tour
+organizer: バンダイナムコミュージックライブ
+categories: anime song
+series:
+  franchises: [Love Live!]
+  groups: [蓮ノ空女学院スクールアイドルクラブ]
+  artists: [日野下花帆, 村野さやか, 乙宗梢]
+performers: [日野下花帆, 村野さやか, 乙宗梢]
+eventernote_url: https://www.eventernote.com/events/465358
+official_url: https://www.lovelive-anime.jp/hasunosora/
+source_url: https://www.lovelive-anime.jp/hasunosora/live-event/live_detail.php?p=6th
+performances:
+  - label: Day 1
+    label_en: Day 1
+    label_zh: 第1天
+    venue: Kアリーナ横浜
+    city: 横浜
+    venue_address: 神奈川県横浜市西区みなとみらい6-2-14
+    doors_jst: 2026-11-07 15:30
+    starts_at_jst: 2026-11-07 17:00
+  - label: Day 2
+    label_en: Day 2
+    label_zh: 第2天
+    venue: Kアリーナ横浜
+    city: 横浜
+    doors_jst: 2026-11-08 15:30
+    starts_at_jst: 2026-11-08 17:00
+rounds:
+  - label: 最速先行抽選（CD封入シリアル）
+    label_en: Earliest advance lottery (CD serial code)
+    label_zh: 最速先行抽选（CD附带序列号）
+    kind: lottery_round
+    applies_to: [Day 1, Day 2]
+    apply_opens_jst: 2026-08-01 12:00
+    apply_closes_jst: 2026-08-16 23:59
+    results_jst: 2026-08-22 15:00
+    payment_deadline_jst: 2026-08-25 23:00
+    url: https://eplus.jp/hasunosora-6th/
+    notes: 1次シリアル先行。CD初回限定盤に封入。
+  - label: 一般発売（先着）
+    label_en: General sale (first come, first served)
+    label_zh: 一般发售（先到先得）
+    kind: fcfs_sale
+    applies_to: []
+    apply_opens_jst: 2026-10-24 12:00
+    url: https://eplus.jp/hasunosora-6th/
+notes: 全席指定。
+notes_en: All seats reserved.
+notes_zh: 全部为指定席。
