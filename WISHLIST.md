@@ -31,20 +31,141 @@ The 2026-07-23 agent-driven import build (a paste-a-YAML-draft seam feeding the
 existing import preview, the YAML export made two-way, the add-concert skill) is
 the latest, and like the builds above it was not a Proposed entry, so nothing
 moved up FROM Proposed. It is logged in Shipped, and its revision pass ADDED two
-entries -- Eventernote actor-page discovery (now #2, cheap now that the skill and
-draft seam exist) and in-app LLM extraction behind the same seam (now #9,
-deferred on budget). The full re-rank it triggered found every existing entry
-unchanged in substance: the shipped seam neither obsoletes nor reorders any of
-them, so the former #2-#11 are pushed down only by the two insertions (never on
-merit). #1 (minute-level offsets) was re-reviewed explicitly and is untouched by
-this build. The one live cross-reference the renumber would have invalidated --
-the sign-in-bounce entry's pointer at the demo-parity batch and the Discover
-head -- was corrected in place.
+entries -- Eventernote actor-page discovery (#2 at the time, cheap now that the
+skill and draft seam exist) and in-app LLM extraction behind the same seam (#9
+at the time, deferred on budget). The full re-rank it triggered found every
+existing entry unchanged in substance: the shipped seam neither obsoletes nor
+reorders any of them, so the former #2-#11 were pushed down only by the two
+insertions (never on merit). Minute-level offsets was re-reviewed explicitly
+and untouched by this build. The one live cross-reference the renumber would
+have invalidated -- the sign-in-bounce entry's pointer at the demo-parity batch
+and the Discover head -- was corrected in place.
+
+The 2026-07-23 evening revision pass is the largest re-rank since the split:
+the owner set next-day priorities, adding four entries that now lead the list
+(#1 i18n calibration -- deliberately first, since corrected wording feeds the
+two design brainstorms; #2 the editor-pages coherence pass, which ABSORBS the
+former "Editor page parity with the demo" entry; #3 a real tablet layout for
+701-1040px; #4 inline tag creation for unmatched import tags), plus two
+assistant-raised entries (#5 event_id slugs from title_en, #6 the
+agent-import review-debt batch). Every pre-existing entry was pushed down by
+insertion, not demoted on merit. The same pass also caught a bookkeeping
+debt: the cache-bust entry had shipped on 2026-07-22 via PR #84
+(`static_url` + per-file content hash) but was never moved -- it is in
+Shipped now, a day late.
 
 ## Proposed (highest impact first)
 
 
-### 1. Minute-level reminder offsets
+### 1. Major i18n translation calibration (owner review pass)
+
+Impact: high - effort: medium (review time, not code). Raised: 2026-07-23
+(owner, end-of-day roadmap discussion).
+
+Every ja/zh string in both catalogues (~710 msgids each) is a
+competent-bilingual, machine-assisted translation that has never had a
+native-speaker review -- flagged as owner homework in the original i18n
+Shipped entry and never done. The owner wants a full calibration pass, and
+it is deliberately ranked FIRST of the 2026-07-23 batch: corrected wording
+changes string lengths and tone, which feeds directly into the editor-pages
+and tablet brainstorms below (chip widths, label wrapping, dialog copy), so
+calibrating after those would re-open them. A review document (CSV: msgid,
+current ja, current zh, blank fix/notes columns) was generated 2026-07-23
+for mobile editing -- regenerate any time by dumping both
+`src/app/translations/*/LC_MESSAGES/messages.po` with babel's pofile reader.
+The apply half is mechanical: paste corrected msgstrs back into both `.po`
+files; `tests/test_i18n_catalogues.py` guards completeness, and no `.mo`
+step exists (compiled in memory).
+
+### 2. Editor and concert pages coherence pass (post-trilingual format)
+
+Impact: high - effort: large (full brainstorm + demo mandated). Raised:
+2026-07-23 (owner).
+
+The trilingual arc and the draft-import build changed a lot of boxes --
+every label became a three-field trio, legs grew venue pickers and hint
+plumbing, rounds grew phrase pickers -- and the four surfaces that share
+that vocabulary (concert_new, import_preview, concert_edit, concert_detail)
+accreted the changes rather than being designed for them. The owner wants
+the set re-thought as a whole so the new format makes sense end to end.
+One concrete, named pain point is NON-NEGOTIABLE scope: in the leg
+(performance) box, the × remove-this-leg button sits directly beside the
+Cancelled toggle -- a destructive control shoulder-to-shoulder with a state
+toggle, visually confusable, and the owner explicitly wants that adjacency
+gone. Per the CLAUDE.md pattern this is a spec + concept-demo feature:
+update `dekimasen-demo.html` (and the onboarding demo's import frame) as
+the design moves. Absorbs the former "Editor page parity with the demo"
+entry (see the note below the Proposed list) -- its demo-frame debt (the
+editor frame still showing the dropped concert-level venue field) rides
+along as a hard requirement.
+
+### 3. A real tablet layout for the 701-1040px band
+
+Impact: medium-high (every tablet user; the owner reports them unhappy) -
+effort: medium-large (brainstorm + demo mandated). Raised: 2026-07-23
+(owner).
+
+The phone retrofit ends at 700px and desktop CSS takes over from 701px up,
+but desktop was designed for ~1100px+: in the 701-1040px band the
+two-column `.layout` (which only collapses below 760px) and the board grid
+render squeezed -- neither the phone's one-column comfort nor desktop's
+room. Constraints to carry into the brainstorm: the mobile retrofit's
+one-`@media`-section rule exists precisely so desktop pixels stay untouched
+-- a tablet band needs the same discipline (its own clearly-bounded section,
+NOT scattered overrides), and it must reconcile with the documented 760px
+`.fsheet`/`.layout` coupling, which sits INSIDE the new band and is the
+likely first thing the design revisits.
+
+### 4. Inline tag creation for unmatched scraped/draft tags
+
+Impact: medium - effort: small-medium. Raised: 2026-07-23 (owner: an
+unmatched tag should offer creation, "not just throw it back to narnia").
+
+When an import (URL scrape or pasted draft) names a franchise/group/artist
+tag that doesn't exist, today's preview shows the unmatched-names hint and
+points at the Tags page -- a context-losing round trip, and the draft's
+tag never gets attached unless the editor remembers to come back. Venues
+already have the answer shipped: `_venue_create_dialog.html` +
+`POST /tags/venue/quick`, since 2026-07-23 even prefilled from the draft's
+hints. Extend that pattern: per unmatched name, a create affordance in the
+preview's Tags fold that opens a kind-aware dialog (group needs a member
+picker deferred, franchise a parent hookup -- scope the brainstorm small:
+name + kind + trilingual names may be enough for v1) and joins the picker
+selection on success. Must keep `create_tag`'s kind-scoped 409 semantics
+and invariant 3 (no group re-expansion surprises from the create path).
+
+### 5. event_id slugs should prefer title_en
+
+Impact: low-medium - effort: small. Raised: 2026-07-23 (assistant, while
+verifying the import path).
+
+`generate_event_id` slugifies the Japanese title, and `slugify` strips
+everything outside `[a-z0-9]` -- so a Japanese-only title collapses to the
+`"concert"` fallback and imports mint ids like `concert-2`, `concert-3`:
+unique, but meaningless in URLs that are supposed to be the human-readable
+identity (invariant 6). Since the trilingual rule made `title_en` mandatory
+at every create boundary, the fix is one line of preference -- slug from
+`title_en` when present, fall back to `title` -- plus tests. Existing
+concerts keep their ids (event_id is editor-owned after creation; no
+backfill).
+
+### 6. Agent-import review-debt batch (three deferred minors)
+
+Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
+whole-branch review of the agent-import build; all three triaged
+defer-with-reason there).
+
+One tidy pass over the review leftovers: (a) `yaml_import.py`'s DraftError
+message uses `{exc or 'nesting too deep'}` -- exceptions are always truthy,
+the fallback is dead code; (b) `_text`'s container guard blanks silently
+where `_dt`'s warns, so a container value for organizer/notes/labels/urls
+leaves no drift warning -- warn WITHOUT stringifying the value (the
+stringify is what the DoS fix removed); (c) `match_tag_ids_by_name`'s
+docstring doesn't state first-tag-wins collision order or that blank names
+drop from both output lists. All behavior-safe today; batched so they stop
+being rediscovered by every future reviewer.
+
+### 7. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -80,10 +201,12 @@ done, and it is now the highest-impact user-facing gap left standing.
 
 Re-reviewed 2026-07-23 (agent-import build): explicitly unchanged. The import
 seam touches concert creation, not reminder offsets, so nothing here moved --
-it stays #1, and the new Eventernote discovery entry was placed under it rather
-than over it for the reason given there.
+it stayed on top at the time, with the new Eventernote discovery entry placed
+under it for the reason given there. (The same evening's owner-priority batch
+then pushed both down by insertion -- position, not substance; the heading
+carries the current rank.)
 
-### 2. Eventernote actor-page discovery
+### 8. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -98,12 +221,12 @@ exist -- discovery produces a paste-ready YAML draft through the exact
 `POST /concerts/import/draft` path the skill already builds, so the "add it"
 half is done; what remains is the walk-and-diff (mapping each followed artist to
 its actor id, deduping candidates against existing concerts by title/date).
-Ranked #2, directly under the established minute-offset entry: it is the
+Ranked directly under the established minute-offset entry: it is the
 highest-impact NET-NEW capability the import build unlocked, but it sits below
-#1 because #1 is proven-needed while this is unbuilt and unproven -- the actor-id
-mapping is manual today and a scraped page's structure can drift.
+that one because that need is proven while this is unbuilt and unproven -- the
+actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 3. Collapse a round's multiple "Coming up" rows into one
+### 9. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
 branch review). Re-ranked 2026-07-19 (twice).
@@ -124,8 +247,8 @@ ROUND with a single primary anchor chosen by `_primary_anchor`, so the
 collapsed shape exists and has tests behind it. What remains is deciding
 whether Home wants the same rule and re-pointing the htmx swap at it.
 (Briefly #2 after the 2026-07-22 import picker shipped and vacated the slot
-above it; now #3, pushed down by the 2026-07-23 eventernote-discovery entry.
-Unchanged in substance.)
+above it, then pushed down by the 2026-07-23 insertions -- the heading above
+carries the current rank. Unchanged in substance.)
 
 Nudged up one slot (from #3) by upgrade rounds shipping on 2026-07-19: an
 upgrade round is one more anchor-bearing round per concert, so on a concert
@@ -141,7 +264,7 @@ few pixels of table height on desktop. Still deferred for the same reason
 as before (collapsing changes the htmx swap shape), but the phone case is
 now the more visible motivator of the two.
 
-### 4. Franchise-aware round-label suggestions
+### 10. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -162,7 +285,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 5. Nine of ten `RoundKind` members are purely cosmetic
+### 11. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -185,7 +308,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 6. Pin the Python version across dev, CI and the server
+### 12. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -209,55 +332,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 7. Cache-bust static assets so deploys can't serve stale CSS
-
-Impact: medium (every CSS-touching deploy is silently defaced until the
-cache expires or someone purges) - effort: small. Raised: 2026-07-21
-(i18n deploy: the live language switcher rendered completely unstyled).
-
-`base.html` links `/static/style.css` with no version marker, and
-Cloudflare caches it at the edge (`cf-cache-status: HIT`). The i18n deploy
-shipped new templates against the OLD cached stylesheet: the language
-switcher rendered as a naked `<details>` (visible marker, header reflow,
-unstyled buttons) until a manual purge. Any future deploy that adds CSS
-for new markup has the same window, and nothing in the deploy ritual
-mentions purging.
-
-Fix shape: version the asset URL so the cache key changes with the file -
-e.g. a `static_url("style.css")` Jinja global appending `?v=<hash>` (hash
-of file contents, computed once at startup), applied to `style.css` and
-any future static asset the templates reference. Cloudflare then treats
-each deploy's CSS as a fresh URL and the purge step disappears entirely.
-Until this ships, the deploy runbook should at least say "purge Cloudflare
-cache after any static/ change".
-
-Reinforced, not re-ranked, by the 2026-07-21 mobile-view build: the phone
-retrofit appended a large `@media (max-width: 700px)` section to
-`style.css` in one commit -- exactly the shape of CSS-touching deploy this
-entry warns about, and a wider blast radius than the language-switcher
-incident that raised it (every phone visitor would see broken layout, not
-one control). Manually purge Cloudflare after this deploys until the fix
-ships.
-
-Reinforced again, and now nearly re-ranked up, by the 2026-07-21 signed-out
-redirect: it adds a `.signin-note` rule for a NEW element that renders on
-the landing page. Against a stale stylesheet the note appears unstyled at
-the top of Home -- for exactly the audience this whole feature exists to
-serve (signed-out visitors arriving from a link), and on the page that is
-the app's entire first impression. That is three consecutive builds whose
-deploy needed a manual Cloudflare purge to look right. Held at #4 only
-because #1-#3 are unchanged and this remains a one-file fix nobody has
-scheduled; the case for just doing it is now stronger than the case for
-its rank.
-
-Not reinforced by the 2026-07-22 venue-to-tags build, which is worth recording
-as the counter-example: it added a whole new dialog
-(`_venue_create_dialog.html`) and touched eleven templates without changing one
-byte of `style.css`, because the dialog is built from existing picker and chip
-classes. That deploy needs no purge -- the first in four that doesn't -- which
-is a small point in favour of this entry's low rank rather than its urgency.
-
-### 8. PWA / installability
+### 13. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -277,7 +352,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 9. In-app LLM extraction behind the same draft seam
+### 14. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -295,7 +370,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 10. Minor demo-parity cosmetics
+### 15. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -323,7 +398,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 11. Discover sort in the content head, plus the catalogue-count note
+### 16. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -349,7 +424,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 12. Name the destination on the sign-in bounce
+### 17. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -365,39 +440,17 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#10) and the Discover head (#11) because
+Ranked below the demo-parity batch (#15) and the Discover head (#16) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
-### 13. Editor page parity with the demo
-
-Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
-re-review).
-
-The editor got no dedicated reconciliation task; the token pass fixed its
-radius, chips and dark mode automatically and the consolidation swapped its
-"Applies to"/"Qualifies" labels to `.eyebrow`. What remains is mostly the
-demo's structure versus deliberate build choices rather than accidental
-drift: the demo nests rounds inside each leg card, while shipped keeps flat
-round and leg lists with chips (which is what lets a browser-added leg be
-targeted before it has an id); the demo shows round name/kind and leg fields
-as read-only summaries with Edit buttons, while shipped is always-open
-inputs; plus minor add-button order and a "1 upgrade" tally count. Lowest
-priority because a parity pass here would mostly re-litigate justified
-decisions.
-
-Re-reviewed 2026-07-20 (i18n build): the "1 upgrade" tally and any new
-read-only summary copy are user-visible strings too -- same catalogue-update
-cost as the two entries above, folded into this one's existing medium
-effort rather than raising it.
-
-Grew on 2026-07-22 (venue-to-tags phase 1): each leg card now carries a VENUE
-tag picker with an inline create-a-venue dialog, and the concert-level venue
-field is gone. `dekimasen-demo.html`'s editor frame still shows the old
-concert-level free-text venue, so the demo is now WRONG rather than merely
-behind -- per the CLAUDE.md rule that a deliberate move updates the demo, that
-frame is owed regardless of whether the rest of this parity pass ever happens.
-Fold it into the demo-parity polish batch if this entry keeps sitting.
+(The former "Editor page parity with the demo" entry (2026-07-20) was
+absorbed on 2026-07-23 into the new editor-pages coherence pass at #2 --
+everything it tracked (demo's nested-rounds structure vs shipped flat lists,
+read-only summaries vs always-open inputs, the stale editor frame in
+`dekimasen-demo.html` showing the dropped concert-level venue) is exactly
+what that brainstorm re-litigates, and its "demo is now WRONG" venue-frame
+debt carries over as a hard requirement there.)
 
 (The former "Eventernote links on performer chips" entry was dropped in the
 2026-07-19 revision pass: it already shipped inside the Tags page redesign,
@@ -405,6 +458,17 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Cache-bust static assets with a per-file content hash (2026-07-22)
+
+Shipped as: PR #84 (`static_url` Jinja global appending a per-file content
+hash, `web/static_assets.py`), exactly the fix shape this entry proposed --
+Cloudflare now sees each deploy's CSS as a fresh URL and the manual-purge
+step is gone from the ritual. Moved here belatedly on 2026-07-23: the PR
+deliberately shipped code-only and the WISHLIST move fell through the crack,
+so the entry sat in Proposed for a day after it was live. The three-builds-
+in-a-row purge pain it recorded (i18n switcher, mobile retrofit, signed-out
+redirect) is what finally got it built.
 
 ### Downloadable add-concert skill zip on the import page (2026-07-23)
 
