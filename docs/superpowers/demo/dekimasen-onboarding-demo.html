@@ -1138,6 +1138,20 @@
       re-checked on every redirect — an editor safety rail, not a general web fetcher.</span>
   </div>
 
+  <div style="max-width:42rem; margin-top:2rem">
+    <h2>Or paste an agent draft</h2>
+    <p class="clock" style="display:block; margin-top:.25rem">
+      Have an agent build the concert as a YAML draft, then paste it here — the same
+      review page opens, fully prefilled with the trilingual titles, rounds and legs.</p>
+    <div style="display:grid; gap:1rem; margin-top:1rem">
+      <label class="fld"><span>Agent draft (YAML)</span>
+        <textarea rows="10" placeholder="title: 9th ラブライブ！&#10;title_en: 9th LoveLive!&#10;event_id: aqours-9th-saitama&#10;days:&#10;  - date: 2025-11-08&#10;    venue: さいたまスーパーアリーナ&#10;rounds:&#10;  - label: オフィシャル1次抽選&#10;    kind: lottery"></textarea></label>
+      <div>
+        <button class="btn" type="button" data-view="preview">Preview draft</button>
+      </div>
+    </div>
+  </div>
+
   <p class="clock" style="display:block; margin-top:1.5rem">
     No ramen.events page? <button class="more" type="button" data-view="flow" style="margin:0">Create the concert manually</button> instead.
   </p>

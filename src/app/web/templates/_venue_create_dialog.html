@@ -66,6 +66,13 @@
       if (!btn) return;
       const row = btn.closest(".eleg");
       opener = row ? row.querySelector("[data-venue-select]") : null;
+      // A pasted draft may carry the scraped venue name/city/address for
+      // this leg -- prefill them so the dialog starts from what the source
+      // said. dataset reads only, never inline on* interpolation (invariant
+      // 7); the close handler clears these, so each open re-prefills fresh.
+      if (btn.dataset.hintVenue) dlg.querySelector('[name="v_name"]').value = btn.dataset.hintVenue;
+      if (btn.dataset.hintCity) dlg.querySelector('[name="v_city"]').value = btn.dataset.hintCity;
+      if (btn.dataset.hintAddress) dlg.querySelector('[name="v_address"]').value = btn.dataset.hintAddress;
       dlg.showModal();
     });
 

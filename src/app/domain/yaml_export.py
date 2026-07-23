@@ -73,6 +73,9 @@ def concert_to_yaml(
     official_url: str | None = None,
     source_url: str | None = None,
     performers: list[str] | None = None,
+    title_zh: str | None = None,
+    notes_en: str | None = None,
+    notes_zh: str | None = None,
 ) -> str:
     """All timestamps are rendered in JST (the "Datetime contract" boundary
     for this app), formatted the same way forms accept them: 'YYYY-MM-DD HH:MM'.
@@ -81,6 +84,7 @@ def concert_to_yaml(
         "slug": slugify(title),
         "title": title,
         "title_en": title_en,
+        "title_zh": title_zh,
         "kind": kind,
         "organizer": organizer,
         "categories": categories,
@@ -124,5 +128,7 @@ def concert_to_yaml(
             for r in rounds
         ],
         "notes": notes,
+        "notes_en": notes_en,
+        "notes_zh": notes_zh,
     }
     return yaml.dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False)

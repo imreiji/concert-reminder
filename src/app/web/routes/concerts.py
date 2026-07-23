@@ -1412,7 +1412,9 @@ async def export_concert_yaml(
         artists=[t.name for t in concert.tags if t.kind is TagKind.ARTIST],
         venues=[t.name for t in concert.tags if t.kind is TagKind.VENUE],
         days=yaml_days, rounds=yaml_rounds, notes=concert.notes,
-        title_en=concert.title_en, organizer=concert.organizer, categories=concert.categories,
+        title_en=concert.title_en, title_zh=concert.title_zh,
+        organizer=concert.organizer, categories=concert.categories,
+        notes_en=concert.notes_en, notes_zh=concert.notes_zh,
         eventernote_url=concert.eventernote_url, official_url=concert.official_url,
         source_url=concert.source_url,
         performers=(

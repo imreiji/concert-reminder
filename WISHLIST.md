@@ -27,6 +27,20 @@ four entries left Proposed, and #14 (the RoundKind observation) rose above the
 plumbing entries as the highest-impact thing still standing after the
 user-facing arc shipped.
 
+The 2026-07-23 agent-driven import build (a paste-a-YAML-draft seam feeding the
+existing import preview, the YAML export made two-way, the add-concert skill) is
+the latest, and like the builds above it was not a Proposed entry, so nothing
+moved up FROM Proposed. It is logged in Shipped, and its revision pass ADDED two
+entries -- Eventernote actor-page discovery (now #2, cheap now that the skill and
+draft seam exist) and in-app LLM extraction behind the same seam (now #9,
+deferred on budget). The full re-rank it triggered found every existing entry
+unchanged in substance: the shipped seam neither obsoletes nor reorders any of
+them, so the former #2-#11 are pushed down only by the two insertions (never on
+merit). #1 (minute-level offsets) was re-reviewed explicitly and is untouched by
+this build. The one live cross-reference the renumber would have invalidated --
+the sign-in-bounce entry's pointer at the demo-parity batch and the Discover
+head -- was corrected in place.
+
 ## Proposed (highest impact first)
 
 
@@ -64,7 +78,32 @@ import per-leg venue picker (phase 1 follow-up, see Shipped). Nothing about this
 entry changed; it is back on top because the thing that briefly outranked it is
 done, and it is now the highest-impact user-facing gap left standing.
 
-### 2. Collapse a round's multiple "Coming up" rows into one
+Re-reviewed 2026-07-23 (agent-import build): explicitly unchanged. The import
+seam touches concert creation, not reminder offsets, so nothing here moved --
+it stays #1, and the new Eventernote discovery entry was placed under it rather
+than over it for the reason given there.
+
+### 2. Eventernote actor-page discovery
+
+Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
+(during the agent-import design discussion). Buildable as of 2026-07-23, when
+the draft seam and the add-concert skill shipped.
+
+A concert nobody has added to the app has NO deadline tracking at all -- the
+worst failure the app has, worse than a mistimed reminder, because the user
+never learns there was a deadline to miss. The skill (or a scheduled agent) can
+close that gap: walk each followed artist's Eventernote `/actors/<id>/events`
+page and flag concerts not yet in the catalogue. Cheap now that the pieces
+exist -- discovery produces a paste-ready YAML draft through the exact
+`POST /concerts/import/draft` path the skill already builds, so the "add it"
+half is done; what remains is the walk-and-diff (mapping each followed artist to
+its actor id, deduping candidates against existing concerts by title/date).
+Ranked #2, directly under the established minute-offset entry: it is the
+highest-impact NET-NEW capability the import build unlocked, but it sits below
+#1 because #1 is proven-needed while this is unbuilt and unproven -- the actor-id
+mapping is manual today and a scraped page's structure can drift.
+
+### 3. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
 branch review). Re-ranked 2026-07-19 (twice).
@@ -84,8 +123,9 @@ concert page's per-leg round rows (2026-07-19) already render one row per
 ROUND with a single primary anchor chosen by `_primary_anchor`, so the
 collapsed shape exists and has tests behind it. What remains is deciding
 whether Home wants the same rule and re-pointing the htmx swap at it.
-(Now #2 after the 2026-07-22 import picker shipped and vacated the slot above
-it; unchanged in substance.)
+(Briefly #2 after the 2026-07-22 import picker shipped and vacated the slot
+above it; now #3, pushed down by the 2026-07-23 eventernote-discovery entry.
+Unchanged in substance.)
 
 Nudged up one slot (from #3) by upgrade rounds shipping on 2026-07-19: an
 upgrade round is one more anchor-bearing round per concert, so on a concert
@@ -101,7 +141,7 @@ few pixels of table height on desktop. Still deferred for the same reason
 as before (collapsing changes the htmx swap shape), but the phone case is
 now the more visible motivator of the two.
 
-### 3. Franchise-aware round-label suggestions
+### 4. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -122,7 +162,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 4. Nine of ten `RoundKind` members are purely cosmetic
+### 5. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -145,7 +185,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 5. Pin the Python version across dev, CI and the server
+### 6. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -169,7 +209,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 6. Cache-bust static assets so deploys can't serve stale CSS
+### 7. Cache-bust static assets so deploys can't serve stale CSS
 
 Impact: medium (every CSS-touching deploy is silently defaced until the
 cache expires or someone purges) - effort: small. Raised: 2026-07-21
@@ -217,7 +257,7 @@ byte of `style.css`, because the dialog is built from existing picker and chip
 classes. That deploy needs no purge -- the first in four that doesn't -- which
 is a small point in favour of this entry's low rank rather than its urgency.
 
-### 7. PWA / installability
+### 8. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -237,7 +277,25 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 8. Minor demo-parity cosmetics
+### 9. In-app LLM extraction behind the same draft seam
+
+Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
+deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
+
+The paste-a-draft seam (`POST /concerts/import/draft`) is producer-agnostic by
+design: an agent following the add-concert skill is today's producer, but a
+server-side LLM step that turns a pasted event page (or free text) into the same
+YAML draft would drop in behind the identical seam with no change to the preview
+or to the `import_commit` write path. Deferred not for lack of a place to put it
+-- the seam is exactly that place -- but on budget: the owner has no allowance
+for a per-import API call, which is the whole reason the import path is
+agent-side rather than server-side in the first place. Logged so the seam's
+producer-agnosticism is recorded design intent rather than something
+rediscovered later. Ranked here by its low-medium impact, above the pure-cosmetic
+entries below it, but note it is NOT actionable until the budget question
+changes -- the seam being ready does not make this buildable.
+
+### 10. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -265,7 +323,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 9. Discover sort in the content head, plus the catalogue-count note
+### 11. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -291,7 +349,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 10. Name the destination on the sign-in bounce
+### 12. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -307,11 +365,11 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#8) and the Discover head (#9) because
+Ranked below the demo-parity batch (#10) and the Discover head (#11) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
-### 11. Editor page parity with the demo
+### 13. Editor page parity with the demo
 
 Impact: low - effort: medium. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -347,6 +405,42 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Agent-driven concert import (YAML draft round-trip + add-concert skill) (2026-07-23)
+
+Shipped as: a way to skip the typing that the trilingual arc created. The
+all-three-languages-or-none rule (i18n phase 4) roughly TRIPLED the keystrokes to
+create a concert by hand -- three titles, three labels per round, three notes --
+and with no budget for a server-side LLM API call the fix had to be agent-side. A
+new seam, `POST /concerts/import/draft`, takes a pasted YAML draft and renders
+the existing `import_preview.html` fully prefilled (trilingual titles/labels, all
+four round anchors, real multi-leg round binding), so an agent does the typing
+and the editor only reviews and submits. To anchor the draft vocabulary the YAML
+EXPORT (`domain/yaml_export.py`) was made two-way -- `title_zh` and notes
+variants added -- so an exported concert round-trips back through a new pure
+parser, `domain/yaml_import.py` (`yaml.safe_load` only, warnings over failures,
+hardened post-review against hostile structure: RecursionError maps to
+DraftError, container values for scalar fields blank safely, and the alias
+fan-out DoS is closed). Tag and venue NAMES in the draft resolve to picker
+pre-selections -- `match_tag_ids_by_name` across all three name columns,
+`match_venue_tag_id` for the leg venue -- and a name that matches nothing renders
+as a visible hint rather than being silently dropped; the venue quick-create
+dialog even prefills from the draft's per-leg venue/city/address hints via
+`data-hint-*` attributes. `import_commit` stays the ONLY write path: the seam is
+a second PRODUCER of the preview, never a second writer. The producer is normally
+an agent following `.claude/skills/add-concert/SKILL.md`, whose
+`references/example-draft.yaml` is pinned to the parser by
+`test_skill_example_draft_parses_clean`, so the skill's example and the code
+cannot drift apart. The import form's paste-card strings shipped in ja as the
+下書き-family wording for catalogue consistency.
+
+Not a Proposed entry here -- it came out of the trilingual arc's typing cost
+rather than the wishlist -- but logged in full, and its revision pass ADDED two
+entries: Eventernote actor-page discovery (#2, cheap now that the skill and the
+draft seam exist) and in-app LLM extraction behind the same seam (#9, deferred on
+budget, since the seam is producer-agnostic on purpose). It changed no existing
+entry's substance -- #1 (minute-level offsets) in particular was re-reviewed and
+is untouched by it.
 
 ### Drop the legacy free-text venue columns (venue-to-tags phase 5) (2026-07-22)
 

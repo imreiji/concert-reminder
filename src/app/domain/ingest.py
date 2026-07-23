@@ -20,12 +20,12 @@ type="datetime-local">, so they flow through the SAME boundary
 """
 
 import re
-from dataclasses import dataclass, field
 from datetime import datetime
 
 from bs4 import BeautifulSoup
 from bs4 import Tag as BS4Tag
 
+from app.domain.draft import ParsedConcert, ParsedDay, ParsedRound
 from app.domain.types import RoundKind
 from app.domain.urls import UnsafeURLError, clean_url
 
@@ -60,30 +60,6 @@ _KIND_KEYWORDS: list[tuple[str, RoundKind]] = [
 
 class IngestError(Exception):
     """The page doesn't look like a ramen.events event post at all."""
-
-
-@dataclass
-class ParsedDay:
-    label: str
-    starts_at_jst: datetime
-
-
-@dataclass
-class ParsedRound:
-    label: str
-    kind: RoundKind
-    opens_at_jst: datetime | None
-    closes_at_jst: datetime | None
-    url: str | None
-
-
-@dataclass
-class ParsedConcert:
-    title: str
-    venue_name: str | None
-    days: list[ParsedDay] = field(default_factory=list)
-    rounds: list[ParsedRound] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
 
 
 def _guess_kind(text: str) -> RoundKind:
