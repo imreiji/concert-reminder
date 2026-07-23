@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from app.db.models import Tag, TagKind
+from app.db.service import match_tag_ids_by_name
 from app.domain.draft import ParsedConcert, ParsedDay, ParsedRound
 from app.domain.types import ConcertKind, RoundKind
 from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml
@@ -280,3 +282,33 @@ def test_export_then_parse_round_trips():
     assert r.results_at_jst == datetime(2026, 8, 22, 15, 0)
     assert r.payment_at_jst == datetime(2026, 8, 25, 23, 0)
     assert r.url == "https://eplus.jp/x/" and r.notes == "シリアル"
+
+
+def _tag(id_, name, name_en=None, name_zh=None):
+    t = Tag(name=name, kind=TagKind.ARTIST, name_en=name_en, name_zh=name_zh)
+    t.id = id_
+    return t
+
+
+def test_match_tag_ids_by_name_across_all_three_columns():
+    tags = [
+        _tag(1, "日野下花帆", name_en="Kaho Hinoshita"),
+        _tag(2, "村野さやか", name_zh="村野沙耶香"),
+    ]
+    ids, missing = match_tag_ids_by_name(
+        ["Kaho Hinoshita", "村野沙耶香", "誰それ"], tags
+    )
+    assert ids == [1, 2]
+    assert missing == ["誰それ"]
+
+
+def test_match_tag_ids_by_name_trims_and_casefolds():
+    tags = [_tag(3, "Liella!", name_en="liella!")]
+    ids, missing = match_tag_ids_by_name(["　LIELLA!　"], tags)
+    assert ids == [3] and missing == []
+
+
+def test_match_tag_ids_by_name_dedupes_ids():
+    tags = [_tag(4, "Aqours", name_en="Aqours")]
+    ids, missing = match_tag_ids_by_name(["Aqours", "aqours"], tags)
+    assert ids == [4] and missing == []

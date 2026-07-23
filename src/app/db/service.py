@@ -2973,6 +2973,45 @@ def match_venue_tag_id(name: str | None, venue_tags: Sequence[Tag]) -> int | Non
     return None
 
 
+def match_tag_ids_by_name(
+    names: Sequence[str], tags: Sequence[Tag]
+) -> tuple[list[int], list[str]]:
+    """Resolve draft-supplied tag NAMES to ids: (matched ids, unmatched names).
+
+    The pasted-draft path's counterpart to match_venue_tag_id above, with one
+    deliberate difference: it matches name_en and name_zh too, not just the
+    canonical column. A draft is written by an agent that read sources in
+    whichever language the site used, and every tag name here is resolved
+    into a picker the editor immediately SEES (a wrong match is a lit chip
+    to un-click, not a silently bound FK) -- the accidental-locale-match
+    risk that keeps the venue matcher narrow doesn't apply.
+
+    Same trim reasoning as the neighbor: Python's str.strip() drops U+3000,
+    and the comparison stays in Python over the already-loaded tag list so
+    SQLite's U+0020-only trim() can never be substituted in.
+
+    Ids come back deduplicated in first-mention order; unmatched names keep
+    their input order so the preview can list them verbatim.
+    """
+    matched: list[int] = []
+    unmatched: list[str] = []
+    for name in names:
+        needle = name.strip().casefold()
+        if not needle:
+            continue
+        for tag in tags:
+            if any(
+                col and col.strip().casefold() == needle
+                for col in (tag.name, tag.name_en, tag.name_zh)
+            ):
+                if tag.id not in matched:
+                    matched.append(tag.id)
+                break
+        else:
+            unmatched.append(name.strip())
+    return matched, unmatched
+
+
 async def tag_picker_context(session: AsyncSession) -> dict:
     """Data the shared tag-picker partial needs: tags grouped by kind, plus
     the two lookup maps its client-side script reads (group->members for
