@@ -99,6 +99,22 @@ entry (see the note below the Proposed list) -- its demo-frame debt (the
 editor frame still showing the dropped concert-level venue field) rides
 along as a hard requirement.
 
+Added scope (2026-07-23, owner): the sentence-style reminder-rule builder
+is part of this pass. Both surfaces that offer it -- the welcome wizard's
+default-reminders fine-tune rows (`welcome.html`) and Preferences'
+`sentence_fields` macro (`preferences.html`) -- were designed after the
+each-rule-reads-as-a-complete-sentence decision but BEFORE i18n, and the
+format was never adapted: translated fragments ("Remind me", "day(s)",
+"before", "each") interleave with the selects in FIXED English word order,
+so ja/zh translate each fragment correctly and the assembled sentence
+ungrammatically (ja wants the anchor phrase first -- 「締切の1日前に」 --
+and zh likewise hangs 前/后 off the anchor). The redesign needs per-locale
+fragment ORDER (a per-locale slot template driving where each select sits),
+not just translated fragment text. One hard defect rides along: welcome.html's
+client-side row builder writes untranslated literal "before"/"after" option
+text into rows it creates (~line 246), so a freshly added row is part-English
+in every locale.
+
 ### 3. A real tablet layout for the 701-1040px band
 
 Impact: medium-high (every tablet user; the owner reports them unhappy) -
@@ -149,10 +165,10 @@ at every create boundary, the fix is one line of preference -- slug from
 concerts keep their ids (event_id is editor-owned after creation; no
 backfill).
 
-### 6. Agent-import review-debt batch (three deferred minors)
+### 6. Agent-import review-debt batch (deferred minors)
 
 Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
-whole-branch review of the agent-import build; all three triaged
+whole-branch review of the agent-import build; the first three triaged
 defer-with-reason there).
 
 One tidy pass over the review leftovers: (a) `yaml_import.py`'s DraftError
@@ -162,8 +178,13 @@ where `_dt`'s warns, so a container value for organizer/notes/labels/urls
 leaves no drift warning -- warn WITHOUT stringifying the value (the
 stringify is what the DoS fix removed); (c) `match_tag_ids_by_name`'s
 docstring doesn't state first-tag-wins collision order or that blank names
-drop from both output lists. All behavior-safe today; batched so they stop
-being rediscovered by every future reviewer.
+drop from both output lists; (d) `preferences.html`'s preset-item edit form
+writes its action with BACKSLASHES (`action="\presets\{{ p.id }}\items\...`)
+where the sibling forms use `/` -- browsers fold `\` to `/` in URL paths so
+it works today, but it's a typo waiting to confuse someone (spotted
+2026-07-23 while scoping the sentence-builder i18n problem). All
+behavior-safe today; batched so they stop being rediscovered by every
+future reviewer.
 
 ### 7. Minute-level reminder offsets
 
@@ -186,7 +207,6 @@ Reinforced, not re-ranked, by the 2026-07-20 onboarding build: the welcome
 wizard's default-reminders step had to drop the demo's "30 minutes before"
 fine-tune option for the same reason (`PresetItem` has no minutes column),
 so the gap now visibly shows up in a second surface, not just FCFS sales.
-Stays #1.
 
 Re-reviewed 2026-07-20 (i18n build): whichever "N minutes before" copy this
 eventually ships (fine-tune option labels, sentence-style rule descriptions)
