@@ -1169,7 +1169,6 @@ async def test_duplicate_clones_scalars_and_tags_but_not_days_rounds_or_venues(c
     # does not have. Keeping it would contradict the empty leg set from birth,
     # and the editor's first save (duplicate lands on /edit) would strip it.
     assert {t.name for t in clone.tags} == {"Hasunosora"}
-    assert clone.venue is None
     assert clone.days == []
     assert clone.rounds == []
 

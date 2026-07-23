@@ -74,10 +74,10 @@ def test_loc_field_no_cross_locale_chaining():
 
 
 def test_loc_field_works_on_other_fields():
-    c = _Obj(venue="渋谷", venue_en="Shibuya", venue_zh="涩谷")
-    assert i18n.loc_field(c, "venue", "en") == "Shibuya"
-    assert i18n.loc_field(c, "venue", "zh") == "涩谷"
-    assert i18n.loc_field(c, "venue", "ja") == "渋谷"
+    c = _Obj(blurb="渋谷", blurb_en="Shibuya", blurb_zh="涩谷")
+    assert i18n.loc_field(c, "blurb", "en") == "Shibuya"
+    assert i18n.loc_field(c, "blurb", "zh") == "涩谷"
+    assert i18n.loc_field(c, "blurb", "ja") == "渋谷"
 
 
 # ── new columns are nullable, no backfill ────────────────────────────────
@@ -90,7 +90,6 @@ async def test_concert_columns_nullable(session):
     await session.commit()
     assert c.title_zh is None
     assert c.notes_en is None and c.notes_zh is None
-    assert c.venue_en is None and c.venue_zh is None
 
 
 @pytest.mark.asyncio

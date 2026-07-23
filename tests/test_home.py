@@ -104,9 +104,9 @@ class Seed:
         self.s = session
         self.tag = tag
 
-    async def concert(self, event_id, title=None, venue=None, day_offset=60):
+    async def concert(self, event_id, title=None, day_offset=60):
         c = Concert(
-            title=title or event_id, event_id=event_id, created_by=USER, venue=venue
+            title=title or event_id, event_id=event_id, created_by=USER
         )
         self.s.add(c)
         await self.s.flush()
@@ -229,7 +229,7 @@ async def test_signed_out_landing_card_has_tagrow_and_date(client):
         vn = Tag(name="Saitama Super Arena", kind=TagKind.VENUE, region="Kanto")
         seed.s.add_all([fr, vn])
         await seed.s.flush()
-        c = await seed.concert("aqours-9th", title="9th LoveLive", venue="SSA")
+        c = await seed.concert("aqours-9th", title="9th LoveLive")
         seed.s.add(ConcertTag(concert_id=c.id, tag_id=fr.id))
         seed.s.add(ConcertTag(concert_id=c.id, tag_id=vn.id))
         await seed.open_round(c, "FC lottery")
@@ -253,7 +253,7 @@ async def test_signed_in_peek_grid_keeps_its_shared_card(client):
         seed.s.add_all([fr, vn])
         await seed.s.flush()
         # Untracked (no subscribed tag), so it lands in the peek grid.
-        c = Concert(title="Untracked", event_id="untracked", created_by=USER, venue="SSA")
+        c = Concert(title="Untracked", event_id="untracked", created_by=USER)
         seed.s.add(c)
         await seed.s.flush()
         seed.s.add(ConcertTag(concert_id=c.id, tag_id=fr.id))
@@ -280,7 +280,7 @@ async def test_signed_in_home_renders_all_four_blocks(client):
     """The logged-in GET render test CLAUDE.md requires for every page -- a
     missing one shipped a 500 once."""
     async def build(seed):
-        c = await seed.concert("aqours-live", title="Aqours 9th LoveLive", venue="SSA")
+        c = await seed.concert("aqours-live", title="Aqours 9th LoveLive")
         await seed.open_round(c, "FC lottery")
 
     await seeded(client.db, build)
@@ -920,7 +920,7 @@ async def test_board_and_deadline_row_dates_render_day_month(client):
     deadline TIME column keeps the dual JST/local render from Task 2; only
     this venue/date context line changes."""
     async def build(seed):
-        c = await seed.concert("aqours-live", title="Aqours Live", venue="SSA", day_offset=None)
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
         seed.s.add(ConcertDay(
             concert_id=c.id, label="Day 1",
             starts_at_utc=datetime(2026, 10, 12, 10, 0, tzinfo=UTC),

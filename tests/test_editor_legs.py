@@ -100,11 +100,10 @@ async def seed(db, *, legs, rounds, event_id="tour"):
         s.add(c)
         await s.flush()
         day_ids = []
-        for i, (label, city, cancelled) in enumerate(legs):
+        for i, (label, _city, cancelled) in enumerate(legs):
             d = ConcertDay(
                 concert_id=c.id,
                 label=label,
-                city=city,
                 starts_at_utc=datetime(2099, 8, 1 + i, 9, 0, tzinfo=UTC),
                 cancelled=cancelled,
             )
@@ -940,31 +939,6 @@ def resubmit_as_the_template_does(client, event_id, *, days, rounds, title="Tour
         "round_legs": [r[2] for r in rounds],
     }
     return client.post(f"/concerts/{event_id}/edit", data=data)
-
-
-async def test_a_new_leg_with_no_free_text_still_stores_nulls(client, db):
-    """Preserve-on-empty must not resurrect anything. A brand-new row starts
-    with these columns NULL, so an empty incoming value has to leave them
-    NULL -- not invent a "" or carry another row's value in."""
-    await make_editor(db)
-    login(client)
-    venue_id = await _venue_tag(db)
-    _, (round_id,) = await seed(db, legs=[], rounds=[("R", [])])
-
-    r = resubmit_as_the_template_does(
-        client,
-        "tour",
-        days=[("", "Day 1", venue_id)],
-        rounds=[(round_id, "R", "")],
-    )
-    assert r.status_code == 303
-
-    async with db() as s:
-        d = (await s.execute(select(ConcertDay))).scalar_one()
-        assert d.venue_tag_id == venue_id
-        assert d.city is None
-        assert d.venue is None
-        assert d.venue_address is None
 
 
 async def test_day_venue_tag_fk_sets_null_on_tag_delete(db):

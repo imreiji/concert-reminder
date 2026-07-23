@@ -207,9 +207,7 @@ async def test_create_form_rolls_up_leg_venues(editor_client):
         )).scalar_one()
         assert await _venue_tag_ids(session, concert.id) == {1, 2}
         # create_concert_row no longer derives a join string; the rolled-up
-        # VENUE tags above are the only answer to "where is this". Pinned so a
-        # regression restoring ", ".join(...) is caught.
-        assert concert.venue is None
+        # VENUE tags above are the only answer to "where is this".
 
 
 async def test_import_commit_rolls_up_leg_venues(editor_client):
