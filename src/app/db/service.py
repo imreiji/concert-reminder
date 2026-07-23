@@ -3671,10 +3671,10 @@ def concert_variant_gaps(
     lazy-loaded mid-render, and they are numbered in the order the edit page
     renders them.
 
-    Concert.venue/_en/_zh are deliberately absent: the editor no longer types
-    them (a leg's venue is a VENUE tag), they are never validated, and a
-    later phase drops the columns -- a notice about them would only ask for
-    work that is about to be deleted.
+    There is no venue field here: a leg's venue is a VENUE tag, whose own
+    name variants are governed on the Tags page, not per concert. (The old
+    Concert.venue/_en/_zh columns were dropped once every venue lived on a
+    tag.)
     """
     pairs: list[tuple[str, tuple[str, ...]]] = [
         (_("Title"), missing_variants(
