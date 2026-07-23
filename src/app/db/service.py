@@ -1536,12 +1536,10 @@ async def my_deadline_rows(
             can_capture=can_capture,
             can_report_result=can_report_result,
             # Same display rule as the tile macro: >1 venue tag collapses to
-            # "Multiple", one wins outright, and the free-text venue is only a
-            # fallback when there is no VENUE tag at all.
+            # "Multiple", one wins outright, no venue tag means no venue.
             venue=(
                 _("Multiple") if len(venue_tags) > 1
-                else (venue_tags[0] if venue_tags
-                      else (loc_field(concert, "venue", get_locale()) if concert else None))
+                else (venue_tags[0] if venue_tags else None)
             ),
             starts_at_utc=live_days[0].starts_at_utc if live_days else None,
         ))
@@ -1602,13 +1600,13 @@ class SetupTallies:
 
 def _setup_tile_venue(concert: Concert) -> str | None:
     """Same >1-venue rule my_deadline_rows uses: many VENUE tags collapse to
-    "Multiple", one wins, the free-text venue is the fallback with no tag."""
+    "Multiple", one wins, no venue tag means no venue."""
     venue_tags = [t for t in concert.tags if t.kind is TagKind.VENUE]
     if len(venue_tags) > 1:
         return _("Multiple")
     if venue_tags:
         return loc_field(venue_tags[0], "name", get_locale())
-    return loc_field(concert, "venue", get_locale())
+    return None
 
 
 def _next_round_anchor(
@@ -2640,7 +2638,7 @@ async def user_calendar_events(
 TRACKED_CONCERT_FIELDS = [
     "event_id", "title", "title_en", "title_zh", "kind", "organizer", "categories",
     "eventernote_url", "official_url", "source_url", "performers_text", "notes",
-    "notes_en", "notes_zh", "venue_en", "venue_zh",
+    "notes_en", "notes_zh",
 ]
 
 
@@ -3439,7 +3437,7 @@ async def notice_context(
         title=loc_field(concert, "title", locale),
         tags_line=" · ".join(non_venue),
         venue=(gettext_in(locale, "Multiple") if len(venues) > 1
-               else (venues[0] if venues else loc_field(concert, "venue", locale))),
+               else (venues[0] if venues else None)),
         first_deadline_label=loc_field(first[0], "label", locale) if first else None,
         first_deadline_at=first[1] if first else None,
         user_timezone=user.timezone if user else "America/Moncton",

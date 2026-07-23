@@ -1191,30 +1191,6 @@ def test_index_search_matches_venue_tag_name(client):
     assert 'style="display:none"' not in tile.split("</a>", 1)[0]
 
 
-async def test_index_search_falls_back_to_free_text_venue_when_no_venue_tag(client):
-    """Concert.venue is a legacy top-level field the current creation form
-    doesn't expose (only per-day ConcertDay.venue is settable through the
-    UI) -- set it directly at the DB layer, matching how other tests reach
-    fields the form doesn't cover."""
-    login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={
-        "title_en": "Some Show", "title_zh": "Some Show", "title": "Some Show",
-        "event_id": "some-show",
-    })
-    async with client.db() as s:
-        from app.db.models import Concert as ConcertModel
-
-        concert = (await s.execute(
-            select(ConcertModel).where(ConcertModel.event_id == "some-show")
-        )).scalar_one()
-        concert.venue = "Nippon Budokan"
-        await s.commit()
-
-    filtered = client.get("/discover?q=budokan").text
-    tile = filtered[filtered.index('<a class="tile"'):]
-    assert 'style="display:none"' not in tile.split("</a>", 1)[0]
-
-
 async def test_index_search_ignores_free_text_venue_when_venue_tag_exists(client):
     """The free-text-venue fallback only applies when NO VENUE tag is
     attached -- if a VENUE tag exists, stale/mismatched free-text venue

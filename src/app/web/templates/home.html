@@ -15,17 +15,12 @@
 {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
 {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
 {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
-{#- The venue line reads the concert's VENUE TAGS first -- they are derived
-    from its legs by sync_concert_venue_tags, so they are the only answer
-    that cannot go stale. `Concert.venue` is the legacy free-text column,
-    written as NULL by every new concert and kept only until a later phase
-    drops it, so it is a fallback and never the primary. Same rule as a
-    Discover tile (discover.html): more than one venue collapses to
-    "Multiple", since a tour's cities do not fit on a card. Reading the
-    tags also fixes the old guard's blind spot -- `{% raw %}{% if c.venue %}{% endraw %}` tested
-    the Japanese column, so a venue filled only in venue_en/venue_zh
-    rendered nothing. -#}
-{% set venue_text = _("Multiple") if cv | length > 1 else ((cv | map("loc_name") | join(", ")) or loc(c, "venue")) %}
+{#- The venue line reads the concert's VENUE TAGS, derived from its legs by
+    sync_concert_venue_tags, so they are the only answer that cannot go
+    stale. Same rule as a Discover tile (discover.html): more than one venue
+    collapses to "Multiple", since a tour's cities do not fit on a card. A
+    concert whose legs carry no venue tag shows no venue. -#}
+{% set venue_text = _("Multiple") if cv | length > 1 else (cv | map("loc_name") | join(", ")) %}
 {% set live_days = c.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
 <a class="card" href="/concerts/{{ c.event_id }}">
   {% if cg or ca %}

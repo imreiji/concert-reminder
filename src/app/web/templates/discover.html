@@ -53,7 +53,7 @@
       {% endif %}
       <strong>{{ loc(c, "title") }}</strong>{% if c.kind %} <span class="dim kind-tag">{{ c.kind.value.replace("_", " ") }}</span>{% endif %}
       {% if cv | length > 1 %}<span class="dim">📍 {{ _("Multiple") }}</span>
-      {% elif cv or c.venue %}<span class="dim">📍 {{ (cv | map("loc_name") | join(", ")) or loc(c, "venue") }}</span>{% endif %}
+      {% elif cv %}<span class="dim">📍 {{ cv | map("loc_name") | join(", ") }}</span>{% endif %}
       {% set live_days = c.days | rejectattr("cancelled") | list %}
       {% if live_days %}<span class="when dim">{% trans day=day_month(live_days[0].starts_at_utc) %}{{ day }} JST{% endtrans %}</span>{% endif %}
       {#- Tag-row minichips: franchise + region at a glance (demo .tagrow/

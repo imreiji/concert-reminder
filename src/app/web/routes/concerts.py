@@ -1434,10 +1434,7 @@ async def export_concert_yaml(
     # The legs, with their venue tags: the export's city/venue/venue_address
     # come off the tag when the leg has one, and ConcertDay.venue_tag is
     # lazy="raise", so the eager load below is load-bearing -- without it every
-    # export is a MissingGreenlet 500. A leg with NO tag falls back to its old
-    # free-text columns (see the YamlDay build): those still hold the venue for
-    # every ramen.events import and for anything the backfill could not match,
-    # and exporting null for them would lose data the DB still has.
+    # export is a MissingGreenlet 500. A leg with NO venue tag exports no venue.
     days = list((await session.execute(
         select(ConcertDay)
         .where(ConcertDay.concert_id == concert.id)
@@ -1451,9 +1448,9 @@ async def export_concert_yaml(
         YamlDay(
             label=d.label, label_en=d.label_en, label_zh=d.label_zh,
             starts_at_utc=d.starts_at_utc,
-            city=d.venue_tag.city if d.venue_tag else d.city,
-            venue=d.venue_tag.name if d.venue_tag else d.venue,
-            venue_address=d.venue_tag.address if d.venue_tag else d.venue_address,
+            city=d.venue_tag.city if d.venue_tag else None,
+            venue=d.venue_tag.name if d.venue_tag else None,
+            venue_address=d.venue_tag.address if d.venue_tag else None,
             doors_at_utc=d.doors_at_utc,
         )
         for d in days

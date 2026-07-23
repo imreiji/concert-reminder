@@ -425,41 +425,6 @@ async def test_board_card_shows_the_leg_venue_tag(editor_client):
     assert "Zepp Namba" in board
 
 
-# Finding 2: an unmatched free-text venue must stay visible and exportable.
-#
-# The old free-text columns survive this phase by design (a two-deploy
-# migration keeps an unmatched venue recoverable). If nothing renders them,
-# the operator cannot spot an affected concert by browsing -- and every
-# ramen.events import, whose preview posts no day_venue_tag_id at all,
-# silently loses its venue.
-
-
-def _create_free_text_leg(client, event_id="freetext"):
-    return client.post("/concerts", data={"title_en": "Free Text", "title_zh": "Free Text",
-        "title": "Free Text", "event_id": event_id,
-        "day_label": ["Day 1"],
-        "day_label_en": ["Day 1"],
-        "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-        "day_doors_at": [""],
-        "day_city": ["Osaka"], "day_venue": ["Namba Hatch"],
-        "day_venue_address": ["1-3-1 Minatomachi"],
-    })
-
-
-async def test_concert_page_falls_back_to_free_text_venue(editor_client):
-    assert _create_free_text_leg(editor_client).status_code == 303
-    assert "Namba Hatch" in editor_client.get("/concerts/freetext").text
-
-
-async def test_yaml_export_falls_back_to_free_text_venue(editor_client):
-    assert _create_free_text_leg(editor_client, "freetext2").status_code == 303
-    data = yaml.safe_load(editor_client.get("/concerts/freetext2/export.yaml").text)
-    day = data["performances"][0]
-    assert day["venue"] == "Namba Hatch"
-    assert day["city"] == "Osaka"
-    assert day["venue_address"] == "1-3-1 Minatomachi"
-
-
 # Finding 5: the export ROUTE, not just the pure serializer. `venue_tag` is
 # lazy="raise", so a missing selectinload here is a 500 on an editor-facing
 # endpoint that the pure-function tests could never see.
