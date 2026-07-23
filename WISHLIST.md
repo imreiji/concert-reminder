@@ -123,8 +123,9 @@ concert page's per-leg round rows (2026-07-19) already render one row per
 ROUND with a single primary anchor chosen by `_primary_anchor`, so the
 collapsed shape exists and has tests behind it. What remains is deciding
 whether Home wants the same rule and re-pointing the htmx swap at it.
-(Now #2 after the 2026-07-22 import picker shipped and vacated the slot above
-it; unchanged in substance.)
+(Briefly #2 after the 2026-07-22 import picker shipped and vacated the slot
+above it; now #3, pushed down by the 2026-07-23 eventernote-discovery entry.
+Unchanged in substance.)
 
 Nudged up one slot (from #3) by upgrade rounds shipping on 2026-07-19: an
 upgrade round is one more anchor-bearing round per concert, so on a concert
