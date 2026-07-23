@@ -201,3 +201,30 @@ def test_slug_and_venues_keys_are_ignored_silently():
     must not warn about them."""
     p = parse_draft("title: T\nslug: t\nvenues: [Somewhere]\n")
     assert not p.warnings
+
+
+def test_deeply_nested_flow_raises_draft_error_not_recursion_error():
+    with pytest.raises(DraftError):
+        parse_draft("title: " + "[" * 500 + "]" * 500)
+
+
+def test_anchor_fanout_completes_and_rejects_container_title():
+    """A tiny alias-DAG payload must neither hang (str() on shared sub-lists
+    is exponential) nor crash: the container title reads as no-title."""
+    lines = ["a0: &a0 [x, x, x, x, x, x, x, x, x, x]"]
+    for i in range(1, 12):
+        prev = f"*a{i-1}, " * 10
+        lines.append(f"a{i}: &a{i} [{prev.rstrip(', ')}]")
+    lines.append("title: *a11")
+    with pytest.raises(DraftError):
+        parse_draft("\n".join(lines))
+
+
+def test_container_value_for_scalar_field_blanks():
+    p = parse_draft(
+        "title: T\norganizer: {corp: bandai}\nperformances:\n  - label: D\n"
+        "    starts_at_jst: [2026, 11, 7]\n"
+    )
+    assert p.organizer is None
+    assert p.days[0].starts_at_jst is None
+    assert any("starts_at_jst" in w for w in p.warnings)

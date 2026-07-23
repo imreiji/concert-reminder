@@ -8,7 +8,10 @@ still renders a preview the editor can fix, instead of bouncing them back
 to a blank form.
 
 Hard failure (DraftError) only when there is nothing to render a preview
-FROM: not YAML, not a mapping, or no title. Everything else degrades to a
+FROM: not YAML, not a mapping, no title, or the YAML itself is hostile
+(nesting too deep for PyYAML's recursive-descent parser, which raises
+RecursionError rather than YAMLError -- caught and reraised as DraftError
+same as any other unparseable input). Everything else degrades to a
 warning carried on the result and shown in the preview's warning strip:
 unknown kinds fall back, malformed datetimes blank the field, unknown keys
 are ignored loudly (they usually mean the skill and this parser have
@@ -58,8 +61,17 @@ def _warn_unknown(mapping: dict, known: set[str], where: str, warnings: list[str
 
 
 def _text(value) -> str | None:
-    """A scalar as trimmed text, or None. YAML may hand back numbers etc."""
+    """A scalar as trimmed text, or None. YAML may hand back numbers etc.
+
+    A list/dict is never valid text for a scalar field -- str()'ing one can
+    be exponentially expensive on an anchor/alias fan-out DAG (a tiny
+    payload whose aliases share sub-structure), so containers are rejected
+    without ever being stringified. It goes silently blank; the caller's
+    own unknown-key/structure warnings are what catch schema drift here.
+    """
     if value is None:
+        return None
+    if isinstance(value, (list, dict)):
         return None
     text = str(value).strip()
     return text or None
@@ -91,6 +103,11 @@ def _dt(value, where: str, warnings: list[str]) -> datetime | None:
         return value
     if isinstance(value, date):
         warnings.append(f"{where}: date without a time -- left blank, fill it in the form")
+        return None
+    if isinstance(value, (list, dict)):
+        warnings.append(
+            f"{where}: expected 'YYYY-MM-DD HH:MM', got a {type(value).__name__} -- left blank"
+        )
         return None
     text = str(value).strip()
     for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M"):
@@ -128,8 +145,8 @@ def _round_kind(value, where: str, warnings: list[str]) -> RoundKind:
 def parse_draft(text: str) -> ParsedConcert:
     try:
         data = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
-        raise DraftError(f"that doesn't parse as YAML: {exc}") from exc
+    except (yaml.YAMLError, RecursionError) as exc:
+        raise DraftError(f"that doesn't parse as YAML: {exc or 'nesting too deep'}") from exc
     if not isinstance(data, dict):
         raise DraftError("a draft is a YAML mapping (key: value lines) -- this isn't one")
     title = _text(data.get("title"))
