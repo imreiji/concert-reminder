@@ -406,6 +406,23 @@ performer chips - see its Shipped entry below.)
 
 ## Shipped
 
+### Downloadable add-concert skill zip on the import page (2026-07-23)
+
+Shipped as: a small distribution affordance layered on the agent-import build
+below, the same day. `GET /concerts/import/skill.zip` (editor-gated, in
+`routes/imports.py`) zips `src/app/web/skill_dist/add-concert/` at request
+time -- a committed binary would go stale the moment the skill changed -- and
+a linked line under the import page's paste card hands it out where editors
+already work. The dist copy is a deliberate variant of the repo skill
+(drift-warning instead of the CI-pin sentence, an editor-access note,
+tool-agnostic fetching for recipients on claude.ai rather than Claude Code);
+its `example-draft.yaml` is pinned byte-identical to the repo skill's by test,
+so the schema contract cannot fork between the two copies. Not a Proposed
+entry (raised and built directly by the owner on 2026-07-23); revision pass
+over Proposed found no rank changes -- it strengthens the case for #2
+(eventernote discovery, since more editors can now produce drafts) without
+displacing anything.
+
 ### Agent-driven concert import (YAML draft round-trip + add-concert skill) (2026-07-23)
 
 Shipped as: a way to skip the typing that the trilingual arc created. The
