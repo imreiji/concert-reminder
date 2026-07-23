@@ -146,7 +146,18 @@ Tags-page untranslated count) -- have shipped since).
   `applies_to` to legs via the same `round_legs`/`day_key`/
   `parse_round_legs`/`key_to_day_id` path `create_concert` uses -- before
   this, the flat import form could not express a round spanning more than
-  one leg. Reminder-rule add/delete lives in
+  one leg.
+  The same preview has a second producer: `POST /concerts/import/draft`
+  takes a pasted YAML draft (the `domain/yaml_export.py` vocabulary made
+  two-way -- `domain/yaml_import.py` parses it, warnings over failures,
+  `yaml.safe_load` only) and renders `import_preview.html` fully prefilled:
+  trilingual titles/labels, all four round anchors, tag/venue NAMES resolved
+  to picker pre-selections via `match_tag_ids_by_name` /
+  `match_venue_tag_id` (never ids in the draft; unmatched names render as
+  hints, never dropped). The producer is normally an agent following
+  `.claude/skills/add-concert/SKILL.md`, whose example draft is pinned to
+  the parser by a test. import_commit stays the only write path.
+  Reminder-rule add/delete lives in
   `routes/reminders.py` (split out of `concerts.py`; renders via
   `concerts.render_rules_fragment`), and the `/me/timezone*` routes live in
   `routes/preferences.py` with the other per-user preference routes.
