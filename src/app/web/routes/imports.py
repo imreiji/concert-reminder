@@ -204,7 +204,7 @@ async def import_preview(
             # fills Japanese only, so this is where they pay off most.
             "round_phrases": await round_label_phrases(session),
             # The one free-text venue the ramen.events parse scrapes for the
-            # whole event. It fills each parsed leg's free-text `day_venue`
+            # whole event. It is shown as a hint beside each leg's venue picker
             # (the importer's find must not be thrown away when no tag matches)
             # and, when it DOES match a VENUE tag by trimmed case-insensitive
             # name, pre-selects that tag below.
@@ -241,9 +241,6 @@ async def import_commit(
     day_label_en: list[str] = Form(default=[]),
     day_label_zh: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
-    day_city: list[str] = Form(default=[]),
-    day_venue: list[str] = Form(default=[]),
-    day_venue_address: list[str] = Form(default=[]),
     day_venue_tag_id: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
     day_cancelled: list[str] = Form(default=[]),
@@ -309,13 +306,13 @@ async def import_commit(
     concert.notes_en = notes_en.strip() or None
     concert.notes_zh = notes_zh.strip() or None
 
-    # The optional day_* fields (venue, city, doors, cancelled) round-trip in
-    # full from the preview form, but a minimal client -- the older import
-    # contract, and its tests -- posts only day_label/day_starts_at. End-pad
-    # those secondary text arrays to the label count so their omission is read
-    # as "blank for every row" (their own default) rather than tripping the
-    # strict zip below. Safe because they are non-binding display text: a
-    # trailing row losing empty text is harmless.
+    # The optional day_* fields (doors, cancelled) round-trip in full from the
+    # preview form, but a minimal client -- the older import contract, and its
+    # tests -- posts only day_label/day_starts_at. End-pad those secondary
+    # arrays to the label count so their omission is read as "blank for every
+    # row" (their own default) rather than tripping the strict zip below. Safe
+    # because they are non-binding display text: a trailing row losing empty
+    # text is harmless.
     n_days = len(day_label)
     # day_label_en/day_label_zh join that same end-padded group -- non-binding
     # display text, and the minimal client above supplies neither. This is the
@@ -324,9 +321,6 @@ async def import_commit(
     # they have no minimal-client contract to honour).
     day_label_en = day_label_en + [""] * (n_days - len(day_label_en))
     day_label_zh = day_label_zh + [""] * (n_days - len(day_label_zh))
-    day_city = day_city + [""] * (n_days - len(day_city))
-    day_venue = day_venue + [""] * (n_days - len(day_venue))
-    day_venue_address = day_venue_address + [""] * (n_days - len(day_venue_address))
     day_doors_at = day_doors_at + [""] * (n_days - len(day_doors_at))
     day_cancelled = day_cancelled + ["false"] * (n_days - len(day_cancelled))
     # day_key is the leg-binding key, so it is NOT end-padded: a partial array
@@ -353,22 +347,21 @@ async def import_commit(
     days: list = []
     key_rows: list[tuple[str, object]] = []
     for row_no, (
-        key, label, label_en, label_zh, starts_at, city, venue, venue_address,
+        key, label, label_en, label_zh, starts_at,
         doors_at, cancelled, v_tag
     ) in enumerate(zip(
-        day_key, day_label, day_label_en, day_label_zh, day_starts_at, day_city, day_venue,
-        day_venue_address, day_doors_at, day_cancelled, day_venue_tags, strict=True,
+        day_key, day_label, day_label_en, day_label_zh, day_starts_at,
+        day_doors_at, day_cancelled, day_venue_tags, strict=True,
     ), start=1):
-        # v_tag is in the guard because the next phase drops the free-text
-        # city/venue inputs: without it, a row where the editor picked ONLY a
-        # venue would read as blank and be silently dropped.
-        if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip(), v_tag]):
+        # v_tag is in the guard so a row where the editor picked ONLY a venue
+        # (no label, no start time yet) is not read as blank and dropped.
+        if not any([label.strip(), starts_at.strip(), v_tag]):
             continue  # a blank trailing row from the repeatable UI -- key and all
         # Same create-boundary rule create_concert applies, with the same row
         # numbering: an import is a create, so its labels are held to it too.
         require_variants(f"Leg {row_no} label", label, label_en, label_zh)
         day = build_day(
-            concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
+            concert.id, label, starts_at, doors_at, cancelled,
             v_tag, label_en, label_zh,
         )
         session.add(day)

@@ -118,17 +118,14 @@ def region_sidebar_links(
 
 def concert_search_text(c: Concert) -> str:
     """Lowercased blob everything free-text search matches: title (plus its
-    en/zh variants), every attached tag's name (all four kinds count --
-    franchise/group/artist/venue -- plus each tag's en/zh variants), and the
-    concert's free-text venue (all variants) as a fallback ONLY when no VENUE
-    tag is attached (mirrors the tile macro's own venue display fallback in
-    discover.html exactly). Localizing the haystack rather than the query lets
-    a search in any language match a concert filled in any other."""
+    en/zh variants) and every attached tag's name (all four kinds count --
+    franchise/group/artist/venue -- plus each tag's en/zh variants). A
+    concert's venue comes off its VENUE tags, so it is already in the blob.
+    Localizing the haystack rather than the query lets a search in any
+    language match a concert filled in any other."""
     parts = [c.title, c.title_en, c.title_zh]
     for t in c.tags:
         parts += [t.name, t.name_en, t.name_zh]
-    if not any(t.kind is TagKind.VENUE for t in c.tags):
-        parts += [c.venue, c.venue_en, c.venue_zh]
     return " ".join(p for p in parts if p).lower()
 
 

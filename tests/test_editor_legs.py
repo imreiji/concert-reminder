@@ -100,11 +100,10 @@ async def seed(db, *, legs, rounds, event_id="tour"):
         s.add(c)
         await s.flush()
         day_ids = []
-        for i, (label, city, cancelled) in enumerate(legs):
+        for i, (label, _city, cancelled) in enumerate(legs):
             d = ConcertDay(
                 concert_id=c.id,
                 label=label,
-                city=city,
                 starts_at_utc=datetime(2099, 8, 1 + i, 9, 0, tzinfo=UTC),
                 cancelled=cancelled,
             )
@@ -146,12 +145,9 @@ def resubmit(client, event_id, *, days, rounds, title="Tour", extra=None):
             "day_label": [d[1] for d in days],
             "day_label_en": [""] * len(days),
             "day_label_zh": [""] * len(days),
-            "day_city": [d[2] for d in days],
             "day_starts_at": [
                 f"2099-08-{1 + i:02d}T18:00" for i in range(len(days))
             ],
-            "day_venue": [""] * len(days),
-            "day_venue_address": [""] * len(days),
             "day_doors_at": [""] * len(days),
             "day_cancelled": ["true" if d[3] else "false" for d in days],
             "round_id": [str(r[0]) for r in rounds],
@@ -393,9 +389,9 @@ async def test_a_concert_with_no_legs_still_edits(client, db):
 # round picks a different leg, so any shift shows up.
 
 
-async def _day_id_by_city(db, city):
+async def _day_id_by_label(db, label):
     async with db() as s:
-        res = await s.execute(select(ConcertDay).where(ConcertDay.city == city))
+        res = await s.execute(select(ConcertDay).where(ConcertDay.label == label))
         return res.scalar_one().id
 
 
@@ -433,7 +429,7 @@ async def test_three_rounds_land_on_three_different_legs_one_of_them_brand_new(
     )
     assert r.status_code == 303
 
-    day3 = await _day_id_by_city(db, "Fukuoka")
+    day3 = await _day_id_by_label(db, "Day 3")
     assert day3 not in (day1, day2)
     assert await applies_to(db, r1) == [day1]
     assert await applies_to(db, r2) == [day2]
@@ -460,7 +456,7 @@ async def test_a_new_leg_key_and_a_saved_leg_id_can_share_one_round(client, db):
         ],
         rounds=[(round_id, "Both legs", f"{day1} new-7")],
     )
-    day2 = await _day_id_by_city(db, "Osaka")
+    day2 = await _day_id_by_label(db, "Day 2")
     assert set(await applies_to(db, round_id)) == {day1, day2}
 
 
@@ -507,7 +503,7 @@ async def test_a_blank_leg_row_does_not_consume_the_next_rows_key(client, db):
         ],
         rounds=[(round_id, "Second leg", "new-real")],
     )
-    day2 = await _day_id_by_city(db, "Osaka")
+    day2 = await _day_id_by_label(db, "Day 2")
     assert await applies_to(db, round_id) == [day2]
 
 
@@ -549,7 +545,7 @@ async def test_a_duplicate_day_key_gives_the_leg_to_the_first_row(client, db):
         ],
         rounds=[(round_id, "Keyed round", "dupe")],
     )
-    assert await applies_to(db, round_id) == [await _day_id_by_city(db, "Osaka")]
+    assert await applies_to(db, round_id) == [await _day_id_by_label(db, "Day 2")]
 
 
 # ── round_legs padding: the two halves of a short array ──────────────────
@@ -914,10 +910,8 @@ async def test_a_blank_leg_rows_venue_select_defaults_to_no_value(client, db):
 def resubmit_as_the_template_does(client, event_id, *, days, rounds, title="Tour"):
     """POST exactly the field set the CURRENT leg editor emits.
 
-    `resubmit` above still sends `day_city`/`day_venue`/`day_venue_address`,
-    which the templates no longer have -- so it cannot see this bug. A real
-    browser sends the keys below and nothing else. `days` is
-    (id, label, venue_tag_id).
+    `days` is (id, label, venue_tag_id) -- the venue is a tag now, so this
+    posts `day_venue_tag_id` and no free-text venue fields.
     """
     data = {
         "title": title,
@@ -945,69 +939,6 @@ def resubmit_as_the_template_does(client, event_id, *, days, rounds, title="Tour
         "round_legs": [r[2] for r in rounds],
     }
     return client.post(f"/concerts/{event_id}/edit", data=data)
-
-
-async def test_an_edit_save_does_not_destroy_a_legs_free_text_venue(client, db):
-    """The two-deploy migration's whole safety net.
-
-    `city`/`venue`/`venue_address` outlive this phase so a leg whose venue
-    string the backfill could not match to a tag stays recoverable by hand.
-    But the inputs are gone from the templates, so those params arrive absent,
-    get padded to "", and a plain assignment would write None over the only
-    surviving record of that venue -- on the FIRST save of any existing
-    concert, silently. Preserve-on-empty is what stops it.
-    """
-    await make_editor(db)
-    login(client)
-    (day1,), (round_id,) = await seed(
-        db,
-        legs=[("Day 1", "Kanagawa", False)],
-        rounds=[("R", [0])],
-    )
-    async with db() as s:
-        d = await s.get(ConcertDay, day1)
-        d.venue = "Zepp Haneda"
-        d.venue_address = "1-4-8 Hanedakuko, Ota-ku, Tokyo"
-        await s.commit()
-
-    r = resubmit_as_the_template_does(
-        client,
-        "tour",
-        days=[(day1, "Day 1", None)],
-        rounds=[(round_id, "R", str(day1))],
-    )
-    assert r.status_code == 303
-
-    async with db() as s:
-        d = await s.get(ConcertDay, day1)
-        assert d.city == "Kanagawa"
-        assert d.venue == "Zepp Haneda"
-        assert d.venue_address == "1-4-8 Hanedakuko, Ota-ku, Tokyo"
-
-
-async def test_a_new_leg_with_no_free_text_still_stores_nulls(client, db):
-    """Preserve-on-empty must not resurrect anything. A brand-new row starts
-    with these columns NULL, so an empty incoming value has to leave them
-    NULL -- not invent a "" or carry another row's value in."""
-    await make_editor(db)
-    login(client)
-    venue_id = await _venue_tag(db)
-    _, (round_id,) = await seed(db, legs=[], rounds=[("R", [])])
-
-    r = resubmit_as_the_template_does(
-        client,
-        "tour",
-        days=[("", "Day 1", venue_id)],
-        rounds=[(round_id, "R", "")],
-    )
-    assert r.status_code == 303
-
-    async with db() as s:
-        d = (await s.execute(select(ConcertDay))).scalar_one()
-        assert d.venue_tag_id == venue_id
-        assert d.city is None
-        assert d.venue is None
-        assert d.venue_address is None
 
 
 async def test_day_venue_tag_fk_sets_null_on_tag_delete(db):

@@ -74,10 +74,10 @@ def test_loc_field_no_cross_locale_chaining():
 
 
 def test_loc_field_works_on_other_fields():
-    c = _Obj(venue="渋谷", venue_en="Shibuya", venue_zh="涩谷")
-    assert i18n.loc_field(c, "venue", "en") == "Shibuya"
-    assert i18n.loc_field(c, "venue", "zh") == "涩谷"
-    assert i18n.loc_field(c, "venue", "ja") == "渋谷"
+    c = _Obj(blurb="渋谷", blurb_en="Shibuya", blurb_zh="涩谷")
+    assert i18n.loc_field(c, "blurb", "en") == "Shibuya"
+    assert i18n.loc_field(c, "blurb", "zh") == "涩谷"
+    assert i18n.loc_field(c, "blurb", "ja") == "渋谷"
 
 
 # ── new columns are nullable, no backfill ────────────────────────────────
@@ -90,7 +90,6 @@ async def test_concert_columns_nullable(session):
     await session.commit()
     assert c.title_zh is None
     assert c.notes_en is None and c.notes_zh is None
-    assert c.venue_en is None and c.venue_zh is None
 
 
 @pytest.mark.asyncio
@@ -163,7 +162,7 @@ async def test_search_text_includes_variants(session):
     await session.flush()
     concert = Concert(
         event_id="ll1", title="ラブライブ", title_en="Love Live", title_zh="爱与生活",
-        venue="渋谷", venue_en="Shibuya Hall", venue_zh="涩谷厅", created_by=None,
+        created_by=None,
     )
     concert.tags.append(tag)
     session.add(concert)
@@ -174,9 +173,6 @@ async def test_search_text_includes_variants(session):
     assert "水团" in text          # tag name_zh
     assert "aqours en" in text     # tag name_en (lowercased)
     assert "爱与生活" in text        # concert title_zh
-    # venue variants land because no VENUE tag is attached (free-text fallback)
-    assert "shibuya hall" in text
-    assert "涩谷厅" in text
 
 
 # ── snapshot_concert tracks the new columns so edits diff ─────────────────
@@ -185,9 +181,9 @@ async def test_search_text_includes_variants(session):
 @pytest.mark.asyncio
 async def test_snapshot_concert_includes_new_fields(session):
     c = Concert(event_id="s1", title="t", title_zh="标题", notes_en="en note",
-                venue_zh="场地", created_by=None)
+                created_by=None)
     snap = snapshot_concert(c)
-    for f in ("title_zh", "notes_en", "notes_zh", "venue_en", "venue_zh"):
+    for f in ("title_zh", "notes_en", "notes_zh"):
         assert f in snap
     assert snap["title_zh"] == "标题"
     assert snap["notes_en"] == "en note"
@@ -276,15 +272,12 @@ async def test_edit_form_persists_translation_variants(client, db):
         "title_zh": "爱与生活",
         "notes_en": "EN note",
         "notes_zh": "中文备注",
-        "venue_en": "Shibuya",
-        "venue_zh": "涩谷",
     })
     assert r.status_code == 303
     async with db() as s:
         c = (await s.execute(select(Concert).where(Concert.event_id == "ll"))).scalar_one()
         assert c.title_zh == "爱与生活"
         assert c.notes_en == "EN note" and c.notes_zh == "中文备注"
-        assert c.venue_en == "Shibuya" and c.venue_zh == "涩谷"
         # an empty variant round-trips to None, never ""
         await s.refresh(c, ["audits"])
     # the edit recorded an audit row (snapshot tracks the new columns)
@@ -292,7 +285,7 @@ async def test_edit_form_persists_translation_variants(client, db):
         from app.db.service import concert_audit_log
         audits = await concert_audit_log(s, c.id)
     changed = {ch["field"] for a in audits for ch in a.changes}
-    assert {"title_zh", "notes_en", "venue_zh"} <= changed
+    assert {"title_zh", "notes_en"} <= changed
 
 
 @pytest.mark.asyncio

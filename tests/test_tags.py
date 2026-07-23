@@ -801,7 +801,7 @@ def create_active_concert_with_group(client, event_id, group_tag_id):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["false"],
         },
     )
@@ -1191,71 +1191,6 @@ def test_index_search_matches_venue_tag_name(client):
     assert 'style="display:none"' not in tile.split("</a>", 1)[0]
 
 
-async def test_index_search_falls_back_to_free_text_venue_when_no_venue_tag(client):
-    """Concert.venue is a legacy top-level field the current creation form
-    doesn't expose (only per-day ConcertDay.venue is settable through the
-    UI) -- set it directly at the DB layer, matching how other tests reach
-    fields the form doesn't cover."""
-    login_as(client, EDITOR_ID, "reiji")
-    client.post("/concerts", data={
-        "title_en": "Some Show", "title_zh": "Some Show", "title": "Some Show",
-        "event_id": "some-show",
-    })
-    async with client.db() as s:
-        from app.db.models import Concert as ConcertModel
-
-        concert = (await s.execute(
-            select(ConcertModel).where(ConcertModel.event_id == "some-show")
-        )).scalar_one()
-        concert.venue = "Nippon Budokan"
-        await s.commit()
-
-    filtered = client.get("/discover?q=budokan").text
-    tile = filtered[filtered.index('<a class="tile"'):]
-    assert 'style="display:none"' not in tile.split("</a>", 1)[0]
-
-
-async def test_index_search_ignores_free_text_venue_when_venue_tag_exists(client):
-    """The free-text-venue fallback only applies when NO VENUE tag is
-    attached -- if a VENUE tag exists, stale/mismatched free-text venue
-    text must not spuriously match. The positive assertion below (search
-    still finds the concert by its actual VENUE tag name) is what proves
-    search is functioning at all for this concert -- without it, this
-    test would pass identically whether the exclusion works correctly or
-    search is silently broken."""
-    login_as(client, EDITOR_ID, "reiji")
-    client.post("/tags", data={
-        "name_en": "Yokohama Arena", "name_zh": "Yokohama Arena", "name": "Yokohama Arena",
-        "kind": "venue",
-    })
-    # Venue on the leg -- see test_index_search_matches_venue_tag_name.
-    client.post("/concerts", data={"title_en": "Some Show", "title_zh": "Some Show",
-        "title": "Some Show", "event_id": "some-show", "venue_tags": [1],
-        "day_label": ["Day 1"],
-        "day_label_en": ["Day 1"],
-        "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-        "day_doors_at": [""], "day_venue_tag_id": ["1"],
-    })
-    async with client.db() as s:
-        from app.db.models import Concert as ConcertModel
-
-        concert = (await s.execute(
-            select(ConcertModel).where(ConcertModel.event_id == "some-show")
-        )).scalar_one()
-        concert.venue = "Stale Old Name"
-        await s.commit()
-
-    stale_filtered = client.get("/discover?q=stale").text
-    stale_tile = stale_filtered[stale_filtered.index('<a class="tile"'):]
-    assert 'style="display:none"' in stale_tile.split("</a>", 1)[0]
-
-    # proves search actually works for this concert (not just silently
-    # broken) -- it still finds it by the VENUE tag's real name
-    tag_name_filtered = client.get("/discover?q=yokohama").text
-    tag_name_tile = tag_name_filtered[tag_name_filtered.index('<a class="tile"'):]
-    assert 'style="display:none"' not in tag_name_tile.split("</a>", 1)[0]
-
-
 def test_index_sorts_by_earliest_event_day(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title_en": "AAA Later Show", "title_zh": "AAA Later Show",
@@ -1263,14 +1198,14 @@ def test_index_sorts_by_earliest_event_day(client):
         "day_label": ["Day 1"],
         "day_label_en": ["Day 1"],
         "day_label_zh": ["Day 1"], "day_starts_at": ["2099-12-01T18:00"],
-        "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        "day_doors_at": [""],
     })
     client.post("/concerts", data={"title_en": "BBB Sooner Show", "title_zh": "BBB Sooner Show",
         "title": "BBB Sooner Show", "event_id": "bbb",
         "day_label": ["Day 1"],
         "day_label_en": ["Day 1"],
         "day_label_zh": ["Day 1"], "day_starts_at": ["2099-06-01T18:00"],
-        "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        "day_doors_at": [""],
     })
 
     by_event = client.get("/discover?sort=event").text
@@ -1459,8 +1394,8 @@ async def test_creation_supports_multiple_groups_and_franchises(client):
 
 async def test_multiple_venues_roll_up_from_legs(client):
     """Tour legs: two venues on one event. Both VENUE tags reach the concert
-    by rolling up from the legs, Concert.venue stays None (the join string is
-    gone -- the tags are the truth), and the tile says "Multiple"."""
+    by rolling up from the legs (the tags are the truth), and the tile says
+    "Multiple"."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={
         "name_en": "Yokohama Arena", "name_zh": "Yokohama Arena", "name": "Yokohama Arena",
@@ -1482,10 +1417,6 @@ async def test_multiple_venues_roll_up_from_legs(client):
     assert r.status_code == 303
     async with client.db() as s:
         assert await tag_ids_on(s, 1) == {1, 2}
-        c = (await s.execute(select(Concert).where(Concert.event_id == "tour"))).scalar_one()
-        # Pins the new contract: create_concert_row no longer writes a join
-        # string; the venue lives in the rolled-up VENUE tags above.
-        assert c.venue is None
     assert "Multiple" in client.get("/discover").text  # tile shows Multiple, not the join
 
 
@@ -1528,7 +1459,7 @@ async def test_index_hides_concert_whose_only_leg_is_cancelled(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
         },
     )
     client.post("/concerts", data={
@@ -1546,7 +1477,7 @@ async def test_index_hides_concert_whose_only_leg_is_cancelled(client):
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["true"],
         },
     )
@@ -1578,7 +1509,7 @@ async def test_index_open_upcoming_bucket_shown_first(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
@@ -1630,8 +1561,7 @@ async def test_index_sort_key_ignores_cancelled_leg_date(client):
             "day_label_en": ["Day 1", "Day 2"],
             "day_label_zh": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-06-01T18:00", "2099-09-01T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_doors_at": ["", ""],
         },
     )
     client.post("/concerts", data={"title_en": "Between Show", "title_zh": "Between Show",
@@ -1639,7 +1569,7 @@ async def test_index_sort_key_ignores_cancelled_leg_date(client):
         "day_label": ["Day 1"],
         "day_label_en": ["Day 1"],
         "day_label_zh": ["Day 1"], "day_starts_at": ["2099-07-01T18:00"],
-        "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+        "day_doors_at": [""],
     })
     async with client.db() as s:
         from app.db.models import Concert as ConcertModel
@@ -1664,8 +1594,7 @@ async def test_index_sort_key_ignores_cancelled_leg_date(client):
             "day_label_en": ["", ""],
             "day_label_zh": ["", ""],
             "day_starts_at": ["2099-06-01T18:00", "2099-09-01T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_doors_at": ["", ""],
             "day_cancelled": ["true", "false"],
         },
     )
@@ -1705,7 +1634,7 @@ async def test_index_deadline_list_excludes_cancelled_round(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
@@ -1724,7 +1653,7 @@ async def test_index_deadline_list_excludes_cancelled_round(client):
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["true"],
             "round_id": [str(round_id)], "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],

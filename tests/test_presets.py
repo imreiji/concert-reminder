@@ -98,7 +98,7 @@ def build_concert_with_deadlines(client, **extra_tags) -> None:
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             **extra_tags,
         },
     )

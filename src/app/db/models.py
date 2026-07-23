@@ -161,9 +161,6 @@ class Concert(Base):
     source_url: Mapped[str | None] = mapped_column(String(500))
     performers_text: Mapped[str | None] = mapped_column(Text)  # free-text, one per line
     franchise: Mapped[str | None] = mapped_column(String(100))  # "Hasunosora", "Gakumas"...
-    venue: Mapped[str | None] = mapped_column(String(200))
-    venue_en: Mapped[str | None] = mapped_column(String(200))
-    venue_zh: Mapped[str | None] = mapped_column(String(200))
     notes: Mapped[str | None] = mapped_column(Text)
     notes_en: Mapped[str | None] = mapped_column(Text)
     notes_zh: Mapped[str | None] = mapped_column(Text)
@@ -308,14 +305,10 @@ class ConcertDay(Base):
     # falls through to the original.
     label_en: Mapped[str | None] = mapped_column(String(100))
     label_zh: Mapped[str | None] = mapped_column(String(100))
-    city: Mapped[str | None] = mapped_column(String(100))  # leg/city, e.g. "Kanagawa"
-    venue: Mapped[str | None] = mapped_column(String(200))  # per-day venue (tours change cities)
-    venue_address: Mapped[str | None] = mapped_column(String(300))
     # The structured venue, and the ONLY one anything reads for display. It
-    # replaces the free-text `venue` above, which the concert page used to
-    # resolve against VENUE tags by case-insensitive name match -- this is
-    # that same link made real, and made authoritative: matching by name left
-    # a re-pointed leg rendering its previous venue forever.
+    # replaced a free-text venue resolved against VENUE tags by
+    # case-insensitive name match, and is made authoritative: matching by name
+    # left a re-pointed leg rendering its previous venue forever.
     # SET NULL rather than CASCADE: a venue tag is shared
     # taxonomy, and deleting one must never take performances down with it.
     venue_tag_id: Mapped[int | None] = mapped_column(

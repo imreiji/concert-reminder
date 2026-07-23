@@ -175,11 +175,11 @@ async def add_venue_tag(db, name, **kw):
         return t.id
 
 
-async def add_day(db, concert_id, label, *, days_ahead=60, venue=None, cancelled=False,
+async def add_day(db, concert_id, label, *, days_ahead=60, cancelled=False,
                   venue_tag_id=None):
     async with db() as s:
         d = ConcertDay(
-            concert_id=concert_id, label=label, venue=venue, cancelled=cancelled,
+            concert_id=concert_id, label=label, cancelled=cancelled,
             venue_tag_id=venue_tag_id,
             starts_at_utc=datetime.now(UTC) + timedelta(days=days_ahead),
             doors_at_utc=datetime.now(UTC) + timedelta(days=days_ahead, hours=-1),
@@ -387,7 +387,7 @@ async def test_an_editor_sees_edit_and_export_in_the_header(client):
 async def test_the_header_carries_no_date_range_and_no_single_venue(client):
     """A tour's legs disagree with any single header summary, so there is no
     header summary."""
-    cid = await seed_concert(client.db, venue="Header Venue")
+    cid = await seed_concert(client.db)
     osaka = await add_venue_tag(client.db, "Osaka-jo Hall")
     tokyo = await add_venue_tag(client.db, "Tokyo Dome")
     await add_day(client.db, cid, "Osaka", days_ahead=30, venue_tag_id=osaka)
@@ -396,7 +396,6 @@ async def test_the_header_carries_no_date_range_and_no_single_venue(client):
 
     body = client.get("/concerts/np").text
     head = body.split('class="chead"', 1)[1].split("</header>", 1)[0]
-    assert "Header Venue" not in head
     assert "Osaka-jo Hall" not in head
 
 
@@ -448,16 +447,15 @@ async def test_a_leg_venue_renders_from_its_tag_in_each_locale(client):
 
 async def test_changing_a_legs_venue_tag_changes_what_the_page_renders(client):
     """The stale-render bug this task closes: the page used to resolve the
-    venue from the leg's FREE TEXT by name. Combined with the preserve-on-empty
-    rule (an edit save no longer nulls day.venue), re-pointing a leg at a new
+    venue from the leg's FREE TEXT by name, so re-pointing a leg at a new
     venue tag left the OLD name on screen with no UI path to correct it -- a
-    confidently wrong venue, not a missing one. The stale free text is left in
-    place here deliberately, because that is the live shape."""
+    confidently wrong venue, not a missing one. The venue now resolves from
+    the leg's VENUE tag alone, so a re-point takes effect immediately."""
     cid = await seed_concert(client.db)
     old = await add_venue_tag(client.db, "Osaka-jo Hall")
     new = await add_venue_tag(client.db, "Tokyo Dome")
     day_id = await add_day(
-        client.db, cid, "Day 1", days_ahead=30, venue="Osaka-jo Hall", venue_tag_id=old
+        client.db, cid, "Day 1", days_ahead=30, venue_tag_id=old
     )
     login(client)
     assert "Osaka-jo Hall" in client.get("/concerts/np").text

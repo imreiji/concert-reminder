@@ -282,7 +282,7 @@ async def test_edit_reconciliation_preserves_unrelated_round_and_day_ids(client)
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
@@ -301,7 +301,7 @@ async def test_edit_reconciliation_preserves_unrelated_round_and_day_ids(client)
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_id": [str(round_id)], "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
@@ -324,7 +324,7 @@ async def test_edit_can_remove_a_day_and_add_a_round(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
         },
     )
     async with client.db() as s:
@@ -542,7 +542,7 @@ async def test_round_applies_to_is_stored(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["Day 1 lottery"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["Day 1 lottery"],
@@ -567,8 +567,7 @@ async def test_detail_page_groups_rounds_by_leg(client):
             "day_label_en": ["Day 1", "Day 2"],
             "day_label_zh": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_doors_at": ["", ""],
             "round_label": ["Day 1 round", "Day 2 round", "General round"],
             "round_kind": ["lottery_round", "lottery_round", "general_sale"],
             "round_opens_at": ["", "", ""],
@@ -605,7 +604,7 @@ async def test_round_with_no_day_association_shown_as_general_only(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["Untied round"], "round_kind": ["other"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["Untied round"],
@@ -636,8 +635,7 @@ async def test_detail_page_nests_performances_and_their_rounds_together(client):
             "day_label_en": ["Day 1", "Day 2"],
             "day_label_zh": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_doors_at": ["", ""],
             "round_label": ["Day 1 round"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["Day 1 round"],
@@ -683,7 +681,7 @@ async def test_export_yaml_shape(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": ["2099-06-10T00:00"], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
@@ -840,9 +838,6 @@ async def test_rich_create_builds_concert_days_and_rounds_atomically(client):
             "day_label_en": ["Day 1", "Day 2"],
             "day_label_zh": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
-            "day_city": ["Kanagawa", "Osaka"],
-            "day_venue": ["K Arena Yokohama", ""],
-            "day_venue_address": ["", ""],
             "day_doors_at": ["2099-08-01T17:00", ""],
             "round_label": ["Kanagawa lottery", "Whole-tour goods sale"],
             "round_label_en": ["Kanagawa lottery round", "Whole-tour goods sale"],
@@ -873,8 +868,6 @@ async def test_rich_create_builds_concert_days_and_rounds_atomically(client):
 
     days = sorted(concert.days, key=lambda d: d.label)
     assert [d.label for d in days] == ["Day 1", "Day 2"]
-    assert days[0].city == "Kanagawa"
-    assert days[0].venue == "K Arena Yokohama"
     assert days[0].doors_at_utc is not None
 
     rounds = sorted(concert.rounds, key=lambda r: r.label)
@@ -894,8 +887,8 @@ async def test_rich_create_tolerates_blank_trailing_rows(client):
             "title": "Minimal", "event_id": "minimal",
             "day_label": [""],
             "day_label_en": [""],
-            "day_label_zh": [""], "day_starts_at": [""], "day_city": [""],
-            "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_label_zh": [""], "day_starts_at": [""],
+            "day_doors_at": [""],
             "round_label": [""], "round_label_en": [""],
             "round_label_zh": [""], "round_kind": ["other"],
             "round_opens_at": [""], "round_closes_at": [""], "round_results_at": [""],
@@ -925,8 +918,7 @@ async def test_create_binds_a_round_to_two_brand_new_legs(client):
             "day_label_en": ["Day 1", "Day 2"],
             "day_label_zh": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
-            "day_city": ["Kanagawa", "Osaka"], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_doors_at": ["", ""],
             "round_label": ["Both legs lottery"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""],
@@ -957,7 +949,7 @@ async def test_create_round_with_no_legs_stores_none(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["Whole event"], "round_kind": ["general_sale"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["Whole event"],
@@ -988,7 +980,7 @@ async def test_create_upgrade_round_stores_a_same_submit_qualifier(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["Base lottery", "VIP upgrade"],
             "round_kind": ["lottery_round", "upgrade"],
             "round_opens_at": ["", ""], "round_closes_at": ["2099-06-25T23:59", "2099-07-01T23:59"],
@@ -1048,7 +1040,7 @@ async def test_edit_page_prefills_every_field(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
@@ -1088,7 +1080,7 @@ async def test_edit_page_preselects_the_rounds_real_leg_ids(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
@@ -1144,7 +1136,7 @@ async def test_duplicate_clones_scalars_and_tags_but_not_days_rounds_or_venues(c
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             # The venue now lives on the leg: the concert's VENUE tags are
             # rolled up from its legs, so a concert-level venue_tags value no
             # leg backs would be derived straight back off again.
@@ -1177,7 +1169,6 @@ async def test_duplicate_clones_scalars_and_tags_but_not_days_rounds_or_venues(c
     # does not have. Keeping it would contradict the empty leg set from birth,
     # and the editor's first save (duplicate lands on /edit) would strip it.
     assert {t.name for t in clone.tags} == {"Hasunosora"}
-    assert clone.venue is None
     assert clone.days == []
     assert clone.rounds == []
 
@@ -1317,7 +1308,7 @@ async def test_edit_page_can_mark_a_day_cancelled(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
         },
     )
     async with client.db() as s:
@@ -1330,7 +1321,7 @@ async def test_edit_page_can_mark_a_day_cancelled(client):
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["true"],
         },
     )
@@ -1347,7 +1338,7 @@ async def test_edit_page_can_mark_a_day_cancelled(client):
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["false"],
         },
     )
@@ -1365,7 +1356,7 @@ async def test_edit_page_defaults_new_day_rows_to_not_cancelled(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["false"],
         },
     )
@@ -1385,7 +1376,7 @@ async def test_edit_page_prefills_the_cancelled_toggle(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
         },
     )
     async with client.db() as s:
@@ -1397,7 +1388,7 @@ async def test_edit_page_prefills_the_cancelled_toggle(client):
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["true"],
         },
     )
@@ -1419,7 +1410,7 @@ async def test_cancelling_the_only_leg_clears_its_reminders_and_notifies(client)
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
         },
     )
     client.post("/concerts/c/rules", data={"anchor": "event_start", "days_before": 7})
@@ -1434,7 +1425,7 @@ async def test_cancelling_the_only_leg_clears_its_reminders_and_notifies(client)
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["true"],
         },
     )
@@ -1457,7 +1448,7 @@ async def test_resubmitting_edit_with_same_cancelled_state_does_not_renotify(cli
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["true"],
         },
     )
@@ -1470,7 +1461,7 @@ async def test_resubmitting_edit_with_same_cancelled_state_does_not_renotify(cli
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["true"],  # already cancelled -- resubmitting the same state
         },
     )
@@ -1488,8 +1479,7 @@ async def test_detail_page_shows_cancelled_badge_on_cancelled_leg_only(client):
             "day_label_en": ["Day 1", "Day 2"],
             "day_label_zh": ["Day 1", "Day 2"],
             "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_doors_at": ["", ""],
         },
     )
     async with client.db() as s:
@@ -1507,8 +1497,7 @@ async def test_detail_page_shows_cancelled_badge_on_cancelled_leg_only(client):
             "day_label_en": ["", ""],
             "day_label_zh": ["", ""],
             "day_starts_at": ["2099-08-01T18:00", "2099-08-02T18:00"],
-            "day_city": ["", ""], "day_venue": ["", ""],
-            "day_venue_address": ["", ""], "day_doors_at": ["", ""],
+            "day_doors_at": ["", ""],
             "day_cancelled": ["true", "false"],
         },
     )
@@ -1538,7 +1527,7 @@ async def test_round_tied_to_cancelled_day_still_renders_not_vanishes(client):
             "day_label": ["Day 1"],
             "day_label_en": ["Day 1"],
             "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
             "round_results_at": [""], "round_payment_at": [""], "round_label_en": ["R1"],
@@ -1557,7 +1546,7 @@ async def test_round_tied_to_cancelled_day_still_renders_not_vanishes(client):
             "day_id": [str(day_id)], "day_label": ["Day 1"],
             "day_label_en": [""],
             "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
-            "day_city": [""], "day_venue": [""], "day_venue_address": [""], "day_doors_at": [""],
+            "day_doors_at": [""],
             "day_cancelled": ["true"],
             "round_id": [str(round_id)], "round_label": ["R1"], "round_kind": ["lottery_round"],
             "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],

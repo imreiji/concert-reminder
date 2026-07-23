@@ -59,14 +59,12 @@
       {% set cf = ctags | selectattr("kind.value", "equalto", "franchise") | list %}
       {% set cg = ctags | selectattr("kind.value", "equalto", "group") | list %}
       {% set ca = ctags | selectattr("kind.value", "equalto", "artist") | list %}
-      {#- The venue line reads the concert's VENUE TAGS first: they are
-          derived from its legs by sync_concert_venue_tags, while
-          `Concert.venue` is the legacy free-text column every new concert
-          leaves NULL. Same collapse rule as a Discover tile -- more than one
-          venue is "Multiple". `concert.tags` is already eager-loaded by
-          board_cards, so this costs no query. -#}
+      {#- The venue line reads the concert's VENUE TAGS: they are derived
+          from its legs by sync_concert_venue_tags. Same collapse rule as a
+          Discover tile -- more than one venue is "Multiple". `concert.tags`
+          is already eager-loaded by board_cards, so this costs no query. -#}
       {% set cv = ctags | selectattr("kind.value", "equalto", "venue") | list %}
-      {% set venue_text = _("Multiple") if cv | length > 1 else ((cv | map("loc_name") | join(", ")) or loc(card.concert, "venue")) %}
+      {% set venue_text = _("Multiple") if cv | length > 1 else (cv | map("loc_name") | join(", ")) %}
       {#- A franchise alone is not an eyebrow: it only ever qualifies a group,
           so there is nothing to show without one. -#}
       {% if cg or ca %}

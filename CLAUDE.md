@@ -111,19 +111,18 @@ venue without leaving the form -- have shipped since).
   Every path handing legs to a template must `selectinload` it, or load the
   tags separately by id the way `concert_rounds_context`
   (`web/routes/concerts.py`) does.
-- **Two-deploy migration, still mid-flight -- do NOT delete the "dead" venue
-  columns.** `ConcertDay.city`/`venue`/`venue_address` and
-  `Concert.venue`/`venue_en`/`venue_zh` still exist, as LEGACY READ-ONLY data:
-  they survive so a leg whose venue did not match during the backfill stays
-  recoverable, and a LATER phase drops them deliberately. Because the editor's
-  free-text venue inputs are gone, those params now arrive absent (padded to
-  `""`) on every edit POST, so `apply_day_fields` (`web/routes/concerts.py`)
-  assigns the three day columns PRESERVE-ON-EMPTY -- a non-empty value still
-  assigns, an empty one leaves the column alone. Drop that rule and the FIRST
-  save of any existing concert silently destroys exactly the data the
-  migration is keeping, worst of all on the legs the backfill could not match,
-  where the free text is the only surviving record. Migration `789bbcc95bc3`
-  did the backfill by name match and PRINTS every unmatched leg.
+- **The legacy free-text venue columns are GONE (venue-to-tags is complete).**
+  `ConcertDay.city`/`venue`/`venue_address` and `Concert.venue`/`venue_en`/
+  `venue_zh` were dropped by migration `ce43bfcfcae3` once every venue lived on
+  a leg's VENUE tag. They existed through phases 1-4 as recovery data (a leg
+  whose free-text venue did not match a tag during the `789bbcc95bc3` backfill
+  stayed recoverable); the owner confirmed zero unmatched legs in production
+  before the drop. Do not reintroduce them or the old `apply_day_fields`
+  preserve-on-empty rule -- a leg's venue is a VENUE tag and nothing else. A
+  concert with no leg venue tag simply has no venue anywhere. NOTE the drop
+  migration reversed the deploy order (restart on new code BEFORE
+  `alembic upgrade head`) so the old process could not SELECT the dropped
+  columns mid-deploy; any future column-DROP migration needs the same order.
 - `src/app/bot/` — thin shell: cogs, embed builders (`messages.py`),
   persistent buttons (`views.py`).
 - `src/app/web/` — thin shell: routes, templates, static. `routes/imports.py`

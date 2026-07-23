@@ -97,7 +97,7 @@ async def seed(db, *, rounds, links=(), event_id="tour"):
         s.add(c)
         await s.flush()
         day = ConcertDay(
-            concert_id=c.id, label="Day 1", city="Kanagawa",
+            concert_id=c.id, label="Day 1",
             starts_at_utc=datetime(2099, 8, 1, 9, 0, tzinfo=UTC),
         )
         s.add(day)
@@ -134,10 +134,7 @@ def resubmit(client, event_id, *, rounds, title="Tour", extra=None):
         "day_label": ["Day 1"],
         "day_label_en": [""],
         "day_label_zh": [""],
-        "day_city": ["Kanagawa"],
         "day_starts_at": ["2099-08-01T18:00"],
-        "day_venue": [""],
-        "day_venue_address": [""],
         "day_doors_at": [""],
         "day_cancelled": ["false"],
         "round_id": [str(r[0]) for r in rounds],

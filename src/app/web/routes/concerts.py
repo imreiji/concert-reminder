@@ -161,9 +161,6 @@ def apply_day_fields(
     day: ConcertDay,
     label: str,
     starts_at: str,
-    city: str = "",
-    venue: str = "",
-    venue_address: str = "",
     doors_at: str = "",
     cancelled: str = "false",
     venue_tag_id: int | None = None,
@@ -173,43 +170,20 @@ def apply_day_fields(
     """The JST->UTC parse + assignment shared by build_day (new rows) and
     the edit page's in-place update of existing rows.
 
-    label_en/label_zh are the viewer-locale variants of `label`. They are
-    NOT preserve-on-empty like the free-text city/venue trio below: those are
-    legacy columns no editor input still writes, while these have real inputs
-    on every row template, so an empty one means "the editor cleared it" and
-    must null the column.
+    label_en/label_zh are the viewer-locale variants of `label`. An empty one
+    means "the editor cleared it" and nulls the column -- both have real
+    inputs on every row template.
 
     venue_tag_id arrives ALREADY resolved -- an int that is known to name a
     VENUE tag, or None -- from `resolve_day_venue_tags` at the route
     boundary. This function stays sync and I/O-free; see that function's
     docstring for why the check lives there rather than here.
-
-    The free-text city/venue/venue_address columns survive this phase so an
-    unmatched venue stays recoverable across the two-deploy migration; a later
-    phase drops them and these three lines. They are therefore now LEGACY
-    READ-ONLY data, and their assignment is PRESERVE-ON-EMPTY: a non-empty
-    incoming value still assigns, but an empty one leaves the existing column
-    untouched rather than nulling it.
-
-    That matters because the leg editor's free-text venue inputs are gone --
-    the venue is picked as a tag -- so these params now arrive absent from
-    every edit POST and are padded to "" at the route boundary. Overwriting
-    with None would make the FIRST save of any existing concert silently
-    destroy exactly the data the migration is keeping, worst of all for the
-    legs the backfill could not match, where the free text is the only
-    surviving record. Nothing in the editor writes these fields anymore, so
-    there is no "the editor cleared it" case to honour. A brand-new row starts
-    with the columns already NULL, so preserve-on-empty is a no-op on creation
-    (import_commit still supplies real values, which still assign).
     """
     starts = parse_jst(starts_at)
     if starts is None:
         raise HTTPException(status_code=422, detail="a day needs a start time")
     day.label = label.strip()
     day.starts_at_utc = starts
-    day.city = city.strip() or day.city
-    day.venue = venue.strip() or day.venue
-    day.venue_address = venue_address.strip() or day.venue_address
     day.doors_at_utc = parse_jst(doors_at)
     day.cancelled = cancelled == "true"
     day.venue_tag_id = venue_tag_id
@@ -222,9 +196,6 @@ def build_day(
     concert_id: int,
     label: str,
     starts_at: str,
-    city: str = "",
-    venue: str = "",
-    venue_address: str = "",
     doors_at: str = "",
     cancelled: str = "false",
     venue_tag_id: int | None = None,
@@ -234,7 +205,7 @@ def build_day(
     """New-row constructor: the rich creation form, the edit page's new
     rows, and the URL-import commit route."""
     return apply_day_fields(
-        ConcertDay(concert_id=concert_id), label, starts_at, city, venue, venue_address,
+        ConcertDay(concert_id=concert_id), label, starts_at,
         doors_at, cancelled, venue_tag_id, label_en, label_zh,
     )
 
@@ -569,10 +540,6 @@ async def create_concert_row(
         event_id=event_id,
         kind=kind,
         franchise=", ".join(t.name for t in f_tags) or None,  # denormalized display
-        # Venue is derived from the legs by sync_concert_venue_tags, which the
-        # caller runs after the legs are added. It cannot be computed here --
-        # no leg exists yet. (Phase 5 drops this column entirely.)
-        venue=None,
         # Optional so create_concert, which assigns its own richer field set
         # (including source_url) right after this returns, is unaffected.
         # Callers pass an already-form_url-validated value.
@@ -646,8 +613,6 @@ async def create_concert(
     notes: str = Form(""),
     notes_en: str = Form(""),
     notes_zh: str = Form(""),
-    venue_en: str = Form(""),
-    venue_zh: str = Form(""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
@@ -657,9 +622,6 @@ async def create_concert(
     day_label_en: list[str] = Form(default=[]),
     day_label_zh: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
-    day_city: list[str] = Form(default=[]),
-    day_venue: list[str] = Form(default=[]),
-    day_venue_address: list[str] = Form(default=[]),
     day_venue_tag_id: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
     day_cancelled: list[str] = Form(default=[]),
@@ -710,8 +672,6 @@ async def create_concert(
     concert.notes = notes.strip() or None
     concert.notes_en = notes_en.strip() or None
     concert.notes_zh = notes_zh.strip() or None
-    concert.venue_en = venue_en.strip() or None
-    concert.venue_zh = venue_zh.strip() or None
 
     # day_cancelled is newer than the other day_* fields; a submitter that
     # omits it entirely (rather than one row per day) means "not cancelled"
@@ -726,14 +686,6 @@ async def create_concert(
     if not day_key:
         day_key = [""] * len(day_label)
     n_days = len(day_label)
-    # The free-text city/venue/venue_address arrays are on their way out (the
-    # next phase drops their form inputs), so a submitter can already
-    # legitimately omit them; end-pad to the label count exactly as
-    # imports.py has always done -- they are non-binding display text, so a
-    # trailing row losing empty text is harmless.
-    day_city = day_city + [""] * (n_days - len(day_city))
-    day_venue = day_venue + [""] * (n_days - len(day_venue))
-    day_venue_address = day_venue_address + [""] * (n_days - len(day_venue_address))
     # day_venue_tag_id is NOT free text -- it is the leg's structured venue, so
     # a value that slid one row would hand a leg another leg's venue, silently.
     # It therefore follows day_key's rule, not the free-text one: padded only
@@ -756,23 +708,22 @@ async def create_concert(
     # are filled in after the flush below.
     key_rows: list[tuple[str, ConcertDay]] = []
     for row_no, (
-        key, label, label_en, label_zh, starts_at, city, venue, venue_address,
+        key, label, label_en, label_zh, starts_at,
         doors_at, cancelled, v_tag
     ) in enumerate(zip(
-        day_key, day_label, day_label_en, day_label_zh, day_starts_at, day_city, day_venue,
-        day_venue_address, day_doors_at, day_cancelled, day_venue_tags, strict=True,
+        day_key, day_label, day_label_en, day_label_zh, day_starts_at,
+        day_doors_at, day_cancelled, day_venue_tags, strict=True,
     ), start=1):
-        # v_tag is in the guard because the next phase drops the free-text
-        # city/venue inputs: without it, a row where the editor picked ONLY a
-        # venue would read as blank and be silently dropped.
-        if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip(), v_tag]):
+        # v_tag is in the guard so a row where the editor picked ONLY a venue
+        # (no label, no start time yet) is not read as blank and dropped.
+        if not any([label.strip(), starts_at.strip(), v_tag]):
             continue  # blank trailing row from the repeatable UI -- key and all
         # Numbered from the submitted row order (blank rows included), so an
         # editor with six legs is told WHICH one to fix rather than that
         # something, somewhere, is half-translated.
         require_variants(f"Leg {row_no} label", label, label_en, label_zh)
         day = build_day(
-            concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
+            concert.id, label, starts_at, doors_at, cancelled,
             v_tag, label_en, label_zh,
         )
         session.add(day)
@@ -1128,8 +1079,6 @@ async def edit_concert(
     notes: str = Form(""),
     notes_en: str = Form(""),
     notes_zh: str = Form(""),
-    venue_en: str = Form(""),
-    venue_zh: str = Form(""),
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
@@ -1140,9 +1089,6 @@ async def edit_concert(
     day_label_en: list[str] = Form(default=[]),
     day_label_zh: list[str] = Form(default=[]),
     day_starts_at: list[str] = Form(default=[]),
-    day_city: list[str] = Form(default=[]),
-    day_venue: list[str] = Form(default=[]),
-    day_venue_address: list[str] = Form(default=[]),
     day_venue_tag_id: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
     day_cancelled: list[str] = Form(default=[]),
@@ -1182,8 +1128,6 @@ async def edit_concert(
     concert.notes = notes.strip() or None
     concert.notes_en = notes_en.strip() or None
     concert.notes_zh = notes_zh.strip() or None
-    concert.venue_en = venue_en.strip() or None
-    concert.venue_zh = venue_zh.strip() or None
 
     # -- Tags: diff before/after, detach dropped ids, attach new ones only.
     # An unchanged, already-attached group is never re-touched, so its
@@ -1229,15 +1173,10 @@ async def edit_concert(
     # which is worse than a 500.
     if not day_key:
         day_key = [""] * len(day_label)
-    # Same two padding rules create_concert applies, for the same reasons: the
-    # outgoing free-text arrays end-pad (non-binding display text), while
     # day_venue_tag_id -- the leg's structured venue -- is padded only when
     # omitted ENTIRELY, so a partial array trips the strict zip below rather
     # than sliding one leg's venue onto another.
     n_days = len(day_label)
-    day_city = day_city + [""] * (n_days - len(day_city))
-    day_venue = day_venue + [""] * (n_days - len(day_venue))
-    day_venue_address = day_venue_address + [""] * (n_days - len(day_venue_address))
     if not day_venue_tag_id:
         day_venue_tag_id = [""] * n_days
     # day_label_en/day_label_zh are NOT padded, exactly as create_concert leaves
@@ -1255,28 +1194,27 @@ async def edit_concert(
     # paired with another row's day; the ids are filled in after the flush.
     key_rows: list[tuple[str, ConcertDay]] = []
     for (
-        key, did, label, label_en, label_zh, starts_at, city, venue, venue_address,
+        key, did, label, label_en, label_zh, starts_at,
         doors_at, cancelled, v_tag
     ) in zip(
-        day_key, day_id, day_label, day_label_en, day_label_zh, day_starts_at, day_city,
-        day_venue, day_venue_address, day_doors_at, day_cancelled, day_venue_tags,
+        day_key, day_id, day_label, day_label_en, day_label_zh, day_starts_at,
+        day_doors_at, day_cancelled, day_venue_tags,
         strict=True,
     ):
-        # v_tag is in the guard because the next phase drops the free-text
-        # city/venue inputs: without it, a row where the editor picked ONLY a
-        # venue would read as blank and be silently dropped.
-        if not any([label.strip(), starts_at.strip(), city.strip(), venue.strip(), v_tag]):
+        # v_tag is in the guard so a row where the editor picked ONLY a venue
+        # (no label, no start time yet) is not read as blank and dropped.
+        if not any([label.strip(), starts_at.strip(), v_tag]):
             continue  # blank trailing row from the repeatable UI -- key and all
         did = did.strip()
         if did.isdigit() and int(did) in existing_days:
             day = apply_day_fields(
-                existing_days[int(did)], label, starts_at, city, venue, venue_address,
+                existing_days[int(did)], label, starts_at,
                 doors_at, cancelled, v_tag, label_en, label_zh,
             )
             kept_day_ids.add(day.id)
         else:
             day = build_day(
-                concert.id, label, starts_at, city, venue, venue_address, doors_at, cancelled,
+                concert.id, label, starts_at, doors_at, cancelled,
                 v_tag, label_en, label_zh,
             )
             session.add(day)
@@ -1434,10 +1372,7 @@ async def export_concert_yaml(
     # The legs, with their venue tags: the export's city/venue/venue_address
     # come off the tag when the leg has one, and ConcertDay.venue_tag is
     # lazy="raise", so the eager load below is load-bearing -- without it every
-    # export is a MissingGreenlet 500. A leg with NO tag falls back to its old
-    # free-text columns (see the YamlDay build): those still hold the venue for
-    # every ramen.events import and for anything the backfill could not match,
-    # and exporting null for them would lose data the DB still has.
+    # export is a MissingGreenlet 500. A leg with NO venue tag exports no venue.
     days = list((await session.execute(
         select(ConcertDay)
         .where(ConcertDay.concert_id == concert.id)
@@ -1451,9 +1386,9 @@ async def export_concert_yaml(
         YamlDay(
             label=d.label, label_en=d.label_en, label_zh=d.label_zh,
             starts_at_utc=d.starts_at_utc,
-            city=d.venue_tag.city if d.venue_tag else d.city,
-            venue=d.venue_tag.name if d.venue_tag else d.venue,
-            venue_address=d.venue_tag.address if d.venue_tag else d.venue_address,
+            city=d.venue_tag.city if d.venue_tag else None,
+            venue=d.venue_tag.name if d.venue_tag else None,
+            venue_address=d.venue_tag.address if d.venue_tag else None,
             doors_at_utc=d.doors_at_utc,
         )
         for d in days
@@ -1534,9 +1469,6 @@ async def duplicate_concert(
         organizer=source.organizer,
         categories=source.categories,
         franchise=", ".join(f_names) or None,
-        # No legs, therefore no venue -- the derived model's answer, and the
-        # same None create_concert_row now writes.
-        venue=None,
         created_by=user.id,
     )
     session.add(clone)

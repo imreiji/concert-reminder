@@ -177,28 +177,22 @@
         data-variant-group="notes" data-variant-slot="ja"
         data-variant-label="{{ _('Notes') }}">{{ concert.notes or '' }}</textarea></label>
 
-      {#- Per-language variants of the user-entered title, venue and notes.
-          The JP-side originals are the title above and the free-text venue;
-          these are shown to viewers on the matching locale, with a fallback
-          to the original when a variant is empty (i18n.loc_field). -#}
+      {#- Per-language variants of the user-entered title and notes.
+          The JP-side originals are the title and notes above; these are shown
+          to viewers on the matching locale, with a fallback to the original
+          when a variant is empty (i18n.loc_field). -#}
       <div class="section-head trans-head">
         <h3 class="section-sub">{{ _("Translations") }}</h3>
         <p class="dim tiny">{{ _("Optional — shown to viewers reading in that language, falling back to the originals above.") }}</p>
       </div>
       <h4 class="section-sub">{{ _("English") }}</h4>
-      <div class="grid2">
-        <label>{{ _("Title") }} <input name="title_en" maxlength="200" value="{{ concert.title_en or '' }}"
-          data-variant-group="title" data-variant-slot="en"></label>
-        <label>{{ _("Venue") }} <input name="venue_en" maxlength="200" value="{{ concert.venue_en or '' }}"></label>
-      </div>
+      <label>{{ _("Title") }} <input name="title_en" maxlength="200" value="{{ concert.title_en or '' }}"
+        data-variant-group="title" data-variant-slot="en"></label>
       <label>{{ _("Notes") }} <textarea name="notes_en" rows="2"
         data-variant-group="notes" data-variant-slot="en">{{ concert.notes_en or '' }}</textarea></label>
       <h4 class="section-sub">中文</h4>
-      <div class="grid2">
-        <label>{{ _("Title") }} <input name="title_zh" maxlength="200" value="{{ concert.title_zh or '' }}"
-          data-variant-group="title" data-variant-slot="zh"></label>
-        <label>{{ _("Venue") }} <input name="venue_zh" maxlength="200" value="{{ concert.venue_zh or '' }}"></label>
-      </div>
+      <label>{{ _("Title") }} <input name="title_zh" maxlength="200" value="{{ concert.title_zh or '' }}"
+        data-variant-group="title" data-variant-slot="zh"></label>
       <label>{{ _("Notes") }} <textarea name="notes_zh" rows="2"
         data-variant-group="notes" data-variant-slot="zh">{{ concert.notes_zh or '' }}</textarea></label>
     </div>
