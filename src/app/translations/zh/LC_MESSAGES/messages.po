@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 02:27-0300\n"
+"POT-Creation-Date: 2026-07-24 10:22-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -477,26 +477,26 @@ msgstr "{kind} · {n}后开放"
 msgid "All rounds closed"
 msgstr "所有轮次均已截止"
 
-#: src/app/db/service.py:3719 src/app/web/templates/concert_edit.html:38
-#: src/app/web/templates/concert_edit.html:189
-#: src/app/web/templates/concert_edit.html:194
-#: src/app/web/templates/concert_new.html:28
-#: src/app/web/templates/concert_new.html:129
-#: src/app/web/templates/concert_new.html:134
-#: src/app/web/templates/import_preview.html:50
+#: src/app/db/service.py:3719 src/app/web/templates/concert_edit.html:40
+#: src/app/web/templates/concert_edit.html:127
+#: src/app/web/templates/concert_edit.html:132
+#: src/app/web/templates/concert_new.html:30
+#: src/app/web/templates/concert_new.html:99
+#: src/app/web/templates/concert_new.html:104
+#: src/app/web/templates/import_preview.html:52
 msgid "Title"
 msgstr "标题"
 
-#: src/app/db/service.py:3723 src/app/web/templates/concert_edit.html:176
-#: src/app/web/templates/concert_edit.html:178
-#: src/app/web/templates/concert_edit.html:191
-#: src/app/web/templates/concert_edit.html:196
-#: src/app/web/templates/concert_new.html:117
-#: src/app/web/templates/concert_new.html:119
-#: src/app/web/templates/concert_new.html:131
-#: src/app/web/templates/concert_new.html:136
-#: src/app/web/templates/import_preview.html:235
-#: src/app/web/templates/import_preview.html:237
+#: src/app/db/service.py:3723 src/app/web/templates/concert_edit.html:114
+#: src/app/web/templates/concert_edit.html:116
+#: src/app/web/templates/concert_edit.html:129
+#: src/app/web/templates/concert_edit.html:134
+#: src/app/web/templates/concert_new.html:87
+#: src/app/web/templates/concert_new.html:89
+#: src/app/web/templates/concert_new.html:101
+#: src/app/web/templates/concert_new.html:106
+#: src/app/web/templates/import_preview.html:165
+#: src/app/web/templates/import_preview.html:167
 msgid "Notes"
 msgstr "备注"
 
@@ -728,6 +728,97 @@ msgstr "你"
 msgid "Nothing coming up on the events you follow."
 msgstr "你关注的活动暂无即将到来的安排。"
 
+#: src/app/web/templates/_editor_leg_card.html:37
+#: src/app/web/templates/_editor_leg_card.html:55
+#: src/app/web/templates/_editor_leg_card.html:58
+msgid "Day 1"
+msgstr "第 1 天"
+
+#: src/app/web/templates/_editor_leg_card.html:39
+msgid "Performance label"
+msgstr "场次名称"
+
+#: src/app/web/templates/_editor_leg_card.html:44
+msgid "A cancelled performance stays in the list, but appears faded with a label."
+msgstr "已取消的场次仍会保留在列表中，但会以淡色显示并带有标记。"
+
+#: src/app/web/templates/_editor_leg_card.html:44
+#: src/app/web/templates/_round_rows.html:127
+msgid "Cancelled"
+msgstr "已取消"
+
+#: src/app/web/templates/_editor_leg_card.html:47
+#: src/app/web/templates/_editor_round_card.html:42
+msgid "More actions"
+msgstr "更多操作"
+
+#: src/app/web/templates/_editor_leg_card.html:49
+msgid "Remove this performance"
+msgstr "删除此场次"
+
+#: src/app/web/templates/_editor_leg_card.html:61
+#: src/app/web/templates/import_preview.html:71
+#, python-format
+msgid "No venue tag matches “%(venue)s” yet — add it with + New venue."
+msgstr "尚无与“%(venue)s”匹配的场馆标签 — 请用“+ 新建场馆”添加。"
+
+#: src/app/web/templates/_editor_leg_card.html:69
+msgid "No venue yet"
+msgstr "尚未设置场馆"
+
+#: src/app/web/templates/_editor_leg_card.html:75
+msgid "+ New venue"
+msgstr "+ 新建场馆"
+
+#: src/app/web/templates/_editor_leg_card.html:76
+msgid "Doors (JST)"
+msgstr "入场（JST）"
+
+#: src/app/web/templates/_editor_leg_card.html:77
+msgid "Starts (JST)"
+msgstr "开演（JST）"
+
+#: src/app/web/templates/_editor_round_card.html:37
+msgid "Round label"
+msgstr "轮次名称"
+
+#: src/app/web/templates/_editor_round_card.html:44
+msgid "Remove this round"
+msgstr "删除此轮次"
+
+#: src/app/web/templates/_editor_round_card.html:50
+#: src/app/web/templates/_editor_round_card.html:53
+msgid "1st-round advance lottery"
+msgstr "第 1 轮先行抽选"
+
+#: src/app/web/templates/_editor_round_card.html:57
+msgid "Remembered"
+msgstr "已保存"
+
+#: src/app/web/templates/_editor_round_card.html:64
+msgid "Apply opens (JST)"
+msgstr "申请开始（JST）"
+
+#: src/app/web/templates/_editor_round_card.html:65
+msgid "Apply deadline (JST)"
+msgstr "申请截止（JST）"
+
+#: src/app/web/templates/_editor_round_card.html:66
+msgid "Results (JST)"
+msgstr "结果公布（JST）"
+
+#: src/app/web/templates/_editor_round_card.html:67
+msgid "Payment deadline (JST)"
+msgstr "付款截止（JST）"
+
+#: src/app/web/templates/_editor_round_card.html:70
+msgid "Apply URL (optional)"
+msgstr "申请链接（可选）"
+
+#: src/app/web/templates/_editor_round_card.html:71
+msgid "Notes (optional)"
+msgstr "备注（可选）"
+
 #: src/app/web/templates/_following_toggle.html:27
 #: src/app/web/templates/_following_toggle.html:56
 #: src/app/web/templates/preferences.html:16
@@ -853,16 +944,6 @@ msgstr "你的下一步"
 #: src/app/web/templates/_round_rows.html:101
 msgid "No date announced yet"
 msgstr "尚未公布日期"
-
-#: src/app/web/templates/_round_rows.html:127
-#: src/app/web/templates/concert_edit.html:138
-#: src/app/web/templates/concert_edit.html:282
-#: src/app/web/templates/concert_new.html:64
-#: src/app/web/templates/concert_new.html:175
-#: src/app/web/templates/import_preview.html:94
-#: src/app/web/templates/import_preview.html:285
-msgid "Cancelled"
-msgstr "已取消"
 
 #: src/app/web/templates/_round_rows.html:127
 msgid "Not going"
@@ -1062,9 +1143,9 @@ msgstr "发现"
 
 #: src/app/web/templates/base.html:36 src/app/web/templates/base.html:89
 #: src/app/web/templates/concert_detail.html:25
-#: src/app/web/templates/concert_edit.html:202
-#: src/app/web/templates/concert_new.html:142
-#: src/app/web/templates/import_preview.html:246
+#: src/app/web/templates/concert_edit.html:140
+#: src/app/web/templates/concert_new.html:112
+#: src/app/web/templates/import_preview.html:176
 #: src/app/web/templates/tags.html:6
 msgid "Tags"
 msgstr "标签"
@@ -1153,7 +1234,7 @@ msgid "official site"
 msgstr "官方网站"
 
 #: src/app/web/templates/concert_detail.html:52
-#: src/app/web/templates/concert_edit.html:20
+#: src/app/web/templates/concert_edit.html:22
 msgid "Edit event"
 msgstr "编辑活动"
 
@@ -1203,12 +1284,12 @@ msgid "Edit history (%(n)s)"
 msgstr "编辑记录（%(n)s）"
 
 #: src/app/web/templates/concert_detail.html:102
-#: src/app/web/templates/concert_edit.html:218
+#: src/app/web/templates/concert_edit.html:156
 msgid "Deleted user"
 msgstr "已删除的用户"
 
 #: src/app/web/templates/concert_detail.html:106
-#: src/app/web/templates/concert_edit.html:222
+#: src/app/web/templates/concert_edit.html:160
 msgid "(empty)"
 msgstr "（空）"
 
@@ -1216,397 +1297,232 @@ msgstr "（空）"
 msgid "edit"
 msgstr "编辑"
 
-#: src/app/web/templates/concert_edit.html:14
+#: src/app/web/templates/concert_edit.html:16
 msgid "title EN"
 msgstr "标题 EN"
 
-#: src/app/web/templates/concert_edit.html:15
+#: src/app/web/templates/concert_edit.html:17
 msgid "organizer"
 msgstr "主办方"
 
-#: src/app/web/templates/concert_edit.html:16
+#: src/app/web/templates/concert_edit.html:18
 msgid "categories"
 msgstr "分类"
 
-#: src/app/web/templates/concert_edit.html:17
+#: src/app/web/templates/concert_edit.html:19
 msgid "notes"
 msgstr "备注"
 
-#: src/app/web/templates/concert_edit.html:18
+#: src/app/web/templates/concert_edit.html:20
 #, python-format
 msgid "%(n)s link"
 msgid_plural "%(n)s links"
 msgstr[0] "%(n)s 个链接"
 
-#: src/app/web/templates/concert_edit.html:35
-#: src/app/web/templates/concert_new.html:25
-#: src/app/web/templates/import_preview.html:47
+#: src/app/web/templates/concert_edit.html:37
+#: src/app/web/templates/concert_new.html:27
+#: src/app/web/templates/import_preview.html:49
 msgid "Title (JP)"
 msgstr "标题（日文）"
 
-#: src/app/web/templates/concert_edit.html:39
-#: src/app/web/templates/concert_new.html:29
+#: src/app/web/templates/concert_edit.html:41
+#: src/app/web/templates/concert_new.html:31
 msgid "Event ID"
 msgstr "活动 ID"
 
-#: src/app/web/templates/concert_edit.html:39
-#: src/app/web/templates/concert_new.html:29
+#: src/app/web/templates/concert_edit.html:41
+#: src/app/web/templates/concert_new.html:31
 msgid "(this event's URL — letters, digits, hyphens, underscores only)"
 msgstr "（这场活动的 URL — 仅限字母、数字、连字符和下划线）"
 
-#: src/app/web/templates/concert_edit.html:42
-#: src/app/web/templates/concert_new.html:105
-#: src/app/web/templates/import_preview.html:51
+#: src/app/web/templates/concert_edit.html:44
+#: src/app/web/templates/concert_new.html:75
+#: src/app/web/templates/import_preview.html:53
 #: src/app/web/templates/tags.html:230
 msgid "Kind"
 msgstr "类型"
 
-#: src/app/web/templates/concert_edit.html:44
-#: src/app/web/templates/concert_new.html:107
-#: src/app/web/templates/import_preview.html:53
+#: src/app/web/templates/concert_edit.html:46
+#: src/app/web/templates/concert_new.html:77
+#: src/app/web/templates/import_preview.html:55
 #: src/app/web/templates/tags.html:260
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/app/web/templates/concert_edit.html:53
+#: src/app/web/templates/concert_edit.html:55
 msgid "Rounds and legs"
 msgstr "轮次与场次"
 
-#: src/app/web/templates/concert_edit.html:54
+#: src/app/web/templates/concert_edit.html:56
 msgid ""
 "Where nearly every edit happens — a round gets announced\n"
 "      and needs adding. Times are JST."
 msgstr "这里是最常编辑的部分 — 每当公布新轮次时，都需要在此添加。时间为 JST。"
 
-#: src/app/web/templates/concert_edit.html:59
+#: src/app/web/templates/concert_edit.html:61
 #, python-format
 msgid "%(count)s leg"
 msgid_plural "%(count)s legs"
 msgstr[0] "%(count)s 个场次"
 
-#: src/app/web/templates/concert_edit.html:60
+#: src/app/web/templates/concert_edit.html:62
 #, python-format
 msgid "%(count)s round"
 msgid_plural "%(count)s rounds"
 msgstr[0] "%(count)s 个轮次"
 
-#: src/app/web/templates/concert_edit.html:61
-#: src/app/web/templates/concert_new.html:92
-#: src/app/web/templates/import_preview.html:194
+#: src/app/web/templates/concert_edit.html:63
+#: src/app/web/templates/concert_new.html:62
+#: src/app/web/templates/import_preview.html:124
 msgid "Add a round"
 msgstr "添加轮次"
 
-#: src/app/web/templates/concert_edit.html:62
+#: src/app/web/templates/concert_edit.html:64
 msgid "Add a leg"
 msgstr "添加场次"
 
-#: src/app/web/templates/concert_edit.html:73
-#: src/app/web/templates/concert_edit.html:309
-#: src/app/web/templates/concert_new.html:201
-#: src/app/web/templates/import_preview.html:153
-#: src/app/web/templates/import_preview.html:311
-msgid "Round label"
-msgstr "轮次名称"
-
-#: src/app/web/templates/concert_edit.html:75
-#: src/app/web/templates/concert_edit.html:79
-#: src/app/web/templates/concert_edit.html:311
-#: src/app/web/templates/concert_edit.html:314
-#: src/app/web/templates/concert_new.html:203
-#: src/app/web/templates/concert_new.html:206
-#: src/app/web/templates/import_preview.html:155
-#: src/app/web/templates/import_preview.html:159
-#: src/app/web/templates/import_preview.html:313
-#: src/app/web/templates/import_preview.html:316
-msgid "1st-round advance lottery"
-msgstr "第 1 轮先行抽选"
-
-#: src/app/web/templates/concert_edit.html:84
-#: src/app/web/templates/concert_edit.html:318
-#: src/app/web/templates/concert_new.html:210
-#: src/app/web/templates/import_preview.html:164
-#: src/app/web/templates/import_preview.html:320
-msgid "Remembered"
-msgstr "已保存"
-
-#: src/app/web/templates/concert_edit.html:88
-#: src/app/web/templates/concert_edit.html:322
-#: src/app/web/templates/concert_new.html:214
-#: src/app/web/templates/import_preview.html:168
-#: src/app/web/templates/import_preview.html:324
-msgid "Remove this round"
-msgstr "删除此轮次"
-
-#: src/app/web/templates/concert_edit.html:93
-#: src/app/web/templates/concert_edit.html:327
-#: src/app/web/templates/concert_new.html:219
-#: src/app/web/templates/import_preview.html:174
-#: src/app/web/templates/import_preview.html:328
-msgid "Apply opens (JST)"
-msgstr "申请开始（JST）"
-
-#: src/app/web/templates/concert_edit.html:95
-#: src/app/web/templates/concert_edit.html:328
-#: src/app/web/templates/concert_new.html:220
-#: src/app/web/templates/import_preview.html:176
-#: src/app/web/templates/import_preview.html:329
-msgid "Apply deadline (JST)"
-msgstr "申请截止（JST）"
-
-#: src/app/web/templates/concert_edit.html:97
-#: src/app/web/templates/concert_edit.html:329
-#: src/app/web/templates/concert_new.html:221
-#: src/app/web/templates/import_preview.html:178
-#: src/app/web/templates/import_preview.html:330
-msgid "Results (JST)"
-msgstr "结果公布（JST）"
-
-#: src/app/web/templates/concert_edit.html:99
-#: src/app/web/templates/concert_edit.html:330
-#: src/app/web/templates/concert_new.html:222
-#: src/app/web/templates/import_preview.html:180
-#: src/app/web/templates/import_preview.html:331
-msgid "Payment deadline (JST)"
-msgstr "付款截止（JST）"
-
-#: src/app/web/templates/concert_edit.html:103
-#: src/app/web/templates/concert_edit.html:333
-#: src/app/web/templates/concert_new.html:225
-#: src/app/web/templates/import_preview.html:184
-#: src/app/web/templates/import_preview.html:334
-msgid "Apply URL (optional)"
-msgstr "申请链接（可选）"
-
-#: src/app/web/templates/concert_edit.html:104
-#: src/app/web/templates/concert_edit.html:334
-#: src/app/web/templates/concert_new.html:226
-#: src/app/web/templates/import_preview.html:185
-#: src/app/web/templates/import_preview.html:335
-msgid "Notes (optional)"
-msgstr "备注（可选）"
-
-#: src/app/web/templates/concert_edit.html:108
-#: src/app/web/templates/concert_new.html:96
+#: src/app/web/templates/concert_edit.html:81
+#: src/app/web/templates/concert_new.html:66
 msgid "No rounds yet — add the first one above."
 msgstr "还没有轮次 — 请在上方添加第一个轮次。"
 
-#: src/app/web/templates/concert_edit.html:112
+#: src/app/web/templates/concert_edit.html:85
 msgid "Legs"
 msgstr "场次"
 
-#: src/app/web/templates/concert_edit.html:112
+#: src/app/web/templates/concert_edit.html:85
 msgid "(one per show / day)"
 msgstr "（每场演出或每天一个）"
 
-#: src/app/web/templates/concert_edit.html:123
-#: src/app/web/templates/concert_edit.html:127
-#: src/app/web/templates/concert_edit.html:131
-#: src/app/web/templates/concert_edit.html:270
-#: src/app/web/templates/concert_edit.html:274
-#: src/app/web/templates/concert_edit.html:277
-#: src/app/web/templates/concert_new.html:52
-#: src/app/web/templates/concert_new.html:56
-#: src/app/web/templates/concert_new.html:59
-#: src/app/web/templates/concert_new.html:163
-#: src/app/web/templates/concert_new.html:167
-#: src/app/web/templates/concert_new.html:170
-#: src/app/web/templates/import_preview.html:80
-#: src/app/web/templates/import_preview.html:84
-#: src/app/web/templates/import_preview.html:88
-#: src/app/web/templates/import_preview.html:273
-#: src/app/web/templates/import_preview.html:277
-#: src/app/web/templates/import_preview.html:280
-msgid "Day 1"
-msgstr "第 1 天"
-
-#: src/app/web/templates/concert_edit.html:125
-#: src/app/web/templates/concert_edit.html:272
-#: src/app/web/templates/concert_new.html:54
-#: src/app/web/templates/concert_new.html:165
-#: src/app/web/templates/import_preview.html:82
-#: src/app/web/templates/import_preview.html:275
-msgid "Performance label"
-msgstr "场次名称"
-
-#: src/app/web/templates/concert_edit.html:138
-#: src/app/web/templates/concert_edit.html:282
-#: src/app/web/templates/concert_new.html:64
-#: src/app/web/templates/concert_new.html:175
-#: src/app/web/templates/import_preview.html:94
-#: src/app/web/templates/import_preview.html:285
-msgid "A cancelled performance stays in the list, but appears faded with a label."
-msgstr "已取消的场次仍会保留在列表中，但会以淡色显示并带有标记。"
-
-#: src/app/web/templates/concert_edit.html:140
-#: src/app/web/templates/concert_edit.html:284
-msgid "Remove this leg"
-msgstr "删除此场次"
-
-#: src/app/web/templates/concert_edit.html:147
-#: src/app/web/templates/concert_edit.html:291
-#: src/app/web/templates/concert_new.html:74
-#: src/app/web/templates/concert_new.html:183
-#: src/app/web/templates/import_preview.html:112
-#: src/app/web/templates/import_preview.html:293
-msgid "No venue yet"
-msgstr "尚未设置场馆"
-
-#: src/app/web/templates/concert_edit.html:152
-#: src/app/web/templates/concert_edit.html:296
-#: src/app/web/templates/concert_new.html:79
-#: src/app/web/templates/concert_new.html:188
-#: src/app/web/templates/import_preview.html:120
-#: src/app/web/templates/import_preview.html:298
-msgid "+ New venue"
-msgstr "+ 新建场馆"
-
-#: src/app/web/templates/concert_edit.html:153
-#: src/app/web/templates/concert_edit.html:297
-#: src/app/web/templates/concert_new.html:80
-#: src/app/web/templates/concert_new.html:189
-#: src/app/web/templates/import_preview.html:124
-#: src/app/web/templates/import_preview.html:299
-msgid "Doors (JST)"
-msgstr "入场（JST）"
-
-#: src/app/web/templates/concert_edit.html:155
-#: src/app/web/templates/concert_edit.html:298
-#: src/app/web/templates/concert_new.html:81
-#: src/app/web/templates/concert_new.html:190
-#: src/app/web/templates/import_preview.html:126
-#: src/app/web/templates/import_preview.html:300
-msgid "Starts (JST)"
-msgstr "开演（JST）"
-
-#: src/app/web/templates/concert_edit.html:160
+#: src/app/web/templates/concert_edit.html:98
 msgid "No legs yet — add the first one above."
 msgstr "还没有场次 — 请在上方添加第一个场次。"
 
-#: src/app/web/templates/concert_edit.html:165
-#: src/app/web/templates/concert_new.html:100
-#: src/app/web/templates/import_preview.html:203
+#: src/app/web/templates/concert_edit.html:103
+#: src/app/web/templates/concert_new.html:70
+#: src/app/web/templates/import_preview.html:133
 msgid "Details and links"
 msgstr "详情与链接"
 
-#: src/app/web/templates/concert_edit.html:166
+#: src/app/web/templates/concert_edit.html:104
 msgid "nothing set yet"
 msgstr "尚未设置任何内容"
 
-#: src/app/web/templates/concert_edit.html:169
-#: src/app/web/templates/concert_new.html:104
-#: src/app/web/templates/import_preview.html:217
+#: src/app/web/templates/concert_edit.html:107
+#: src/app/web/templates/concert_new.html:74
+#: src/app/web/templates/import_preview.html:147
 msgid "Artist / organizer"
 msgstr "艺人／主办方"
 
-#: src/app/web/templates/concert_edit.html:170
-#: src/app/web/templates/concert_new.html:111
-#: src/app/web/templates/import_preview.html:219
+#: src/app/web/templates/concert_edit.html:108
+#: src/app/web/templates/concert_new.html:81
+#: src/app/web/templates/import_preview.html:149
 msgid "Categories (comma-sep)"
 msgstr "分类（逗号分隔）"
 
-#: src/app/web/templates/concert_edit.html:171
-#: src/app/web/templates/concert_new.html:112
-#: src/app/web/templates/import_preview.html:221
+#: src/app/web/templates/concert_edit.html:109
+#: src/app/web/templates/concert_new.html:82
+#: src/app/web/templates/import_preview.html:151
 #: src/app/web/templates/tags.html:86 src/app/web/templates/tags.html:266
 msgid "eventernote URL"
 msgstr "eventernote 链接"
 
-#: src/app/web/templates/concert_edit.html:172
-#: src/app/web/templates/concert_new.html:113
-#: src/app/web/templates/import_preview.html:223
+#: src/app/web/templates/concert_edit.html:110
+#: src/app/web/templates/concert_new.html:83
+#: src/app/web/templates/import_preview.html:153
 msgid "Official URL"
 msgstr "官方链接"
 
-#: src/app/web/templates/concert_edit.html:173
-#: src/app/web/templates/concert_new.html:114
-#: src/app/web/templates/import_preview.html:225
+#: src/app/web/templates/concert_edit.html:111
+#: src/app/web/templates/concert_new.html:84
+#: src/app/web/templates/import_preview.html:155
 msgid "Source URL"
 msgstr "来源链接"
 
-#: src/app/web/templates/concert_edit.html:175
-#: src/app/web/templates/concert_new.html:116
-#: src/app/web/templates/import_preview.html:228
+#: src/app/web/templates/concert_edit.html:113
+#: src/app/web/templates/concert_new.html:86
+#: src/app/web/templates/import_preview.html:158
 msgid "Performers (one per line)"
 msgstr "出演者（每行一名）"
 
-#: src/app/web/templates/concert_edit.html:185
-#: src/app/web/templates/concert_new.html:125
+#: src/app/web/templates/concert_edit.html:123
+#: src/app/web/templates/concert_new.html:95
 msgid "Translations"
 msgstr "翻译"
 
-#: src/app/web/templates/concert_edit.html:186
-#: src/app/web/templates/concert_new.html:126
+#: src/app/web/templates/concert_edit.html:124
+#: src/app/web/templates/concert_new.html:96
 msgid ""
 "Optional — shown to people using that language. If left blank, the text "
 "above is used."
 msgstr "选填。使用该语言的用户会看到此内容；留空时会显示上方的内容。"
 
-#: src/app/web/templates/concert_edit.html:188
-#: src/app/web/templates/concert_new.html:128
+#: src/app/web/templates/concert_edit.html:126
+#: src/app/web/templates/concert_new.html:98
 msgid "English"
 msgstr "英文"
 
-#: src/app/web/templates/concert_edit.html:203
+#: src/app/web/templates/concert_edit.html:141
 #, python-format
 msgid "+%(n)s more"
 msgstr "+还有 %(n)s 项"
 
-#: src/app/web/templates/concert_edit.html:203
+#: src/app/web/templates/concert_edit.html:141
 msgid "no tags yet"
 msgstr "暂无标签"
 
-#: src/app/web/templates/concert_edit.html:210
+#: src/app/web/templates/concert_edit.html:148
 msgid "Edit history"
 msgstr "编辑记录"
 
-#: src/app/web/templates/concert_edit.html:211
+#: src/app/web/templates/concert_edit.html:149
 #, python-format
 msgid "%(count)s change"
 msgid_plural "%(count)s changes"
 msgstr[0] "%(count)s 处更改"
 
-#: src/app/web/templates/concert_edit.html:211
+#: src/app/web/templates/concert_edit.html:149
 #, python-format
 msgid "last by %(username)s"
 msgstr "最后由 %(username)s 编辑"
 
-#: src/app/web/templates/concert_edit.html:211
+#: src/app/web/templates/concert_edit.html:149
 msgid "deleted user"
 msgstr "已删除的用户"
 
-#: src/app/web/templates/concert_edit.html:211
+#: src/app/web/templates/concert_edit.html:149
 msgid "no edits recorded yet"
 msgstr "尚无编辑记录"
 
-#: src/app/web/templates/concert_edit.html:229
+#: src/app/web/templates/concert_edit.html:167
 msgid ""
 "Nothing yet. We only track changes to the event details above. Changes to"
 " days, rounds, and tags are not tracked."
 msgstr "暂时没有记录。这里只记录上方活动信息的更改，不记录演出日期、轮次或标签的更改。"
 
-#: src/app/web/templates/concert_edit.html:234
+#: src/app/web/templates/concert_edit.html:172
 msgid "Save event"
 msgstr "保存活动"
 
-#: src/app/web/templates/concert_edit.html:250
+#: src/app/web/templates/concert_edit.html:188
 msgid "Duplicate or delete"
 msgstr "复制或删除"
 
-#: src/app/web/templates/concert_edit.html:251
+#: src/app/web/templates/concert_edit.html:189
 msgid ""
 "Duplicating copies this event's details and the exact tags shown here. It"
 " does not add the group's current members or copy rounds or performances."
 msgstr "复制活动时，会复制活动详情和此处显示的标签。不会添加组合的当前成员，也不会复制轮次或场次。"
 
-#: src/app/web/templates/concert_edit.html:255
+#: src/app/web/templates/concert_edit.html:193
 msgid "Duplicate as new event"
 msgstr "复制为新活动"
 
-#: src/app/web/templates/concert_edit.html:258
+#: src/app/web/templates/concert_edit.html:196
 msgid "Delete this event and every reminder attached to it?"
 msgstr "删除这场活动及其所有相关提醒？"
 
-#: src/app/web/templates/concert_edit.html:260
+#: src/app/web/templates/concert_edit.html:198
 msgid "Delete event"
 msgstr "删除活动"
 
@@ -1614,76 +1530,69 @@ msgstr "删除活动"
 msgid "new event"
 msgstr "新活动"
 
-#: src/app/web/templates/concert_new.html:15
+#: src/app/web/templates/concert_new.html:17
 msgid "Add an event"
 msgstr "添加活动"
 
-#: src/app/web/templates/concert_new.html:16
+#: src/app/web/templates/concert_new.html:18
 msgid "Prefer to import from a ramen.events URL instead? →"
 msgstr "想改为从 ramen.events 链接导入吗？ →"
 
-#: src/app/web/templates/concert_new.html:26
+#: src/app/web/templates/concert_new.html:28
 msgid "Hasunosora 6th Live"
 msgstr "莲之空 6th Live"
 
-#: src/app/web/templates/concert_new.html:31
+#: src/app/web/templates/concert_new.html:33
 msgid "hasunosora-6th-live"
 msgstr "hasunosora-6th-live"
 
-#: src/app/web/templates/concert_new.html:35
+#: src/app/web/templates/concert_new.html:37
 msgid "Performances"
 msgstr "场次"
 
-#: src/app/web/templates/concert_new.html:36
+#: src/app/web/templates/concert_new.html:38
 msgid "One per show / day — the first is open below. Times are JST."
 msgstr "每场演出或每天一个 — 第一个已在下方展开。时间为 JST。"
 
-#: src/app/web/templates/concert_new.html:40
+#: src/app/web/templates/concert_new.html:42
 msgid "Add performance"
 msgstr "添加场次"
 
-#: src/app/web/templates/concert_new.html:66
-#: src/app/web/templates/concert_new.html:177
-#: src/app/web/templates/import_preview.html:96
-#: src/app/web/templates/import_preview.html:287
-msgid "Remove this performance"
-msgstr "删除此场次"
-
-#: src/app/web/templates/concert_new.html:87
+#: src/app/web/templates/concert_new.html:57
 msgid "Lottery rounds"
 msgstr "抽选轮次"
 
-#: src/app/web/templates/concert_new.html:88
+#: src/app/web/templates/concert_new.html:58
 msgid ""
 "Select the performances for each round. If you select none, the round "
 "applies to the whole event. Times are JST."
 msgstr "请为每个轮次选择适用场次。不选择任何场次时，该轮次将适用于整个活动。时间为 JST。"
 
-#: src/app/web/templates/concert_new.html:101
+#: src/app/web/templates/concert_new.html:71
 msgid "Optional — title EN, organizer, kind, categories, links, performers, notes"
 msgstr "可选 — 标题 EN、主办方、类型、分类、链接、出演者、备注"
 
-#: src/app/web/templates/concert_new.html:104
-#: src/app/web/templates/import_preview.html:218
+#: src/app/web/templates/concert_new.html:74
+#: src/app/web/templates/import_preview.html:148
 msgid "non-series acts, etc."
 msgstr "非系列艺人等"
 
-#: src/app/web/templates/concert_new.html:111
-#: src/app/web/templates/import_preview.html:220
+#: src/app/web/templates/concert_new.html:81
+#: src/app/web/templates/import_preview.html:150
 msgid "event, tour"
 msgstr "活动、巡演"
 
-#: src/app/web/templates/concert_new.html:114
-#: src/app/web/templates/import_preview.html:226
+#: src/app/web/templates/concert_new.html:84
+#: src/app/web/templates/import_preview.html:156
 msgid "where this was sourced from"
 msgstr "此信息的来源"
 
-#: src/app/web/templates/concert_new.html:143
+#: src/app/web/templates/concert_new.html:113
 msgid "Franchise, group, artists, venue — optional"
 msgstr "系列、组合、艺人、场馆 — 可选"
 
-#: src/app/web/templates/concert_new.html:149
-#: src/app/web/templates/import_preview.html:259
+#: src/app/web/templates/concert_new.html:119
+#: src/app/web/templates/import_preview.html:189
 msgid "Create event"
 msgstr "创建活动"
 
@@ -2062,95 +1971,89 @@ msgstr "没有 ramen.events 页面？那就改为<a class=\"more\" href=\"/\">�
 msgid "review import"
 msgstr "检查导入"
 
-#: src/app/web/templates/import_preview.html:15
+#: src/app/web/templates/import_preview.html:17
 msgid "Review draft"
 msgstr "检查草稿"
 
-#: src/app/web/templates/import_preview.html:16
+#: src/app/web/templates/import_preview.html:18
 #, python-format
 msgid ""
 "Imported from\n"
 "    %(url)s."
 msgstr "已从 %(url)s 导入。"
 
-#: src/app/web/templates/import_preview.html:17
+#: src/app/web/templates/import_preview.html:19
 msgid "Reviewing a pasted draft."
 msgstr "正在检查粘贴的草稿。"
 
-#: src/app/web/templates/import_preview.html:18
+#: src/app/web/templates/import_preview.html:20
 msgid "Edit anything below, then create the event."
 msgstr "按需修改以下内容，然后创建活动。"
 
-#: src/app/web/templates/import_preview.html:23
+#: src/app/web/templates/import_preview.html:25
 msgid ""
 "<b>Nothing is saved yet.</b> This is a draft in your browser. It becomes "
 "a real\n"
 "    event only when you press <b>Create event</b> at the bottom."
 msgstr "<b>目前尚未保存任何内容。</b>这只是你浏览器里的草稿。只有当你按下底部的<b>创建活动</b>时，它才会成为真正的活动。"
 
-#: src/app/web/templates/import_preview.html:60
+#: src/app/web/templates/import_preview.html:62
 msgid "Performance days"
 msgstr "场次日期"
 
-#: src/app/web/templates/import_preview.html:61
+#: src/app/web/templates/import_preview.html:63
 msgid ""
 "Each imported day becomes a performance that can have rounds. Times are "
 "JST."
 msgstr "导入的每个日期都会成为一个可添加轮次的场次。时间为 JST。"
 
-#: src/app/web/templates/import_preview.html:69
-#: src/app/web/templates/import_preview.html:122
-#, python-format
-msgid "No venue tag matches “%(venue)s” yet — add it with + New venue."
-msgstr "尚无与“%(venue)s”匹配的场馆标签 — 请用“+ 新建场馆”添加。"
-
-#: src/app/web/templates/import_preview.html:131
+#: src/app/web/templates/import_preview.html:90
 msgid "No days were imported — add the first one below."
 msgstr "未导入任何日期 — 请在下方添加第一个。"
 
-#: src/app/web/templates/import_preview.html:136
+#: src/app/web/templates/import_preview.html:95
 msgid "Add day"
 msgstr "添加场次日期"
 
-#: src/app/web/templates/import_preview.html:140
+#: src/app/web/templates/import_preview.html:99
 msgid "Lottery / sale rounds"
 msgstr "抽选／发售轮次"
 
-#: src/app/web/templates/import_preview.html:141
+#: src/app/web/templates/import_preview.html:100
 msgid ""
 "Tick the days each round applies to — leave none ticked\n"
 "      for a whole-event round. Times are JST."
 msgstr "勾选每个轮次适用的日期 — 如果该轮次适用于整个活动，则无需勾选任何日期。时间为 JST。"
 
-#: src/app/web/templates/import_preview.html:189
+#: src/app/web/templates/import_preview.html:119
 msgid "No rounds yet — add the first one below."
 msgstr "还没有轮次 — 请在下方添加第一个轮次。"
 
-#: src/app/web/templates/import_preview.html:204
+#: src/app/web/templates/import_preview.html:134
 msgid "Optional — title and notes in each language, organizer, source URL"
 msgstr "可选 — 各语言的标题和备注、主办、来源链接"
 
-#: src/app/web/templates/import_preview.html:211
+#: src/app/web/templates/import_preview.html:141
 msgid "Title (EN)"
 msgstr "标题（EN）"
 
-#: src/app/web/templates/import_preview.html:214
+#: src/app/web/templates/import_preview.html:144
 msgid "Title (中文)"
 msgstr "标题（中文）"
 
-#: src/app/web/templates/import_preview.html:238
+#: src/app/web/templates/import_preview.html:168
 msgid "Notes (EN)"
 msgstr "备注（EN）"
 
-#: src/app/web/templates/import_preview.html:240
+#: src/app/web/templates/import_preview.html:170
 msgid "Notes (中文)"
 msgstr "备注（中文）"
 
-#: src/app/web/templates/import_preview.html:247
+#: src/app/web/templates/import_preview.html:177
 msgid "Franchise, group, artists, venue — imported and editable"
 msgstr "系列、组合、艺人、场馆 — 已导入，可编辑"
 
-#: src/app/web/templates/import_preview.html:253
+#: src/app/web/templates/import_preview.html:183
 #, python-format
 msgid ""
 "No tag yet for: %(names)s — create them on the <a href=\"/tags\">tags "
@@ -3681,4 +3584,7 @@ msgstr "准备完成。接下来，请选择你计划参加的活动。"
 #: src/app/web/templates/welcome.html:492
 msgid "Continue to my events"
 msgstr "前往我的活动"
+
+#~ msgid "Remove this leg"
+#~ msgstr "删除此场次"
 

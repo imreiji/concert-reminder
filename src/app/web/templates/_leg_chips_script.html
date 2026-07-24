@@ -144,5 +144,16 @@
     // "change" as well as "input", for the venue <select>.
     days?.addEventListener("input", renderAllChips);
     days?.addEventListener("change", renderAllChips);
+
+    // The kebab is a native <details>, which only closes on its own summary.
+    // One delegated document listener closes any open kebab when the click
+    // lands outside it -- the standard overflow-menu nicety, no per-card
+    // listeners. A click on a kebab's own summary/item is inside it, so this
+    // never fights the disclosure toggle or the delegated remove handlers.
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll("details.kebab[open]").forEach((k) => {
+        if (!k.contains(e.target)) k.removeAttribute("open");
+      });
+    });
   })();
 </script>

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ _("new event") }} — dekimasen.app{% endblock %}
 {% block content %}
+{%- from "_editor_leg_card.html" import leg_card with context %}
+{%- from "_editor_round_card.html" import round_card with context %}
 {#- Identity-first, the inverse of the editor's rounds-first fold.
 
     Creating an event means naming it before anything else, and every required
@@ -45,42 +47,10 @@
       fixed literal (nothing generated it yet); the generated keys the script
       hands new rows carry a random prefix, so they never collide with it. -#}
   <div id="day-rows" class="row-list">
-    <div class="eleg" data-variant-scope>
-      <input type="hidden" name="day_id" value="">
-      <input type="hidden" name="day_key" value="new-first">
-      <div class="eleg-top">
-        <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}"
-               data-variant-group="day_label" data-variant-slot="ja"
-               data-variant-label="{{ _('Performance label') }}">
-        <label class="vfld"><span class="vfld-tag">English</span>
-          <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
-                 data-variant-group="day_label" data-variant-slot="en"></label>
-        <label class="vfld"><span class="vfld-tag">中文</span>
-          <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
-                 data-variant-group="day_label" data-variant-slot="zh"></label>
-        <span class="cancel-toggle">
-          <input type="hidden" name="day_cancelled" value="false">
-          <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                  title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
-        </span>
-        <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
-      </div>
-      <div class="eleg-fields">
-        {#- The blank first option MUST stay first and valued "": a leg row
-            carrying a venue but no start time is not blank any more, so a
-            pre-selected venue on an untouched trailing row would 422 the
-            whole save. See _leg_chips_script.html's addRow(). -#}
-        <select name="day_venue_tag_id" data-venue-select>
-          <option value="">{{ _("No venue yet") }}</option>
-          {% for v in venue_tags %}
-          <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
-          {% endfor %}
-        </select>
-        <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
-        <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
-        <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
-      </div>
-    </div>
+    {#- day_key is a fixed literal (nothing generated it yet); the generated
+        keys the script hands new rows carry a random prefix, so they never
+        collide with it. -#}
+    {{ leg_card(day_key="new-first") }}
   </div>
 
   <div class="section-head">
@@ -156,76 +126,11 @@
 {% include "_tag_picker_script.html" %}
 
 <template id="day-row-template">
-  <div class="eleg" data-variant-scope>
-    <input type="hidden" name="day_id" value="">
-    <input type="hidden" name="day_key" value="">
-    <div class="eleg-top">
-      <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}"
-             data-variant-group="day_label" data-variant-slot="ja"
-             data-variant-label="{{ _('Performance label') }}">
-      <label class="vfld"><span class="vfld-tag">English</span>
-        <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
-               data-variant-group="day_label" data-variant-slot="en"></label>
-      <label class="vfld"><span class="vfld-tag">中文</span>
-        <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
-               data-variant-group="day_label" data-variant-slot="zh"></label>
-      <span class="cancel-toggle">
-        <input type="hidden" name="day_cancelled" value="false">
-        <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
-      </span>
-      <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
-    </div>
-    <div class="eleg-fields">
-      {#- Cloned rows start blank, venue included -- see the note on the first
-          leg row above. -#}
-      <select name="day_venue_tag_id" data-venue-select>
-        <option value="">{{ _("No venue yet") }}</option>
-        {% for v in venue_tags %}
-        <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
-        {% endfor %}
-      </select>
-      <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
-      <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
-      <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
-    </div>
-  </div>
+  {{ leg_card() }}
 </template>
 
 <template id="round-row-template">
-  <div class="redit" data-variant-scope>
-    <input type="hidden" name="round_id" value="">
-    <div class="redit-top">
-      <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選"
-             data-variant-group="round_label" data-variant-slot="ja"
-             data-variant-label="{{ _('Round label') }}">
-      <label class="vfld"><span class="vfld-tag">English</span>
-        <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-               data-variant-group="round_label" data-variant-slot="en"></label>
-      <label class="vfld"><span class="vfld-tag">中文</span>
-        <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-               data-variant-group="round_label" data-variant-slot="zh"></label>
-      {#- Fills all three boxes above from a triple this editor has typed
-          before -- see _round_phrase_dialog.html, included after </form>. -#}
-      <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>
-      <select name="round_kind">{% for k in kinds %}
-        <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
-      {% endfor %}</select>
-      <button type="button" class="x" title="{{ _('Remove this round') }}" data-remove-round>×</button>
-    </div>
-    {% with value = "", selected = none %}{% include "_round_leg_chips.html" %}{% endwith %}
-    {% with value = "", selected = none, self_id = none, kind_value = "" %}{% include "_round_qualifier_chips.html" %}{% endwith %}
-    <div class="redit-times">
-      <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at"></label>
-      <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at"></label>
-      <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at"></label>
-      <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at"></label>
-    </div>
-    <div class="redit-extra">
-      <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}">
-      <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}">
-    </div>
-  </div>
+  {{ round_card() }}
 </template>
 {% include "_leg_chips_script.html" %}
 {% include "_qualifier_chips_script.html" %}

@@ -1,0 +1,74 @@
+{#- ONE lottery/sale round card -- the single source of the `.redit` markup all
+    three editor surfaces and their <template> clone-rows render through.
+
+    Imported `with context` so it sees the render's `kinds`/`legs`/
+    `saved_rounds`/`loc`/`_`; the per-row data comes in as explicit args, and
+    the applies-to / qualifier chip partials are pulled in via `{% with %}` +
+    `{% include %}` exactly as the hand-rolled cards did. Anatomy matches the
+    demo editor frame: a `.cardtop` (ja label, kind select, kebab), a `.vary`
+    variants row (EN + 中文, then the "Remembered" phrase chip at the END), the
+    applies-to chips, an optional upgrade-qualifier box, then the times and
+    url/notes rows. Remove lives ONLY in the kebab; `data-remove-round` rides
+    the menu item so the delegated handler (which climbs to `.redit`) keeps its
+    hook.
+
+    Args:
+      round_id                hidden identity field
+      label/_en/_zh           ja label and its two locale variants
+      kind                    the round's RoundKind (pre-selects the <select>),
+                              or none for a blank row
+      opens/closes/results/payment  pre-formatted datetime strings (caller runs
+                              jst()/fmt())
+      url, notes              extra-row fields
+      leg_value, leg_selected applies-to chips: whole value + selected set
+      with_qualifiers         emit the upgrade-qualifier box (edit/new yes,
+                              import no -- import has no saved rounds to qualify)
+      qual_value, qual_selected, self_id, kind_value  qualifier-box state -#}
+{% macro round_card(round_id="", label="", label_en="", label_zh="",
+                    kind=none, opens="", closes="", results="", payment="",
+                    url="", notes="", leg_value="", leg_selected=none,
+                    with_qualifiers=True, qual_value="", qual_selected=none,
+                    self_id=none, kind_value="") %}
+<div class="redit" data-variant-scope>
+  <input type="hidden" name="round_id" value="{{ round_id }}">
+  <div class="cardtop">
+    <input class="cardname" name="round_label" required maxlength="200" placeholder="1次先行抽選"
+           value="{{ label }}" data-variant-group="round_label" data-variant-slot="ja"
+           data-variant-label="{{ _('Round label') }}">
+    <select name="round_kind">{% for k in kinds %}
+      <option value="{{ k.value }}"{% if kind is not none and k == kind %} selected{% endif %}>{{ round_kind_label(k) }}</option>
+    {% endfor %}</select>
+    <details class="kebab">
+      <summary title="{{ _('More actions') }}">&#8943;</summary>
+      <div class="kmenu">
+        <button class="kitem danger" type="button" data-remove-round>{{ _("Remove this round") }}</button>
+      </div>
+    </details>
+  </div>
+  <div class="vary">
+    <label class="vfld"><span class="vfld-tag">English</span>
+      <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
+             value="{{ label_en }}" data-variant-group="round_label" data-variant-slot="en"></label>
+    <label class="vfld"><span class="vfld-tag">中文</span>
+      <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
+             value="{{ label_zh }}" data-variant-group="round_label" data-variant-slot="zh"></label>
+    {#- Fills the three boxes above from a triple this editor has typed before
+        -- it lives beside the fields it fills (see _round_phrase_dialog.html). -#}
+    <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>
+  </div>
+  {% with value = leg_value, selected = leg_selected %}{% include "_round_leg_chips.html" %}{% endwith %}
+  {% if with_qualifiers %}
+  {% with value = qual_value, selected = qual_selected, self_id = self_id, kind_value = kind_value %}{% include "_round_qualifier_chips.html" %}{% endwith %}
+  {% endif %}
+  <div class="redit-times">
+    <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at" value="{{ opens }}"></label>
+    <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at" value="{{ closes }}"></label>
+    <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at" value="{{ results }}"></label>
+    <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at" value="{{ payment }}"></label>
+  </div>
+  <div class="redit-extra">
+    <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}" value="{{ url }}">
+    <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}" value="{{ notes }}">
+  </div>
+</div>
+{% endmacro %}
