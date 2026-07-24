@@ -216,25 +216,82 @@
   .foldbody { padding: 0 .9rem 1rem; display: grid; gap: .75rem; }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; }
 
-  .elegs { margin-top: 1.5rem; display: grid; gap: 1.25rem; }
-  .elegcard { border: 1px solid var(--line); border-radius: 3px; background: var(--raise); }
-  .elegcard > .lh {
-    display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
-    padding: .7rem .9rem; border-bottom: 1px solid var(--line);
-  }
-  .elegcard > .lh h3 { margin: 0; font-size: .95rem; font-weight: 650; }
-  .elegcard > .lh .meta { color: var(--dim); font-size: .8125rem; }
-  .elegcard > .lh .sp { margin-left: auto; display: flex; gap: .4rem; }
-  .rlist { padding: .3rem .9rem .9rem; display: grid; gap: .5rem; }
+  /* Editor cards (coherence pass) -- shared anatomy with dekimasen-demo.html's
+     editor frame. Import preview's leg/round cards are a FLAT list; destructive
+     actions live in a kebab menu top-right, never an inline x; the ja label is
+     the top-row input and the EN/中文 variants sit on their own always-visible
+     row. Import preview has no upgrade qualifier box. */
+  .rowlist { display: grid; gap: .8rem; margin: 1rem 0 .5rem; }
 
-  .redit {
-    border: 1px solid var(--line); border-radius: 3px; padding: .7rem .8rem;
-    display: grid; gap: .6rem; background: var(--paper);
+  .eleg, .redit {
+    position: relative; border: 1px solid var(--line); border-radius: 3px;
+    background: var(--raise); padding: .75rem .8rem; display: grid; gap: .55rem;
   }
-  .redit .top { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
-  .redit .top .nm { font-weight: 600; }
-  .redit .top .sp { margin-left: auto; display: flex; gap: .35rem; }
-  .redit .times { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .6rem; }
+  .eleg.cancelled { opacity: .55; }
+  .cardtop { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  .cardtop .cardname { flex: 2 1 14rem; min-width: 0; font-weight: 600; }
+  .cardtop > select { flex: 1 1 9rem; min-width: 0; }
+  .cardtop input, .cardtop select,
+  .vary .vfld input, .redit-extra input, .eleg-fields input, .eleg-fields select {
+    font: inherit; padding: .45rem .6rem; border: 1px solid var(--line);
+    border-radius: 3px; background: var(--paper); color: var(--ink);
+  }
+  .cardtop input:focus-visible, .cardtop select:focus-visible,
+  .vary input:focus-visible, .eleg-fields input:focus-visible,
+  .eleg-fields select:focus-visible, .redit-extra input:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+
+  /* variants row: EN + 中文, always visible; Remembered chip ends round rows */
+  .vary { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  .vfld { display: flex; align-items: center; gap: .3rem; flex: 1 1 12rem; min-width: 10rem; }
+  .vfld .vfld-tag { flex: 0 0 auto; font-size: .72rem; color: var(--dim); white-space: nowrap; }
+  .vfld input { flex: 1 1 auto; min-width: 0; width: 100%; }
+
+  /* leg fields row: venue + new-venue chip + doors + starts (+ venue hint) */
+  .eleg-fields { display: flex; gap: .5rem .6rem; align-items: flex-end; flex-wrap: wrap; }
+  .f2 { display: grid; gap: .2rem; flex: 1 1 10rem; }
+  .f2.venue { flex: 2 1 13rem; }
+  .f2 > span { font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .venue-hint { flex: 1 1 100%; font-size: .75rem; color: var(--dim); margin-top: .1rem; }
+
+  /* round rows: applies-to chips, then the four anchors, then url/notes */
+  .redit-times, .redit-extra {
+    display: grid; gap: .35rem .6rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  }
+  .leg-chips { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
+
+  /* kebab overflow menu: native <details>, tokens only, below-right */
+  .kebab { position: relative; flex: 0 0 auto; margin-left: .1rem; }
+  .kebab > summary {
+    list-style: none; cursor: pointer; width: 1.9rem; height: 1.9rem; display: grid;
+    place-items: center; border: 1px solid var(--line); border-radius: 3px;
+    background: var(--paper); color: var(--dim); font-size: 1rem; line-height: 1; user-select: none;
+  }
+  .kebab > summary::-webkit-details-marker { display: none; }
+  .kebab > summary::marker { content: ""; }
+  .kebab > summary:hover, .kebab[open] > summary { color: var(--ink); border-color: var(--dim); }
+  .kmenu {
+    position: absolute; top: calc(100% + .3rem); right: 0; z-index: 20; min-width: 12rem;
+    background: var(--raise); border: 1px solid var(--line); border-radius: 4px;
+    box-shadow: var(--shadow); padding: .3rem; display: grid; gap: .1rem;
+  }
+  .kitem {
+    font: inherit; font-size: .8125rem; text-align: left; width: 100%; padding: .45rem .55rem;
+    border: 0; border-radius: 3px; background: none; color: var(--ink); cursor: pointer;
+  }
+  .kitem:hover { background: var(--chip); }
+  .kitem.danger { color: var(--danger); }
+  .kitem.danger:hover { background: var(--danger-wash); }
+
+  /* + New venue / Remembered: add-buttons that share the chip silhouette */
+  .chip.add {
+    border: 1px solid var(--line); background: var(--raise); color: var(--ink);
+    font-size: .78rem; border-radius: 999px; padding: .18rem .6rem; cursor: pointer;
+    display: inline-flex; align-items: center; gap: .25rem; align-self: center; white-space: nowrap;
+  }
+  .chip.add:hover { border-color: var(--ink); }
+  .cancel-toggle { flex: 0 0 auto; }
   .applies { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; font-size: .8125rem; }
   .applies .lbl3 { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
   .legchip {
@@ -1163,13 +1220,13 @@
   <div class="lede" style="margin-top:2rem">
     <h1>Review draft</h1>
     <p>Parsed from <a href="#" onclick="return false" style="color:var(--accent)">ramen.events/e/aqours-9th-love-live-saitama</a>.
-      Edit anything below, then create the concert.</p>
+      Edit anything below, then create the event.</p>
   </div>
 
   <div class="callout info" style="margin-top:1.25rem">
     <span>💾</span>
     <span><b>Nothing is saved yet.</b> This is a draft in your browser. It becomes a real
-      concert only when you press <b>Create concert</b> at the bottom.</span>
+      event only when you press <b>Create event</b> at the bottom.</span>
   </div>
 
   <div class="warnlist">
@@ -1185,121 +1242,202 @@
       <select><option selected>lottery event</option><option>stream</option><option>serial code</option></select></label>
   </div>
 
-  <details class="fold" open>
-    <summary>Tags <span class="hint">Franchise · group · performers · venue — parsed, editable</span></summary>
-    <div class="foldbody">
-      <div class="applies"><span class="lbl3">Franchise</span><span class="chip">Love Live! Sunshine!!</span><button class="legchip" type="button">+ Add</button></div>
-      <div class="applies"><span class="lbl3">Group</span><span class="chip">Aqours</span><button class="legchip" type="button">+ Add</button></div>
-      <div class="applies"><span class="lbl3">Performers</span><span class="chip">伊波杏樹</span><span class="chip">逢田梨香子</span><span class="chip">諏訪ななか</span><span class="chip">+6 more</span><button class="legchip" type="button">+ Add</button></div>
-      <div class="applies"><span class="lbl3">Venue</span><span class="chip">さいたまスーパーアリーナ</span><button class="legchip" type="button">+ Add</button></div>
-    </div>
-  </details>
-
   <div class="head" style="margin-top:1.75rem">
     <h2>Performance days</h2>
     <span class="note">Each parsed day becomes a leg you can attach rounds to</span>
   </div>
 
-  <div class="elegs">
-    <div class="elegcard">
-      <div class="lh">
-        <h3>Day 1</h3>
-        <span class="meta num">Sat 23 Aug · 開演 16:00 · さいたまスーパーアリーナ</span>
-        <span class="sp"><button class="act" type="button">Edit</button><button class="act no" type="button">Remove</button></span>
+  <!-- Legs: flat list, new card anatomy. Day 2's parsed venue string didn't
+       match a tag, so it shows a per-leg venue hint. -->
+  <div class="rowlist">
+
+    <div class="eleg">
+      <div class="cardtop">
+        <input class="cardname" value="Day 1 昼公演">
+        <span class="cancel-toggle">
+          <button class="chip" type="button" data-cancel-toggle aria-pressed="false">Cancelled</button>
+        </span>
+        <details class="kebab"><summary>&#8943;</summary>
+          <div class="kmenu"><button class="kitem danger" type="button">Remove this performance</button></div>
+        </details>
+      </div>
+      <div class="vary">
+        <label class="vfld"><span class="vfld-tag">English</span><input value="Day 1 matinee"></label>
+        <label class="vfld"><span class="vfld-tag">中文</span><input value="第1天 午场"></label>
+      </div>
+      <div class="eleg-fields">
+        <label class="f2 venue"><span>Venue</span>
+          <select><option selected>さいたまスーパーアリーナ</option><option>ぴあアリーナMM</option><option>No venue yet</option></select></label>
+        <button class="chip add" type="button">+ New venue</button>
+        <label class="f2"><span>Doors (JST)</span><input type="datetime-local" value="2026-08-23T15:00"></label>
+        <label class="f2"><span>Starts (JST)</span><input type="datetime-local" value="2026-08-23T16:00"></label>
       </div>
     </div>
-    <div class="elegcard">
-      <div class="lh">
-        <h3>Day 2</h3>
-        <span class="meta num">Sun 24 Aug · 開演 15:00 · さいたまスーパーアリーナ</span>
-        <span class="sp"><button class="act" type="button">Edit</button><button class="act no" type="button">Remove</button></span>
+
+    <div class="eleg">
+      <div class="cardtop">
+        <input class="cardname" value="Day 2 夜公演">
+        <span class="cancel-toggle">
+          <button class="chip" type="button" data-cancel-toggle aria-pressed="false">Cancelled</button>
+        </span>
+        <details class="kebab"><summary>&#8943;</summary>
+          <div class="kmenu"><button class="kitem danger" type="button">Remove this performance</button></div>
+        </details>
+      </div>
+      <div class="vary">
+        <label class="vfld"><span class="vfld-tag">English</span><input value="Day 2 evening"></label>
+        <label class="vfld"><span class="vfld-tag">中文</span><input value=""></label>
+      </div>
+      <div class="eleg-fields">
+        <label class="f2 venue"><span>Venue</span>
+          <select><option>さいたまスーパーアリーナ</option><option>ぴあアリーナMM</option><option selected>No venue yet</option></select></label>
+        <button class="chip add" type="button">+ New venue</button>
+        <label class="f2"><span>Doors (JST)</span><input type="datetime-local" value="2026-08-24T14:00"></label>
+        <label class="f2"><span>Starts (JST)</span><input type="datetime-local" value="2026-08-24T15:00"></label>
+        <span class="venue-hint">Parsed venue &ldquo;さいたまスーパーアリーナ（メインアリーナ）&rdquo; &mdash; no matching tag. Pick one above or create it.</span>
       </div>
     </div>
   </div>
-  <div class="bar" style="margin-top:1rem"><button class="btn quiet" type="button">+ Add day</button></div>
+  <div class="bar" style="margin-top:1rem"><button class="btn quiet" type="button">Add day</button></div>
 
   <div class="head" style="margin-top:1.75rem">
     <h2>Lottery / sale rounds</h2>
     <span class="note">Parsed round kinds and times — leg chips say which days each applies to</span>
   </div>
 
-  <div class="elegs">
-    <div class="elegcard">
-      <div class="lh"><h3>Rounds</h3><span class="meta">3 parsed · toggle the leg chips to change scope</span><span class="sp"></span></div>
-      <div class="rlist">
-        <div class="redit">
-          <div class="top">
-            <span class="nm">最速先行</span><span class="pill p-quiet">fan club</span>
-            <span class="sp"><button class="act" type="button">Edit</button><button class="act no" type="button">Remove</button></span>
-          </div>
-          <div class="times">
-            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-06-01T10:00"></label>
-            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value="2026-06-30T23:59"></label>
-            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value="2026-07-04T12:00"></label>
-            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
-          </div>
-          <div class="applies">
-            <span class="lbl3">Applies to</span>
-            <button class="legchip" type="button" aria-pressed="true">Day 1</button>
-            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
-          </div>
-        </div>
-        <div class="redit">
-          <div class="top">
-            <span class="nm">先行抽選 R1</span><span class="pill p-quiet">lottery</span>
-            <span class="sp"><button class="act" type="button">Edit</button><button class="act no" type="button">Remove</button></span>
-          </div>
-          <div class="times">
-            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-07-10T10:00"></label>
-            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value="2026-07-23T23:59"></label>
-            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value="2026-07-28T12:00"></label>
-            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
-          </div>
-          <div class="applies">
-            <span class="lbl3">Applies to</span>
-            <button class="legchip" type="button" aria-pressed="true">Day 1</button>
-            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
-          </div>
-        </div>
-        <div class="redit" style="border-color:var(--off)">
-          <div class="top">
-            <span class="nm">一般発売</span><span class="pill p-quiet">first come</span>
-            <span class="pill p-off">needs close time</span>
-            <span class="sp"><button class="act" type="button">Edit</button><button class="act no" type="button">Remove</button></span>
-          </div>
-          <div class="times">
-            <label class="fld sm"><span>Opens (JST)</span><input type="datetime-local" value="2026-08-09T10:00"></label>
-            <label class="fld sm"><span>Closes (JST)</span><input type="datetime-local" value=""></label>
-            <label class="fld sm"><span>Result (JST)</span><input type="datetime-local" value=""></label>
-            <label class="fld sm"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
-          </div>
-          <div class="applies">
-            <span class="lbl3">Applies to</span>
-            <button class="legchip" type="button" aria-pressed="true">Day 1</button>
-            <button class="legchip" type="button" aria-pressed="true">Day 2</button>
-          </div>
-        </div>
+  <!-- Rounds: flat list, new card anatomy. No upgrade qualifier box in import. -->
+  <div class="rowlist">
+
+    <div class="redit">
+      <div class="cardtop">
+        <input class="cardname" value="最速先行">
+        <select><option selected>Fan-club presale</option><option>Lottery</option><option>First come, first served</option><option>General sale</option></select>
+        <details class="kebab"><summary>&#8943;</summary>
+          <div class="kmenu"><button class="kitem danger" type="button">Remove this round</button></div>
+        </details>
+      </div>
+      <div class="vary">
+        <label class="vfld"><span class="vfld-tag">English</span><input value="Fastest fan-club presale"></label>
+        <label class="vfld"><span class="vfld-tag">中文</span><input value="最速抢先"></label>
+        <button class="chip add" type="button">Remembered</button>
+      </div>
+      <div class="leg-chips">
+        <span class="eyebrow">Applies to</span>
+        <button class="chip on" type="button" aria-pressed="true">Day 1 昼公演</button>
+        <button class="chip on" type="button" aria-pressed="true">Day 2 夜公演</button>
+      </div>
+      <div class="redit-times">
+        <label class="f2"><span>Opens (JST)</span><input type="datetime-local" value="2026-06-01T10:00"></label>
+        <label class="f2"><span>Closes (JST)</span><input type="datetime-local" value="2026-06-30T23:59"></label>
+        <label class="f2"><span>Results (JST)</span><input type="datetime-local" value="2026-07-04T12:00"></label>
+        <label class="f2"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
+      </div>
+      <div class="redit-extra">
+        <input type="url" placeholder="Apply URL (optional)" value="">
+        <input placeholder="Notes (optional)" value="">
+      </div>
+    </div>
+
+    <div class="redit">
+      <div class="cardtop">
+        <input class="cardname" value="先行抽選 R1">
+        <select><option>Fan-club presale</option><option selected>Lottery</option><option>First come, first served</option><option>General sale</option></select>
+        <details class="kebab"><summary>&#8943;</summary>
+          <div class="kmenu"><button class="kitem danger" type="button">Remove this round</button></div>
+        </details>
+      </div>
+      <div class="vary">
+        <label class="vfld"><span class="vfld-tag">English</span><input value="Advance lottery R1"></label>
+        <label class="vfld"><span class="vfld-tag">中文</span><input value="先行抽选 R1"></label>
+        <button class="chip add" type="button">Remembered</button>
+      </div>
+      <div class="leg-chips">
+        <span class="eyebrow">Applies to</span>
+        <button class="chip on" type="button" aria-pressed="true">Day 1 昼公演</button>
+        <button class="chip on" type="button" aria-pressed="true">Day 2 夜公演</button>
+      </div>
+      <div class="redit-times">
+        <label class="f2"><span>Opens (JST)</span><input type="datetime-local" value="2026-07-10T10:00"></label>
+        <label class="f2"><span>Closes (JST)</span><input type="datetime-local" value="2026-07-23T23:59"></label>
+        <label class="f2"><span>Results (JST)</span><input type="datetime-local" value="2026-07-28T12:00"></label>
+        <label class="f2"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
+      </div>
+      <div class="redit-extra">
+        <input type="url" placeholder="Apply URL (optional)" value="">
+        <input placeholder="Notes (optional)" value="">
+      </div>
+    </div>
+
+    <div class="redit" style="border-color:var(--off)">
+      <div class="cardtop">
+        <input class="cardname" value="一般発売">
+        <select><option>Fan-club presale</option><option>Lottery</option><option selected>First come, first served</option><option>General sale</option></select>
+        <span class="pill p-off">needs close time</span>
+        <details class="kebab"><summary>&#8943;</summary>
+          <div class="kmenu"><button class="kitem danger" type="button">Remove this round</button></div>
+        </details>
+      </div>
+      <div class="vary">
+        <label class="vfld"><span class="vfld-tag">English</span><input value="General sale"></label>
+        <label class="vfld"><span class="vfld-tag">中文</span><input value="一般发售"></label>
+        <button class="chip add" type="button">Remembered</button>
+      </div>
+      <div class="leg-chips">
+        <span class="eyebrow">Applies to</span>
+        <button class="chip on" type="button" aria-pressed="true">Day 1 昼公演</button>
+        <button class="chip on" type="button" aria-pressed="true">Day 2 夜公演</button>
+      </div>
+      <div class="redit-times">
+        <label class="f2"><span>Opens (JST)</span><input type="datetime-local" value="2026-08-09T10:00"></label>
+        <label class="f2"><span>Closes (JST)</span><input type="datetime-local" value=""></label>
+        <label class="f2"><span>Results (JST)</span><input type="datetime-local" value=""></label>
+        <label class="f2"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
+      </div>
+      <div class="redit-extra">
+        <input type="url" placeholder="Apply URL (optional)" value="">
+        <input placeholder="Notes (optional)" value="">
       </div>
     </div>
   </div>
-  <div class="bar" style="margin-top:1rem"><button class="btn quiet" type="button">+ Add round</button></div>
+  <div class="bar" style="margin-top:1rem"><button class="btn quiet" type="button">Add a round</button></div>
 
   <details class="fold">
-    <summary>Details and links <span class="hint">Title (EN), organizer, source URL, notes</span></summary>
+    <summary>Details and links <span class="hint">Title (EN · 中文), organizer, categories, URLs, notes trio</span></summary>
     <div class="foldbody">
       <div class="grid2">
         <label class="fld"><span>Title (EN)</span><input value="9th LoveLive! — Nobody's Perfect"></label>
+        <label class="fld"><span>Title (中文)</span><input value="9th LoveLive! — 无人完美"></label>
         <label class="fld"><span>Artist / organizer</span><input value="Aqours"></label>
+        <label class="fld"><span>Categories</span><input value="live, arena"></label>
       </div>
-      <label class="fld"><span>Source URL</span><input type="url" value="https://ramen.events/e/aqours-9th-love-live-saitama"></label>
-      <label class="fld"><span>Notes</span><textarea rows="2"></textarea></label>
+      <div class="grid2">
+        <label class="fld"><span>Official URL</span><input type="url" value="https://lovelive-anime.jp/..."></label>
+        <label class="fld"><span>Source URL</span><input type="url" value="https://ramen.events/e/aqours-9th-love-live-saitama"></label>
+      </div>
+      <label class="fld"><span>Notes (JP)</span><textarea rows="2"></textarea></label>
+      <div class="grid2">
+        <label class="fld"><span>Notes (EN)</span><textarea rows="2"></textarea></label>
+        <label class="fld"><span>Notes (中文)</span><textarea rows="2"></textarea></label>
+      </div>
+    </div>
+  </details>
+
+  <!-- Tags fold LAST, matching shipped import_preview.html. No Venue row: a
+       leg's venue is a VENUE tag now, derived up from the legs. -->
+  <details class="fold" open>
+    <summary>Tags <span class="hint">Franchise · group · performers — parsed, editable</span></summary>
+    <div class="foldbody">
+      <div class="applies"><span class="lbl3">Franchise</span><span class="chip">Love Live! Sunshine!!</span><button class="legchip" type="button">+ Add</button></div>
+      <div class="applies"><span class="lbl3">Group</span><span class="chip">Aqours</span><button class="legchip" type="button">+ Add</button></div>
+      <div class="applies"><span class="lbl3">Performers</span><span class="chip">伊波杏樹</span><span class="chip">逢田梨香子</span><span class="chip">諏訪ななか</span><span class="chip">+6 more</span><button class="legchip" type="button">+ Add</button></div>
+      <p class="venue-hint">Parsed tag &ldquo;Guilty Kiss&rdquo; didn&rsquo;t match anything &mdash; add it as a group, or leave it out.</p>
     </div>
   </details>
 
   <div class="bar">
-    <span class="tally">Once created, this concert enters the shared catalogue for everyone.</span>
+    <span class="tally">Once created, this event enters the shared catalogue for everyone.</span>
     <button class="btn quiet" type="button" data-view="import">Back</button>
-    <button class="btn" type="button" data-view="flow">Create concert</button>
+    <button class="btn" type="button" data-view="flow">Create event</button>
   </div>
 </div>
 
@@ -1572,10 +1710,31 @@
     document.getElementById('feedBox').hidden = false;
   });
 
-  /* ---- leg chips toggle in import preview ------------------------------ */
+  /* ---- editor-card interactions in import preview ---------------------- */
   document.addEventListener('click', (e) => {
+    // Legacy leg chips (tag folds) — inert unless aria-pressed.
     const lc = e.target.closest('.legchip[aria-pressed]');
     if (lc) lc.setAttribute('aria-pressed', String(lc.getAttribute('aria-pressed') !== 'true'));
+    // Applies-to chips: toggle pressed state and the accent fill.
+    const legc = e.target.closest('.leg-chips .chip[aria-pressed]');
+    if (legc) {
+      const on = legc.getAttribute('aria-pressed') !== 'true';
+      legc.setAttribute('aria-pressed', String(on));
+      legc.classList.toggle('on', on);
+    }
+    // Cancelled toggle on a leg card, separated from the kebab.
+    const cc = e.target.closest('[data-cancel-toggle]');
+    if (cc) {
+      const on = cc.getAttribute('aria-pressed') !== 'true';
+      cc.setAttribute('aria-pressed', String(on));
+      cc.classList.toggle('on', on);
+      const card = cc.closest('.eleg');
+      if (card) card.classList.toggle('cancelled', on);
+    }
+    // Close any open kebab when the click landed outside it.
+    document.querySelectorAll('details.kebab[open]').forEach((d) => {
+      if (!d.contains(e.target)) d.removeAttribute('open');
+    });
   });
 
   /* ---- reminder-preset step: three preset cards, plus a fine-tune list
