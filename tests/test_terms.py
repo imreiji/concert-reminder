@@ -200,14 +200,14 @@ def test_terms_cover_the_required_sections(client):
 def test_terms_state_the_non_affiliation(client):
     """The app is entirely about other people's events -- say so."""
     body = client.get("/terms").text
-    assert "not affiliated" in body
+    assert "independent from" in body
 
 
 def test_terms_do_not_name_a_specific_minimum_age(client):
     """Login is Discord-only, so Discord's own minimum is the floor; naming
     a number here would only contradict it in some country."""
     body = client.get("/terms").text
-    assert "minimum age" in body
+    assert "old enough to use Discord" in body
     for number in ("13 ", "16 ", "18 "):
         assert number not in body
 

@@ -8,7 +8,7 @@
     {#- Each pluralized count phrase is captured, then one trans block carries
         the whole sentence so translators control word order (the standalone
         "across" was unextractable on its own). -#}
-    {%- set n_concerts -%}<strong>{% trans count=summary.concerts %}{{ count }} concert{% pluralize %}{{ count }} concerts{% endtrans %}</strong>{%- endset -%}
+    {%- set n_concerts -%}<strong>{% trans count=summary.concerts %}{{ count }} event{% pluralize %}{{ count }} events{% endtrans %}</strong>{%- endset -%}
     {%- set n_franchises -%}{% trans count=summary.franchises %}{{ count }} franchise{% pluralize %}{{ count }} franchises{% endtrans %}{%- endset -%}
     {%- set n_groups -%}{% trans count=summary.groups %}{{ count }} group{% pluralize %}{{ count }} groups{% endtrans %}{%- endset -%}
     {%- set n_performers -%}{% trans count=summary.performers %}{{ count }} performer{% pluralize %}{{ count }} performers{% endtrans %}{%- endset -%}
@@ -35,8 +35,7 @@
     onclick="document.getElementById('new-tag-dialog').showModal()">{{ _("+ New tag") }}</button>{% endif %}
 </div>
 
-<p class="dim">{% trans %}Following a tag subscribes you to every future concert carrying it, so counts
-here are what a rename or delete actually touches.{% endtrans %}</p>
+<p class="dim">{% trans %}Following a tag follows every future event with that tag. The counts show how many events will change if you rename or delete the tag.{% endtrans %}</p>
 
 <input class="tag-search" type="search" placeholder="{{ _('Search franchises, groups, performers, venues…') }}" oninput="filterChips(this, '.tags-page')">
 
@@ -59,7 +58,7 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
   </div>
   <div class="db">
     <div class="usage">
-      <div><div class="n3">{{ c.concerts }}</div><div class="l3">{{ _("concerts") }}</div></div>
+      <div><div class="n3">{{ c.concerts }}</div><div class="l3">{{ _("events") }}</div></div>
       <div><div class="n3">{{ c.followers }}</div><div class="l3">{{ _("followers") }}</div></div>
       {% if is_group %}<div><div class="n3">{{ c.members }}</div><div class="l3">{{ _("members") }}</div></div>{% endif %}
       <div><div class="n3">{{ c.upcoming }}</div><div class="l3">{{ _("upcoming") }}</div></div>
@@ -125,11 +124,9 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
     </div>
 
     <div class="upgradebox">
-      <div class="u1">{% trans %}<b>Apply to existing concerts.</b> Adding a member does not touch
-        concerts that already carry this group — expansion is materialised at the moment
-        you attach it. Use this to push a new member onto active events.{% endtrans %}</div>
+      <div class="u1">{% trans %}<b>Apply to existing events.</b> Adding a member does not update events that already have this group. Group members are added when the group is first attached. Use this to add the new member to active events.{% endtrans %}</div>
       {% for m, n in eligible_members.get(t.id, []) %}
-      <a class="btn quiet" href="/tags/{{ t.id }}/members/{{ m.id }}/retroactive-apply">{% trans count=n, name=loc(m, "name") %}Apply {{ name }} to {{ count }} upcoming concert{% pluralize %}Apply {{ name }} to {{ count }} upcoming concerts{% endtrans %}</a>
+      <a class="btn quiet" href="/tags/{{ t.id }}/members/{{ m.id }}/retroactive-apply">{% trans count=n, name=loc(m, "name") %}Apply {{ name }} to {{ count }} upcoming event{% pluralize %}Apply {{ name }} to {{ count }} upcoming events{% endtrans %}</a>
       {% endfor %}
     </div>
     {% endif %}
@@ -237,7 +234,7 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
         <button type="button" data-kind="artist" aria-pressed="false">{{ _("Performer") }}</button>
         <button type="button" data-kind="venue" aria-pressed="false">{{ _("Venue") }}</button>
       </div>
-      <span class="dim" id="kindHint">{{ _("A group contains performers. Attaching it to a concert adds its members.") }}</span>
+      <span class="dim" id="kindHint">{{ _("A group contains performers. Attaching it to an event adds its members.") }}</span>
     </div>
 
     <label class="fld"><span>{{ _("Name") }}</span>
@@ -278,7 +275,7 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
         {%- for rn, _vs in venue_regions -%}{%- if rn != "No region" -%}{% set _ = region_names.append(rn) %}{%- endif -%}{%- endfor -%}
         {% for rn in region_names %}<option value="{{ rn }}"></option>{% endfor %}
       </datalist>
-      <span class="dim">{% trans %}Discover groups venues by region. Without one it lands in “No region” and drops out of region filtering.{% endtrans %}</span>
+      <span class="dim">{% trans %}The Discover page groups venues by region. A venue without a region appears under “No region” and cannot be found with a region filter.{% endtrans %}</span>
     </div>
 
     <div class="fld kf k-venue">
@@ -305,14 +302,14 @@ here are what a rename or delete actually touches.{% endtrans %}</p>
     // Translated strings passed via | tojson (invariant 7: never | safe); every
     // one reaches the DOM through textContent, never innerHTML.
     const KIND_HINTS = {{ {
-      "franchise": _("A franchise is the top level. Groups hang off it."),
-      "group": _("A group contains performers. Attaching it to a concert adds its members."),
+      "franchise": _("A franchise is the top level. It contains groups."),
+      "group": _("A group contains performers. Attaching it to an event adds its members."),
       "artist": _("A single performer. Can belong to a group, or stand alone."),
       "venue": _("A place. Discover filters venues by region, not individually."),
     } | tojson }};
-    const DUPE_MSG = {{ _("A {kind} tag with this name is on {concerts} with {followers}. Adding a second one splits them — there is no merge yet.") | tojson }};
-    const CONCERT_WORD = {{ _("concert") | tojson }};
-    const CONCERTS_WORD = {{ _("concerts") | tojson }};
+    const DUPE_MSG = {{ _("A {kind} tag with this name is already used by {concerts} and followed by {followers}. Creating another one will keep them separate because tags cannot be merged yet.") | tojson }};
+    const CONCERT_WORD = {{ _("event") | tojson }};
+    const CONCERTS_WORD = {{ _("events") | tojson }};
     const FOLLOWER_WORD = {{ _("follower") | tojson }};
     const FOLLOWERS_WORD = {{ _("followers") | tojson }};
     const kindInput = document.getElementById("new-tag-kind");

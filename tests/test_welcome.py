@@ -169,7 +169,7 @@ def test_step_1_renders_the_three_preset_cards(client):
     login_as(client, FAN_ID, "fan")
     client.post("/welcome/advance")  # step 0 -> 1
     r = client.get("/welcome")
-    assert "Relaxed" in r.text and "Standard" in r.text and "On the ball" in r.text
+    assert "Relaxed" in r.text and "Standard" in r.text and "Frequent" in r.text
     # The demo drops "30 minutes" -- PresetItem has no minutes column.
     assert "30 minutes" not in r.text
 
@@ -305,7 +305,7 @@ async def test_welcome_shows_step_4_calendar_feed(client):
     assert "Get your calendar feed" in r.text
     # The continue button reads the same forward-facing label whether or
     # not a feed was generated yet (P5 demo-parity: no "Skip this" here).
-    assert "Continue to my concerts" in r.text
+    assert "Continue to my events" in r.text
 
 
 async def test_step_4_generate_feed_returns_to_welcome_with_link_shown(client):

@@ -27,15 +27,14 @@
           onclick="document.getElementById('unfollowConfirm').showModal()">{{ _("Following") }}</button>
   <span class="clock">{{ _("You will be reminded about every round below.") }}</span>
   <dialog id="unfollowConfirm" class="prune">
-    <div class="dh">{{ _("Opt out of this concert?") }}
+    <div class="dh">{{ _("Stop following this event?") }}
       <button type="button" class="x" aria-label="{{ _('Close') }}"
               onclick="document.getElementById('unfollowConfirm').close()">×</button></div>
     <p>
       {% if won_payment_at_utc %}
-      {% trans when=dual(won_payment_at_utc, tz) %}You won this ticket. Payment is due {{ when }}. Opting out stops
-      that reminder and forfeits the ticket.{% endtrans %}
+      {% trans when=dual(won_payment_at_utc, tz) %}This ticket is marked as won. Payment is due {{ when }}. If you stop following this event, we'll remove that mark and the payment reminder.{% endtrans %}
       {% else %}
-      {{ _("You hold a ticket for this concert. Opting out forfeits it and stops its reminders.") }}
+      {{ _("You marked that you have a ticket for this event. If you stop following it, we'll remove that mark and its reminders.") }}
       {% endif %}
     </p>
     <div class="da">
@@ -45,7 +44,7 @@
             hx-target="#following-toggle" hx-swap="outerHTML"
             method="post" action="/concerts/{{ concert.event_id }}/subscription">
         <input type="hidden" name="state" value="opted_out">
-        <button class="btn danger" type="submit">{{ _("Opt out and forfeit") }}</button>
+        <button class="btn danger" type="submit">{{ _("Stop following") }}</button>
       </form>
     </div>
   </dialog>

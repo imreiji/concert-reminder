@@ -95,7 +95,7 @@
     {% endif %}
   </nav>
   {% if user and user.is_editor and nav_page in ("home", "discover") %}
-  <a class="fab" href="/concerts/new" title="{{ _("Add concert") }}">+</a>
+  <a class="fab" href="/concerts/new" title="{{ _("Add event") }}">+</a>
   {% endif %}
   <main>{% block content %}{% endblock %}</main>
   <footer>

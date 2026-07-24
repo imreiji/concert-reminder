@@ -13,15 +13,15 @@
     reference; import_commit resolves those to real ids after the days flush. -#}
 <div class="lede">
   <h1>{{ _("Review draft") }}</h1>
-  <p>{% if source_url %}{% set source_link %}<a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_url }}</a>{% endset %}{% trans url=source_link %}Parsed from
+  <p>{% if source_url %}{% set source_link %}<a href="{{ source_url }}" target="_blank" rel="noopener">{{ source_url }}</a>{% endset %}{% trans url=source_link %}Imported from
     {{ url }}.{% endtrans %}{% else %}{{ _("Reviewing a pasted draft.") }}{% endif %}
-    {% trans %}Edit anything below, then create the concert.{% endtrans %}</p>
+    {% trans %}Edit anything below, then create the event.{% endtrans %}</p>
 </div>
 
 <div class="callout info">
   <span>💾</span>
   <span>{% trans %}<b>Nothing is saved yet.</b> This is a draft in your browser. It becomes a real
-    concert only when you press <b>Create concert</b> at the bottom.{% endtrans %}</span>
+    event only when you press <b>Create event</b> at the bottom.{% endtrans %}</span>
 </div>
 
 {% if parsed.warnings %}
@@ -58,7 +58,7 @@
 
   <div class="section-head">
     <h2>{{ _("Performance days") }}</h2>
-    <p class="dim tiny">{{ _("Each parsed day becomes a leg you can attach rounds to. Times are JST.") }}</p>
+    <p class="dim tiny">{{ _("Each imported day becomes a performance that can have rounds. Times are JST.") }}</p>
   </div>
 
   {#- Event-level, not per-leg: the ramen.events parse yields a single
@@ -91,7 +91,7 @@
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="false">
           <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                  title="{{ _('A cancelled leg is dimmed and badged, never deleted') }}">{{ _("Cancelled") }}</button>
+                  title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
         </span>
         <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
       </div>
@@ -128,7 +128,7 @@
       </div>
     </div>
     {% else %}
-    <p class="dim tiny" data-no-legs-row>{{ _("No days parsed — add the first one below.") }}</p>
+    <p class="dim tiny" data-no-legs-row>{{ _("No days were imported — add the first one below.") }}</p>
     {% endfor %}
   </div>
 
@@ -217,7 +217,7 @@
         <label>{{ _("Artist / organizer") }} <input name="organizer" maxlength="200"
           value="{{ parsed.organizer or '' }}" placeholder="{{ _('non-series acts, etc.') }}"></label>
         <label>{{ _("Categories (comma-sep)") }} <input name="categories" maxlength="200"
-          value="{{ parsed.categories or '' }}" placeholder="{{ _('concert, tour') }}"></label>
+          value="{{ parsed.categories or '' }}" placeholder="{{ _('event, tour') }}"></label>
         <label>{{ _("eventernote URL") }} <input name="eventernote_url" type="url"
           value="{{ parsed.eventernote_url or '' }}"></label>
         <label>{{ _("Official URL") }} <input name="official_url" type="url"
@@ -244,7 +244,7 @@
 
   <details class="fold" open>
     <summary>{{ _("Tags") }}
-      <span class="fold-hint">{{ _("Franchise, group, artists, venue — parsed, editable") }}</span></summary>
+      <span class="fold-hint">{{ _("Franchise, group, artists, venue — imported and editable") }}</span></summary>
     <div class="fold-body">
       {#- No venue row here: a concert's VENUE tags are DERIVED from its legs
           (sync_concert_venue_tags), so the parsed venue is picked on the leg
@@ -256,7 +256,7 @@
     </div>
   </details>
 
-  <button class="btn">{{ _("Create concert") }}</button>
+  <button class="btn">{{ _("Create event") }}</button>
 </form>
 {#- Outside the form on purpose: the dialog's v_* inputs are read by hand
     and must not post on the commit. Same placement concert_new.html uses. -#}
@@ -282,7 +282,7 @@
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
         <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                title="{{ _('A cancelled leg is dimmed and badged, never deleted') }}">{{ _("Cancelled") }}</button>
+                title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
       </span>
       <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
     </div>

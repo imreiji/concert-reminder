@@ -27,16 +27,13 @@
   <section class="psec" id="p-follow">
     <h3>{{ _("Following") }}</h3>
     <p class="blurb">
-      {% trans %}Following a tag subscribes you to <b>every future concert</b> carrying it.
-      Notify sends a DM when a new one appears; Auto-apply adds your default
-      preset to it. Drop individual concerts from the concert page or a
-      reminder DM.{% endtrans %}
+      {% trans %}Follow a tag to add <b>all future events</b> with that tag. Notify sends you a DM when a new event appears. Auto-apply adds your default preset. You can stop following an individual event from its page or a reminder DM.{% endtrans %}
     </p>
 
     <div class="statline" style="margin-bottom:1rem">
       <span class="pill p-ok">{% trans sub_count=subs | length %}{{ sub_count }} tags followed{% endtrans %}</span>
-      <span class="clock">{% trans tracked=tracked_count, upcoming=upcoming_count, pruned=pruned_concerts | length %}{{ tracked }} tracked &middot; {{ upcoming }} upcoming
-        &middot; {{ pruned }} you pruned{% endtrans %}</span>
+      <span class="clock">{% trans tracked=tracked_count, upcoming=upcoming_count, pruned=pruned_concerts | length %}{{ tracked }} followed &middot; {{ upcoming }} upcoming
+        &middot; {{ pruned }} skipped{% endtrans %}</span>
     </div>
 
     {# One subrow per followed tag. The two `.swb` toggles map to the stored
@@ -47,17 +44,17 @@
     {% set counts = tag_counts.get(tag.id, (0, 0)) %}
     <div class="subrow">
       <span class="nm3"><span class="tchip k-{{ tag.kind.value }}">{{ tag.name }}</span></span>
-      <span class="cnt">{% trans count=counts[0] %}<b>{{ count }}</b> concert{% pluralize %}<b>{{ count }}</b> concerts{% endtrans %}
+      <span class="cnt">{% trans count=counts[0] %}<b>{{ count }}</b> event{% pluralize %}<b>{{ count }}</b> events{% endtrans %}
         &middot; {% trans upcoming=counts[1] %}{{ upcoming }} upcoming{% endtrans %}</span>
       <span class="sw">
         <form method="post" action="/subscriptions/{{ sub.id }}/notify" style="display:contents">
           <button class="swb" type="submit" aria-pressed="{{ 'true' if sub.notify else 'false' }}"
-                  title="{{ _('DM me when a new matching concert appears') }}">{{ _("Notify") }}</button>
+                  title="{{ _('DM me when a new matching event appears') }}">{{ _("Notify") }}</button>
         </form>
         <form method="post" action="/subscriptions/{{ sub.id }}/auto-apply" style="display:contents">
           <button class="swb" type="submit"
                   aria-pressed="{{ 'true' if sub.preset_id else 'false' }}"
-                  title="{{ _('Add my default preset to new matching concerts') }}">{{ _("Auto-apply") }}</button>
+                  title="{{ _('Add my default preset to new matching events') }}">{{ _("Auto-apply") }}</button>
         </form>
         <form method="post" action="/subscriptions/{{ sub.id }}/delete" style="display:contents">
           <button class="act no" type="submit" title="{{ _('Stop following this tag') }}">{{ _("Unfollow") }}</button>
@@ -70,9 +67,8 @@
 
     {% if pruned_concerts %}
     <div style="margin-top:1.25rem">
-      <div class="ruleline" style="margin-bottom:.4rem"><b>{{ _("Pruned concerts") }}</b></div>
-      <p class="clock" style="display:block;margin:0 0 .5rem">{% trans %}You skipped these individually.
-        Restoring one returns it to whatever its tags say by default.{% endtrans %}</p>
+      <div class="ruleline" style="margin-bottom:.4rem"><b>{{ _("Skipped events") }}</b></div>
+      <p class="clock" style="display:block;margin:0 0 .5rem">{% trans %}These are events you stopped following one at a time. Add one back to use its tag settings again.{% endtrans %}</p>
       {% for c in pruned_concerts %}
       <div class="subrow">
         <span class="nm3"><a href="/concerts/{{ c.event_id }}">{{ c.title }}</a>
@@ -180,8 +176,7 @@
   <section class="psec" id="p-remind">
     <h3>{{ _("Reminders") }}</h3>
     <p class="blurb">
-      {% trans %}A preset is a set of reminder rules applied to concerts you follow. Rules
-      on an individual concert override these.{% endtrans %}
+      {% trans %}A preset is a group of reminder rules for events you follow. If you change the rules for one event, those rules are used instead.{% endtrans %}
     </p>
 
     {% macro sentence_fields(days_val, hours_val, dir_val, anchor_val) -%}
@@ -240,7 +235,7 @@
     {% endfor %}
 
     <div class="bar stacked">
-      <span class="tally">{{ _("Presets apply to future concerts. Existing ones keep the rules they already have.") }}</span>
+      <span class="tally">{{ _("Presets apply to future events. Existing ones keep the rules they already have.") }}</span>
       <details class="fold" {% if not presets %}open{% endif %}>
         <summary>{{ _("New preset") }}</summary>
         <div class="fold-body">
@@ -357,15 +352,14 @@
     {% elif has_calendar_feed %}
     <form class="inline" method="post" action="/me/calendar-feed" style="margin-top:.6rem">
       <button class="act no" type="submit"
-              data-confirm="{{ _('This invalidates your current feed link — your calendar app will need the new one.') }}"
+              data-confirm="{{ _('Your current feed link will stop working. Add the new link to your calendar app.') }}"
               onclick="return confirm(this.dataset.confirm)">{{ _("Generate a new one") }}</button>
     </form>
     {% else %}
     <form method="post" action="/me/calendar-feed" style="margin-top:.6rem"><button class="act" type="submit">{{ _("Generate feed link") }}</button></form>
     {% endif %}
     <p class="clock" style="margin-top:.6rem; display:block">
-      {% trans %}Generating a new link revokes the old one immediately. Anyone still
-      subscribed to it stops receiving updates.{% endtrans %}
+      {% trans %}Creating a new link makes the old one stop working right away. Anyone using the old link will stop getting updates.{% endtrans %}
     </p>
   </section>
 
@@ -378,9 +372,7 @@
     <div class="danger" style="border-color: var(--line); margin-top:0">
       <div>
         <div class="t2">{{ _("Re-run first-time setup") }}</div>
-        <div class="s2">{% trans %}Walks you back through your concerts so you can prune the ones you
-          are not going for and mark what you have already applied to. Nothing is reset —
-          your existing choices are the starting point.{% endtrans %}</div>
+        <div class="s2">{% trans %}Review your events again. Turn off any you are not going to, and mark the rounds you have already applied to. Your current choices stay selected.{% endtrans %}</div>
       </div>
       <span class="sp"><a class="btn" href="/setup">{{ _("Run setup") }}</a></span>
     </div>
@@ -394,7 +386,7 @@
     <div class="danger" style="margin-top:1rem">
       <div>
         <div class="t2">{{ _("Delete my account") }}</div>
-        <div class="s2">{{ _("Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed.") }}</div>
+        <div class="s2">{{ _("Your reminders, subscriptions, and settings are deleted. Events and tags you created stay, but your name is removed from them.") }}</div>
       </div>
       <span class="sp">
         <button class="btn warn" type="button"
@@ -405,7 +397,7 @@
       <div class="dh">{{ _("Delete your account?") }}
         <button type="button" class="x" aria-label="{{ _('Close') }}"
                 onclick="document.getElementById('deleteAccountConfirm').close()">×</button></div>
-      <p>{{ _("Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed. This cannot be undone.") }}</p>
+      <p>{{ _("Your reminders, subscriptions, and settings will be deleted. Events and tags you created will stay, but your name will be removed from them. You cannot undo this.") }}</p>
       <div class="da">
         <button class="btn quiet" type="button"
                 onclick="document.getElementById('deleteAccountConfirm').close()">{{ _("Keep my account") }}</button>
@@ -420,9 +412,7 @@
   {% if user.is_admin %}
   <section class="psec" id="p-admin">
     <h3>{{ _("Editors") }} <span class="pill p-quiet">{{ _("admin only") }}</span></h3>
-    <p class="blurb">{% trans %}Discord users allowed to create and edit concerts, rounds and tags.
-      Env-managed editors (<code>EDITOR_WHITELIST</code>) can't be removed here — edit
-      <code>.env</code> instead.{% endtrans %}</p>
+    <p class="blurb">{% trans %}These Discord users can create and edit events, rounds, and tags. Editors listed in <code>EDITOR_WHITELIST</code> must be changed in <code>.env</code>.{% endtrans %}</p>
     {% for e in editors %}
     {# `.two` rather than an inline grid-template-columns: an inline style beats
        every stylesheet rule INCLUDING media queries, so the inline version was
@@ -438,7 +428,7 @@
     <p class="clock" style="display:block">{{ _("No editors yet.") }}</p>
     {% endfor %}
     <div class="bar">
-      <span class="tally">{{ _("Whitelisted editors live in the server env and cannot be removed from here.") }}</span>
+      <span class="tally">{{ _("Some editors are set on the server and cannot be removed here.") }}</span>
       <form class="inline" method="post" action="/admin/editors">
         <input name="discord_id" type="number" inputmode="numeric" placeholder="{{ _('Discord user ID') }}" required>
         <button class="act" type="submit">{{ _("Add an editor") }}</button>

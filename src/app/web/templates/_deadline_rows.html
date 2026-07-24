@@ -28,7 +28,7 @@
 
 <div class="deadline-rows" id="deadline-rows">
   <div class="rowhead">
-    <span>{{ _("Your status") }}</span><span>{{ _("Closes") }}</span><span>{{ _("Concert") }}</span>
+    <span>{{ _("Your status") }}</span><span>{{ _("Closes") }}</span><span>{{ _("Event") }}</span>
     <span>{{ _("What happens") }}</span><span>{{ _("You") }}</span>
   </div>
   {% for row in rows %}
@@ -57,6 +57,6 @@
     </span>
   </div>
   {% else %}
-  <p class="dim">{{ _("Nothing coming up on the concerts you follow.") }}</p>
+  <p class="dim">{{ _("Nothing coming up on the events you follow.") }}</p>
   {% endfor %}
 </div>

@@ -2,14 +2,14 @@
 {% block title %}{{ _("Privacy policy") }} — dekimasen.app{% endblock %}
 {% block content %}
 {% if current_locale() != "en" %}
-<p class="dim">{{ _("This translation is provided for convenience. The English version governs in any conflict.") }}</p>
+<p class="dim">{{ _("This translation is for reference. If it differs from the English version, the English version applies.") }}</p>
 {% endif %}
 <article class="legal">
   <h1>{{ _("Privacy policy") }}</h1>
   <p class="updated num">{% trans %}Last updated: {{ last_updated }}{% endtrans %}</p>
 
   <p class="lead">
-    {% trans %}dekimasen.app tracks deadlines for Japanese concerts and sends you a
+    {% trans %}dekimasen.app tracks deadlines for Japanese events and sends you a
     Discord DM before the ones you care about close. To do that it has to
     store a small amount of information about you. This page says exactly
     what, why, and for how long, in plain language. The rules for using the
@@ -20,9 +20,7 @@
   <h2>{{ _("What we collect") }}</h2>
   <ul>
     <li>
-      {% trans %}<strong>Your Discord account basics</strong> — your Discord user ID,
-      your display name, and your avatar hash. We ask Discord for the
-      <code>identify</code> scope only, which is the minimum available.{% endtrans %}
+      {% trans %}<strong>Your basic Discord account info</strong> — your Discord user ID, display name, and avatar ID. We only ask Discord for basic profile access (<code>identify</code>).{% endtrans %}
     </li>
     <li>
       {% trans %}<strong>Your timezone</strong> — either the one you picked, or the one
@@ -44,20 +42,14 @@
       Only its SHA-256 hash is stored, never the token itself.{% endtrans %}
     </li>
     <li>
-      {% trans %}<strong>A calendar feed token</strong>, if you generate one. Also
-      stored only as a SHA-256 hash. Anyone holding the raw feed URL can
-      read your upcoming deadlines, so treat it as a password; if you lose
-      it or want to revoke it, generate a new one and the old URL stops
-      working.{% endtrans %}
+      {% trans %}<strong>Your calendar feed link</strong>, if you create one. We store only a SHA-256 hash. Anyone with the link can see your upcoming deadlines, so keep it private like a password. If you lose it or want to turn it off, create a new link. The old link will stop working.{% endtrans %}
     </li>
     <li>
-      {% trans %}<strong>Whether your DMs are reachable</strong> — a single flag, set
-      when Discord refuses a DM, so the site can tell you why reminders
-      stopped arriving.{% endtrans %}
+      {% trans %}<strong>Whether Discord can send you DMs</strong> — we save one setting when a DM fails so we can explain why reminders stopped.{% endtrans %}
     </li>
     <li>
       {% trans %}<strong>What you contributed</strong> — if you have editor rights,
-      the concerts, tags, and edits you made are recorded with you as the
+      the events, tags, and edits you made are recorded with you as the
       author.{% endtrans %}
     </li>
   </ul>
@@ -67,41 +59,29 @@
     <li>{{ _("No email address. Discord login never hands us one.") }}</li>
     <li>{{ _("No IP addresses in the database.") }}</li>
     <li>
-      {% trans %}No message content. The bot uses no privileged intents, so it cannot
-      read your messages, your server list, or your friends.{% endtrans %}
+      {% trans %}The bot does not collect message content. It does not have permission to read your messages, server list, or friends.{% endtrans %}
     </li>
     <li>{{ _("No analytics, no third-party trackers, no advertising.") }}</li>
   </ul>
 
   <h2>{{ _("Why we collect it") }}</h2>
   <p>
-    {% trans %}Solely to send you the concert-deadline reminders you asked for, and to
-    show your own settings back to you. There is no other use. Nothing here
-    is profiled, scored, or used to make automated decisions about you.{% endtrans %}
+    {% trans %}We use this information only to send the event deadline reminders you asked for and show you your settings. We do not use it for anything else. We do not use it to build a profile, rate you, or make automated decisions about you.{% endtrans %}
   </p>
 
   <h2>{{ _("Sharing") }}</h2>
   <p>
-    {% trans %}We share nothing. Your data is not sold, rented, or given to third parties. The
-    only outbound traffic carrying anything about you is the Discord API
-    call that delivers your DM, which is the service you signed up for.{% endtrans %}
+    {% trans %}We do not share your data. We do not sell, rent, or give it to other companies. We only send the information needed to Discord to deliver your DM.{% endtrans %}
   </p>
 
   <h2>{{ _("How long we keep it") }}</h2>
   <p>
-    {% trans %}Your data is kept while your account exists. The database is backed up
-    nightly to a private, non-public storage bucket (encrypted at rest by
-    the storage provider), and those backups expire automatically after 30
-    days. So after a deletion, your data is gone from the live site
-    immediately but can persist in backups for up to 30 more days. We would
-    rather say that than claim instant erasure.{% endtrans %}
+    {% trans %}We keep your data while your account is active. We back up the database every night in private, encrypted storage. Backups are deleted automatically after 30 days. When you delete your account, your data is removed from the live site right away, but it may remain in backups for up to 30 days.{% endtrans %}
   </p>
 
   <h2>{{ _("Cookies") }}</h2>
   <p>
-    {% trans %}One cookie: your login session. It is strictly necessary — without it
-    you cannot stay signed in. There are no analytics or tracking cookies,
-    which is why you are not being asked to click through a consent banner.{% endtrans %}
+    {% trans %}We use one cookie to keep you signed in. We do not use analytics or tracking cookies, so there is no cookie consent banner.{% endtrans %}
   </p>
 
   <h2>{{ _("Your rights") }}</h2>
@@ -130,13 +110,7 @@
   </p>
   {% endif %}
   <p>
-    {% trans %}Deleting your account removes everything personal listed above: your
-    account row, your sessions, your reminder rules, presets and preset
-    items, your tag subscriptions, your recorded lottery outcomes, your
-    queued reminders, and your pending notifications. What stays is the
-    shared catalogue — concerts, tags, and edit history you contributed —
-    with the author field blanked out, so the events everyone else is
-    following do not disappear because one person left.{% endtrans %}
+    {% trans %}Deleting your account removes your personal data, including your login sessions, reminders, presets, tag subscriptions, and lottery results. Events, tags, and edit history you added stay in the shared catalogue, but your name is removed. This keeps events available for other people who follow them.{% endtrans %}
   </p>
 
   <h2>{{ _("Changes to this policy") }}</h2>

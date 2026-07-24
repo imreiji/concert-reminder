@@ -17,9 +17,7 @@
 {% if step == 0 %}
 <div class="lede">
   <h1>{{ _("Follow some artists") }}</h1>
-  <p>{% trans %}Get a DM the moment a new event drops for anyone you follow. Pick a franchise to cover
-    everyone under it, a group, or a single performer — you can change any of this later. Tap
-    to follow.{% endtrans %}</p>
+  <p>{% trans %}Get a DM when a new event is added for someone you follow. Follow a franchise, group, or performer. You can change this later.{% endtrans %}</p>
 </div>
 
 <input class="tag-search" type="search" placeholder="{{ _('Search franchises, groups, performers…') }}"
@@ -89,9 +87,7 @@
 {% if step == 1 %}
 <div class="lede">
   <h1>{{ _("Pick a default reminder preset") }}</h1>
-  <p>{% trans %}This is what fires when you tap "Set my reminders" on a concert, or press the Discord DM
-    button — a standard loadout you won't have to rebuild every time. Rules on a single concert
-    always override it.{% endtrans %}</p>
+  <p>{% trans %}This preset is used when you tap "Set my reminders" on an event or press the Discord DM button. You can reuse it each time. Rules set on one event are used instead.{% endtrans %}</p>
 </div>
 
 {# The fine-tune rows below are the source of truth; picking a card reseeds
@@ -102,7 +98,7 @@
   <div class="remcards" id="remCards">
     <button class="remcard" type="button" data-remcard="relaxed" aria-pressed="false">
       <span class="remtick">✓</span>
-      <span class="eyebrow">{{ _("Light touch") }}</span>
+      <span class="eyebrow">{{ _("Fewer reminders") }}</span>
       <span class="rem-label">{{ _("Relaxed") }}</span>
       <div class="rem-lines">
         <div>{{ _("Opens — when applications open") }}</div>
@@ -127,8 +123,8 @@
     </button>
     <button class="remcard" type="button" data-remcard="onball" aria-pressed="false">
       <span class="remtick">✓</span>
-      <span class="eyebrow">{{ _("Maximum coverage") }}</span>
-      <span class="rem-label">{{ _("On the ball") }}</span>
+      <span class="eyebrow">{{ _("More reminders") }}</span>
+      <span class="rem-label">{{ _("Frequent") }}</span>
       <div class="rem-lines">
         <div>{{ _("Opens — 1 day before &amp; when applications open") }}</div>
         <div>{{ _("Closes — 5, 3 &amp; 1 days before") }}</div>
@@ -138,23 +134,21 @@
     </button>
   </div>
 
-  <p class="remnote">{% trans %}One reminder for each single moment — opens, results, payment — plus a
-    couple of nudges before closes, since that's the one with an action to take. Fine-tune any of
-    these below, or later in Preferences.{% endtrans %}</p>
+  <p class="remnote">{% trans %}Get one reminder when applications open, results are announced, and payment is due. You also get two reminders before applications close. You can change these below or later in Preferences.{% endtrans %}</p>
 
   {% macro remrow(days, hours, direction, anchor) -%}
     {%- set offval = days ~ ":" ~ hours -%}
     {%- set moment = (days == 0 and hours == 0) -%}
     <div class="remrule" data-ruleid="server">
       <span>{{ _("Remind me") }}</span>
-      <select name="offset" data-role="offset" aria-label="{{ _('Offset') }}">
+      <select name="offset" data-role="offset" aria-label="{{ _('Timing') }}">
         {% for o in offset_options %}<option value="{{ o.value }}"{% if o.value == offval %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
       </select>
       <select name="direction" data-role="direction" aria-label="{{ _('Before or after') }}"{% if moment %} hidden{% endif %}>
         <option value="before"{% if direction == "before" %} selected{% endif %}>{{ _("before") }}</option>
         <option value="after"{% if direction == "after" %} selected{% endif %}>{{ _("after") }}</option>
       </select>
-      <select name="anchor" data-role="anchor" aria-label="{{ _('Anchor') }}">
+      <select name="anchor" data-role="anchor" aria-label="{{ _('Deadline type') }}">
         {% for a in anchor_order %}<option value="{{ a }}"{% if a == anchor %} selected{% endif %}>{{ anchor_moment[a] if moment else anchor_noun[a] }}</option>{% endfor %}
       </select>
       <span>.</span>
@@ -164,8 +158,8 @@
 
   <div class="remtune">
     <div class="remtune-head">
-      <h3>{{ _("Fine-tune these reminders") }}</h3>
-      <span class="note">{{ _("Change any dropdown — each row stays a real sentence.") }}</span>
+      <h3>{{ _("Edit these reminders") }}</h3>
+      <span class="note">{{ _("Use the menus below to change each reminder.") }}</span>
     </div>
     {# Standard rows rendered server-side: the list is populated with JS off,
        and the script rebuilds the identical rows on load, so there is no flash. #}
@@ -178,7 +172,7 @@
   </div>
 
   <div class="bar">
-    <span class="tally">{{ _("Rules on a single concert always override this.") }}</span>
+    <span class="tally">{{ _("Rules set on one event are used instead of this preset.") }}</span>
     <button class="btn quiet" type="submit" formaction="/welcome/advance">{{ _("Skip this step") }}</button>
     <button class="btn" type="submit" id="remSubmit">{{ _("Create preset &amp; continue") }}</button>
   </div>
@@ -437,8 +431,7 @@
 {% if step == 3 %}
 <div class="lede">
   <h1>{{ _("Send a test DM") }}</h1>
-  <p>{% trans %}Confirm reminders can actually reach you on Discord before you rely on them. If your DMs
-    are closed, this is where you find out — not the night a lottery closes.{% endtrans %}</p>
+  <p>{% trans %}Send a test DM now to check that Discord reminders work. If your DMs are blocked, we'll tell you here.{% endtrans %}</p>
 </div>
 
 {% if bot_enabled %}
@@ -452,8 +445,7 @@
   <div>
     <div class="bn">dekimasen <span class="bg">bot</span> <span class="ts">{{ _("now") }}</span></div>
     <div class="msg">
-      {% trans %}✅ <b>Test reminder.</b> If you can read this, your deadline DMs will reach you — you'll
-      get messages like a presale closing in 3 days, with the time in JST and your own zone.{% endtrans %}
+      {% trans %}✅ <b>Test reminder.</b> If you can read this, test DMs are working. Deadline reminders will look like this and show both JST and your time zone.{% endtrans %}
     </div>
   </div>
 </div>
@@ -472,8 +464,7 @@
 {% if step == 4 %}
 <div class="lede">
   <h1>{{ _("Get your calendar feed") }}</h1>
-  <p>{% trans %}Subscribe once in your phone or calendar app and every deadline you have a reminder for
-    stays in sync automatically — a belt to the DM's braces.{% endtrans %}</p>
+  <p>{% trans %}Add this feed to your phone or calendar app to keep your reminder deadlines updated. It gives you a backup to Discord DMs.{% endtrans %}</p>
 </div>
 
 {% if feed_url %}
@@ -497,8 +488,8 @@
 
 <form method="post" action="/welcome/advance">
   <div class="bar">
-    <span class="tally">{{ _("You're set — next we'll tidy up which concerts you're actually going for.") }}</span>
-    <button class="btn" type="submit">{{ _("Continue to my concerts") }}</button>
+    <span class="tally">{{ _("You're ready. Next, choose which events you plan to attend.") }}</span>
+    <button class="btn" type="submit">{{ _("Continue to my events") }}</button>
   </div>
 </form>
 {% endif %}

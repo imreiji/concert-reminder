@@ -166,5 +166,5 @@ async def test_account_card_gates_delete_behind_heavy_confirmation(client):
     # not a one-click button.
     assert 'id="deleteAccountConfirm"' in r.text
     # Loss-naming copy: what goes vs what stays.
-    assert "Your reminders, subscriptions, and preferences are deleted." in r.text
-    assert "Concerts and tags you authored stay, with your name removed." in r.text
+    assert "Your reminders, subscriptions, and settings are deleted." in r.text
+    assert "Events and tags you created stay, but your name is removed from them." in r.text

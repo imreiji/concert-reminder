@@ -7,10 +7,7 @@
 <div class="lede">
   <h1>{% trans name=member.name %}Add {{ name }} to active events?{% endtrans %}</h1>
   {% if concerts %}
-  <p>{% trans member_name=member.name, group_name=group.name, count=concerts | length %}{{ member_name }} was just added to the <b>{{ group_name }}</b> group tag. Group membership
-    is materialised when a group is attached to a concert, so existing concerts are not touched
-    automatically. These {{ count }} active event(s) already carry {{ group_name }}
-    but not {{ member_name }} individually:{% endtrans %}</p>
+  <p>{% trans member_name=member.name, group_name=group.name, count=concerts | length %}{{ member_name }} was added to the <b>{{ group_name }}</b> group tag. Group members are copied to an event when you add the group, so existing events are not updated automatically. This {{ count }} active event already has {{ group_name }} but does not have {{ member_name }}:{% pluralize count %}{{ member_name }} was added to the <b>{{ group_name }}</b> group tag. Group members are copied to an event when you add the group, so existing events are not updated automatically. These {{ count }} active events already have {{ group_name }} but do not have {{ member_name }}:{% endtrans %}</p>
   {% endif %}
 </div>
 
@@ -20,9 +17,7 @@
     un-prune members an editor deliberately removed. -#}
 <div class="callout info">
   <span>ℹ</span>
-  <span>{% trans name=member.name %}Applying adds {{ name }} as a performer chip on each concert below. It does
-    <b>not</b> re-expand the group or restore performers an editor pruned — only this one new
-    member is added.{% endtrans %}</span>
+  <span>{% trans name=member.name %}Add {{ name }} to each event below as a performer. This does <b>not</b> add the whole group again or bring back performers an editor removed; only the new member is added.{% endtrans %}</span>
 </div>
 
 <ul class="rows">
@@ -32,8 +27,9 @@
 </ul>
 
 <form class="bar" method="post" action="/tags/{{ group.id }}/members/{{ member.id }}/retroactive-apply">
-  <span class="tally">{% trans count=concerts | length, name=member.name %}<b>{{ count }}</b> active event(s) will gain {{ name }}.
-    Concerts already carrying {{ name }} are skipped.{% endtrans %}</span>
+  <span class="tally">{% trans count=concerts | length, name=member.name %}<b>{{ count }}</b> active event will get {{ name }}.
+    Events that already have {{ name }} will be skipped.{% pluralize %}<b>{{ count }}</b> active events will get {{ name }}.
+    Events that already have {{ name }} will be skipped.{% endtrans %}</span>
   <a class="btn quiet" href="/tags">{{ _("Skip") }}</a>
   <button class="btn">{% trans count=concerts | length %}Apply to all {{ count }}{% endtrans %}</button>
 </form>

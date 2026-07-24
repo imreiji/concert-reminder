@@ -61,7 +61,7 @@
         <span class="cancel-toggle">
           <input type="hidden" name="day_cancelled" value="false">
           <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                  title="{{ _('A cancelled leg is dimmed and badged, never deleted') }}">{{ _("Cancelled") }}</button>
+                  title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
         </span>
         <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
       </div>
@@ -85,8 +85,7 @@
 
   <div class="section-head">
     <h2>{{ _("Lottery rounds") }}</h2>
-    <p class="dim tiny">{% trans %}Tick the performances each round applies to — leave none ticked
-      for a whole-event round. Times are JST.{% endtrans %}</p>
+    <p class="dim tiny">{% trans %}Select the performances for each round. If you select none, the round applies to the whole event. Times are JST.{% endtrans %}</p>
   </div>
 
   <div class="editor-actions">
@@ -109,7 +108,7 @@
             {% for k in concert_kinds %}<option value="{{ k.value }}">{{ k.value.replace("_", " ") | capitalize }}</option>{% endfor %}
           </select>
         </label>
-        <label>{{ _("Categories (comma-sep)") }} <input name="categories" placeholder="{{ _('concert, tour') }}"></label>
+        <label>{{ _("Categories (comma-sep)") }} <input name="categories" placeholder="{{ _('event, tour') }}"></label>
         <label>{{ _("eventernote URL") }} <input name="eventernote_url" type="url"></label>
         <label>{{ _("Official URL") }} <input name="official_url" type="url"></label>
         <label>{{ _("Source URL") }} <input name="source_url" type="url" placeholder="{{ _('where this was sourced from') }}"></label>
@@ -124,7 +123,7 @@
           originals when empty (i18n.loc_field). -#}
       <div class="section-head trans-head">
         <h3 class="section-sub">{{ _("Translations") }}</h3>
-        <p class="dim tiny">{{ _("Optional — shown to viewers reading in that language, falling back to the originals above.") }}</p>
+        <p class="dim tiny">{{ _("Optional — shown to people using that language. If left blank, the text above is used.") }}</p>
       </div>
       <h4 class="section-sub">{{ _("English") }}</h4>
       <label>{{ _("Title") }} <input name="title_en" maxlength="200"
@@ -173,7 +172,7 @@
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
         <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                title="{{ _('A cancelled leg is dimmed and badged, never deleted') }}">{{ _("Cancelled") }}</button>
+                title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
       </span>
       <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
     </div>

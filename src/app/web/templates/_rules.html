@@ -26,11 +26,11 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="dim">{{ _("No reminders for this concert yet.") }}</p>
+  <p class="dim">{{ _("No reminders for this event yet.") }}</p>
   {% endif %}
 
   <div class="bar">
-    <span class="tally">{{ _("Rules here override your default preset for this concert only.") }}</span>
+    <span class="tally">{{ _("For this event, rules set here are used instead of your default preset.") }}</span>
     {#- A native disclosure, not a JS-driven reveal: no on* handler is needed
         at all, so invariant 7's "no user text in on* handlers" rule never
         comes into play here. Collapsed by default -- the old always-open
