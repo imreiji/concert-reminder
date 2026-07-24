@@ -1,0 +1,275 @@
+"msgid (exact, current source)",plural form,proposed english,reviewer note
+Reinstate my reminders,,Turn my reminders back on,
+Reinstated {n} reminder(s) — you'll be notified again per your existing settings for any that are still active.,,Turned {n} reminder(s) back on. You'll be notified again for any active ones using your existing settings.,English uses reminder(s) instead of the existing singular/plural message mechanism.
+**{name}** is env-managed (EDITOR_WHITELIST) — edit `.env` instead.,,**{name}** is managed through EDITOR_WHITELIST. Edit `.env` to change it.,
+That concert doesn't exist (deleted?).,,That event doesn't exist (deleted?).,
+Find concerts to follow →,,Find events to follow →,
+Concert,,Event,
+Nothing coming up on the concerts you follow.,,Nothing coming up on the events you follow.,
+Opt out of this concert?,,Stop following this event?,
+"You won this ticket. Payment is due %(when)s. Opting out stops
+      that reminder and forfeits the ticket.",,"This ticket is marked as won. Payment is due %(when)s. If you stop following this event, we'll remove that mark and the payment reminder.",
+You hold a ticket for this concert. Opting out forfeits it and stops its reminders.,,"You marked that you have a ticket for this event. If you stop following it, we'll remove that mark and its reminders.",
+Opt out and forfeit,,Stop following,
+"Save the concert first, then a saved round can be picked here.",,"Save the event first, then a saved round can be picked here.",
+No reminders for this concert yet.,,No reminders for this event yet.,
+Rules here override your default preset for this concert only.,,"For this event, rules set here are used instead of your default preset.",
+"Missing a tag? Create it on the <a href=""/tags"">tags page</a> first — concerts are tag-driven.",,"Missing a tag? Create it on the <a href=""/tags"">tags page</a> first — events are tag-driven.",
+Add concert,,Add event,
+"A cancelled leg is dimmed and badged, never deleted",,"A cancelled performance stays in the list, but appears faded with a label.",
+"Optional — shown to viewers reading in that language, falling back to the originals above.",,"Optional — shown to people using that language. If left blank, the text above is used.",
+"Nothing yet. Only the concert's own top-level fields are
+        tracked — day, round and tag changes are not.",,"Nothing yet. We only track changes to the event details above. Changes to days, rounds, and tags are not tracked.",The source says day while the data model and nearby UI use performance/leg; standardize the entity name.
+"Duplicating copies this event's tags and details — the
+      exact tag set as pruned here, not a group's current membership — but
+      not rounds or legs.",,Duplicating copies this event's details and the exact tags shown here. It does not add the group's current members or copy rounds or performances.,
+Delete this concert and every reminder attached to it?,,Delete this event and every reminder attached to it?,
+"Tick the performances each round applies to — leave none ticked
+      for a whole-event round. Times are JST.",,"Select the performances for each round. If you select none, the round applies to the whole event. Times are JST.",
+"concert, tour",,"event, tour",
+Concerts,,Events,
+%(count)s concert,singular,[singular] %(count)s event,
+%(count)s concerts,plural,[plural] %(count)s events,
+Search concerts…,,Search events…,
+No concerts match.,,No events match.,
+"dekimasen.app · Japanese concert ticketing, tracked",,"dekimasen.app · Japanese event ticketing, tracked",
+"Every Japanese ticket is a <b>campaign</b>, not a date — fan-club presale, lottery
+      round 1, round 2 if you lose, a first-come sale, an upgrade round riding on the
+      seat you already hold. We track the whole ladder and tell you exactly where you stand.",,"Buying a Japanese ticket usually takes <b>several steps</b> — a fan-club presale, lottery round 1, another round if you lose, a first-come sale, and sometimes an upgrade lottery for a ticket you already have. We track each step and show you what comes next.",
+concerts tracked,,events tracked,
+"Presale opens, lottery closes, results land, payment is due. All times shown
+          <b>JST and yours</b>, always both — no mental arithmetic at 3am.",,"See when presales open, lotteries close, results are announced, and payments are due. Times are always shown in <b>JST and your local time</b>.",
+"A Discord reminder before each deadline, plus a campaign board that says whether the
+          ball is <b>in your court</b> or you are already covered.",,Get a Discord reminder before each deadline. The board also shows whether <b>you need to do something</b> or you're already done.,
+Follow four groups in a minute. Miss nothing after that.,,Follow four groups in a minute. We'll show you their new events and deadlines.,“Miss nothing after that” is an absolute reliability claim that conflicts with the no-guarantee copy later in the product.
+"<b>Signed out, this is the whole product in one screen.</b> Sign in and it becomes your
+    board — your rounds, your outcomes, your deadlines. Everything above is a taste of what
+    fills in once you follow someone.",,"<b>When you're signed out, this page shows an example.</b> Sign in to see your own board with your rounds, results, and deadlines. Follow someone to add their events.",
+"%(count)s concert in the catalogue,",singular,"[singular] %(count)s event in the catalogue,",
+"%(count)s concerts in the catalogue,",plural,"[plural] %(count)s events in the catalogue,",
+"<b>Home answers ""where do I stand"".</b> Everything above is yours — your rounds, your outcomes,
+  your deadlines. Discovery sits at the bottom as a door out, not as the page itself.",,"<b>Home shows your current status.</b> Everything above is yours — your rounds, results, and deadlines. Use the section at the bottom to find more events.",
+"Done — you won't be reminded about this round. Later rounds for
+    <b id=""pruneName"">this concert</b> will still reach you.",,"Done — you won't get reminders for this round. You'll still get reminders for later rounds of
+    <b id=""pruneName"">this event</b>.",Rounds do not “reach you”; notifications or reminders do. The English subject is wrong.
+Skip this concert entirely,,Skip this event entirely,
+Manage this concert →,,Manage this event →,
+import concert,,import event,
+"Paste a <code>ramen.events</code> event page — it'll fetch the title, tags, performance
+    days and lottery rounds as a draft. Nothing is saved until you review and submit the
+    next page.",,"Paste a <code>ramen.events</code> event page. We'll import the title, tags, performance days, and lottery rounds into a draft. Nothing is saved until you review and submit the next page.",
+"Couldn't parse that page: %(error)s. You can still
+    <a href=""/"">create the concert manually</a>.",,"We couldn't read that page: %(error)s. You can still
+    <a href=""/"">create the event manually</a>.",
+Fetch draft,,Import draft,
+"Only <b>https ramen.events</b> URLs are accepted. The fetch is size-capped and
+    re-checked on every redirect — an editor safety rail, not a general web fetcher.",,"Only <b>https ramen.events</b> URLs are accepted. For safety, we limit the page size and check each redirect. This tool only imports ramen.events pages.",
+"Produced by the <code>add-concert</code> skill — the agent merges the
+    official ticket page and eventernote into one trilingual draft. Nothing is saved
+    until you review and submit the next page.",,"Produced by the <code>add-event</code> skill — the agent merges the
+    official ticket page and eventernote into one trilingual draft. Nothing is saved
+    until you review and submit the next page.",Renaming the visible <code>add-concert</code> identifier to <code>add-event</code> also requires the corresponding skill/package to be renamed outside this translation file.
+"Drafting with an agent elsewhere? <a class=""more"" href=""/concerts/import/skill.zip"">Download the add-concert skill</a> (zip).",,"Drafting with an agent elsewhere? <a class=""more"" href=""/concerts/import/skill.zip"">Download the add-event skill</a> (zip).","The visible skill name changes to add-event, but the protected href /concerts/import/skill.zip is unchanged; migrate the route/asset separately before applying this source fix."
+"No ramen.events page? <a class=""more"" href=""/"">Create the concert manually</a> instead.",,"No ramen.events page? <a class=""more"" href=""/"">Create the event manually</a> instead.",
+"Parsed from
+    %(url)s.",,"Imported from
+    %(url)s.",
+"Edit anything below, then create the concert.",,"Edit anything below, then create the event.",
+"<b>Nothing is saved yet.</b> This is a draft in your browser. It becomes a real
+    concert only when you press <b>Create concert</b> at the bottom.",,"<b>Nothing is saved yet.</b> This is a draft in your browser. It becomes a real
+    event only when you press <b>Create event</b> at the bottom.",
+Each parsed day becomes a leg you can attach rounds to. Times are JST.,,Each imported day becomes a performance that can have rounds. Times are JST.,
+No days parsed — add the first one below.,,No days were imported — add the first one below.,
+"Franchise, group, artists, venue — parsed, editable",,"Franchise, group, artists, venue — imported and editable",
+Create concert,,Create event,
+"Following a tag subscribes you to <b>every future concert</b> carrying it.
+      Notify sends a DM when a new one appears; Auto-apply adds your default
+      preset to it. Drop individual concerts from the concert page or a
+      reminder DM.",,Follow a tag to add <b>all future events</b> with that tag. Notify sends you a DM when a new event appears. Auto-apply adds your default preset. You can stop following an individual event from its page or a reminder DM.,"“Drop individual concerts” is unclear about whether the action opts out, hides, or deletes."
+"%(tracked)s tracked &middot; %(upcoming)s upcoming
+        &middot; %(pruned)s you pruned",,"%(tracked)s followed &middot; %(upcoming)s upcoming
+        &middot; %(pruned)s skipped",“you pruned” exposes internal jargon and is inconsistent with the user-facing skip/opt-out terminology.
+<b>%(count)s</b> concert,singular,[singular] <b>%(count)s</b> event,
+<b>%(count)s</b> concerts,plural,[plural] <b>%(count)s</b> events,
+DM me when a new matching concert appears,,DM me when a new matching event appears,
+Add my default preset to new matching concerts,,Add my default preset to new matching events,
+Pruned concerts,,Skipped events,“Pruned concerts” exposes internal jargon; use the same English term as skip/opt out.
+"You skipped these individually.
+        Restoring one returns it to whatever its tags say by default.",,These are events you stopped following one at a time. Add one back to use its tag settings again.,
+"A preset is a set of reminder rules applied to concerts you follow. Rules
+      on an individual concert override these.",,"A preset is a group of reminder rules for events you follow. If you change the rules for one event, those rules are used instead.",
+Presets apply to future concerts. Existing ones keep the rules they already have.,,Presets apply to future events. Existing ones keep the rules they already have.,
+This invalidates your current feed link — your calendar app will need the new one.,,Your current feed link will stop working. Add the new link to your calendar app.,
+"Generating a new link revokes the old one immediately. Anyone still
+      subscribed to it stops receiving updates.",,Creating a new link makes the old one stop working right away. Anyone using the old link will stop getting updates.,
+"Walks you back through your concerts so you can prune the ones you
+          are not going for and mark what you have already applied to. Nothing is reset —
+          your existing choices are the starting point.",,"Review your events again. Turn off any you are not going to, and mark the rounds you have already applied to. Your current choices stay selected.","“prune” is internal jargon and should be replaced in the English UI with skip, exclude, or opt out."
+"Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed.",,"Your reminders, subscriptions, and settings are deleted. Events and tags you created stay, but your name is removed from them.",“with your name removed” can sound as if concert/tag names are removed; say that author attribution is removed.
+"Your reminders, subscriptions, and preferences are deleted. Concerts and tags you authored stay, with your name removed. This cannot be undone.",,"Your reminders, subscriptions, and settings will be deleted. Events and tags you created will stay, but your name will be removed from them. You cannot undo this.",“with your name removed” can sound as if concert/tag names are removed; say that author attribution is removed.
+"Discord users allowed to create and edit concerts, rounds and tags.
+      Env-managed editors (<code>EDITOR_WHITELIST</code>) can't be removed here — edit
+      <code>.env</code> instead.",,"These Discord users can create and edit events, rounds, and tags. Editors listed in <code>EDITOR_WHITELIST</code> must be changed in <code>.env</code>.",
+Whitelisted editors live in the server env and cannot be removed from here.,,Some editors are set on the server and cannot be removed here.,
+This translation is provided for convenience. The English version governs in any conflict.,,"This translation is for reference. If it differs from the English version, the English version applies.",
+"dekimasen.app tracks deadlines for Japanese concerts and sends you a
+    Discord DM before the ones you care about close. To do that it has to
+    store a small amount of information about you. This page says exactly
+    what, why, and for how long, in plain language. The rules for using the
+    service itself are on a separate page — see the
+    <a href=""/terms"">terms of service</a>.",,"dekimasen.app tracks deadlines for Japanese events and sends you a
+    Discord DM before the ones you care about close. To do that it has to
+    store a small amount of information about you. This page says exactly
+    what, why, and for how long, in plain language. The rules for using the
+    service itself are on a separate page — see the
+    <a href=""/terms"">terms of service</a>.",
+"<strong>Your Discord account basics</strong> — your Discord user ID,
+      your display name, and your avatar hash. We ask Discord for the
+      <code>identify</code> scope only, which is the minimum available.",,"<strong>Your basic Discord account info</strong> — your Discord user ID, display name, and avatar ID. We only ask Discord for basic profile access (<code>identify</code>).",
+"<strong>A calendar feed token</strong>, if you generate one. Also
+      stored only as a SHA-256 hash. Anyone holding the raw feed URL can
+      read your upcoming deadlines, so treat it as a password; if you lose
+      it or want to revoke it, generate a new one and the old URL stops
+      working.",,"<strong>Your calendar feed link</strong>, if you create one. We store only a SHA-256 hash. Anyone with the link can see your upcoming deadlines, so keep it private like a password. If you lose it or want to turn it off, create a new link. The old link will stop working.",
+"<strong>Whether your DMs are reachable</strong> — a single flag, set
+      when Discord refuses a DM, so the site can tell you why reminders
+      stopped arriving.",,<strong>Whether Discord can send you DMs</strong> — we save one setting when a DM fails so we can explain why reminders stopped.,
+"<strong>What you contributed</strong> — if you have editor rights,
+      the concerts, tags, and edits you made are recorded with you as the
+      author.",,"<strong>What you contributed</strong> — if you have editor rights,
+      the events, tags, and edits you made are recorded with you as the
+      author.",
+"No message content. The bot uses no privileged intents, so it cannot
+      read your messages, your server list, or your friends.",,"The bot does not collect message content. It does not have permission to read your messages, server list, or friends.",
+"Solely to send you the concert-deadline reminders you asked for, and to
+    show your own settings back to you. There is no other use. Nothing here
+    is profiled, scored, or used to make automated decisions about you.",,"We use this information only to send the event deadline reminders you asked for and show you your settings. We do not use it for anything else. We do not use it to build a profile, rate you, or make automated decisions about you.",
+"We share nothing. Your data is not sold, rented, or given to third parties. The
+    only outbound traffic carrying anything about you is the Discord API
+    call that delivers your DM, which is the service you signed up for.",,"We do not share your data. We do not sell, rent, or give it to other companies. We only send the information needed to Discord to deliver your DM.",
+"Your data is kept while your account exists. The database is backed up
+    nightly to a private, non-public storage bucket (encrypted at rest by
+    the storage provider), and those backups expire automatically after 30
+    days. So after a deletion, your data is gone from the live site
+    immediately but can persist in backups for up to 30 more days. We would
+    rather say that than claim instant erasure.",,"We keep your data while your account is active. We back up the database every night in private, encrypted storage. Backups are deleted automatically after 30 days. When you delete your account, your data is removed from the live site right away, but it may remain in backups for up to 30 days.",
+"One cookie: your login session. It is strictly necessary — without it
+    you cannot stay signed in. There are no analytics or tracking cookies,
+    which is why you are not being asked to click through a consent banner.",,"We use one cookie to keep you signed in. We do not use analytics or tracking cookies, so there is no cookie consent banner.",
+"Deleting your account removes everything personal listed above: your
+    account row, your sessions, your reminder rules, presets and preset
+    items, your tag subscriptions, your recorded lottery outcomes, your
+    queued reminders, and your pending notifications. What stays is the
+    shared catalogue — concerts, tags, and edit history you contributed —
+    with the author field blanked out, so the events everyone else is
+    following do not disappear because one person left.",,"Deleting your account removes your personal data, including your login sessions, reminders, presets, tag subscriptions, and lottery results. Events, tags, and edit history you added stay in the shared catalogue, but your name is removed. This keeps events available for other people who follow them.",
+"%(member_name)s was just added to the <b>%(group_name)s</b> group tag. Group membership
+    is materialised when a group is attached to a concert, so existing concerts are not touched
+    automatically. These %(count)s active event(s) already carry %(group_name)s
+    but not %(member_name)s individually:",,"%(member_name)s was added to the <b>%(group_name)s</b> group tag. Group members are copied to an event when you add the group, so existing events are not updated automatically. These %(count)s active event(s) already have %(group_name)s but do not have %(member_name)s:",English uses active event(s) rather than singular/plural messages.
+"Applying adds %(name)s as a performer chip on each concert below. It does
+    <b>not</b> re-expand the group or restore performers an editor pruned — only this one new
+    member is added.",,Add %(name)s to each event below as a performer. This does <b>not</b> add the whole group again or bring back performers an editor removed; only the new member is added.,
+"<b>%(count)s</b> active event(s) will gain %(name)s.
+    Concerts already carrying %(name)s are skipped.",,"<b>%(count)s</b> active event(s) will get %(name)s.
+    Events that already have %(name)s will be skipped.",English uses active event(s) rather than singular/plural messages.
+Your concerts,,Your events,
+We found %(count)s upcoming concert for you,singular,[singular] We found %(count)s upcoming event for you,
+We found %(count)s upcoming concerts for you,plural,[plural] We found %(count)s upcoming events for you,
+"Most people
+      cannot get to every date — switch off the ones you are not going for and we will not
+      chase you about them. You can change any of this later.",,"Most people cannot attend every performance. Turn off the ones you are not going to, and we will stop sending reminders for them. You can change this later.",The source uses date for an entity elsewhere called performance/leg.
+No upcoming concerts yet,,No upcoming events yet,
+"We didn't find any upcoming concerts for the tags you follow yet.
+      <a href=""/discover"">Browse what's on</a> to find some — or continue, and your board
+      will fill in as new events drop.",,"We didn't find any upcoming events for the tags you follow.
+      <a href=""/discover"">Browse events</a> now, or continue. New matching events will appear on your board later.",
+"Anything you skip, we will ask about by DM when its result lands.",,"If you skip one, we'll ask by DM when its result is announced.",
+"None of the concerts you are tracking has a round still waiting on you. We will ask by
+      DM the moment one does.",,None of the events you follow has a round that needs your answer. We'll DM you when one does.,
+"%(title)s is waiting on a payment — the closest thing here to
+    losing a ticket you have already won.",,%(title)s still needs payment. Please check the payment deadline.,The sentence makes %(title)s itself “wait on a payment” and the comparison is hard to parse; rewrite the English source.
+"Following a tag subscribes you to every future concert carrying it, so counts
+here are what a rename or delete actually touches.",,Following a tag follows every future event with that tag. The counts show how many events will change if you rename or delete the tag.,
+concerts,,events,
+"<b>Apply to existing concerts.</b> Adding a member does not touch
+        concerts that already carry this group — expansion is materialised at the moment
+        you attach it. Use this to push a new member onto active events.",,<b>Apply to existing events.</b> Adding a member does not update events that already have this group. Group members are added when the group is first attached. Use this to add the new member to active events.,
+Apply %(name)s to %(count)s upcoming concert,singular,[singular] Apply %(name)s to %(count)s upcoming event,
+Apply %(name)s to %(count)s upcoming concerts,plural,[plural] Apply %(name)s to %(count)s upcoming events,
+A group contains performers. Attaching it to a concert adds its members.,,A group contains performers. Attaching it to an event adds its members.,
+Discover groups venues by region. Without one it lands in “No region” and drops out of region filtering.,,The Discover page groups venues by region. A venue without a region appears under “No region” and cannot be found with a region filter.,“Discover groups venues” is syntactically ambiguous; write “The Discover page groups venues…”.
+A franchise is the top level. Groups hang off it.,,A franchise is the top level. It contains groups.,
+A {kind} tag with this name is on {concerts} with {followers}. Adding a second one splits them — there is no merge yet.,,A {kind} tag with this name is already used by {concerts} and followed by {followers}. Creating another one will keep them separate because tags cannot be merged yet.,"The placeholder phrase “on {concerts} with {followers}” is structurally ambiguous and fragile across languages. The only concert occurrence is the protected placeholder {concerts}, which is preserved byte-for-byte. Rename it only together with the application code."
+concert,,event,
+"dekimasen.app tracks deadlines for Japanese concerts — lottery rounds,
+    serial-code sales, stream tickets — and sends you a Discord DM before
+    the ones you follow close. It is run by one person, for free, on a
+    best-effort basis. It is not affiliated with, endorsed by, or operated
+    on behalf of Discord, any artist, agency, venue, promoter, or ticketing
+    operator. Names and events listed here belong to the people who run
+    them; this site only points at their deadlines.",,"dekimasen.app tracks deadlines for Japanese events — lottery rounds, serial-code sales, and stream tickets — and sends you a Discord DM before the ones you follow close. One person runs it for free, so it may not always work perfectly. The service is independent from Discord, artists, agencies, venues, promoters, and ticket sellers. They do not run or officially support it. Names and events belong to their owners; this site only lists deadlines.",“serial-code sales” may mean a code-gated application rather than sale of codes; the ticketing action must be clarified in English.
+"You need a Discord account to sign in, and you must meet Discord's
+    minimum age requirement for your country. Discord's own terms apply to
+    you alongside these ones — nothing here overrides them.",,You need a Discord account to sign in. You must also be old enough to use Discord in your country. Discord's terms still apply.,
+"This is the part that matters, so it is stated plainly: the service is
+    provided as is, with no warranty of any kind. There is no promise that
+    a reminder arrives on time, that it arrives at all, or that the deadline
+    it refers to is correct.",,"This service comes with no guarantees. Reminders may be late, may not arrive, or may show an incorrect deadline.",
+"All three fail in ordinary use. Discord can refuse or delay a DM. The
+    server can be down, and the scheduler can miss a tick. An editor can
+    type the wrong date, or a promoter can move one after it was entered.
+    Treat what you see here as a prompt to go and check, never as the
+    authority. You are responsible for confirming every deadline you care
+    about with the official source before you rely on it.",,"These problems can happen. Discord may block or delay a DM. The server may be down or miss a reminder. An editor may enter the wrong date, or an organizer may change it. Always check the official source before relying on a deadline shown here.",
+"To the extent the law allows, the operator is not liable for any loss
+    arising from your use of the service — a missed deadline, a missed
+    lottery, a ticket you did not get, or anything downstream of those.
+    This is a free service given away as a convenience; it comes with no
+    money and no guarantees attached.",,"Where the law allows, the operator is not responsible for losses caused by using the service, such as a missed deadline, missed lottery, or missed ticket. This is a free service and comes with no guarantees.",“comes with no money” is unclear English and produces nonsensical literal translations.
+Do not scrape the site or send automated traffic at it.,,Do not use bots to copy data from the site or send automatic requests.,
+"Concerts, tags, and edits made by an editor go into a shared catalogue
+    that everyone on the site uses. That content stays even if you stop
+    using the service or ask for your account to be deleted — only your
+    name is removed from it, so the events other people are following do
+    not disappear because one person left. By contributing you agree to
+    that arrangement. The
+    <a href=""/privacy"">privacy policy</a> says the same thing from the data
+    side.",,"Events, tags, and edits made by an editor go into a shared catalogue
+    that everyone on the site uses. That content stays even if you stop
+    using the service or ask for your account to be deleted — only your
+    name is removed from it, so the events other people are following do
+    not disappear because one person left. By contributing you agree to
+    that arrangement. The
+    <a href=""/privacy"">privacy policy</a> says the same thing from the data
+    side.",
+"The service may change, break, or shut down at any time, with or without
+    notice. Access may be withdrawn from anyone who abuses it or breaks
+    these terms. You can stop using it whenever you like.",,"The service may change, stop working, or shut down at any time. We may block access for anyone who misuses it or breaks these terms. You can stop using it at any time.",
+"tl;dr: it's a helpful reminder tool built by a fan, not a ticket broker.
+    Double-check the official page before every deadline.",,"In short: this is a reminder tool made by a fan, not a ticket seller. Check the official page before every deadline.",
+"Get a DM the moment a new event drops for anyone you follow. Pick a franchise to cover
+    everyone under it, a group, or a single performer — you can change any of this later. Tap
+    to follow.",,"Get a DM when a new event is added for someone you follow. Follow a franchise, group, or performer. You can change this later.",
+"This is what fires when you tap ""Set my reminders"" on a concert, or press the Discord DM
+    button — a standard loadout you won't have to rebuild every time. Rules on a single concert
+    always override it.",,"This preset is used when you tap ""Set my reminders"" on an event or press the Discord DM button. You can reuse it each time. Rules set on one event are used instead.",
+Light touch,,Fewer reminders,
+Maximum coverage,,More reminders,
+On the ball,,Frequent,
+"One reminder for each single moment — opens, results, payment — plus a
+    couple of nudges before closes, since that's the one with an action to take. Fine-tune any of
+    these below, or later in Preferences.",,"Get one reminder when applications open, results are announced, and payment is due. You also get two reminders before applications close. You can change these below or later in Preferences.","The source says closes is the only moment requiring action, but payment also requires action."
+Offset,,Timing,
+Anchor,,Deadline type,
+Fine-tune these reminders,,Edit these reminders,
+Change any dropdown — each row stays a real sentence.,,Use the menus below to change each reminder.,The claim that each row stays a real sentence is incompatible with concatenating localized fragments in fixed English order.
+Rules on a single concert always override this.,,Rules set on one event are used instead of this preset.,
+"Confirm reminders can actually reach you on Discord before you rely on them. If your DMs
+    are closed, this is where you find out — not the night a lottery closes.",,"Send a test DM now to check that Discord reminders work. If your DMs are blocked, we'll tell you here.",
+"✅ <b>Test reminder.</b> If you can read this, your deadline DMs will reach you — you'll
+      get messages like a presale closing in 3 days, with the time in JST and your own zone.",,"✅ <b>Test reminder.</b> If you can read this, test DMs are working. Deadline reminders will look like this and show both JST and your time zone.",
+"Subscribe once in your phone or calendar app and every deadline you have a reminder for
+    stays in sync automatically — a belt to the DM's braces.",,Add this feed to your phone or calendar app to keep your reminder deadlines updated. It gives you a backup to Discord DMs.,“a belt to the DM's braces” is an opaque culture-specific idiom; replace it in English with a direct redundancy/backup statement.
+You're set — next we'll tidy up which concerts you're actually going for.,,"You're ready. Next, choose which events you plan to attend.",
+Continue to my concerts,,Continue to my events,

@@ -119,3 +119,5 @@ Shipped since Phase 12 (no phase numbers assigned, tracked as feature PRs instea
 - [x] Signed-out redirect home — a real landing page instead of a bare 401, returning you to the page you asked for after login
 - [x] Venue-to-tags — a leg's venue is a VENUE tag (city/address live on the tag); a concert's venues derive from its legs; create a venue without leaving the editor; the legacy free-text venue columns are gone
 - [x] Trilingual concert pages — leg and round labels render in the viewer's language; a self-populating round-label phrase library (typed triples become one-click suggestions); every translatable field is filled in all three languages or none; the import preview's per-leg venue picker
+- [x] Agent-driven concert import — paste a YAML draft and the import preview arrives prefilled (titles, legs, rounds, tag/venue matches); the add-concert skill that authors drafts is downloadable from the import page
+- [x] i18n calibration — a native-level review pass applied across both catalogues (307 ja / 344 zh strings corrected; the reviewed English-source fixes are mapped in `docs/i18n-english-source-fixes-2026-07-24.csv` for a later pass)

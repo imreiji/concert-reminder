@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 1165 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 1207 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -51,7 +51,13 @@ language, a self-populating round-label phrase library (typed triples become
 one-click suggestions, since real labels don't decompose into a taxonomy), and
 all-three-languages-or-none variant enforcement (one pure rule, a 422 at create
 boundaries with an inline browser-side block, edit-page gap notices, a
-Tags-page untranslated count) -- have shipped since).
+Tags-page untranslated count) -- and the agent-driven import seam (paste a
+YAML draft, the preview arrives prefilled; the add-concert skill that
+authors drafts is downloadable from the import page) and a native-review
+i18n calibration applied across both catalogues (its 132 English-source
+fixes are msgid changes, mapped in
+`docs/i18n-english-source-fixes-2026-07-24.csv` for a later pass) -- have
+shipped since).
 
 ## Commands
 
@@ -241,13 +247,12 @@ Tags-page untranslated count) -- have shipped since).
   there's no `_ja` column); an empty string counts as unfilled and falls
   through; there is no cross-locale chaining (zh never falls back through en
   to the original). The UGC layer now also covers venue names through tags
-  (`Tag.name_en`/`name_zh`, plus `city_en`/`city_zh`), and phase 2 (IN FLIGHT,
-  PR #75, not merged) adds `ConcertDay.label_en`/`label_zh` and
-  `Round.label_zh` (migration `a589d82c11b4`) so leg and round labels resolve
-  in the viewer's language too. `Round.label_en` CHANGES MEANING there: it
-  predates the i18n layer and used to render to EVERY viewer as an English
-  gloss beside the Japanese label, and it becomes a true locale variant
-  selected by `loc_field`.
+  (`Tag.name_en`/`name_zh`, plus `city_en`/`city_zh`), and phase 2 added
+  `ConcertDay.label_en`/`label_zh` and `Round.label_zh` (migration
+  `a589d82c11b4`) so leg and round labels resolve in the viewer's language
+  too. `Round.label_en` CHANGED MEANING there: it predates the i18n layer
+  and used to render to EVERY viewer as an English gloss beside the Japanese
+  label, and it is now a true locale variant selected by `loc_field`.
   THREE locale sources are in play, and choosing the wrong one is SILENT --
   nothing raises, the text just comes out in somebody else's language.
   `get_locale()` for anything inside a web request; `user.language` for
