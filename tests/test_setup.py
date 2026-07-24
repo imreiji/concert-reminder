@@ -422,7 +422,7 @@ async def test_ready_step_tracker_matches_demo_shape(client):
     assert '<a class="more" href="/preferences">' in r.text
     assert "&larr; Preferences" in r.text or "← Preferences" in r.text
     # Both capture-flow dots read done on the reveal screen; no third dot.
-    assert '<span class="stepdot done">Your concerts</span>' in r.text
+    assert '<span class="stepdot done">Your events</span>' in r.text
     assert '<span class="stepdot done">Applications</span>' in r.text
     assert ">Ready<" not in r.text
 
@@ -431,7 +431,7 @@ async def test_prune_screen_step_tracker_marks_first_dot_on(client):
     login_as(client, FAN_ID, "fan")
     r = client.get("/setup")
     assert r.status_code == 200
-    assert '<span class="stepdot on">Your concerts</span>' in r.text
+    assert '<span class="stepdot on">Your events</span>' in r.text
     assert '<span class="stepdot">Applications</span>' in r.text
 
 
@@ -439,7 +439,7 @@ async def test_applications_screen_step_tracker_marks_second_dot_on(client):
     login_as(client, FAN_ID, "fan")
     r = client.get("/setup/applications")
     assert r.status_code == 200
-    assert '<span class="stepdot done">Your concerts</span>' in r.text
+    assert '<span class="stepdot done">Your events</span>' in r.text
     assert '<span class="stepdot on">Applications</span>' in r.text
 
 

@@ -135,7 +135,7 @@
           <input type="hidden" name="day_cancelled" value="{{ 'true' if d.cancelled else 'false' }}">
           <button type="button" class="chip{% if d.cancelled %} on{% endif %}" data-cancel-toggle
                   aria-pressed="{{ 'true' if d.cancelled else 'false' }}"
-                  title="{{ _('A cancelled leg is dimmed and badged, never deleted') }}">{{ _("Cancelled") }}</button>
+                  title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
         </span>
         <button type="button" class="x" title="{{ _('Remove this leg') }}" data-remove-leg>×</button>
       </div>
@@ -183,7 +183,7 @@
           when a variant is empty (i18n.loc_field). -#}
       <div class="section-head trans-head">
         <h3 class="section-sub">{{ _("Translations") }}</h3>
-        <p class="dim tiny">{{ _("Optional — shown to viewers reading in that language, falling back to the originals above.") }}</p>
+        <p class="dim tiny">{{ _("Optional — shown to people using that language. If left blank, the text above is used.") }}</p>
       </div>
       <h4 class="section-sub">{{ _("English") }}</h4>
       <label>{{ _("Title") }} <input name="title_en" maxlength="200" value="{{ concert.title_en or '' }}"
@@ -226,8 +226,7 @@
         {% endfor %}
       </ul>
       {% else %}
-      <p class="dim tiny">{% trans %}Nothing yet. Only the concert's own top-level fields are
-        tracked — day, round and tag changes are not.{% endtrans %}</p>
+      <p class="dim tiny">{% trans %}Nothing yet. We only track changes to the event details above. Changes to days, rounds, and tags are not tracked.{% endtrans %}</p>
       {% endif %}
     </div>
   </details>
@@ -249,16 +248,14 @@
 <div class="danger-row">
   <div>
     <strong>{{ _("Duplicate or delete") }}</strong>
-    <p class="dim tiny">{% trans %}Duplicating copies this event's tags and details — the
-      exact tag set as pruned here, not a group's current membership — but
-      not rounds or legs.{% endtrans %}</p>
+    <p class="dim tiny">{% trans %}Duplicating copies this event's details and the exact tags shown here. It does not add the group's current members or copy rounds or performances.{% endtrans %}</p>
   </div>
   <span class="danger-row-actions">
     <form method="post" action="/concerts/{{ concert.event_id }}/duplicate">
       <button class="btn quiet">{{ _("Duplicate as new event") }}</button>
     </form>
     <form method="post" action="/concerts/{{ concert.event_id }}/delete"
-          data-confirm="{{ _('Delete this concert and every reminder attached to it?') }}"
+          data-confirm="{{ _('Delete this event and every reminder attached to it?') }}"
           onsubmit="return confirm(this.dataset.confirm)">
       <button class="btn danger">{{ _("Delete event") }}</button>
     </form>
@@ -282,7 +279,7 @@
       <span class="cancel-toggle">
         <input type="hidden" name="day_cancelled" value="false">
         <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                title="{{ _('A cancelled leg is dimmed and badged, never deleted') }}">{{ _("Cancelled") }}</button>
+                title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
       </span>
       <button type="button" class="x" title="{{ _('Remove this leg') }}" data-remove-leg>×</button>
     </div>

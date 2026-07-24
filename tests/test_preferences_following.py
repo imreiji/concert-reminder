@@ -141,7 +141,7 @@ async def test_following_shows_pruned_count(client):
     login_as(client, USER_A, "reiji")
     r = client.get("/preferences")
     assert r.status_code == 200
-    assert "1 you pruned" in r.text
+    assert "1 skipped" in r.text
     assert "Big Show" in r.text  # the pruned concert appears in the restore list
 
 
@@ -151,7 +151,7 @@ async def test_no_pruned_when_nothing_opted_out(client):
     login_as(client, USER_A, "reiji")
     r = client.get("/preferences")
     assert r.status_code == 200
-    assert "1 you pruned" not in r.text
+    assert "1 skipped" not in r.text
 
 
 async def test_restore_control_untracks_then_retracks(client):

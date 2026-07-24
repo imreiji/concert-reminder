@@ -189,7 +189,7 @@ async def test_discover_shows_catalogue_count_summary(client):
 
     r = client.get("/discover")
     assert r.status_code == 200
-    assert "<strong>2 concerts</strong>" in r.text
+    assert "<strong>2 events</strong>" in r.text
     assert "1 with a round still open" in r.text
 
 

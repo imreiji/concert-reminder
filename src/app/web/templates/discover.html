@@ -12,9 +12,9 @@
 <div class="layout">
   <section class="content">
     <div class="toolbar">
-      <h1>{{ _("Concerts") }}</h1>
+      <h1>{{ _("Events") }}</h1>
       <span class="note">
-        <strong>{% trans count=catalogue_count %}{{ count }} concert{% pluralize %}{{ count }} concerts{% endtrans %}</strong>
+        <strong>{% trans count=catalogue_count %}{{ count }} event{% pluralize %}{{ count }} events{% endtrans %}</strong>
         &middot; {% trans n=open_round_count %}{{ n }} with a round still open{% endtrans %}
       </span>
     </div>
@@ -24,7 +24,7 @@
       {% for tid in selected_tags %}<input type="hidden" name="tag" value="{{ tid }}">{% endfor %}
       {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
       <input type="search" name="q" id="concert-search" value="{{ query }}"
-             placeholder="{{ _('Search concerts…') }}" oninput="return liveSearch(this)">
+             placeholder="{{ _('Search events…') }}" oninput="return liveSearch(this)">
       <button class="quiet" type="submit">{{ _("Search") }}</button>
     </form>
 
@@ -103,9 +103,9 @@
     </div>
     {% endif %}
     <p class="dim" id="no-match"
-       {% if visible_concert_ids or (not selected_tags and not query and not status) %}style="display:none"{% endif %}>{{ _("No concerts match.") }}</p>
+       {% if visible_concert_ids or (not selected_tags and not query and not status) %}style="display:none"{% endif %}>{{ _("No events match.") }}</p>
     {% else %}
-    <p class="dim">{{ _("No concerts match.") }}{% if user and user.is_editor and not selected_tags and not query %} <a href="/concerts/new">{{ _("Create the first one →") }}</a>{% endif %}</p>
+    <p class="dim">{{ _("No events match.") }}{% if user and user.is_editor and not selected_tags and not query %} <a href="/concerts/new">{{ _("Create the first one →") }}</a>{% endif %}</p>
     {% endif %}
 
     {% if deadlines %}

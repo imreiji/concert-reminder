@@ -63,9 +63,10 @@ class Admin(commands.Cog):
             return
         if settings.is_editor(member.id):
             await interaction.response.send_message(
-                _("**{name}** is env-managed (EDITOR_WHITELIST) — edit `.env` instead.").format(
-                    name=member.name
-                ),
+                _(
+                    "**{name}** is managed through EDITOR_WHITELIST. "
+                    "Edit `.env` to change it."
+                ).format(name=member.name),
                 ephemeral=True,
             )
             return

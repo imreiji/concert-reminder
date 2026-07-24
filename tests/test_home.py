@@ -216,7 +216,7 @@ async def test_signed_out_landing_catalogue_stat_line_reflects_real_counts(clien
     await seeded(client.db, build)
 
     html = client.get("/").text
-    assert '<div class="n">1</div><div class="l">concerts tracked</div>' in html
+    assert '<div class="n">1</div><div class="l">events tracked</div>' in html
 
 
 async def test_signed_out_landing_card_has_tagrow_and_date(client):
@@ -625,8 +625,8 @@ async def test_teaser_count_excludes_fully_cancelled_concerts(client):
     login(client)
 
     html = client.get("/").text
-    assert "1 concert in the catalogue" in html
-    assert "2 concerts in the catalogue" not in html
+    assert "1 event in the catalogue" in html
+    assert "2 events in the catalogue" not in html
 
 
 async def test_times_render_dual_jst_first(client):
@@ -834,7 +834,7 @@ async def test_foot_note_paragraph_renders(client):
 
     html = client.get("/").text
     assert 'class="foot-note"' in html
-    assert "Home answers" in html
+    assert "Home shows" in html
 
 
 async def test_teaser_names_the_open_round_count_alongside_the_catalogue_count(client):

@@ -30,7 +30,7 @@
     <span class="eyebrow">{{ _("Qualifies") }}</span>
     <input type="hidden" name="round_qualifiers" value="{{ value | default('', true) }}">
     {% set options = saved_rounds | rejectattr('id', 'equalto', self_id) | list %}
-    <span class="dim tiny" data-no-qualifiers {% if options %}hidden{% endif %}>{{ _("Save the concert first, then a saved round can be picked here.") }}</span>
+    <span class="dim tiny" data-no-qualifiers {% if options %}hidden{% endif %}>{{ _("Save the event first, then a saved round can be picked here.") }}</span>
     {% for other in options %}
     <button type="button" class="chip{% if selected and other.id in selected %} on{% endif %}"
             data-qualifier-id="{{ other.id }}"

@@ -54,10 +54,10 @@ boundaries with an inline browser-side block, edit-page gap notices, a
 Tags-page untranslated count) -- and the agent-driven import seam (paste a
 YAML draft, the preview arrives prefilled; the add-concert skill that
 authors drafts is downloadable from the import page) and a native-review
-i18n calibration applied across both catalogues (its 132 English-source
-fixes are msgid changes, mapped in
-`docs/i18n-english-source-fixes-2026-07-24.csv` for a later pass) -- have
-shipped since).
+i18n calibration applied across both catalogues, including a ja
+agent-proofread round and the 132 reviewed English-source fixes applied
+at the msgid layer (mapping preserved in
+`docs/i18n-english-source-fixes-2026-07-24.csv`) -- have shipped since).
 
 ## Commands
 

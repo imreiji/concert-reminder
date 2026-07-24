@@ -65,6 +65,18 @@ edits, not catalogue edits -- which were extracted verbatim to
 number. Two stale rank cross-references in older entries were made
 name-based in the same pass.
 
+Later the same day the rest of that arc shipped: PR #89 (a ja round-2
+agent proofread -- 8 correctness fixes, logged inside the calibration
+Shipped entry) and then the English-source fixes themselves as PR #90,
+so the "new #3" lasted hours: all 132 applied at the source layer,
+msgids re-keyed in both catalogues with reviewed msgstrs preserved, and
+the touched "(s)" strings converted to real plurals per that entry's
+rider. One review row was REJECTED: the visible add-concert ->
+add-event rename was conditional on renaming the shipped skill itself,
+which keeps its name. Entries below renumbered 4-16; the
+sign-in-bounce entry's demo-parity/Discover-head pointer was bumped in
+place.
+
 ## Proposed (highest impact first)
 
 
@@ -123,28 +135,7 @@ NOT scattered overrides), and it must reconcile with the documented 760px
 `.fsheet`/`.layout` coupling, which sits INSIDE the new band and is the
 likely first thing the design revisits.
 
-### 3. Apply the reviewed English-source fixes (132 msgids)
-
-Impact: medium (copy quality in the app's primary language) - effort:
-medium (source edits, not catalogue edits). Raised: 2026-07-24 (owner,
-while merging the calibration PR).
-
-The 2026-07-23 native-review pass also proposed fixes to 132 ENGLISH
-source strings. English is the msgid layer, so each fix is a source-code
-change: edit the literal in its template/module, re-key that entry in
-BOTH catalogues (the msgid must stay byte-identical to its catalogue key
-or the translation silently drops), and update any EN test asserting the
-old copy. The full mapping is committed at
-`docs/i18n-english-source-fixes-2026-07-24.csv` (exact current msgid,
-plural form, proposed English, reviewer note) -- verified row-aligned
-against the ja catalogue at extraction, zero mismatches. Two riders from
-the reviewer's notes: several strings use the "{n} reminder(s)" shortcut
-where real plural msgids exist as a mechanism and should switch over when
-touched; and the editor-pages coherence pass (ranked above) should consult
-this file so surfaces it redesigns adopt the corrected copy directly
-instead of being edited twice.
-
-### 4. Inline tag creation for unmatched scraped/draft tags
+### 3. Inline tag creation for unmatched scraped/draft tags
 
 Impact: medium - effort: small-medium. Raised: 2026-07-23 (owner: an
 unmatched tag should offer creation, "not just throw it back to narnia").
@@ -162,7 +153,7 @@ name + kind + trilingual names may be enough for v1) and joins the picker
 selection on success. Must keep `create_tag`'s kind-scoped 409 semantics
 and invariant 3 (no group re-expansion surprises from the create path).
 
-### 5. event_id slugs should prefer title_en
+### 4. event_id slugs should prefer title_en
 
 Impact: low-medium - effort: small. Raised: 2026-07-23 (assistant, while
 verifying the import path).
@@ -177,7 +168,7 @@ at every create boundary, the fix is one line of preference -- slug from
 concerts keep their ids (event_id is editor-owned after creation; no
 backfill).
 
-### 6. Agent-import review-debt batch (deferred minors)
+### 5. Agent-import review-debt batch (deferred minors)
 
 Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
 whole-branch review of the agent-import build; the first three triaged
@@ -198,7 +189,7 @@ it works today, but it's a typo waiting to confuse someone (spotted
 behavior-safe today; batched so they stop being rediscovered by every
 future reviewer.
 
-### 7. Minute-level reminder offsets
+### 6. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -238,7 +229,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 8. Eventernote actor-page discovery
+### 7. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -258,7 +249,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 9. Collapse a round's multiple "Coming up" rows into one
+### 8. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
 branch review). Re-ranked 2026-07-19 (twice).
@@ -296,7 +287,7 @@ few pixels of table height on desktop. Still deferred for the same reason
 as before (collapsing changes the htmx swap shape), but the phone case is
 now the more visible motivator of the two.
 
-### 10. Franchise-aware round-label suggestions
+### 9. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -317,7 +308,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 11. Nine of ten `RoundKind` members are purely cosmetic
+### 10. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -340,7 +331,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 12. Pin the Python version across dev, CI and the server
+### 11. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -364,7 +355,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 13. PWA / installability
+### 12. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -384,7 +375,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 14. In-app LLM extraction behind the same draft seam
+### 13. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -402,7 +393,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 15. Minor demo-parity cosmetics
+### 14. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -430,7 +421,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 16. Discover sort in the content head, plus the catalogue-count note
+### 15. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -456,7 +447,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 17. Name the destination on the sign-in bounce
+### 16. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -472,7 +463,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#15) and the Discover head (#16) because
+Ranked below the demo-parity batch (#14) and the Discover head (#15) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -501,12 +492,38 @@ tags repaired positionally from the msgid, zero rows skipped. Four i18n
 smoke tests updated to the calibrated strings. The review's 132
 English-source fixes were deliberately NOT applied -- msgids are frozen at
 the catalogue layer -- and are extracted verbatim to
-`docs/i18n-english-source-fixes-2026-07-24.csv`, tracked as Proposed #3.
+`docs/i18n-english-source-fixes-2026-07-24.csv`, tracked as Proposed #3
+(since shipped -- see the entry above).
 Revision pass: the two design brainstorms this entry deliberately preceded
 (corrected wording feeds chip widths, label wrapping, dialog copy) rise to
 #1/#2 unchanged in substance, and the reviewer's "fragment -- needs UI
 reorder" notes independently confirm the sentence-builder scope already
 folded into the coherence pass.
+Round 2 (same day, PR #89): after the owner's external-LLM route proved
+more trouble than it was worth, an agent proofread of all 762 ja rows
+against the approved glossary (round=受付, sign in=サインイン, 購読 banned
+with calendar subscribe=登録, upgrade round stays アップグレード抽選)
+returned exactly 8 correctness fixes -- two mis-localized literal
+add-concert skill names, four banned-term survivals, two sign-in strays
+-- and confirmed the calibrated catalogue otherwise holds up.
+
+### Apply the reviewed English-source fixes (132 msgids) (2026-07-24)
+
+Shipped as: PR #90, hours after being filed as Proposed #3. All 132
+review rows applied at the source layer (bot cogs, views, 20 templates,
+including the trans-block %(var)s <-> {{ var }} conversions); both
+catalogues re-keyed under the corrected English with the just-reviewed
+msgstrs preserved byte-for-byte; the "{n} reminder(s)"/"active event(s)"
+shortcuts in touched strings became real plurals (one ngettext call, two
+{% pluralize %} blocks, one latent wrong-selector Jinja bug fixed); two
+msgid collisions merged losslessly; 10 test files updated. One row
+REJECTED: the visible add-concert -> add-event rename, conditional on
+renaming the shipped skill itself -- the follow-up commit also fixed the
+zh msgstrs that still carried add-event (the bug ja round 2 had fixed
+for ja). The mapping CSV stays in docs/ as the record of what was
+reviewed and the one rejection. Revision pass over Proposed: no rank
+changes -- the coherence pass (#1) now inherits corrected copy on every
+surface it will redesign, which is the sequencing the rider asked for.
 
 ### Cache-bust static assets with a per-file content hash (2026-07-22)
 

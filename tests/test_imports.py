@@ -141,7 +141,7 @@ def test_import_form_error_uses_warn_callout(client):
     r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
     assert r.status_code == 200
     assert 'class="callout warn"' in r.text
-    assert "Couldn" in r.text
+    assert "couldn't read that page" in r.text
 
 
 # ── Host allowlist (SSRF guard) ─────────────────────────────────────────
@@ -218,7 +218,7 @@ def test_fetch_failure_rerenders_form_with_error_not_500(client):
     client.monkeypatch.setattr(import_routes, "fetch_ramen_html", fail)
     r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
     assert r.status_code == 200  # friendly re-render, not a raw 502
-    assert "Couldn" in r.text
+    assert "couldn't read that page" in r.text
 
 
 def test_unparseable_page_rerenders_form_with_error(client):
@@ -226,7 +226,7 @@ def test_unparseable_page_rerenders_form_with_error(client):
     mock_fetch(client, "<html><body>not an event</body></html>")
     r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
     assert r.status_code == 200
-    assert "Couldn" in r.text
+    assert "couldn't read that page" in r.text
 
 
 # ── Commit ───────────────────────────────────────────────────────────────

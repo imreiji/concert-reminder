@@ -11,7 +11,7 @@
   <span class="stepdot done">{{ _("Reminders") }}</span>
   <span class="stepdot done">{{ _("Test DM") }}</span>
   <a class="more" href="/preferences">&larr; {{ _("Preferences") }}</a>
-  <span class="stepdot{% if screen == 'prune' %} on{% else %} done{% endif %}">{{ _("Your concerts") }}</span>
+  <span class="stepdot{% if screen == 'prune' %} on{% else %} done{% endif %}">{{ _("Your events") }}</span>
   <span class="stepdot{% if screen == 'applications' %} on{% elif screen == 'ready' %} done{% endif %}">{{ _("Applications") }}</span>
 </div>
 
@@ -19,11 +19,9 @@
   {% if tiles %}
   {% set tile_count = tiles | length %}
   <div class="lede">
-    <h1>{% trans count=tile_count %}We found {{ count }} upcoming concert for you{% pluralize %}We found {{ count }} upcoming concerts for you{% endtrans %}</h1>
+    <h1>{% trans count=tile_count %}We found {{ count }} upcoming event for you{% pluralize %}We found {{ count }} upcoming events for you{% endtrans %}</h1>
     <p>
-      {% if because %}{% trans because=because | join(", ") %}Because you follow {{ because }}. {% endtrans %}{% endif %}{% trans %}Most people
-      cannot get to every date — switch off the ones you are not going for and we will not
-      chase you about them. You can change any of this later.{% endtrans %}
+      {% if because %}{% trans because=because | join(", ") %}Because you follow {{ because }}. {% endtrans %}{% endif %}{% trans %}Most people cannot attend every performance. Turn off the ones you are not going to, and we will stop sending reminders for them. You can change this later.{% endtrans %}
     </p>
   </div>
 
@@ -87,11 +85,10 @@
   </script>
   {% else %}
   <div class="lede">
-    <h1>{{ _("No upcoming concerts yet") }}</h1>
+    <h1>{{ _("No upcoming events yet") }}</h1>
     <p>
-      {% trans %}We didn't find any upcoming concerts for the tags you follow yet.
-      <a href="/discover">Browse what's on</a> to find some — or continue, and your board
-      will fill in as new events drop.{% endtrans %}
+      {% trans %}We didn't find any upcoming events for the tags you follow.
+      <a href="/discover">Browse events</a> now, or continue. New matching events will appear on your board later.{% endtrans %}
     </p>
   </div>
   <form method="post" action="/setup/prune">
@@ -130,7 +127,7 @@
     </div>
 
     <div class="bar">
-      <span class="tally">{{ _("Anything you skip, we will ask about by DM when its result lands.") }}</span>
+      <span class="tally">{{ _("If you skip one, we'll ask by DM when its result is announced.") }}</span>
       <a class="btn quiet" href="/setup">{{ _("Back") }}</a>
       <button class="btn" type="submit">{{ _("Finish") }}</button>
     </div>
@@ -139,8 +136,7 @@
   <div class="lede">
     <h1>{{ _("Nothing to ask right now") }}</h1>
     <p>
-      {% trans %}None of the concerts you are tracking has a round still waiting on you. We will ask by
-      DM the moment one does.{% endtrans %}
+      {% trans %}None of the events you follow has a round that needs your answer. We'll DM you when one does.{% endtrans %}
     </p>
   </div>
   <form method="post" action="/setup/applications">
@@ -174,8 +170,7 @@
   </div>
   {% if tallies.payment_due > 0 and tallies.payment_concert %}
   <p class="lede" style="margin: 0 auto 1.5rem; color: var(--dim);">
-    {% trans title=loc(tallies.payment_concert, "title") %}{{ title }} is waiting on a payment — the closest thing here to
-    losing a ticket you have already won.{% endtrans %}
+    {% trans title=loc(tallies.payment_concert, "title") %}{{ title }} still needs payment. Please check the payment deadline.{% endtrans %}
   </p>
   {% endif %}
   <a class="btn" href="/">{{ _("Go to my board") }}</a>

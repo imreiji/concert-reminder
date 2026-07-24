@@ -669,7 +669,7 @@ async def test_the_danger_row_says_what_duplicate_copies(client, db):
     assert 'class="danger-row"' in body
     assert "/concerts/tour/duplicate" in body
     assert "/concerts/tour/delete" in body
-    assert "not rounds or legs" in body
+    assert "copy rounds or performances" in body
 
 
 # ── cancelled: a leg toggle, not a buried <select> ───────────────────────

@@ -129,7 +129,7 @@ class Reminders(commands.Cog):
             target = await session.get(Concert, concert)
             if target is None:
                 await interaction.response.send_message(
-                    _("That concert doesn't exist (deleted?)."), ephemeral=True
+                    _("That event doesn't exist (deleted?)."), ephemeral=True
                 )
                 return
 

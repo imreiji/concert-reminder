@@ -548,7 +548,7 @@ def test_tags_page_summary_line_counts_kinds(client):
         "title_en": "Show", "title_zh": "Show", "title": "Show", "event_id": "show",
     })
     r = client.get("/tags")
-    assert "1 concert" in r.text
+    assert "1 event" in r.text
     assert "2 franchises" in r.text
     assert "1 group" in r.text
     assert "3 performers" in r.text
@@ -574,7 +574,7 @@ def test_tag_dialog_shows_usage_counts(client):
     assert r.status_code == 200
     dlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
     assert '<div class="usage">' in dlg
-    assert '<div class="l3">concerts</div>' in dlg
+    assert '<div class="l3">events</div>' in dlg
     assert '<div class="l3">followers</div>' in dlg
     # concerts=1 and followers=1 are wired from counts, not hardcoded
     assert dlg.count('<div class="n3">1</div>') >= 2
@@ -618,7 +618,7 @@ def test_group_dialog_offers_apply_link_only_when_concerts_eligible(client):
     r = client.get("/tags")
     gdlg = r.text.split('id="tag-dialog-1"')[1].split("</dialog>")[0]
     assert "/tags/1/members/2/retroactive-apply" in gdlg
-    assert "Apply Sumire to 1 upcoming concert" in gdlg
+    assert "Apply Sumire to 1 upcoming event" in gdlg
 
     edlg = r.text.split('id="tag-dialog-3"')[1].split("</dialog>")[0]
     assert "upgradebox" in edlg  # the invariant explanation still renders
@@ -885,7 +885,7 @@ def test_confirmation_page_shows_info_callout_and_bar_actions(client):
     assert r.status_code == 200
     assert 'class="callout info"' in r.text
     # states it adds only the new member: no re-expansion, no un-pruning
-    assert "not</b> re-expand" in r.text or "not re-expand" in r.text
+    assert "not</b> add the whole group again" in r.text
     assert 'class="bar"' in r.text
     assert 'action="/tags/1/members/2/retroactive-apply"' in r.text
     assert "Apply to all" in r.text

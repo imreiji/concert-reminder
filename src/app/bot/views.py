@@ -37,7 +37,7 @@ from app.db.service import (
 from app.db.session import SessionMaker
 from app.domain.timezones import fmt_dual
 from app.domain.types import LotteryOutcome
-from app.i18n import N_, get_locale, loc_field, set_locale
+from app.i18n import N_, get_locale, loc_field, ngettext, set_locale
 from app.i18n import gettext as _
 
 
@@ -114,7 +114,7 @@ class ReinstateRemindersButton(
 ):
     def __init__(self, concert_id: int) -> None:
         super().__init__(discord.ui.Button(
-            label=_("Reinstate my reminders"),
+            label=_("Turn my reminders back on"),
             style=discord.ButtonStyle.primary,
             custom_id=f"dk:reinstate:{concert_id}",
         ))
@@ -130,8 +130,13 @@ class ReinstateRemindersButton(
             await _apply_locale(session, interaction.user.id)
             await session.commit()
         msg = (
-            _("Reinstated {n} reminder(s) — you'll be notified again per your existing "
-              "settings for any that are still active.").format(n=n)
+            ngettext(
+                "Turned {n} reminder back on. You'll be notified again for any "
+                "active ones using your existing settings.",
+                "Turned {n} reminders back on. You'll be notified again for any "
+                "active ones using your existing settings.",
+                n,
+            ).format(n=n)
             if n else _("You had no reminders set up on this event.")
         )
         await interaction.response.send_message(msg)
