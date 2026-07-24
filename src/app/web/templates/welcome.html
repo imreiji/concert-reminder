@@ -136,22 +136,20 @@
 
   <p class="remnote">{% trans %}Get one reminder when applications open, results are announced, and payment is due. You also get two reminders before applications close. You can change these below or later in Preferences.{% endtrans %}</p>
 
+  {# One reminder as a sentence. The three selects are pre-rendered into Markup,
+     then dropped into the TRANSLATED pattern's {offset}/{direction}/{anchor}
+     slots in the viewer-locale word order (sentence_slots, web/app.py) -- ja/zh
+     reorder freely, EN reads as before. The direction select is always present
+     (hidden for a "moment" offset) so the JS clone and the three POST arrays
+     never fall out of step. #}
   {% macro remrow(days, hours, direction, anchor) -%}
     {%- set offval = days ~ ":" ~ hours -%}
     {%- set moment = (days == 0 and hours == 0) -%}
+    {%- set offset_html %}<select name="offset" data-role="offset" aria-label="{{ _('Timing') }}">{% for o in offset_options %}<option value="{{ o.value }}"{% if o.value == offval %} selected{% endif %}>{{ o.label }}</option>{% endfor %}</select>{% endset -%}
+    {%- set direction_html %}<select name="direction" data-role="direction" aria-label="{{ _('Before or after') }}"{% if moment %} hidden{% endif %}><option value="before"{% if direction == "before" %} selected{% endif %}>{{ _("before") }}</option><option value="after"{% if direction == "after" %} selected{% endif %}>{{ _("after") }}</option></select>{% endset -%}
+    {%- set anchor_html %}<select name="anchor" data-role="anchor" aria-label="{{ _('Deadline type') }}">{% for a in anchor_order %}<option value="{{ a }}"{% if a == anchor %} selected{% endif %}>{{ anchor_moment[a] if moment else anchor_noun[a] }}</option>{% endfor %}</select>{% endset -%}
     <div class="remrule" data-ruleid="server">
-      <span>{{ _("Remind me") }}</span>
-      <select name="offset" data-role="offset" aria-label="{{ _('Timing') }}">
-        {% for o in offset_options %}<option value="{{ o.value }}"{% if o.value == offval %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
-      </select>
-      <select name="direction" data-role="direction" aria-label="{{ _('Before or after') }}"{% if moment %} hidden{% endif %}>
-        <option value="before"{% if direction == "before" %} selected{% endif %}>{{ _("before") }}</option>
-        <option value="after"{% if direction == "after" %} selected{% endif %}>{{ _("after") }}</option>
-      </select>
-      <select name="anchor" data-role="anchor" aria-label="{{ _('Deadline type') }}">
-        {% for a in anchor_order %}<option value="{{ a }}"{% if a == anchor %} selected{% endif %}>{{ anchor_moment[a] if moment else anchor_noun[a] }}</option>{% endfor %}
-      </select>
-      <span>.</span>
+      {{ sentence_slots(_("Remind me {offset} {direction} {anchor}."), {"offset": offset_html, "direction": direction_html, "anchor": anchor_html}) }}
       <button class="act" type="button" data-remove="server" aria-label="{{ _('Remove this reminder') }}">×</button>
     </div>
   {%- endmacro %}
@@ -166,6 +164,11 @@
     <div class="remrules" id="remRuleList">
       {% for r in standard_rules %}{{ remrow(r[0], r[1], r[2], r[3]) }}{% endfor %}
     </div>
+    {# One blank row rendered through the SAME macro, in the viewer's language,
+       for the JS to clone (kills the old hardcoded-English DOM builder). Cloned
+       and re-labelled per row; its "before"-vs-noun anchor phrasing is a
+       starting point the clone flow overwrites. #}
+    <template id="remrule-template">{{ remrow(1, 0, "before", "closes") }}</template>
     <div class="remtune-add">
       <button class="btn quiet" type="button" id="remAddRow">{{ _("+ Add a reminder") }}</button>
     </div>
@@ -179,23 +182,27 @@
 </form>
 
 <script>
-  // Static, self-contained: seeds and edits the fine-tune rows entirely from
-  // config passed via `| tojson` (invariant 7 -- never `| safe`, and every
-  // label reaches the DOM through textContent, never innerHTML). None of this
-  // is user-controlled; it is the offset/anchor vocabulary and the three
-  // starter presets, defined once server-side in routes/welcome.py.
+  // Self-contained: seeds and edits the fine-tune rows. Each row is a CLONE of
+  // the server-rendered <template id="remrule-template">, which the macro
+  // already emitted in the viewer's language (translated selects, locale-ordered
+  // sentence) -- the JS never assembles English DOM, it only sets select values
+  // and toggles the direction select. The anchor labels alone are re-stamped as
+  // moment-vs-noun (from config passed via `| tojson`, invariant 7: never
+  // `| safe`, and every label reaches the DOM through textContent), since that
+  // phrasing flips with the offset. None of this config is user-controlled.
   (function () {
     var form = document.getElementById("remForm");
     var cards = document.getElementById("remCards");
     var ruleList = document.getElementById("remRuleList");
+    var tmpl = document.getElementById("remrule-template");
     var submitBtn = document.getElementById("remSubmit");
-    if (!form || !cards || !ruleList) return;
+    if (!form || !cards || !ruleList || !tmpl) return;
 
     var OFFSETS = {{ offset_options | tojson }};
-    var ANCHOR_ORDER = {{ anchor_order | tojson }};
     var ANCHOR_MOMENT = {{ anchor_moment | tojson }};
     var ANCHOR_NOUN = {{ anchor_noun | tojson }};
     var PRESETS = {{ preset_templates | tojson }};
+    var EMPTY_MSG = {{ _("No reminders yet — add one below.") | tojson }};
 
     function isMoment(value) {
       var o = OFFSETS.find(function (x) { return x.value === value; });
@@ -206,69 +213,32 @@
     var rows = [];   // [{ id, offset, direction, anchor }] -- the fine-tune state
     var seq = 0;
 
-    // One row as a real sentence, with NAMED selects so the native form submit
-    // carries three aligned arrays. The direction select is always present
-    // (hidden for a moment offset) so those arrays never fall out of step.
+    // One row as a clone of the translated template. Values are set on the
+    // existing selects (all three already present, named, locale-ordered); the
+    // direction select is hidden for a moment offset so the three POST arrays
+    // never fall out of step; the anchor option labels are re-stamped for the
+    // moment-vs-noun phrasing that flips with the offset.
     function buildRow(row) {
       var moment = isMoment(row.offset);
-      var wrap = document.createElement("div");
-      wrap.className = "remrule";
+      var wrap = tmpl.content.firstElementChild.cloneNode(true);
       wrap.dataset.ruleid = row.id;
 
-      var lead = document.createElement("span");
-      lead.textContent = "Remind me";
-      wrap.appendChild(lead);
+      var offsetSel = wrap.querySelector('select[data-role="offset"]');
+      offsetSel.value = row.offset;
 
-      var offsetSel = document.createElement("select");
-      offsetSel.name = "offset";
-      offsetSel.dataset.role = "offset";
-      offsetSel.setAttribute("aria-label", "Offset");
-      OFFSETS.forEach(function (o) {
-        var opt = document.createElement("option");
-        opt.value = o.value;
-        opt.textContent = o.label;
-        if (o.value === row.offset) opt.selected = true;
-        offsetSel.appendChild(opt);
-      });
-      wrap.appendChild(offsetSel);
+      var relSel = wrap.querySelector('select[data-role="direction"]');
+      relSel.hidden = moment;
+      relSel.value = row.direction;
 
-      var relSel = document.createElement("select");
-      relSel.name = "direction";
-      relSel.dataset.role = "direction";
-      relSel.setAttribute("aria-label", "Before or after");
-      if (moment) relSel.hidden = true;
-      ["before", "after"].forEach(function (r) {
-        var opt = document.createElement("option");
-        opt.value = r;
-        opt.textContent = r;
-        if (r === row.direction) opt.selected = true;
-        relSel.appendChild(opt);
-      });
-      wrap.appendChild(relSel);
-
-      var anchorSel = document.createElement("select");
-      anchorSel.name = "anchor";
-      anchorSel.dataset.role = "anchor";
-      anchorSel.setAttribute("aria-label", "Anchor");
+      var anchorSel = wrap.querySelector('select[data-role="anchor"]');
       var phrase = moment ? ANCHOR_MOMENT : ANCHOR_NOUN;
-      ANCHOR_ORDER.forEach(function (a) {
-        var opt = document.createElement("option");
-        opt.value = a;
-        opt.textContent = phrase[a];
-        if (a === row.anchor) opt.selected = true;
-        anchorSel.appendChild(opt);
+      Array.prototype.forEach.call(anchorSel.options, function (opt) {
+        if (phrase[opt.value] !== undefined) opt.textContent = phrase[opt.value];
       });
-      wrap.appendChild(anchorSel);
+      anchorSel.value = row.anchor;
 
-      wrap.appendChild(document.createTextNode("."));
-
-      var rm = document.createElement("button");
-      rm.type = "button";
-      rm.className = "act";
-      rm.dataset.remove = row.id;
-      rm.setAttribute("aria-label", "Remove this reminder");
-      rm.textContent = "×";
-      wrap.appendChild(rm);
+      var rm = wrap.querySelector("[data-remove]");
+      if (rm) rm.dataset.remove = row.id;
       return wrap;
     }
 
@@ -281,7 +251,7 @@
       if (!rows.length) {
         var p = document.createElement("div");
         p.className = "remrule-empty";
-        p.textContent = "No reminders yet — add one below.";
+        p.textContent = EMPTY_MSG;
         ruleList.appendChild(p);
         return;
       }

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 10:22-0300\n"
+"POT-Creation-Date: 2026-07-24 10:37-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -37,7 +37,7 @@ msgstr "付款截止"
 msgid "starts"
 msgstr "开演"
 
-#: src/app/bot/messages.py:45 src/app/web/templates/welcome.html:446
+#: src/app/bot/messages.py:45 src/app/web/templates/welcome.html:416
 msgid "now"
 msgstr "现在"
 
@@ -266,7 +266,7 @@ msgstr "**{name}** 由 EDITOR_WHITELIST 管理。请编辑 `.env` 进行更改�
 msgid "**{name}** is no longer an editor."
 msgstr "**{name}** 已不再是编辑者。"
 
-#: src/app/bot/cogs/admin.py:87 src/app/web/templates/preferences.html:428
+#: src/app/bot/cogs/admin.py:87 src/app/web/templates/preferences.html:426
 msgid "No editors yet."
 msgstr "还没有编辑者。"
 
@@ -341,11 +341,11 @@ msgid "round #{n}"
 msgstr "第 {n} 轮"
 
 #: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:189
-#: src/app/web/templates/welcome.html:148
+#: src/app/web/templates/welcome.html:149
 msgid "before"
 msgstr "提前"
 
-#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:190
+#: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:189
 #: src/app/web/templates/welcome.html:149
 msgid "after"
 msgstr "延后"
@@ -515,7 +515,7 @@ msgstr "轮次 {n} 名称"
 #: src/app/web/templates/_venue_create_dialog.html:36
 #: src/app/web/templates/_venue_create_dialog.html:37
 #: src/app/web/templates/_venue_create_dialog.html:39
-#: src/app/web/templates/preferences.html:243
+#: src/app/web/templates/preferences.html:241
 #: src/app/web/templates/tags.html:76 src/app/web/templates/tags.html:78
 #: src/app/web/templates/tags.html:81 src/app/web/templates/tags.html:83
 #: src/app/web/templates/tags.html:240 src/app/web/templates/tags.html:244
@@ -708,7 +708,7 @@ msgid "Your status"
 msgstr "你的申请状态"
 
 #: src/app/web/templates/_deadline_rows.html:31
-#: src/app/web/templates/preferences.html:195
+#: src/app/web/templates/preferences.html:192
 msgid "Closes"
 msgstr "截止时间"
 
@@ -838,7 +838,7 @@ msgstr "不再关注此活动吗？"
 
 #: src/app/web/templates/_following_toggle.html:31
 #: src/app/web/templates/home.html:287
-#: src/app/web/templates/preferences.html:398
+#: src/app/web/templates/preferences.html:396
 msgid "Close"
 msgstr "关闭"
 
@@ -1007,8 +1007,8 @@ msgid "DM &middot; applies to every round above"
 msgstr "DM &middot; 适用于以上所有轮次"
 
 #: src/app/web/templates/_rules.html:22
-#: src/app/web/templates/preferences.html:222
-#: src/app/web/templates/preferences.html:424
+#: src/app/web/templates/preferences.html:220
+#: src/app/web/templates/preferences.html:422
 msgid "Remove"
 msgstr "删除"
 
@@ -1029,8 +1029,6 @@ msgid "days before"
 msgstr "天前"
 
 #: src/app/web/templates/_rules.html:47
-#: src/app/web/templates/preferences.html:183
-#: src/app/web/templates/welcome.html:143
 msgid "Remind me"
 msgstr "提醒我"
 
@@ -1155,8 +1153,8 @@ msgid "Toggle dark mode"
 msgstr "切换深色模式"
 
 #: src/app/web/templates/base.html:58
-#: src/app/web/templates/preferences.html:297
-#: src/app/web/templates/welcome.html:407
+#: src/app/web/templates/preferences.html:295
+#: src/app/web/templates/welcome.html:377
 msgid "Language"
 msgstr "语言"
 
@@ -2075,17 +2073,17 @@ msgid "Time"
 msgstr "时间"
 
 #: src/app/web/templates/preferences.html:19
-#: src/app/web/templates/preferences.html:312
+#: src/app/web/templates/preferences.html:310
 msgid "Delivery"
 msgstr "通知方式"
 
 #: src/app/web/templates/preferences.html:20
-#: src/app/web/templates/preferences.html:368
+#: src/app/web/templates/preferences.html:366
 msgid "Account"
 msgstr "账户"
 
 #: src/app/web/templates/preferences.html:21
-#: src/app/web/templates/preferences.html:414
+#: src/app/web/templates/preferences.html:412
 msgid "Editors"
 msgstr "编辑者"
 
@@ -2217,287 +2215,280 @@ msgid ""
 "change the rules for one event, those rules are used instead."
 msgstr "预设是一组用于你所关注活动的提醒设置。如果你更改单个活动的设置，系统会使用该活动的设置。"
 
-#: src/app/web/templates/preferences.html:185
-msgid "day(s)"
-msgstr "天"
-
-#: src/app/web/templates/preferences.html:187
-msgid "hour(s)"
-msgstr "小时"
-
 #: src/app/web/templates/preferences.html:192
-msgid "each"
-msgstr "每"
-
-#: src/app/web/templates/preferences.html:195
 msgid "Opens"
 msgstr "申请开始"
 
-#: src/app/web/templates/preferences.html:195
+#: src/app/web/templates/preferences.html:192
 msgid "Results"
 msgstr "结果公布"
 
-#: src/app/web/templates/preferences.html:195
+#: src/app/web/templates/preferences.html:192
 msgid "Payment"
 msgstr "付款"
 
-#: src/app/web/templates/preferences.html:195
+#: src/app/web/templates/preferences.html:192
 msgid "Event start"
 msgstr "活动开始"
 
-#: src/app/web/templates/preferences.html:204
+#: src/app/web/templates/preferences.html:194
+#, python-brace-format
+msgid "Remind me {days} day(s) {hours} hour(s) {direction} each {anchor}."
+msgstr "每次{anchor}{direction}{days}天{hours}小时提醒我。"
+
+#: src/app/web/templates/preferences.html:202
 msgid "Rename"
 msgstr "重命名"
 
-#: src/app/web/templates/preferences.html:206
+#: src/app/web/templates/preferences.html:204
 msgid "The Discord 'Set my reminders' button applies this preset"
 msgstr "Discord 上的“设置我的提醒”按钮会应用此预设。"
 
-#: src/app/web/templates/preferences.html:206
+#: src/app/web/templates/preferences.html:204
 msgid "Default"
 msgstr "默认"
 
-#: src/app/web/templates/preferences.html:208
+#: src/app/web/templates/preferences.html:206
 msgid "Make this the preset the Discord button applies"
 msgstr "设为 Discord 按钮应用的预设"
 
-#: src/app/web/templates/preferences.html:208
+#: src/app/web/templates/preferences.html:206
 msgid "Make default"
 msgstr "设为默认"
 
-#: src/app/web/templates/preferences.html:211
+#: src/app/web/templates/preferences.html:209
 msgid "Delete preset"
 msgstr "删除预设"
 
-#: src/app/web/templates/preferences.html:211
+#: src/app/web/templates/preferences.html:209
 msgid "Delete"
 msgstr "删除"
 
-#: src/app/web/templates/preferences.html:220
-#: src/app/web/templates/preferences.html:270
+#: src/app/web/templates/preferences.html:218
+#: src/app/web/templates/preferences.html:268
 #: src/app/web/templates/tags.html:135
 msgid "Save"
 msgstr "保存"
 
-#: src/app/web/templates/preferences.html:222
+#: src/app/web/templates/preferences.html:220
 msgid "Remove rule"
 msgstr "删除规则"
 
-#: src/app/web/templates/preferences.html:226
+#: src/app/web/templates/preferences.html:224
 msgid "Add a rule"
 msgstr "添加规则"
 
-#: src/app/web/templates/preferences.html:230
+#: src/app/web/templates/preferences.html:228
 msgid "Add rule"
 msgstr "添加规则"
 
-#: src/app/web/templates/preferences.html:238
+#: src/app/web/templates/preferences.html:236
 msgid ""
 "Presets apply to future events. Existing ones keep the rules they already"
 " have."
 msgstr "预设会应用于今后的活动；已有活动仍保留原来的规则。"
 
-#: src/app/web/templates/preferences.html:240
+#: src/app/web/templates/preferences.html:238
 msgid "New preset"
 msgstr "新预设"
 
-#: src/app/web/templates/preferences.html:243
+#: src/app/web/templates/preferences.html:241
 msgid "standard lottery coverage"
 msgstr "标准抽选提醒"
 
-#: src/app/web/templates/preferences.html:245
+#: src/app/web/templates/preferences.html:243
 msgid "Create preset"
 msgstr "创建预设"
 
-#: src/app/web/templates/preferences.html:246
+#: src/app/web/templates/preferences.html:244
 msgid "Created with this first rule — add more after."
 msgstr "创建时会包含这条初始规则，之后还可继续添加。"
 
-#: src/app/web/templates/preferences.html:255
+#: src/app/web/templates/preferences.html:253
 msgid "Time & language"
 msgstr "时间与语言"
 
-#: src/app/web/templates/preferences.html:256
+#: src/app/web/templates/preferences.html:254
 msgid "Every deadline shows JST first, then yours. This sets the second one."
 msgstr "每个截止时间都会先显示 JST，再显示你的当地时间。此项用于设置后者。"
 
-#: src/app/web/templates/preferences.html:261
-#: src/app/web/templates/welcome.html:364
+#: src/app/web/templates/preferences.html:259
+#: src/app/web/templates/welcome.html:334
 msgid "Your timezone"
 msgstr "你的时区"
 
-#: src/app/web/templates/preferences.html:263
-#: src/app/web/templates/welcome.html:366
+#: src/app/web/templates/preferences.html:261
+#: src/app/web/templates/welcome.html:336
 msgid "Common"
 msgstr "常用"
 
-#: src/app/web/templates/preferences.html:266
-#: src/app/web/templates/welcome.html:369
+#: src/app/web/templates/preferences.html:264
+#: src/app/web/templates/welcome.html:339
 msgid "All zones (IANA)"
 msgstr "所有时区（IANA）"
 
-#: src/app/web/templates/preferences.html:277
-#: src/app/web/templates/welcome.html:375
+#: src/app/web/templates/preferences.html:275
+#: src/app/web/templates/welcome.html:345
 msgid "Detection"
 msgstr "检测"
 
-#: src/app/web/templates/preferences.html:278
-#: src/app/web/templates/welcome.html:376
+#: src/app/web/templates/preferences.html:276
+#: src/app/web/templates/welcome.html:346
 msgid "Timezone detection mode"
 msgstr "时区检测模式"
 
-#: src/app/web/templates/preferences.html:279
-#: src/app/web/templates/welcome.html:377
+#: src/app/web/templates/preferences.html:277
+#: src/app/web/templates/welcome.html:347
 msgid "Follow my browser"
 msgstr "跟随浏览器"
 
-#: src/app/web/templates/preferences.html:280
-#: src/app/web/templates/welcome.html:378
+#: src/app/web/templates/preferences.html:278
+#: src/app/web/templates/welcome.html:348
 msgid "Keep what I picked"
 msgstr "使用我选择的时区"
 
-#: src/app/web/templates/preferences.html:289
+#: src/app/web/templates/preferences.html:287
 #, python-format
 msgid "Detected <b>%(tz)s</b> from your browser."
 msgstr "已从你的浏览器检测到 <b>%(tz)s</b>。"
 
-#: src/app/web/templates/preferences.html:289
+#: src/app/web/templates/preferences.html:287
 #, python-format
 msgid "Using <b>%(tz)s</b>."
 msgstr "正在使用 <b>%(tz)s</b>。"
 
-#: src/app/web/templates/preferences.html:290
+#: src/app/web/templates/preferences.html:288
 #, python-format
 msgid "Right now that reads <span class=\"num\">%(tz_preview)s</span>."
 msgstr "现在显示为 <span class=\"num\">%(tz_preview)s</span>。"
 
-#: src/app/web/templates/preferences.html:313
+#: src/app/web/templates/preferences.html:311
 msgid "Where reminders actually arrive."
 msgstr "提醒会实际发送到这里。"
 
-#: src/app/web/templates/preferences.html:319
+#: src/app/web/templates/preferences.html:317
 msgid "Discord DMs blocked"
 msgstr "Discord DM 已被阻止"
 
-#: src/app/web/templates/preferences.html:320
+#: src/app/web/templates/preferences.html:318
 msgid "Check your Discord privacy settings to allow DMs from server members."
 msgstr "请检查 Discord 隐私设置，允许接收服务器成员的 DM。"
 
-#: src/app/web/templates/preferences.html:322
+#: src/app/web/templates/preferences.html:320
 msgid "Discord DMs reaching you"
 msgstr "Discord DM 可正常送达"
 
-#: src/app/web/templates/preferences.html:325
-#: src/app/web/templates/welcome.html:433
+#: src/app/web/templates/preferences.html:323
+#: src/app/web/templates/welcome.html:403
 msgid "Send a test DM"
 msgstr "发送测试 DM"
 
-#: src/app/web/templates/preferences.html:328
+#: src/app/web/templates/preferences.html:326
 msgid "Bot not running here (dev mode) — DMs can't be tested."
 msgstr "此处未运行机器人（开发模式）— 无法测试 DM。"
 
-#: src/app/web/templates/preferences.html:336
+#: src/app/web/templates/preferences.html:334
 msgid "Calendar feed active"
 msgstr "日历订阅已启用"
 
-#: src/app/web/templates/preferences.html:337
+#: src/app/web/templates/preferences.html:335
 msgid "Subscribe by URL in Google or Apple Calendar."
 msgstr "在 Google 或 Apple 日历中通过 URL 订阅。"
 
-#: src/app/web/templates/preferences.html:339
+#: src/app/web/templates/preferences.html:337
 msgid "No calendar feed"
 msgstr "无日历订阅"
 
-#: src/app/web/templates/preferences.html:345
+#: src/app/web/templates/preferences.html:343
 msgid "Your feed link is ready — save it now, it won't be shown again."
 msgstr "订阅链接已就绪 — 请立即保存，它不会再次显示。"
 
-#: src/app/web/templates/preferences.html:348
-#: src/app/web/templates/welcome.html:476
+#: src/app/web/templates/preferences.html:346
+#: src/app/web/templates/welcome.html:446
 msgid "Copy link"
 msgstr "复制链接"
 
-#: src/app/web/templates/preferences.html:349
+#: src/app/web/templates/preferences.html:347
 msgid ""
 "Google Calendar: Settings &rarr; Add calendar &rarr; From URL.\n"
 "        Apple Calendar: File &rarr; New Calendar Subscription."
 msgstr "Google 日历：设置 &rarr; 添加日历 &rarr; 通过网址。Apple 日历：文件 &rarr; 新建日历订阅。"
 
-#: src/app/web/templates/preferences.html:355
+#: src/app/web/templates/preferences.html:353
 msgid ""
 "Your current feed link will stop working. Add the new link to your "
 "calendar app."
 msgstr "当前的日历订阅链接将无法继续使用。请将新链接添加到你的日历应用中。"
 
-#: src/app/web/templates/preferences.html:356
+#: src/app/web/templates/preferences.html:354
 msgid "Generate a new one"
 msgstr "生成新链接"
 
-#: src/app/web/templates/preferences.html:359
-#: src/app/web/templates/welcome.html:485
+#: src/app/web/templates/preferences.html:357
+#: src/app/web/templates/welcome.html:455
 msgid "Generate feed link"
 msgstr "生成订阅链接"
 
-#: src/app/web/templates/preferences.html:362
+#: src/app/web/templates/preferences.html:360
 msgid ""
 "Creating a new link makes the old one stop working right away. Anyone "
 "using the old link will stop getting updates."
 msgstr "创建新链接后，旧链接会立即无法使用。仍在使用旧链接的人将不再收到更新。"
 
-#: src/app/web/templates/preferences.html:369
+#: src/app/web/templates/preferences.html:367
 #, python-format
 msgid "Signed in with Discord as <b>%(username)s</b>."
 msgstr "已通过 Discord 登录为 <b>%(username)s</b>。"
 
-#: src/app/web/templates/preferences.html:374
+#: src/app/web/templates/preferences.html:372
 msgid "Re-run first-time setup"
 msgstr "重新运行首次设置"
 
-#: src/app/web/templates/preferences.html:375
+#: src/app/web/templates/preferences.html:373
 msgid ""
 "Review your events again. Turn off any you are not going to, and mark the"
 " rounds you have already applied to. Your current choices stay selected."
 msgstr "再次检查你的活动。关闭不打算参加的活动，并标记已经申请的轮次。当前选择会保留。"
 
-#: src/app/web/templates/preferences.html:377
+#: src/app/web/templates/preferences.html:375
 msgid "Run setup"
 msgstr "开始设置"
 
-#: src/app/web/templates/preferences.html:388
-#: src/app/web/templates/preferences.html:405
+#: src/app/web/templates/preferences.html:386
+#: src/app/web/templates/preferences.html:403
 msgid "Delete my account"
 msgstr "删除我的账户"
 
-#: src/app/web/templates/preferences.html:389
+#: src/app/web/templates/preferences.html:387
 msgid ""
 "Your reminders, subscriptions, and settings are deleted. Events and tags "
 "you created stay, but your name is removed from them."
 msgstr "你的提醒、订阅和设置会被删除。你创建的活动和标签会保留，但会移除你的名字。"
 
-#: src/app/web/templates/preferences.html:393
+#: src/app/web/templates/preferences.html:391
 msgid "Delete account"
 msgstr "删除账户"
 
-#: src/app/web/templates/preferences.html:397
+#: src/app/web/templates/preferences.html:395
 msgid "Delete your account?"
 msgstr "确定删除你的账户吗？"
 
-#: src/app/web/templates/preferences.html:400
+#: src/app/web/templates/preferences.html:398
 msgid ""
 "Your reminders, subscriptions, and settings will be deleted. Events and "
 "tags you created will stay, but your name will be removed from them. You "
 "cannot undo this."
 msgstr "你的提醒、订阅和设置会被删除。你创建的活动和标签会保留，但会移除你的名字。删除后无法恢复。"
 
-#: src/app/web/templates/preferences.html:403
+#: src/app/web/templates/preferences.html:401
 msgid "Keep my account"
 msgstr "保留我的账户"
 
-#: src/app/web/templates/preferences.html:414
+#: src/app/web/templates/preferences.html:412
 msgid "admin only"
 msgstr "仅限管理员"
 
-#: src/app/web/templates/preferences.html:415
+#: src/app/web/templates/preferences.html:413
 msgid ""
 "These Discord users can create and edit events, rounds, and tags. Editors"
 " listed in <code>EDITOR_WHITELIST</code> must be changed in "
@@ -2506,27 +2497,27 @@ msgstr ""
 "这些 Discord 用户可以创建和编辑活动、轮次及标签。<code>EDITOR_WHITELIST</code> 中的编辑者必须在 "
 "<code>.env</code> 中更改。"
 
-#: src/app/web/templates/preferences.html:421
+#: src/app/web/templates/preferences.html:419
 msgid "from env"
 msgstr "来自环境变量"
 
-#: src/app/web/templates/preferences.html:423
+#: src/app/web/templates/preferences.html:421
 msgid "cannot be removed here"
 msgstr "无法在此移除"
 
-#: src/app/web/templates/preferences.html:424
+#: src/app/web/templates/preferences.html:422
 msgid "Remove editor"
 msgstr "移除编辑者"
 
-#: src/app/web/templates/preferences.html:431
+#: src/app/web/templates/preferences.html:429
 msgid "Some editors are set on the server and cannot be removed here."
 msgstr "部分编辑者由服务器设置，无法在这里移除。"
 
-#: src/app/web/templates/preferences.html:433
+#: src/app/web/templates/preferences.html:431
 msgid "Discord user ID"
 msgstr "Discord 用户 ID"
 
-#: src/app/web/templates/preferences.html:434
+#: src/app/web/templates/preferences.html:432
 msgid "Add an editor"
 msgstr "添加编辑者"
 
@@ -2852,7 +2843,7 @@ msgid "Turn all off"
 msgstr "全部关闭"
 
 #: src/app/web/templates/setup.html:58 src/app/web/templates/setup.html:95
-#: src/app/web/templates/welcome.html:82 src/app/web/templates/welcome.html:459
+#: src/app/web/templates/welcome.html:82 src/app/web/templates/welcome.html:429
 msgid "Continue"
 msgstr "继续"
 
@@ -3453,71 +3444,80 @@ msgid ""
 " can change these below or later in Preferences."
 msgstr "申请开始、结果公布和付款截止时会各提醒一次。申请截止前还会提醒两次。你可以在下方修改，也可以稍后在“偏好设置”中更改。"
 
-#: src/app/web/templates/welcome.html:144
+#: src/app/web/templates/welcome.html:148
 msgid "Timing"
 msgstr "提醒时间"
 
-#: src/app/web/templates/welcome.html:147
+#: src/app/web/templates/welcome.html:149
 msgid "Before or after"
 msgstr "提前或延后"
 
-#: src/app/web/templates/welcome.html:151
+#: src/app/web/templates/welcome.html:150
 msgid "Deadline type"
 msgstr "截止类型"
 
-#: src/app/web/templates/welcome.html:155
+#: src/app/web/templates/welcome.html:152
+#, python-brace-format
+msgid "Remind me {offset} {direction} {anchor}."
+msgstr "{anchor}{direction}{offset}提醒我。"
+
+#: src/app/web/templates/welcome.html:153
 msgid "Remove this reminder"
 msgstr "删除此提醒"
 
-#: src/app/web/templates/welcome.html:161
+#: src/app/web/templates/welcome.html:159
 msgid "Edit these reminders"
 msgstr "编辑这些提醒"
 
-#: src/app/web/templates/welcome.html:162
+#: src/app/web/templates/welcome.html:160
 msgid "Use the menus below to change each reminder."
 msgstr "使用下方菜单修改各条提醒。"
 
-#: src/app/web/templates/welcome.html:170
+#: src/app/web/templates/welcome.html:173
 msgid "+ Add a reminder"
 msgstr "+ 添加提醒"
 
-#: src/app/web/templates/welcome.html:175
+#: src/app/web/templates/welcome.html:178
 msgid "Rules set on one event are used instead of this preset."
 msgstr "单个活动另设的规则会优先于此预设。"
 
-#: src/app/web/templates/welcome.html:176
+#: src/app/web/templates/welcome.html:179
 msgid "Skip this step"
 msgstr "跳过此步"
 
-#: src/app/web/templates/welcome.html:177
+#: src/app/web/templates/welcome.html:180
 msgid "Create preset &amp; continue"
 msgstr "创建预设 &amp; 继续"
 
-#: src/app/web/templates/welcome.html:347
+#: src/app/web/templates/welcome.html:205
+msgid "No reminders yet — add one below."
+msgstr "还没有提醒 — 请在下方添加。"
+
+#: src/app/web/templates/welcome.html:317
 msgid "Confirm your timezone"
 msgstr "确认你的时区"
 
-#: src/app/web/templates/welcome.html:348
+#: src/app/web/templates/welcome.html:318
 msgid ""
 "Deadlines always show JST first, then this timezone — so you never have "
 "to convert a\n"
 "    23:59 JST close in your head."
 msgstr "截止时间始终先显示 JST，再显示此时区的时间 — 这样，你就不用在脑中换算 23:59 JST 对应几点。"
 
-#: src/app/web/templates/welcome.html:352
+#: src/app/web/templates/welcome.html:322
 #, python-format
 msgid "Detected <strong>%(tz)s</strong>"
 msgstr "已检测到 <strong>%(tz)s</strong>"
 
-#: src/app/web/templates/welcome.html:353
+#: src/app/web/templates/welcome.html:323
 msgid "(auto-detected from your browser)"
 msgstr "（从你的浏览器自动检测）"
 
-#: src/app/web/templates/welcome.html:373
+#: src/app/web/templates/welcome.html:343
 msgid "Use this timezone"
 msgstr "使用此时区"
 
-#: src/app/web/templates/welcome.html:421
+#: src/app/web/templates/welcome.html:391
 #, python-format
 msgid ""
 "Right now that reads\n"
@@ -3526,28 +3526,28 @@ msgstr ""
 "你当前看到的时间是\n"
 "  <span class=\"num\">%(tz_preview)s</span>。"
 
-#: src/app/web/templates/welcome.html:426
+#: src/app/web/templates/welcome.html:396
 msgid "Looks right, continue"
 msgstr "看起来没错，继续"
 
-#: src/app/web/templates/welcome.html:434
+#: src/app/web/templates/welcome.html:404
 msgid ""
 "Send a test DM now to check that Discord reminders work. If your DMs are "
 "blocked, we'll tell you here."
 msgstr "现在发送测试 DM，确认 Discord 提醒能否正常送达。如果 DM 被阻止，我们会在这里告诉你。"
 
-#: src/app/web/templates/welcome.html:439
+#: src/app/web/templates/welcome.html:409
 msgid "Send test DM"
 msgstr "发送测试 DM"
 
-#: src/app/web/templates/welcome.html:448
+#: src/app/web/templates/welcome.html:418
 msgid ""
 "✅ <b>Test reminder.</b> If you can read this, test DMs are working. "
 "Deadline reminders will look like this and show both JST and your time "
 "zone."
 msgstr "✅ <b>测试提醒。</b>如果你能看到这条消息，测试 DM 可以正常送达。截止提醒也会采用这种格式，同时显示 JST 和你的时区时间。"
 
-#: src/app/web/templates/welcome.html:453
+#: src/app/web/templates/welcome.html:423
 msgid ""
 "The Discord bot isn't running in this environment\n"
 "  (dev mode), so DMs can't be tested here."
@@ -3555,36 +3555,45 @@ msgstr ""
 "此环境中未运行 Discord 机器人\n"
 "  （开发模式），因此无法在这里测试 DM。"
 
-#: src/app/web/templates/welcome.html:466
+#: src/app/web/templates/welcome.html:436
 msgid "Get your calendar feed"
 msgstr "获取你的日历订阅"
 
-#: src/app/web/templates/welcome.html:467
+#: src/app/web/templates/welcome.html:437
 msgid ""
 "Add this feed to your phone or calendar app to keep your reminder "
 "deadlines updated. It gives you a backup to Discord DMs."
 msgstr "将此订阅添加到手机或日历应用后，你设置提醒的截止时间会自动更新。它也可以作为 Discord DM 的备用方式。"
 
-#: src/app/web/templates/welcome.html:472
+#: src/app/web/templates/welcome.html:442
 msgid "✓ Your feed link is ready — save it now, it won't be shown again."
 msgstr "✓ 订阅链接已就绪 — 请立即保存，它不会再次显示。"
 
-#: src/app/web/templates/welcome.html:477
+#: src/app/web/templates/welcome.html:447
 msgid "Add it in Google Calendar, Apple Calendar, or Outlook."
 msgstr "请在 Google 日历、Apple 日历或 Outlook 中添加。"
 
-#: src/app/web/templates/welcome.html:481
+#: src/app/web/templates/welcome.html:451
 msgid "Your feed is active."
 msgstr "你的订阅已启用。"
 
-#: src/app/web/templates/welcome.html:491
+#: src/app/web/templates/welcome.html:461
 msgid "You're ready. Next, choose which events you plan to attend."
 msgstr "准备完成。接下来，请选择你计划参加的活动。"
 
-#: src/app/web/templates/welcome.html:492
+#: src/app/web/templates/welcome.html:462
 msgid "Continue to my events"
 msgstr "前往我的活动"
 
 #~ msgid "Remove this leg"
 #~ msgstr "删除此场次"
+
+#~ msgid "day(s)"
+#~ msgstr "天"
+
+#~ msgid "hour(s)"
+#~ msgstr "小时"
+
+#~ msgid "each"
+#~ msgstr "每"
 

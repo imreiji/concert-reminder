@@ -156,6 +156,40 @@ async def test_delivery_status_pills(client):
     assert "calendar feed" in r.text.lower()  # calendar status pill (active or off)
 
 
+async def test_reminder_sentence_slot_order_en(client):
+    """The reminder rule reads as a sentence built from locale-ordered slots.
+    In English the day/hour selects come before the anchor select, and the
+    `each` fragment sits between the direction and anchor selects."""
+    await seed(client.db)
+    login_as(client, USER_A, "reiji")
+    r = client.get("/preferences")
+    # A preset must exist for a rule row to render; the "New preset" fold
+    # always carries a blank sentence_fields even with no presets.
+    assert 'name="days"' in r.text and 'name="anchor"' in r.text
+    assert r.text.index('name="days"') < r.text.index('name="anchor"')
+    assert "each" in r.text  # the EN pattern's between-slots text
+
+
+async def test_reminder_sentence_slot_order_ja(client):
+    """Under ja the pattern reorders the slots -- the anchor select leads and
+    the day/hour selects follow -- and the translated pattern text renders."""
+    from app import i18n
+
+    i18n.reset_catalog_cache()
+    try:
+        await seed(client.db)
+        login_as(client, USER_A, "reiji")
+        client.cookies.set("lang", "ja")
+        r = client.get("/preferences")
+        # ja: 各{anchor}の{days}日{hours}時間{direction}に通知。 -> anchor before days.
+        assert r.text.index('name="anchor"') < r.text.index('name="days"')
+        # Translated pattern fragments appear (proves it went through slots).
+        assert "に通知" in r.text
+        assert "日" in r.text
+    finally:
+        i18n.reset_catalog_cache()
+
+
 async def test_time_has_two_selects(client):
     """The Time section is the demo's two-select layout: zone + detection."""
     await seed(client.db)

@@ -255,6 +255,36 @@ async def test_step_1_malformed_row_returns_422_not_500(client):
     assert presets == []
 
 
+def test_step_1_sentence_slot_order_en(client):
+    """The reminder rows read as sentences built from locale-ordered slots. In
+    English the offset select precedes the anchor select."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    r = client.get("/welcome")
+    assert 'data-role="offset"' in r.text and 'data-role="anchor"' in r.text
+    assert r.text.index('data-role="offset"') < r.text.index('data-role="anchor"')
+
+
+def test_step_1_clone_template_present_and_translated_under_ja(client):
+    """The JS clones a server-rendered <template id="remrule-template"> instead
+    of assembling English DOM. Under ja it must exist and carry the translated
+    pattern text, and the slot order flips (anchor select before offset)."""
+    from app import i18n
+
+    i18n.reset_catalog_cache()
+    try:
+        login_as(client, FAN_ID, "fan")
+        client.post("/welcome/advance")  # step 0 -> 1
+        client.cookies.set("lang", "ja")
+        r = client.get("/welcome")
+        assert 'id="remrule-template"' in r.text
+        # ja: {anchor}の{offset}{direction}に通知。 -> anchor before offset.
+        assert r.text.index('data-role="anchor"') < r.text.index('data-role="offset"')
+        assert "に通知" in r.text  # translated pattern text, not English DOM
+    finally:
+        i18n.reset_catalog_cache()
+
+
 async def test_welcome_shows_step_2_timezone(client):
     login_as(client, FAN_ID, "fan")
     client.post("/welcome/advance")  # 0 -> 1
