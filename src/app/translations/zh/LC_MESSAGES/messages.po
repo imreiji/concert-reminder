@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 02:11-0300\n"
+"POT-Creation-Date: 2026-07-24 02:27-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -256,21 +256,21 @@ msgstr "需要管理员权限。"
 msgid "**{name}** is now an editor."
 msgstr "**{name}** 现在是编辑者。"
 
-#: src/app/bot/cogs/admin.py:66
+#: src/app/bot/cogs/admin.py:67
 #, python-brace-format
 msgid "**{name}** is managed through EDITOR_WHITELIST. Edit `.env` to change it."
 msgstr "**{name}** 由 EDITOR_WHITELIST 管理。请编辑 `.env` 进行更改。"
 
-#: src/app/bot/cogs/admin.py:76
+#: src/app/bot/cogs/admin.py:77
 #, python-brace-format
 msgid "**{name}** is no longer an editor."
 msgstr "**{name}** 已不再是编辑者。"
 
-#: src/app/bot/cogs/admin.py:86 src/app/web/templates/preferences.html:428
+#: src/app/bot/cogs/admin.py:87 src/app/web/templates/preferences.html:428
 msgid "No editors yet."
 msgstr "还没有编辑者。"
 
-#: src/app/bot/cogs/admin.py:88
+#: src/app/bot/cogs/admin.py:89
 msgid "env"
 msgstr "env"
 
@@ -2027,12 +2027,12 @@ msgstr "或粘贴 AI 助手生成的草稿"
 
 #: src/app/web/templates/import_form.html:33
 msgid ""
-"Produced by the <code>add-event</code> skill — the agent merges the\n"
+"Produced by the <code>add-concert</code> skill — the agent merges the\n"
 "    official ticket page and eventernote into one trilingual draft. "
 "Nothing is saved\n"
 "    until you review and submit the next page."
 msgstr ""
-"由<code>add-event</code>技能生成 — AI 助手会将官方售票页面和 eventernote "
+"由<code>add-concert</code>技能生成 — AI 助手会将官方售票页面和 eventernote "
 "合并为一份三语草稿。只有在你检查并提交下一页后，内容才会保存。"
 
 #: src/app/web/templates/import_form.html:40
@@ -2046,11 +2046,11 @@ msgstr "预览草稿"
 #: src/app/web/templates/import_form.html:47
 msgid ""
 "Drafting with an agent elsewhere? <a class=\"more\" "
-"href=\"/concerts/import/skill.zip\">Download the add-event skill</a> "
+"href=\"/concerts/import/skill.zip\">Download the add-concert skill</a> "
 "(zip)."
 msgstr ""
 "正在其他地方使用 AI 助手起草？<a class=\"more\" href=\"/concerts/import/skill.zip\">下载"
-" add-event 技能</a>（zip）。"
+" add-concert 技能</a>（zip）。"
 
 #: src/app/web/templates/import_form.html:50
 msgid ""
