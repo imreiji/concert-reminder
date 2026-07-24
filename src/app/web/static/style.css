@@ -124,6 +124,10 @@ button.langtoggle { font-family: inherit; cursor: pointer; margin: 0; }
 button.langtoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; font-size: .9rem; }
+/* Preferences/Log out carry both a text label (.nav-lbl) and an aria-hidden
+   glyph (.nav-ico); the glyph is hidden everywhere EXCEPT the tablet band,
+   which swaps the two (see the 701-1040 section near the mobile block). */
+.nav-ico { display: none; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; }
 .badge { color: var(--ok); font-style: normal; font-size: .8em; border: 1px solid currentColor; padding: 0 .3em; border-radius: 4px; }
 
@@ -279,7 +283,12 @@ button.x:hover { color: var(--danger); opacity: 1; }
 
 /* Phase 11: layout, tiles, subscription box, sentence builder */
 .layout { display: grid; grid-template-columns: 15rem 1fr; gap: 2rem; align-items: start; }
-@media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+/* Collapses to one column across the WHOLE tablet band and below (was 760;
+   the fixed 15rem sidebar squeezed the content column at 820, per the tablet
+   spec). Coupled to the .fsheet flip below at the identical 1040/1041
+   boundary -- see that comment. Stays its own max-width query (not folded
+   into the 701-1040 tablet section) because phones need the collapse too. */
+@media (max-width: 1040px) { .layout { grid-template-columns: 1fr; } }
 
 /* Discover's filter sheet (.fsheet, a native <details> wrapping the sidebar
    controls -- see discover.html and the mobile CSS section further down).
@@ -292,10 +301,13 @@ button.x:hover { color: var(--danger); opacity: 1; }
    the plain sidebar block both directions. */
 .fsheet > summary { list-style: none; cursor: pointer; }
 .fsheet > summary::-webkit-details-marker { display: none; }
-/* 761px, not 701 -- must track .layout's own collapse point (line 263)
-   exactly, see the longer comment at the mobile @media (max-width: 760px)
-   .fsheet rules further down. */
-@media (min-width: 761px) {
+/* 1041px, not 701 -- must track .layout's own collapse point (the
+   @media (max-width: 1040px) rule just above) exactly, so the desktop
+   two-column layout and the fsheet-as-sidebar presentation flip on the
+   identical boundary. Below it (the whole tablet band + phone) the summary
+   shows and the fsheet is a disclosure, styled in the 701-1040 tablet
+   section and the phone @media (max-width: 760px) .fsheet block. */
+@media (min-width: 1041px) {
   .fsheet { order: -1; }
   .fsheet > summary { display: none; }
 }
@@ -823,14 +835,9 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 }
 .foot-note b { color: var(--ink); font-weight: 600; }
 
-@media (max-width: 1024px) {
-  .rowhead, .deadline-rows .row { grid-template-columns: 6.5rem 12rem 1fr 14rem; }
-  .rowhead span:nth-child(4), .row .act-c { display: none; }
-}
-@media (max-width: 960px) {
-  .board { grid-template-columns: repeat(2, 1fr); }
-  .peek { grid-template-columns: repeat(2, 1fr); }
-}
+/* The old 1024 (coming-up rows) and 960 (.board/.peek 2-col) breakpoints
+   lived here; both are absorbed into the single tablet-band section near the
+   mobile block (search "Tablet band (701"). */
 
 /* -- Concert page ---------------------------------------------------------
    Same token vocabulary as Home; nothing new is invented here. The page has
@@ -1413,6 +1420,87 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 }
 .feedbox .frow { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 
+/* ── Tablet band (701–1040px) ────────────────────────────────────────────
+   Spec: docs/superpowers/specs/2026-07-24-tablet-band-design.md; visual
+   reference: docs/superpowers/demo/dekimasen-tablet-demo.html. ONE bounded
+   section, mirroring the mobile discipline below: every rule that patches the
+   701-1040 band lives here, so desktop (>1040) and phone (<=700) stay
+   untouched by construction.
+
+   It ABSORBS the two breakpoints that existed only to patch this band -- the
+   old max-width:1024 (coming-up rows) and max-width:960 (.board/.peek 2-col).
+   Three band-touching rules stayed OUTSIDE this section ON PURPOSE, because
+   they serve phones legitimately too and moving them here would un-apply them
+   below 701: the max-width:900 .rnd2/.standing stack, the max-width:860
+   .plyt/.prail strip, and the .layout collapse (now max-width:1040, coupled
+   to the .fsheet summary-flip at min-width:1041 -- both must also reach
+   phones, and a min-width rule cannot live in a max-width section). The
+   phone bottom-sheet .fsheet block (max-width:760) also stays put; in this
+   band the fsheet is an inline disclosure panel, styled below. */
+@media (min-width: 701px) and (max-width: 1040px) {
+  /* T2 -- compact header: one row, never wraps under ja/zh. */
+  header.site a.home .mark { white-space: nowrap; }
+  header.site a.home .wordmark { display: none; }   /* keep the できません mark alone */
+  header.site nav.auth > span { display: none; }     /* username text; the avatar stays */
+  /* Preferences/Log out go icon-only: label hides, the aria-hidden glyph
+     shows, the anchor keeps its name via aria-label/title (base.html). */
+  header.site nav.auth a.btn.quiet { padding: .35rem .5rem; }
+  header.site nav.auth .nav-lbl { display: none; }
+  header.site nav.auth .nav-ico { display: inline-flex; font-size: 1rem; line-height: 1; }
+
+  /* T3 -- campaign board -> horizontal swipe rail (demo .board-scroll/
+     .board-swipe). Same shape as the phone .board carousel below, adapted to
+     full-width 280px columns with proximity snap and a thin visible bar; the
+     columns overflow the band width, so the fourth peeks at the right edge to
+     signal more. grid-template-columns:none neutralises the desktop
+     repeat(4,1fr) so grid-auto-columns sizes the columns. */
+  .board {
+    grid-template-columns: none;
+    display: grid; grid-auto-flow: column; grid-auto-columns: 280px;
+    gap: 1rem; align-items: start;
+    overflow-x: auto; scroll-snap-type: x proximity;
+    padding-bottom: .6rem; scrollbar-width: thin;
+  }
+  .board > .col { scroll-snap-align: start; }
+
+  /* .peek keeps the old 960 rule's 2-col (phone drops it to 1fr below). */
+  .peek { grid-template-columns: repeat(2, 1fr); }
+
+  /* T5 -- coming-up rows keep their context: drop the what-happens COLUMN
+     (demo's 4-track grid) but fold its text into the title's small line via
+     data-happens, rather than the old 1024 rule's outright display:none with
+     no replacement. Scoped to .deadline-rows so the ::after never lands on
+     #rules rows or any other .row .title-c small (their attr(data-happens) is
+     empty and would paint a stray separator). */
+  .rowhead, .deadline-rows .row { grid-template-columns: 6.5rem 10.5rem 1fr 14rem; }
+  .rowhead span:nth-child(4), .deadline-rows .row .act-c { display: none; }
+  .deadline-rows .row .title-c small::after { content: " \00b7 " attr(data-happens); }
+
+  /* T4 -- Discover: .layout already collapsed to one column (the 1040 rule);
+     the filter sheet's summary shows (the 1041 flip no longer hides it) and
+     the sidebar renders as an inline bordered disclosure panel (demo's
+     .sheetbody look). order:-1 lifts the whole disclosure above the content,
+     matching the phone's Filters-first placement. The real .fsheet-panel is
+     discover.html's sidebar markup unchanged -- a single vertical column
+     (the demo's multi-column .grp grid needs wrapper elements the real
+     sidebar doesn't have, and restructuring it is out of scope). */
+  .fsheet { order: -1; }
+  .fsheet > summary {
+    display: inline-flex; align-items: center; gap: .5rem;
+    font-size: .8125rem; font-weight: 600; color: var(--ink);
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .45rem .8rem;
+  }
+  .fsheet > summary::before {
+    content: "\25B8"; color: var(--dim); transition: transform 150ms ease;
+  }
+  .fsheet[open] > summary::before { transform: rotate(90deg); }
+  .fsheet-panel {
+    margin-top: .75rem; padding: 1rem 1.1rem;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
+  }
+}
+
 /* ── Mobile (≤700px) ─────────────────────────────────────────────────────
    Spec: docs/superpowers/specs/2026-07-21-mobile-view-design.md; visual
    reference: docs/superpowers/demo/dekimasen-mobile-demo.html. Everything
@@ -1494,6 +1582,12 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      classes .act/.done inside .acts, see _capture_actions.html) go full-width
      and >=44px tall instead of the desktop's small inline pills. */
   .rowhead { display: none; }
+  /* The what-happens cell: dropped on phone (the card has no room for it),
+     exactly as before. This hide used to ride on the shared max-width:1024
+     rule, which the tablet-band section replaced -- so the phone keeps its
+     own copy here rather than inheriting it. The tablet band instead FOLDS
+     this text into the title via data-happens; the phone does not. */
+  .deadline-rows .row .act-c { display: none; }
   .deadline-rows { border-top: 0; }
   .deadline-rows .row {
     grid-template-columns: 1fr auto; gap: .3rem .75rem;
@@ -1627,14 +1721,15 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   .pick, .remcards { grid-template-columns: 1fr; }
 }
 
-/* The .fsheet component switches modes at 760px, NOT the phone breakpoint
-   (700px) used above -- it must track exactly where .layout itself collapses
-   to one column (line 263: `@media (max-width: 760px) { .layout {
-   grid-template-columns: 1fr; } }`). If .fsheet switched at 700 while
-   .layout switched at 760, the 701-760px band would render .layout as a
-   single stacked column (tablet mode) while .fsheet's desktop rules
-   (`order: -1`, summary hidden) still applied -- putting the full filters
-   panel above the tiles with no toggle to collapse it. */
+/* This block presents .fsheet as a phone BOTTOM SHEET, and its 760px
+   boundary now marks the phone/tablet presentation split, NOT .layout's
+   collapse point. .layout collapses at 1040 and the fsheet summary-flip is
+   at 1041 (the two coupled rules further up) -- so the whole band + phone is
+   one column with the summary shown. Within that: <=760 is this bottom
+   sheet; 761-1040 is the tablet inline disclosure panel (the 701-1040
+   tablet-band section, search "Tablet band (701"). The 760 here must stay in
+   lockstep with discover.html's matchMedia("(max-width: 760px)"), which adds
+   the .fsheet-js class these rules gate on -- change one, change both. */
 @media (max-width: 760px) {
   /* With JS (sheet mode) the fsheet is just its small Filters button, so it
      moves ABOVE the content column, per the demo's filter row -- content is

@@ -7,6 +7,7 @@ guards ("the demo's token is present"), the CSS equivalent of the project's
 the toggle control and the pill nav actually reach the page.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -68,6 +69,32 @@ def test_style_ports_the_demos_dark_paper_hex():
     # The dark palette is the demo's, not a naive invert -- pin one hex so a
     # future "simplify" can't quietly swap it.
     assert "#17161a" in css()
+
+
+# ── Tablet band (701–1040px): one bounded section, no scattered breakpoints ──
+
+
+def test_tablet_band_section_exists():
+    # The band's rules live in ONE banner-commented section, the same
+    # single-bounded-section discipline as the mobile block. Pin the banner
+    # and the exact media query so a future edit can't quietly scatter band
+    # rules back into ad-hoc breakpoints.
+    text = css()
+    assert "Tablet band (701" in text, "the tablet-band banner comment must exist"
+    assert "@media (min-width: 701px) and (max-width: 1040px) {" in text
+
+
+def test_no_scattered_max_width_breakpoints_reappear():
+    # Count actual `@media (max-width: Npx) {` rule blocks (not comment
+    # mentions, and not the tablet band, which is written min-width-first so
+    # it is deliberately excluded from this max-width tally). The tablet work
+    # absorbed the old 1024 and 960 breakpoints; what remains is:
+    #   1040 (.layout collapse), 900 (.rnd2), 860 (.plyt), 700 (mobile),
+    #   380 (nested, inside the 700 block), 760 (.fsheet bottom sheet) = 6.
+    # A new scattered breakpoint bumps this and fails the guard, which is the
+    # point -- band rules belong in the one section above, not a fresh query.
+    blocks = re.findall(r"@media \(max-width: \d+px\) \{", css())
+    assert len(blocks) == 6, f"expected 6 max-width media blocks, found {len(blocks)}: {blocks}"
 
 
 # ── header render ──────────────────────────────────────────────────────────

@@ -212,8 +212,10 @@
    the first thing seen; with JS disabled it stays `open` (set above), i.e.
    the no-JS fallback is the filters rendered in-flow after the tiles,
    fully functional, just not sheet-shaped. The breakpoint here (760px) must
-   match .fsheet's own CSS breakpoint (style.css), which tracks .layout's
-   collapse point, not the 700px phone breakpoint used elsewhere. The
+   match the .fsheet BOTTOM-SHEET CSS block (style.css @media max-width:760),
+   which marks the phone/tablet presentation split -- NOT .layout's collapse
+   (now 1040) nor the 700px phone breakpoint used elsewhere. At 761-1040 the
+   sheet stays open and renders as the tablet inline disclosure panel. The
    fsheet-js class is the JS-confirmed signal style.css gates the overlay/
    fixed-sheet presentation on -- without it (JS off), an open .fsheet stays
    a plain in-flow block, never the fixed bottom sheet + dark overlay. #}
