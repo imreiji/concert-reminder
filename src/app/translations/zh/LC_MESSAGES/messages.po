@@ -17,7 +17,7 @@ msgstr ""
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:32
 #: src/app/bot/views.py:175 src/app/db/service.py:830
 msgid "opens"
-msgstr "开放申请"
+msgstr "申请开始"
 
 #: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:33
 #: src/app/bot/views.py:177 src/app/db/service.py:831
@@ -74,12 +74,12 @@ msgstr "场馆"
 
 #: src/app/bot/messages.py:113
 msgid "First deadline"
-msgstr "首个截止"
+msgstr "首个截止时间"
 
 #: src/app/bot/messages.py:121 src/app/bot/messages.py:147
 #: src/app/bot/messages.py:189
 msgid "Open on dekimasen.app"
-msgstr "在 dekimasen.app 打开"
+msgstr "在 dekimasen.app 中打开"
 
 #: src/app/bot/messages.py:142
 msgid "A performance you had a reminder for was cancelled, and it's been cleared."
@@ -100,11 +100,11 @@ msgstr "设置我的提醒"
 #: src/app/bot/views.py:78
 #, python-brace-format
 msgid "Done — {n} reminder(s) set from your default preset."
-msgstr "完成 — 已根据你的默认预设设置 {n} 条提醒。"
+msgstr "完成 — 已按你的默认预设设置了 {n} 条提醒。"
 
 #: src/app/bot/views.py:79
 msgid "You already have reminders on this event."
-msgstr "你在此活动上已有提醒。"
+msgstr "你已经为这场活动设置了提醒。"
 
 #: src/app/bot/views.py:80
 msgid "You have no default preset — mark one with ★ in Preferences."
@@ -117,34 +117,34 @@ msgstr "删除这些提醒"
 #: src/app/bot/views.py:106
 #, python-brace-format
 msgid "Removed {n} reminder(s) for this event — you won't be pinged about it."
-msgstr "已删除此活动的 {n} 条提醒 — 你不会再收到相关通知。"
+msgstr "已删除这场活动的 {n} 条提醒 — 你不会再收到相关通知。"
 
 #: src/app/bot/views.py:107
 msgid "You had no reminders on this event."
-msgstr "你在此活动上没有提醒。"
+msgstr "你没有为这场活动设置提醒。"
 
 #: src/app/bot/views.py:117
 msgid "Reinstate my reminders"
-msgstr "恢复我的提醒"
+msgstr "重新开启提醒"
 
 #: src/app/bot/views.py:133
 #, python-brace-format
 msgid ""
 "Reinstated {n} reminder(s) — you'll be notified again per your existing "
 "settings for any that are still active."
-msgstr "已恢复 {n} 条提醒 — 仍然有效的部分将按你现有的设置再次通知你。"
+msgstr "已重新开启 {n} 条提醒。仍有效的提醒会按照你当前的设置再次通知你。"
 
 #: src/app/bot/views.py:135
 msgid "You had no reminders set up on this event."
-msgstr "你在此活动上没有设置过提醒。"
+msgstr "你没有为这场活动设置过提醒。"
 
 #: src/app/bot/views.py:145
 msgid "Show all deadlines"
-msgstr "显示所有截止"
+msgstr "显示所有截止时间"
 
 #: src/app/bot/views.py:163
 msgid "That event no longer exists."
-msgstr "该活动已不存在。"
+msgstr "这场活动已不存在。"
 
 #: src/app/bot/views.py:170
 msgid "cancelled"
@@ -156,11 +156,11 @@ msgstr "结果"
 
 #: src/app/bot/views.py:193
 msgid "No deadlines entered yet."
-msgstr "尚未录入任何截止。"
+msgstr "尚未录入任何截止时间。"
 
 #: src/app/bot/views.py:202
 msgid "Snooze 1 day"
-msgstr "延后 1 天"
+msgstr "1 天后再提醒"
 
 #: src/app/bot/views.py:218
 msgid "Snoozed — I'll remind you again in 24 hours."
@@ -188,11 +188,11 @@ msgstr "收到 — 已标记为已申请！"
 
 #: src/app/bot/views.py:263
 msgid "Didn't apply"
-msgstr "未申请"
+msgstr "我没申请"
 
 #: src/app/bot/views.py:275
 msgid "No worries — you won't get results/payment reminders for this one."
-msgstr "没问题 — 你不会收到此项的结果/付款提醒。"
+msgstr "没问题 — 你不会收到这个活动的结果或付款提醒。"
 
 #: src/app/bot/views.py:284 src/app/web/templates/_deadline_rows.html:22
 #: src/app/web/templates/_round_rows.html:26
@@ -212,7 +212,7 @@ msgstr "落选"
 msgid ""
 "Sorry to hear it — no payment reminder needed, and I'll let you know when"
 " the next round opens if there is one."
-msgstr "很遗憾 — 无需付款提醒；若有下一轮，我会在它开放时通知你。"
+msgstr "很遗憾 — 无需付款提醒；如果还有下一轮，我会在开放申请时通知你。"
 
 #: src/app/bot/views.py:327 src/app/web/templates/_capture_actions.html:72
 #: src/app/web/templates/home.html:165 src/app/web/templates/home.html:171
@@ -256,7 +256,7 @@ msgstr "**{name}** 现在是编辑者。"
 #: src/app/bot/cogs/admin.py:66
 #, python-brace-format
 msgid "**{name}** is env-managed (EDITOR_WHITELIST) — edit `.env` instead."
-msgstr "**{name}** 由环境变量管理（EDITOR_WHITELIST）— 请改为编辑 `.env`。"
+msgstr "**{name}** 由 EDITOR_WHITELIST 管理。请编辑 `.env` 进行更改。"
 
 #: src/app/bot/cogs/admin.py:76
 #, python-brace-format
@@ -281,7 +281,7 @@ msgstr "编辑者"
 
 #: src/app/bot/cogs/ping.py:27
 msgid "viewer"
-msgstr "访客"
+msgstr "查看者"
 
 #: src/app/bot/cogs/ping.py:30
 #, python-brace-format
@@ -291,7 +291,7 @@ msgstr "pong — 延迟 {ms:.0f}ms — 你是 **{role}**"
 #: src/app/bot/cogs/reminders.py:44
 #, python-brace-format
 msgid "Nothing opens or closes in the next {days} days. 平和ですね。"
-msgstr "接下来 {days} 天没有任何开放或截止。天下太平。"
+msgstr "接下来 {days} 天内没有任何申请开始或截止。天下太平。"
 
 #: src/app/bot/cogs/reminders.py:63
 #, python-brace-format
@@ -304,15 +304,15 @@ msgstr "暂无即将到来的安排。"
 
 #: src/app/bot/cogs/reminders.py:93
 msgid "No upcoming deadlines on your reminders. `/remindme` to add one."
-msgstr "你的提醒中没有即将到来的截止。用 `/remindme` 添加一个。"
+msgstr "你的提醒中没有即将到来的截止时间。使用 `/remindme` 添加一个。"
 
 #: src/app/bot/cogs/reminders.py:104
 msgid "Your upcoming deadlines"
-msgstr "你即将到来的截止"
+msgstr "你接下来的截止时间"
 
 #: src/app/bot/cogs/reminders.py:132
 msgid "That concert doesn't exist (deleted?)."
-msgstr "该演出不存在（已删除？）。"
+msgstr "这场活动不存在（可能已被删除）。"
 
 #: src/app/bot/cogs/reminders.py:147
 msgid "same day"
@@ -326,7 +326,7 @@ msgstr "{n} 天前"
 #: src/app/bot/cogs/reminders.py:149
 #, python-brace-format
 msgid "Done — I'll DM you {when} each **{anchor}** for **{title}**."
-msgstr "完成 — 我会在 **{title}** 每个 **{anchor}** 的{when}给你发私信。"
+msgstr "完成 — 我会在 **{title}** 每次 **{anchor}** 的{when}给你发 DM。"
 
 #: src/app/bot/cogs/reminders.py:183
 msgid "No rules yet — `/remindme` to create one."
@@ -340,12 +340,12 @@ msgstr "第 {n} 轮"
 #: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:194
 #: src/app/web/templates/welcome.html:154
 msgid "before"
-msgstr "之前"
+msgstr "提前"
 
 #: src/app/bot/cogs/reminders.py:191 src/app/web/templates/preferences.html:195
 #: src/app/web/templates/welcome.html:155
 msgid "after"
-msgstr "之后"
+msgstr "延后"
 
 #: src/app/bot/cogs/reminders.py:192
 msgid "same-day"
@@ -353,11 +353,11 @@ msgstr "当天"
 
 #: src/app/db/service.py:838
 msgid "Lottery round"
-msgstr "抽选"
+msgstr "抽选轮次"
 
 #: src/app/db/service.py:839
 msgid "Eligibility item sale"
-msgstr "资格商品发售"
+msgstr "抽选资格商品发售"
 
 #: src/app/db/service.py:840
 msgid "Stream ticket sale"
@@ -381,7 +381,7 @@ msgstr "先到先得"
 
 #: src/app/db/service.py:845
 msgid "Overseas tour package"
-msgstr "海外巡演套餐"
+msgstr "海外观演旅行套餐"
 
 #: src/app/db/service.py:846
 msgid "Upgrade round"
@@ -415,7 +415,7 @@ msgstr "{n}分"
 #: src/app/db/service.py:2403
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
-msgstr "升级中签 — 于 {day} 前付款"
+msgstr "升级中签 — 最迟于 {day} 付款"
 
 #: src/app/db/service.py:2404
 msgid "Upgrade won — payment due"
@@ -432,19 +432,19 @@ msgstr "升级 · {n}后截止"
 
 #: src/app/db/service.py:2429
 msgid "Upgrade · Open now"
-msgstr "升级 · 现正开放"
+msgstr "升级 · 申请开放中"
 
 #: src/app/db/service.py:2435 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:23
 #: src/app/web/templates/_round_rows.html:27
 #: src/app/web/templates/home.html:160
 msgid "Secured"
-msgstr "已确保"
+msgstr "已获票"
 
 #: src/app/db/service.py:2446
 #, python-brace-format
 msgid "Won — pay by {day}"
-msgstr "中签 — 于 {day} 前付款"
+msgstr "中签 — 最迟于 {day} 付款"
 
 #: src/app/db/service.py:2447
 msgid "Won — payment due"
@@ -463,7 +463,7 @@ msgstr "{kind} · {n}后截止"
 #: src/app/db/service.py:2481
 #, python-brace-format
 msgid "{kind} · Open now"
-msgstr "{kind} · 现正开放"
+msgstr "{kind} · 开放中"
 
 #: src/app/db/service.py:2487
 #, python-brace-format
@@ -472,7 +472,7 @@ msgstr "{kind} · {n}后开放"
 
 #: src/app/db/service.py:2494
 msgid "All rounds closed"
-msgstr "所有轮次已截止"
+msgstr "所有轮次均已截止"
 
 #: src/app/db/service.py:3719 src/app/web/templates/concert_edit.html:38
 #: src/app/web/templates/concert_edit.html:189
@@ -500,12 +500,12 @@ msgstr "备注"
 #: src/app/db/service.py:3729
 #, python-brace-format
 msgid "Leg {n} label"
-msgstr "场次{n}名称"
+msgstr "场次 {n} 名称"
 
 #: src/app/db/service.py:3734
 #, python-brace-format
 msgid "Round {n} label"
-msgstr "轮次{n}名称"
+msgstr "轮次 {n} 名称"
 
 #: src/app/db/service.py:3743
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -531,23 +531,23 @@ msgstr "城市"
 #: src/app/web/routes/discover.py:55 src/app/web/templates/_board.html:20
 #: src/app/web/templates/home.html:127
 msgid "Open now"
-msgstr "现正开放"
+msgstr "申请开放中"
 
 #: src/app/web/routes/discover.py:56
 msgid "Opening soon"
-msgstr "即将开放"
+msgstr "即将开始申请"
 
 #: src/app/web/routes/discover.py:57
 msgid "Not tracking"
-msgstr "未追踪"
+msgstr "未关注"
 
 #: src/app/web/routes/discover.py:65
 msgid "Event date"
-msgstr "演出日期"
+msgstr "活动日期"
 
 #: src/app/web/routes/discover.py:66
 msgid "Next deadline"
-msgstr "下个截止"
+msgstr "下一个截止时间"
 
 #: src/app/web/routes/discover.py:67
 msgid "Recently added"
@@ -555,7 +555,7 @@ msgstr "最近添加"
 
 #: src/app/web/routes/welcome.py:64
 msgid "applications open"
-msgstr "开放申请"
+msgstr "申请开始"
 
 #: src/app/web/routes/welcome.py:64
 msgid "applications close"
@@ -575,11 +575,11 @@ msgstr "演出开始"
 
 #: src/app/web/routes/welcome.py:69
 msgid "the opening"
-msgstr "开放申请"
+msgstr "申请开始"
 
 #: src/app/web/routes/welcome.py:69
 msgid "the deadline"
-msgstr "截止"
+msgstr "截止时间"
 
 #: src/app/web/routes/welcome.py:69
 msgid "the results"
@@ -587,7 +587,7 @@ msgstr "结果公布"
 
 #: src/app/web/routes/welcome.py:70
 msgid "the payment deadline"
-msgstr "付款截止"
+msgstr "付款截止时间"
 
 #: src/app/web/routes/welcome.py:70
 msgid "the show"
@@ -602,7 +602,7 @@ msgstr "已申请"
 
 #: src/app/web/templates/_board.html:22 src/app/web/templates/home.html:151
 msgid "Won — pay"
-msgstr "中签 — 付款"
+msgstr "中签 — 去付款"
 
 #: src/app/web/templates/_board.html:28
 msgid "lost"
@@ -631,15 +631,15 @@ msgstr "+还有 %(n)s 项 →"
 
 #: src/app/web/templates/_board.html:106
 msgid "Nothing here yet."
-msgstr "这里还什么都没有。"
+msgstr "这里暂时还没有内容。"
 
 #: src/app/web/templates/_board.html:111
 msgid "Nothing on your board yet."
-msgstr "你的看板上还什么都没有。"
+msgstr "你的看板上暂时还没有内容。"
 
 #: src/app/web/templates/_board.html:111
 msgid "Find concerts to follow →"
-msgstr "寻找要关注的演出 →"
+msgstr "查找想关注的活动 →"
 
 #: src/app/web/templates/_board_summary.html:12
 #, python-format
@@ -649,7 +649,7 @@ msgstr "%(n)s 项开放中"
 #: src/app/web/templates/_board_summary.html:13
 #, python-format
 msgid "%(n)s awaiting results"
-msgstr "%(n)s 项等待结果"
+msgstr "%(n)s 项等待结果公布"
 
 #: src/app/web/templates/_board_summary.html:14
 #, python-format
@@ -659,7 +659,7 @@ msgstr "%(n)s 项待付款"
 #: src/app/web/templates/_board_summary.html:15
 #, python-format
 msgid "%(n)s secured"
-msgstr "%(n)s 项已确保"
+msgstr "%(n)s 项已获票"
 
 #: src/app/web/templates/_capture_actions.html:33
 msgid "Not open yet"
@@ -702,20 +702,20 @@ msgstr "未申请"
 
 #: src/app/web/templates/_deadline_rows.html:31
 msgid "Your status"
-msgstr "你的状态"
+msgstr "你的申请状态"
 
 #: src/app/web/templates/_deadline_rows.html:31
 #: src/app/web/templates/preferences.html:200
 msgid "Closes"
-msgstr "截止"
+msgstr "截止时间"
 
 #: src/app/web/templates/_deadline_rows.html:31
 msgid "Concert"
-msgstr "演出"
+msgstr "活动"
 
 #: src/app/web/templates/_deadline_rows.html:32
 msgid "What happens"
-msgstr "内容"
+msgstr "状态说明"
 
 #: src/app/web/templates/_deadline_rows.html:32
 msgid "You"
@@ -723,7 +723,7 @@ msgstr "你"
 
 #: src/app/web/templates/_deadline_rows.html:60
 msgid "Nothing coming up on the concerts you follow."
-msgstr "你关注的演出暂无即将到来的安排。"
+msgstr "你关注的活动暂无即将到来的安排。"
 
 #: src/app/web/templates/_following_toggle.html:27
 #: src/app/web/templates/_following_toggle.html:57
@@ -736,11 +736,11 @@ msgstr "关注中"
 #: src/app/web/templates/_following_toggle.html:28
 #: src/app/web/templates/_following_toggle.html:59
 msgid "You will be reminded about every round below."
-msgstr "以下每一轮都会提醒你。"
+msgstr "你会收到以下每个轮次的提醒。"
 
 #: src/app/web/templates/_following_toggle.html:30
 msgid "Opt out of this concert?"
-msgstr "不再关注这场演出？"
+msgstr "不再关注此活动吗？"
 
 #: src/app/web/templates/_following_toggle.html:31
 #: src/app/web/templates/home.html:294
@@ -753,13 +753,13 @@ msgstr "关闭"
 msgid ""
 "You won this ticket. Payment is due %(when)s. Opting out stops\n"
 "      that reminder and forfeits the ticket."
-msgstr "你已中签这张票。付款截止为 %(when)s。取消关注会停止该提醒并放弃这张票。"
+msgstr "此门票已标记为“中签”。付款截止时间为 %(when)s。不再关注此活动后，该标记和付款提醒会被删除。"
 
 #: src/app/web/templates/_following_toggle.html:38
 msgid ""
 "You hold a ticket for this concert. Opting out forfeits it and stops its "
 "reminders."
-msgstr "你持有这场演出的票。取消关注即视为放弃，并停止其提醒。"
+msgstr "此活动已标记为“有票”。不再关注后，该标记和相关提醒会被删除。"
 
 #: src/app/web/templates/_following_toggle.html:43
 msgid "Keep following"
@@ -767,7 +767,7 @@ msgstr "继续关注"
 
 #: src/app/web/templates/_following_toggle.html:48
 msgid "Opt out and forfeit"
-msgstr "取消关注并放弃"
+msgstr "不再关注"
 
 #: src/app/web/templates/_following_toggle.html:67
 #: src/app/web/templates/setup.html:9 src/app/web/templates/welcome.html:8
@@ -780,7 +780,7 @@ msgstr "适用于"
 
 #: src/app/web/templates/_round_leg_chips.html:27
 msgid "Add a leg to assign this round to it."
-msgstr "添加一个场次以便将此轮次分配给它。"
+msgstr "添加场次后，即可将此轮次关联到该场次。"
 
 #: src/app/web/templates/_round_leg_chips.html:32
 msgid "Leg"
@@ -796,21 +796,21 @@ msgstr "搜索…"
 
 #: src/app/web/templates/_round_phrase_dialog.html:38
 msgid "Forget this label"
-msgstr "删除此名称"
+msgstr "删除此标签"
 
 #: src/app/web/templates/_round_phrase_dialog.html:42
 msgid "Labels you fill in all three languages are remembered here."
-msgstr "三种语言都填写的名称会保存在这里。"
+msgstr "三种语言都填写完整的标签会保存在这里。"
 
 #: src/app/web/templates/_round_phrase_dialog.html:51
 msgid "No labels match your search."
-msgstr "没有符合搜索的名称。"
+msgstr "没有符合搜索条件的标签。"
 
 #: src/app/web/templates/_round_qualifier_chips.html:27
 msgid ""
 "<b>Upgrade round.</b> Only people holding a ticket from a\n"
 "    qualifying round can enter."
-msgstr "<b>升级抽选。</b>只有持有符合条件轮次门票的人才能申请。"
+msgstr "<b>升级抽选。</b>只有持有符合条件轮次的门票者才能申请。"
 
 #: src/app/web/templates/_round_qualifier_chips.html:30
 msgid "Qualifies"
@@ -818,7 +818,7 @@ msgstr "符合条件"
 
 #: src/app/web/templates/_round_qualifier_chips.html:33
 msgid "Save the concert first, then a saved round can be picked here."
-msgstr "请先保存演出，之后已保存的轮次即可在此选择。"
+msgstr "请先保存活动，然后才能在此选择已保存的轮次。"
 
 #: src/app/web/templates/_round_qualifier_chips.html:41
 msgid ""
@@ -837,11 +837,11 @@ msgstr "轮次页面"
 #: src/app/web/templates/_round_rows.html:77
 #, python-format
 msgid "Requires a ticket from: %(names)s"
-msgstr "需要来自以下轮次的门票：%(names)s"
+msgstr "需要持有以下轮次的门票：%(names)s"
 
 #: src/app/web/templates/_round_rows.html:77
 msgid "Requires a ticket from an earlier round"
-msgstr "需要来自前一轮次的门票"
+msgstr "需要持有前一轮次的门票"
 
 #: src/app/web/templates/_round_rows.html:99
 msgid "Next for you"
@@ -876,11 +876,11 @@ msgstr "再次参加"
 
 #: src/app/web/templates/_round_rows.html:144
 msgid "Not going to this day"
-msgstr "不参加这一天"
+msgstr "不参加这一场"
 
 #: src/app/web/templates/_round_rows.html:148
 msgid "No rounds yet for this leg."
-msgstr "此场次还没有轮次。"
+msgstr "这个场次还没有轮次。"
 
 #: src/app/web/templates/_round_rows.html:159
 msgid "All legs"
@@ -892,7 +892,7 @@ msgstr "轮次"
 
 #: src/app/web/templates/_round_rows.html:165
 msgid "No performances yet."
-msgstr "还没有演出。"
+msgstr "还没有场次。"
 
 #: src/app/web/templates/_rules.html:4
 #, python-format
@@ -916,11 +916,11 @@ msgstr[0] "%(count)s 天前"
 #: src/app/web/templates/_rules.html:16
 #, python-format
 msgid "each %(anchor)s"
-msgstr "每个 %(anchor)s"
+msgstr "每次 %(anchor)s"
 
 #: src/app/web/templates/_rules.html:17
 msgid "DM &middot; applies to every round above"
-msgstr "私信 &middot; 适用于以上每一轮"
+msgstr "DM &middot; 适用于以上所有轮次"
 
 #: src/app/web/templates/_rules.html:22
 #: src/app/web/templates/preferences.html:227
@@ -930,11 +930,11 @@ msgstr "删除"
 
 #: src/app/web/templates/_rules.html:29
 msgid "No reminders for this concert yet."
-msgstr "此演出还没有提醒。"
+msgstr "此活动还没有提醒。"
 
 #: src/app/web/templates/_rules.html:33
 msgid "Rules here override your default preset for this concert only."
-msgstr "此处的规则仅对这场演出覆盖你的默认预设。"
+msgstr "此活动会优先使用这里的规则，而不是默认预设。"
 
 #: src/app/web/templates/_rules.html:39
 msgid "Add a reminder"
@@ -953,7 +953,7 @@ msgstr "提醒我"
 #: src/app/web/templates/_rules.html:55
 #, python-format
 msgid "Apply &ldquo;%(name)s&rdquo;"
-msgstr "应用“%(name)s”"
+msgstr "应用&ldquo;%(name)s&rdquo;"
 
 #: src/app/web/templates/_rules.html:58
 msgid "Edit presets"
@@ -984,7 +984,7 @@ msgstr "艺人"
 
 #: src/app/web/templates/_tag_picker_fields.html:21
 msgid "(auto-filled from groups — × anyone not performing)"
-msgstr "（由组合自动填充 — 用×移除未出演者）"
+msgstr "（由组合自动填充 — 未出演者请用 × 移除）"
 
 #: src/app/web/templates/_tag_picker_fields.html:23
 msgid "+ Add artist"
@@ -994,7 +994,7 @@ msgstr "+ 添加艺人"
 msgid ""
 "Missing a tag? Create it on the <a href=\"/tags\">tags page</a> first — "
 "concerts are tag-driven."
-msgstr "缺少某个标签？请先在<a href=\"/tags\">标签页</a>创建 — 演出是由标签驱动的。"
+msgstr "缺少标签？请先在<a href=\"/tags\">标签页</a>创建 — 所有活动均通过标签管理。"
 
 #: src/app/web/templates/_variant_gaps.html:24
 msgid "Not translated everywhere yet."
@@ -1002,12 +1002,12 @@ msgstr "尚未完成全部翻译。"
 
 #: src/app/web/templates/_variant_gaps.html:25
 msgid "You can still save — this is a reminder, not a block."
-msgstr "仍然可以保存——这只是提醒，不是限制。"
+msgstr "仍然可以保存 — 这只是提醒，不是限制。"
 
 #: src/app/web/templates/_variant_gaps.html:30
 #, python-format
 msgid "Missing %(language)s for: %(fields)s"
-msgstr "缺少%(language)s：%(fields)s"
+msgstr "缺少 %(language)s：%(fields)s"
 
 #: src/app/web/templates/_variant_guard.html:62
 #, python-brace-format
@@ -1087,12 +1087,12 @@ msgstr "偏好设置"
 
 #: src/app/web/templates/base.html:65
 msgid "Log out"
-msgstr "登出"
+msgstr "退出登录"
 
 #: src/app/web/templates/base.html:67 src/app/web/templates/home.html:82
 #: src/app/web/templates/home.html:195
 msgid "Sign in with Discord"
-msgstr "用 Discord 登录"
+msgstr "使用 Discord 登录"
 
 #: src/app/web/templates/base.html:74
 msgid ""
@@ -1100,8 +1100,8 @@ msgid ""
 "    settings to allow DMs from server members, or\n"
 "    <a href=\"/preferences\">test it from Preferences</a>."
 msgstr ""
-"你上一条 Discord 私信未能送达 — 请检查 Discord 隐私设置以允许来自服务器成员的私信，或<a "
-"href=\"/preferences\">在偏好设置中测试</a>。"
+"你上次的 Discord DM 未能送达 — 请检查 Discord 隐私设置，允许接收服务器成员的 DM，或<a "
+"href=\"/preferences\">在“偏好设置”中测试</a>。"
 
 #: src/app/web/templates/base.html:91
 msgid "Me"
@@ -1113,13 +1113,13 @@ msgstr "登录"
 
 #: src/app/web/templates/base.html:98
 msgid "Add concert"
-msgstr "添加演出"
+msgstr "添加活动"
 
 #: src/app/web/templates/base.html:102
 msgid ""
 "Times are entered in <strong>JST</strong> and shown as JST + your local "
 "time."
-msgstr "时间以<strong>日本标准时间（JST）</strong>输入，并以 JST 及你的当地时间显示。"
+msgstr "时间以<strong>JST</strong>输入，并同时显示 JST 和你的当地时间。"
 
 #: src/app/web/templates/base.html:103 src/app/web/templates/privacy.html:2
 #: src/app/web/templates/privacy.html:8
@@ -1134,12 +1134,12 @@ msgstr "服务条款"
 #: src/app/web/templates/base.html:144
 #, python-brace-format
 msgid "Delete tag {name} everywhere?"
-msgstr "在所有位置删除标签 {name}？"
+msgstr "确定在所有位置删除标签 {name} 吗？"
 
 #: src/app/web/templates/base.html:145
 #, python-brace-format
 msgid "Delete preset {name}?"
-msgstr "删除预设 {name}？"
+msgstr "确定删除预设 {name} 吗？"
 
 #: src/app/web/templates/concert_detail.html:35
 msgid "Links"
@@ -1183,7 +1183,7 @@ msgstr[0] "组合标签"
 #: src/app/web/templates/tags.html:53
 msgid "performer"
 msgid_plural "performers"
-msgstr[0] "表演者"
+msgstr[0] "出演者"
 
 #: src/app/web/templates/concert_detail.html:80
 #: src/app/web/templates/concert_detail.html:81
@@ -1215,11 +1215,11 @@ msgstr "编辑"
 
 #: src/app/web/templates/concert_edit.html:14
 msgid "title EN"
-msgstr "英文标题"
+msgstr "标题 EN"
 
 #: src/app/web/templates/concert_edit.html:15
 msgid "organizer"
-msgstr "主办"
+msgstr "主办方"
 
 #: src/app/web/templates/concert_edit.html:16
 msgid "categories"
@@ -1249,7 +1249,7 @@ msgstr "活动 ID"
 #: src/app/web/templates/concert_edit.html:39
 #: src/app/web/templates/concert_new.html:29
 msgid "(this event's URL — letters, digits, hyphens, underscores only)"
-msgstr "（此活动的 URL — 仅限字母、数字、连字符、下划线）"
+msgstr "（这场活动的 URL — 仅限字母、数字、连字符和下划线）"
 
 #: src/app/web/templates/concert_edit.html:42
 #: src/app/web/templates/concert_new.html:106
@@ -1273,7 +1273,7 @@ msgstr "轮次与场次"
 msgid ""
 "Where nearly every edit happens — a round gets announced\n"
 "      and needs adding. Times are JST."
-msgstr "几乎所有编辑都在这里进行 — 有轮次公布时便需添加。时间为 JST。"
+msgstr "这里是最常编辑的部分 — 每当公布新轮次时，都需要在此添加。时间为 JST。"
 
 #: src/app/web/templates/concert_edit.html:59
 #, python-format
@@ -1316,7 +1316,7 @@ msgstr "轮次名称"
 #: src/app/web/templates/import_preview.html:313
 #: src/app/web/templates/import_preview.html:316
 msgid "1st-round advance lottery"
-msgstr "第一轮先行抽选"
+msgstr "第 1 轮先行抽选"
 
 #: src/app/web/templates/concert_edit.html:84
 #: src/app/web/templates/concert_edit.html:321
@@ -1340,7 +1340,7 @@ msgstr "删除此轮次"
 #: src/app/web/templates/import_preview.html:174
 #: src/app/web/templates/import_preview.html:328
 msgid "Apply opens (JST)"
-msgstr "开放申请（JST）"
+msgstr "申请开始（JST）"
 
 #: src/app/web/templates/concert_edit.html:95
 #: src/app/web/templates/concert_edit.html:331
@@ -1385,7 +1385,7 @@ msgstr "备注（可选）"
 #: src/app/web/templates/concert_edit.html:108
 #: src/app/web/templates/concert_new.html:97
 msgid "No rounds yet — add the first one above."
-msgstr "还没有轮次 — 请在上方添加第一个。"
+msgstr "还没有轮次 — 请在上方添加第一个轮次。"
 
 #: src/app/web/templates/concert_edit.html:112
 msgid "Legs"
@@ -1393,7 +1393,7 @@ msgstr "场次"
 
 #: src/app/web/templates/concert_edit.html:112
 msgid "(one per show / day)"
-msgstr "（每场演出／每天一个）"
+msgstr "（每场演出或每天一个）"
 
 #: src/app/web/templates/concert_edit.html:123
 #: src/app/web/templates/concert_edit.html:127
@@ -1423,7 +1423,7 @@ msgstr "第 1 天"
 #: src/app/web/templates/import_preview.html:82
 #: src/app/web/templates/import_preview.html:275
 msgid "Performance label"
-msgstr "演出名称"
+msgstr "场次名称"
 
 #: src/app/web/templates/concert_edit.html:138
 #: src/app/web/templates/concert_edit.html:285
@@ -1432,7 +1432,7 @@ msgstr "演出名称"
 #: src/app/web/templates/import_preview.html:94
 #: src/app/web/templates/import_preview.html:285
 msgid "A cancelled leg is dimmed and badged, never deleted"
-msgstr "已取消的场次会变暗并加上标记，而不会被删除"
+msgstr "已取消的场次仍会保留在列表中，但会以淡色显示并带有标记。"
 
 #: src/app/web/templates/concert_edit.html:140
 #: src/app/web/templates/concert_edit.html:287
@@ -1477,7 +1477,7 @@ msgstr "开演（JST）"
 
 #: src/app/web/templates/concert_edit.html:160
 msgid "No legs yet — add the first one above."
-msgstr "还没有场次 — 请在上方添加第一个。"
+msgstr "还没有场次 — 请在上方添加第一个场次。"
 
 #: src/app/web/templates/concert_edit.html:165
 #: src/app/web/templates/concert_new.html:101
@@ -1493,7 +1493,7 @@ msgstr "尚未设置任何内容"
 #: src/app/web/templates/concert_new.html:105
 #: src/app/web/templates/import_preview.html:217
 msgid "Artist / organizer"
-msgstr "艺人／主办"
+msgstr "艺人／主办方"
 
 #: src/app/web/templates/concert_edit.html:170
 #: src/app/web/templates/concert_new.html:112
@@ -1524,7 +1524,7 @@ msgstr "来源链接"
 #: src/app/web/templates/concert_new.html:117
 #: src/app/web/templates/import_preview.html:228
 msgid "Performers (one per line)"
-msgstr "表演者（每行一名）"
+msgstr "出演者（每行一名）"
 
 #: src/app/web/templates/concert_edit.html:185
 #: src/app/web/templates/concert_new.html:126
@@ -1536,7 +1536,7 @@ msgstr "翻译"
 msgid ""
 "Optional — shown to viewers reading in that language, falling back to the"
 " originals above."
-msgstr "可选 — 显示给以该语言阅读的访客，未填写时回退到上方的原文。"
+msgstr "选填。使用该语言的用户会看到此内容；留空时会显示上方的内容。"
 
 #: src/app/web/templates/concert_edit.html:188
 #: src/app/web/templates/concert_new.html:129
@@ -1579,7 +1579,7 @@ msgstr "尚无编辑记录"
 msgid ""
 "Nothing yet. Only the concert's own top-level fields are\n"
 "        tracked — day, round and tag changes are not."
-msgstr "还什么都没有。仅追踪演出自身的顶层字段 — 场次、轮次和标签的更改不在其中。"
+msgstr "暂时没有记录。这里只记录上方活动信息的更改，不记录演出日期、轮次或标签的更改。"
 
 #: src/app/web/templates/concert_edit.html:235
 msgid "Save event"
@@ -1595,7 +1595,7 @@ msgid ""
 "      exact tag set as pruned here, not a group's current membership — "
 "but\n"
 "      not rounds or legs."
-msgstr "复制会拷贝此活动的标签和详情 — 就是这里修剪后的那套标签，而非某组合当前的成员 — 但不包括轮次或场次。"
+msgstr "复制活动时，会复制活动详情和此处显示的标签。不会添加组合的当前成员，也不会复制轮次或场次。"
 
 #: src/app/web/templates/concert_edit.html:258
 msgid "Duplicate as new event"
@@ -1603,7 +1603,7 @@ msgstr "复制为新活动"
 
 #: src/app/web/templates/concert_edit.html:261
 msgid "Delete this concert and every reminder attached to it?"
-msgstr "删除这场演出及其所有相关提醒？"
+msgstr "删除这场活动及其所有相关提醒？"
 
 #: src/app/web/templates/concert_edit.html:263
 msgid "Delete event"
@@ -1619,7 +1619,7 @@ msgstr "添加活动"
 
 #: src/app/web/templates/concert_new.html:16
 msgid "Prefer to import from a ramen.events URL instead? →"
-msgstr "想改为从 ramen.events 链接导入？ →"
+msgstr "想改为从 ramen.events 链接导入吗？ →"
 
 #: src/app/web/templates/concert_new.html:26
 msgid "Hasunosora 6th Live"
@@ -1635,7 +1635,7 @@ msgstr "场次"
 
 #: src/app/web/templates/concert_new.html:36
 msgid "One per show / day — the first is open below. Times are JST."
-msgstr "每场演出／每天一个 — 第一个已在下方展开。时间为 JST。"
+msgstr "每场演出或每天一个 — 第一个已在下方展开。时间为 JST。"
 
 #: src/app/web/templates/concert_new.html:40
 msgid "Add performance"
@@ -1650,27 +1650,27 @@ msgstr "删除此场次"
 
 #: src/app/web/templates/concert_new.html:87
 msgid "Lottery rounds"
-msgstr "轮次"
+msgstr "抽选轮次"
 
 #: src/app/web/templates/concert_new.html:88
 msgid ""
 "Tick the performances each round applies to — leave none ticked\n"
 "      for a whole-event round. Times are JST."
-msgstr "勾选每个轮次适用的场次 — 若为整场活动的轮次则不勾选任何一项。时间为 JST。"
+msgstr "请为每个轮次选择适用场次。不选择任何场次时，该轮次将适用于整个活动。时间为 JST。"
 
 #: src/app/web/templates/concert_new.html:102
 msgid "Optional — title EN, organizer, kind, categories, links, performers, notes"
-msgstr "可选 — 英文标题、主办、类型、分类、链接、表演者、备注"
+msgstr "可选 — 标题 EN、主办方、类型、分类、链接、出演者、备注"
 
 #: src/app/web/templates/concert_new.html:105
 #: src/app/web/templates/import_preview.html:218
 msgid "non-series acts, etc."
-msgstr "非系列的演出等"
+msgstr "非系列艺人等"
 
 #: src/app/web/templates/concert_new.html:112
 #: src/app/web/templates/import_preview.html:220
 msgid "concert, tour"
-msgstr "演出、巡演"
+msgstr "活动、巡演"
 
 #: src/app/web/templates/concert_new.html:115
 #: src/app/web/templates/import_preview.html:226
@@ -1687,22 +1687,22 @@ msgstr "创建活动"
 
 #: src/app/web/templates/discover.html:15
 msgid "Concerts"
-msgstr "演出"
+msgstr "活动"
 
 #: src/app/web/templates/discover.html:17 src/app/web/templates/tags.html:11
 #, python-format
 msgid "%(count)s concert"
 msgid_plural "%(count)s concerts"
-msgstr[0] "%(count)s 场演出"
+msgstr[0] "%(count)s 场活动"
 
 #: src/app/web/templates/discover.html:18
 #, python-format
 msgid "%(n)s with a round still open"
-msgstr "%(n)s 场仍有轮次开放"
+msgstr "%(n)s 场仍有开放中的轮次"
 
 #: src/app/web/templates/discover.html:27
 msgid "Search concerts…"
-msgstr "搜索演出…"
+msgstr "搜索活动…"
 
 #: src/app/web/templates/discover.html:28
 msgid "Search"
@@ -1715,24 +1715,24 @@ msgstr "%(day)s JST"
 
 #: src/app/web/templates/discover.html:94
 msgid "Open &amp; upcoming"
-msgstr "开放中 &amp; 即将到来"
+msgstr "开放中 &amp; 即将举行"
 
 #: src/app/web/templates/discover.html:100
 msgid "Upcoming"
-msgstr "即将到来"
+msgstr "即将举行"
 
 #: src/app/web/templates/discover.html:106
 #: src/app/web/templates/discover.html:108
 msgid "No concerts match."
-msgstr "没有匹配的演出。"
+msgstr "没有匹配的活动。"
 
 #: src/app/web/templates/discover.html:108
 msgid "Create the first one →"
-msgstr "创建第一场 →"
+msgstr "创建第一个 →"
 
 #: src/app/web/templates/discover.html:112
 msgid "Coming up soon"
-msgstr "即将到来"
+msgstr "即将开始"
 
 #: src/app/web/templates/discover.html:144
 msgid "Filters"
@@ -1769,11 +1769,11 @@ msgstr "管理标签"
 
 #: src/app/web/templates/home.html:71
 msgid "Sign in to continue to the page you asked for."
-msgstr "登录后即可继续前往您要访问的页面。"
+msgstr "登录后即可继续前往你要访问的页面。"
 
 #: src/app/web/templates/home.html:74
 msgid "dekimasen.app · Japanese concert ticketing, tracked"
-msgstr "dekimasen.app · 追踪日本演出购票"
+msgstr "dekimasen.app · 日本活动票务追踪"
 
 #: src/app/web/templates/home.html:75
 msgid "Never say <em>dekimasen deshita</em> again."
@@ -1788,20 +1788,20 @@ msgid ""
 "      seat you already hold. We track the whole ladder and tell you "
 "exactly where you stand."
 msgstr ""
-"日本的每一张票都是一场<b>战役</b>，而不只是一个日期 — "
-"后援会先行、抽选第一轮、落选后的第二轮、先到先得的发售、依托你已有座位的升级抽选。我们追踪整条阶梯，并准确告诉你现在处于哪一步。"
+"购买日本的门票通常要经过<b>多个阶段</b>，例如 FC "
+"先行、第一轮抽选、落选后的下一轮抽选、先到先得发售，以及已持有门票的升级抽选。我们会跟踪每个阶段，并告诉你下一步是什么。"
 
 #: src/app/web/templates/home.html:83
 msgid "Free · we DM you on Discord · no card, no spam"
-msgstr "免费 · 我们通过 Discord 私信你 · 无需绑卡，绝无骚扰"
+msgstr "免费 · 我们会通过 Discord 给你发 DM · 无需绑卡，绝不骚扰"
 
 #: src/app/web/templates/home.html:86
 msgid "concerts tracked"
-msgstr "追踪中的演出"
+msgstr "追踪中的活动"
 
 #: src/app/web/templates/home.html:87
 msgid "with a round open now"
-msgstr "当前有轮次开放"
+msgstr "当前有开放中的轮次"
 
 #: src/app/web/templates/home.html:88
 msgid "franchises"
@@ -1809,7 +1809,7 @@ msgstr "系列"
 
 #: src/app/web/templates/home.html:89
 msgid "performers tagged"
-msgstr "已标记的表演者"
+msgstr "已标记的出演者"
 
 #: src/app/web/templates/home.html:94
 msgid "How it works"
@@ -1817,7 +1817,7 @@ msgstr "运作方式"
 
 #: src/app/web/templates/home.html:94
 msgid "Three steps, then it runs itself"
-msgstr "三步之后，它便自动运转"
+msgstr "只需三步，之后一切自动运行"
 
 #: src/app/web/templates/home.html:98
 msgid "Follow your artists"
@@ -1828,37 +1828,37 @@ msgid ""
 "Tap a franchise, a group, or one performer. New events for anyone you "
 "follow\n"
 "          show up on your board <b>automatically</b>."
-msgstr "点选一个系列、一个组合，或某一位表演者。你关注对象的新活动会<b>自动</b>出现在你的看板上。"
+msgstr "点选一个系列、一个组合或一位出演者。你所关注对象的新活动会<b>自动</b>出现在看板上。"
 
 #: src/app/web/templates/home.html:104
 msgid "We track every round's deadline"
-msgstr "我们追踪每一轮的截止"
+msgstr "我们追踪每个轮次的截止时间"
 
 #: src/app/web/templates/home.html:105
 msgid ""
 "Presale opens, lottery closes, results land, payment is due. All times "
 "shown\n"
 "          <b>JST and yours</b>, always both — no mental arithmetic at 3am."
-msgstr "先行开放、抽选截止、结果公布、付款截止。所有时间都<b>同时以 JST 和你的时间</b>显示，永远两者兼备 — 无需在凌晨三点心算。"
+msgstr "你可以查看先行开始、抽选截止、结果公布和付款截止时间。所有时间都会同时以<b>JST 和你的当地时间</b>显示。"
 
 #: src/app/web/templates/home.html:110
 msgid "You get a DM, and you know where you stand"
-msgstr "你会收到私信，并清楚自己的处境"
+msgstr "你会收到 DM，并清楚自己的进度"
 
 #: src/app/web/templates/home.html:111
 msgid ""
 "A Discord reminder before each deadline, plus a campaign board that says "
 "whether the\n"
 "          ball is <b>in your court</b> or you are already covered."
-msgstr "每个截止前的 Discord 提醒，外加一块战役看板 — 告诉你<b>球在你这边</b>，还是你已经万事俱备。"
+msgstr "每个截止时间前，你都会收到 Discord 提醒。看板还会显示<b>是否需要你操作</b>，或者你是否已经完成。"
 
 #: src/app/web/templates/home.html:119
 msgid "The whole campaign, one board"
-msgstr "整场战役，一块看板"
+msgstr "整个购票流程，尽在一块看板"
 
 #: src/app/web/templates/home.html:120
 msgid "One card moves left to right as you apply, win, and pay"
-msgstr "随着你申请、中签、付款，一张卡片从左移到右"
+msgstr "随着你申请、中签、付款，一张卡片会从左向右移动。"
 
 #: src/app/web/templates/home.html:132
 msgid "FC presale · 6h left"
@@ -1866,11 +1866,11 @@ msgstr "FC 先行 · 剩 6 小时"
 
 #: src/app/web/templates/home.html:138
 msgid "General presale · 4d"
-msgstr "一般先行 · 4 天"
+msgstr "一般先行 · 剩 4 天"
 
 #: src/app/web/templates/home.html:147
 msgid "Lottery R1 · result 21 Jul"
-msgstr "抽选 R1 · 结果 7 月 21 日"
+msgstr "抽选 R1 · 7 月 21 日公布结果"
 
 #: src/app/web/templates/home.html:156
 msgid "Pay by 22 Jul"
@@ -1878,30 +1878,30 @@ msgstr "7 月 22 日前付款"
 
 #: src/app/web/templates/home.html:179
 msgid "Discover what's on"
-msgstr "发现正在进行的演出"
+msgstr "看看有哪些活动"
 
 #: src/app/web/templates/home.html:180
 msgid "The catalogue is public — browse before you sign in"
-msgstr "目录是公开的 — 登录前即可浏览"
+msgstr "活动目录是公开的 — 登录前即可浏览。"
 
 #: src/app/web/templates/home.html:181
 msgid "Sign in to track →"
-msgstr "登录以追踪 →"
+msgstr "登录后开始追踪 →"
 
 #: src/app/web/templates/home.html:191
 msgid "Ready when you are"
-msgstr "随时准备就绪"
+msgstr "准备好就开始吧"
 
 #: src/app/web/templates/home.html:192
 msgid "Follow four groups in a minute. Miss nothing after that."
-msgstr "一分钟关注四个组合。此后什么都不会错过。"
+msgstr "一分钟即可关注四个组合。之后会显示它们的新活动和截止时间。"
 
 #: src/app/web/templates/home.html:193
 msgid ""
 "Sign in with the Discord account you already have. We only ever DM you "
 "about deadlines\n"
 "      for artists you chose to follow."
-msgstr "用你已有的 Discord 账号登录。我们只会就你选择关注的艺人的截止给你发私信。"
+msgstr "使用你已有的 Discord 账号登录。我们只会针对你选择关注的艺人，在相关事项截止前给你发 DM。"
 
 #: src/app/web/templates/home.html:199
 msgid ""
@@ -1910,9 +1910,7 @@ msgid ""
 "    board — your rounds, your outcomes, your deadlines. Everything above "
 "is a taste of what\n"
 "    fills in once you follow someone."
-msgstr ""
-"<b>在登出状态下，这一屏就是整个产品。</b>登录后它会变成你的看板 — "
-"你的轮次、你的结果、你的截止。上方所展示的一切，都是你关注某人后会逐渐填满的内容的预览。"
+msgstr "<b>未登录时，此页面会显示示例内容。</b>登录后，你可以在自己的看板上查看轮次、结果和截止时间。关注艺人后，相关活动会添加到看板。"
 
 #: src/app/web/templates/home.html:220
 msgid "Up next"
@@ -1920,7 +1918,7 @@ msgstr "接下来"
 
 #: src/app/web/templates/home.html:239
 msgid "Your campaigns"
-msgstr "你的战役"
+msgstr "你的购票流程"
 
 #: src/app/web/templates/home.html:252
 msgid "Coming up"
@@ -1928,22 +1926,22 @@ msgstr "即将到来"
 
 #: src/app/web/templates/home.html:253
 msgid "All times JST and yours, always both"
-msgstr "时间同时以 JST 和你的时间显示，永远两者兼备"
+msgstr "始终同时显示 JST 和你的当地时间"
 
 #: src/app/web/templates/home.html:262
 msgid "Not tracking these yet"
-msgstr "尚未追踪这些"
+msgstr "尚未追踪这些活动"
 
 #: src/app/web/templates/home.html:265
 #, python-format
 msgid "%(count)s concert in the catalogue,"
 msgid_plural "%(count)s concerts in the catalogue,"
-msgstr[0] "目录中有 %(count)s 场演出，"
+msgstr[0] "目录中有 %(count)s 场活动，"
 
 #: src/app/web/templates/home.html:268
 #, python-format
 msgid "%(n)s with a round still open."
-msgstr "其中 %(n)s 场仍有轮次开放。"
+msgstr "其中 %(n)s 场仍有开放中的轮次。"
 
 #: src/app/web/templates/home.html:269
 msgid "Browse by franchise, group, artist or region — or search everything."
@@ -1951,7 +1949,7 @@ msgstr "按系列、组合、艺人或地区浏览 — 或搜索全部。"
 
 #: src/app/web/templates/home.html:272
 msgid "Open discover →"
-msgstr "打开发现页 →"
+msgstr "前往发现页 →"
 
 #: src/app/web/templates/home.html:286
 msgid ""
@@ -1959,7 +1957,7 @@ msgid ""
 "your rounds, your outcomes,\n"
 "  your deadlines. Discovery sits at the bottom as a door out, not as the "
 "page itself."
-msgstr "<b>主页回答“我现在处于哪一步”。</b>上方的一切都是你的 — 你的轮次、你的结果、你的截止。发现页作为一道出口位于底部，而不是这个页面本身。"
+msgstr "<b>主页会显示你的当前状态。</b>上方显示的是你的轮次、结果和截止时间。你可以在页面底部查找更多活动。"
 
 #: src/app/web/templates/home.html:293
 msgid "Not applying to this round"
@@ -1969,7 +1967,7 @@ msgstr "不申请这一轮"
 msgid ""
 "Done — you won't be reminded about this round. Later rounds for\n"
 "    <b id=\"pruneName\">this concert</b> will still reach you."
-msgstr "完成 — 你不会收到关于这一轮的提醒。<b id=\"pruneName\">这场演出</b>之后的轮次仍会通知你。"
+msgstr "完成 — 此轮次的提醒已停止。你仍会收到<b id=\"pruneName\">此活动</b>后续轮次的提醒。"
 
 #: src/app/web/templates/home.html:300
 msgid "That's right"
@@ -1977,15 +1975,15 @@ msgstr "没错"
 
 #: src/app/web/templates/home.html:308
 msgid "Skip this concert entirely"
-msgstr "完全跳过这场演出"
+msgstr "完全跳过这场活动"
 
 #: src/app/web/templates/home.html:310
 msgid "Manage this concert →"
-msgstr "管理这场演出 →"
+msgstr "管理这场活动 →"
 
 #: src/app/web/templates/import_form.html:2
 msgid "import concert"
-msgstr "导入演出"
+msgstr "导入活动"
 
 #: src/app/web/templates/import_form.html:6
 msgid "Import from a URL"
@@ -1999,15 +1997,15 @@ msgid ""
 " and submit the\n"
 "    next page."
 msgstr ""
-"粘贴一个 <code>ramen.events</code> 活动页面 — "
-"它会抓取标题、标签、演出日期和抽选轮次作为草稿。在你于下一页确认并提交之前，不会保存任何内容。"
+"粘贴一个 <code>ramen.events</code> "
+"活动页面。我们会将标题、标签、场次日期和抽选轮次导入草稿。只有在下一页检查并提交后，内容才会保存。"
 
 #: src/app/web/templates/import_form.html:15
 #, python-format
 msgid ""
 "Couldn't parse that page: %(error)s. You can still\n"
 "    <a href=\"/\">create the concert manually</a>."
-msgstr "无法解析该页面：%(error)s。你仍可以<a href=\"/\">手动创建演出</a>。"
+msgstr "无法读取该页面：%(error)s。你仍可以<a href=\"/\">手动创建活动</a>。"
 
 #: src/app/web/templates/import_form.html:22
 msgid "ramen.events URL"
@@ -2015,7 +2013,7 @@ msgstr "ramen.events 链接"
 
 #: src/app/web/templates/import_form.html:25
 msgid "Fetch draft"
-msgstr "获取草稿"
+msgstr "导入草稿"
 
 #: src/app/web/templates/import_form.html:30
 msgid ""
@@ -2024,12 +2022,12 @@ msgid ""
 "    re-checked on every redirect — an editor safety rail, not a general "
 "web fetcher."
 msgstr ""
-"仅接受 <b>https 的 ramen.events</b> 链接。抓取有大小上限，并在每次重定向时重新校验 — "
-"这是给编辑者的安全护栏，而非通用的网页抓取器。"
+"仅接受 <b>https ramen.events</b> 链接。为确保安全，我们会限制页面大小，并检查每次跳转。此功能仅用于导入 "
+"ramen.events 页面。"
 
 #: src/app/web/templates/import_form.html:35
 msgid "Or paste an agent draft"
-msgstr "或粘贴代理生成的草稿"
+msgstr "或粘贴 AI 助手生成的草稿"
 
 #: src/app/web/templates/import_form.html:36
 msgid ""
@@ -2038,8 +2036,8 @@ msgid ""
 "Nothing is saved\n"
 "    until you review and submit the next page."
 msgstr ""
-"由 <code>add-concert</code> 技能生成 — "
-"代理会将官方售票页面和 eventernote 合并成一份三语草稿。在你于下一页确认并提交之前，不会保存任何内容。"
+"由<code>add-event</code>技能生成 — AI 助手会将官方售票页面和 eventernote "
+"合并为一份三语草稿。只有在你检查并提交下一页后，内容才会保存。"
 
 #: src/app/web/templates/import_form.html:43
 msgid "Draft YAML"
@@ -2055,14 +2053,14 @@ msgid ""
 "href=\"/concerts/import/skill.zip\">Download the add-concert skill</a> "
 "(zip)."
 msgstr ""
-"在其他环境用代理写草稿？<a class=\"more\" "
-"href=\"/concerts/import/skill.zip\">下载 add-concert 技能</a>（zip）。"
+"正在其他地方使用 AI 助手起草？<a class=\"more\" href=\"/concerts/import/skill.zip\">下载"
+" add-event 技能</a>（zip）。"
 
 #: src/app/web/templates/import_form.html:53
 msgid ""
 "No ramen.events page? <a class=\"more\" href=\"/\">Create the concert "
 "manually</a> instead."
-msgstr "没有 ramen.events 页面？那就改为<a class=\"more\" href=\"/\">手动创建演出</a>。"
+msgstr "没有 ramen.events 页面？那就改为<a class=\"more\" href=\"/\">手动创建活动</a>。"
 
 #: src/app/web/templates/import_preview.html:2
 msgid "review import"
@@ -2077,7 +2075,7 @@ msgstr "检查草稿"
 msgid ""
 "Parsed from\n"
 "    %(url)s."
-msgstr "解析自 %(url)s。"
+msgstr "已从 %(url)s 导入。"
 
 #: src/app/web/templates/import_preview.html:17
 msgid "Reviewing a pasted draft."
@@ -2085,22 +2083,22 @@ msgstr "正在检查粘贴的草稿。"
 
 #: src/app/web/templates/import_preview.html:18
 msgid "Edit anything below, then create the concert."
-msgstr "编辑下方任意内容，然后创建演出。"
+msgstr "按需修改以下内容，然后创建活动。"
 
 #: src/app/web/templates/import_preview.html:23
 msgid ""
 "<b>Nothing is saved yet.</b> This is a draft in your browser. It becomes "
 "a real\n"
 "    concert only when you press <b>Create concert</b> at the bottom."
-msgstr "<b>目前尚未保存任何内容。</b>这只是你浏览器里的草稿。只有当你按下底部的<b>创建演出</b>时，它才会成为真正的演出。"
+msgstr "<b>目前尚未保存任何内容。</b>这只是你浏览器里的草稿。只有当你按下底部的<b>创建活动</b>时，它才会成为真正的活动。"
 
 #: src/app/web/templates/import_preview.html:60
 msgid "Performance days"
-msgstr "演出日期"
+msgstr "场次日期"
 
 #: src/app/web/templates/import_preview.html:61
 msgid "Each parsed day becomes a leg you can attach rounds to. Times are JST."
-msgstr "每个解析出的日期都会成为一个可挂载轮次的场次。时间为 JST。"
+msgstr "导入的每个日期都会成为一个可添加轮次的场次。时间为 JST。"
 
 #: src/app/web/templates/import_preview.html:69
 #: src/app/web/templates/import_preview.html:122
@@ -2110,11 +2108,11 @@ msgstr "尚无与“%(venue)s”匹配的场馆标签 — 请用“+ 新建场�
 
 #: src/app/web/templates/import_preview.html:131
 msgid "No days parsed — add the first one below."
-msgstr "没有解析出日期 — 请在下方添加第一个。"
+msgstr "未导入任何日期 — 请在下方添加第一个。"
 
 #: src/app/web/templates/import_preview.html:136
 msgid "Add day"
-msgstr "添加日期"
+msgstr "添加场次日期"
 
 #: src/app/web/templates/import_preview.html:140
 msgid "Lottery / sale rounds"
@@ -2124,11 +2122,11 @@ msgstr "抽选／发售轮次"
 msgid ""
 "Tick the days each round applies to — leave none ticked\n"
 "      for a whole-event round. Times are JST."
-msgstr "勾选每个轮次适用的日期 — 若为整场活动的轮次则不勾选任何一项。时间为 JST。"
+msgstr "勾选每个轮次适用的日期 — 如果该轮次适用于整个活动，则无需勾选任何日期。时间为 JST。"
 
 #: src/app/web/templates/import_preview.html:189
 msgid "No rounds yet — add the first one below."
-msgstr "还没有轮次 — 请在下方添加第一个。"
+msgstr "还没有轮次 — 请在下方添加第一个轮次。"
 
 #: src/app/web/templates/import_preview.html:204
 msgid "Optional — title and notes in each language, organizer, source URL"
@@ -2136,7 +2134,7 @@ msgstr "可选 — 各语言的标题和备注、主办、来源链接"
 
 #: src/app/web/templates/import_preview.html:211
 msgid "Title (EN)"
-msgstr "标题（英文）"
+msgstr "标题（EN）"
 
 #: src/app/web/templates/import_preview.html:214
 msgid "Title (中文)"
@@ -2144,7 +2142,7 @@ msgstr "标题（中文）"
 
 #: src/app/web/templates/import_preview.html:238
 msgid "Notes (EN)"
-msgstr "备注（英文）"
+msgstr "备注（EN）"
 
 #: src/app/web/templates/import_preview.html:240
 msgid "Notes (中文)"
@@ -2152,19 +2150,18 @@ msgstr "备注（中文）"
 
 #: src/app/web/templates/import_preview.html:247
 msgid "Franchise, group, artists, venue — parsed, editable"
-msgstr "系列、组合、艺人、场馆 — 已解析，可编辑"
+msgstr "系列、组合、艺人、场馆 — 已导入，可编辑"
 
 #: src/app/web/templates/import_preview.html:253
 #, python-format
 msgid ""
 "No tag yet for: %(names)s — create them on the <a href=\"/tags\">tags "
 "page</a>, then re-paste, or pick by hand."
-msgstr ""
-"%(names)s 还没有对应的标签 — 请在<a href=\"/tags\">标签页</a>创建后重新粘贴，或手动选择。"
+msgstr "%(names)s 还没有对应的标签 — 请在 <a href=\"/tags\">标签页</a>创建后重新粘贴，或手动选择。"
 
 #: src/app/web/templates/import_preview.html:259
 msgid "Create concert"
-msgstr "创建演出"
+msgstr "创建活动"
 
 #: src/app/web/templates/preferences.html:2
 msgid "preferences"
@@ -2183,7 +2180,7 @@ msgstr "时间"
 #: src/app/web/templates/preferences.html:19
 #: src/app/web/templates/preferences.html:317
 msgid "Delivery"
-msgstr "送达"
+msgstr "通知方式"
 
 #: src/app/web/templates/preferences.html:20
 #: src/app/web/templates/preferences.html:374
@@ -2203,7 +2200,9 @@ msgid ""
 "default\n"
 "      preset to it. Drop individual concerts from the concert page or a\n"
 "      reminder DM."
-msgstr "关注一个标签，即订阅了带有它的<b>今后所有演出</b>。“通知”会在有新演出出现时发私信；“自动应用”会为其加上你的默认预设。你可以在演出页面或提醒私信中单独移除某场演出。"
+msgstr ""
+"关注标签后，所有带有该标签的<b>未来活动</b>都会添加到看板。“通知”会在出现新活动时发送 "
+"DM；“自动应用”会套用你的默认预设。你可以在活动页面或提醒 DM 中取消关注单个活动。"
 
 #: src/app/web/templates/preferences.html:37
 #, python-format
@@ -2215,22 +2214,22 @@ msgstr "关注了 %(sub_count)s 个标签"
 msgid ""
 "%(tracked)s tracked &middot; %(upcoming)s upcoming\n"
 "        &middot; %(pruned)s you pruned"
-msgstr "%(tracked)s 场追踪中 &middot; %(upcoming)s 场即将到来 &middot; %(pruned)s 场已被你修剪"
+msgstr "%(tracked)s 场已关注 &middot; %(upcoming)s 场即将到来 &middot; %(pruned)s 场已跳过"
 
 #: src/app/web/templates/preferences.html:50
 #, python-format
 msgid "<b>%(count)s</b> concert"
 msgid_plural "<b>%(count)s</b> concerts"
-msgstr[0] "<b>%(count)s</b> 场演出"
+msgstr[0] "<b>%(count)s</b> 场活动"
 
 #: src/app/web/templates/preferences.html:51
 #, python-format
 msgid "%(upcoming)s upcoming"
-msgstr "%(upcoming)s 场即将到来"
+msgstr "%(upcoming)s 场即将举行"
 
 #: src/app/web/templates/preferences.html:55
 msgid "DM me when a new matching concert appears"
-msgstr "有匹配的新演出出现时给我发私信"
+msgstr "有匹配的新活动时给我发 DM"
 
 #: src/app/web/templates/preferences.html:55
 msgid "Notify"
@@ -2238,7 +2237,7 @@ msgstr "通知"
 
 #: src/app/web/templates/preferences.html:60
 msgid "Add my default preset to new matching concerts"
-msgstr "为匹配的新演出加上我的默认预设"
+msgstr "为匹配的新活动应用我的默认预设"
 
 #: src/app/web/templates/preferences.html:60
 msgid "Auto-apply"
@@ -2258,17 +2257,17 @@ msgstr "你还没有关注任何标签。"
 
 #: src/app/web/templates/preferences.html:73
 msgid "Pruned concerts"
-msgstr "已修剪的演出"
+msgstr "已跳过的活动"
 
 #: src/app/web/templates/preferences.html:74
 msgid ""
 "You skipped these individually.\n"
 "        Restoring one returns it to whatever its tags say by default."
-msgstr "你单独跳过了这些。恢复其中一项，会让它回到其标签默认设定的状态。"
+msgstr "这些是你单独取消关注的活动。重新添加后，会再次使用相应标签的设置。"
 
 #: src/app/web/templates/preferences.html:87
 msgid "Restore to the tag default"
-msgstr "恢复到标签默认"
+msgstr "恢复为标签默认设置"
 
 #: src/app/web/templates/preferences.html:87
 msgid "Restore"
@@ -2292,7 +2291,7 @@ msgstr "无"
 
 #: src/app/web/templates/preferences.html:110
 msgid "DM me on new events"
-msgstr "有新活动时给我发私信"
+msgstr "有新活动时给我发 DM"
 
 #: src/app/web/templates/preferences.html:121
 msgid "preset linked"
@@ -2310,7 +2309,7 @@ msgstr "其他组合"
 #: src/app/web/templates/preferences.html:155
 #: src/app/web/templates/welcome.html:69
 msgid "Solo artists"
-msgstr "独立艺人"
+msgstr "个人艺人"
 
 #: src/app/web/templates/preferences.html:160
 #: src/app/web/templates/tags.html:189 src/app/web/templates/welcome.html:74
@@ -2322,7 +2321,7 @@ msgid ""
 "A preset is a set of reminder rules applied to concerts you follow. Rules"
 "\n"
 "      on an individual concert override these."
-msgstr "预设是一组应用于你关注演出的提醒规则。单场演出上的规则会覆盖这些。"
+msgstr "预设是一组用于你所关注活动的提醒设置。如果你更改单个活动的设置，系统会使用该活动的设置。"
 
 #: src/app/web/templates/preferences.html:190
 msgid "day(s)"
@@ -2338,7 +2337,7 @@ msgstr "每"
 
 #: src/app/web/templates/preferences.html:200
 msgid "Opens"
-msgstr "开放申请"
+msgstr "申请开始"
 
 #: src/app/web/templates/preferences.html:200
 msgid "Results"
@@ -2350,7 +2349,7 @@ msgstr "付款"
 
 #: src/app/web/templates/preferences.html:200
 msgid "Event start"
-msgstr "演出开始"
+msgstr "活动开始"
 
 #: src/app/web/templates/preferences.html:209
 msgid "Rename"
@@ -2358,7 +2357,7 @@ msgstr "重命名"
 
 #: src/app/web/templates/preferences.html:211
 msgid "The Discord 'Set my reminders' button applies this preset"
-msgstr "Discord 上的“设置我的提醒”按钮会应用此预设"
+msgstr "Discord 上的“设置我的提醒”按钮会应用此预设。"
 
 #: src/app/web/templates/preferences.html:211
 msgid "Default"
@@ -2366,7 +2365,7 @@ msgstr "默认"
 
 #: src/app/web/templates/preferences.html:213
 msgid "Make this the preset the Discord button applies"
-msgstr "设为 Discord 按钮所应用的预设"
+msgstr "设为 Discord 按钮应用的预设"
 
 #: src/app/web/templates/preferences.html:213
 msgid "Make default"
@@ -2402,7 +2401,7 @@ msgstr "添加规则"
 msgid ""
 "Presets apply to future concerts. Existing ones keep the rules they "
 "already have."
-msgstr "预设适用于今后的演出。已有的演出保留它们已经拥有的规则。"
+msgstr "预设会应用于今后的活动；已有活动仍保留原来的规则。"
 
 #: src/app/web/templates/preferences.html:245
 msgid "New preset"
@@ -2410,7 +2409,7 @@ msgstr "新预设"
 
 #: src/app/web/templates/preferences.html:248
 msgid "standard lottery coverage"
-msgstr "标准抽选覆盖"
+msgstr "标准抽选提醒"
 
 #: src/app/web/templates/preferences.html:250
 msgid "Create preset"
@@ -2418,7 +2417,7 @@ msgstr "创建预设"
 
 #: src/app/web/templates/preferences.html:251
 msgid "Created with this first rule — add more after."
-msgstr "以这条首规则创建 — 之后可再添加。"
+msgstr "创建时会包含这条初始规则，之后还可继续添加。"
 
 #: src/app/web/templates/preferences.html:260
 msgid "Time & language"
@@ -2426,7 +2425,7 @@ msgstr "时间与语言"
 
 #: src/app/web/templates/preferences.html:261
 msgid "Every deadline shows JST first, then yours. This sets the second one."
-msgstr "每个截止都先显示 JST，再显示你的时间。此项设置的是后者。"
+msgstr "每个截止时间都会先显示 JST，再显示你的当地时间。此项用于设置后者。"
 
 #: src/app/web/templates/preferences.html:266
 #: src/app/web/templates/welcome.html:370
@@ -2441,7 +2440,7 @@ msgstr "常用"
 #: src/app/web/templates/preferences.html:271
 #: src/app/web/templates/welcome.html:375
 msgid "All zones (IANA)"
-msgstr "全部时区（IANA）"
+msgstr "所有时区（IANA）"
 
 #: src/app/web/templates/preferences.html:282
 #: src/app/web/templates/welcome.html:381
@@ -2456,12 +2455,12 @@ msgstr "时区检测模式"
 #: src/app/web/templates/preferences.html:284
 #: src/app/web/templates/welcome.html:383
 msgid "Follow my browser"
-msgstr "跟随我的浏览器"
+msgstr "跟随浏览器"
 
 #: src/app/web/templates/preferences.html:285
 #: src/app/web/templates/welcome.html:384
 msgid "Keep what I picked"
-msgstr "保留我选择的"
+msgstr "使用我选择的时区"
 
 #: src/app/web/templates/preferences.html:294
 #, python-format
@@ -2480,28 +2479,28 @@ msgstr "现在显示为 <span class=\"num\">%(tz_preview)s</span>。"
 
 #: src/app/web/templates/preferences.html:318
 msgid "Where reminders actually arrive."
-msgstr "提醒实际送达的地方。"
+msgstr "提醒会实际发送到这里。"
 
 #: src/app/web/templates/preferences.html:324
 msgid "Discord DMs blocked"
-msgstr "Discord 私信被拦截"
+msgstr "Discord DM 已被阻止"
 
 #: src/app/web/templates/preferences.html:325
 msgid "Check your Discord privacy settings to allow DMs from server members."
-msgstr "请检查你的 Discord 隐私设置，以允许来自服务器成员的私信。"
+msgstr "请检查 Discord 隐私设置，允许接收服务器成员的 DM。"
 
 #: src/app/web/templates/preferences.html:327
 msgid "Discord DMs reaching you"
-msgstr "Discord 私信可正常送达"
+msgstr "Discord DM 可正常送达"
 
 #: src/app/web/templates/preferences.html:330
 #: src/app/web/templates/welcome.html:439
 msgid "Send a test DM"
-msgstr "发送测试私信"
+msgstr "发送测试 DM"
 
 #: src/app/web/templates/preferences.html:333
 msgid "Bot not running here (dev mode) — DMs can't be tested."
-msgstr "此处未运行机器人（开发模式）— 无法测试私信。"
+msgstr "此处未运行机器人（开发模式）— 无法测试 DM。"
 
 #: src/app/web/templates/preferences.html:341
 msgid "Calendar feed active"
@@ -2517,7 +2516,7 @@ msgstr "无日历订阅"
 
 #: src/app/web/templates/preferences.html:350
 msgid "Your feed link is ready — save it now, it won't be shown again."
-msgstr "你的订阅链接已就绪 — 请立即保存，它不会再次显示。"
+msgstr "订阅链接已就绪 — 请立即保存，它不会再次显示。"
 
 #: src/app/web/templates/preferences.html:353
 #: src/app/web/templates/welcome.html:485
@@ -2534,11 +2533,11 @@ msgstr "Google 日历：设置 &rarr; 添加日历 &rarr; 通过网址。Apple �
 msgid ""
 "This invalidates your current feed link — your calendar app will need the"
 " new one."
-msgstr "这会使你当前的订阅链接失效 — 你的日历应用将需要新的链接。"
+msgstr "当前的日历订阅链接将无法继续使用。请将新链接添加到你的日历应用中。"
 
 #: src/app/web/templates/preferences.html:361
 msgid "Generate a new one"
-msgstr "生成一个新的"
+msgstr "生成新链接"
 
 #: src/app/web/templates/preferences.html:364
 #: src/app/web/templates/welcome.html:494
@@ -2549,12 +2548,12 @@ msgstr "生成订阅链接"
 msgid ""
 "Generating a new link revokes the old one immediately. Anyone still\n"
 "      subscribed to it stops receiving updates."
-msgstr "生成新链接会立即吊销旧的。仍在订阅旧链接的人将不再收到更新。"
+msgstr "创建新链接后，旧链接会立即无法使用。仍在使用旧链接的人将不再收到更新。"
 
 #: src/app/web/templates/preferences.html:375
 #, python-format
 msgid "Signed in with Discord as <b>%(username)s</b>."
-msgstr "已用 Discord 以 <b>%(username)s</b> 身份登录。"
+msgstr "已通过 Discord 登录为 <b>%(username)s</b>。"
 
 #: src/app/web/templates/preferences.html:380
 msgid "Re-run first-time setup"
@@ -2566,11 +2565,11 @@ msgid ""
 "          are not going for and mark what you have already applied to. "
 "Nothing is reset —\n"
 "          your existing choices are the starting point."
-msgstr "带你重新过一遍你的演出，好让你剔除不打算去的、并标记已经申请过的。什么都不会被重置 — 你现有的选择就是起点。"
+msgstr "再次检查你的活动。关闭不打算参加的活动，并标记已经申请的轮次。当前选择会保留。"
 
 #: src/app/web/templates/preferences.html:385
 msgid "Run setup"
-msgstr "运行设置"
+msgstr "开始设置"
 
 #: src/app/web/templates/preferences.html:396
 #: src/app/web/templates/preferences.html:413
@@ -2581,7 +2580,7 @@ msgstr "删除我的账户"
 msgid ""
 "Your reminders, subscriptions, and preferences are deleted. Concerts and "
 "tags you authored stay, with your name removed."
-msgstr "你的提醒、订阅和偏好设置将被删除。你创建的演出和标签会保留，但会移除你的名字。"
+msgstr "你的提醒、订阅和设置会被删除。你创建的活动和标签会保留，但会移除你的名字。"
 
 #: src/app/web/templates/preferences.html:401
 msgid "Delete account"
@@ -2589,13 +2588,13 @@ msgstr "删除账户"
 
 #: src/app/web/templates/preferences.html:405
 msgid "Delete your account?"
-msgstr "删除你的账户？"
+msgstr "确定删除你的账户吗？"
 
 #: src/app/web/templates/preferences.html:408
 msgid ""
 "Your reminders, subscriptions, and preferences are deleted. Concerts and "
 "tags you authored stay, with your name removed. This cannot be undone."
-msgstr "你的提醒、订阅和偏好设置将被删除。你创建的演出和标签会保留，但会移除你的名字。此操作无法撤销。"
+msgstr "你的提醒、订阅和设置会被删除。你创建的活动和标签会保留，但会移除你的名字。删除后无法恢复。"
 
 #: src/app/web/templates/preferences.html:411
 msgid "Keep my account"
@@ -2612,9 +2611,8 @@ msgid ""
 "removed here — edit\n"
 "      <code>.env</code> instead."
 msgstr ""
-"获准创建和编辑演出、轮次和标签的 Discord "
-"用户。由环境变量管理的编辑者（<code>EDITOR_WHITELIST</code>）无法在此移除 — 请改为编辑 "
-"<code>.env</code>。"
+"这些 Discord 用户可以创建和编辑活动、轮次及标签。<code>EDITOR_WHITELIST</code> 中的编辑者必须在 "
+"<code>.env</code> 中更改。"
 
 #: src/app/web/templates/preferences.html:431
 msgid "from env"
@@ -2632,7 +2630,7 @@ msgstr "移除编辑者"
 msgid ""
 "Whitelisted editors live in the server env and cannot be removed from "
 "here."
-msgstr "白名单编辑者存放在服务器环境变量中，无法从此处移除。"
+msgstr "部分编辑者由服务器设置，无法在这里移除。"
 
 #: src/app/web/templates/preferences.html:443
 msgid "Discord user ID"
@@ -2646,7 +2644,7 @@ msgstr "添加编辑者"
 msgid ""
 "This translation is provided for convenience. The English version governs"
 " in any conflict."
-msgstr "本翻译仅为方便阅读而提供。如有任何冲突，以英文版本为准。"
+msgstr "本翻译仅供参考。如与英文版有出入，以英文版为准。"
 
 #: src/app/web/templates/privacy.html:9 src/app/web/templates/terms.html:9
 #, python-format
@@ -2665,13 +2663,13 @@ msgid ""
 "    service itself are on a separate page — see the\n"
 "    <a href=\"/terms\">terms of service</a>."
 msgstr ""
-"dekimasen.app 追踪日本演出的截止，并在你所关心的截止到来前给你发送 Discord "
-"私信。为此，它需要存储少量关于你的信息。本页用平实的语言准确说明存了什么、为什么以及保留多久。使用服务本身的规则在另一页 — 见<a "
+"dekimasen.app 会追踪日本活动的截止时间，并在你关注的事项截止前通过 Discord 给你发送 "
+"DM。为此，我们需要存储少量与你有关的信息。本页会用通俗易懂的语言明确说明存储哪些信息、为何存储，以及保留多久。服务本身的使用规则另见<a "
 "href=\"/terms\">服务条款</a>。"
 
 #: src/app/web/templates/privacy.html:20
 msgid "What we collect"
-msgstr "我们收集什么"
+msgstr "我们收集的信息"
 
 #: src/app/web/templates/privacy.html:23
 msgid ""
@@ -2679,8 +2677,8 @@ msgid ""
 "      your display name, and your avatar hash. We ask Discord for the\n"
 "      <code>identify</code> scope only, which is the minimum available."
 msgstr ""
-"<strong>你的 Discord 账户基本信息</strong> — 你的 Discord 用户 ID、显示名和头像哈希。我们只向 "
-"Discord 申请 <code>identify</code> 权限范围，这是可用的最小范围。"
+"<strong>Discord 账号的基本信息</strong> — Discord 用户 ID、显示名称和头像 ID。我们只会向 Discord"
+" 请求基本资料访问权限（<code>identify</code>）。"
 
 #: src/app/web/templates/privacy.html:28
 msgid ""
@@ -2688,7 +2686,7 @@ msgid ""
 "      your browser reported, so deadlines show in your local time "
 "alongside\n"
 "      JST."
-msgstr "<strong>你的时区</strong> — 你选择的那个，或你浏览器报告的那个，以便在 JST 旁一并以你的当地时间显示截止。"
+msgstr "<strong>你的时区</strong> — 你选择的时区，或浏览器报告的时区，以便在 JST 旁同时显示你的当地时间。"
 
 #: src/app/web/templates/privacy.html:33
 msgid ""
@@ -2699,19 +2697,19 @@ msgid ""
 "      uses to stop reminding you about rounds you are done with."
 msgstr ""
 "<strong>你的提醒设置</strong> — "
-"你创建的提醒规则、你的提醒预设、你订阅的标签，以及你记录的抽选结果（已申请、中签、落选、已付款）；应用用它们来停止提醒你已经了结的轮次。"
+"你创建的提醒规则、提醒预设、订阅的标签，以及记录的抽选结果（已申请、中签、落选、已付款）。应用会据此停止提醒你已经处理完的轮次。"
 
 #: src/app/web/templates/privacy.html:39
 msgid ""
 "<strong>Pending and sent reminders</strong> — the queue of reminders\n"
 "      scheduled for you, and whether each has been delivered."
-msgstr "<strong>待发和已发的提醒</strong> — 为你排定的提醒队列，以及每一条是否已送达。"
+msgstr "<strong>待发送和已发送的提醒</strong> — 为你排定的提醒队列，以及每条提醒是否已送达。"
 
 #: src/app/web/templates/privacy.html:43
 msgid ""
 "<strong>Login sessions</strong> — a random session token per login.\n"
 "      Only its SHA-256 hash is stored, never the token itself."
-msgstr "<strong>登录会话</strong> — 每次登录一个随机会话令牌。仅存储其 SHA-256 哈希，从不存储令牌本身。"
+msgstr "<strong>登录会话</strong> — 每次登录使用一个随机会话令牌。我们只存储其 SHA-256 哈希，绝不存储令牌本身。"
 
 #: src/app/web/templates/privacy.html:47
 msgid ""
@@ -2722,15 +2720,15 @@ msgid ""
 "      it or want to revoke it, generate a new one and the old URL stops\n"
 "      working."
 msgstr ""
-"<strong>一个日历订阅令牌</strong>，如果你生成了的话。同样仅以 SHA-256 哈希存储。任何持有原始订阅 URL "
-"的人都能读取你即将到来的截止，所以请把它当作密码看待；若你遗失或想吊销它，生成一个新的，旧 URL 便会失效。"
+"<strong>日历订阅链接</strong>（如果你创建了一个）：我们只会保存它的 SHA-256 "
+"哈希。任何拿到链接的人都能查看你接下来的截止时间，因此请像保护密码一样保管好它。如果链接丢失或不想再使用，请创建一个新链接，旧链接会停止使用。"
 
 #: src/app/web/templates/privacy.html:54
 msgid ""
 "<strong>Whether your DMs are reachable</strong> — a single flag, set\n"
 "      when Discord refuses a DM, so the site can tell you why reminders\n"
 "      stopped arriving."
-msgstr "<strong>你的私信是否可送达</strong> — 一个单一标志，在 Discord 拒收私信时设置，好让网站能告诉你提醒为何停止到达。"
+msgstr "<strong>Discord 能否向你发送 DM</strong> — 当 DM 发送失败时，我们会保存一项设置，以便说明提醒停止的原因。"
 
 #: src/app/web/templates/privacy.html:59
 msgid ""
@@ -2738,33 +2736,33 @@ msgid ""
 "      the concerts, tags, and edits you made are recorded with you as the"
 "\n"
 "      author."
-msgstr "<strong>你所贡献的内容</strong> — 如果你拥有编辑权限，你创建的演出、标签和编辑会以你为作者被记录。"
+msgstr "<strong>你贡献的内容</strong> — 如果你拥有编辑权限，你创建的活动、标签以及所作的编辑都会记录你为作者。"
 
 #: src/app/web/templates/privacy.html:65
 msgid "What we do not collect"
-msgstr "我们不收集什么"
+msgstr "我们不收集的信息"
 
 #: src/app/web/templates/privacy.html:67
 msgid "No email address. Discord login never hands us one."
-msgstr "电子邮箱地址。Discord 登录从不向我们提供邮箱。"
+msgstr "我们不收集电子邮箱地址。通过 Discord 登录也不会向我们提供邮箱地址。"
 
 #: src/app/web/templates/privacy.html:68
 msgid "No IP addresses in the database."
-msgstr "数据库中的 IP 地址。"
+msgstr "数据库中不存储 IP 地址。"
 
 #: src/app/web/templates/privacy.html:70
 msgid ""
 "No message content. The bot uses no privileged intents, so it cannot\n"
 "      read your messages, your server list, or your friends."
-msgstr "消息内容。机器人不使用任何特权意图，因此无法读取你的消息、你的服务器列表或你的好友。"
+msgstr "机器人不会收集消息内容，也没有权限读取你的消息、服务器列表或好友列表。"
 
 #: src/app/web/templates/privacy.html:73
 msgid "No analytics, no third-party trackers, no advertising."
-msgstr "分析统计、第三方追踪器、广告。"
+msgstr "不使用分析工具、第三方跟踪器或广告。"
 
 #: src/app/web/templates/privacy.html:76
 msgid "Why we collect it"
-msgstr "我们为何收集"
+msgstr "我们为何收集这些信息"
 
 #: src/app/web/templates/privacy.html:78
 msgid ""
@@ -2772,11 +2770,11 @@ msgid ""
 "    show your own settings back to you. There is no other use. Nothing "
 "here\n"
 "    is profiled, scored, or used to make automated decisions about you."
-msgstr "仅仅是为了给你发送你所要求的演出截止提醒，以及把你自己的设置显示给你看。没有其他用途。这里的任何内容都不会被用于画像、评分或对你作出自动化决策。"
+msgstr "我们只会用这些信息发送你设置的活动截止提醒，并显示你的设置，不会用于其他用途。我们不会用这些信息建立用户画像、给你评分或对你作出自动决定。"
 
 #: src/app/web/templates/privacy.html:83
 msgid "Sharing"
-msgstr "共享"
+msgstr "信息共享"
 
 #: src/app/web/templates/privacy.html:85
 msgid ""
@@ -2784,9 +2782,7 @@ msgid ""
 "parties. The\n"
 "    only outbound traffic carrying anything about you is the Discord API\n"
 "    call that delivers your DM, which is the service you signed up for."
-msgstr ""
-"我们不共享任何内容。你的数据不会被出售、出租或交给第三方。唯一承载你相关信息的对外流量，是投递你私信的 Discord API 调用 — "
-"那正是你注册的服务本身。"
+msgstr "我们不会共享你的数据，也不会出售、出租或提供给其他公司。只会向 Discord 发送投递 DM 所需的信息。"
 
 #: src/app/web/templates/privacy.html:90
 msgid "How long we keep it"
@@ -2804,8 +2800,8 @@ msgid ""
 "would\n"
 "    rather say that than claim instant erasure."
 msgstr ""
-"只要你的账户存在，你的数据就会保留。数据库每晚备份到一个私有、非公开的存储桶（由存储服务商在静态时加密），这些备份会在 30 "
-"天后自动过期。因此在删除之后，你的数据会立即从线上站点消失，但可能在备份中最多再保留 30 天。与其声称即时抹除，我们更愿意如实说明。"
+"账户有效期间，我们会保存你的数据。数据库每晚都会备份到私有且加密的存储空间。备份会在 30 "
+"天后自动删除。删除账户后，你的数据会立即从网站中删除，但最多还会在备份中保留 30 天。"
 
 #: src/app/web/templates/privacy.html:100
 msgid "Cookies"
@@ -2818,9 +2814,7 @@ msgid ""
 "cookies,\n"
 "    which is why you are not being asked to click through a consent "
 "banner."
-msgstr ""
-"只有一个 Cookie：你的登录会话。它是严格必要的 — 没有它你就无法保持登录。没有任何分析或追踪 "
-"Cookie，这正是你不会被要求点击同意横幅的原因。"
+msgstr "我们只使用一个 Cookie 来保持登录状态，不使用分析或跟踪 Cookie，因此不会显示 Cookie 同意横幅。"
 
 #: src/app/web/templates/privacy.html:107
 msgid "Your rights"
@@ -2830,7 +2824,7 @@ msgstr "你的权利"
 msgid ""
 "You can ask for a copy of your data, ask for it to be corrected, or ask\n"
 "    for it to be deleted. Just get in touch:"
-msgstr "你可以要求获取你数据的副本、要求更正，或要求删除。尽管联系我们："
+msgstr "你可以申请获取数据副本、更正数据或删除数据。请通过以下方式联系我们："
 
 #: src/app/web/templates/privacy.html:114 src/app/web/templates/terms.html:111
 #, python-format
@@ -2845,7 +2839,7 @@ msgstr "电子邮箱："
 msgid ""
 "This deployment has not published contact details yet. If you reached\n"
 "    this page from a running site, contact whoever operates it."
-msgstr "此部署尚未公布联系方式。如果你是从一个正在运行的站点来到本页，请联系运营它的人。"
+msgstr "此部署尚未公布联系方式。如果你是在实际运行的网站上看到本页，请联系网站运营者。"
 
 #: src/app/web/templates/privacy.html:133
 msgid ""
@@ -2857,9 +2851,7 @@ msgid ""
 "\n"
 "    with the author field blanked out, so the events everyone else is\n"
 "    following do not disappear because one person left."
-msgstr ""
-"删除你的账户会移除上面列出的一切个人信息：你的账户记录、你的会话、你的提醒规则、预设及预设项、你的标签订阅、你记录的抽选结果、你排队中的提醒，以及你待发的通知。保留下来的是共享目录"
-" — 你贡献的演出、标签和编辑记录 — 其作者字段会被清空，好让大家都在关注的活动不会因为一个人离开而消失。"
+msgstr "删除账户后，你的登录会话、提醒、预设、标签关注和抽选结果等个人数据都会被删除。你添加的活动、标签和编辑记录会保留在共享目录中，但你的名字会被移除，以便其他人继续查看其关注的活动。"
 
 #: src/app/web/templates/privacy.html:142
 msgid "Changes to this policy"
@@ -2871,7 +2863,7 @@ msgid ""
 "    it. There is no mailing list to notify, since we do not have your "
 "email\n"
 "    address."
-msgstr "如果本政策发生变更，本页顶部的日期也会随之更改。由于我们没有你的电子邮箱地址，没有邮件列表可供通知。"
+msgstr "如果本政策发生变更，本页顶部的日期也会随之更改。由于我们没有你的电子邮箱地址，不会通过邮件列表通知。"
 
 #: src/app/web/templates/retroactive_apply.html:2
 msgid "confirm"
@@ -2880,7 +2872,7 @@ msgstr "确认"
 #: src/app/web/templates/retroactive_apply.html:8
 #, python-format
 msgid "Add %(name)s to active events?"
-msgstr "将 %(name)s 加入进行中的活动？"
+msgstr "将 %(name)s 添加到进行中的活动？"
 
 #: src/app/web/templates/retroactive_apply.html:10
 #, python-format
@@ -2893,9 +2885,9 @@ msgid ""
 "%(group_name)s\n"
 "    but not %(member_name)s individually:"
 msgstr ""
-"%(member_name)s 刚被加入 <b>%(group_name)s</b> "
-"组合标签。组合成员是在组合被附加到演出的那一刻才实体化的，因此已有的演出不会被自动改动。以下 %(count)s 场进行中的活动已带有 "
-"%(group_name)s，但未单独带有 %(member_name)s："
+"%(member_name)s 已添加到 <b>%(group_name)s</b> "
+"组合标签。组合成员只会在你把组合添加到活动时一并加入，因此现有活动不会自动更新。以下 %(count)s 个进行中的活动已有 "
+"%(group_name)s，但没有 %(member_name)s："
 
 #: src/app/web/templates/retroactive_apply.html:23
 #, python-format
@@ -2905,16 +2897,14 @@ msgid ""
 "    <b>not</b> re-expand the group or restore performers an editor pruned"
 " — only this one new\n"
 "    member is added."
-msgstr ""
-"应用会在下面每场演出上把 %(name)s 添加为一个表演者标签。它<b>不会</b>重新展开组合，也不会恢复被编辑者修剪掉的表演者 — "
-"只会添加这一位新成员。"
+msgstr "将 %(name)s 作为出演者添加到下方每个活动中。系统<b>不会</b>重新添加整个组合，也不会恢复编辑者已删除的出演者；只会添加这位新成员。"
 
 #: src/app/web/templates/retroactive_apply.html:35
 #, python-format
 msgid ""
 "<b>%(count)s</b> active event(s) will gain %(name)s.\n"
 "    Concerts already carrying %(name)s are skipped."
-msgstr "<b>%(count)s</b> 场进行中的活动将获得 %(name)s。已带有 %(name)s 的演出会被跳过。"
+msgstr "将为<b>%(count)s</b> 场进行中的活动添加 %(name)s。已有 %(name)s 的活动会被跳过。"
 
 #: src/app/web/templates/retroactive_apply.html:37
 msgid "Skip"
@@ -2923,14 +2913,14 @@ msgstr "跳过"
 #: src/app/web/templates/retroactive_apply.html:38
 #, python-format
 msgid "Apply to all %(count)s"
-msgstr "全部 %(count)s 场都应用"
+msgstr "应用到全部 %(count)s 场"
 
 #: src/app/web/templates/retroactive_apply.html:41
 #, python-format
 msgid ""
 "Nothing to apply — every active event with %(group_name)s already has "
 "%(member_name)s."
-msgstr "无需应用 — 每场带有 %(group_name)s 的进行中活动都已有 %(member_name)s。"
+msgstr "无需应用 — 带有 %(group_name)s 的每场进行中活动都已经有 %(member_name)s。"
 
 #: src/app/web/templates/retroactive_apply.html:42
 msgid "Back to tags"
@@ -2946,11 +2936,11 @@ msgstr "时区"
 
 #: src/app/web/templates/setup.html:12 src/app/web/templates/welcome.html:8
 msgid "Test DM"
-msgstr "测试私信"
+msgstr "测试 DM"
 
 #: src/app/web/templates/setup.html:14
 msgid "Your concerts"
-msgstr "你的演出"
+msgstr "你的活动"
 
 #: src/app/web/templates/setup.html:15
 msgid "Applications"
@@ -2960,7 +2950,7 @@ msgstr "申请情况"
 #, python-format
 msgid "We found %(count)s upcoming concert for you"
 msgid_plural "We found %(count)s upcoming concerts for you"
-msgstr[0] "为你找到 %(count)s 场即将到来的演出"
+msgstr[0] "为你找到 %(count)s 场即将到来的活动"
 
 #: src/app/web/templates/setup.html:24
 #, python-format
@@ -2973,12 +2963,12 @@ msgid ""
 "      cannot get to every date — switch off the ones you are not going "
 "for and we will not\n"
 "      chase you about them. You can change any of this later."
-msgstr "大多数人无法赶上每一个日期 — 把你不打算去的关掉，我们就不会为它们催你。这些之后都能随时更改。"
+msgstr "大多数人无法参加所有场次。关闭不打算参加的场次后，我们就不会再发送相关提醒。之后可以更改此设置。"
 
 #: src/app/web/templates/setup.html:58
 #, python-format
 msgid "<b id=\"keepCount\">%(kept)s</b> of %(total)s kept"
-msgstr "保留 <b id=\"keepCount\">%(kept)s</b> / %(total)s"
+msgstr "%(total)s 场中已保留 <b id=\"keepCount\">%(kept)s</b> 场"
 
 #: src/app/web/templates/setup.html:59
 msgid "Turn all off"
@@ -2991,7 +2981,7 @@ msgstr "继续"
 
 #: src/app/web/templates/setup.html:90
 msgid "No upcoming concerts yet"
-msgstr "暂无即将到来的演出"
+msgstr "暂无即将到来的活动"
 
 #: src/app/web/templates/setup.html:92
 msgid ""
@@ -3000,12 +2990,12 @@ msgid ""
 "continue, and your board\n"
 "      will fill in as new events drop."
 msgstr ""
-"我们还没有为你关注的标签找到任何即将到来的演出。<a href=\"/discover\">浏览正在进行的演出</a>去发现一些 — "
-"或者继续，随着新活动出现，你的看板会逐渐填满。"
+"暂未找到与你关注的标签匹配的未来活动。你可以<a "
+"href=\"/discover\">浏览活动</a>，也可以直接继续。之后出现的匹配活动会显示在看板上。"
 
 #: src/app/web/templates/setup.html:106
 msgid "Already applied to any of these?"
-msgstr "这些当中有你已经申请过的吗？"
+msgstr "这些轮次中有你已经申请过的吗？"
 
 #: src/app/web/templates/setup.html:108
 msgid ""
@@ -3013,19 +3003,19 @@ msgid ""
 "on a result. A\n"
 "      past round you lost does not change what happens next, so we do not"
 " ask."
-msgstr "只列出你仍可能身处其中的轮次 — 正在开放，或已截止、正等待结果。你已落选的过往轮次不会改变接下来发生什么，所以我们不问。"
+msgstr "这里只列出你仍可能参加的轮次 — 当前开放的，或已经截止、正在等待结果的。已经落选的过往轮次不会影响后续流程，因此无需再询问。"
 
 #: src/app/web/templates/setup.html:127
 msgid "Still open"
-msgstr "仍在开放"
+msgstr "仍可申请"
 
 #: src/app/web/templates/setup.html:127
 msgid "Awaiting result"
-msgstr "等待结果"
+msgstr "等待结果公布"
 
 #: src/app/web/templates/setup.html:133
 msgid "Anything you skip, we will ask about by DM when its result lands."
-msgstr "任何你跳过的，我们会在其结果公布时通过私信询问你。"
+msgstr "如果跳过某个轮次，我们会在结果公布时通过 DM 询问你。"
 
 #: src/app/web/templates/setup.html:134
 msgid "Back"
@@ -3037,14 +3027,14 @@ msgstr "完成"
 
 #: src/app/web/templates/setup.html:140
 msgid "Nothing to ask right now"
-msgstr "目前没什么要问的"
+msgstr "目前无需确认。"
 
 #: src/app/web/templates/setup.html:142
 msgid ""
 "None of the concerts you are tracking has a round still waiting on you. "
 "We will ask by\n"
 "      DM the moment one does."
-msgstr "你正在追踪的演出中，没有哪一轮还在等你。一旦有了，我们会立即通过私信询问你。"
+msgstr "你关注的活动目前都没有需要回答的轮次。出现时，我们会通过 DM 询问你。"
 
 #: src/app/web/templates/setup.html:154
 msgid "Setup complete"
@@ -3056,18 +3046,18 @@ msgstr "你的看板已就绪"
 
 #: src/app/web/templates/setup.html:157
 msgid "tracking"
-msgstr "追踪中"
+msgstr "关注中"
 
 #: src/app/web/templates/setup.html:172
 msgid "next deadline"
-msgstr "下个截止"
+msgstr "下一个截止时间"
 
 #: src/app/web/templates/setup.html:177
 #, python-format
 msgid ""
 "%(title)s is waiting on a payment — the closest thing here to\n"
 "    losing a ticket you have already won."
-msgstr "%(title)s 正在等待付款 — 这是此处最接近于失去一张你已经中签的票的情况。"
+msgstr "%(title)s 仍需付款。请确认付款截止时间。"
 
 #: src/app/web/templates/setup.html:181
 msgid "Go to my board"
@@ -3093,7 +3083,7 @@ msgstr[0] "%(count)s 个组合"
 #, python-format
 msgid "%(count)s performer"
 msgid_plural "%(count)s performers"
-msgstr[0] "%(count)s 位表演者"
+msgstr[0] "%(count)s 位出演者"
 
 #: src/app/web/templates/tags.html:15
 #, python-format
@@ -3110,7 +3100,7 @@ msgid ""
 "    %(performers)s,\n"
 "    %(venues)s"
 msgstr ""
-"%(concerts)s，横跨\n"
+"%(concerts)s，涵盖\n"
 "    %(franchises)s、\n"
 "    %(groups)s、\n"
 "    %(performers)s、\n"
@@ -3120,7 +3110,7 @@ msgstr ""
 #, python-format
 msgid "%(count)s tag is not translated everywhere yet"
 msgid_plural "%(count)s tags are not translated everywhere yet"
-msgstr[0] "有 %(count)s 个标签尚未翻译完整"
+msgstr[0] "有 %(count)s 个标签尚未完整翻译。"
 
 #: src/app/web/templates/tags.html:35
 msgid "+ New tag"
@@ -3131,11 +3121,11 @@ msgid ""
 "Following a tag subscribes you to every future concert carrying it, so "
 "counts\n"
 "here are what a rename or delete actually touches."
-msgstr "关注一个标签，即订阅了带有它的今后所有演出，所以这里的数字正是重命名或删除实际会触及的范围。"
+msgstr "关注标签后，你也会关注所有带有该标签的未来活动。这里的数量表示重命名或删除该标签时会影响多少场活动。"
 
 #: src/app/web/templates/tags.html:41
 msgid "Search franchises, groups, performers, venues…"
-msgstr "搜索系列、组合、表演者、场馆…"
+msgstr "搜索系列、组合、出演者、场馆…"
 
 #: src/app/web/templates/tags.html:53
 msgid "franchise"
@@ -3151,7 +3141,7 @@ msgstr "场馆"
 
 #: src/app/web/templates/tags.html:62 src/app/web/templates/tags.html:315
 msgid "concerts"
-msgstr "演出"
+msgstr "活动"
 
 #: src/app/web/templates/tags.html:63 src/app/web/templates/tags.html:317
 msgid "followers"
@@ -3163,7 +3153,7 @@ msgstr "成员"
 
 #: src/app/web/templates/tags.html:65
 msgid "upcoming"
-msgstr "即将到来"
+msgstr "即将举行"
 
 #: src/app/web/templates/tags.html:92
 msgid "Location link"
@@ -3187,13 +3177,13 @@ msgid ""
 "        concerts that already carry this group — expansion is "
 "materialised at the moment\n"
 "        you attach it. Use this to push a new member onto active events."
-msgstr "<b>应用到已有的演出。</b>添加成员不会触及已带有该组合的演出 — 展开是在你附加它的那一刻实体化的。用这个把新成员推送到进行中的活动上。"
+msgstr "<b>应用到现有活动。</b>添加成员不会更新已经带有此组合标签的活动。组合成员只会在首次添加组合时加入。使用此功能可将新成员添加到进行中的活动。"
 
 #: src/app/web/templates/tags.html:132
 #, python-format
 msgid "Apply %(name)s to %(count)s upcoming concert"
 msgid_plural "Apply %(name)s to %(count)s upcoming concerts"
-msgstr[0] "将 %(name)s 应用到 %(count)s 场即将到来的演出"
+msgstr[0] "将 %(name)s 应用到 %(count)s 场即将到来的活动"
 
 #: src/app/web/templates/tags.html:139 src/app/web/templates/tags.html:295
 msgid "Cancel"
@@ -3221,15 +3211,15 @@ msgstr "无系列"
 
 #: src/app/web/templates/tags.html:189
 msgid "— grouped by the region used in the Discover sidebar"
-msgstr "— 按发现页侧栏所用的地区分组"
+msgstr "— 按“发现”侧栏使用的地区分组"
 
 #: src/app/web/templates/tags.html:202
 msgid "Performers with no group"
-msgstr "无所属组合的表演者"
+msgstr "未归属组合的出演者"
 
 #: src/app/web/templates/tags.html:202
 msgid "— solo artists, or members not yet attached"
-msgstr "— 独立艺人，或尚未附加的成员"
+msgstr "— 独立艺人，或尚未加入组合的成员"
 
 #: src/app/web/templates/tags.html:227
 msgid "New tag"
@@ -3245,11 +3235,11 @@ msgstr "组合"
 
 #: src/app/web/templates/tags.html:237
 msgid "Performer"
-msgstr "表演者"
+msgstr "出演者"
 
 #: src/app/web/templates/tags.html:240 src/app/web/templates/tags.html:309
 msgid "A group contains performers. Attaching it to a concert adds its members."
-msgstr "组合包含表演者。将它附加到演出会添加其成员。"
+msgstr "组合由出演者组成。将组合添加到活动时，会同时添加其成员。"
 
 #: src/app/web/templates/tags.html:245
 msgid "As it is written on the official site"
@@ -3271,7 +3261,7 @@ msgstr "（可选）"
 msgid ""
 "Discover groups venues by region. Without one it lands in “No region” and"
 " drops out of region filtering."
-msgstr "发现页按地区对场馆分组。没有地区它会落入“无地区”，并从地区筛选中掉出。"
+msgstr "“发现”页面会按地区对场馆分组。未设置地区的场馆会显示在“无地区”下，且无法通过地区筛选找到。"
 
 #: src/app/web/templates/tags.html:285
 msgid "Map or venue URL"
@@ -3279,7 +3269,7 @@ msgstr "地图或场馆链接"
 
 #: src/app/web/templates/tags.html:290
 msgid "A franchise is just a parent for groups — nothing else to set."
-msgstr "系列只是组合的一个上级 — 没有其他需要设置的。"
+msgstr "系列只是组合的上级分类，无需设置其他内容。"
 
 #: src/app/web/templates/tags.html:294
 msgid "Create tag"
@@ -3287,26 +3277,26 @@ msgstr "创建标签"
 
 #: src/app/web/templates/tags.html:308
 msgid "A franchise is the top level. Groups hang off it."
-msgstr "系列是最顶层。组合挂在它下面。"
+msgstr "系列是最高层级，其中包含组合。"
 
 #: src/app/web/templates/tags.html:310
 msgid "A single performer. Can belong to a group, or stand alone."
-msgstr "单个表演者。可以隶属于某个组合，也可以独立存在。"
+msgstr "一位出演者，可以属于某个组合，也可以独立活动。"
 
 #: src/app/web/templates/tags.html:311
 msgid "A place. Discover filters venues by region, not individually."
-msgstr "一个地点。发现页按地区而非单独地筛选场馆。"
+msgstr "一个地点。发现页只能按地区筛选场馆，不能逐个筛选。"
 
 #: src/app/web/templates/tags.html:313
 #, python-brace-format
 msgid ""
 "A {kind} tag with this name is on {concerts} with {followers}. Adding a "
 "second one splits them — there is no merge yet."
-msgstr "一个同名的 {kind} 标签已在 {concerts}上，带有 {followers}。再加一个会把它们拆开 — 目前还没有合并功能。"
+msgstr "同名的 {kind} 标签已用于 {concerts}，并由 {followers} 关注。再创建一个会使两者保持分开，因为目前无法合并标签。"
 
 #: src/app/web/templates/tags.html:314
 msgid "concert"
-msgstr "演出"
+msgstr "活动"
 
 #: src/app/web/templates/tags.html:316
 msgid "follower"
@@ -3320,13 +3310,13 @@ msgid ""
 "    handled is a separate page — see the\n"
 "    <a href=\"/privacy\">privacy policy</a>."
 msgstr ""
-"这是使用 dekimasen.app "
-"的条款。登录即表示你同意它们。它们特意写得很短：这是一个免费的业余项目，不是一家公司，如实的版本一页就够了。你的数据如何处理是另一页 — 见<a "
+"这些是使用 dekimasen.app "
+"的条款。登录即表示你同意这些条款。我们特意将其写得很短：这是一个免费的个人项目，而不是公司，如实版本一页就够了。你的数据如何处理另见 <a "
 "href=\"/privacy\">隐私政策</a>。"
 
 #: src/app/web/templates/terms.html:19
 msgid "What this is"
-msgstr "这是什么"
+msgstr "本服务是什么"
 
 #: src/app/web/templates/terms.html:21
 msgid ""
@@ -3341,9 +3331,9 @@ msgid ""
 "    operator. Names and events listed here belong to the people who run\n"
 "    them; this site only points at their deadlines."
 msgstr ""
-"dekimasen.app 追踪日本演出的截止 — 抽选、序列码发售、直播票 — 并在你关注的截止到来前给你发送 Discord "
-"私信。它由一个人免费、尽力而为地运营。它与 "
-"Discord，以及任何艺人、经纪公司、场馆、主办方或票务运营商均无隶属、背书或代运营关系。此处列出的名称和活动归运营它们的人所有；本站只是指向它们的截止。"
+"dekimasen.app 会追踪日本活动的截止时间——包括抽选轮次、抽选码商品发售和直播票——并在你关注的事项截止前通过 Discord 发送 "
+"DM。该服务由个人免费运营，因此可能无法始终保持正常运行。它独立于 "
+"Discord、艺人、经纪公司、场馆、主办方和票务平台，这些机构不会运营或官方支持本服务。名称和活动归其所有者所有；本站只列出截止时间。"
 
 #: src/app/web/templates/terms.html:30
 msgid "Who can use it"
@@ -3355,9 +3345,7 @@ msgid ""
 "    minimum age requirement for your country. Discord's own terms apply "
 "to\n"
 "    you alongside these ones — nothing here overrides them."
-msgstr ""
-"你需要一个 Discord 账号才能登录，并且必须达到 Discord 针对你所在国家/地区的最低年龄要求。Discord "
-"自己的条款与这些条款一并适用于你 — 这里的任何内容都不会推翻它们。"
+msgstr "你需要 Discord 账号才能登录，也必须达到所在国家或地区使用 Discord 的最低年龄。Discord 的条款仍然适用。"
 
 #: src/app/web/templates/terms.html:37
 msgid "No guarantees"
@@ -3371,7 +3359,7 @@ msgid ""
 "    a reminder arrives on time, that it arrives at all, or that the "
 "deadline\n"
 "    it refers to is correct."
-msgstr "这是最要紧的部分，所以直说：本服务按现状提供，不附带任何形式的保证。不保证提醒会准时到达、会到达，或它所指的截止是正确的。"
+msgstr "本服务不作保证。提醒可能延迟、无法送达，或显示错误的截止时间。"
 
 #: src/app/web/templates/terms.html:45
 msgid ""
@@ -3384,9 +3372,8 @@ msgid ""
 "\n"
 "    about with the official source before you rely on it."
 msgstr ""
-"这三者在日常使用中都会发生。Discord "
-"可能拒绝或延迟一条私信。服务器可能宕机，调度器可能漏掉一次运行。编辑者可能打错日期，主办方也可能在录入之后改动它。请把你在这里看到的当作去核实的提示，而绝不要当作权威。在你依赖每一个你在意的截止之前，核实它是你自己的责任"
-" — 以官方来源为准。"
+"这些问题都可能发生。Discord 可能会阻止或延迟 "
+"DM，服务器也可能停止运行或漏发提醒。编辑者可能填错日期，主办方也可能更改日期。依赖这里显示的截止时间前，请务必查看官方来源。"
 
 #: src/app/web/templates/terms.html:53
 msgid "Limitation of liability"
@@ -3399,33 +3386,31 @@ msgid ""
 "    lottery, a ticket you did not get, or anything downstream of those.\n"
 "    This is a free service given away as a convenience; it comes with no\n"
 "    money and no guarantees attached."
-msgstr ""
-"在法律允许的范围内，运营者对你使用本服务所引起的任何损失概不负责 — "
-"错过的截止、落空的抽选、没拿到的票，或这些的任何后续影响。这是一项作为便利而免费赠予的服务；它不附带任何金钱，也不附带任何保证。"
+msgstr "在法律允许的范围内，运营者不对使用本服务造成的损失负责，例如错过截止时间、错过抽选或未能获得门票。本服务免费提供，不作保证。"
 
 #: src/app/web/templates/terms.html:62
 msgid "Acceptable use"
-msgstr "可接受的使用"
+msgstr "可接受的使用方式"
 
 #: src/app/web/templates/terms.html:64
 msgid "Do not scrape the site or send automated traffic at it."
-msgstr "不要抓取本站，也不要向它发送自动化流量。"
+msgstr "请勿使用机器人复制网站数据或发送自动请求。"
 
 #: src/app/web/templates/terms.html:66
 msgid ""
 "Do not attempt to break it, disrupt it, or reach data or accounts that\n"
 "      are not yours."
-msgstr "不要试图破坏它、扰乱它，或访问不属于你的数据或账户。"
+msgstr "不要试图破坏或干扰服务，也不要访问不属于你的数据或账户。"
 
 #: src/app/web/templates/terms.html:70
 msgid ""
 "If you have editor rights, use them in good faith: add real events,\n"
 "      keep entries accurate, and do not vandalise or spam the catalogue."
-msgstr "如果你拥有编辑权限，请本着善意使用：添加真实的活动，保持条目准确，不要破坏或向目录灌水。"
+msgstr "如果你拥有编辑权限，请善意使用：只添加真实活动，保持条目准确，不要破坏目录或发布垃圾内容。"
 
 #: src/app/web/templates/terms.html:75
 msgid "Editor contributions"
-msgstr "编辑者的贡献"
+msgstr "编辑者贡献的内容"
 
 #: src/app/web/templates/terms.html:77
 msgid ""
@@ -3439,20 +3424,20 @@ msgid ""
 "data\n"
 "    side."
 msgstr ""
-"编辑者创建的演出、标签和编辑会进入一个站上所有人都在用的共享目录。即使你不再使用本服务或要求删除账户，那些内容也会保留 — "
-"只会从中移除你的名字，好让大家都在关注的活动不会因为一个人离开而消失。通过贡献内容，你即同意这一安排。<a "
-"href=\"/privacy\">隐私政策</a>从数据的角度说的是同一件事。"
+"编辑者创建的活动、标签和编辑记录会进入网站所有用户共用的目录。即使你停止使用服务或要求删除账户，这些内容仍会保留 — "
+"只会移除你的姓名，以免你离开后其他人关注的活动也随之消失。提交内容即表示你同意这一安排。<a "
+"href=\"/privacy\">隐私政策</a>从数据处理角度说明了同一事项。"
 
 #: src/app/web/templates/terms.html:87
 msgid "Availability and shutdown"
-msgstr "可用性与关停"
+msgstr "服务可用性与关停"
 
 #: src/app/web/templates/terms.html:89
 msgid ""
 "The service may change, break, or shut down at any time, with or without\n"
 "    notice. Access may be withdrawn from anyone who abuses it or breaks\n"
 "    these terms. You can stop using it whenever you like."
-msgstr "本服务可能随时更改、中断或关停，无论是否事先通知。对滥用它或违反这些条款的任何人，其访问权限可能被撤回。你可以随时停止使用它。"
+msgstr "本服务可能随时更改、停止运行或关闭。对于滥用服务或违反这些条款的用户，我们可能会阻止其访问。你可以随时停止使用。"
 
 #: src/app/web/templates/terms.html:94
 msgid "Changes to these terms"
@@ -3482,13 +3467,13 @@ msgstr "联系方式"
 
 #: src/app/web/templates/terms.html:108
 msgid "Questions about any of this:"
-msgstr "有关这些的任何问题："
+msgstr "如对以上内容有任何疑问："
 
 #: src/app/web/templates/terms.html:130
 msgid ""
 "tl;dr: it's a helpful reminder tool built by a fan, not a ticket broker.\n"
 "    Double-check the official page before every deadline."
-msgstr "一句话：这是一个粉丝做的实用提醒工具，不是票务中介。每个截止前请再核对官方页面。"
+msgstr "简而言之：这是由粉丝制作的提醒工具，并非票务销售方。每个截止时间前都请查看官方页面。"
 
 #: src/app/web/templates/welcome.html:2
 msgid "welcome"
@@ -3513,11 +3498,11 @@ msgid ""
 "    everyone under it, a group, or a single performer — you can change "
 "any of this later. Tap\n"
 "    to follow."
-msgstr "你关注的任何人一有新活动，你就会立刻收到私信。选一个系列以覆盖其下所有人、一个组合，或某一位表演者 — 这些之后都能随时更改。点击即可关注。"
+msgstr "你关注的对象有新活动时会收到 DM。你可以关注系列、组合或出演者，之后也可以更改。"
 
 #: src/app/web/templates/welcome.html:25
 msgid "Search franchises, groups, performers…"
-msgstr "搜索系列、组合、表演者…"
+msgstr "搜索系列、组合、出演者…"
 
 #: src/app/web/templates/welcome.html:26
 msgid "Search tags"
@@ -3544,13 +3529,11 @@ msgid ""
 "    button — a standard loadout you won't have to rebuild every time. "
 "Rules on a single concert\n"
 "    always override it."
-msgstr ""
-"当你在某场演出上点击“设置我的提醒”，或按下 Discord 私信按钮时，触发的就是这个 — "
-"一套无需每次重建的标准配置。单场演出上的规则始终会覆盖它。"
+msgstr "在活动页面点击“设置我的提醒”或按下 Discord DM 按钮时，系统会使用此预设。每次都可以重复使用。单个活动另设的规则会优先使用。"
 
 #: src/app/web/templates/welcome.html:105
 msgid "Light touch"
-msgstr "轻量"
+msgstr "较少提醒"
 
 #: src/app/web/templates/welcome.html:106
 msgid "Relaxed"
@@ -3559,11 +3542,11 @@ msgstr "轻松"
 #: src/app/web/templates/welcome.html:108
 #: src/app/web/templates/welcome.html:122
 msgid "Opens — when applications open"
-msgstr "开放 — 申请开放时"
+msgstr "申请开始 — 开放申请时提醒"
 
 #: src/app/web/templates/welcome.html:109
 msgid "Closes — 1 day before"
-msgstr "截止 — 提前 1 天"
+msgstr "申请截止 — 提前 1 天"
 
 #: src/app/web/templates/welcome.html:110
 #: src/app/web/templates/welcome.html:124
@@ -3573,7 +3556,7 @@ msgstr "结果 — 结果公布时"
 
 #: src/app/web/templates/welcome.html:111
 msgid "Payment — when payment is due"
-msgstr "付款 — 到付款截止时"
+msgstr "付款截止 — 截止时提醒"
 
 #: src/app/web/templates/welcome.html:116
 msgid "Balanced"
@@ -3589,7 +3572,7 @@ msgstr "推荐"
 
 #: src/app/web/templates/welcome.html:123
 msgid "Closes — 3 days &amp; 1 day before"
-msgstr "截止 — 提前 3 天 &amp; 1 天"
+msgstr "申请截止 — 提前 3 天 &amp; 1 天"
 
 #: src/app/web/templates/welcome.html:125
 msgid "Payment — 1 day before"
@@ -3597,23 +3580,23 @@ msgstr "付款 — 提前 1 天"
 
 #: src/app/web/templates/welcome.html:130
 msgid "Maximum coverage"
-msgstr "最大覆盖"
+msgstr "更多提醒"
 
 #: src/app/web/templates/welcome.html:131
 msgid "On the ball"
-msgstr "万无一失"
+msgstr "频繁"
 
 #: src/app/web/templates/welcome.html:133
 msgid "Opens — 1 day before &amp; when applications open"
-msgstr "开放 — 提前 1 天 &amp; 申请开放时"
+msgstr "申请开始 — 提前 1 天 &amp; 申请开放时"
 
 #: src/app/web/templates/welcome.html:134
 msgid "Closes — 5, 3 &amp; 1 days before"
-msgstr "截止 — 提前 5、3 &amp; 1 天"
+msgstr "申请截止 — 提前 5、3 &amp; 1 天"
 
 #: src/app/web/templates/welcome.html:136
 msgid "Payment — 3 &amp; 1 days before"
-msgstr "付款 — 提前 3 &amp; 1 天"
+msgstr "付款 — 提前 3 天和 1 天"
 
 #: src/app/web/templates/welcome.html:141
 msgid ""
@@ -3621,21 +3604,19 @@ msgid ""
 "    couple of nudges before closes, since that's the one with an action "
 "to take. Fine-tune any of\n"
 "    these below, or later in Preferences."
-msgstr ""
-"每个单一时刻各一条提醒 — 开放、结果、付款 — "
-"外加临近截止前的几次提醒，因为那是唯一需要采取行动的。你可以在下面，或之后在偏好设置里，微调其中任何一项。"
+msgstr "申请开始、结果公布和付款截止时会各提醒一次。申请截止前还会提醒两次。你可以在下方修改，也可以稍后在“偏好设置”中更改。"
 
 #: src/app/web/templates/welcome.html:150
 msgid "Offset"
-msgstr "偏移"
+msgstr "提醒时间"
 
 #: src/app/web/templates/welcome.html:153
 msgid "Before or after"
-msgstr "之前或之后"
+msgstr "提前或延后"
 
 #: src/app/web/templates/welcome.html:157
 msgid "Anchor"
-msgstr "锚点"
+msgstr "截止类型"
 
 #: src/app/web/templates/welcome.html:161
 msgid "Remove this reminder"
@@ -3643,11 +3624,11 @@ msgstr "删除此提醒"
 
 #: src/app/web/templates/welcome.html:167
 msgid "Fine-tune these reminders"
-msgstr "微调这些提醒"
+msgstr "编辑这些提醒"
 
 #: src/app/web/templates/welcome.html:168
 msgid "Change any dropdown — each row stays a real sentence."
-msgstr "更改任一下拉框 — 每一行都保持为一句完整的话。"
+msgstr "使用下方菜单修改各条提醒。"
 
 #: src/app/web/templates/welcome.html:176
 msgid "+ Add a reminder"
@@ -3655,7 +3636,7 @@ msgstr "+ 添加提醒"
 
 #: src/app/web/templates/welcome.html:181
 msgid "Rules on a single concert always override this."
-msgstr "单场演出上的规则始终会覆盖它。"
+msgstr "单个活动另设的规则会优先于此预设。"
 
 #: src/app/web/templates/welcome.html:182
 msgid "Skip this step"
@@ -3663,7 +3644,7 @@ msgstr "跳过此步"
 
 #: src/app/web/templates/welcome.html:183
 msgid "Create preset &amp; continue"
-msgstr "创建预设并继续"
+msgstr "创建预设 &amp; 继续"
 
 #: src/app/web/templates/welcome.html:353
 msgid "Confirm your timezone"
@@ -3674,7 +3655,7 @@ msgid ""
 "Deadlines always show JST first, then this timezone — so you never have "
 "to convert a\n"
 "    23:59 JST close in your head."
-msgstr "截止总是先显示 JST，再显示这个时区 — 这样你就不用在脑子里换算一个 23:59 JST 的截止。"
+msgstr "截止时间始终先显示 JST，再显示此时区的时间 — 这样，你就不用在脑中换算 23:59 JST 对应几点。"
 
 #: src/app/web/templates/welcome.html:358
 #, python-format
@@ -3695,7 +3676,7 @@ msgid ""
 "Right now that reads\n"
 "  <span class=\"num\">%(tz_preview)s</span> for you."
 msgstr ""
-"现在对你来说，它显示为\n"
+"你当前看到的时间是\n"
 "  <span class=\"num\">%(tz_preview)s</span>。"
 
 #: src/app/web/templates/welcome.html:432
@@ -3708,11 +3689,11 @@ msgid ""
 "them. If your DMs\n"
 "    are closed, this is where you find out — not the night a lottery "
 "closes."
-msgstr "在你依赖它们之前，先确认提醒确实能在 Discord 上送达你。如果你的私信是关闭的，就在这里发现 — 而不是在某个抽选截止的夜晚。"
+msgstr "现在发送测试 DM，确认 Discord 提醒能否正常送达。如果 DM 被阻止，我们会在这里告诉你。"
 
 #: src/app/web/templates/welcome.html:446
 msgid "Send test DM"
-msgstr "发送测试私信"
+msgstr "发送测试 DM"
 
 #: src/app/web/templates/welcome.html:455
 msgid ""
@@ -3720,9 +3701,7 @@ msgid ""
 "reach you — you'll\n"
 "      get messages like a presale closing in 3 days, with the time in JST"
 " and your own zone."
-msgstr ""
-"✅ <b>测试提醒。</b>如果你能读到这条，你的截止私信就能送达你 — 你会收到诸如“某先行将在 3 天后截止”的消息，并附上 JST "
-"和你自己时区的时间。"
+msgstr "✅ <b>测试提醒。</b>如果你能看到这条消息，测试 DM 可以正常送达。截止提醒也会采用这种格式，同时显示 JST 和你的时区时间。"
 
 #: src/app/web/templates/welcome.html:461
 msgid ""
@@ -3730,7 +3709,7 @@ msgid ""
 "  (dev mode), so DMs can't be tested here."
 msgstr ""
 "此环境中未运行 Discord 机器人\n"
-"  （开发模式），所以无法在此测试私信。"
+"  （开发模式），因此无法在这里测试 DM。"
 
 #: src/app/web/templates/welcome.html:474
 msgid "Get your calendar feed"
@@ -3741,15 +3720,15 @@ msgid ""
 "Subscribe once in your phone or calendar app and every deadline you have "
 "a reminder for\n"
 "    stays in sync automatically — a belt to the DM's braces."
-msgstr "在你的手机或日历应用里订阅一次，你设置了提醒的每个截止都会自动保持同步 — 给私信上一道双保险。"
+msgstr "将此订阅添加到手机或日历应用后，你设置提醒的截止时间会自动更新。它也可以作为 Discord DM 的备用方式。"
 
 #: src/app/web/templates/welcome.html:481
 msgid "✓ Your feed link is ready — save it now, it won't be shown again."
-msgstr "✓ 你的订阅链接已就绪 — 请立即保存，它不会再次显示。"
+msgstr "✓ 订阅链接已就绪 — 请立即保存，它不会再次显示。"
 
 #: src/app/web/templates/welcome.html:486
 msgid "Add it in Google Calendar, Apple Calendar, or Outlook."
-msgstr "在 Google 日历、Apple 日历或 Outlook 中添加它。"
+msgstr "请在 Google 日历、Apple 日历或 Outlook 中添加。"
 
 #: src/app/web/templates/welcome.html:490
 msgid "Your feed is active."
@@ -3757,11 +3736,11 @@ msgstr "你的订阅已启用。"
 
 #: src/app/web/templates/welcome.html:500
 msgid "You're set — next we'll tidy up which concerts you're actually going for."
-msgstr "你已就绪 — 接下来我们会整理一下你实际打算去的演出。"
+msgstr "准备完成。接下来，请选择你计划参加的活动。"
 
 #: src/app/web/templates/welcome.html:501
 msgid "Continue to my concerts"
-msgstr "前往我的演出"
+msgstr "前往我的活动"
 
 #~ msgid "(suggested: %(venue)s)"
 #~ msgstr "（建议：%(venue)s）"
