@@ -208,17 +208,21 @@
     </div>
   </details>
 </div>
-{# Progressive enhancement only: mobile starts the sheet closed so tiles are
-   the first thing seen; with JS disabled it stays `open` (set above), i.e.
-   the no-JS fallback is the filters rendered in-flow after the tiles,
-   fully functional, just not sheet-shaped. The breakpoint here (760px) must
-   match .fsheet's own CSS breakpoint (style.css), which tracks .layout's
-   collapse point, not the 700px phone breakpoint used elsewhere. The
-   fsheet-js class is the JS-confirmed signal style.css gates the overlay/
-   fixed-sheet presentation on -- without it (JS off), an open .fsheet stays
-   a plain in-flow block, never the fixed bottom sheet + dark overlay. #}
+{# Progressive enhancement only: phones AND tablets start the sheet closed so
+   tiles are the first thing seen; with JS disabled it stays `open` (set
+   above), i.e. the no-JS fallback is the filters rendered in-flow, fully
+   functional, just not sheet-shaped. TWO boundaries govern the sheet now:
+   - This collapse breakpoint (1040px) must match the summary-visible range
+     -- i.e. style.css's `.fsheet` flip at min-width:1041 -- because
+     collapsing where no summary chip renders would leave no way to reopen.
+   - The bottom-sheet OVERLAY presentation is phone-only: style.css gates it
+     at max-width:700 (the phone section boundary), so 701-1040 opens as the
+     tablet inline disclosure panel instead.
+   The fsheet-js class is the JS-confirmed signal the overlay presentation
+   additionally requires -- without it (JS off), an open .fsheet stays a
+   plain in-flow block, never the fixed bottom sheet + dark overlay. #}
 <script>
-  if (matchMedia("(max-width: 760px)").matches)
+  if (matchMedia("(max-width: 1040px)").matches)
     document.querySelectorAll(".fsheet[open]").forEach((d) => {
       d.classList.add("fsheet-js");
       d.removeAttribute("open");

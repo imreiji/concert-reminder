@@ -61,8 +61,16 @@
         <img class="avatar" src="{{ user.avatar_url }}" alt="">
         <span>{{ user.username }}{% if user.is_admin %} <em class="badge">{{ _("admin") }}</em>{% elif user.is_editor %} <em class="badge">{{ _("editor") }}</em>{% endif %}</span>
         {% if user.is_editor %}<a class="btn" href="/concerts/new">{{ _("+ Add") }}</a>{% endif %}
-        <a class="btn quiet" href="/preferences">{{ _("Preferences") }}</a>
-        <a class="btn quiet" href="/auth/logout">{{ _("Log out") }}</a>
+        {# Preferences and Log out fold to icon-only in the tablet band
+           (701-1040px): the .nav-lbl text hides, the aria-hidden .nav-ico
+           glyph shows, and the anchor's aria-label/title carry the
+           accessible name so nothing depends on the visible text. On desktop
+           and phone the icon span is display:none (see .nav-ico in
+           style.css), so output there is unchanged. #}
+        <a class="btn quiet" href="/preferences"
+           aria-label="{{ _('Preferences') }}" title="{{ _('Preferences') }}"><span class="nav-lbl">{{ _("Preferences") }}</span><span class="nav-ico" aria-hidden="true">⚙</span></a>
+        <a class="btn quiet" href="/auth/logout"
+           aria-label="{{ _('Log out') }}" title="{{ _('Log out') }}"><span class="nav-lbl">{{ _("Log out") }}</span><span class="nav-ico" aria-hidden="true">⏻</span></a>
       {% else %}
         <a class="btn" href="{{ login_url(request) }}">{{ _("Sign in with Discord") }}</a>
       {% endif %}

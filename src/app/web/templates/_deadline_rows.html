@@ -41,7 +41,12 @@
     <span class="when-c num">{% set wl = dual_lines(d.at_utc, tz) %}<b>{{ wl[0] }}</b>{{ wl[1] }}</span>
     <span class="title-c">
       <a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a>
-      <small>{% if row.venue %}📍 {{ row.venue }}{% endif %}{% if row.venue and row.starts_at_utc %} · {% endif %}{% if row.starts_at_utc %}{{ day_month(row.starts_at_utc) }}{% endif %}</small>
+      {# data-happens folds the what-happens context (the .act-c cell) into
+         this small line via a ::after in the tablet band (701-1040px), where
+         the what-happens COLUMN is dropped. Desktop shows the column and
+         ignores the attribute; the phone drops the context (act-c hidden),
+         same as before. #}
+      <small data-happens="{{ d.label }} {{ deadline_label(d.anchor) }}">{% if row.venue %}📍 {{ row.venue }}{% endif %}{% if row.venue and row.starts_at_utc %} · {% endif %}{% if row.starts_at_utc %}{{ day_month(row.starts_at_utc) }}{% endif %}</small>
     </span>
     <span class="act-c"><b>{{ d.label }}</b> {{ deadline_label(d.anchor) }}</span>
     <span class="acts">

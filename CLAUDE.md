@@ -629,11 +629,26 @@ deleting them.
   `style.css`'s single `@media (max-width: 700px)` section at the end of
   the file (banner comment marks its start) -- desktop pixels stay
   untouched by construction, since nothing outside that block may change.
-  The one documented exception is `.fsheet` (Discover's filter sheet),
-  which switches at 760px instead because it must track `.layout`'s own
-  collapse point exactly (also 760px) -- splitting the two breakpoints
-  would open a 701-760px band where `.layout` has already stacked to one
-  column but `.fsheet` still thinks it's in two-column desktop mode.
+  **The tablet band (701-1040px) follows the same discipline**: one
+  banner-commented `@media (min-width: 701px) and (max-width: 1040px)`
+  section (just before the phone section) holds every band rule -- the
+  compact one-row header (wordmark secondary hidden, username hidden,
+  icon-only Preferences/Sign out via base.html's `.nav-lbl`/`.nav-ico`
+  spans), the swipeable 280px-column campaign board (the phone board's
+  mechanics at tablet numbers), the `.peek` 2-col, the coming-up rows'
+  data-happens fold, and the inline filter-sheet panel. The old scattered
+  1024/960 breakpoints died into it; the 900 (`.rnd2`) and 860 (`.plyt`)
+  queries deliberately remain standalone (they serve phones too);
+  `test_theme_and_tokens.py` pins the exact top-level max-width query
+  count so scattered-breakpoint drift fails CI.
+  The `.fsheet`/`.layout` coupling now sits at 1040/1041: `.layout`
+  collapses at 1040 and the `.fsheet` summary-flip is `min-width: 1041`,
+  so the two-column desktop and the sidebar presentation flip on the
+  identical boundary -- the invariant is "same boundary", not any magic
+  number. TWO further boundaries govern the sheet: discover.html's
+  collapse-on-load JS runs at <=1040 (must match the summary-visible
+  range), while the bottom-sheet OVERLAY presentation is phone-only at
+  <=700 -- in-band the sheet opens as an inline panel.
   Narrow phones (<=380px) get a NESTED `@media (max-width: 380px)` inside
   that same 700px block rather than a second top-level one, so the retrofit
   stays one section. It currently holds a single rule: drop the header's
