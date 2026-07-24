@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.routing import Match
@@ -16,6 +17,7 @@ from app.config import settings
 from app.db.models import User
 from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
 from app.db.session import get_session
+from app.domain.sentence import split_slots
 from app.domain.timezones import fmt_day_month, fmt_dual, fmt_dual_lines, utc_to_jst
 from app.domain.types import TagKind
 from app.domain.urls import safe_next
@@ -54,6 +56,26 @@ templates.env.globals["day_month"] = lambda dt: fmt_day_month(dt, i18n.get_local
 templates.env.globals["deadline_label"] = lambda anchor: i18n.gettext(LABEL_BY_ANCHOR[anchor])
 templates.env.globals["round_kind_label"] = lambda kind: i18n.gettext(LABEL_BY_ROUND_KIND[kind])
 templates.env.globals["current_locale"] = i18n.get_locale  # {{ current_locale() }}
+
+
+def sentence_slots(pattern: str, slots: dict[str, Markup]) -> Markup:
+    """Render a translated reminder-rule pattern with the caller's selects.
+
+    The reminder-rule builders (welcome's `remrow`, preferences' `sentence_fields`)
+    pass an already-TRANSLATED pattern (`_("Remind me {offset} {direction}
+    {anchor}.")`) plus a dict mapping each `{name}` to the server-built `<select>`
+    Markup. This joins the pattern's parts in order: text runs are escaped
+    (invariant 7 -- a translator-controlled string must not inject markup), and
+    each slot renders ONLY the trusted, server-built select. An unknown
+    placeholder raises (loud in the catalogue tests) via `split_slots`.
+    """
+    out: list = []
+    for kind, value in split_slots(pattern, slots.keys()):
+        out.append(slots[value] if kind == "slot" else value)
+    return Markup("").join(out)
+
+
+templates.env.globals["sentence_slots"] = sentence_slots
 # UGC parallel-column display: {{ loc(concert, "title") }} / {{ loc(tag, "name") }}
 # renders the viewer-locale variant, falling back to the original. Display
 # ONLY -- form values, data-* filter keys and URLs keep the original field.

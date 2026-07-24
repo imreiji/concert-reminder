@@ -357,7 +357,11 @@ def test_no_row_template_leaves_a_variant_label_box_unmarked():
     """import_preview.html has no cheap render fixture -- guard it at source.
 
     Missing one template leaves that one page ambiguous, which is the whole
-    bug; this catches a new row template that forgets the wrapper too.
+    bug; this catches a variant box that forgets the wrapper. The six
+    hand-rolled leg/round cards were collapsed into two shared partials
+    (_editor_leg_card.html + _editor_round_card.html), so the label boxes now
+    live in exactly one place each -- 2 per partial, 4 in total -- and every
+    one must still carry its `</span>` language marker.
     """
     tpl = Path(__file__).resolve().parents[1] / "src" / "app" / "web" / "templates"
     seen = 0
@@ -367,7 +371,7 @@ def test_no_row_template_leaves_a_variant_label_box_unmarked():
             seen += 1
             marker = text[:m.start()].rstrip()
             assert marker.endswith("</span>"), f"{path.name}: {m[1]} has no language marker"
-    assert seen == 22  # 6 new + 8 edit + 8 import preview
+    assert seen == 4  # leg card (day_label en/zh) + round card (round_label en/zh)
 
 
 # ── display: a zh viewer sees the variant, an en viewer the original ──────

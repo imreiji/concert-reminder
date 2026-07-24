@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ _("review import") }} — dekimasen.app{% endblock %}
 {% block content %}
+{%- from "_editor_leg_card.html" import leg_card with context %}
+{%- from "_editor_round_card.html" import round_card with context %}
 {#- The parsed draft on the editor's card/chip vocabulary, the SAME shape as
     concert_new.html -- each parsed day an `.eleg` card, each parsed round a
     `.redit` card whose leg chips say which days it covers. Pre-populated from
@@ -70,63 +72,20 @@
   {% endif %}
 
   <div id="day-rows" class="row-list">
+    {#- Each parsed day is an `.eleg` card via the shared partial. Import-only
+        twists: the venue picker PRE-SELECTS a scraped name that matched a VENUE
+        tag (matched_venue_tag_id, resolved server-side -- a derived match, not
+        a copied value), the + New venue button carries the scraped facts as
+        dialog-prefill hints, and an unmatched venue shows a per-leg notice. The
+        stable "d{index}" key is what round chips reference. -#}
     {% for d in parsed.days %}
-    <div class="eleg" data-variant-scope>
-      <input type="hidden" name="day_id" value="">
-      {#- The key a round's chips reference. Stable per parsed row; a leg the
-          editor adds in the browser gets a generated key instead. -#}
-      <input type="hidden" name="day_key" value="d{{ loop.index0 }}">
-      <div class="eleg-top">
-        <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ d.label }}"
-               data-variant-group="day_label" data-variant-slot="ja"
-               data-variant-label="{{ _('Performance label') }}">
-        <label class="vfld"><span class="vfld-tag">English</span>
-          <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
-                 value="{{ d.label_en or '' }}"
-                 data-variant-group="day_label" data-variant-slot="en"></label>
-        <label class="vfld"><span class="vfld-tag">中文</span>
-          <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
-                 value="{{ d.label_zh or '' }}"
-                 data-variant-group="day_label" data-variant-slot="zh"></label>
-        <span class="cancel-toggle">
-          <input type="hidden" name="day_cancelled" value="false">
-          <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                  title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
-        </span>
-        <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
-      </div>
-      <div class="eleg-fields">
-        {#- Same picker both editor pages carry, with one import-only twist:
-            when the scraped venue name matches an existing VENUE tag by
-            trimmed, case-insensitive name, that tag is PRE-SELECTED
-            (matched_venue_tag_id, resolved server-side in the route). A
-            derived match, not a copied value -- which is why it pre-fills
-            here even though round_label_en deliberately does not.
-
-            The blank option MUST stay first and valued "" for the no-match
-            case: the leg blank-row guard counts a venue pick, so a row
-            carrying a venue but no start time is not blank any more and
-            would 422 the whole commit. Never value="0" -- that reaches
-            resolve_day_venue_tags as an invalid id. -#}
-        <select name="day_venue_tag_id" data-venue-select>
-          <option value="">{{ _("No venue yet") }}</option>
-          {% for v in venue_tags %}
-          <option value="{{ v.id }}"{% if d.matched_venue_tag_id == v.id %} selected{% endif %}>{{ loc(v, "name") }}</option>
-          {% endfor %}
-        </select>
-        <button type="button" class="chip add" data-new-venue
-                data-hint-venue="{{ d.venue_name or '' }}"
-                data-hint-city="{{ d.venue_city or '' }}"
-                data-hint-address="{{ d.venue_address or '' }}">{{ _("+ New venue") }}</button>
-        {% if d.venue_name and not d.matched_venue_tag_id %}
-        <span class="dim tiny">{% trans venue=d.venue_name %}No venue tag matches “{{ venue }}” yet — add it with + New venue.{% endtrans %}</span>
-        {% endif %}
-        <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"
-          value="{{ fmt(d.doors_at_jst) }}"></label>
-        <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required
-          value="{{ fmt(d.starts_at_jst) }}"></label>
-      </div>
-    </div>
+    {{ leg_card(
+        day_key="d" ~ loop.index0,
+        label=d.label, label_en=d.label_en or '', label_zh=d.label_zh or '',
+        venue_id=d.matched_venue_tag_id,
+        doors=fmt(d.doors_at_jst), starts=fmt(d.starts_at_jst),
+        hint_venue=d.venue_name or '', hint_city=d.venue_city or '', hint_address=d.venue_address or '',
+        show_venue_hint=(d.venue_name and not d.matched_venue_tag_id), venue_hint_name=d.venue_name) }}
     {% else %}
     <p class="dim tiny" data-no-legs-row>{{ _("No days were imported — add the first one below.") }}</p>
     {% endfor %}
@@ -143,48 +102,19 @@
   </div>
 
   <div id="round-rows" class="row-list">
+    {#- No qualifier chips here (with_qualifiers=False): a parsed import has no
+        saved rounds a nested UPGRADE round could qualify against. Parsed rounds
+        carry no leg info, so nothing is pre-selected unless a draft supplied
+        leg_keys_selected. -#}
     {% for r in parsed.rounds %}
-    <div class="redit" data-variant-scope>
-      <input type="hidden" name="round_id" value="">
-      <div class="redit-top">
-        <input class="redit-name" name="round_label" required maxlength="200"
-               placeholder="1次先行抽選" value="{{ r.label }}"
-               data-variant-group="round_label" data-variant-slot="ja"
-               data-variant-label="{{ _('Round label') }}">
-        <label class="vfld"><span class="vfld-tag">English</span>
-          <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-                 value="{{ r.label_en or '' }}"
-                 data-variant-group="round_label" data-variant-slot="en"></label>
-        <label class="vfld"><span class="vfld-tag">中文</span>
-          <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-                 value="{{ r.label_zh or '' }}"
-                 data-variant-group="round_label" data-variant-slot="zh"></label>
-        {#- The scrape only ever fills Japanese, so this is the page where a
-            remembered triple saves the most typing. -#}
-        <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>
-        <select name="round_kind">{% for k in kinds %}
-          <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ round_kind_label(k) }}</option>
-        {% endfor %}</select>
-        <button type="button" class="x" title="{{ _('Remove this round') }}" data-remove-round>×</button>
-      </div>
-      {#- No leg info from the parse, so nothing pre-selected (all-legs). The
-          chips are built for the parsed days via the shared partial. -#}
-      {% with value = r.leg_keys, selected = r.leg_keys_selected or none %}{% include "_round_leg_chips.html" %}{% endwith %}
-      <div class="redit-times">
-        <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at"
-          value="{{ fmt(r.opens_at_jst) }}"></label>
-        <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at"
-          value="{{ fmt(r.closes_at_jst) }}"></label>
-        <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at"
-          value="{{ fmt(r.results_at_jst) }}"></label>
-        <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at"
-          value="{{ fmt(r.payment_at_jst) }}"></label>
-      </div>
-      <div class="redit-extra">
-        <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}" value="{{ r.url or '' }}">
-        <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}" value="{{ r.notes or '' }}">
-      </div>
-    </div>
+    {{ round_card(
+        label=r.label, label_en=r.label_en or '', label_zh=r.label_zh or '',
+        kind=r.kind,
+        opens=fmt(r.opens_at_jst), closes=fmt(r.closes_at_jst),
+        results=fmt(r.results_at_jst), payment=fmt(r.payment_at_jst),
+        url=r.url or '', notes=r.notes or '',
+        leg_value=r.leg_keys, leg_selected=r.leg_keys_selected or none,
+        with_qualifiers=False) }}
     {% else %}
     <p class="dim tiny" data-no-rounds>{{ _("No rounds yet — add the first one below.") }}</p>
     {% endfor %}
@@ -266,75 +196,11 @@
 {% include "_tag_picker_script.html" %}
 
 <template id="day-row-template">
-  <div class="eleg" data-variant-scope>
-    <input type="hidden" name="day_id" value="">
-    <input type="hidden" name="day_key" value="">
-    <div class="eleg-top">
-      <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}"
-             data-variant-group="day_label" data-variant-slot="ja"
-             data-variant-label="{{ _('Performance label') }}">
-      <label class="vfld"><span class="vfld-tag">English</span>
-        <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
-               data-variant-group="day_label" data-variant-slot="en"></label>
-      <label class="vfld"><span class="vfld-tag">中文</span>
-        <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
-               data-variant-group="day_label" data-variant-slot="zh"></label>
-      <span class="cancel-toggle">
-        <input type="hidden" name="day_cancelled" value="false">
-        <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
-      </span>
-      <button type="button" class="x" title="{{ _('Remove this performance') }}" data-remove-leg>×</button>
-    </div>
-    <div class="eleg-fields">
-      {#- A cloned row starts blank, venue included -- see the note on the
-          parsed leg row above for why a pre-selection here would 422. -#}
-      <select name="day_venue_tag_id" data-venue-select>
-        <option value="">{{ _("No venue yet") }}</option>
-        {% for v in venue_tags %}
-        <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
-        {% endfor %}
-      </select>
-      <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
-      <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
-      <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
-    </div>
-  </div>
+  {{ leg_card() }}
 </template>
 
 <template id="round-row-template">
-  <div class="redit" data-variant-scope>
-    <input type="hidden" name="round_id" value="">
-    <div class="redit-top">
-      <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選"
-             data-variant-group="round_label" data-variant-slot="ja"
-             data-variant-label="{{ _('Round label') }}">
-      <label class="vfld"><span class="vfld-tag">English</span>
-        <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-               data-variant-group="round_label" data-variant-slot="en"></label>
-      <label class="vfld"><span class="vfld-tag">中文</span>
-        <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-               data-variant-group="round_label" data-variant-slot="zh"></label>
-      {#- Fills all three boxes above from a triple this editor has typed
-          before -- see _round_phrase_dialog.html, included after </form>. -#}
-      <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>
-      <select name="round_kind">{% for k in kinds %}
-        <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
-      {% endfor %}</select>
-      <button type="button" class="x" title="{{ _('Remove this round') }}" data-remove-round>×</button>
-    </div>
-    {% with value = "", selected = none %}{% include "_round_leg_chips.html" %}{% endwith %}
-    <div class="redit-times">
-      <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at"></label>
-      <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at"></label>
-      <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at"></label>
-      <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at"></label>
-    </div>
-    <div class="redit-extra">
-      <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}">
-      <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}">
-    </div>
-  </div>
+  {{ round_card(with_qualifiers=False) }}
 </template>
 {% include "_leg_chips_script.html" %}
 {% endblock %}

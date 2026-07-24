@@ -77,48 +77,18 @@ which keeps its name. Entries below renumbered 4-16; the
 sign-in-bounce entry's demo-parity/Discover-head pointer was bumped in
 place.
 
+The 2026-07-24 evening pass ships #1 itself: the editor coherence pass went
+brainstorm -> spec -> reconciled demos (PR #91) -> implementation (PR #92)
+in one day, including its sentence-builder added scope and two riders the
+build surfaced (translated offset labels, a standing placeholder-integrity
+hygiene test). The tablet band rises to #1 by pure removal; every entry
+shifts up one, and the sign-in-bounce cross-reference was bumped in place
+once more.
+
 ## Proposed (highest impact first)
 
 
-### 1. Editor and concert pages coherence pass (post-trilingual format)
-
-Impact: high - effort: large (full brainstorm + demo mandated). Raised:
-2026-07-23 (owner).
-
-The trilingual arc and the draft-import build changed a lot of boxes --
-every label became a three-field trio, legs grew venue pickers and hint
-plumbing, rounds grew phrase pickers -- and the four surfaces that share
-that vocabulary (concert_new, import_preview, concert_edit, concert_detail)
-accreted the changes rather than being designed for them. The owner wants
-the set re-thought as a whole so the new format makes sense end to end.
-One concrete, named pain point is NON-NEGOTIABLE scope: in the leg
-(performance) box, the × remove-this-leg button sits directly beside the
-Cancelled toggle -- a destructive control shoulder-to-shoulder with a state
-toggle, visually confusable, and the owner explicitly wants that adjacency
-gone. Per the CLAUDE.md pattern this is a spec + concept-demo feature:
-update `dekimasen-demo.html` (and the onboarding demo's import frame) as
-the design moves. Absorbs the former "Editor page parity with the demo"
-entry (see the note below the Proposed list) -- its demo-frame debt (the
-editor frame still showing the dropped concert-level venue field) rides
-along as a hard requirement.
-
-Added scope (2026-07-23, owner): the sentence-style reminder-rule builder
-is part of this pass. Both surfaces that offer it -- the welcome wizard's
-default-reminders fine-tune rows (`welcome.html`) and Preferences'
-`sentence_fields` macro (`preferences.html`) -- were designed after the
-each-rule-reads-as-a-complete-sentence decision but BEFORE i18n, and the
-format was never adapted: translated fragments ("Remind me", "day(s)",
-"before", "each") interleave with the selects in FIXED English word order,
-so ja/zh translate each fragment correctly and the assembled sentence
-ungrammatically (ja wants the anchor phrase first -- 「締切の1日前に」 --
-and zh likewise hangs 前/后 off the anchor). The redesign needs per-locale
-fragment ORDER (a per-locale slot template driving where each select sits),
-not just translated fragment text. One hard defect rides along: welcome.html's
-client-side row builder writes untranslated literal "before"/"after" option
-text into rows it creates (~line 246), so a freshly added row is part-English
-in every locale.
-
-### 2. A real tablet layout for the 701-1040px band
+### 1. A real tablet layout for the 701-1040px band
 
 Impact: medium-high (every tablet user; the owner reports them unhappy) -
 effort: medium-large (brainstorm + demo mandated). Raised: 2026-07-23
@@ -135,7 +105,7 @@ NOT scattered overrides), and it must reconcile with the documented 760px
 `.fsheet`/`.layout` coupling, which sits INSIDE the new band and is the
 likely first thing the design revisits.
 
-### 3. Inline tag creation for unmatched scraped/draft tags
+### 2. Inline tag creation for unmatched scraped/draft tags
 
 Impact: medium - effort: small-medium. Raised: 2026-07-23 (owner: an
 unmatched tag should offer creation, "not just throw it back to narnia").
@@ -153,7 +123,7 @@ name + kind + trilingual names may be enough for v1) and joins the picker
 selection on success. Must keep `create_tag`'s kind-scoped 409 semantics
 and invariant 3 (no group re-expansion surprises from the create path).
 
-### 4. event_id slugs should prefer title_en
+### 3. event_id slugs should prefer title_en
 
 Impact: low-medium - effort: small. Raised: 2026-07-23 (assistant, while
 verifying the import path).
@@ -168,7 +138,7 @@ at every create boundary, the fix is one line of preference -- slug from
 concerts keep their ids (event_id is editor-owned after creation; no
 backfill).
 
-### 5. Agent-import review-debt batch (deferred minors)
+### 4. Agent-import review-debt batch (deferred minors)
 
 Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
 whole-branch review of the agent-import build; the first three triaged
@@ -189,7 +159,7 @@ it works today, but it's a typo waiting to confuse someone (spotted
 behavior-safe today; batched so they stop being rediscovered by every
 future reviewer.
 
-### 6. Minute-level reminder offsets
+### 5. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -229,7 +199,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 7. Eventernote actor-page discovery
+### 6. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -249,7 +219,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 8. Collapse a round's multiple "Coming up" rows into one
+### 7. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
 branch review). Re-ranked 2026-07-19 (twice).
@@ -287,7 +257,7 @@ few pixels of table height on desktop. Still deferred for the same reason
 as before (collapsing changes the htmx swap shape), but the phone case is
 now the more visible motivator of the two.
 
-### 9. Franchise-aware round-label suggestions
+### 8. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -308,7 +278,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 10. Nine of ten `RoundKind` members are purely cosmetic
+### 9. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -331,7 +301,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 11. Pin the Python version across dev, CI and the server
+### 10. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -355,7 +325,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 12. PWA / installability
+### 11. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -375,7 +345,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 13. In-app LLM extraction behind the same draft seam
+### 12. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -393,7 +363,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 14. Minor demo-parity cosmetics
+### 13. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -421,7 +391,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 15. Discover sort in the content head, plus the catalogue-count note
+### 14. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -447,7 +417,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 16. Name the destination on the sign-in bounce
+### 15. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -463,7 +433,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#14) and the Discover head (#15) because
+Ranked below the demo-parity batch (#13) and the Discover head (#14) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -481,6 +451,30 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Editor and concert pages coherence pass (2026-07-24)
+
+Shipped as: spec + reconciled demos in PR #91, implementation in PR #92 --
+filed, designed and built the same day. The four owner decisions from the
+brainstorm: keep the flat editor structure (the demo's never-built
+nested-rounds concept is retired; the demos were rebuilt to match shipped),
+destructive actions move into a top-right kebab menu (`details.kebab`, the
+app's first overflow menu, deliberately single-purpose -- the x beside
+Cancelled is gone), ja/EN/中文 label trios sit on an always-visible second
+row, and the sentence-style reminder builders render through locale-ordered
+slot patterns (`domain/sentence.py:split_slots` + the `sentence_slots`
+Jinja global) so ja reads 「申込締切の1日前に通知。」 instead of English
+word order. The structural win underneath: the six hand-rolled leg/round
+card copies collapsed into `_editor_leg_card.html`/`_editor_round_card.html`,
+shared by all three editor surfaces AND their <template> blocks. Riders
+shipped along the way: offset labels became real msgids (bare 時/时 as the
+moment label so the direction-hidden sentence completes), welcome's
+JS-added rows are fully translated (clone a server-rendered template), and
+both catalogues gained a placeholder-integrity hygiene test. The
+concert_detail viewer was untouched by design. Revision pass: the tablet
+band rises to #1 by removal only; nothing re-ranked on merit; the
+minute-offsets entry was re-checked (the new offset-label msgids change
+nothing about its missing minutes column).
 
 ### Major i18n translation calibration (owner review pass) (2026-07-24)
 

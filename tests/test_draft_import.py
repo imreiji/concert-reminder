@@ -289,3 +289,25 @@ def test_dist_example_draft_is_byte_identical_to_repo_skill():
         / "references" / "example-draft.yaml"
     )
     assert dist.read_bytes() == repo.read_bytes()
+
+
+async def test_import_preview_serves_kebab_with_remove_in_menu(client, db):
+    """The import preview is the third surface built on the shared card
+    partials -- so it too moves Remove into a kebab menu (spec D2). Every
+    remove control is a danger `.kmenu` item carrying its handler hook, never
+    an inline × beside the Cancelled toggle."""
+    await _seed_tags(db)
+    login_as(client, EDITOR_ID, "reiji")
+    body = client.post("/concerts/import/draft", data={"draft": DRAFT}).text
+
+    assert 'class="kebab"' in body
+    assert body.count("data-remove-leg>") == body.count(
+        'class="kitem danger" type="button" data-remove-leg>'
+    )
+    assert body.count("data-remove-round>") == body.count(
+        'class="kitem danger" type="button" data-remove-round>'
+    )
+    # the leg's remove is nested in the menu, not inline next to Cancelled
+    seg = body.split("data-cancel-toggle", 1)[1].split("data-remove-leg", 1)[0]
+    assert 'class="kmenu"' in seg
+    assert "data-remove-leg>×" not in body

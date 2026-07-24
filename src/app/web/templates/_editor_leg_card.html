@@ -1,0 +1,80 @@
+{#- ONE leg (performance) card -- the single source of the `.eleg` markup all
+    three editor surfaces (concert_new, concert_edit, import_preview) and their
+    <template> clone-rows render through. Before this, six hand-rolled copies
+    drifted apart on every card change.
+
+    Imported `with context` so it sees the render's `venue_tags`/`loc`/`_`; the
+    per-row data comes in as explicit args. Anatomy matches the demo editor
+    frame (docs/superpowers/demo/dekimasen-demo.html): a `.cardtop` (ja label,
+    Cancelled chip, kebab), a `.vary` variants row (EN + 中文, then the
+    import-only venue hint), then the `.eleg-fields` row. The destructive
+    Remove lives ONLY inside the kebab menu -- never inline beside Cancelled
+    (spec D2). `data-remove-leg` rides the menu item, so the delegated remove
+    handler in _leg_chips_script.html keeps its hook (it climbs to `.eleg`).
+
+    Args:
+      day_id, day_key   hidden identity fields (day_key is what round chips ref)
+      label/_en/_zh     the ja label and its two locale variants
+      cancelled         bool -> .cancelled class + pressed toggle + hidden field
+      venue_id          venue tag id to pre-select, or none (blank rows pass none
+                        so an untouched trailing clone stays blank -- see
+                        _leg_chips_script.addRow)
+      doors, starts     pre-formatted "YYYY-MM-DDTHH:MM" strings (caller runs
+                        jst()/fmt(); the macro just prints them)
+      hint_venue/_city/_address  import-only + New venue dialog prefill; when
+                        NOT none, the three data-hint-* attrs are emitted (the
+                        clone template passes none, staying hint-free)
+      show_venue_hint, venue_hint_name  import-only unmatched-venue notice on
+                        the variants row -#}
+{% macro leg_card(day_id="", day_key="", label="", label_en="", label_zh="",
+                  cancelled=False, venue_id=none, doors="", starts="",
+                  hint_venue=none, hint_city="", hint_address="",
+                  show_venue_hint=False, venue_hint_name="") %}
+<div class="eleg{% if cancelled %} cancelled{% endif %}" data-variant-scope>
+  <input type="hidden" name="day_id" value="{{ day_id }}">
+  <input type="hidden" name="day_key" value="{{ day_key }}">
+  <div class="cardtop">
+    <input class="cardname" name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ label }}"
+           data-variant-group="day_label" data-variant-slot="ja"
+           data-variant-label="{{ _('Performance label') }}">
+    <span class="cancel-toggle">
+      <input type="hidden" name="day_cancelled" value="{{ 'true' if cancelled else 'false' }}">
+      <button type="button" class="chip{% if cancelled %} on{% endif %}" data-cancel-toggle
+              aria-pressed="{{ 'true' if cancelled else 'false' }}"
+              title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
+    </span>
+    <details class="kebab">
+      <summary title="{{ _('More actions') }}">&#8943;</summary>
+      <div class="kmenu">
+        <button class="kitem danger" type="button" data-remove-leg>{{ _("Remove this performance") }}</button>
+      </div>
+    </details>
+  </div>
+  <div class="vary">
+    <label class="vfld"><span class="vfld-tag">English</span>
+      <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ label_en }}"
+             data-variant-group="day_label" data-variant-slot="en"></label>
+    <label class="vfld"><span class="vfld-tag">中文</span>
+      <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ label_zh }}"
+             data-variant-group="day_label" data-variant-slot="zh"></label>
+    {% if show_venue_hint %}
+    <span class="dim tiny venue-hint">{% trans venue=venue_hint_name %}No venue tag matches “{{ venue }}” yet — add it with + New venue.{% endtrans %}</span>
+    {% endif %}
+  </div>
+  <div class="eleg-fields">
+    {#- The blank first option MUST stay first and valued "": a leg carrying a
+        venue but no start time is not blank any more, so a pre-selected venue
+        on an untouched trailing clone would 422 the whole save. -#}
+    <select name="day_venue_tag_id" data-venue-select>
+      <option value="">{{ _("No venue yet") }}</option>
+      {% for v in venue_tags %}
+      <option value="{{ v.id }}"{% if venue_id is not none and venue_id == v.id %} selected{% endif %}>{{ loc(v, "name") }}</option>
+      {% endfor %}
+    </select>
+    <button type="button" class="chip add" data-new-venue{% if hint_venue is not none %}
+            data-hint-venue="{{ hint_venue }}" data-hint-city="{{ hint_city }}" data-hint-address="{{ hint_address }}"{% endif %}>{{ _("+ New venue") }}</button>
+    <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at" value="{{ doors }}"></label>
+    <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required value="{{ starts }}"></label>
+  </div>
+</div>
+{% endmacro %}

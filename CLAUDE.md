@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 1207 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 1222 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -57,7 +57,12 @@ authors drafts is downloadable from the import page) and a native-review
 i18n calibration applied across both catalogues, including a ja
 agent-proofread round and the 132 reviewed English-source fixes applied
 at the msgid layer (mapping preserved in
-`docs/i18n-english-source-fixes-2026-07-24.csv`) -- have shipped since).
+`docs/i18n-english-source-fixes-2026-07-24.csv`) -- and the editor
+coherence pass: the three editor surfaces' leg/round cards share two
+partials, destructive actions moved into a kebab menu, EN/中文 variants
+got their own row, and the sentence-style reminder builders render
+through locale-ordered slot patterns so ja/zh read grammatically -- have
+shipped since).
 
 ## Commands
 
@@ -530,6 +535,29 @@ deleting them.
 - Tag chips are the universal element; "+ Add x" buttons share the exact
   chip silhouette. Pickers are native <dialog> white cards: header (title +
   ×), search, chip list; no footer; backdrop-click and Esc close.
+- Editor leg/round cards render through the shared partials
+  `_editor_leg_card.html`/`_editor_round_card.html` -- concert_new,
+  concert_edit and import_preview (their loops AND `<template>` blocks) all
+  use them. Never hand-roll a card copy again; that six-site duplication is
+  exactly what the coherence pass removed. Card anatomy: ja label on the
+  top row, EN/中文 on the always-visible `.vary` row, fields below.
+- Destructive card actions live in the kebab menu (`details.kebab`,
+  top-right; menu items keep the `data-remove-leg`/`data-remove-round`
+  hooks). It is the app's ONLY overflow menu and stays single-purpose:
+  destructive actions only, never a place to bury regular controls. The
+  inline × beside the Cancelled toggle was removed deliberately (owner
+  call) -- do not reintroduce it.
+- The sentence-style reminder builders (welcome, Preferences) render
+  through locale-ordered slot patterns: ONE translatable pattern msgid per
+  builder (e.g. ja 「{anchor}の{offset}{direction}に通知。」), split by
+  `domain/sentence.py:split_slots` (raises on unknown slots) and rendered
+  by the `sentence_slots` Jinja global -- text parts escaped, only the
+  server-built selects pass as Markup (invariant 7). Translators own the
+  word order; option labels (offsets, anchors) are their own msgids
+  translated per-request in `routes/welcome.py`. A dropped placeholder is
+  caught by `test_i18n_catalogues.py`'s placeholder-integrity tests.
+  Welcome's JS adds rows by cloning the server-rendered
+  `<template id="remrule-template">` -- never by assembling English DOM.
 - Tile display rules: franchise+group → "F · G"; group only → G; artists
   only → artist chips; >1 venue → "📍 Multiple".
 - Times always render dual: JST + the user's timezone.

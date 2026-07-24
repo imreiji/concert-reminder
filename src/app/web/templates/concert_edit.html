@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ _("edit") }} {{ concert.title }} — dekimasen.app{% endblock %}
 {% block content %}
+{%- from "_editor_leg_card.html" import leg_card with context %}
+{%- from "_editor_round_card.html" import round_card with context %}
 {#- Rounds and legs lead; everything else folds.
 
     The edit this page actually gets opened for is "a new round was just
@@ -64,46 +66,17 @@
 
   <div id="round-rows" class="row-list">
     {% for r, leg_value, leg_ids, qual_value, qual_ids in rounds_with_chips %}
-    <div class="redit" data-variant-scope>
-      <input type="hidden" name="round_id" value="{{ r.id }}">
-      <div class="redit-top">
-        <input class="redit-name" name="round_label" required maxlength="200"
-               placeholder="1次先行抽選" value="{{ r.label }}"
-               data-variant-group="round_label" data-variant-slot="ja"
-               data-variant-label="{{ _('Round label') }}">
-        <label class="vfld"><span class="vfld-tag">English</span>
-          <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-                 value="{{ r.label_en or '' }}"
-                 data-variant-group="round_label" data-variant-slot="en"></label>
-        <label class="vfld"><span class="vfld-tag">中文</span>
-          <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-                 value="{{ r.label_zh or '' }}"
-                 data-variant-group="round_label" data-variant-slot="zh"></label>
-        {#- Fills all three boxes above from a triple this editor has typed
-            before -- see _round_phrase_dialog.html, included after </form>. -#}
-        <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>
-        <select name="round_kind">{% for k in kinds %}
-          <option value="{{ k.value }}" {% if k == r.kind %}selected{% endif %}>{{ round_kind_label(k) }}</option>
-        {% endfor %}</select>
-        <button type="button" class="x" title="{{ _('Remove this round') }}" data-remove-round>×</button>
-      </div>
-      {% with value = leg_value, selected = leg_ids %}{% include "_round_leg_chips.html" %}{% endwith %}
-      {% with value = qual_value, selected = qual_ids, self_id = r.id, kind_value = r.kind.value %}{% include "_round_qualifier_chips.html" %}{% endwith %}
-      <div class="redit-times">
-        <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at"
-          value="{{ jst(r.opens_at_utc).strftime('%Y-%m-%dT%H:%M') if r.opens_at_utc else '' }}"></label>
-        <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at"
-          value="{{ jst(r.closes_at_utc).strftime('%Y-%m-%dT%H:%M') if r.closes_at_utc else '' }}"></label>
-        <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at"
-          value="{{ jst(r.results_at_utc).strftime('%Y-%m-%dT%H:%M') if r.results_at_utc else '' }}"></label>
-        <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at"
-          value="{{ jst(r.payment_deadline_at_utc).strftime('%Y-%m-%dT%H:%M') if r.payment_deadline_at_utc else '' }}"></label>
-      </div>
-      <div class="redit-extra">
-        <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}" value="{{ r.url or '' }}">
-        <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}" value="{{ r.notes or '' }}">
-      </div>
-    </div>
+    {{ round_card(
+        round_id=r.id, label=r.label, label_en=r.label_en or '', label_zh=r.label_zh or '',
+        kind=r.kind,
+        opens=(jst(r.opens_at_utc).strftime('%Y-%m-%dT%H:%M') if r.opens_at_utc else ''),
+        closes=(jst(r.closes_at_utc).strftime('%Y-%m-%dT%H:%M') if r.closes_at_utc else ''),
+        results=(jst(r.results_at_utc).strftime('%Y-%m-%dT%H:%M') if r.results_at_utc else ''),
+        payment=(jst(r.payment_deadline_at_utc).strftime('%Y-%m-%dT%H:%M') if r.payment_deadline_at_utc else ''),
+        url=r.url or '', notes=r.notes or '',
+        leg_value=leg_value, leg_selected=leg_ids,
+        with_qualifiers=True, qual_value=qual_value, qual_selected=qual_ids,
+        self_id=r.id, kind_value=r.kind.value) }}
     {% else %}
     <p class="dim tiny" data-no-rounds>{{ _("No rounds yet — add the first one above.") }}</p>
     {% endfor %}
@@ -112,50 +85,15 @@
   <h3 class="section-sub">{{ _("Legs") }} <small class="dim">{{ _("(one per show / day)") }}</small></h3>
   <div id="day-rows" class="row-list">
     {% for d in concert.days %}
-    <div class="eleg{% if d.cancelled %} cancelled{% endif %}" data-variant-scope>
-      <input type="hidden" name="day_id" value="{{ d.id }}">
-      {#- day_key: the identifier a round's chips reference. A saved leg's
-          key is its own id, so nothing about an existing leg depends on the
-          key list; a row added in the browser gets a generated one, which is
-          what lets a brand-new leg be assigned a round in the same save. -#}
-      <input type="hidden" name="day_key" value="{{ d.id }}">
-      <div class="eleg-top">
-        <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ d.label }}"
-               data-variant-group="day_label" data-variant-slot="ja"
-               data-variant-label="{{ _('Performance label') }}">
-        <label class="vfld"><span class="vfld-tag">English</span>
-          <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
-                 value="{{ d.label_en or '' }}"
-                 data-variant-group="day_label" data-variant-slot="en"></label>
-        <label class="vfld"><span class="vfld-tag">中文</span>
-          <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
-                 value="{{ d.label_zh or '' }}"
-                 data-variant-group="day_label" data-variant-slot="zh"></label>
-        <span class="cancel-toggle">
-          <input type="hidden" name="day_cancelled" value="{{ 'true' if d.cancelled else 'false' }}">
-          <button type="button" class="chip{% if d.cancelled %} on{% endif %}" data-cancel-toggle
-                  aria-pressed="{{ 'true' if d.cancelled else 'false' }}"
-                  title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
-        </span>
-        <button type="button" class="x" title="{{ _('Remove this leg') }}" data-remove-leg>×</button>
-      </div>
-      <div class="eleg-fields">
-        {#- One <select> per leg row, ALWAYS: `day_venue_tag_id` is padded only
-            when the whole array is omitted, so a row that emitted no field
-            would shorten the array and trip the route's strict zip. -#}
-        <select name="day_venue_tag_id" data-venue-select>
-          <option value="">{{ _("No venue yet") }}</option>
-          {% for v in venue_tags %}
-          <option value="{{ v.id }}"{% if d.venue_tag_id == v.id %} selected{% endif %}>{{ loc(v, "name") }}</option>
-          {% endfor %}
-        </select>
-        <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
-        <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"
-          value="{{ jst(d.doors_at_utc).strftime('%Y-%m-%dT%H:%M') if d.doors_at_utc else '' }}"></label>
-        <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required
-          value="{{ jst(d.starts_at_utc).strftime('%Y-%m-%dT%H:%M') }}"></label>
-      </div>
-    </div>
+    {#- day_key is a saved leg's own id, so nothing about it depends on the key
+        list; a row added in the browser gets a generated key, which is what
+        lets a brand-new leg be assigned a round in the same save. -#}
+    {{ leg_card(
+        day_id=d.id, day_key=d.id,
+        label=d.label, label_en=d.label_en or '', label_zh=d.label_zh or '',
+        cancelled=d.cancelled, venue_id=d.venue_tag_id,
+        doors=(jst(d.doors_at_utc).strftime('%Y-%m-%dT%H:%M') if d.doors_at_utc else ''),
+        starts=jst(d.starts_at_utc).strftime('%Y-%m-%dT%H:%M')) }}
     {% else %}
     <p class="dim tiny" data-no-legs-row>{{ _("No legs yet — add the first one above.") }}</p>
     {% endfor %}
@@ -263,77 +201,11 @@
 </div>
 
 <template id="day-row-template">
-  <div class="eleg" data-variant-scope>
-    <input type="hidden" name="day_id" value="">
-    <input type="hidden" name="day_key" value="">
-    <div class="eleg-top">
-      <input name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}"
-             data-variant-group="day_label" data-variant-slot="ja"
-             data-variant-label="{{ _('Performance label') }}">
-      <label class="vfld"><span class="vfld-tag">English</span>
-        <input name="day_label_en" maxlength="100" placeholder="{{ _('Day 1') }}"
-               data-variant-group="day_label" data-variant-slot="en"></label>
-      <label class="vfld"><span class="vfld-tag">中文</span>
-        <input name="day_label_zh" maxlength="100" placeholder="{{ _('Day 1') }}"
-               data-variant-group="day_label" data-variant-slot="zh"></label>
-      <span class="cancel-toggle">
-        <input type="hidden" name="day_cancelled" value="false">
-        <button type="button" class="chip" data-cancel-toggle aria-pressed="false"
-                title="{{ _('A cancelled performance stays in the list, but appears faded with a label.') }}">{{ _("Cancelled") }}</button>
-      </span>
-      <button type="button" class="x" title="{{ _('Remove this leg') }}" data-remove-leg>×</button>
-    </div>
-    <div class="eleg-fields">
-      {#- No `selected` anywhere: a cloned row is blank, and a pre-picked
-          venue would make an untouched trailing row fail the start-time
-          check instead of being skipped as empty. -#}
-      <select name="day_venue_tag_id" data-venue-select>
-        <option value="">{{ _("No venue yet") }}</option>
-        {% for v in venue_tags %}
-        <option value="{{ v.id }}">{{ loc(v, "name") }}</option>
-        {% endfor %}
-      </select>
-      <button type="button" class="chip add" data-new-venue>{{ _("+ New venue") }}</button>
-      <label>{{ _("Doors (JST)") }} <input type="datetime-local" name="day_doors_at"></label>
-      <label>{{ _("Starts (JST)") }} <input type="datetime-local" name="day_starts_at" required></label>
-    </div>
-  </div>
+  {{ leg_card() }}
 </template>
 
 <template id="round-row-template">
-  <div class="redit" data-variant-scope>
-    <input type="hidden" name="round_id" value="">
-    <div class="redit-top">
-      <input class="redit-name" name="round_label" required maxlength="200" placeholder="1次先行抽選"
-             data-variant-group="round_label" data-variant-slot="ja"
-             data-variant-label="{{ _('Round label') }}">
-      <label class="vfld"><span class="vfld-tag">English</span>
-        <input name="round_label_en" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-               data-variant-group="round_label" data-variant-slot="en"></label>
-      <label class="vfld"><span class="vfld-tag">中文</span>
-        <input name="round_label_zh" maxlength="200" placeholder="{{ _('1st-round advance lottery') }}"
-               data-variant-group="round_label" data-variant-slot="zh"></label>
-      {#- Fills all three boxes above from a triple this editor has typed
-          before -- see _round_phrase_dialog.html, included after </form>. -#}
-      <button type="button" class="chip add" data-open-phrases>{{ _("Remembered") }}</button>
-      <select name="round_kind">{% for k in kinds %}
-        <option value="{{ k.value }}">{{ round_kind_label(k) }}</option>
-      {% endfor %}</select>
-      <button type="button" class="x" title="{{ _('Remove this round') }}" data-remove-round>×</button>
-    </div>
-    {% with value = "", selected = none %}{% include "_round_leg_chips.html" %}{% endwith %}
-    {% with value = "", selected = none, self_id = none, kind_value = "" %}{% include "_round_qualifier_chips.html" %}{% endwith %}
-    <div class="redit-times">
-      <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at"></label>
-      <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at"></label>
-      <label>{{ _("Results (JST)") }} <input type="datetime-local" name="round_results_at"></label>
-      <label>{{ _("Payment deadline (JST)") }} <input type="datetime-local" name="round_payment_at"></label>
-    </div>
-    <div class="redit-extra">
-      <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}">
-      <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}">
-    </div>
-  </div>
+  {{ round_card() }}
 </template>
 {% include "_leg_chips_script.html" %}
 {% include "_qualifier_chips_script.html" %}

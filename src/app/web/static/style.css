@@ -474,9 +474,6 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
   border: 1px solid var(--line); border-radius: 3px; background: var(--raise);
 }
 .redit + .redit { margin-top: .5rem; }
-.redit-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
-.redit-top input, .redit-top select { flex: 1 1 auto; min-width: 8rem; }
-.redit-name { flex: 2 1 14rem; font-weight: 600; }
 .redit-times, .redit-extra {
   display: grid; gap: .4rem .6rem;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
@@ -491,14 +488,28 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 }
 .eleg + .eleg { margin-top: .5rem; }
 .eleg.cancelled { opacity: .6; }
-.eleg-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
-.eleg-top > input { flex: 1 1 auto; min-width: 8rem; }
 .eleg-fields {
   display: grid; gap: .4rem .6rem;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 }
 .eleg-fields label { display: grid; gap: .2rem; font-size: .8rem; color: var(--dim); }
 .cancel-toggle { flex: 0 0 auto; }
+
+/* Card top row (both card types): the ja label input grows, then the leg's
+   Cancelled chip / the round's kind <select>, then the kebab pinned right.
+   The demo's shared vocabulary -- one .cardtop everywhere replaced the old
+   divergent .eleg-top / .redit-top. */
+.cardtop { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.cardtop > .cardname { flex: 2 1 14rem; min-width: 8rem; font-weight: 600; }
+.cardtop > select { flex: 1 1 9rem; min-width: 8rem; }
+
+/* Variants row: EN + 中文 label fields, always visible (spec D3), so the
+   all-three-or-none guard keeps pointing at fields the editor can see. On a
+   round row the "Remembered" phrase chip ends the row; on an import leg row a
+   full-width unmatched-venue hint wraps below. */
+.vary { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.vary > .chip.add { flex: 0 0 auto; }
+.vary > .venue-hint { flex: 1 1 100%; margin: 0; }
 
 /* Locale-variant label inputs (_en / _zh) on leg and round rows. The two
    variant boxes are otherwise identical empty text fields sitting side by
@@ -515,16 +526,44 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
    the marker too, which makes the row wrap one field earlier instead of
    crushing all three. The inner input drops to min-width:0 so it shrinks
    inside the wrapper rather than overflowing it. */
-.eleg-top > .vfld, .redit-top > .vfld {
+.vary > .vfld {
   display: flex; align-items: center; gap: .3rem;
   flex: 1 1 auto; min-width: 10rem;
 }
 .vfld > .vfld-tag {
   flex: 0 0 auto; font-size: .72rem; color: var(--dim); white-space: nowrap;
 }
-.eleg-top > .vfld > input, .redit-top > .vfld > input {
+.vary > .vfld > input {
   flex: 1 1 auto; min-width: 0; width: 100%;
 }
+
+/* Kebab overflow menu -- the app's FIRST, and single-purpose (destructive
+   actions only; see the CLAUDE.md UI note). Native <details> disclosure, no
+   framework: the summary is the ⋯ trigger, the .kmenu an absolutely-positioned
+   card below-right. A document-level click closes any open one
+   (_leg_chips_script.html). Tokens only; the menu card uses the dialogs' 4px
+   radius, everything else the app's 3px. */
+.kebab { position: relative; flex: 0 0 auto; margin-left: .1rem; }
+.kebab > summary {
+  list-style: none; cursor: pointer; width: 1.9rem; height: 1.9rem; display: grid;
+  place-items: center; border: 1px solid var(--line); border-radius: 3px;
+  background: var(--paper); color: var(--dim); font-size: 1rem; line-height: 1; user-select: none;
+}
+.kebab > summary::-webkit-details-marker { display: none; }
+.kebab > summary::marker { content: ""; }
+.kebab > summary:hover, .kebab[open] > summary { color: var(--ink); border-color: var(--dim); }
+.kmenu {
+  position: absolute; top: calc(100% + .3rem); right: 0; z-index: 20; min-width: 12rem;
+  background: var(--raise); border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: var(--shadow); padding: .3rem; display: grid; gap: .1rem;
+}
+.kitem {
+  font: inherit; font-size: .8125rem; text-align: left; width: 100%; padding: .45rem .55rem;
+  border: 0; border-radius: 3px; background: none; color: var(--ink); cursor: pointer;
+}
+.kitem:hover { background: var(--chip); }
+.kitem.danger { color: var(--danger); }
+.kitem.danger:hover { background: var(--danger-wash); }
 /* The inline "you forgot a language" message the browser-side variant guard
    paints (_variant_guard.html) -- inserted after the offending field, and
    removed again the moment its trio is whole. flex-basis 100% so that inside

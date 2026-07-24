@@ -179,21 +179,19 @@
       {% trans %}A preset is a group of reminder rules for events you follow. If you change the rules for one event, those rules are used instead.{% endtrans %}
     </p>
 
+    {# The sentence is ONE translatable pattern; the four selects drop into its
+       {days}/{hours}/{direction}/{anchor} slots in the viewer-locale word order
+       (sentence_slots, web/app.py) -- ja/zh reorder freely, EN reads as before.
+       The select names/values are unchanged, so the POST body is identical. #}
     {% macro sentence_fields(days_val, hours_val, dir_val, anchor_val) -%}
-      <span>{{ _("Remind me") }}</span>
-      <select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == days_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
-      <span>{{ _("day(s)") }}</span>
-      <select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}" {% if n == hours_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
-      <span>{{ _("hour(s)") }}</span>
-      <select name="direction">
-        <option value="before" {% if dir_val == "before" %}selected{% endif %}>{{ _("before") }}</option>
-        <option value="after" {% if dir_val == "after" %}selected{% endif %}>{{ _("after") }}</option>
-      </select>
-      <span>{{ _("each") }}</span>
+      {%- set days_html %}<select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == days_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>{% endset -%}
+      {%- set hours_html %}<select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}" {% if n == hours_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>{% endset -%}
+      {%- set direction_html %}<select name="direction"><option value="before" {% if dir_val == "before" %}selected{% endif %}>{{ _("before") }}</option><option value="after" {% if dir_val == "after" %}selected{% endif %}>{{ _("after") }}</option></select>{% endset -%}
       {# Literal label map: computed .value.replace().capitalize() can't be
          extracted for translation. msgids reproduce today's rendered strings. #}
       {%- set anchor_labels = {"opens": _("Opens"), "closes": _("Closes"), "results": _("Results"), "payment": _("Payment"), "event_start": _("Event start")} -%}
-      <select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ anchor_labels.get(a.value, a.value) }}</option>{% endfor %}</select>
+      {%- set anchor_html %}<select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ anchor_labels.get(a.value, a.value) }}</option>{% endfor %}</select>{% endset -%}
+      {{ sentence_slots(_("Remind me {days} day(s) {hours} hour(s) {direction} each {anchor}."), {"days": days_html, "hours": hours_html, "direction": direction_html, "anchor": anchor_html}) }}
     {%- endmacro %}
 
     {% for p in presets %}

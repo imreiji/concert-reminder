@@ -1001,3 +1001,35 @@ async def test_editor_round_trips_label_variants(client, db):
         assert (round_.label, round_.label_en, round_.label_zh) == (
             "1次先行", "1st advance", "第一轮先行",
         )
+
+
+# ── kebab overflow menu (editor-coherence: card anatomy) ──────────────────
+
+
+async def test_new_and_edit_serve_kebab_remove_menus(client, db):
+    """Spec D2: the destructive Remove moves off the card's top row into a
+    kebab (⋯) overflow menu, on both leg and round cards, so it can no longer
+    be hit by a mis-aimed click at the Cancelled toggle. The `data-remove-*`
+    handler hooks ride the menu items, so the delegated remove listeners keep
+    working. Both editor surfaces render through the shared card partials."""
+    await make_editor(db)
+    login(client)
+    await seed(db, legs=[("Day 1", "Tokyo", False)], rounds=[("R1", [0])])
+    for url in ("/concerts/new", "/concerts/tour/edit"):
+        body = client.get(url).text
+        assert 'class="kebab"' in body, url
+        # every remove control is a danger kebab-menu item -- never inline
+        assert body.count("data-remove-leg>") == body.count(
+            'class="kitem danger" type="button" data-remove-leg>'
+        ), url
+        assert body.count("data-remove-round>") == body.count(
+            'class="kitem danger" type="button" data-remove-round>'
+        ), url
+        # and it lives INSIDE the .kmenu, not shoulder-to-shoulder with the
+        # Cancelled toggle: walking from the toggle to the leg's remove hook
+        # must cross the menu container.
+        seg = body.split("data-cancel-toggle", 1)[1].split("data-remove-leg", 1)[0]
+        assert 'class="kmenu"' in seg, url
+        # the old inline × remove is gone from the leg card's top row
+        assert "data-remove-leg>×" not in body, url
+        assert "data-remove-round>×" not in body, url
