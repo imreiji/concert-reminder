@@ -55,6 +55,15 @@ def test_style_uses_3px_radius_not_6or8():
     assert "border-radius: 3px" in text
 
 
+def test_style_hidden_attribute_wins():
+    # Any element with an author display rule (.upgradebox, .feedbox, ...)
+    # renders despite hidden="" unless a global [hidden] override exists --
+    # the UA's display:none loses to any author display. This shipped once:
+    # every non-upgrade round on the edit page showed the upgrade qualifier
+    # box because .upgradebox { display: grid } beat the attribute.
+    assert "[hidden] { display: none !important; }" in css()
+
+
 def test_style_ports_the_demos_dark_paper_hex():
     # The dark palette is the demo's, not a naive invert -- pin one hex so a
     # future "simplify" can't quietly swap it.
