@@ -5,8 +5,16 @@ the same way `pybabel extract` does (same method_map/keywords as babel.cfg),
 then asserts each one is present AND non-empty in both shipped catalogues.
 Plural entries carry a tuple msgstr under nplurals=1 -- every member must be
 non-empty.
+
+It also guards placeholder INTEGRITY: a translation must carry exactly the
+placeholders its msgid does. This matters doubly for the sentence-slot
+patterns (welcome/preferences reminder builders), where a dropped {direction}
+or {hours} would silently render a select-less form whose POST is missing a
+field -- split_slots only raises on UNKNOWN slots, so this test is the guard
+for DROPPED ones.
 """
 
+import re
 from io import BytesIO
 from pathlib import Path
 
@@ -78,3 +86,35 @@ def test_ja_catalogue_complete():
 
 def test_zh_catalogue_complete():
     _assert_complete("zh")
+
+
+_PLACEHOLDER = re.compile(r"%\([a-zA-Z_][a-zA-Z0-9_]*\)[sd]|\{[a-zA-Z_][a-zA-Z0-9_.:]*\}")
+
+
+def _assert_placeholders_intact(locale: str) -> None:
+    po = ROOT / "src" / "app" / "translations" / locale / "LC_MESSAGES" / "messages.po"
+    catalog = read_po(BytesIO(po.read_bytes()), locale=locale)
+    bad: list[str] = []
+    for m in catalog:
+        if not m.id or not m.string:
+            continue
+        ids = m.id if isinstance(m.id, tuple) else (m.id,)
+        strs = m.string if isinstance(m.string, tuple) else (m.string,)
+        # Plural pairs collapse to one CJK form: it must carry the UNION of
+        # the two English forms' placeholders (in practice both forms use the
+        # same set).
+        want: set[str] = set()
+        for i in ids:
+            want |= set(_PLACEHOLDER.findall(i))
+        for s in strs:
+            if s and set(_PLACEHOLDER.findall(s)) != want:
+                bad.append(f"{ids[0][:60]!r} -> {s[:60]!r}")
+    assert not bad, f"placeholder mismatch in {locale} ({len(bad)}): {bad[:10]}"
+
+
+def test_ja_placeholders_intact():
+    _assert_placeholders_intact("ja")
+
+
+def test_zh_placeholders_intact():
+    _assert_placeholders_intact("zh")
