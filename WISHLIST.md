@@ -51,6 +51,14 @@ boundary. A production visual bug found during measurement shipped
 separately (PR #93, the global [hidden] override). Entries below
 renumbered 1-14; the sign-in-bounce cross-reference bumped again.
 
+The third 2026-07-24 pass ships inline tag creation (PR #96) hours after
+the tablet band: per-name quick-create chips in the import preview, a
+kind-aware popup (kind pre-selected from the draft bucket, parent
+franchise for groups), the picker join, and the 409 select-existing
+courtesy. Live click-through verified against a seeded dev server before
+the PR. Entries below renumbered 1-13; event_id slugs rises to #1 by
+removal.
+
 The 2026-07-23 evening revision pass is the largest re-rank since the split:
 the owner set next-day priorities, adding four entries that now lead the list
 (#1 i18n calibration -- deliberately first, since corrected wording feeds the
@@ -98,25 +106,7 @@ once more.
 ## Proposed (highest impact first)
 
 
-### 1. Inline tag creation for unmatched scraped/draft tags
-
-Impact: medium - effort: small-medium. Raised: 2026-07-23 (owner: an
-unmatched tag should offer creation, "not just throw it back to narnia").
-
-When an import (URL scrape or pasted draft) names a franchise/group/artist
-tag that doesn't exist, today's preview shows the unmatched-names hint and
-points at the Tags page -- a context-losing round trip, and the draft's
-tag never gets attached unless the editor remembers to come back. Venues
-already have the answer shipped: `_venue_create_dialog.html` +
-`POST /tags/venue/quick`, since 2026-07-23 even prefilled from the draft's
-hints. Extend that pattern: per unmatched name, a create affordance in the
-preview's Tags fold that opens a kind-aware dialog (group needs a member
-picker deferred, franchise a parent hookup -- scope the brainstorm small:
-name + kind + trilingual names may be enough for v1) and joins the picker
-selection on success. Must keep `create_tag`'s kind-scoped 409 semantics
-and invariant 3 (no group re-expansion surprises from the create path).
-
-### 2. event_id slugs should prefer title_en
+### 1. event_id slugs should prefer title_en
 
 Impact: low-medium - effort: small. Raised: 2026-07-23 (assistant, while
 verifying the import path).
@@ -131,7 +121,7 @@ at every create boundary, the fix is one line of preference -- slug from
 concerts keep their ids (event_id is editor-owned after creation; no
 backfill).
 
-### 3. Agent-import review-debt batch (deferred minors)
+### 2. Agent-import review-debt batch (deferred minors)
 
 Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
 whole-branch review of the agent-import build; the first three triaged
@@ -152,7 +142,7 @@ it works today, but it's a typo waiting to confuse someone (spotted
 behavior-safe today; batched so they stop being rediscovered by every
 future reviewer.
 
-### 4. Minute-level reminder offsets
+### 3. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -192,7 +182,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 5. Eventernote actor-page discovery
+### 4. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -212,7 +202,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 6. Collapse a round's multiple "Coming up" rows into one
+### 5. Collapse a round's multiple "Coming up" rows into one
 
 Impact: medium - effort: medium. Raised: 2026-07-19 (Home/Discover split,
 branch review). Re-ranked 2026-07-19 (twice).
@@ -250,7 +240,7 @@ few pixels of table height on desktop. Still deferred for the same reason
 as before (collapsing changes the htmx swap shape), but the phone case is
 now the more visible motivator of the two.
 
-### 7. Franchise-aware round-label suggestions
+### 6. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -271,7 +261,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 8. Nine of ten `RoundKind` members are purely cosmetic
+### 7. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -294,7 +284,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 9. Pin the Python version across dev, CI and the server
+### 8. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -318,7 +308,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 10. PWA / installability
+### 9. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -338,7 +328,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 11. In-app LLM extraction behind the same draft seam
+### 10. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -356,7 +346,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 12. Minor demo-parity cosmetics
+### 11. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -384,7 +374,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 13. Discover sort in the content head, plus the catalogue-count note
+### 12. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -410,7 +400,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 14. Name the destination on the sign-in bounce
+### 13. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -426,7 +416,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#12) and the Discover head (#13) because
+Ranked below the demo-parity batch (#11) and the Discover head (#12) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -444,6 +434,26 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Inline tag creation for unmatched scraped/draft tags (2026-07-24)
+
+Shipped as: PR #96, after an owner UI checkup that picked per-name create
+chips and the kind+names+parent popup (over a generic button and a
+minimal name-only dialog). Each unmatched franchise/group/artist name in
+the import preview renders as its own + chip; the popup opens with the
+kind pre-selected (the draft parser knows which list the name came from),
+the name prefilled, optional EN/中文, and a parent-franchise select for
+groups (Tag.parent_id, so no Tags-page orphans). Create & select joins
+the picker via pickerAddAndSelect and removes the chip; the kind-scoped
+409 returns the existing tag's id+name for one-click select-existing.
+Groups are created EMPTY -- expansion stays attach-time-only (invariant
+3), and no notification fires (creation is not attachment, invariant 4).
+VENUE keeps its richer /tags/venue/quick. Found-and-noted: Tag.name is
+globally unique across kinds (a pre-existing model quirk create_tag
+shares); the endpoint mirrors it rather than diverging. Revision pass:
+event_id slugs rises to #1 by removal; nothing re-ranked on merit -- the
+review-debt batch (#2) remains the natural pairing for the slugs work,
+both being small importer-adjacent cleanups.
 
 ### A real tablet layout for the 701-1040px band (2026-07-24)
 
