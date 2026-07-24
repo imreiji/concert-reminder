@@ -1,0 +1,648 @@
+<title>dekimasen tablet &mdash; concept</title>
+<style>
+  :root {
+    --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+    --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+    --accent: #4f46b8;
+    --ok-wash: #e8f2ec; --off-wash: #f7eede; --danger-wash: #f8e8e6;
+    --accent-wash: #eceaf7; --chip: #efede6;
+    --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+      --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+      --accent: #9a92f0;
+      --ok-wash: #1a2a22; --off-wash: #2c2418; --danger-wash: #2e1d1c;
+      --accent-wash: #23204a; --chip: #2a2830;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+    --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+    --accent: #9a92f0; --ok-wash: #1a2a22; --off-wash: #2c2418;
+    --danger-wash: #2e1d1c; --accent-wash: #23204a; --chip: #2a2830;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+  }
+  :root[data-theme="light"] {
+    --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+    --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+    --accent: #4f46b8; --ok-wash: #e8f2ec; --off-wash: #f7eede;
+    --danger-wash: #f8e8e6; --accent-wash: #eceaf7; --chip: #efede6;
+    --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--chip); color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* -- gallery chrome ---------------------------------------------------- */
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+  .wrap > header { margin-bottom: 2.5rem; max-width: 46rem; }
+  .eyebrow {
+    font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650;
+  }
+  h1 { font-size: 1.7rem; letter-spacing: -.02em; margin: .3rem 0 .8rem; text-wrap: balance; }
+  .wrap > header p { color: var(--dim); margin: 0 0 .6rem; }
+  .decisions { margin: 1rem 0 0; padding: 0; list-style: none; display: grid; gap: .3rem; }
+  .decisions li { padding-left: 1.1rem; position: relative; font-size: .92rem; }
+  .decisions li::before { content: "\2014"; position: absolute; left: 0; color: var(--accent); }
+
+  .gtoggle {
+    display: inline-flex; gap: .5rem; align-items: center; margin-top: 1.4rem;
+  }
+  .gtoggle button {
+    font: inherit; font-size: .85rem; cursor: pointer; color: var(--ink);
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .4rem .8rem; display: inline-flex; gap: .4rem; align-items: center;
+  }
+  .gtoggle button:hover { border-color: var(--dim); }
+
+  /* each demo block: a caption then a fixed-width framed panel, centred */
+  .block { margin-top: 3rem; }
+  .cap { max-width: 1040px; margin: 0 auto .7rem; }
+  .cap b { font-size: .95rem; display: block; }
+  .cap span { font-size: .82rem; color: var(--dim); }
+  .frame {
+    margin: 0 auto; background: var(--paper); border: 1px solid var(--line);
+    border-radius: 6px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  .frame + .frame { margin-top: 1rem; }
+  .fbody { padding: 1.25rem 1.25rem 1.5rem; }
+
+  /* -- compact tablet header (decision T2) ------------------------------- */
+  .thead {
+    display: flex; align-items: center; gap: 1rem;
+    padding: .7rem 1.25rem; background: var(--raise);
+    border-bottom: 1px solid var(--line);
+  }
+  .thead .mark {
+    font-weight: 700; letter-spacing: .06em; font-size: .95rem; white-space: nowrap;
+  }
+  .thead nav { display: flex; gap: .2rem; margin-left: .1rem; }
+  .thead nav a {
+    font: inherit; font-size: .875rem; font-weight: 550; color: var(--dim);
+    padding: .35rem .7rem; border-radius: 3px; text-decoration: none; white-space: nowrap;
+  }
+  .thead nav a:hover { color: var(--ink); background: var(--chip); }
+  .thead nav a[aria-current="page"] { color: var(--ink); background: var(--chip); }
+  .thead .grow { flex: 1 1 auto; }
+  .thead .cluster { display: flex; align-items: center; gap: .4rem; flex: 0 0 auto; }
+  .iconbtn {
+    font: inherit; font-size: 1rem; line-height: 1; cursor: pointer;
+    width: 2rem; height: 2rem; display: grid; place-items: center;
+    background: none; border: 1px solid var(--line); border-radius: 3px; color: var(--dim);
+  }
+  .iconbtn:hover { color: var(--ink); border-color: var(--dim); }
+  .langchip {
+    font: inherit; font-size: .8rem; color: var(--dim); background: none;
+    border: 1px solid var(--line); border-radius: 3px; padding: .32rem .6rem;
+    display: inline-flex; gap: .3rem; align-items: center; cursor: pointer;
+    white-space: nowrap; flex: 0 0 auto;
+  }
+  .addbtn {
+    font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer;
+    padding: .38rem .7rem; border: 1px solid var(--ink); border-radius: 3px;
+    background: var(--ink); color: var(--paper); white-space: nowrap; flex: 0 0 auto;
+  }
+
+  /* -- section headings inside a frame ----------------------------------- */
+  .fhead { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .fhead h2 { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+  .fhead .note { color: var(--dim); font-size: .8125rem; }
+  .fhead .note strong { color: var(--ink); font-weight: 600; }
+
+  /* -- pills, shared ----------------------------------------------------- */
+  .pill {
+    font-size: .6875rem; font-weight: 650; letter-spacing: .04em;
+    padding: .15rem .45rem; border-radius: 3px; border: 1px solid currentColor; white-space: nowrap;
+  }
+  .p-danger { color: var(--danger); background: var(--danger-wash); }
+  .p-off { color: var(--off); background: var(--off-wash); }
+  .p-ok { color: var(--ok); background: var(--ok-wash); }
+  .p-quiet { color: var(--dim); background: transparent; }
+
+  /* -- board card (from the desktop demo) -------------------------------- */
+  .card {
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .8rem .85rem; display: grid; gap: .45rem; box-shadow: var(--shadow);
+    text-decoration: none; color: inherit;
+  }
+  .card .artist { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .card .title { font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
+  .card .venue { font-size: .8125rem; color: var(--dim); }
+  .card .foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .15rem; }
+  .clock { font-size: .8125rem; color: var(--dim); }
+
+  .ladder { display: grid; margin-top: .3rem; }
+  .rung {
+    display: grid; grid-template-columns: 14px 1fr auto; gap: .55rem; align-items: center;
+    padding: .3rem 0; font-size: .8125rem; border-top: 1px dotted var(--line);
+  }
+  .rung:first-child { border-top: 0; }
+  .rung .rmark {
+    width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line);
+    display: grid; place-items: center; font-size: 9px; font-weight: 700; line-height: 1;
+  }
+  .m-lost { border-color: var(--dim); color: var(--dim); }
+  .m-live { border-color: var(--danger); background: var(--danger); color: var(--raise); }
+  .m-wait { border-color: var(--off); color: var(--off); }
+  .m-todo { border-color: var(--line); color: transparent; }
+  .rung.is-done .name { color: var(--dim); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .rung.is-todo .name { color: var(--dim); }
+  .rung .stat { font-size: .75rem; color: var(--dim); }
+
+  /* -- swipeable 4-column board (decision T3) ---------------------------- */
+  .board-scroll {
+    overflow-x: auto; scroll-snap-type: x proximity;
+    padding-bottom: .6rem; scrollbar-width: thin;
+  }
+  .board-swipe {
+    display: grid; grid-auto-flow: column; grid-auto-columns: 280px;
+    gap: 1rem; align-items: start;
+  }
+  .bcol { scroll-snap-align: start; display: grid; gap: .625rem; align-content: start; }
+  .col-head {
+    display: flex; align-items: center; gap: .5rem; font-size: .75rem;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+    font-weight: 650; padding-bottom: .5rem; border-bottom: 1px solid var(--line);
+  }
+  .col-head .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .col-head .count { margin-left: auto; font-weight: 500; letter-spacing: 0; }
+  .d-open { background: var(--danger); } .d-applied { background: var(--off); }
+  .d-won { background: var(--accent); } .d-secured { background: var(--ok); }
+  .swipehint { font-size: .78rem; color: var(--dim); margin-top: .6rem; }
+
+  /* -- coming-up rows, band shape (decision T5) -------------------------- */
+  /* what-happens folds into the title cell's small line via data-happens,
+     never a separate column that display:none drops out from under the acts */
+  .rows { border-top: 1px solid var(--line); }
+  .rowhead, .row {
+    display: grid; grid-template-columns: 6.5rem 10.5rem 1fr 14rem;
+    gap: 1rem; padding: .55rem .1rem; border-bottom: 1px solid var(--line);
+  }
+  .rowhead {
+    font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650;
+  }
+  .rowhead span:last-child { text-align: right; }
+  .row { align-items: center; text-decoration: none; color: inherit; }
+  .row .when-c { font-size: .8125rem; color: var(--dim); line-height: 1.35; }
+  .row .when-c b { display: block; color: var(--ink); font-weight: 600; }
+  .row .title-c { font-weight: 550; line-height: 1.35; }
+  .row .title-c small { display: block; font-weight: 400; font-size: .78rem; color: var(--dim); }
+  .row .title-c small::after { content: " \00b7 " attr(data-happens); }
+  .row .acts { display: flex; align-items: center; gap: .4rem; justify-content: flex-end; }
+  .act {
+    font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
+    padding: .22rem .5rem; border-radius: 3px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--raise); color: var(--dim);
+    white-space: nowrap;
+  }
+  .act.yes:hover { color: var(--ok); border-color: var(--ok); }
+  .act.no:hover { color: var(--danger); border-color: var(--danger); }
+  .done { font-size: .72rem; font-weight: 650; color: var(--ok); letter-spacing: .03em; }
+
+  /* -- Discover under the filter sheet (decision T4) --------------------- */
+  .searchbar { display: flex; gap: .5rem; margin-bottom: 1rem; }
+  .searchbar input {
+    flex: 1; font: inherit; padding: .55rem .75rem; border: 1px solid var(--line);
+    border-radius: 3px; background: var(--raise); color: var(--ink); min-width: 0;
+  }
+  .searchbar .btn2 {
+    font: inherit; font-size: .875rem; font-weight: 600; padding: .5rem .9rem;
+    border: 1px solid var(--ink); border-radius: 3px; background: var(--ink);
+    color: var(--paper); cursor: pointer; white-space: nowrap;
+  }
+
+  details.fsheet { margin-bottom: 1.25rem; }
+  details.fsheet > summary {
+    list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .5rem;
+    font-size: .8125rem; font-weight: 600; color: var(--ink);
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .45rem .8rem;
+  }
+  details.fsheet > summary::-webkit-details-marker { display: none; }
+  details.fsheet > summary::before { content: "\25B8"; color: var(--dim); transition: transform 150ms ease; }
+  details.fsheet[open] > summary::before { transform: rotate(90deg); }
+  details.fsheet > summary .fcount { color: var(--dim); font-weight: 500; }
+  .sheetbody {
+    margin-top: .75rem; padding: 1rem 1.1rem; border: 1px solid var(--line);
+    border-radius: 3px; background: var(--raise);
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 1.1rem;
+  }
+  .grp h4 {
+    margin: 0 0 .5rem; font-size: .7rem; letter-spacing: .11em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .chip {
+    font-size: .78rem; padding: .2rem .55rem; border-radius: 999px; line-height: 1.5;
+    background: var(--chip); color: var(--ink); border: 1px solid transparent; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--dim); }
+  .chip.on { background: var(--accent); color: #fff; }
+  .chip .n { color: var(--dim); font-size: .72em; margin-left: .25em; }
+  .chip.on .n { color: rgba(255,255,255,.75); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: .875rem; }
+  .grid .card .when { font-size: .8125rem; color: var(--dim); }
+  .status-line {
+    display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+    margin-top: .2rem; padding-top: .5rem; border-top: 1px dotted var(--line);
+  }
+  .s-in { color: var(--ok); background: var(--ok-wash); border-color: var(--ok); }
+  .s-act { color: var(--danger); background: var(--danger-wash); border-color: var(--danger); }
+  .s-none { color: var(--dim); background: transparent; border-color: var(--line); }
+  .s-up { color: var(--accent); background: var(--accent-wash); border-color: var(--accent); }
+
+  .note-b { max-width: 1040px; margin: 2.5rem auto 0; font-size: .8rem; color: var(--dim); }
+  .note-b code { background: var(--raise); border: 1px solid var(--line); border-radius: 3px; padding: .05rem .3rem; font-size: .78rem; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">dekimasen.app &middot; concept demo</span>
+    <h1>Tablet band (701&ndash;1040&nbsp;px) &mdash; the target states, one framed panel each</h1>
+    <p>Five fixed-width panels at the band's reference widths (820 and 1000&nbsp;px), on the shipped design tokens (this page follows your light/dark setting, like the app). Each panel proves one decision from the spec:</p>
+    <ul class="decisions">
+      <li><b>Compact header</b> &mdash; one row, never wraps: nowrap wordmark (no secondary), nav, then theme + language + add + icon-only Preferences/Sign&nbsp;out. Shown in EN and the widest-language ja case.</li>
+      <li><b>Swipeable 4-column board</b> &mdash; all four columns at full card width, real horizontal scroll with snap, the next column's edge peeking. Try it: the board below actually scrolls.</li>
+      <li><b>Discover under the filter sheet</b> &mdash; the sidebar folds into a Filters disclosure above the grid; tiles auto-fill 2-across in-band.</li>
+      <li><b>Discover at 1000&nbsp;px</b> &mdash; same sheet, tiles 3-across, proving the upper edge of the band.</li>
+      <li><b>Coming-up rows</b> &mdash; the "what happens" text folds into the title's small line (data-happens) rather than being dropped; capture buttons keep their context.</li>
+    </ul>
+    <div class="gtoggle">
+      <button type="button" onclick="tdTheme()">&#9680; Toggle light / dark</button>
+      <span class="eyebrow">or use your OS / Claude theme</span>
+    </div>
+  </header>
+
+  <!-- 1 - COMPACT HEADER, both languages -->
+  <div class="block">
+    <div class="cap">
+      <b>1 &middot; Compact header</b>
+      <span>820px &mdash; one row, never wraps. Two variants: EN, then the widest-language ja case (&#12507;&#12540;&#12512;/&#25506;&#12377;/&#12479;&#12464;, &#8220;+ &#36861;&#21152;&#8221;, &#127760; &#26085;&#26412;&#35486;) proving it still fits.</span>
+    </div>
+
+    <div class="frame" style="width: 820px">
+      <div class="thead">
+        <span class="mark">&#12391;&#12365;&#12414;&#12379;&#12435;</span>
+        <nav>
+          <a href="#" aria-current="page">Home</a>
+          <a href="#">Discover</a>
+          <a href="#">Tags</a>
+        </nav>
+        <span class="grow"></span>
+        <div class="cluster">
+          <button class="iconbtn" onclick="tdTheme()" title="Toggle dark mode">&#9680;</button>
+          <button class="langchip" title="Switch language">&#127760; EN</button>
+          <button class="addbtn">+ Add</button>
+          <button class="iconbtn" title="Preferences">&#9881;</button>
+          <button class="iconbtn" title="Sign out">&#9099;</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame" style="width: 820px">
+      <div class="thead">
+        <span class="mark">&#12391;&#12365;&#12414;&#12379;&#12435;</span>
+        <nav>
+          <a href="#" aria-current="page">&#12507;&#12540;&#12512;</a>
+          <a href="#">&#25506;&#12377;</a>
+          <a href="#">&#12479;&#12464;</a>
+        </nav>
+        <span class="grow"></span>
+        <div class="cluster">
+          <button class="iconbtn" onclick="tdTheme()" title="&#12480;&#12540;&#12463;&#12514;&#12540;&#12489;">&#9680;</button>
+          <button class="langchip" title="&#35328;&#35486;&#12434;&#20999;&#12426;&#26367;&#12360;">&#127760; &#26085;&#26412;&#35486;</button>
+          <button class="addbtn">+ &#36861;&#21152;</button>
+          <button class="iconbtn" title="&#35373;&#23450;">&#9881;</button>
+          <button class="iconbtn" title="&#12525;&#12464;&#12450;&#12454;&#12488;">&#9099;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 - SWIPEABLE BOARD -->
+  <div class="block">
+    <div class="cap">
+      <b>2 &middot; Swipeable campaign board</b>
+      <span>820px &mdash; four full-width columns, horizontal scroll with per-column snap, next column's edge peeking to signal more. The apply &rarr; win &rarr; pay story stays left-to-right instead of folding to a 2&times;2. Scroll it sideways.</span>
+    </div>
+    <div class="frame" style="width: 820px">
+      <div class="fbody">
+        <div class="fhead">
+          <h2>Your campaigns</h2>
+          <span class="note"><strong>2 open</strong> &middot; 2 awaiting results &middot; 1 payment due &middot; 3 secured</span>
+        </div>
+
+        <div class="board-scroll">
+          <div class="board-swipe">
+
+            <section class="bcol">
+              <div class="col-head"><span class="dot d-open"></span> Open now <span class="count num">2</span></div>
+              <a class="card" href="#">
+                <div class="artist">Liella!</div>
+                <div class="title">5th Live Tour &mdash; Yokohama</div>
+                <div class="venue">&#27178;&#27996;&#12450;&#12522;&#12490; &middot; 12 Oct</div>
+                <div class="ladder">
+                  <div class="rung"><span class="rmark m-live">1</span><span class="name">FC presale R1</span><span class="stat">open</span></div>
+                  <div class="rung is-todo"><span class="rmark m-todo">2</span><span class="name">General presale</span><span class="stat">28 Jul</span></div>
+                </div>
+                <div class="foot"><span class="pill p-danger">6h left</span><span class="clock num">23:59 JST</span></div>
+              </a>
+              <a class="card" href="#">
+                <div class="artist">22/7</div>
+                <div class="title">Live at Nakano</div>
+                <div class="venue">&#20013;&#37326;&#12469;&#12531;&#12503;&#12521;&#12470; &middot; 3 Sep</div>
+                <div class="ladder">
+                  <div class="rung is-done"><span class="rmark m-lost">&times;</span><span class="name">FC presale</span><span class="stat">lost</span></div>
+                  <div class="rung"><span class="rmark m-live">2</span><span class="name">General presale</span><span class="stat">open</span></div>
+                </div>
+                <div class="foot"><span class="pill p-off">4 days</span><span class="clock num">23:59 JST</span></div>
+              </a>
+            </section>
+
+            <section class="bcol">
+              <div class="col-head"><span class="dot d-applied"></span> Applied <span class="count num">2</span></div>
+              <a class="card" href="#">
+                <div class="artist">Aqours</div>
+                <div class="title">9th LoveLive! Day 2</div>
+                <div class="venue">&#12373;&#12356;&#12383;&#12414;&#12473;&#12540;&#12497;&#12540;&#12450;&#12522;&#12490; &middot; 24 Aug</div>
+                <div class="ladder">
+                  <div class="rung"><span class="rmark m-wait">?</span><span class="name">FC lottery R1</span><span class="stat">result 21 Jul</span></div>
+                  <div class="rung is-todo"><span class="rmark m-todo">2</span><span class="name">Lottery R2</span><span class="stat">if lost</span></div>
+                </div>
+                <div class="foot"><span class="pill p-off">Result tomorrow</span></div>
+              </a>
+              <a class="card" href="#">
+                <div class="artist">Roselia</div>
+                <div class="title">Rausch und/oder Craziness</div>
+                <div class="venue">&#24149;&#24373;&#12513;&#12483;&#12475; &middot; 6 Sep</div>
+                <div class="ladder">
+                  <div class="rung"><span class="rmark m-wait">?</span><span class="name">Fan-club lottery</span><span class="stat">result 2 Aug</span></div>
+                </div>
+                <div class="foot"><span class="pill p-quiet">14 days</span></div>
+              </a>
+            </section>
+
+            <section class="bcol">
+              <div class="col-head"><span class="dot d-won"></span> Won &mdash; pay <span class="count num">1</span></div>
+              <a class="card" href="#" style="border-left: 3px solid var(--accent)">
+                <div class="artist">Poppin'Party</div>
+                <div class="title">Bloom in the Summer</div>
+                <div class="venue">&#26085;&#26412;&#12460;&#12452;&#12471;&#12507;&#12540;&#12523; &middot; 17 Aug</div>
+                <div class="ladder">
+                  <div class="rung is-done"><span class="rmark m-lost">&times;</span><span class="name">FC lottery R1</span><span class="stat">lost</span></div>
+                  <div class="rung"><span class="rmark m-live">2</span><span class="name">FC lottery R2</span><span class="stat">won</span></div>
+                </div>
+                <div class="foot"><span class="pill p-danger">Pay by 22 Jul</span><span class="clock num">&yen;9,800</span></div>
+              </a>
+            </section>
+
+            <section class="bcol">
+              <div class="col-head"><span class="dot d-secured"></span> Secured <span class="count num">3</span></div>
+              <a class="card" href="#">
+                <div class="artist">&mu;'s</div>
+                <div class="title">Final Live Encore</div>
+                <div class="venue">&#26481;&#20140;&#12489;&#12540;&#12512; &middot; 30 Nov</div>
+                <div class="foot"><span class="pill p-ok">Paid</span><span class="clock">Seat 2F&nbsp;A-14</span></div>
+              </a>
+              <a class="card" href="#">
+                <div class="artist">Nijigasaki</div>
+                <div class="title">7th Live &mdash; Day 1</div>
+                <div class="venue">&#12401;&#12354;&#12450;&#12522;&#12490;MM &middot; 5 Oct</div>
+                <div class="foot"><span class="pill p-ok">Paid</span></div>
+              </a>
+              <a class="card" href="#">
+                <div class="artist">Morfonica</div>
+                <div class="title">Rebloom</div>
+                <div class="venue">Zepp Haneda &middot; 21 Sep</div>
+                <div class="foot"><span class="pill p-ok">Paid</span></div>
+              </a>
+            </section>
+
+          </div>
+        </div>
+        <div class="swipehint">&larr; scroll &rarr; &nbsp; four columns, full width; the fourth peeks at the right edge.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 - DISCOVER, FILTER SHEET, 820 -->
+  <div class="block">
+    <div class="cap">
+      <b>3 &middot; Discover under the filter sheet</b>
+      <span>820px &mdash; the 15rem sidebar folds into a "Filters &middot; 3 active" disclosure (open it); tiles auto-fill 2-across below.</span>
+    </div>
+    <div class="frame" style="width: 820px">
+      <div class="fbody">
+        <div class="fhead">
+          <h2>Concerts</h2>
+          <span class="note"><strong>142</strong> &middot; 38 with a round open</span>
+        </div>
+        <div class="searchbar">
+          <input type="text" placeholder="Search title, group, venue&hellip;" value="">
+          <button class="btn2">Search</button>
+        </div>
+
+        <details class="fsheet">
+          <summary>Filters <span class="fcount">&middot; 3 active</span></summary>
+          <div class="sheetbody">
+            <div class="grp">
+              <h4>Sort</h4>
+              <div class="chips"><span class="chip on">Event date</span><span class="chip">Next deadline</span><span class="chip">Recently added</span></div>
+            </div>
+            <div class="grp">
+              <h4>Round status</h4>
+              <div class="chips"><span class="chip on">Open now <span class="n">38</span></span><span class="chip">Opening soon <span class="n">21</span></span><span class="chip">Not tracking <span class="n">83</span></span></div>
+            </div>
+            <div class="grp">
+              <h4>Franchises &amp; groups</h4>
+              <div class="chips"><span class="chip on">Love Live! <span class="n">64</span></span><span class="chip">BanG Dream! <span class="n">31</span></span><span class="chip">22/7 <span class="n">8</span></span><span class="chip">Aqours <span class="n">22</span></span></div>
+            </div>
+            <div class="grp">
+              <h4>Regions</h4>
+              <div class="chips"><span class="chip">Kanto <span class="n">71</span></span><span class="chip">Kansai <span class="n">24</span></span><span class="chip">Other <span class="n">47</span></span></div>
+            </div>
+          </div>
+        </details>
+
+        <div class="grid">
+          <a class="card" href="#">
+            <div class="artist">Liella!</div>
+            <div class="title">5th Live Tour &mdash; Yokohama</div>
+            <div class="venue">&#128205; &#27178;&#27996;&#12450;&#12522;&#12490; &middot; 12 Oct</div>
+            <div class="status-line"><span class="pill s-act">FC presale &middot; closes in 6h</span></div>
+          </a>
+          <a class="card" href="#">
+            <div class="artist">Aqours</div>
+            <div class="title">9th LoveLive! &mdash; Day 2</div>
+            <div class="venue">&#128205; &#12373;&#12356;&#12383;&#12414;&#12473;&#12540;&#12497;&#12540;&#12450;&#12522;&#12490; &middot; 24 Aug</div>
+            <div class="status-line"><span class="pill s-in">Lottery R1 &middot; applied</span></div>
+          </a>
+          <a class="card" href="#">
+            <div class="artist">Poppin'Party</div>
+            <div class="title">Bloom in the Summer</div>
+            <div class="venue">&#128205; &#26085;&#26412;&#12460;&#12452;&#12471;&#12507;&#12540;&#12523; &middot; 17 Aug</div>
+            <div class="status-line"><span class="pill s-act">Won &middot; pay by 22 Jul</span></div>
+          </a>
+          <a class="card" href="#">
+            <div class="artist">Hasunosora</div>
+            <div class="title">6th Live &mdash; Day 1</div>
+            <div class="venue">&#128205; K&#12450;&#12522;&#12490;&#27178;&#27996; &middot; 8 Nov</div>
+            <div class="status-line"><span class="pill s-none">Opens in 3d</span></div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 - DISCOVER 1000 -->
+  <div class="block">
+    <div class="cap">
+      <b>4 &middot; Discover at the top of the band</b>
+      <span>1000px &mdash; same filter sheet, tiles now 3-across (auto-fill, minmax 270px). Proves the 1040 upper edge before the desktop two-column layout returns.</span>
+    </div>
+    <div class="frame" style="width: 1000px">
+      <div class="fbody">
+        <div class="fhead">
+          <h2>Concerts</h2>
+          <span class="note"><strong>142</strong> &middot; 38 with a round open</span>
+        </div>
+        <div class="searchbar">
+          <input type="text" placeholder="Search title, group, venue&hellip;" value="">
+          <button class="btn2">Search</button>
+        </div>
+
+        <details class="fsheet">
+          <summary>Filters <span class="fcount">&middot; 3 active</span></summary>
+          <div class="sheetbody">
+            <div class="grp">
+              <h4>Sort</h4>
+              <div class="chips"><span class="chip on">Event date</span><span class="chip">Next deadline</span><span class="chip">Recently added</span></div>
+            </div>
+            <div class="grp">
+              <h4>Round status</h4>
+              <div class="chips"><span class="chip on">Open now <span class="n">38</span></span><span class="chip">Opening soon <span class="n">21</span></span><span class="chip">Not tracking <span class="n">83</span></span></div>
+            </div>
+            <div class="grp">
+              <h4>Franchises &amp; groups</h4>
+              <div class="chips"><span class="chip on">Love Live! <span class="n">64</span></span><span class="chip">BanG Dream! <span class="n">31</span></span><span class="chip">22/7 <span class="n">8</span></span><span class="chip">Aqours <span class="n">22</span></span></div>
+            </div>
+            <div class="grp">
+              <h4>Regions</h4>
+              <div class="chips"><span class="chip">Kanto <span class="n">71</span></span><span class="chip">Kansai <span class="n">24</span></span><span class="chip">Other <span class="n">47</span></span></div>
+            </div>
+          </div>
+        </details>
+
+        <div class="grid">
+          <a class="card" href="#">
+            <div class="artist">Liella!</div>
+            <div class="title">5th Live Tour &mdash; Yokohama</div>
+            <div class="venue">&#128205; &#27178;&#27996;&#12450;&#12522;&#12490; &middot; 12 Oct</div>
+            <div class="status-line"><span class="pill s-act">FC presale &middot; closes in 6h</span></div>
+          </a>
+          <a class="card" href="#">
+            <div class="artist">Aqours</div>
+            <div class="title">9th LoveLive! &mdash; Day 2</div>
+            <div class="venue">&#128205; &#12373;&#12356;&#12383;&#12414;&#12473;&#12540;&#12497;&#12540;&#12450;&#12522;&#12490; &middot; 24 Aug</div>
+            <div class="status-line"><span class="pill s-in">Lottery R1 &middot; applied</span></div>
+          </a>
+          <a class="card" href="#">
+            <div class="artist">Poppin'Party</div>
+            <div class="title">Bloom in the Summer</div>
+            <div class="venue">&#128205; &#26085;&#26412;&#12460;&#12452;&#12471;&#12507;&#12540;&#12523; &middot; 17 Aug</div>
+            <div class="status-line"><span class="pill s-act">Won &middot; pay by 22 Jul</span></div>
+          </a>
+          <a class="card" href="#">
+            <div class="artist">Aqours &middot; upgrade</div>
+            <div class="title">9th &mdash; Osaka Day 1</div>
+            <div class="venue">&#128205; &#20140;&#12475;&#12521;&#12489;&#12540;&#12512;&#22823;&#38442; &middot; 8 Nov</div>
+            <div class="status-line"><span class="pill s-up">Upgrade open</span></div>
+          </a>
+          <a class="card" href="#">
+            <div class="artist">Roselia</div>
+            <div class="title">Rausch und/oder Craziness</div>
+            <div class="venue">&#128205; &#24149;&#24373;&#12513;&#12483;&#12475; &middot; 6 Sep</div>
+            <div class="status-line"><span class="pill s-in">FC lottery &middot; awaiting result</span></div>
+          </a>
+          <a class="card" href="#">
+            <div class="artist">Hasunosora</div>
+            <div class="title">6th Live &mdash; Day 1</div>
+            <div class="venue">&#128205; K&#12450;&#12522;&#12490;&#27178;&#27996; &middot; 8 Nov</div>
+            <div class="status-line"><span class="pill s-none">Opens in 3d</span></div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 - COMING UP ROWS -->
+  <div class="block">
+    <div class="cap">
+      <b>5 &middot; Coming up &mdash; rows keep their context</b>
+      <span>820px &mdash; the "what happens" column is folded into the title's small line (data-happens) instead of display:none'd, so the capture buttons never sit without their reason.</span>
+    </div>
+    <div class="frame" style="width: 820px">
+      <div class="fbody">
+        <div class="fhead">
+          <h2>Coming up</h2>
+          <span class="note">All times JST and yours, always both</span>
+        </div>
+        <div class="rows">
+          <div class="rowhead">
+            <span>Your status</span><span>Closes</span><span>Concert</span><span>You</span>
+          </div>
+
+          <div class="row">
+            <span><span class="pill p-quiet">Not applied</span></span>
+            <span class="when-c num"><b>Sun 20 Jul</b>23:59 JST &middot; 10:59 AST</span>
+            <span class="title-c">Liella! 5th Live Tour<small data-happens="FC presale closes in 6h">&#27178;&#27996;&#12450;&#12522;&#12490; &middot; 12 Oct</small></span>
+            <span class="acts">
+              <button class="act yes" type="button">I have applied</button>
+              <button class="act no" type="button">Not applying</button>
+            </span>
+          </div>
+
+          <div class="row">
+            <span><span class="pill p-ok">Applied</span></span>
+            <span class="when-c num"><b>Mon 21 Jul</b>12:00 JST &middot; 23:00 AST</span>
+            <span class="title-c">Aqours 9th LoveLive! Day 2<small data-happens="Lottery result announced">&#12373;&#12356;&#12383;&#12414;&#12473;&#12540;&#12497;&#12540;&#12450;&#12522;&#12490; &middot; 24 Aug</small></span>
+            <span class="acts"><span class="done">Nothing to do</span></span>
+          </div>
+
+          <div class="row">
+            <span><span class="pill p-danger">Won</span></span>
+            <span class="when-c num"><b>Tue 22 Jul</b>23:59 JST &middot; 10:59 AST</span>
+            <span class="title-c">Poppin'Party &mdash; Bloom in the Summer<small data-happens="Payment due &yen;9,800">&#26085;&#26412;&#12460;&#12452;&#12471;&#12507;&#12540;&#12523; &middot; 17 Aug</small></span>
+            <span class="acts"><button class="act yes" type="button">Paid</button></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note-b">
+    Reference panel for the tablet <code>@media (min-width: 701px) and (max-width: 1040px)</code> section in <code>style.css</code>, joining <code>dekimasen-mobile-demo.html</code>. Only the theme toggle, the <code>&lt;details&gt;</code> filter sheet, and the board's horizontal scroll are interactive &mdash; everything else is a static state. Toggle your OS / Claude theme, or the button up top, to check the dark rendering.
+  </p>
+</div>
+
+<script>
+  function tdTheme(){
+    var r = document.documentElement;
+    var cur = r.getAttribute('data-theme');
+    if(!cur){ cur = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+    r.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+</script>
