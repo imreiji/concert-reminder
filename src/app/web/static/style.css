@@ -306,7 +306,7 @@ button.x:hover { color: var(--danger); opacity: 1; }
    two-column layout and the fsheet-as-sidebar presentation flip on the
    identical boundary. Below it (the whole tablet band + phone) the summary
    shows and the fsheet is a disclosure, styled in the 701-1040 tablet
-   section and the phone @media (max-width: 760px) .fsheet block. */
+   section and the phone @media (max-width: 700px) .fsheet block. */
 @media (min-width: 1041px) {
   .fsheet { order: -1; }
   .fsheet > summary { display: none; }
@@ -1721,16 +1721,18 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   .pick, .remcards { grid-template-columns: 1fr; }
 }
 
-/* This block presents .fsheet as a phone BOTTOM SHEET, and its 760px
-   boundary now marks the phone/tablet presentation split, NOT .layout's
-   collapse point. .layout collapses at 1040 and the fsheet summary-flip is
-   at 1041 (the two coupled rules further up) -- so the whole band + phone is
-   one column with the summary shown. Within that: <=760 is this bottom
-   sheet; 761-1040 is the tablet inline disclosure panel (the 701-1040
-   tablet-band section, search "Tablet band (701"). The 760 here must stay in
-   lockstep with discover.html's matchMedia("(max-width: 760px)"), which adds
-   the .fsheet-js class these rules gate on -- change one, change both. */
-@media (max-width: 760px) {
+/* This block presents .fsheet as a phone BOTTOM SHEET. Its boundary is
+   700px -- the PHONE SECTION boundary -- because the sheet-vs-inline split
+   is a phone/tablet presentation split, and 760 lost its meaning when
+   .layout's collapse moved to 1040. So: .layout collapses at 1040, the
+   fsheet summary-flip is at 1041 (the coupled rules further up), the whole
+   band + phone shows the summary; within that, <=700 is this bottom sheet
+   and 701-1040 is the tablet inline disclosure panel (the 701-1040
+   tablet-band section, search "Tablet band (701"). The COLLAPSE-on-load JS
+   in discover.html runs at <=1040 (matching the summary-visible range); the
+   .fsheet-js class it adds is required by these overlay rules, which only
+   match <=700 -- in-band the class is present but inert. */
+@media (max-width: 700px) {
   /* With JS (sheet mode) the fsheet is just its small Filters button, so it
      moves ABOVE the content column, per the demo's filter row -- content is
      still on screen one. Without JS the fsheet stays where the DOM puts it
