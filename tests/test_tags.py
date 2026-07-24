@@ -1981,3 +1981,113 @@ def test_inline_venue_creation_leaves_blank_leg_rows_blank(client):
     assert script.count("opener.value = tag.id") == 1
     # the append loop touches the new <option>, never the <select>'s value
     assert "sel.value" not in script
+
+
+# ── Inline tag creation from the import preview (POST /tags/quick) ────────
+
+
+async def test_quick_tag_create_returns_the_new_franchise(client):
+    login_as(client, EDITOR_ID, "reiji")
+    resp = client.post("/tags/quick", data={
+        "name": "Love Live!", "name_en": "Love Live!", "kind": "franchise",
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "Love Live!"
+    assert body["kind"] == "franchise"
+    assert body["parent_id"] is None
+    async with client.db() as s:
+        tag = await s.get(Tag, body["id"])
+        assert tag.kind is TagKind.FRANCHISE
+        assert tag.name_en == "Love Live!"
+        # EN/中文 are optional here -- a Japanese-only quick-create is complete.
+        assert tag.name_zh is None
+
+
+async def test_quick_tag_create_returns_the_new_artist(client):
+    login_as(client, EDITOR_ID, "reiji")
+    resp = client.post("/tags/quick", data={"name": "日野下花帆", "kind": "artist"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["kind"] == "artist"
+    async with client.db() as s:
+        tag = await s.get(Tag, body["id"])
+        assert tag.kind is TagKind.ARTIST
+
+
+async def test_quick_tag_create_group_sets_parent_id(client):
+    login_as(client, EDITOR_ID, "reiji")
+    async with client.db() as s:
+        parent = Tag(name="Love Live!", kind=TagKind.FRANCHISE)
+        s.add(parent)
+        await s.commit()
+        parent_id = parent.id
+    resp = client.post("/tags/quick", data={
+        "name": "Aqours", "kind": "group", "parent_id": str(parent_id),
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["parent_id"] == parent_id
+    async with client.db() as s:
+        tag = await s.get(Tag, body["id"])
+        assert tag.kind is TagKind.GROUP
+        assert tag.parent_id == parent_id
+        # An empty group -- no member expansion happens at creation (invariant 3).
+        members = (await s.execute(
+            select(TagMember).where(TagMember.group_tag_id == tag.id)
+        )).scalars().all()
+        assert members == []
+
+
+async def test_quick_tag_create_rejects_a_duplicate_of_the_same_kind(client):
+    login_as(client, EDITOR_ID, "reiji")
+    async with client.db() as s:
+        existing = Tag(name="Aqours", kind=TagKind.GROUP)
+        s.add(existing)
+        await s.commit()
+        existing_id = existing.id
+    resp = client.post("/tags/quick", data={"name": "Aqours", "kind": "group"})
+    # Kind-scoped 409, matching create_tag / quick_create_venue -- the dialog's
+    # JS maps 409 -> "already exists" plus a one-click "select existing".
+    assert resp.status_code == 409
+    # The 409 body carries the existing tag's id + name so the dialog can offer
+    # to select it instead of dead-ending.
+    detail = resp.json()["detail"]
+    assert detail["id"] == existing_id
+    assert detail["name"] == "Aqours"
+
+
+def test_quick_tag_create_rejects_an_invalid_kind(client):
+    login_as(client, EDITOR_ID, "reiji")
+    # VENUE has its own richer route and is not one of the three this endpoint
+    # handles; a bogus kind is likewise a 422.
+    assert client.post("/tags/quick", data={"name": "X", "kind": "venue"}).status_code == 422
+    assert client.post("/tags/quick", data={"name": "X", "kind": "bogus"}).status_code == 422
+
+
+def test_quick_tag_create_rejects_a_blank_name(client):
+    login_as(client, EDITOR_ID, "reiji")
+    assert client.post("/tags/quick", data={"name": "   ", "kind": "artist"}).status_code == 422
+
+
+def test_quick_tag_create_rejects_a_parent_on_a_non_group(client):
+    login_as(client, EDITOR_ID, "reiji")
+    resp = client.post("/tags/quick", data={
+        "name": "X", "kind": "artist", "parent_id": "1",
+    })
+    assert resp.status_code == 422
+
+
+def test_quick_tag_create_requires_editor(client):
+    """Signed out is not an error -- LoginRequired redirects to `/` (invariant
+    5), so this must not be a 403."""
+    resp = client.post("/tags/quick", data={"name": "X", "kind": "artist"})
+    assert resp.status_code in (200, 303, 204)
+    assert "/tags/quick" not in resp.headers.get("location", "")
+
+
+def test_quick_tag_create_is_403_for_a_signed_in_non_editor(client):
+    login_as(client, VIEWER_ID, "viewer")
+    assert client.post(
+        "/tags/quick", data={"name": "X", "kind": "artist"}
+    ).status_code == 403

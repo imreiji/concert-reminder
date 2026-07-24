@@ -179,8 +179,16 @@
       {#- No venue row here: a concert's VENUE tags are DERIVED from its legs
           (sync_concert_venue_tags), so the parsed venue is picked on the leg
           cards above and rolls up from there. -#}
-      {% if unmatched_tag_names %}
-      <p class="dim tiny">{% trans names=unmatched_tag_names | join(", ") %}No tag yet for: {{ names }} — create them on the <a href="/tags">tags page</a>, then re-paste, or pick by hand.{% endtrans %}</p>
+      {#- Each scraped/pasted tag NAME that matched no existing tag renders as
+          its own chip-silhouette "+ create this" button. Clicking one opens the
+          quick-create dialog pre-filled with the name and kind; a successful
+          create drops the tag into the picker selection and removes the chip.
+          data-tag-name / data-tag-kind (never data-name -- that collides with
+          base.html's filterChips selector, invariant 7). -#}
+      {% if unmatched_tags %}
+      <p class="dim tiny" data-unmatched-lead>{{ _("No tag yet:") }}
+        {% for u in unmatched_tags %}<button type="button" class="chip add" data-new-tag
+          data-tag-name="{{ u.name }}" data-tag-kind="{{ u.kind }}">+ 「{{ u.name }}」</button>{% endfor %}</p>
       {% endif %}
       {% include "_tag_picker_fields.html" %}
     </div>
@@ -194,6 +202,9 @@
 {% include "_venue_create_dialog.html" %}
 {% include "_round_phrase_dialog.html" %}
 {% include "_tag_picker_script.html" %}
+{#- After _tag_picker_script.html on purpose: the quick-create dialog calls
+    window.pickerAddAndSelect, defined by that script. -#}
+{% include "_tag_create_dialog.html" %}
 
 <template id="day-row-template">
   {{ leg_card() }}

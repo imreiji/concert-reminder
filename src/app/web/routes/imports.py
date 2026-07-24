@@ -221,7 +221,9 @@ async def import_preview(
             # name, pre-selects that tag below.
             "venue_hint": parsed.venue_name,
             "matched_venue_tag_id": matched,
-            "unmatched_tag_names": [],
+            # No name->tag resolution on the URL path, so nothing unmatched to
+            # offer a create chip for -- the draft path below is the producer.
+            "unmatched_tags": [],
             # One chip target per parsed day, keyed by day_key -- the round
             # cards render their leg chips from this via _round_leg_chips.html.
             "legs": _preview_legs(parsed),
@@ -268,10 +270,13 @@ async def import_draft(
     for d in parsed.days:
         d.matched_venue_tag_id = match_venue_tag_id(d.venue_name, venue_tags)
 
-    # Tag names -> picker pre-selection. Unmatched names surface as one hint
-    # in the Tags fold rather than vanishing.
+    # Tag names -> picker pre-selection. Unmatched names surface in the Tags
+    # fold as per-name "create this tag" chips rather than vanishing -- each
+    # carries its kind (franchise/group/artist) so the quick-create dialog can
+    # pre-select the right kind. Structured (name, kind) pairs, not a flat name
+    # list: the kind is what the chip and the dialog both need.
     initial_selected: dict[str, list[str]] = {}
-    unmatched_tag_names: list[str] = []
+    unmatched_tags: list[dict] = []
     for kind_name, names in (
         ("franchise", parsed.franchise_names),
         ("group", parsed.group_names),
@@ -280,7 +285,7 @@ async def import_draft(
         ids, missing = match_tag_ids_by_name(names, picker["by_kind"].get(kind_name, []))
         if ids:
             initial_selected[kind_name] = [str(i) for i in ids]
-        unmatched_tag_names.extend(missing)
+        unmatched_tags.extend({"name": name, "kind": kind_name} for name in missing)
 
     # applies_to leg labels -> the preview's day_key scheme ("d0", "d1", ...),
     # first row claiming a duplicate label keeps it (same rule as
@@ -322,7 +327,7 @@ async def import_draft(
             "venue_hint": None,
             "matched_venue_tag_id": None,
             "legs": _preview_legs(parsed),
-            "unmatched_tag_names": unmatched_tag_names,
+            "unmatched_tags": unmatched_tags,
         },
     )
 

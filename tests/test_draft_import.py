@@ -194,11 +194,30 @@ async def test_draft_renders_fully_prefilled_preview(client, db):
     assert 'value="https://example.jp/6th/ticket/"' in text
 
 
-async def test_unmatched_tag_names_render_a_hint(client, db):
+async def test_unmatched_tag_names_render_create_chips(client, db):
     login_as(client, EDITOR_ID, "reiji")  # no tags seeded at all
     r = client.post("/concerts/import/draft", data={"draft": DRAFT})
     assert r.status_code == 200
-    assert "Love Live!" in r.text  # named in the unmatched hint
+    text = r.text
+    # Each unmatched name is its own "+ create this tag" chip carrying its kind
+    # -- structured (name, kind) pairs, not a flat text list. The DRAFT names a
+    # franchise (Love Live!) and an artist (日野下花帆), neither seeded.
+    assert 'data-new-tag' in text
+    assert 'data-tag-name="Love Live!"' in text
+    assert 'data-tag-kind="franchise"' in text
+    assert 'data-tag-name="日野下花帆"' in text
+    assert 'data-tag-kind="artist"' in text
+    # The lead-in line still gives the chips context.
+    assert "No tag yet:" in text
+    # The quick-create dialog is present, included outside the form.
+    assert 'id="tag-create"' in text
+    assert 'data-tag-save' in text
+    # Invariant 7: the opener chips carry data-tag-name, NEVER data-name (which
+    # collides with base.html's filterChips selector). Check the Tags fold has
+    # no stray data-name on a create chip.
+    for chunk in text.split('data-new-tag')[1:]:
+        seg = chunk.split('>', 1)[0]
+        assert 'data-name=' not in seg
 
 
 def test_draft_error_rerenders_the_form(client):

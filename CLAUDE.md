@@ -182,6 +182,16 @@ shipped since).
   exists" instead of the generic 422 everything else gets. The concert-level
   venue picker was REMOVED from both forms -- the leg is the single place a
   venue is entered, and `create_concert_row` sets `venue=None`.
+  Franchise/group/artist tags get the same treatment in the IMPORT PREVIEW:
+  each unmatched draft name renders as a per-name create chip
+  (`data-new-tag` + `data-tag-name`/`data-tag-kind`) opening
+  `_tag_create_dialog.html`, backed by `POST /tags/quick` (editor-only,
+  kind-aware, groups take a `parent_id`; its kind-scoped 409 returns the
+  existing tag's id+name so the dialog offers one-click select-existing).
+  A group created there is EMPTY on purpose -- expansion stays
+  attach-time-only (invariant 3) -- and creation fires no notification
+  (creation is not attachment, invariant 4). The created tag joins the
+  picker via `_tag_picker_script.html`'s `pickerAddAndSelect`.
   `routes/discover.py` is the public catalogue and `routes/outcomes.py` is
   the web half of lottery-outcome capture (`POST /rounds/{id}/outcome`) --
   it shares `record_round_outcome` with the DM buttons rather than writing

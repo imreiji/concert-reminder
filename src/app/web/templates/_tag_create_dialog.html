@@ -1,0 +1,199 @@
+{#- Create a franchise/group/artist tag without leaving the import preview.
+
+    Same shape as _venue_create_dialog.html (.picker: header with title and ×,
+    no footer, backdrop-click and Esc close) and the same wiring: it POSTs
+    JSON to /tags/quick and drops the result into the tag picker's selection
+    via window.pickerAddAndSelect (defined in _tag_picker_script.html, which
+    MUST be included before this). VENUE is not offered -- venues have their
+    own richer _venue_create_dialog.html / quick_create_venue route.
+
+    MUST be included OUTSIDE the concert <form>: its inputs are read by hand
+    (never named form fields), so nesting them would post stray values on the
+    commit.
+
+    Every user-controlled string reaches the DOM through textContent or a
+    data- attribute read via `dataset`, never an inline on* handler or | safe:
+    the browser HTML-decodes an attribute before parsing it as JS, so Jinja's
+    &#39; would not protect an apostrophe-bearing tag name (invariant 7). The
+    opener attributes are data-tag-name / data-tag-kind, deliberately NOT
+    data-name -- that one collides with base.html's shared filterChips()
+    selector. -#}
+<dialog class="picker" id="tag-create"
+        data-err-generic="{{ _('Could not add that tag.') }}"
+        data-err-duplicate="{{ _('That tag already exists.') }}">
+  <div class="picker-head">
+    <h3>{{ _("New tag") }}</h3>
+    <button type="button" class="x" data-tag-cancel>×</button>
+  </div>
+  <div class="picker-body">
+    <div class="fld">
+      <span>{{ _("Kind") }}</span>
+      <div class="kindpick" id="tc-kindpick">
+        <button type="button" data-kind="franchise" aria-pressed="false">{{ _("Franchise") }}</button>
+        <button type="button" data-kind="group" aria-pressed="true">{{ _("Group") }}</button>
+        <button type="button" data-kind="artist" aria-pressed="false">{{ _("Performer") }}</button>
+      </div>
+      <span class="dim tiny" data-tc-hint></span>
+    </div>
+    <label class="fld"><span>{{ _("Name") }}</span>
+      <input maxlength="100" data-tc-name></label>
+    <label class="fld"><span>{{ _("Name") }} · English</span>
+      <input maxlength="100" data-tc-name-en></label>
+    <label class="fld"><span>{{ _("Name") }} · 中文</span>
+      <input maxlength="100" data-tc-name-zh></label>
+    <div class="fld kf-group" data-tc-parent-fld>
+      <span>{{ _("Parent franchise") }}</span>
+      <select data-tc-parent>
+        {#- Empty value, not "0": this select is read by the fetch below, never
+            posted as a form field, and a "0" here would trip the import
+            preview's global "no value=0 in the venue selects" guard. Blank is
+            falsy, so the save path simply omits parent_id. -#}
+        <option value="">{{ _("— none —") }}</option>
+        {% for f in by_kind.get("franchise", []) %}<option value="{{ f.id }}">{{ loc(f, "name") }}</option>{% endfor %}
+      </select>
+    </div>
+    <p class="dim tiny" data-tag-err hidden role="alert"></p>
+    {#- Shown only on a 409: the name already exists, so offer to select the
+        existing tag rather than leaving the editor stuck. -#}
+    <button type="button" class="chip add" data-tag-select-existing hidden>{{ _("Select existing tag") }}</button>
+    <button type="button" class="chip add" data-tag-save>{{ _("Create & select") }}</button>
+  </div>
+</dialog>
+
+<script>
+  (function () {
+    const dlg = document.getElementById("tag-create");
+    if (!dlg) return;
+    // Translated kind hints, reusing the Tags-page msgids. | tojson, never
+    // | safe (invariant 7); read into textContent below.
+    const KIND_HINTS = {{ {
+      "franchise": _("A franchise is the top level. It contains groups."),
+      "group": _("A group contains performers. Attaching it to an event adds its members."),
+      "artist": _("A single performer. Can belong to a group, or stand alone."),
+    } | tojson }};
+
+    const nameIn = dlg.querySelector("[data-tc-name]");
+    const nameEnIn = dlg.querySelector("[data-tc-name-en]");
+    const nameZhIn = dlg.querySelector("[data-tc-name-zh]");
+    const parentSel = dlg.querySelector("[data-tc-parent]");
+    const parentFld = dlg.querySelector("[data-tc-parent-fld]");
+    const err = dlg.querySelector("[data-tag-err]");
+    const selectExisting = dlg.querySelector("[data-tag-select-existing]");
+    const hint = dlg.querySelector("[data-tc-hint]");
+
+    // The chip that opened the dialog (an unmatched-tag "+ create" button) and
+    // the kind chosen -- set by the delegated opener, read by the save path so
+    // the created tag lands in the right picker row and the chip is removed.
+    // The existing-tag payload from a 409 rides here too, for the one-click
+    // "select existing" button.
+    let opener = null;
+    let currentKind = "group";
+    let existingTag = null;
+
+    function setKind(kind) {
+      currentKind = kind;
+      dlg.querySelectorAll("#tc-kindpick button").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b.dataset.kind === kind));
+      });
+      // Parent franchise applies to groups only.
+      parentFld.style.display = kind === "group" ? "" : "none";
+      hint.textContent = KIND_HINTS[kind] || "";
+      // A kind switch invalidates any duplicate warning from the last name.
+      hideError();
+    }
+
+    function hideError() {
+      err.hidden = true;
+      err.textContent = "";
+      selectExisting.hidden = true;
+      existingTag = null;
+    }
+
+    document.addEventListener("click", function (e) {
+      const btn = e.target.closest("[data-new-tag]");
+      if (!btn) return;
+      opener = btn;
+      nameIn.value = btn.dataset.tagName || "";
+      setKind(btn.dataset.tagKind || "group");
+      dlg.showModal();
+    });
+
+    // Backdrop-click closes, like .picker. Esc is the <dialog> default.
+    dlg.addEventListener("click", function (e) {
+      if (e.target === dlg) dlg.close();
+    });
+    dlg.querySelector("[data-tag-cancel]").addEventListener("click", function () { dlg.close(); });
+
+    // One reset for every close path (×, backdrop, Esc, save success): without
+    // it a failed save leaves the stale error and the filled name over the
+    // next open.
+    dlg.addEventListener("close", function () {
+      hideError();
+      nameIn.value = nameEnIn.value = nameZhIn.value = "";
+      parentSel.value = "";
+      opener = null;
+    });
+
+    // Drop the created (or already-existing) tag into the picker and remove the
+    // opener chip; if that was the last unmatched chip, drop the lead-in line.
+    function selectAndFinish(kind, tag) {
+      if (window.pickerAddAndSelect) window.pickerAddAndSelect(kind, tag);
+      if (opener) {
+        const lead = opener.closest("[data-unmatched-lead]");
+        opener.remove();
+        if (lead && !lead.querySelector("[data-new-tag]")) lead.remove();
+      }
+      dlg.close();
+    }
+
+    selectExisting.addEventListener("click", function () {
+      if (existingTag) selectAndFinish(currentKind, existingTag);
+    });
+
+    dlg.querySelector("[data-tag-save]").addEventListener("click", async function () {
+      hideError();
+      const name = nameIn.value.trim();
+      if (!name) { nameIn.focus(); return; }
+      const body = new FormData();
+      body.append("name", name);
+      body.append("name_en", nameEnIn.value);
+      body.append("name_zh", nameZhIn.value);
+      body.append("kind", currentKind);
+      // parent_id is a group-only concept; send it only then, and only when
+      // a real franchise is chosen (the "— none —" option is value="").
+      if (currentKind === "group" && parentSel.value) {
+        body.append("parent_id", parentSel.value);
+      }
+
+      let resp;
+      try {
+        resp = await fetch("/tags/quick", { method: "POST", body: body });
+      } catch (_) {
+        err.textContent = dlg.dataset.errGeneric;
+        err.hidden = false;
+        return;
+      }
+      if (!resp.ok) {
+        // 409 is the one status with a tag to offer: its JSON detail carries
+        // the existing tag's id + name, so the editor can select it in one
+        // click instead of hitting a dead end. Every other failure carries its
+        // reason in detail (a string), falling back to the generic copy. The
+        // parse is guarded -- an error response need not be JSON.
+        let detail = null;
+        try { detail = (await resp.json()).detail; } catch (_) { /* not JSON */ }
+        if (resp.status === 409 && detail && detail.id) {
+          existingTag = { id: detail.id, name: detail.name };
+          err.textContent = dlg.dataset.errDuplicate;
+          err.hidden = false;
+          selectExisting.hidden = false;
+          return;
+        }
+        err.textContent = (typeof detail === "string" && detail) || dlg.dataset.errGeneric;
+        err.hidden = false;
+        return;
+      }
+      const tag = await resp.json();
+      selectAndFinish(tag.kind, tag);
+    });
+  })();
+</script>
