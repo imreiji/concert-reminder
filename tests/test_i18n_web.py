@@ -247,12 +247,12 @@ def test_legal_governs_note_absent_in_en_present_in_ja(client):
     # The note renders only when locale != en (the {% if %} in privacy.html).
     r = client.get("/privacy")
     assert "English version governs" not in r.text
-    assert "英語版が優先されます" not in r.text
+    assert "英語版が適用されます" not in r.text
     client.cookies.set("lang", "ja")
     r = client.get("/privacy")
     # Now that Task 14 filled the catalogues, the note renders translated
     # (the pre-fill English-fallback proxy this used is obsolete).
-    assert "英語版が優先されます" in r.text
+    assert "英語版が適用されます" in r.text
 
 
 # ── per-locale smoke tests: real msgstr on the five copy-heaviest pages ───
@@ -277,13 +277,13 @@ _SMOKE = {
     # / signed-out landing: "How it works"
     "landing": ("仕組み", "运作方式"),
     # /discover: "Round status"
-    "discover": ("抽選状況", "轮次状态"),
+    "discover": ("受付状況", "轮次状态"),
     # /privacy: "What we collect"
-    "privacy": ("収集する情報", "我们收集什么"),
+    "privacy": ("収集する情報", "我们收集的信息"),
     # /preferences (logged in): "Account"
     "preferences": ("アカウント", "账户"),
     # /welcome step 0 (logged in): "Follow some artists"
-    "welcome": ("アーティストをフォローしましょう", "关注一些艺人"),
+    "welcome": ("アーティストをフォロー", "关注一些艺人"),
 }
 
 

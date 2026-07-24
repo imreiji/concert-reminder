@@ -54,30 +54,21 @@ debt: the cache-bust entry had shipped on 2026-07-22 via PR #84
 (`static_url` + per-file content hash) but was never moved -- it is in
 Shipped now, a day late.
 
+The 2026-07-24 pass ships the first entry of that batch: the calibration
+review came back (762 rows, a full pass plus a later zh-only overlay) and
+PR #88 applied 307 ja / 344 zh corrections, so the entry moved to Shipped
+and the two design brainstorms it fed rise to #1/#2. The same review
+proposed 132 ENGLISH source fixes -- msgid changes, i.e. source-code
+edits, not catalogue edits -- which were extracted verbatim to
+`docs/i18n-english-source-fixes-2026-07-24.csv` and inserted as the new
+#3 rather than applied blind, so every entry from #4 down keeps its
+number. Two stale rank cross-references in older entries were made
+name-based in the same pass.
+
 ## Proposed (highest impact first)
 
 
-### 1. Major i18n translation calibration (owner review pass)
-
-Impact: high - effort: medium (review time, not code). Raised: 2026-07-23
-(owner, end-of-day roadmap discussion).
-
-Every ja/zh string in both catalogues (~710 msgids each) is a
-competent-bilingual, machine-assisted translation that has never had a
-native-speaker review -- flagged as owner homework in the original i18n
-Shipped entry and never done. The owner wants a full calibration pass, and
-it is deliberately ranked FIRST of the 2026-07-23 batch: corrected wording
-changes string lengths and tone, which feeds directly into the editor-pages
-and tablet brainstorms below (chip widths, label wrapping, dialog copy), so
-calibrating after those would re-open them. A review document (CSV: msgid,
-current ja, current zh, blank fix/notes columns) was generated 2026-07-23
-for mobile editing -- regenerate any time by dumping both
-`src/app/translations/*/LC_MESSAGES/messages.po` with babel's pofile reader.
-The apply half is mechanical: paste corrected msgstrs back into both `.po`
-files; `tests/test_i18n_catalogues.py` guards completeness, and no `.mo`
-step exists (compiled in memory).
-
-### 2. Editor and concert pages coherence pass (post-trilingual format)
+### 1. Editor and concert pages coherence pass (post-trilingual format)
 
 Impact: high - effort: large (full brainstorm + demo mandated). Raised:
 2026-07-23 (owner).
@@ -115,7 +106,7 @@ client-side row builder writes untranslated literal "before"/"after" option
 text into rows it creates (~line 246), so a freshly added row is part-English
 in every locale.
 
-### 3. A real tablet layout for the 701-1040px band
+### 2. A real tablet layout for the 701-1040px band
 
 Impact: medium-high (every tablet user; the owner reports them unhappy) -
 effort: medium-large (brainstorm + demo mandated). Raised: 2026-07-23
@@ -131,6 +122,27 @@ one-`@media`-section rule exists precisely so desktop pixels stay untouched
 NOT scattered overrides), and it must reconcile with the documented 760px
 `.fsheet`/`.layout` coupling, which sits INSIDE the new band and is the
 likely first thing the design revisits.
+
+### 3. Apply the reviewed English-source fixes (132 msgids)
+
+Impact: medium (copy quality in the app's primary language) - effort:
+medium (source edits, not catalogue edits). Raised: 2026-07-24 (owner,
+while merging the calibration PR).
+
+The 2026-07-23 native-review pass also proposed fixes to 132 ENGLISH
+source strings. English is the msgid layer, so each fix is a source-code
+change: edit the literal in its template/module, re-key that entry in
+BOTH catalogues (the msgid must stay byte-identical to its catalogue key
+or the translation silently drops), and update any EN test asserting the
+old copy. The full mapping is committed at
+`docs/i18n-english-source-fixes-2026-07-24.csv` (exact current msgid,
+plural form, proposed English, reviewer note) -- verified row-aligned
+against the ja catalogue at extraction, zero mismatches. Two riders from
+the reviewer's notes: several strings use the "{n} reminder(s)" shortcut
+where real plural msgids exist as a mechanism and should switch over when
+touched; and the editor-pages coherence pass (ranked above) should consult
+this file so surfaces it redesigns adopt the corrected copy directly
+instead of being edited twice.
 
 ### 4. Inline tag creation for unmatched scraped/draft tags
 
@@ -465,7 +477,7 @@ those close several visible gaps each; this refines one sentence that is
 already correct.
 
 (The former "Editor page parity with the demo" entry (2026-07-20) was
-absorbed on 2026-07-23 into the new editor-pages coherence pass at #2 --
+absorbed on 2026-07-23 into the editor-pages coherence pass --
 everything it tracked (demo's nested-rounds structure vs shipped flat lists,
 read-only summaries vs always-open inputs, the stale editor frame in
 `dekimasen-demo.html` showing the dropped concert-level venue) is exactly
@@ -478,6 +490,23 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Major i18n translation calibration (owner review pass) (2026-07-24)
+
+Shipped as: PR #88. The 762-row review CSV came back from external
+native-level review (a full pass plus a later zh-only overlay that won its
+6 conflicts) and 307 ja / 344 zh msgstrs were applied by script:
+placeholder sets validated per row, the overlay's renderer-mangled HTML
+tags repaired positionally from the msgid, zero rows skipped. Four i18n
+smoke tests updated to the calibrated strings. The review's 132
+English-source fixes were deliberately NOT applied -- msgids are frozen at
+the catalogue layer -- and are extracted verbatim to
+`docs/i18n-english-source-fixes-2026-07-24.csv`, tracked as Proposed #3.
+Revision pass: the two design brainstorms this entry deliberately preceded
+(corrected wording feeds chip widths, label wrapping, dialog copy) rise to
+#1/#2 unchanged in substance, and the reviewer's "fragment -- needs UI
+reorder" notes independently confirm the sentence-builder scope already
+folded into the coherence pass.
 
 ### Cache-bust static assets with a per-file content hash (2026-07-22)
 
@@ -503,9 +532,9 @@ tool-agnostic fetching for recipients on claude.ai rather than Claude Code);
 its `example-draft.yaml` is pinned byte-identical to the repo skill's by test,
 so the schema contract cannot fork between the two copies. Not a Proposed
 entry (raised and built directly by the owner on 2026-07-23); revision pass
-over Proposed found no rank changes -- it strengthens the case for #2
-(eventernote discovery, since more editors can now produce drafts) without
-displacing anything.
+over Proposed found no rank changes -- it strengthens the case for the
+Eventernote actor-page discovery entry (more editors can now produce
+drafts) without displacing anything.
 
 ### Agent-driven concert import (YAML draft round-trip + add-concert skill) (2026-07-23)
 
