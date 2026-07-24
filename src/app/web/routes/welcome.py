@@ -44,14 +44,19 @@ TOTAL_STEPS = 5
 # "30 minutes" option is deliberately dropped. A "0:0" offset is the "when it
 # happens" moment, which carries no before/after.
 OFFSET_OPTIONS = [
-    {"value": "0:0", "label": "when", "moment": True},
-    {"value": "0:1", "label": "1 hour", "moment": False},
-    {"value": "0:3", "label": "3 hours", "moment": False},
-    {"value": "0:6", "label": "6 hours", "moment": False},
-    {"value": "1:0", "label": "1 day", "moment": False},
-    {"value": "3:0", "label": "3 days", "moment": False},
-    {"value": "5:0", "label": "5 days", "moment": False},
-    {"value": "7:0", "label": "1 week", "moment": False},
+    # N_() like the anchors below: the sentence patterns put these labels
+    # inside a ja/zh sentence, so an untranslated "1 day" would read as
+    # 「締切の1 day前に通知。」. The moment label is deliberately the bare
+    # 時/时 in ja/zh — with the direction select hidden it completes the
+    # sentence as 「申込受付開始の時に通知。」 / 「申请开始时提醒我。」.
+    {"value": "0:0", "label": N_("when"), "moment": True},
+    {"value": "0:1", "label": N_("1 hour"), "moment": False},
+    {"value": "0:3", "label": N_("3 hours"), "moment": False},
+    {"value": "0:6", "label": N_("6 hours"), "moment": False},
+    {"value": "1:0", "label": N_("1 day"), "moment": False},
+    {"value": "3:0", "label": N_("3 days"), "moment": False},
+    {"value": "5:0", "label": N_("5 days"), "moment": False},
+    {"value": "7:0", "label": N_("1 week"), "moment": False},
 ]
 
 # Two phrasings per anchor keep every rule reading as a grammatical sentence:
@@ -140,8 +145,14 @@ async def welcome(
         # The reminder-step data the fine-tune UI seeds and edits from. The
         # standard rows are also emitted server-side so the list is populated
         # with JS off (no flash, and a JS-off submit still creates a preset).
+        # Translate each offset label without a literal inside _() -- babel's
+        # extractor reads _(o["label"]) as msgid "label" and pollutes the pot.
+        offset_options = []
+        for o in OFFSET_OPTIONS:
+            label = o["label"]
+            offset_options.append({**o, "label": _(label)})
         context.update({
-            "offset_options": OFFSET_OPTIONS,
+            "offset_options": offset_options,
             "anchor_order": ANCHOR_ORDER,
             # Translated per-request (the route runs under the request locale).
             "anchor_moment": {k: _(v) for k, v in ANCHOR_MOMENT.items()},

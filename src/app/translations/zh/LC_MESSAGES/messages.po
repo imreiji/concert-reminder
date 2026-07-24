@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 10:37-0300\n"
+"POT-Creation-Date: 2026-07-24 10:46-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -556,43 +556,75 @@ msgstr "下一个截止时间"
 msgid "Recently added"
 msgstr "最近添加"
 
-#: src/app/web/routes/welcome.py:64
+#: src/app/web/routes/welcome.py:52
+msgid "when"
+msgstr "时"
+
+#: src/app/web/routes/welcome.py:53
+msgid "1 hour"
+msgstr "1小时"
+
+#: src/app/web/routes/welcome.py:54
+msgid "3 hours"
+msgstr "3小时"
+
+#: src/app/web/routes/welcome.py:55
+msgid "6 hours"
+msgstr "6小时"
+
+#: src/app/web/routes/welcome.py:56
+msgid "1 day"
+msgstr "1天"
+
+#: src/app/web/routes/welcome.py:57
+msgid "3 days"
+msgstr "3天"
+
+#: src/app/web/routes/welcome.py:58
+msgid "5 days"
+msgstr "5天"
+
+#: src/app/web/routes/welcome.py:59
+msgid "1 week"
+msgstr "1周"
+
+#: src/app/web/routes/welcome.py:69
 msgid "applications open"
 msgstr "申请开始"
 
-#: src/app/web/routes/welcome.py:64
+#: src/app/web/routes/welcome.py:69
 msgid "applications close"
 msgstr "申请截止"
 
-#: src/app/web/routes/welcome.py:65
+#: src/app/web/routes/welcome.py:70
 msgid "results come out"
 msgstr "结果公布"
 
-#: src/app/web/routes/welcome.py:65
+#: src/app/web/routes/welcome.py:70
 msgid "payment is due"
 msgstr "付款截止"
 
-#: src/app/web/routes/welcome.py:66
+#: src/app/web/routes/welcome.py:71
 msgid "the show starts"
 msgstr "演出开始"
 
-#: src/app/web/routes/welcome.py:69
+#: src/app/web/routes/welcome.py:74
 msgid "the opening"
 msgstr "申请开始"
 
-#: src/app/web/routes/welcome.py:69
+#: src/app/web/routes/welcome.py:74
 msgid "the deadline"
 msgstr "截止时间"
 
-#: src/app/web/routes/welcome.py:69
+#: src/app/web/routes/welcome.py:74
 msgid "the results"
 msgstr "结果公布"
 
-#: src/app/web/routes/welcome.py:70
+#: src/app/web/routes/welcome.py:75
 msgid "the payment deadline"
 msgstr "付款截止时间"
 
-#: src/app/web/routes/welcome.py:70
+#: src/app/web/routes/welcome.py:75
 msgid "the show"
 msgstr "演出"
 
@@ -3596,4 +3628,7 @@ msgstr "前往我的活动"
 
 #~ msgid "each"
 #~ msgstr "每"
+
+#~ msgid "label"
+#~ msgstr "轮次名称"
 
