@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 10:46-0300\n"
+"POT-Creation-Date: 2026-07-24 13:52-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -481,8 +481,8 @@ msgstr "所有轮次均已截止"
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:30
-#: src/app/web/templates/concert_new.html:99
-#: src/app/web/templates/concert_new.html:104
+#: src/app/web/templates/concert_new.html:96
+#: src/app/web/templates/concert_new.html:101
 #: src/app/web/templates/import_preview.html:52
 msgid "Title"
 msgstr "标题"
@@ -491,10 +491,10 @@ msgstr "标题"
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
-#: src/app/web/templates/concert_new.html:87
-#: src/app/web/templates/concert_new.html:89
-#: src/app/web/templates/concert_new.html:101
-#: src/app/web/templates/concert_new.html:106
+#: src/app/web/templates/concert_new.html:84
+#: src/app/web/templates/concert_new.html:86
+#: src/app/web/templates/concert_new.html:98
+#: src/app/web/templates/concert_new.html:103
 #: src/app/web/templates/import_preview.html:165
 #: src/app/web/templates/import_preview.html:167
 msgid "Notes"
@@ -510,7 +510,9 @@ msgstr "场次 {n} 名称"
 msgid "Round {n} label"
 msgstr "轮次 {n} 名称"
 
-#: src/app/db/service.py:3743
+#: src/app/db/service.py:3743 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/web/templates/_tag_create_dialog.html:40
+#: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
 #: src/app/web/templates/_venue_create_dialog.html:36
 #: src/app/web/templates/_venue_create_dialog.html:37
@@ -756,7 +758,7 @@ msgstr "状态说明"
 msgid "You"
 msgstr "你"
 
-#: src/app/web/templates/_deadline_rows.html:60
+#: src/app/web/templates/_deadline_rows.html:65
 msgid "Nothing coming up on the events you follow."
 msgstr "你关注的活动暂无即将到来的安排。"
 
@@ -1073,6 +1075,78 @@ msgstr "应用&ldquo;%(name)s&rdquo;"
 msgid "Edit presets"
 msgstr "编辑预设"
 
+#: src/app/web/templates/_tag_create_dialog.html:22
+msgid "Could not add that tag."
+msgstr "无法添加该标签。"
+
+#: src/app/web/templates/_tag_create_dialog.html:23
+msgid "That tag already exists."
+msgstr "该标签已存在。"
+
+#: src/app/web/templates/_tag_create_dialog.html:25
+#: src/app/web/templates/tags.html:224
+msgid "New tag"
+msgstr "新建标签"
+
+#: src/app/web/templates/_tag_create_dialog.html:30
+#: src/app/web/templates/concert_edit.html:44
+#: src/app/web/templates/concert_new.html:72
+#: src/app/web/templates/import_preview.html:53
+#: src/app/web/templates/tags.html:230
+msgid "Kind"
+msgstr "类型"
+
+#: src/app/web/templates/_tag_create_dialog.html:32
+#: src/app/web/templates/tags.html:232
+msgid "Franchise"
+msgstr "系列"
+
+#: src/app/web/templates/_tag_create_dialog.html:33
+#: src/app/web/templates/tags.html:233
+msgid "Group"
+msgstr "组合"
+
+#: src/app/web/templates/_tag_create_dialog.html:34
+#: src/app/web/templates/tags.html:234
+msgid "Performer"
+msgstr "出演者"
+
+#: src/app/web/templates/_tag_create_dialog.html:45
+#: src/app/web/templates/tags.html:258
+msgid "Parent franchise"
+msgstr "所属系列"
+
+#: src/app/web/templates/_tag_create_dialog.html:47
+#: src/app/web/templates/concert_edit.html:46
+#: src/app/web/templates/concert_new.html:74
+#: src/app/web/templates/import_preview.html:55
+#: src/app/web/templates/tags.html:260
+msgid "— none —"
+msgstr "— 无 —"
+
+#: src/app/web/templates/_tag_create_dialog.html:54
+msgid "Select existing tag"
+msgstr "选择现有标签"
+
+#: src/app/web/templates/_tag_create_dialog.html:55
+msgid "Create & select"
+msgstr "创建并选择"
+
+#: src/app/web/templates/_tag_create_dialog.html:66
+#: src/app/web/templates/tags.html:305
+msgid "A franchise is the top level. It contains groups."
+msgstr "系列是最高层级，其中包含组合。"
+
+#: src/app/web/templates/_tag_create_dialog.html:67
+#: src/app/web/templates/tags.html:237 src/app/web/templates/tags.html:306
+msgid "A group contains performers. Attaching it to an event adds its members."
+msgstr "组合由出演者组成。将组合添加到活动时，会同时添加其成员。"
+
+#: src/app/web/templates/_tag_create_dialog.html:68
+#: src/app/web/templates/tags.html:307
+msgid "A single performer. Can belong to a group, or stand alone."
+msgstr "一位出演者，可以属于某个组合，也可以独立活动。"
+
 #: src/app/web/templates/_tag_picker_fields.html:13
 #: src/app/web/templates/discover.html:182
 msgid "Franchises"
@@ -1162,19 +1236,19 @@ msgstr "地图链接"
 msgid "Add venue"
 msgstr "添加场馆"
 
-#: src/app/web/templates/base.html:35 src/app/web/templates/base.html:84
+#: src/app/web/templates/base.html:35 src/app/web/templates/base.html:92
 msgid "Home"
 msgstr "主页"
 
-#: src/app/web/templates/base.html:35 src/app/web/templates/base.html:86
+#: src/app/web/templates/base.html:35 src/app/web/templates/base.html:94
 #: src/app/web/templates/home.html:257
 msgid "Discover"
 msgstr "发现"
 
-#: src/app/web/templates/base.html:36 src/app/web/templates/base.html:89
+#: src/app/web/templates/base.html:36 src/app/web/templates/base.html:97
 #: src/app/web/templates/concert_detail.html:25
 #: src/app/web/templates/concert_edit.html:140
-#: src/app/web/templates/concert_new.html:112
+#: src/app/web/templates/concert_new.html:109
 #: src/app/web/templates/import_preview.html:176
 #: src/app/web/templates/tags.html:6
 msgid "Tags"
@@ -1194,21 +1268,21 @@ msgstr "语言"
 msgid "+ Add"
 msgstr "+ 添加"
 
-#: src/app/web/templates/base.html:64 src/app/web/templates/preferences.html:11
+#: src/app/web/templates/base.html:71 src/app/web/templates/preferences.html:11
 #: src/app/web/templates/setup.html:13
 msgid "Preferences"
 msgstr "偏好设置"
 
-#: src/app/web/templates/base.html:65
+#: src/app/web/templates/base.html:73
 msgid "Log out"
 msgstr "退出登录"
 
-#: src/app/web/templates/base.html:67 src/app/web/templates/home.html:80
+#: src/app/web/templates/base.html:75 src/app/web/templates/home.html:80
 #: src/app/web/templates/home.html:191
 msgid "Sign in with Discord"
 msgstr "使用 Discord 登录"
 
-#: src/app/web/templates/base.html:74
+#: src/app/web/templates/base.html:82
 msgid ""
 "Your last Discord DM couldn't be delivered — check your Discord privacy\n"
 "    settings to allow DMs from server members, or\n"
@@ -1217,40 +1291,40 @@ msgstr ""
 "你上次的 Discord DM 未能送达 — 请检查 Discord 隐私设置，允许接收服务器成员的 DM，或<a "
 "href=\"/preferences\">在“偏好设置”中测试</a>。"
 
-#: src/app/web/templates/base.html:91
+#: src/app/web/templates/base.html:99
 msgid "Me"
 msgstr "我的"
 
-#: src/app/web/templates/base.html:94
+#: src/app/web/templates/base.html:102
 msgid "Sign in"
 msgstr "登录"
 
-#: src/app/web/templates/base.html:98
+#: src/app/web/templates/base.html:106
 msgid "Add event"
 msgstr "添加活动"
 
-#: src/app/web/templates/base.html:102
+#: src/app/web/templates/base.html:110
 msgid ""
 "Times are entered in <strong>JST</strong> and shown as JST + your local "
 "time."
 msgstr "时间以<strong>JST</strong>输入，并同时显示 JST 和你的当地时间。"
 
-#: src/app/web/templates/base.html:103 src/app/web/templates/privacy.html:2
+#: src/app/web/templates/base.html:111 src/app/web/templates/privacy.html:2
 #: src/app/web/templates/privacy.html:8
 msgid "Privacy policy"
 msgstr "隐私政策"
 
-#: src/app/web/templates/base.html:104 src/app/web/templates/terms.html:2
+#: src/app/web/templates/base.html:112 src/app/web/templates/terms.html:2
 #: src/app/web/templates/terms.html:8
 msgid "Terms of service"
 msgstr "服务条款"
 
-#: src/app/web/templates/base.html:144
+#: src/app/web/templates/base.html:152
 #, python-brace-format
 msgid "Delete tag {name} everywhere?"
 msgstr "确定在所有位置删除标签 {name} 吗？"
 
-#: src/app/web/templates/base.html:145
+#: src/app/web/templates/base.html:153
 #, python-brace-format
 msgid "Delete preset {name}?"
 msgstr "确定删除预设 {name} 吗？"
@@ -1365,20 +1439,6 @@ msgstr "活动 ID"
 msgid "(this event's URL — letters, digits, hyphens, underscores only)"
 msgstr "（这场活动的 URL — 仅限字母、数字、连字符和下划线）"
 
-#: src/app/web/templates/concert_edit.html:44
-#: src/app/web/templates/concert_new.html:75
-#: src/app/web/templates/import_preview.html:53
-#: src/app/web/templates/tags.html:230
-msgid "Kind"
-msgstr "类型"
-
-#: src/app/web/templates/concert_edit.html:46
-#: src/app/web/templates/concert_new.html:77
-#: src/app/web/templates/import_preview.html:55
-#: src/app/web/templates/tags.html:260
-msgid "— none —"
-msgstr "— 无 —"
-
 #: src/app/web/templates/concert_edit.html:55
 msgid "Rounds and legs"
 msgstr "轮次与场次"
@@ -1402,7 +1462,7 @@ msgid_plural "%(count)s rounds"
 msgstr[0] "%(count)s 个轮次"
 
 #: src/app/web/templates/concert_edit.html:63
-#: src/app/web/templates/concert_new.html:62
+#: src/app/web/templates/concert_new.html:59
 #: src/app/web/templates/import_preview.html:124
 msgid "Add a round"
 msgstr "添加轮次"
@@ -1412,7 +1472,7 @@ msgid "Add a leg"
 msgstr "添加场次"
 
 #: src/app/web/templates/concert_edit.html:81
-#: src/app/web/templates/concert_new.html:66
+#: src/app/web/templates/concert_new.html:63
 msgid "No rounds yet — add the first one above."
 msgstr "还没有轮次 — 请在上方添加第一个轮次。"
 
@@ -1429,7 +1489,7 @@ msgid "No legs yet — add the first one above."
 msgstr "还没有场次 — 请在上方添加第一个场次。"
 
 #: src/app/web/templates/concert_edit.html:103
-#: src/app/web/templates/concert_new.html:70
+#: src/app/web/templates/concert_new.html:67
 #: src/app/web/templates/import_preview.html:133
 msgid "Details and links"
 msgstr "详情与链接"
@@ -1439,56 +1499,56 @@ msgid "nothing set yet"
 msgstr "尚未设置任何内容"
 
 #: src/app/web/templates/concert_edit.html:107
-#: src/app/web/templates/concert_new.html:74
+#: src/app/web/templates/concert_new.html:71
 #: src/app/web/templates/import_preview.html:147
 msgid "Artist / organizer"
 msgstr "艺人／主办方"
 
 #: src/app/web/templates/concert_edit.html:108
-#: src/app/web/templates/concert_new.html:81
+#: src/app/web/templates/concert_new.html:78
 #: src/app/web/templates/import_preview.html:149
 msgid "Categories (comma-sep)"
 msgstr "分类（逗号分隔）"
 
 #: src/app/web/templates/concert_edit.html:109
-#: src/app/web/templates/concert_new.html:82
+#: src/app/web/templates/concert_new.html:79
 #: src/app/web/templates/import_preview.html:151
 #: src/app/web/templates/tags.html:86 src/app/web/templates/tags.html:266
 msgid "eventernote URL"
 msgstr "eventernote 链接"
 
 #: src/app/web/templates/concert_edit.html:110
-#: src/app/web/templates/concert_new.html:83
+#: src/app/web/templates/concert_new.html:80
 #: src/app/web/templates/import_preview.html:153
 msgid "Official URL"
 msgstr "官方链接"
 
 #: src/app/web/templates/concert_edit.html:111
-#: src/app/web/templates/concert_new.html:84
+#: src/app/web/templates/concert_new.html:81
 #: src/app/web/templates/import_preview.html:155
 msgid "Source URL"
 msgstr "来源链接"
 
 #: src/app/web/templates/concert_edit.html:113
-#: src/app/web/templates/concert_new.html:86
+#: src/app/web/templates/concert_new.html:83
 #: src/app/web/templates/import_preview.html:158
 msgid "Performers (one per line)"
 msgstr "出演者（每行一名）"
 
 #: src/app/web/templates/concert_edit.html:123
-#: src/app/web/templates/concert_new.html:95
+#: src/app/web/templates/concert_new.html:92
 msgid "Translations"
 msgstr "翻译"
 
 #: src/app/web/templates/concert_edit.html:124
-#: src/app/web/templates/concert_new.html:96
+#: src/app/web/templates/concert_new.html:93
 msgid ""
 "Optional — shown to people using that language. If left blank, the text "
 "above is used."
 msgstr "选填。使用该语言的用户会看到此内容；留空时会显示上方的内容。"
 
 #: src/app/web/templates/concert_edit.html:126
-#: src/app/web/templates/concert_new.html:98
+#: src/app/web/templates/concert_new.html:95
 msgid "English"
 msgstr "英文"
 
@@ -1588,41 +1648,41 @@ msgstr "每场演出或每天一个 — 第一个已在下方展开。时间为 
 msgid "Add performance"
 msgstr "添加场次"
 
-#: src/app/web/templates/concert_new.html:57
+#: src/app/web/templates/concert_new.html:54
 msgid "Lottery rounds"
 msgstr "抽选轮次"
 
-#: src/app/web/templates/concert_new.html:58
+#: src/app/web/templates/concert_new.html:55
 msgid ""
 "Select the performances for each round. If you select none, the round "
 "applies to the whole event. Times are JST."
 msgstr "请为每个轮次选择适用场次。不选择任何场次时，该轮次将适用于整个活动。时间为 JST。"
 
-#: src/app/web/templates/concert_new.html:71
+#: src/app/web/templates/concert_new.html:68
 msgid "Optional — title EN, organizer, kind, categories, links, performers, notes"
 msgstr "可选 — 标题 EN、主办方、类型、分类、链接、出演者、备注"
 
-#: src/app/web/templates/concert_new.html:74
+#: src/app/web/templates/concert_new.html:71
 #: src/app/web/templates/import_preview.html:148
 msgid "non-series acts, etc."
 msgstr "非系列艺人等"
 
-#: src/app/web/templates/concert_new.html:81
+#: src/app/web/templates/concert_new.html:78
 #: src/app/web/templates/import_preview.html:150
 msgid "event, tour"
 msgstr "活动、巡演"
 
-#: src/app/web/templates/concert_new.html:84
+#: src/app/web/templates/concert_new.html:81
 #: src/app/web/templates/import_preview.html:156
 msgid "where this was sourced from"
 msgstr "此信息的来源"
 
-#: src/app/web/templates/concert_new.html:113
+#: src/app/web/templates/concert_new.html:110
 msgid "Franchise, group, artists, venue — optional"
 msgstr "系列、组合、艺人、场馆 — 可选"
 
-#: src/app/web/templates/concert_new.html:119
-#: src/app/web/templates/import_preview.html:189
+#: src/app/web/templates/concert_new.html:116
+#: src/app/web/templates/import_preview.html:197
 msgid "Create event"
 msgstr "创建活动"
 
@@ -2083,12 +2143,9 @@ msgstr "备注（中文）"
 msgid "Franchise, group, artists, venue — imported and editable"
 msgstr "系列、组合、艺人、场馆 — 已导入，可编辑"
 
-#: src/app/web/templates/import_preview.html:183
-#, python-format
-msgid ""
-"No tag yet for: %(names)s — create them on the <a href=\"/tags\">tags "
-"page</a>, then re-paste, or pick by hand."
-msgstr "%(names)s 还没有对应的标签 — 请在 <a href=\"/tags\">标签页</a>创建后重新粘贴，或手动选择。"
+#: src/app/web/templates/import_preview.html:189
+msgid "No tag yet:"
+msgstr "尚无标签:"
 
 #: src/app/web/templates/preferences.html:2
 msgid "preferences"
@@ -3115,26 +3172,6 @@ msgstr "未归属组合的出演者"
 msgid "— solo artists, or members not yet attached"
 msgstr "— 独立艺人，或尚未加入组合的成员"
 
-#: src/app/web/templates/tags.html:224
-msgid "New tag"
-msgstr "新建标签"
-
-#: src/app/web/templates/tags.html:232
-msgid "Franchise"
-msgstr "系列"
-
-#: src/app/web/templates/tags.html:233
-msgid "Group"
-msgstr "组合"
-
-#: src/app/web/templates/tags.html:234
-msgid "Performer"
-msgstr "出演者"
-
-#: src/app/web/templates/tags.html:237 src/app/web/templates/tags.html:306
-msgid "A group contains performers. Attaching it to an event adds its members."
-msgstr "组合由出演者组成。将组合添加到活动时，会同时添加其成员。"
-
 #: src/app/web/templates/tags.html:242
 msgid "As it is written on the official site"
 msgstr "按官方网站上的写法"
@@ -3142,10 +3179,6 @@ msgstr "按官方网站上的写法"
 #: src/app/web/templates/tags.html:254
 msgid "Already exists."
 msgstr "已存在。"
-
-#: src/app/web/templates/tags.html:258
-msgid "Parent franchise"
-msgstr "所属系列"
 
 #: src/app/web/templates/tags.html:266 src/app/web/templates/tags.html:282
 msgid "(optional)"
@@ -3168,14 +3201,6 @@ msgstr "系列只是组合的上级分类，无需设置其他内容。"
 #: src/app/web/templates/tags.html:291
 msgid "Create tag"
 msgstr "创建标签"
-
-#: src/app/web/templates/tags.html:305
-msgid "A franchise is the top level. It contains groups."
-msgstr "系列是最高层级，其中包含组合。"
-
-#: src/app/web/templates/tags.html:307
-msgid "A single performer. Can belong to a group, or stand alone."
-msgstr "一位出演者，可以属于某个组合，也可以独立活动。"
 
 #: src/app/web/templates/tags.html:308
 msgid "A place. Discover filters venues by region, not individually."
@@ -3631,4 +3656,11 @@ msgstr "前往我的活动"
 
 #~ msgid "label"
 #~ msgstr "轮次名称"
+
+#~ msgid ""
+#~ "No tag yet for: %(names)s — create"
+#~ " them on the <a href=\"/tags\">tags "
+#~ "page</a>, then re-paste, or pick "
+#~ "by hand."
+#~ msgstr "%(names)s 还没有对应的标签 — 请在 <a href=\"/tags\">标签页</a>创建后重新粘贴，或手动选择。"
 

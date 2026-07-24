@@ -110,5 +110,42 @@
     put("group_tags", sel.group);
     put("artist_tags", sel.artist);
   }
+
+  // Inline quick-create (import preview's _tag_create_dialog.html) hands a
+  // freshly created franchise/group/artist tag here so it joins BOTH the
+  // picker dialog's chip list and the current selection -- the tag-picker
+  // analogue of the venue dialog appending an <option> and selecting it.
+  // Exposed on window because the dialog is a separate script element that
+  // runs after this one. A brand-new group has NO members (invariant 3: a
+  // memberless group expands to nothing), so its NC_GROUPS entry is empty and
+  // autoArtists() adds nothing for it. textContent only -- the name is
+  // user-controlled.
+  window.pickerAddAndSelect = function (kind, tag) {
+    const id = String(tag.id);
+    TAG_NAMES[id] = tag.name;
+    if (kind === "group") {
+      NC_GROUPS[id] = { name: tag.name, franchise: tag.parent_id || null, members: [] };
+    }
+    const list = document.querySelector("#picker-" + kind + " .taglist");
+    if (list && !list.querySelector('.chip[data-id="' + id + '"]')) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip kind-" + kind;
+      chip.dataset.name = tag.name.toLowerCase();
+      chip.dataset.id = id;
+      chip.textContent = tag.name;
+      chip.addEventListener("click", function () { togglePick(kind, chip); });
+      list.appendChild(chip);
+    }
+    if (kind === "artist") {
+      artistManual.add(id);
+      artistExcluded.delete(id);
+    } else {
+      sel[kind].add(id);
+    }
+    renderAll();
+    markPickerState(kind);
+  };
+
   renderAll();
 </script>

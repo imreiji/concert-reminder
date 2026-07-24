@@ -207,6 +207,86 @@ async def quick_create_venue(
     return {"id": tag.id, "name": tag.name}
 
 
+# The three kinds this endpoint creates; VENUE keeps its own richer
+# quick_create_venue route (it collects city/region/address a franchise or
+# artist never has), so it is deliberately NOT in this set.
+_QUICK_KINDS = (TagKind.FRANCHISE, TagKind.GROUP, TagKind.ARTIST)
+
+
+@router.post("/tags/quick")
+async def quick_create_tag(
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+    name: str = Form(..., max_length=100),
+    name_en: str = Form(""),
+    name_zh: str = Form(""),
+    kind: str = Form(...),
+    parent_id: int = Form(0),
+) -> dict:
+    """Create a franchise/group/artist tag without leaving the import preview.
+    Returns JSON so the caller can drop the new tag straight into the tag
+    picker's selection (see `_tag_create_dialog.html`).
+
+    Sibling of `quick_create_venue` above: it builds the same Tag row
+    `create_tag` does and shares the same kind-scoped duplicate check
+    (`find_tag_by_name_and_kind`), so a second franchise/group/artist of the
+    same name is a 409 exactly as it is on the Tags page. Unlike `create_tag`,
+    the English/中文 name variants are OPTIONAL here (no `require_variants`): a
+    tag is not held to the concert all-three-or-none rule, and an editor
+    quick-creating a scraped Japanese name mid-import should not be blocked for
+    lacking a translation. Editing the tag later can fill them in.
+
+    Creating a GROUP here creates an EMPTY group -- no member expansion happens
+    (invariant 3: expansion is an attach-time act; a memberless group expands
+    to nothing when attached). No notification fires: `handle_newly_tagged` is
+    about concert attachment, and this route attaches nothing.
+
+    The 409 body carries the existing tag's id and name so the dialog can offer
+    a one-click "select the existing one" instead of a dead end.
+    """
+    try:
+        tag_kind = TagKind(kind)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"unknown tag kind {kind!r}") from exc
+    if tag_kind not in _QUICK_KINDS:
+        raise HTTPException(
+            status_code=422,
+            detail="quick-create handles franchise, group and artist tags only",
+        )
+    name = name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="a tag needs a name")
+    existing = await find_tag_by_name_and_kind(session, name, tag_kind)
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"a {tag_kind.value} tag named {name!r} already exists",
+                "id": existing.id,
+                "name": existing.name,
+            },
+        )
+    parent = None
+    if parent_id:
+        if tag_kind is not TagKind.GROUP:
+            raise HTTPException(status_code=422, detail="only group tags take a franchise parent")
+        parent = await session.get(Tag, parent_id)
+        if parent is None or parent.kind is not TagKind.FRANCHISE:
+            raise HTTPException(status_code=422, detail="parent must be a franchise tag")
+    await ensure_user(session, user.id, user.username)
+    tag = Tag(
+        name=name,
+        name_en=name_en.strip() or None,
+        name_zh=name_zh.strip() or None,
+        kind=tag_kind,
+        parent_id=parent.id if parent else None,
+        created_by=user.id,
+    )
+    session.add(tag)
+    await session.commit()
+    return {"id": tag.id, "name": tag.name, "kind": tag.kind.value, "parent_id": tag.parent_id}
+
+
 @router.post("/tags/{tag_id}/edit")
 async def edit_tag(
     tag_id: int,
