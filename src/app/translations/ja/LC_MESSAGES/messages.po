@@ -1087,7 +1087,7 @@ msgstr "設定"
 
 #: src/app/web/templates/base.html:65
 msgid "Log out"
-msgstr "ログアウト"
+msgstr "サインアウト"
 
 #: src/app/web/templates/base.html:67 src/app/web/templates/home.html:82
 #: src/app/web/templates/home.html:195
@@ -1769,7 +1769,7 @@ msgstr "タグを管理"
 
 #: src/app/web/templates/home.html:71
 msgid "Sign in to continue to the page you asked for."
-msgstr "ログインすると、お探しのページに進めます。"
+msgstr "サインインすると、お探しのページに進めます。"
 
 #: src/app/web/templates/home.html:74
 msgid "dekimasen.app · Japanese concert ticketing, tracked"
@@ -2035,7 +2035,7 @@ msgid ""
 "    until you review and submit the next page."
 msgstr ""
 "<code>add-"
-"event</code>スキルで作成された下書きです。エージェントが公式チケットページとeventernoteを統合し、3言語の下書きを作成します。次のページで確認して送信するまで、保存されません。"
+"concert</code>スキルで作成された下書きです。エージェントが公式チケットページとeventernoteを統合し、3言語の下書きを作成します。次のページで確認して送信するまで、保存されません。"
 
 #: src/app/web/templates/import_form.html:43
 msgid "Draft YAML"
@@ -2052,7 +2052,7 @@ msgid ""
 "(zip)."
 msgstr ""
 "別の環境のエージェントで下書きを作りますか？<a class=\"more\" href=\"/concerts/import/skill.zip"
-"\">add-event スキルをダウンロード</a>（zip）。"
+"\">add-concert スキルをダウンロード</a>（zip）。"
 
 #: src/app/web/templates/import_form.html:53
 msgid ""
@@ -2508,7 +2508,7 @@ msgstr "カレンダーフィードが有効"
 
 #: src/app/web/templates/preferences.html:342
 msgid "Subscribe by URL in Google or Apple Calendar."
-msgstr "GoogleまたはAppleカレンダーでURLを購読してください。"
+msgstr "GoogleまたはAppleカレンダーでURLを登録してください。"
 
 #: src/app/web/templates/preferences.html:344
 msgid "No calendar feed"
@@ -2529,7 +2529,7 @@ msgid ""
 "        Apple Calendar: File &rarr; New Calendar Subscription."
 msgstr ""
 "Googleカレンダー：設定 &rarr; カレンダーを追加 &rarr; URLで追加。Appleカレンダー：ファイル &rarr; "
-"新規カレンダー購読。"
+"新規照会カレンダー。"
 
 #: src/app/web/templates/preferences.html:360
 msgid ""
@@ -2582,7 +2582,7 @@ msgstr "アカウントを削除"
 msgid ""
 "Your reminders, subscriptions, and preferences are deleted. Concerts and "
 "tags you authored stay, with your name removed."
-msgstr "リマインダー、購読、設定は削除されます。作成したイベントとタグは残りますが、作成者名は削除されます。"
+msgstr "リマインダー、フォロー、設定は削除されます。作成したイベントとタグは残りますが、作成者名は削除されます。"
 
 #: src/app/web/templates/preferences.html:401
 msgid "Delete account"
@@ -2596,7 +2596,7 @@ msgstr "アカウントを削除しますか？"
 msgid ""
 "Your reminders, subscriptions, and preferences are deleted. Concerts and "
 "tags you authored stay, with your name removed. This cannot be undone."
-msgstr "リマインダー、購読、設定は削除されます。作成したイベントとタグは残りますが、作成者名は削除されます。この操作は元に戻せません。"
+msgstr "リマインダー、フォロー、設定は削除されます。作成したイベントとタグは残りますが、作成者名は削除されます。この操作は元に戻せません。"
 
 #: src/app/web/templates/preferences.html:411
 msgid "Keep my account"
