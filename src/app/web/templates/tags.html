@@ -2,6 +2,7 @@
 {% block title %}{{ _("tags") }} — dekimasen.app{% endblock %}
 {% block content %}
 {%- from "_variant_gaps.html" import variant_gaps with context %}
+{%- set KIND_LABELS = {"franchise": _("franchise"), "group": _("group"), "venue": _("venue"), "artist": _("performer")} %}
 <div class="tags-head">
   <h1>{{ _("Tags") }}</h1>
   <span class="note dim">
@@ -37,7 +38,20 @@
 
 <p class="dim">{% trans %}Following a tag follows every future event with that tag. The counts show how many events will change if you rename or delete the tag.{% endtrans %}</p>
 
-<input class="tag-search" type="search" placeholder="{{ _('Search franchises, groups, performers, venues…') }}" oninput="filterChips(this, '.tags-page')">
+<input class="tag-search" type="search" placeholder="{{ _('Search franchises, groups, performers, venues…') }}" oninput="filterChips(this, '.tags-scope')">
+
+{#- E1: the editor-only chips ⇄ table toggle. Chips are for picking, tables
+    for comparing usage. Both views live inside .tags-scope so the search box
+    above (filterChips, keyed on data-name) filters whichever is visible. -#}
+{% if user.is_editor %}
+<div class="viewbar">
+  <div class="viewtoggle" id="tagViewToggle">
+    <button type="button" data-view="chips" aria-pressed="true">{{ _("Chips") }}</button>
+    <button type="button" data-view="table" aria-pressed="false">{{ _("Table") }}</button>
+  </div>
+</div>
+{% endif %}
+<div class="tags-scope">
 
 {#- Per-tag edit dialog. One dialog per tag, real <form>s posting to real
     routes (the concept uses a single JS-populated dialog; we keep the shipped
@@ -49,7 +63,7 @@
 {%- set is_group = t.kind.value == "group" -%}
 {%- set is_venue = t.kind.value == "venue" -%}
 {%- set is_artist = t.kind.value == "artist" -%}
-{%- set kind_label = {"franchise": _("franchise"), "group": _("group"), "venue": _("venue"), "artist": _("performer")}.get(t.kind.value, t.kind.value) -%}
+{%- set kind_label = KIND_LABELS.get(t.kind.value, t.kind.value) -%}
 <dialog id="tag-dialog-{{ t.id }}" class="tagdlg">
   <div class="dh">
     <h3>{{ loc(t, "name") }}</h3>
@@ -123,7 +137,7 @@
       {% endif %}
     </div>
 
-    <div class="upgradebox">
+    <div class="edgecard upgradebox">
       <div class="u1">{% trans %}<b>Apply to existing events.</b> Adding a member does not update events that already have this group. Group members are added when the group is first attached. Use this to add the new member to active events.{% endtrans %}</div>
       {% for m, n in eligible_members.get(t.id, []) %}
       <a class="btn quiet" href="/tags/{{ t.id }}/members/{{ m.id }}/retroactive-apply">{% trans count=n, name=loc(m, "name") %}Apply {{ name }} to {{ count }} upcoming event{% pluralize %}Apply {{ name }} to {{ count }} upcoming events{% endtrans %}</a>
@@ -203,6 +217,51 @@
   </div>
   {% endif %}
 </div>
+{% if user.is_editor %}
+{#- The table renders AFTER the chips directory in DOM order, deliberately:
+    document-order tests (and any future "first occurrence" logic) keep the
+    chips view's ordering semantics -- the table is a duplicate density view,
+    never the first sighting of a name. -#}
+<div id="tag-table-wrap" hidden>
+  <table class="tagtable">
+    <thead><tr>
+      <th>{{ _("Tag") }}</th><th>{{ _("Kind") }}</th>
+      <th class="r">{{ _("Events") }}</th><th class="r">{{ _("Followers") }}</th>
+      <th class="r">{{ _("Upcoming") }}</th><th>{{ _("Following") }}</th>
+    </tr></thead>
+    <tbody>
+      {% for t in all_tags %}
+      {% set c = counts[t.id] %}
+      <tr data-name="{{ t.name | lower }}">
+        <td><button type="button" class="tchip"
+              onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ loc(t, "name") }}</button></td>
+        <td><span class="dim">{{ KIND_LABELS.get(t.kind.value, t.kind.value) }}</span></td>
+        <td class="r">{{ c.concerts }}</td>
+        <td class="r">{{ c.followers }}</td>
+        <td class="r">{{ c.upcoming }}</td>
+        <td>{% include "_tag_follow_bell.html" %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+</div>
+<script>
+  // E1: chips ⇄ table view toggle (editor-only; the controls render only for
+  // editors). aria-pressed is the state; [hidden] does the hiding.
+  (function () {
+    const toggle = document.getElementById("tagViewToggle");
+    if (!toggle) return;
+    toggle.addEventListener("click", function (e) {
+      const b = e.target.closest("button[data-view]");
+      if (!b) return;
+      toggle.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      document.querySelector(".tags-page").hidden = b.dataset.view !== "chips";
+      document.getElementById("tag-table-wrap").hidden = b.dataset.view !== "table";
+    });
+  })();
+</script>
 {% if user.is_editor %}{% for t in all_tags %}{{ tag_dialog(t) }}{% endfor %}
 
 {% include "_variant_guard.html" %}
@@ -249,7 +308,7 @@
       <input name="name_zh" maxlength="100"
              data-variant-group="tag_name" data-variant-slot="zh"></label>
 
-    <div class="dupe" id="new-tag-dupe">
+    <div class="banner warn dupe" id="new-tag-dupe">
       <span>⚠</span>
       <span><b>{{ _("Already exists.") }}</b> <span class="dupe-msg"></span></span>
     </div>

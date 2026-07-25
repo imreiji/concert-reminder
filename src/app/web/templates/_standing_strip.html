@@ -1,0 +1,36 @@
+{# "Next for you" -- the nearest moment on THIS concert that still wants
+   something from the reader. Rendered in the concert header on GET
+   (concert_detail.html), and re-rendered with oob=true by POST
+   /rounds/{id}/outcome so recording an outcome updates it live -- the same
+   contract _board.html keeps on Home.
+
+   The outer wrapper is ALWAYS in the DOM, empty when the reader has no
+   standing and nothing is open: it is the oob swap target, and a target that
+   vanished between renders could never be swapped back in. (A heading over a
+   blank is still worse than no block, so the .standing itself stays
+   conditional.) #}
+{% from "_round_rows.html" import status_pill %}
+<div id="concert-standing"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if next_row %}
+  <div class="edgecard standing">
+    <div>
+      <div class="l">{{ _("Next for you") }}</div>
+      <div class="w">{{ loc(next_row.round_, "label") }}{% if next_row.primary_anchor %} — {{ deadline_label(next_row.primary_anchor) }}{% endif %}</div>
+      <div class="s num">{% if next_row.primary_at_utc %}{% set sl = dual_lines(next_row.primary_at_utc, tz) %}{{ sl[0] }} {{ sl[1] }}{% else %}{{ _("No date announced yet") }}{% endif %}</div>
+    </div>
+    {#- Two facts, both shown: the countdown (time) ABOVE the pill (standing).
+        Replacing the pill with the countdown was considered and rejected --
+        they answer different questions. #}
+    <span class="countside">
+      {% if next_row.primary_at_utc %}
+      <span class="countdown">
+        <span class="big num" data-countdown-big data-iso="{{ next_row.primary_at_utc.isoformat() }}"></span>
+        <span class="unit"></span>
+      </span>
+      {% endif %}
+      {{ status_pill(next_row.outcome) }}
+    </span>
+  </div>
+  <!-- /standing -->
+  {% endif %}
+</div>

@@ -1,0 +1,935 @@
+<title>dekimasen.app — UX pass 2026-07 concept</title>
+<style>
+  /* Tokens: verbatim from dekimasen-demo.html / shipped style.css. */
+  :root {
+    --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+    --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+    --accent: #4f46b8;
+    --ok-wash: #e8f2ec; --off-wash: #f7eede; --danger-wash: #f8e8e6;
+    --accent-wash: #eceaf7; --chip: #efede6;
+    --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+      --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+      --accent: #9a92f0;
+      --ok-wash: #1a2a22; --off-wash: #2c2418; --danger-wash: #2e1d1c;
+      --accent-wash: #23204a; --chip: #2a2830;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+    --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+    --accent: #9a92f0; --ok-wash: #1a2a22; --off-wash: #2c2418;
+    --danger-wash: #2e1d1c; --accent-wash: #23204a; --chip: #2a2830;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+  }
+  :root[data-theme="light"] {
+    --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+    --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+    --accent: #4f46b8; --ok-wash: #e8f2ec; --off-wash: #f7eede;
+    --danger-wash: #f8e8e6; --accent-wash: #eceaf7; --chip: #efede6;
+    --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 5rem; }
+  .eyebrow {
+    font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650;
+  }
+
+  /* ---- demo chrome (not part of the proposal) -------------------------- */
+  header.demo {
+    position: sticky; top: 0; z-index: 20; background: var(--raise);
+    border-bottom: 1px solid var(--line);
+  }
+  .demo-in {
+    max-width: 72rem; margin: 0 auto; padding: .7rem 1.5rem;
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  }
+  .demo-in .t { font-weight: 700; letter-spacing: .02em; font-size: .95rem; }
+  .demo-in nav { display: flex; gap: .15rem; flex-wrap: wrap; }
+  .demo-in nav a {
+    font-size: .75rem; color: var(--dim); text-decoration: none;
+    padding: .2rem .5rem; border-radius: 3px; font-weight: 550;
+  }
+  .demo-in nav a:hover { color: var(--ink); background: var(--chip); }
+  .demo-in .sp { margin-left: auto; }
+  .theme-toggle {
+    font: inherit; font-size: .9rem; cursor: pointer; background: none;
+    border: 0; color: var(--dim); padding: .2rem .5rem; border-radius: 3px;
+  }
+  .theme-toggle:hover { color: var(--ink); background: var(--chip); }
+
+  section.change { margin-top: 3.5rem; }
+  .chead2 { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
+  .cid {
+    font-size: .7rem; font-weight: 700; letter-spacing: .08em; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 3px; padding: .1rem .4rem;
+    white-space: nowrap;
+  }
+  .chead2 h2 { margin: 0; font-size: 1.15rem; font-weight: 650; letter-spacing: -.01em; }
+  .chead2 .where { color: var(--dim); font-size: .8125rem; }
+  .why { color: var(--dim); font-size: .875rem; max-width: 60ch; margin: .4rem 0 0; }
+  .why b { color: var(--ink); font-weight: 600; }
+  .before {
+    margin: .9rem 0 0; font-size: .78rem; color: var(--dim);
+    border-left: 2px solid var(--line); padding-left: .7rem; max-width: 60ch;
+  }
+  .before b { color: var(--ink); font-weight: 600; }
+  .frame {
+    margin-top: 1rem; border: 1px solid var(--line); border-radius: 3px;
+    background: var(--paper); padding: 1.5rem; box-shadow: var(--shadow);
+  }
+  .frame > .flabel {
+    font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650; margin-bottom: 1rem;
+  }
+
+  /* ---- shared app vocabulary (copied from the shipped sheet) ------------ */
+  .pill {
+    font-size: .6875rem; font-weight: 650; letter-spacing: .04em;
+    padding: .15rem .45rem; border-radius: 3px; border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .p-danger { color: var(--danger); background: var(--danger-wash); }
+  .p-off { color: var(--off); background: var(--off-wash); }
+  .p-ok { color: var(--ok); background: var(--ok-wash); }
+  .p-quiet { color: var(--dim); background: transparent; }
+  /* Matches the SHIPPED .chip vocabulary (style.css): a 999px pill on the
+     chip ground, transparent border; .on is solid accent with white text. */
+  .chip {
+    font: inherit; font-size: .82rem; font-weight: 550; cursor: pointer;
+    border: 1px solid transparent; background: var(--chip); color: var(--ink);
+    padding: .2rem .6rem; border-radius: 999px;
+    transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+  }
+  .chip:hover { border-color: var(--dim); }
+  .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn {
+    font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--ink); background: var(--ink); color: var(--paper);
+    padding: .35rem .9rem; border-radius: 3px; text-decoration: none;
+  }
+  .btn.quiet {
+    background: var(--raise); color: var(--ink); border-color: var(--line);
+  }
+  .btn.quiet:hover { border-color: var(--dim); }
+
+  /* =====================================================================
+     A1 — board column identity + won-column urgency
+     ===================================================================== */
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: .875rem; }
+  .col { display: grid; gap: .625rem; align-content: start; }
+  .col-head {
+    display: flex; align-items: center; gap: .5rem; font-size: .75rem;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+    font-weight: 650; padding-bottom: .5rem; border-bottom: 1px solid var(--line);
+  }
+  .col-head .count { margin-left: auto; font-weight: 500; letter-spacing: 0; }
+  .col-head .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .d-open { background: var(--danger); } .d-applied { background: var(--off); }
+  .d-won { background: var(--accent); } .d-secured { background: var(--ok); }
+
+  /* NEW: the underline takes the column colour instead of the neutral line,
+     so a column reads as a lane, not a list. */
+  .col.open .col-head { border-bottom-color: var(--danger); }
+  .col.applied .col-head { border-bottom-color: var(--off); }
+  .col.won .col-head { border-bottom-color: var(--accent); }
+  .col.secured .col-head { border-bottom-color: var(--ok); }
+
+  /* NEW: the underline takes the column colour instead of the neutral line,
+     so a column reads as a lane, not a list. (The breathing dot proposed here
+     was rejected by the owner, 2026-07-24: the app's motion personality is one
+     150ms card lift; the colours carry "money at risk" alone.) */
+  /* Already shipped in the app (style.css .board .card[data-column="won"]) --
+     kept here so the demo board matches the real one. */
+  .col.won .card { border-left: 3px solid var(--accent); }
+
+  .card {
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .8rem .85rem; display: grid; gap: .45rem; box-shadow: var(--shadow);
+    transition: transform 160ms ease, border-color 160ms ease;
+    text-decoration: none; color: inherit; cursor: pointer;
+  }
+  .card:hover { transform: translateY(-1px); border-color: var(--dim); }
+  .card .artist { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .card .title { font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
+  .card .venue { font-size: .8125rem; color: var(--dim); }
+  .card .foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .15rem; }
+  .clock { font-size: .8125rem; color: var(--dim); }
+
+  /* =====================================================================
+     A2 — Home discovery: teaser copy becomes the peek grid's header
+     ===================================================================== */
+  .discover-block .head { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; margin-bottom: .3rem; }
+  .discover-block .head h2 { margin: 0; font-size: 1.35rem; font-weight: 650; letter-spacing: -.02em; }
+  .discover-block .sub { color: var(--dim); font-size: .875rem; margin: 0 0 1.1rem; max-width: 58ch; }
+  .discover-block .sub b { color: var(--ink); font-weight: 600; }
+  .discover-block .head .more { margin-left: auto; font-size: .8125rem; color: var(--accent); text-decoration: none; font-weight: 550; }
+  .peek { display: grid; grid-template-columns: repeat(4, 1fr); gap: .875rem; }
+
+  /* =====================================================================
+     B1 + B2 — Discover: active-filter chips + live section counts
+     ===================================================================== */
+  .toolbar2 { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
+  .toolbar2 h1 { margin: 0; font-size: 1.35rem; letter-spacing: -.02em; }
+  .toolbar2 .note { color: var(--dim); font-size: .8125rem; }
+  .searchbar { display: flex; gap: .5rem; margin-top: .8rem; }
+  .searchbar input {
+    font: inherit; font-size: .9rem; padding: .4rem .7rem; flex: 1; max-width: 26rem;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--raise); color: var(--ink);
+  }
+  /* NEW: the active-filter row. Sits between the search bar and the tiles so
+     the current filter state is visible without opening the sidebar/sheet.
+     Each chip is a removable copy of a sidebar selection. */
+  .active-filters { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-top: .7rem; }
+  .active-filters.allclear { display: none; }
+  .af-label { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .chip .x { margin-left: .35rem; color: inherit; opacity: .65; font-weight: 650; }
+  .chip.on .x { color: #fff; }   /* matches the shipped .chip.on .x */
+  .chip:hover .x { opacity: 1; }
+  .af-clear { font-size: .78rem; color: var(--accent); text-decoration: none; font-weight: 550; background: none; border: 0; cursor: pointer; font-family: inherit; padding: 0; }
+  .af-clear:hover { text-decoration: underline; }
+
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: .875rem; margin-top: .8rem; }
+  .tile {
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .8rem .85rem; display: grid; gap: .4rem; box-shadow: var(--shadow);
+    text-decoration: none; color: inherit;
+  }
+  .tile:hover { border-color: var(--dim); }
+  .tile .artist { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+  .tile strong { font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
+  .tile .dim { color: var(--dim); font-size: .8125rem; }
+  .tile .status-line { display: flex; gap: .4rem; margin-top: .2rem; }
+  h2.tilesec { font-size: 1rem; font-weight: 650; margin: 1.8rem 0 0; letter-spacing: -.01em; }
+  /* NEW: a live count in the section header, kept in step by the same JS
+     that shows/hides the tiles. */
+  h2.tilesec .n { color: var(--dim); font-weight: 500; font-size: .8125rem; margin-left: .4rem; }
+
+  /* =====================================================================
+     C1–C3 — concert header: next-deadline strip, why-tracking, kebab
+     ===================================================================== */
+  .chead-page .lineage { color: var(--dim); font-size: .85rem; margin: 0 0 .2rem; }
+  .chead-page .lineage b { color: var(--ink); font-weight: 600; }
+  .chead-page h1 { margin: 0 0 .5rem; font-size: 1.6rem; letter-spacing: -.025em; font-weight: 650; }
+  /* C1: the SHIPPED .standing component ("Next for you", accent edge --
+     style.css, rendered today by _round_rows.html at the top of the rounds
+     region) moved up into the header, plus the one genuinely new element: a
+     live countdown at the right edge, reusing base.html's countdown clock. */
+  .standing {
+    margin: .9rem 0; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 3px; background: var(--raise); box-shadow: var(--shadow);
+    padding: 1rem 1.15rem; display: grid; grid-template-columns: 1fr auto;
+    gap: 1rem; align-items: center;
+  }
+  .standing .l { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .standing .w { font-size: 1.05rem; font-weight: 600; margin-top: .25rem; }
+  .standing .s { color: var(--dim); font-size: .875rem; margin-top: .15rem; }
+  .standing .s b { color: var(--ink); font-weight: 600; }
+  .standing .countside { display: flex; flex-direction: column; align-items: flex-end; gap: .3rem; }
+  .standing .countdown { text-align: right; }
+  .standing .countdown .big { display: block; font-size: 1.35rem; font-weight: 650; letter-spacing: -.03em; line-height: 1; color: var(--accent); }
+  .standing .countdown .unit { font-size: .68rem; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+  .bar-row { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; margin-top: .8rem; }
+  .btn.follow.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  /* NEW (C3): the tracking derivation, stated next to the control it explains. */
+  .via { font-size: .8rem; color: var(--dim); }
+  .via .tchip { font-size: .72rem; padding: .05rem .4rem; border: 1px solid var(--line); border-radius: 3px; background: var(--chip); color: var(--ink); font-weight: 550; }
+
+  /* =====================================================================
+     D1 + D2 — editor orientation: numbered sections, covers legend
+     ===================================================================== */
+  /* NEW (D1): the required spine, numbered. Pure CSS counters on the existing
+     .section-head wrapper — no markup beyond a class on the form. */
+  .numbered { counter-reset: spine; }
+  .numbered .section-head h2 { counter-increment: spine; display: flex; align-items: baseline; gap: .55rem; }
+  .numbered .section-head h2::before {
+    content: counter(spine);
+    font-size: .72rem; font-weight: 700; color: var(--accent);
+    border: 1.5px solid var(--accent); border-radius: 50%;
+    width: 1.35rem; height: 1.35rem; display: inline-grid; place-items: center;
+    flex: none; letter-spacing: 0;
+  }
+  .section-head { margin-top: 2rem; }
+  .section-head h2 { margin: 0; font-size: 1rem; font-weight: 650; }
+  .section-head .dim { color: var(--dim); font-size: .78rem; margin: .15rem 0 0; }
+  .ebar { display: flex; gap: 1rem; margin-top: 1rem; }
+  .ebar label { display: grid; gap: .3rem; font-size: .82rem; font-weight: 550; flex: 1; }
+  .ebar input {
+    font: inherit; font-size: .9rem; padding: .4rem .6rem;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--raise); color: var(--ink);
+  }
+  .redit {
+    background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
+    padding: .9rem 1rem; margin-top: .9rem; display: grid; gap: .7rem;
+  }
+  .redit .cardtop { display: flex; gap: .6rem; }
+  .redit .cardtop .cardname {
+    font: inherit; font-weight: 600; font-size: .95rem; padding: .35rem .6rem; flex: 1;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink);
+  }
+  .leg-chips { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+  .leg-chips .eyebrow { margin-right: .2rem; }
+  /* NEW (D2): the covers legend — one plain sentence under the chips, kept in
+     sync by the same delegated listener that toggles them. flex-basis 100%
+     because .leg-chips is a flex row: the legend takes its own line. */
+  .covers { flex: 1 1 100%; font-size: .78rem; color: var(--dim); margin: 0; }
+  .covers b { color: var(--ink); font-weight: 600; }
+
+  /* =====================================================================
+     E1 + E2 — tags: table view toggle, per-tag follow bell
+     ===================================================================== */
+  .viewbar { display: flex; align-items: center; gap: .5rem; margin: 1rem 0; }
+  .viewtoggle { display: inline-flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .viewtoggle button {
+    font: inherit; font-size: .78rem; font-weight: 600; border: 0; cursor: pointer;
+    background: var(--raise); color: var(--dim); padding: .3rem .8rem;
+  }
+  .viewtoggle button[aria-pressed="true"] { background: var(--chip); color: var(--ink); }
+  .tagtable { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  .tagtable th {
+    text-align: left; font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 650; padding: .4rem .6rem; border-bottom: 1px solid var(--line);
+  }
+  .tagtable th.r, .tagtable td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .tagtable td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); }
+  .tagtable tr:hover td { background: var(--raise); }
+  .tagtable .tchip { font-weight: 600; }
+  /* In implementation this is the SHIPPED .swb toggle (the Preferences
+     Notify/Auto-apply vocabulary) reused verbatim -- ok-green when pressed,
+     not accent. It keeps the .bell name here only so the demo rows read by
+     what they do. */
+  .bell {
+    font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
+    cursor: pointer; border: 1px solid var(--line);
+    background: var(--raise); color: var(--dim); border-radius: 3px; padding: .22rem .5rem;
+  }
+  .bell[aria-pressed="true"] { color: var(--ok); border-color: var(--ok); background: var(--ok-wash); }
+
+  /* =====================================================================
+     F1–F3 — feel: loading bar, focus rings, toast
+     ===================================================================== */
+  /* NEW (F1): the htmx progress bar. A 2px accent bar pinned to the top of
+     the viewport; base.html's listener adds .on on htmx:beforeRequest and
+     removes it on htmx:afterRequest. Width creeps while pending, snaps to
+     100% and fades on completion. */
+  #hxbar {
+    position: fixed; top: 0; left: 0; height: 2px; width: 0; z-index: 60;
+    background: var(--accent); opacity: 0;
+    transition: width .4s ease, opacity .25s ease .1s;
+  }
+  #hxbar.on { opacity: 1; width: 72%; transition: width 8s cubic-bezier(.1,.7,.3,1); }
+  #hxbar.done { width: 100%; opacity: 0; transition: width .15s ease, opacity .4s ease .15s; }
+
+  /* NEW (F2): one global focus ring, on :focus-visible only, so pointer users
+     never see it and keyboard users always do. */
+  .focus-demo :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* NEW (F3): the outcome toast. One live region, one card shape; the outcome
+     route names the move in an HX-Trigger header, base.html renders it. */
+  #toasts { position: fixed; right: 1rem; bottom: 1rem; display: grid; gap: .5rem; z-index: 70; }
+  .toast {
+    background: var(--ink); color: var(--paper); border-radius: 3px;
+    padding: .6rem .9rem; font-size: .85rem; font-weight: 550;
+    box-shadow: var(--shadow); display: flex; align-items: center; gap: .6rem;
+    animation: toastin .22s ease;
+  }
+  .toast .ok-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+  @keyframes toastin { from { transform: translateY(6px); opacity: 0; } }
+  .feel-row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+
+  /* =====================================================================
+     Part 2 — the aesthetic pass (G1–G7)
+     ===================================================================== */
+  .gcols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .gcols > div { display: grid; gap: .35rem; align-content: start; }
+  .gcols p { margin: 0; }
+  .gtype-1 { font-size: 1rem; } .gtype-2 { font-size: 1.35rem; letter-spacing: -.02em; }
+  /* G2: the two-shape callout grammar. Shape 1 = status card (raise ground,
+     left edge in the tone colour); shape 2 = banner (wash ground, full border
+     in the tone colour). Every existing one-off callout maps to one of these. */
+  .gshape { display: grid; gap: .5rem; margin-top: .8rem; }
+  .edgecard {
+    border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 3px; background: var(--raise); box-shadow: var(--shadow);
+    padding: .7rem .9rem; font-size: .875rem;
+  }
+  .edgecard.dg { border-left-color: var(--danger); }
+  .edgecard.ok { border-left-color: var(--ok); }
+  .banner {
+    display: flex; gap: .6rem; align-items: flex-start;
+    border: 1px solid var(--accent); background: var(--accent-wash); color: var(--accent);
+    border-radius: 3px; padding: .6rem .9rem; font-size: .875rem;
+  }
+  .banner.warn { border-color: var(--off); background: var(--off-wash); color: var(--off); }
+  .banner.dgr { border-color: var(--danger); background: var(--danger-wash); color: var(--danger); }
+  .gmap { font-size: .8rem; color: var(--dim); margin-top: .6rem; }
+  .gmap b { color: var(--ink); font-weight: 600; }
+  .gpre {
+    background: var(--paper); border: 1px solid var(--line); border-radius: 3px;
+    padding: .8rem .9rem; font: .8rem/1.6 ui-monospace, Menlo, monospace;
+    overflow-x: auto; margin: 0; white-space: pre-wrap;
+  }
+  .gtable { margin-top: .5rem; }
+  .gtable td small { color: var(--dim); }
+  .verd-ok { color: var(--ok); font-weight: 650; }
+  .verd-warn { color: var(--danger); font-weight: 650; }
+  .swatches { display: flex; gap: 1rem; margin-top: .9rem; flex-wrap: wrap; }
+  .swatch { display: grid; gap: .2rem; font-size: .75rem; color: var(--dim); }
+  .swatch .box {
+    width: 7rem; height: 2.6rem; border-radius: 3px; border: 1px solid var(--line);
+    display: grid; place-items: center; font-weight: 650; font-size: .8rem;
+  }
+  .badge {
+    color: var(--ok); font-style: normal; font-size: .8em;
+    border: 1px solid currentColor; padding: 0 .3em;
+  }
+  .liftcard {
+    max-width: 18rem; background: var(--raise); border: 1px solid var(--line);
+    border-radius: 3px; padding: .8rem .85rem; box-shadow: var(--shadow);
+    transition: transform 160ms ease, border-color 160ms ease; cursor: pointer;
+  }
+  .liftcard:hover { transform: translateY(-1px); border-color: var(--dim); }
+
+  @media (max-width: 900px) {
+    .board, .peek { grid-template-columns: repeat(2, 1fr); }
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .board, .peek, .tiles { grid-template-columns: 1fr; }
+    .frame { padding: 1rem; }
+  }
+</style>
+
+<header class="demo">
+  <div class="demo-in">
+    <span class="t">UX pass — 2026-07</span>
+    <nav>
+      <a href="#a1">A1 board</a>
+      <a href="#a2">A2 discovery</a>
+      <a href="#b1">B1/B2 discover</a>
+      <a href="#c1">C1/C3 concert</a>
+      <a href="#d1">D1/D2 editor</a>
+      <a href="#e1">E1/E2 tags</a>
+      <a href="#f1">F1–F3 feel</a>
+      <a href="#gpass">G1–G7 aesthetic</a>
+    </nav>
+    <span class="sp"></span>
+    <button class="theme-toggle" data-theme-toggle title="Toggle dark mode">◐</button>
+  </div>
+</header>
+
+<div id="hxbar"></div>
+<div id="toasts" aria-live="polite"></div>
+
+<div class="wrap">
+
+<p class="why" style="margin-top:2rem; max-width: 68ch;">
+  <b>Shipped 2026-07-24</b> — these frames are now the design source of truth for the shipped UI,
+  kept in sync per the demo convention. Concept frames for the 20 changes listed in
+  <b>docs/superpowers/specs/2026-07-24-ux-pass-diffs.md</b> (change ids match; C2 and the A1
+  breathing dot were rejected on review).
+  All sample data is fictitious. Toggle ◐ to check dark mode — every colour is a token.
+</p>
+
+<!-- ================================================================== -->
+<section class="change" id="a1">
+  <div class="chead2"><span class="cid">A1</span><h2>Board columns get identity; “Won — pay” gets urgency</h2><span class="where">Home · _board.html</span></div>
+  <p class="why">The board is the emotional core of the app, but today all four columns look identical.
+  Money at risk (“Won — pay”) should be findable with peripheral vision. Each column head now underlines
+  in its own colour; the won cards' accent edge already ships. (The breathing dot first proposed here was
+  rejected — the colours carry the meaning alone.)</p>
+  <p class="before"><b>Before:</b> neutral grey column heads; a won card is visually identical to a secured one.</p>
+  <div class="frame">
+    <div class="flabel">After — your campaigns</div>
+    <div class="board">
+      <div class="col open">
+        <div class="col-head"><span class="dot d-open"></span> Open now <span class="count num">2</span></div>
+        <a class="card"><span class="artist">Liella!</span><span class="title">5th Live Tour — Yokohama</span><span class="venue">📍 横浜アリーナ · 12 Oct</span><span class="foot"><span class="pill p-danger">FC presale · 6h left</span></span></a>
+        <a class="card"><span class="artist">22/7</span><span class="title">Live at Nakano</span><span class="venue">📍 中野サンプラザ · 3 Sep</span><span class="foot"><span class="pill p-off">General presale · 4d</span></span></a>
+      </div>
+      <div class="col applied">
+        <div class="col-head"><span class="dot d-applied"></span> Applied <span class="count num">1</span></div>
+        <a class="card"><span class="artist">Aqours</span><span class="title">9th LoveLive! — Day 2</span><span class="venue">📍 さいたまスーパーアリーナ · 24 Aug</span><span class="foot"><span class="pill p-off">Lottery R1 · result 21 Jul</span></span></a>
+      </div>
+      <div class="col won">
+        <div class="col-head"><span class="dot d-won"></span> Won — pay <span class="count num">1</span></div>
+        <a class="card"><span class="artist">Poppin'Party</span><span class="title">Bloom in the Summer</span><span class="venue">📍 日本ガイシホール · 17 Aug</span><span class="foot"><span class="pill p-danger">Pay by 22 Jul</span><span class="clock num">¥9,800</span></span></a>
+      </div>
+      <div class="col secured">
+        <div class="col-head"><span class="dot d-secured"></span> Secured <span class="count num">1</span></div>
+        <a class="card"><span class="artist">Nijigasaki</span><span class="title">7th Live — Day 1</span><span class="venue">📍 ぴあアリーナMM · 5 Oct</span><span class="foot"><span class="pill p-ok">Paid</span></span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== -->
+<section class="change" id="a2">
+  <div class="chead2"><span class="cid">A2</span><h2>One discovery section, not two</h2><span class="where">Home · home.html</span></div>
+  <p class="why">Today Home ends with a teaser panel <i>and then</i> a peek grid — two blocks selling the same thing.
+  The teaser's copy becomes the grid's header; the “Open discover →” button stays as the header action.</p>
+  <p class="before"><b>Before:</b> a bordered teaser box (“Not tracking these yet / Discover / …”) followed by a separate unheaded grid.</p>
+  <div class="frame">
+    <div class="flabel">After — bottom of Home, signed in</div>
+    <div class="discover-block">
+      <div class="head">
+        <h2>Not tracking these yet</h2>
+        <a class="more" href="#">Open discover →</a>
+      </div>
+      <p class="sub"><b>142 events</b> in the catalogue, <b>23</b> with a round still open. Browse by franchise, group, artist or region — or search everything.</p>
+      <div class="peek">
+        <a class="card"><span class="artist">Hasunosora</span><span class="title">6th Live — Fukuoka</span><span class="venue">📍 福岡国際センター · 9 Nov</span><span class="foot"><span class="pill p-off">Round opens in 3d</span></span></a>
+        <a class="card"><span class="artist">Liyuu</span><span class="title">Concert Tour 2026</span><span class="venue">📍 Multiple</span><span class="foot"><span class="pill p-danger">Lottery closes in 2d</span></span></a>
+        <a class="card"><span class="artist">≠ME</span><span class="title">Hall Tour — Osaka</span><span class="venue">📍 オリックス劇場 · 1 Dec</span><span class="foot"><span class="pill p-quiet">Announced</span></span></a>
+        <a class="card"><span class="artist">RAISE A SUILEN</span><span class="title">Live 2026 — Day 1</span><span class="venue">📍 豊洲PIT · 18 Jan</span><span class="foot"><span class="pill p-quiet">Announced</span></span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== -->
+<section class="change" id="b1">
+  <div class="chead2"><span class="cid">B1 · B2</span><h2>Active filters visible above the tiles; live section counts</h2><span class="where">Discover · discover.html</span></div>
+  <p class="why">On phone, the filter sheet is closed by default — so the current filter state is invisible.
+  Every active selection now also renders as a removable chip between the search bar and the tiles (B1).
+  The two tile sections carry live counts kept in step by the same JS that hides tiles (B2).
+  <b>Try it:</b> remove a chip — tiles and counts update; “clear all” resets.</p>
+  <p class="before"><b>Before:</b> filter state lives only inside the sidebar/sheet; sections have no counts.</p>
+  <div class="frame">
+    <div class="flabel">After — /discover?tag=1&amp;tag=9&amp;status=open</div>
+    <div class="toolbar2"><h1>Events</h1><span class="note"><strong>142 events</strong> · 23 with a round still open</span></div>
+    <form class="searchbar" onsubmit="return false"><input type="search" placeholder="Search events…"><button class="btn quiet" type="submit">Search</button></form>
+    <div class="active-filters" id="afRow">
+      <span class="af-label">Filters</span>
+      <button class="chip on" data-af="liella">Liella!<span class="x">×</span></button>
+      <button class="chip on" data-af="kanto">Kanto<span class="x">×</span></button>
+      <button class="chip on" data-af="open">Open now<span class="x">×</span></button>
+      <button class="af-clear" id="afClear">Clear all</button>
+    </div>
+    <h2 class="tilesec">Open &amp; upcoming <span class="n" id="nOpen">3</span></h2>
+    <div class="tiles" id="tilesOpen">
+      <a class="tile" data-tags="liella kanto" data-status="open"><span class="artist">Love Live! Superstar!! · Liella!</span><strong>5th Live Tour — Yokohama</strong><span class="dim">📍 横浜アリーナ</span><span class="status-line"><span class="pill p-danger">FC presale · 6h left</span></span></a>
+      <a class="tile" data-tags="liella kanto" data-status="open"><span class="artist">Love Live! Superstar!! · Liella!</span><strong>5th Live Tour — Osaka</strong><span class="dim">📍 大阪城ホール</span><span class="status-line"><span class="pill p-off">Lottery R1 · 4d left</span></span></a>
+      <a class="tile" data-tags="kanto" data-status="open"><span class="artist">22/7</span><strong>Live at Nakano</strong><span class="dim">📍 中野サンプラザ</span><span class="status-line"><span class="pill p-off">General presale · 4d</span></span></a>
+      <a class="tile" data-tags="liella" data-status="closed" hidden><span class="artist">Love Live! Superstar!! · Liella!</span><strong>4th Live — Blu-ray release event</strong><span class="dim">📍 Multiple</span><span class="status-line"><span class="pill p-quiet">Rounds done</span></span></a>
+    </div>
+    <h2 class="tilesec">Upcoming <span class="n" id="nUp">1</span></h2>
+    <div class="tiles" id="tilesUp">
+      <a class="tile" data-tags="liella kanto" data-status="none"><span class="artist">Love Live! Superstar!! · Liella!</span><strong>6th Live (tentative)</strong><span class="dim">📍 横浜アリーナ</span><span class="status-line"><span class="pill p-quiet">Announced</span></span></a>
+      <a class="tile" data-tags="kansai" data-status="open" hidden><span class="artist">Aqours</span><strong>Finale — Kobe</strong><span class="dim">📍 ワールド記念ホール</span><span class="status-line"><span class="pill p-danger">Lottery · 12h left</span></span></a>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== -->
+<section class="change" id="c1">
+  <div class="chead2"><span class="cid">C1 · C3</span><h2>The concert header answers “what do I do here?”</h2><span class="where">Concert detail · concert_detail.html</span></div>
+  <p class="why">The page already ships a “Next for you” standing strip — but it renders at the top of
+  the rounds region, below the performers block. <b>C1</b> moves that same component up into the header
+  (right under the title) and adds the live countdown it lacks. <b>C3</b> states why you're tracking,
+  right beside the Following button, demystifying the override model.
+  (A third idea — folding Edit/Export into the kebab — was <b>rejected</b>: the kebab stays
+  destructive-only, and two quiet buttons aren't clutter.)</p>
+  <p class="before"><b>Before:</b> the standing strip exists but sits mid-page, under performers; the Following button has no explanation.</p>
+  <div class="frame">
+    <div class="flabel">After — /concerts/liella-5th-yokohama (strip moved up, countdown added, pill kept; re-renders live via oob swap on outcome capture)</div>
+    <div class="chead-page">
+      <p class="lineage">Love Live! Superstar!! · <b>Liella!</b></p>
+      <h1>5th Live Tour — Yokohama</h1>
+      <div class="standing">
+        <div>
+          <div class="l">Next for you</div>
+          <div class="w">1次先行抽選 — closes</div>
+          <div class="s num"><b>Sun, 27 Jul</b> 23:59 JST, 16:59 your time</div>
+        </div>
+        <span class="countside">
+          <span class="countdown"><span class="big num">2</span><span class="unit">days left</span></span>
+          <span class="pill p-off">Applied</span>
+        </span>
+      </div>
+      <div class="bar-row">
+        <button class="btn follow on">Following</button>
+        <span class="via">via <span class="tchip">Liella!</span> <span class="tchip">Love Live! Superstar!!</span> + 1 more</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== -->
+<section class="change" id="d1">
+  <div class="chead2"><span class="cid">D1 · D2</span><h2>The create form shows its spine; rounds name their legs</h2><span class="where">Editor · concert_new.html</span></div>
+  <p class="why"><b>D1</b> numbers the three required steps (event → performances → rounds) with pure CSS
+  counters — no wizard, no markup churn. <b>D2</b> adds a one-line legend under each round's leg chips,
+  kept in sync by the same delegated listener, so “no selection = whole event” is never a surprise.
+  <b>Try it:</b> toggle the leg chips.</p>
+  <p class="before"><b>Before:</b> unnumbered section heads; a round with no chips selected silently applies to the whole event, stated only in helper copy at the top.</p>
+  <div class="frame">
+    <div class="flabel">After — /concerts/new (spine excerpt)</div>
+    <form class="numbered" onsubmit="return false">
+      <div class="section-head"><h2>Event</h2><p class="dim">Title and URL — required.</p></div>
+      <div class="ebar">
+        <label>Title (JP) <input value="ラブライブ！スーパースター!! Liella! 5th LoveLive!"></label>
+        <label>Event ID <input value="liella-5th-yokohama"></label>
+      </div>
+      <div class="section-head"><h2>Performances</h2><p class="dim">One per show / day. Times are JST.</p></div>
+      <p class="dim" style="font-size:.8rem">Day 1 — 横浜アリーナ · Day 2 — 横浜アリーナ (cards unchanged)</p>
+      <div class="section-head"><h2>Lottery rounds</h2><p class="dim">Select the performances for each round. Times are JST.</p></div>
+      <div class="redit">
+        <div class="cardtop"><input class="cardname" value="1次先行抽選"></div>
+        <div class="leg-chips" id="demoLegChips">
+          <span class="eyebrow">Applies to</span>
+          <button type="button" class="chip on" aria-pressed="true">Day 1</button>
+          <button type="button" class="chip" aria-pressed="false">Day 2</button>
+        </div>
+        <p class="covers" id="coversLine">This round covers <b>Day 1</b> only.</p>
+      </div>
+      <div class="redit">
+        <div class="cardtop"><input class="cardname" value="一般発売"></div>
+        <div class="leg-chips" id="demoLegChips2">
+          <span class="eyebrow">Applies to</span>
+          <button type="button" class="chip" aria-pressed="false">Day 1</button>
+          <button type="button" class="chip" aria-pressed="false">Day 2</button>
+        </div>
+        <p class="covers" id="coversLine2">Nothing selected — this round applies to the <b>whole event</b>.</p>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- ================================================================== -->
+<section class="change" id="e1">
+  <div class="chead2"><span class="cid">E1 · E2</span><h2>Tags: a table view for scanning, a bell for following</h2><span class="where">Tags · tags.html</span></div>
+  <p class="why">Chips are great for picking, bad for comparing usage. <b>E1</b> adds an editor-only
+  chips ⇄ table toggle; the table reads the same counts the dialogs already compute.
+  <b>E2</b> puts a follow/unfollow bell on each row (aria-pressed, same mechanics as the Preferences
+  toggles), so following no longer requires a trip to Preferences. <b>Try it:</b> flip the view, press a bell.</p>
+  <p class="before"><b>Before:</b> chips only; following is possible only from Preferences or a concert page.</p>
+  <div class="frame">
+    <div class="flabel">After — /tags (editor)</div>
+    <div class="viewbar">
+      <div class="viewtoggle" id="viewToggle">
+        <button type="button" data-view="chips" aria-pressed="false">Chips</button>
+        <button type="button" data-view="table" aria-pressed="true">Table</button>
+      </div>
+      <span class="dim" style="font-size:.78rem">Table view is editor-only.</span>
+    </div>
+    <div id="tagTableWrap">
+      <table class="tagtable">
+        <thead><tr><th>Tag</th><th>Kind</th><th class="r">Events</th><th class="r">Followers</th><th class="r">Upcoming</th><th>Following</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tchip">Liella!</span></td><td><span class="dim">group</span></td><td class="r">14</td><td class="r">38</td><td class="r">3</td><td><button class="bell" aria-pressed="true">🔔 Following</button></td></tr>
+          <tr><td><span class="tchip">Love Live! Superstar!!</span></td><td><span class="dim">franchise</span></td><td class="r">21</td><td class="r">52</td><td class="r">5</td><td><button class="bell" aria-pressed="false">Follow</button></td></tr>
+          <tr><td><span class="tchip">Aqours</span></td><td><span class="dim">group</span></td><td class="r">33</td><td class="r">61</td><td class="r">1</td><td><button class="bell" aria-pressed="true">🔔 Following</button></td></tr>
+          <tr><td><span class="tchip">横浜アリーナ</span></td><td><span class="dim">venue</span></td><td class="r">19</td><td class="r">7</td><td class="r">4</td><td><button class="bell" aria-pressed="false">Follow</button></td></tr>
+          <tr><td><span class="tchip">伊達さゆり</span></td><td><span class="dim">performer</span></td><td class="r">11</td><td class="r">12</td><td class="r">2</td><td><button class="bell" aria-pressed="false">Follow</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="tagChipsWrap" hidden>
+      <p class="dim" style="font-size:.85rem">The existing chip directory renders here, unchanged.</p>
+      <button class="chip">Love Live! Superstar!!</button>
+      <button class="chip">Liella!</button>
+      <button class="chip">Aqours</button>
+      <button class="chip">横浜アリーナ</button>
+      <button class="chip">伊達さゆり</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== -->
+<section class="change" id="f1">
+  <div class="chead2"><span class="cid">F1 · F2 · F3</span><h2>Feel: progress bar, focus rings, outcome toast</h2><span class="where">Cross-cutting · base.html, style.css</span></div>
+  <p class="why">Three small things that make the whole app feel faster and safer. <b>F1</b> a 2px accent
+  bar at the top of the viewport while any htmx request is in flight. <b>F2</b> one global
+  <b>:focus-visible</b> ring — keyboard users currently get browser defaults or nothing.
+  <b>F3</b> a toast confirming an outcome capture (“Recorded — moved to Applied”), triggered by an
+  HX-Trigger header from the outcome route. <b>Try the buttons</b>; Tab through the links for F2.</p>
+  <p class="before"><b>Before:</b> htmx swaps are silent (the board card just moves); no global focus ring; no confirmation on capture.</p>
+  <div class="frame">
+    <div class="flabel">After — triggers</div>
+    <div class="feel-row">
+      <button class="btn quiet" id="demoBar">Simulate an htmx request</button>
+      <button class="btn quiet" id="demoToast">Simulate “I have applied”</button>
+      <span class="focus-demo" style="display:flex; gap:.6rem; align-items:center;">
+        <a href="#f1" style="color:var(--accent)">Tab</a>
+        <a href="#f1" style="color:var(--accent)">through</a>
+        <a href="#f1" style="color:var(--accent)">these</a>
+        <span class="dim" style="font-size:.78rem">← focus ring demo</span>
+      </span>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== -->
+<h2 id="gpass" style="margin-top:4rem">Part 2 — the aesthetic pass</h2>
+<p class="why" style="max-width:68ch">
+  Seven smaller judgements about the sheet as a whole. G1/G3/G5/G7 are mechanical;
+  G2 and G4 are direction; G6 is a decision. Diffs in the spec, same ids.
+</p>
+
+<section class="change" id="g1">
+  <div class="chead2"><span class="cid">G1</span><h2>One weight ramp: 400 / 600 / 700</h2><span class="where">style.css</span></div>
+  <p class="why">The sheet uses 400/500/550/600/650/660/680/700. On Windows, <b>system-ui is Segoe UI</b>,
+  which has no intermediate grades — 550/650/680 snap to 600/700 there. The fine gradation only renders on
+  macOS, so the design currently says two different things on two platforms. Consolidate to 400/600/700.</p>
+  <div class="frame">
+    <div class="flabel">Current ramp vs proposed ramp</div>
+    <div class="gcols">
+      <div>
+        <p class="eyebrow">Current</p>
+        <p class="gtype-1" style="font-weight:550">Toggles and labels — 550</p>
+        <p class="gtype-1" style="font-weight:650">Section heads and card titles — 650</p>
+        <p class="gtype-2" style="font-weight:680">Hero promise — 680</p>
+      </div>
+      <div>
+        <p class="eyebrow">Proposed</p>
+        <p class="gtype-1" style="font-weight:600">Toggles and labels — 600</p>
+        <p class="gtype-1" style="font-weight:700">Section heads and card titles — 700</p>
+        <p class="gtype-2" style="font-weight:700">Hero promise — 700</p>
+      </div>
+    </div>
+    <p class="dim" style="font-size:.8rem; margin-top:1rem">On Windows both columns render identically today; on macOS the right column is a hair heavier. That is the whole change.</p>
+  </div>
+</section>
+
+<section class="change" id="g2">
+  <div class="chead2"><span class="cid">G2</span><h2>Two callout shapes, ten current one-offs</h2><span class="where">style.css</span></div>
+  <p class="why">Ten hand-rolled “colored box” treatments have accreted (.callout, .banner-warn, .signin-note,
+  .dupe, .upgradebox, .standing, .next, .feedbox, .danger-row, .danger). The grammar underneath is really two
+  shapes: a <b>status card</b> (raise ground, left edge in the tone colour — the thing is ongoing) and a
+  <b>banner</b> (wash ground, full border — the thing needs attention). Migrate the one-offs to tones of these.</p>
+  <div class="frame">
+    <div class="flabel">The two shapes, three tones each</div>
+    <div class="gshape">
+      <span class="eyebrow">Shape 1 — status card (ongoing state)</span>
+      <div class="edgecard">Next for you — accent edge (.standing, .next, .upgradebox)</div>
+      <div class="edgecard dg">Payment due — danger edge (.feedbox becomes ok-edge, below)</div>
+      <div class="edgecard ok">Calendar feed ready — ok edge (.feedbox)</div>
+    </div>
+    <div class="gshape">
+      <span class="eyebrow">Shape 2 — banner (needs attention)</span>
+      <div class="banner">Sign in to continue — accent (.signin-note, .callout)</div>
+      <div class="banner warn">DM could not be delivered — off (.banner-warn, .dupe, .callout.warn)</div>
+      <div class="banner dgr">Delete account — danger (.danger-row, .danger)</div>
+    </div>
+    <p class="gmap">Migration map: <b>status card</b> ← .standing, .next, .upgradebox, .feedbox · <b>banner</b> ← .callout(+warn), .banner-warn, .signin-note, .dupe, .danger-row, .danger. Phased, visual-parity-first; detail in the spec.</p>
+  </div>
+</section>
+
+<section class="change" id="g3">
+  <div class="chead2"><span class="cid">G3</span><h2>Write the radius system down</h2><span class="where">style.css header</span></div>
+  <p class="why">3px base · 999px chips · 4px menus+dialogs · 50% dots · 14px bottom sheets is a real system,
+  documented only in scattered comments. One block at the top of the sheet stops drift better than the test does.</p>
+  <div class="frame">
+    <div class="flabel">Proposed comment block</div>
+    <pre class="gpre">/* ── Radius system ─────────────────────────────────────────────────
+   3px              everything, by default (cards, inputs, buttons, pills)
+   999px            chips and chip-like toggles (.chip, .tchip, .kindpick)
+   4px              overlay CARDS only: .kmenu, dialogs (.prune)
+   50%              dots, avatars, counters, ticks (circles, not radii)
+   14px 14px 0 0    phone bottom sheets (dialogs + .fsheet panel)
+   test_style_uses_3px_radius_not_6or8 guards the 3px default. */</pre>
+  </div>
+</section>
+
+<section class="change" id="g4">
+  <div class="chead2"><span class="cid">G4</span><h2>Eyebrow discipline: labels only, never metadata</h2><span class="where">guidance + tags table</span></div>
+  <p class="why">The uppercase eyebrow earns its keep exactly twice: as <b>lineage</b> (the F · G performer line,
+  where it solves the long-title problem) and as a <b>section/field label</b>. Anywhere else it is metadata
+  wearing a label's costume. The shipped sheet is already mostly disciplined — the one new violation was my own
+  tags-table kind cell, shown here corrected.</p>
+  <div class="frame">
+    <div class="flabel">Lineage keeps the eyebrow; the kind cell goes plain</div>
+    <table class="tagtable gtable">
+      <thead><tr><th>Tag</th><th>Kind</th><th class="r">Events</th><th class="r">Followers</th></tr></thead>
+      <tbody>
+        <tr><td><span class="tchip">Liella!</span></td><td><span class="dim">group</span></td><td class="r">14</td><td class="r">38</td></tr>
+        <tr><td><span class="tchip">横浜アリーナ</span></td><td><span class="dim">venue</span></td><td class="r">19</td><td class="r">7</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="change" id="g5">
+  <div class="chead2"><span class="cid">G5</span><h2>Contrast ledger: one pair needs a nudge</h2><span class="where">tokens</span></div>
+  <p class="why">Measured WCAG ratios for every tone-on-wash pill pair and the key text pairs (computed from the
+  token hexes, not eyeballed). Everything passes except light-mode <b>ok green on its wash</b>: 4.38 against the
+  4.5 bar, and pills are .6875rem — small text, where the bar applies. A minimal darken fixes it.</p>
+  <div class="frame">
+    <div class="flabel">Measured ratios (WCAG)</div>
+    <table class="tagtable gtable">
+      <thead><tr><th>Pair</th><th class="r">Ratio</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td>light ok pill <small>#1a7f4e on #e8f2ec</small></td><td class="r">4.38</td><td class="verd-warn">marginal</td></tr>
+        <tr><td>light off pill <small>#a05a00 on #f7eede</small></td><td class="r">4.61</td><td class="verd-ok">pass</td></tr>
+        <tr><td>light danger pill <small>#b3261e on #f8e8e6</small></td><td class="r">5.50</td><td class="verd-ok">pass</td></tr>
+        <tr><td>light accent pill <small>#4f46b8 on #eceaf7</small></td><td class="r">6.09</td><td class="verd-ok">pass</td></tr>
+        <tr><td>dark off pill <small>#d99a3c on #2c2418</small></td><td class="r">6.29</td><td class="verd-ok">pass</td></tr>
+        <tr><td>dark accent pill <small>#9a92f0 on #23204a</small></td><td class="r">5.62</td><td class="verd-ok">pass</td></tr>
+        <tr><td>dark danger pill <small>#e97c72 on #2e1d1c</small></td><td class="r">5.80</td><td class="verd-ok">pass</td></tr>
+        <tr><td>dark ok pill <small>#5fc48c on #1a2a22</small></td><td class="r">6.98</td><td class="verd-ok">pass</td></tr>
+      </tbody>
+    </table>
+    <div class="swatches">
+      <span class="swatch"><span class="box" style="background:#e8f2ec; color:#1a7f4e">Aa 4.38</span>#1a7f4e (current)</span>
+      <span class="swatch"><span class="box" style="background:#e8f2ec; color:#187a49">Aa 4.68</span>#187a49 (proposed)</span>
+    </div>
+  </div>
+</section>
+
+<section class="change" id="g6">
+  <div class="chead2"><span class="cid">G6</span><h2>Motion budget: one hover, zero decoration</h2><span class="where">decided</span></div>
+  <p class="why">The design's personality is restraint: the 150ms <b>translateY(-1px)</b> lift on hover, and nothing
+  else moves. The F1 progress bar earns its place because it is functional. A1's breathing dot was the only
+  <b>decorative</b> animation on the table — <b>rejected (owner, 2026-07-24)</b>: the column-head colours carry
+  “money at risk” alone. A1 ships without the dot.</p>
+  <div class="frame">
+    <div class="flabel">The one motion that stays (hover it)</div>
+    <div class="liftcard">
+      <span class="artist" style="font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); font-weight:650">Liella!</span>
+      <div style="font-weight:600; line-height:1.35">5th Live Tour — Yokohama</div>
+      <div class="dim" style="font-size:.8125rem">📍 横浜アリーナ · 12 Oct</div>
+    </div>
+    <p class="dim" style="font-size:.8rem; margin-top:1rem">Nothing on the page pulses, breathes, or loops. If a future idea wants motion, it has to argue its way in like this one did.</p>
+  </div>
+</section>
+
+<section class="change" id="g7">
+  <div class="chead2"><span class="cid">G7</span><h2>.badge joins the 3px family</h2><span class="where">style.css:132</span></div>
+  <p class="why">The admin/editor badge is the one non-deliberate radius outlier (4px). One-character fix.</p>
+  <div class="frame">
+    <div class="flabel">4px (current) vs 3px (proposed)</div>
+    <div class="gcols">
+      <div><p class="eyebrow">Current</p><p style="margin:0">imreiji <em class="badge" style="border-radius:4px">editor</em></p></div>
+      <div><p class="eyebrow">Proposed</p><p style="margin:0">imreiji <em class="badge" style="border-radius:3px">editor</em></p></div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+  // Theme toggle (same contract as base.html).
+  (function () {
+    try {
+      var t = localStorage.getItem("theme");
+      if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    } catch (e) {}
+    var btn = document.querySelector("[data-theme-toggle]");
+    btn.addEventListener("click", function () {
+      var root = document.documentElement;
+      var cur = root.getAttribute("data-theme") ||
+        (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      var next = cur === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("theme", next); } catch (e) {}
+    });
+  })();
+
+  // B1/B2 — active-filter chips: removing one re-filters tiles and re-counts sections.
+  (function () {
+    var row = document.getElementById("afRow");
+    var clear = document.getElementById("afClear");
+    function active() {
+      return new Set(Array.from(row.querySelectorAll(".chip")).map(function (c) { return c.dataset.af; }));
+    }
+    function apply() {
+      var sel = active();
+      var tags = new Set(["liella", "kanto", "kansai"].filter(function (t) { return sel.has(t); }));
+      var status = sel.has("open") ? "open" : "";
+      ["tilesOpen", "tilesUp"].forEach(function (id) {
+        var n = 0;
+        document.querySelectorAll("#" + id + " .tile").forEach(function (t) {
+          var tt = (t.dataset.tags || "").split(" ");
+          var tagOk = tags.size === 0 || tt.some(function (x) { return tags.has(x); });
+          var stOk = !status || t.dataset.status === status;
+          var vis = tagOk && stOk;
+          t.hidden = !vis;
+          if (vis) n++;
+        });
+        document.getElementById(id === "tilesOpen" ? "nOpen" : "nUp").textContent = n;
+      });
+      row.classList.toggle("allclear", sel.size === 0);
+    }
+    row.addEventListener("click", function (e) {
+      var chip = e.target.closest(".chip");
+      if (chip) { chip.remove(); apply(); }
+    });
+    clear.addEventListener("click", function () {
+      row.querySelectorAll(".chip").forEach(function (c) { c.remove(); });
+      apply();
+    });
+    apply();
+  })();
+
+  // D2 — covers legend follows chip toggles.
+  (function () {
+    function wire(boxId, lineId) {
+      var box = document.getElementById(boxId), line = document.getElementById(lineId);
+      box.addEventListener("click", function (e) {
+        var chip = e.target.closest(".chip");
+        if (!chip) return;
+        var on = chip.getAttribute("aria-pressed") !== "true";
+        chip.setAttribute("aria-pressed", String(on));
+        chip.classList.toggle("on", on);
+        var names = Array.from(box.querySelectorAll('.chip[aria-pressed="true"]')).map(function (c) { return c.textContent; });
+        if (names.length === 0) line.innerHTML = "Nothing selected — this round applies to the <b>whole event</b>.";
+        else if (names.length === 1) line.innerHTML = "This round covers <b>" + names[0] + "</b> only.";
+        else line.innerHTML = "This round covers <b>" + names.join("</b> and <b>") + "</b>.";
+      });
+    }
+    wire("demoLegChips", "coversLine");
+    wire("demoLegChips2", "coversLine2");
+  })();
+
+  // E1/E2 — view toggle + follow bells.
+  (function () {
+    var toggle = document.getElementById("viewToggle");
+    toggle.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-view]");
+      if (!b) return;
+      toggle.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+      document.getElementById("tagTableWrap").hidden = b.dataset.view !== "table";
+      document.getElementById("tagChipsWrap").hidden = b.dataset.view !== "chips";
+    });
+    document.getElementById("tagTableWrap").addEventListener("click", function (e) {
+      var bell = e.target.closest(".bell");
+      if (!bell) return;
+      var on = bell.getAttribute("aria-pressed") !== "true";
+      bell.setAttribute("aria-pressed", String(on));
+      bell.textContent = on ? "🔔 Following" : "Follow";
+    });
+  })();
+
+  // F1/F3 — loading bar + toast triggers.
+  (function () {
+    var bar = document.getElementById("hxbar");
+    document.getElementById("demoBar").addEventListener("click", function () {
+      bar.classList.remove("done"); bar.classList.add("on");
+      setTimeout(function () {
+        bar.classList.remove("on"); bar.classList.add("done");
+        setTimeout(function () { bar.classList.remove("done"); }, 700);
+      }, 1400);
+    });
+    var toasts = document.getElementById("toasts");
+    document.getElementById("demoToast").addEventListener("click", function () {
+      var t = document.createElement("div");
+      t.className = "toast";
+      t.innerHTML = '<span class="ok-dot"></span> Recorded — moved to Applied';
+      toasts.appendChild(t);
+      setTimeout(function () { t.remove(); }, 3200);
+    });
+  })();
+</script>

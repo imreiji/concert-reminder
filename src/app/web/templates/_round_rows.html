@@ -90,20 +90,9 @@
 {% endmacro %}
 
 <div class="crounds" id="concert-rounds">
-  {# "Next for you" -- the nearest moment on THIS concert that still wants
-     something from the reader. Absent entirely when they have no standing
-     and nothing is open: a heading over a blank is worse than no block. #}
-  {% if next_row %}
-  <div class="standing">
-    <div>
-      <div class="l">{{ _("Next for you") }}</div>
-      <div class="w">{{ loc(next_row.round_, "label") }}{% if next_row.primary_anchor %} — {{ deadline_label(next_row.primary_anchor) }}{% endif %}</div>
-      <div class="s num">{% if next_row.primary_at_utc %}{% set sl = dual_lines(next_row.primary_at_utc, tz) %}{{ sl[0] }} {{ sl[1] }}{% else %}{{ _("No date announced yet") }}{% endif %}</div>
-    </div>
-    {{ status_pill(next_row.outcome) }}
-  </div>
-  <!-- /standing -->
-  {% endif %}
+  {# "Next for you" moved to the concert header (_standing_strip.html, C1):
+     the strip is the header's answer to "what do I do here?", and the outcome
+     POST re-renders it out of band from there. #}
 
   {# One section per leg, each carrying its OWN date, doors and venue -- the
      only place those are reliably true, which is why the header no longer

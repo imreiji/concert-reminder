@@ -7,7 +7,7 @@
    specificity lets win over the media query). */
 :root {
   --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
-  --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+  --line: #dedbd2; --ok: #187a49; --off: #a05a00; --danger: #b3261e;
   --accent: #4f46b8;
   --ok-wash: #e8f2ec; --off-wash: #f7eede; --danger-wash: #f8e8e6;
   --accent-wash: #eceaf7; --chip: #efede6;
@@ -32,7 +32,7 @@
 }
 :root[data-theme="light"] {
   --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
-  --line: #dedbd2; --ok: #1a7f4e; --off: #a05a00; --danger: #b3261e;
+  --line: #dedbd2; --ok: #187a49; --off: #a05a00; --danger: #b3261e;
   --accent: #4f46b8; --ok-wash: #e8f2ec; --off-wash: #f7eede;
   --danger-wash: #f8e8e6; --accent-wash: #eceaf7; --chip: #efede6;
   --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
@@ -45,6 +45,19 @@
    on the edit page was showing the upgrade qualifier box. The demos carry
    the same rule; test_style_hidden_attribute_wins pins it here. */
 [hidden] { display: none !important; }
+
+/* ── Radius system ─────────────────────────────────────────────────
+   3px              everything, by default (cards, inputs, buttons, pills)
+   999px            chips and chip-like toggles (.chip, .tchip, .kindpick)
+   4px              overlay CARDS only: .kmenu, dialogs (.prune)
+   50%              dots, avatars, counters, ticks (circles, not radii)
+   14px 14px 0 0    phone bottom sheets (dialogs + .fsheet panel)
+   test_style_uses_3px_radius_not_6or8 guards the 3px default. */
+
+/* One global keyboard focus ring. :focus-visible only, so pointer users never
+   see it; components that already define their own copy keep it (higher
+   specificity), this catches everything else. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
   font: 16px/1.6 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
@@ -82,9 +95,9 @@ footer a { color: inherit; }
    for data-dense grids; legal prose needs a much narrower column and its
    own heading rhythm to stay readable. Ported from the onboarding demo. */
 .legal { max-width: 62ch; margin-top: 2.5rem; }
-.legal h1 { font-size: 1.7rem; letter-spacing: -.025em; font-weight: 650; margin: 0 0 .3rem; }
+.legal h1 { font-size: 1.7rem; letter-spacing: -.025em; font-weight: 700; margin: 0 0 .3rem; }
 .legal .updated { color: var(--dim); font-size: .8125rem; margin: 0 0 2.25rem; }
-.legal h2 { font-size: 1rem; font-weight: 650; margin: 2.25rem 0 .5rem; letter-spacing: -.01em; }
+.legal h2 { font-size: 1rem; font-weight: 700; margin: 2.25rem 0 .5rem; letter-spacing: -.01em; }
 .legal p { margin: 0 0 1rem; font-size: .9375rem; line-height: 1.7; }
 .legal ul { margin: 0 0 1rem; padding-left: 1.2rem; display: grid; gap: .4rem; }
 .legal li { font-size: .9375rem; line-height: 1.6; }
@@ -103,7 +116,7 @@ nav.main a {
   border-radius: 3px; transition: color 150ms ease, background 150ms ease;
 }
 nav.main a:hover { color: var(--ink); background: var(--chip); }
-nav.main a[aria-current="page"] { color: var(--ink); background: var(--chip); font-weight: 550; }
+nav.main a[aria-current="page"] { color: var(--ink); background: var(--chip); font-weight: 600; }
 
 /* Quiet header toggle: same pill silhouette as the nav items. */
 .theme-toggle {
@@ -129,7 +142,7 @@ nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; fo
    which swaps the two (see the 701-1040 section near the mobile block). */
 .nav-ico { display: none; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; }
-.badge { color: var(--ok); font-style: normal; font-size: .8em; border: 1px solid currentColor; padding: 0 .3em; border-radius: 4px; }
+.badge { color: var(--ok); font-style: normal; font-size: .8em; border: 1px solid currentColor; padding: 0 .3em; border-radius: 3px; }
 
 /* Signed-out Home landing (.hero has no other caller). Discord brand button
    is the one deliberate fixed colour (blurple), which reads correctly on
@@ -141,11 +154,37 @@ nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; fo
 .btn-discord:hover { opacity: .9; }
 .btn-discord .di { font-size: 1rem; line-height: 1; }
 
+/* htmx progress bar: a 2px accent bar pinned to the viewport top. base.html's
+   listener adds .on on htmx:beforeRequest (the bar creeps toward ~72%) and
+   swaps it for .done on htmx:afterRequest (snap to 100%, fade). It asserts no
+   timing -- it is a feel, not a meter. */
+#hxbar {
+  position: fixed; top: 0; left: 0; height: 2px; width: 0; z-index: 60;
+  background: var(--accent); opacity: 0;
+  transition: width .4s ease, opacity .25s ease .1s;
+}
+#hxbar.on { opacity: 1; width: 72%; transition: width 8s cubic-bezier(.1,.7,.3,1); }
+#hxbar.done { width: 100%; opacity: 0; transition: width .15s ease, opacity .4s ease .15s; }
+
+/* Outcome toast (F3): one live region, one card shape; the outcome route
+   names the move in an HX-Trigger header, base.html renders it. Dark card in
+   both themes -- ink on paper inverts, which reads as "system message" rather
+   than content. */
+#toasts { position: fixed; right: 1rem; bottom: 1rem; display: grid; gap: .5rem; z-index: 70; }
+.toast {
+  background: var(--ink); color: var(--paper); border-radius: 3px;
+  padding: .6rem .9rem; font-size: .85rem; font-weight: 600;
+  box-shadow: var(--shadow); display: flex; align-items: center; gap: .6rem;
+  animation: toastin .22s ease;
+}
+.toast .ok-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+@keyframes toastin { from { transform: translateY(6px); opacity: 0; } }
+
 .hero { padding: 4rem 0 1rem; max-width: 54rem; }
 .hero .eyebrow { display: block; margin-bottom: 1rem; }
 .hero .promise {
   font-size: clamp(2.1rem, 6vw, 3.5rem); line-height: 1.04; letter-spacing: -.035em;
-  font-weight: 680; margin: 0 0 1.2rem; text-wrap: balance;
+  font-weight: 700; margin: 0 0 1.2rem; text-wrap: balance;
 }
 .hero .promise em { font-style: normal; color: var(--accent); }
 .hero .vprop { font-size: 1.15rem; color: var(--dim); max-width: 46ch; margin: 0 0 1.9rem; line-height: 1.5; }
@@ -154,8 +193,8 @@ nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; fo
 .hero .reassure { color: var(--dim); font-size: .8125rem; }
 
 .statband { display: flex; gap: 2.75rem; flex-wrap: wrap; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
-.statband div .n { font-size: 1.7rem; font-weight: 680; letter-spacing: -.02em; }
-.statband div .l { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+.statband div .n { font-size: 1.7rem; font-weight: 700; letter-spacing: -.02em; }
+.statband div .l { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 700; }
 
 .howto { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.25rem; }
 .howstep {
@@ -166,7 +205,7 @@ nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; fo
   width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--accent-wash);
   color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: .85rem;
 }
-.howstep h3 { margin: .3rem 0 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+.howstep h3 { margin: .3rem 0 0; font-size: 1rem; font-weight: 700; letter-spacing: -.01em; }
 .howstep p { margin: 0; color: var(--dim); font-size: .875rem; }
 .howstep p b { color: var(--ink); font-weight: 600; }
 
@@ -182,7 +221,7 @@ nav.auth { margin-left: auto; display: flex; align-items: center; gap: .6rem; fo
   background: var(--raise); box-shadow: var(--shadow);
   padding: 2.25rem 2rem; text-align: center; display: grid; gap: 1rem; justify-items: center;
 }
-.ctafoot h2 { margin: 0; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 660; text-wrap: balance; }
+.ctafoot h2 { margin: 0; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 700; text-wrap: balance; }
 .ctafoot p { margin: 0; color: var(--dim); max-width: 48ch; }
 
 .toolbar { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
@@ -205,27 +244,10 @@ h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 2.2rem; }
 .panel { border: 1px dashed var(--line); border-radius: 3px; padding: .6rem .9rem; margin: 1rem 0; }
 .panel summary, details.edit-round summary { cursor: pointer; color: var(--dim); }
 
-.banner-warn {
-  border: 1px solid var(--off);
-  border-radius: 3px;
-  padding: .6rem 1rem;
-  margin: 0 auto 1rem;
-  max-width: 60rem;
-  font-size: .9rem;
-}
-.banner-warn a { color: var(--off); font-weight: 600; }
-/* Bounced off a signed-in-only page, explaining the redirect Home. Accent
-   and not --off on purpose: nothing has gone wrong, the visitor just needs
-   to sign in first. Both tokens are defined in the dark blocks too. */
-.signin-note {
-  border: 1px solid var(--accent);
-  background: var(--accent-wash);
-  border-radius: 3px;
-  padding: .6rem 1rem;
-  margin: 0 auto 1rem;
-  max-width: 60rem;
-  font-size: .9rem;
-}
+/* Page-level banner placement (the DM-blocked warning in base.html, the
+   sign-in note on the landing): a .banner with this class sits centered
+   under the header. */
+.banner-block { margin: 0 auto 1rem; max-width: 60rem; font-size: .9rem; }
 .stack { display: grid; gap: .55rem; max-width: 26rem; margin-top: .6rem; }
 .stack label { display: grid; gap: .2rem; font-size: .85rem; color: var(--dim); }
 .stack.wide { max-width: 44rem; }
@@ -351,6 +373,22 @@ button.x:hover { color: var(--danger); opacity: 1; }
 /* The round-status facet reuses the sort list's shape -- it is the same kind
    of control (one choice, narrows the grid), just a different axis. */
 .sorts.facets a.on { color: var(--ink); font-weight: 600; }
+/* The tile-section headers' live count, kept in step by applyVisibility. */
+[data-sec-count] { color: var(--dim); font-weight: 500; font-size: .8125rem; margin-left: .4rem; }
+
+/* Active filters (B1): the current selections as removable chips between the
+   search bar and the tiles, so filter state is visible without opening the
+   sidebar/sheet. Chips reuse .chip/.on (white × from .chip.on .x); the row
+   hides when empty. With JS off each chip is a real link to the URL without
+   that selection. */
+.active-filters { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-top: .7rem; }
+.active-filters.allclear { display: none; }
+.af-label {
+  font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--dim); font-weight: 700;
+}
+.af-clear { font-size: .78rem; color: var(--accent); text-decoration: none; font-weight: 600; }
+.af-clear:hover { text-decoration: underline; }
 /* Sort and round-status facet links get the demo's boxed/pill chrome
    (`.sorts button`) while staying real <a href> elements -- JS-off must
    still filter through a plain page load (see discover.html's script
@@ -419,7 +457,7 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
   width: 100%; background: var(--paper); border: 1px solid transparent;
   border-radius: 3px; padding: .6rem .9rem;
 }
-.picker-body input[type=search]:focus { outline: none; border-color: var(--line); background: var(--raise); }
+.picker-body input[type=search]:focus { border-color: var(--line); background: var(--raise); }
 .picker-body .taglist { max-height: 44vh; overflow-y: auto; gap: .5rem; padding: .1rem; }
 .picker-body .chip { background: var(--paper); border-color: transparent; padding: .25rem .8rem; }
 .picker-body .chip:hover { border-color: var(--ink); background: var(--raise); }
@@ -464,6 +502,11 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
   flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem;
 }
 .leg-chips input[type="hidden"] { flex: 0 0 auto; min-width: 0; }
+/* The covers legend (D2): one plain sentence under a round's leg chips, kept
+   in sync by _leg_chips_script.html. Renders empty server-side (JS fills it);
+   flex-basis 100% so it takes its own line inside the chip row. */
+.covers { flex: 1 1 100%; font-size: .78rem; color: var(--dim); }
+.covers:empty { display: none; }
 
 /* ── Concert editor ─────────────────────────────────────────────────────
    Rounds and legs lead the page; details, tags and history fold away. The
@@ -479,6 +522,20 @@ dialog.picker::backdrop { background: rgba(27, 27, 32, .45); }
 .section-head { margin-top: 1.4rem; }
 .section-head h2 { margin: 0; }
 .section-head p { margin: .15rem 0 0; }
+
+/* The create form's required spine, numbered: 1 Event, 2 Performances,
+   3 Lottery rounds. Pure CSS counters on the existing .section-head wrappers
+   (.numbered only ever goes on concert_new's form) -- a wizard would break
+   the single-POST simplicity, this is just orientation. */
+.numbered { counter-reset: spine; }
+.numbered .section-head h2 { counter-increment: spine; display: flex; align-items: baseline; gap: .55rem; }
+.numbered .section-head h2::before {
+  content: counter(spine);
+  font-size: .72rem; font-weight: 700; color: var(--accent);
+  border: 1.5px solid var(--accent); border-radius: 50%;
+  width: 1.35rem; height: 1.35rem; display: inline-grid; place-items: center;
+  flex: none;
+}
 .section-sub { margin: 1.4rem 0 .2rem; }
 .editor-actions {
   display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .7rem 0 .4rem;
@@ -627,7 +684,6 @@ details.fold > summary {
 .danger-row {
   display: flex; flex-wrap: wrap; align-items: center; gap: .8rem;
   margin-top: 2rem; padding: .8rem 1rem;
-  border: 1px solid var(--danger); border-radius: 3px;
 }
 .danger-row p { margin: .15rem 0 0; max-width: 44rem; }
 .danger-row-actions { margin-left: auto; display: flex; gap: .5rem; flex-wrap: wrap; }
@@ -658,17 +714,17 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 
 .eyebrow {
   font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650;
+  color: var(--dim); font-weight: 700;
 }
 .head { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1rem; flex-wrap: wrap; }
-.head h2 { margin: 0; font-size: 1rem; font-weight: 650; }
+.head h2 { margin: 0; font-size: 1rem; font-weight: 700; }
 .head .note { color: var(--dim); font-size: .8125rem; }
 .head .note strong { color: var(--ink); font-weight: 600; }
 
 /* Colour encodes who owes the next move: ok = you are covered, danger/off =
    you owe an action, quiet = you have no standing here. */
 .pill {
-  font-size: .6875rem; font-weight: 650; letter-spacing: .04em; white-space: nowrap;
+  font-size: .6875rem; font-weight: 700; letter-spacing: .04em; white-space: nowrap;
   padding: .15rem .45rem; border-radius: 3px; border: 1px solid currentColor;
 }
 .p-danger { color: var(--danger); background: var(--danger-wash); }
@@ -680,9 +736,8 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 
 /* Closes next */
 .next {
-  margin-top: 1.5rem; background: var(--raise); border: 1px solid var(--line);
-  border-left: 3px solid var(--danger); border-radius: 3px;
-  padding: 1.25rem 1.4rem; box-shadow: var(--shadow);
+  margin-top: 1.5rem;
+  padding: 1.25rem 1.4rem;
   display: grid; grid-template-columns: 1fr auto; gap: 1.25rem; align-items: center;
 }
 .next .label {
@@ -696,7 +751,7 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 /* Two-line dual time: bold labelled weekday line over the JST/local line. */
 .next .when b { display: block; color: var(--ink); font-weight: 600; }
 .next .countdown { display: block; text-align: right; }
-.next .countdown .big { font-size: 1.75rem; font-weight: 650; line-height: 1.2; color: var(--danger); }
+.next .countdown .big { font-size: 1.75rem; font-weight: 700; line-height: 1.2; color: var(--danger); }
 .next .countdown .unit {
   font-size: .75rem; color: var(--dim); letter-spacing: .08em; text-transform: uppercase;
 }
@@ -707,14 +762,23 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .col-head {
   display: flex; align-items: center; gap: .5rem; font-size: .75rem;
   letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
-  font-weight: 650; padding-bottom: .5rem; border-bottom: 1px solid var(--line);
+  font-weight: 700; padding-bottom: .5rem; border-bottom: 1px solid var(--line);
 }
 .col-head .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 .col-head .count { margin-left: auto; font-weight: 500; letter-spacing: 0; }
 .d-open { background: var(--danger); } .d-applied { background: var(--off); }
 .d-won { background: var(--accent); } .d-secured { background: var(--ok); }
-.col .more { font-size: .8125rem; color: var(--accent); text-decoration: none; font-weight: 550; }
+.col .more { font-size: .8125rem; color: var(--accent); text-decoration: none; font-weight: 600; }
 .col .more:hover { text-decoration: underline; }
+
+/* Column identity: the head underline takes the column colour, so a column
+   reads as a lane, not a list. (A breathing dot on won was proposed and
+   rejected -- owner, 2026-07-24: the colours carry "money at risk" alone,
+   and the cards' accent edge above already ships, keyed off data-column.) */
+.col.open .col-head { border-bottom-color: var(--danger); }
+.col.applied .col-head { border-bottom-color: var(--off); }
+.col.won .col-head { border-bottom-color: var(--accent); }
+.col.secured .col-head { border-bottom-color: var(--ok); }
 
 /* .peek reuses the exact same card: Home's peek grid is a taste of the
    catalogue rendered with the board's own card shape (see home.html). */
@@ -770,7 +834,7 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 }
 .rowhead {
   padding: .4rem .1rem; font-size: .68rem; letter-spacing: .12em;
-  text-transform: uppercase; color: var(--dim); font-weight: 650;
+  text-transform: uppercase; color: var(--dim); font-weight: 700;
 }
 .rowhead span:nth-child(5) { text-align: right; }
 .deadline-rows .row { align-items: center; padding: .65rem .1rem; }
@@ -778,7 +842,7 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .row .when-c { font-size: .8125rem; color: var(--dim); line-height: 1.35; }
 /* Two-line dual time: bold weekday+day+month over a smaller JST/local line. */
 .row .when-c b { display: block; color: var(--ink); font-weight: 600; }
-.row .title-c { font-weight: 550; line-height: 1.35; }
+.row .title-c { font-weight: 600; line-height: 1.35; }
 .row .title-c a { color: inherit; text-decoration: none; }
 .row .title-c a:hover { text-decoration: underline; }
 .row .title-c small { display: block; font-weight: 400; font-size: .78rem; color: var(--dim); }
@@ -786,7 +850,7 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .row .act-c b { color: var(--ink); font-weight: 600; }
 .row .acts { display: flex; align-items: center; gap: .4rem; justify-content: flex-end; }
 .act {
-  font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
+  font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: .03em;
   padding: .22rem .5rem; border-radius: 3px; cursor: pointer; white-space: nowrap;
   border: 1px solid var(--line); background: var(--raise); color: var(--dim);
   transition: color 150ms ease, border-color 150ms ease;
@@ -803,7 +867,7 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
    out inline to match the timezone row beside it. */
 .langrow { display: flex; gap: .4rem; flex-wrap: wrap; }
 .langrow form { display: contents; }
-.done { font-size: .72rem; font-weight: 650; color: var(--ok); letter-spacing: .03em; }
+.done { font-size: .72rem; font-weight: 700; color: var(--ok); letter-spacing: .03em; }
 
 /* The follow-up to "Not applying": the narrow action already happened, the
    wider one is a second deliberate press. Same native <dialog> shape as the
@@ -813,18 +877,20 @@ dialog.prune {
   color: var(--ink); padding: 0; max-width: 26rem; box-shadow: var(--shadow);
 }
 dialog.prune::backdrop { background: rgba(27, 27, 32, .45); }
-dialog.prune .dh { display: flex; align-items: baseline; gap: 1rem; padding: 1rem 1.1rem .5rem; font-weight: 650; }
+dialog.prune .dh { display: flex; align-items: baseline; gap: 1rem; padding: 1rem 1.1rem .5rem; font-weight: 700; }
 dialog.prune .dh button { margin-left: auto; background: none; border: 0; color: var(--dim); font-size: 1.1rem; cursor: pointer; }
 dialog.prune p { margin: 0; padding: 0 1.1rem 1rem; color: var(--dim); font-size: .875rem; }
 dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wrap: wrap; }
 
-/* Discovery teaser */
-.teaser {
-  margin-top: 2.75rem; border-top: 1px solid var(--line); padding-top: 1.75rem;
-  display: grid; grid-template-columns: 1fr auto; gap: 2rem; align-items: end;
-}
-.teaser h2 { margin: .3rem 0 .35rem; font-size: 1.1rem; font-weight: 650; }
-.teaser p { margin: 0; color: var(--dim); font-size: .875rem; max-width: 52ch; }
+/* Discovery block (A2): the old teaser's copy is now the peek grid's own
+   header -- one section instead of two blocks selling the same thing. The
+   .head/.head .more chrome is the shared one; .peek's own margin-top below
+   provides the gap under the copy. */
+.discover-block { margin-top: 2.75rem; border-top: 1px solid var(--line); padding-top: 1.75rem; }
+.discover-block .head { margin-bottom: .3rem; }
+.discover-block .head h2 { font-size: 1.35rem; letter-spacing: -.02em; }
+.discover-block .sub { margin: 0; color: var(--dim); font-size: .875rem; max-width: 58ch; }
+.discover-block .sub b { color: var(--ink); font-weight: 600; }
 
 .peek { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-top: 1.25rem; }
 .peek .card { gap: .3rem; }
@@ -844,7 +910,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
    no header date range and no header venue on purpose -- both belong to a
    leg, which is the only place they are reliably true. */
 .chead { margin-top: 1.5rem; display: grid; gap: .55rem; }
-.chead h1 { margin: 0; font-size: 1.7rem; font-weight: 650; text-wrap: balance; }
+.chead h1 { margin: 0; font-size: 1.7rem; font-weight: 700; text-wrap: balance; }
 /* Franchise + group lead, per the tile display rule ("F · G"). The group is
    what someone recognises first -- the title is often a long subtitle. */
 .chead .lineage {
@@ -857,7 +923,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 }
 .chead .othertags .lbl, .chead .links .lbl2 {
   font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650;
+  color: var(--dim); font-weight: 700;
 }
 .chead .links { font-size: .8125rem; color: var(--dim); }
 .chead .links a { color: var(--accent); text-decoration: none; }
@@ -878,6 +944,11 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .follow:not(.on) { border-color: var(--line); background: transparent; color: var(--dim); }
 /* The following-toggle's explanatory caption, next to the button. */
 .clock { font-size: .8125rem; color: var(--dim); }
+/* C3: WHY the reader tracks this concert, beside the control it explains --
+   the followed tags that matched (the derivation tracked_concert_ids
+   performs), as small chips. */
+.via { font-size: .8rem; color: var(--dim); }
+.via .tchip { font-size: .72rem; padding: .05rem .4rem; }
 
 /* Performers are the reason someone is on this page; a nine-member group
    mixed into a generic chip row is unreadable. The label names the source
@@ -889,7 +960,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 }
 .performers .plabel {
   font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650; margin-bottom: .5rem;
+  color: var(--dim); font-weight: 700; margin-bottom: .5rem;
   display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap;
 }
 .performers .plabel span { letter-spacing: 0; text-transform: none; font-weight: 500; }
@@ -899,7 +970,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   display: inline-flex; align-items: center; justify-content: center; text-align: center;
   line-height: 1.5; padding: .22rem .6rem;
 }
-.performers .chip.grp { background: var(--accent); color: #fff; font-weight: 650; }
+.performers .chip.grp { background: var(--accent); color: #fff; font-weight: 700; }
 /* No eventernote link yet -- dimmed rather than a dead link (see the
    markup: these render as a plain <span>, never an <a>). */
 .performers .chip.nolink { opacity: .75; }
@@ -914,8 +985,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
    Accent rather than the danger red Home's "Closes next" uses -- that one is
    sitewide triage, this one is a single campaign's status. */
 .standing {
-  margin-top: 1.75rem; border: 1px solid var(--line); border-left: 3px solid var(--accent);
-  border-radius: 3px; background: var(--raise); box-shadow: var(--shadow);
+  margin-top: 1.75rem;
   padding: 1rem 1.15rem; display: grid; grid-template-columns: 1fr auto;
   gap: 1rem; align-items: center;
 }
@@ -925,6 +995,12 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 }
 .standing .w { font-size: 1.05rem; font-weight: 600; margin-top: .25rem; }
 .standing .s { color: var(--dim); font-size: .875rem; margin-top: .15rem; }
+/* C1: the strip moved into the concert header and gained a countdown ABOVE
+   the standing pill -- two facts (time, standing), one right-aligned stack. */
+.standing .countside { display: flex; flex-direction: column; align-items: flex-end; gap: .3rem; }
+.standing .countdown { display: block; text-align: right; }
+.standing .countdown .big { display: block; font-size: 1.35rem; font-weight: 700; letter-spacing: -.03em; line-height: 1; color: var(--accent); }
+.standing .countdown .unit { font-size: .68rem; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
 
 /* One section per leg, each with its own date, doors and venue. A cancelled
    leg is dimmed and badged, never hidden: invariant 2 keeps the row because
@@ -934,7 +1010,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
   padding-bottom: .6rem; border-bottom: 1px solid var(--line);
 }
-.leghead h3.leg-heading { margin: 0; font-size: 1rem; font-weight: 650; color: var(--ink); }
+.leghead h3.leg-heading { margin: 0; font-size: 1rem; font-weight: 700; color: var(--ink); }
 .leghead .lv { color: var(--dim); font-size: .8125rem; }
 .leghead .lvenue { display: block; }
 .leg.off .rnds, .leg.off .lv { opacity: .45; }
@@ -948,7 +1024,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   align-items: center; padding: .75rem .1rem; border-bottom: 1px solid var(--line);
 }
 .rnd2.past { opacity: .55; }
-.rnd2 .nm { font-weight: 550; line-height: 1.3; }
+.rnd2 .nm { font-weight: 600; line-height: 1.3; }
 .rnd2 .nm em {
   font-style: normal; display: block; font-size: .75rem;
   color: var(--dim); font-weight: 400;
@@ -973,7 +1049,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .plyt { display: grid; grid-template-columns: 13rem 1fr; gap: 2.5rem; margin-top: 1.5rem; }
 .prail { align-content: start; display: grid; gap: .1rem; position: sticky; top: 4.5rem; }
 .prail a {
-  text-decoration: none; color: var(--dim); font-size: .875rem; font-weight: 550;
+  text-decoration: none; color: var(--dim); font-size: .875rem; font-weight: 600;
   padding: .4rem .6rem; border-radius: 3px; border-left: 2px solid transparent;
   white-space: nowrap;   /* see the 860px strip rule: a label is one line */
 }
@@ -982,7 +1058,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 
 .psec { padding-bottom: 2.5rem; margin-bottom: 2.5rem; border-bottom: 1px solid var(--line); }
 .psec:last-child { border-bottom: 0; }
-.psec > h3 { margin: 0 0 .3rem; font-size: 1.05rem; font-weight: 650; letter-spacing: -.01em; }
+.psec > h3 { margin: 0 0 .3rem; font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
 .psec > .blurb { margin: 0 0 1.1rem; color: var(--dim); font-size: .875rem; max-width: 62ch; }
 
 /* A subscription row states its consequence: following a tag subscribes you to
@@ -993,7 +1069,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   padding: .6rem .1rem; border-bottom: 1px solid var(--line);
 }
 .subrow:first-of-type { border-top: 1px solid var(--line); }
-.subrow .nm3 { font-weight: 550; display: flex; align-items: center; gap: .5rem; }
+.subrow .nm3 { font-weight: 600; display: flex; align-items: center; gap: .5rem; }
 .subrow .cnt { font-size: .8125rem; color: var(--dim); font-variant-numeric: tabular-nums; }
 .subrow .cnt b { color: var(--ink); font-weight: 600; }
 .subrow .sw { display: flex; gap: .35rem; justify-content: flex-end; }
@@ -1002,7 +1078,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
    an inline copy is a row the phone collapse can never reach. */
 .subrow.two { grid-template-columns: 1fr auto; }
 .swb {
-  font: inherit; font-size: .72rem; font-weight: 650; letter-spacing: .03em;
+  font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: .03em;
   padding: .22rem .5rem; border-radius: 3px; cursor: pointer;
   border: 1px solid var(--line); background: var(--raise); color: var(--dim);
 }
@@ -1016,7 +1092,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 }
 .presetcard + .presetcard { margin-top: .7rem; }
 .presetcard .ph { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-.presetcard .ph input.nm4 { font-weight: 650; font: inherit; border: 1px solid transparent; background: transparent; padding: .1rem .2rem; }
+.presetcard .ph input.nm4 { font-weight: 700; font: inherit; border: 1px solid transparent; background: transparent; padding: .1rem .2rem; }
 .presetcard .ph input.nm4:hover, .presetcard .ph input.nm4:focus { border-color: var(--line); background: var(--paper); }
 .presetcard .ph .sp { margin-left: auto; display: flex; gap: .35rem; }
 .ruleline { font-size: .8125rem; color: var(--dim); display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
@@ -1026,12 +1102,13 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 
 /* General field wrapper (the tag dialog scopes its own; Time needs a page one). */
 .fld { display: grid; gap: .25rem; }
-.fld > span { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
+.fld > span { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); font-weight: 700; }
 
 /* The danger-card frame (Account items). Shared with the reveal/other pages;
-   `button.danger` above is a different, button-only rule and does not collide. */
+   `button.danger` above is a different, button-only rule and does not collide.
+   The border+wash come from .banner.dgr in the markup (G2). */
 .danger {
-  margin-top: 2.5rem; border: 1px solid var(--danger); border-radius: 3px;
+  margin-top: 2.5rem;
   padding: .9rem 1rem; display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
 }
 .danger .t2 { font-weight: 600; font-size: .9rem; }
@@ -1076,7 +1153,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .tsec { margin-top: 2rem; }
 .tsec > h3 {
   margin: 0 0 .75rem; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650; padding-bottom: .5rem; border-bottom: 1px solid var(--line);
+  color: var(--dim); font-weight: 700; padding-bottom: .5rem; border-bottom: 1px solid var(--line);
   display: flex; align-items: baseline; gap: .5rem;
 }
 .tsec > h3 span { letter-spacing: 0; text-transform: none; font-weight: 500; }
@@ -1092,6 +1169,25 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .memb { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; }
 .region-label { width: 6rem; flex: none; }
 
+/* Tags table view (E1): an editor-only density toggle over the same counts
+   the chip dialogs already compute. Chips are for picking, tables for
+   comparing. */
+.viewbar { display: flex; align-items: center; gap: .5rem; margin: .8rem 0; }
+.viewtoggle { display: inline-flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+.viewtoggle button {
+  font: inherit; font-size: .78rem; font-weight: 600; border: 0; cursor: pointer;
+  background: var(--raise); color: var(--dim); padding: .3rem .8rem;
+}
+.viewtoggle button[aria-pressed="true"] { background: var(--chip); color: var(--ink); }
+.tagtable { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.tagtable th {
+  text-align: left; font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--dim); font-weight: 700; padding: .4rem .6rem; border-bottom: 1px solid var(--line);
+}
+.tagtable th.r, .tagtable td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.tagtable td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); }
+.tagtable tr:hover td { background: var(--raise); }
+
 .tchip {
   font: inherit; font-size: .8rem; padding: .22rem .6rem; border-radius: 999px;
   border: 1px solid transparent; background: var(--chip-bg); color: var(--ink);
@@ -1099,7 +1195,7 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 }
 .tchip:hover { border-color: var(--dim); opacity: 1; }
 .tchip .n2 { font-size: .72em; color: var(--dim); font-variant-numeric: tabular-nums; }
-.tchip.k-franchise { background: var(--accent-wash); color: var(--accent); font-weight: 650; }
+.tchip.k-franchise { background: var(--accent-wash); color: var(--accent); font-weight: 700; }
 .tchip.k-group { background: var(--ok-wash); color: var(--ok); font-weight: 600; }
 .tchip.k-venue { background: var(--off-wash); color: var(--off); }
 .tchip.unused { opacity: .55; border-style: dashed; border-color: var(--line); }
@@ -1125,7 +1221,7 @@ dialog.tagdlg .df {
 dialog.tagdlg .fld { display: grid; gap: .25rem; }
 dialog.tagdlg .fld > span {
   font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650;
+  color: var(--dim); font-weight: 700;
 }
 dialog.tagdlg .fld .plain { text-transform: none; letter-spacing: 0; font-weight: 400; }
 dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
@@ -1135,10 +1231,10 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   background: var(--paper); border: 1px solid var(--line);
 }
 .usage div { text-align: center; }
-.usage .n3 { font-size: 1.1rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.usage .n3 { font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .usage .l3 {
   font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650;
+  color: var(--dim); font-weight: 700;
 }
 
 .kindpick { display: flex; gap: .35rem; flex-wrap: wrap; }
@@ -1153,18 +1249,17 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 
 .dupe {
   display: none; gap: .5rem; align-items: flex-start; padding: .6rem .7rem;
-  border-radius: 3px; background: var(--off-wash); border: 1px solid var(--off);
-  color: var(--off); font-size: .8125rem;
+  font-size: .8125rem;
 }
-.dupe.show { display: flex; }
+/* Outspecifics .banner's display:flex -- the warning stays JS-gated. */
+.banner.dupe.show { display: flex; }
 .dupe b { font-weight: 700; }
 
 .upgradebox {
-  border-left: 3px solid var(--accent); background: var(--accent-wash);
   padding: .6rem .75rem; border-radius: 3px; display: grid; gap: .45rem;
 }
 .upgradebox .u1 { font-size: .8125rem; }
-.upgradebox .u1 b { font-weight: 650; }
+.upgradebox .u1 b { font-weight: 700; }
 /* Retroactive-apply reads as a button (.btn.quiet), not an underlined text
    link -- .upgradebox is a grid, so the link still needs justify-self to
    avoid stretching to the row's full width. */
@@ -1185,40 +1280,51 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
    rules are scoped under .pick so they never collide with the Discover .tile. */
 .steps { display: flex; gap: .4rem; align-items: center; margin: 1.5rem 0 1.25rem; flex-wrap: wrap; }
 .stepdot {
-  font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 650;
+  font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 700;
   color: var(--dim); padding: .25rem .6rem; border-radius: 3px; border: 1px solid var(--line);
 }
 .stepdot.on { color: var(--ink); border-color: var(--ink); }
 .stepdot.done { color: var(--ok); border-color: var(--ok); }
 
 .lede { max-width: 58ch; }
-.lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 650; }
+.lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 700; }
 .lede p { margin: 0; color: var(--dim); }
 
-/* Import + preview callouts (task 2/3): a reassurance or warning banner,
-   the accent tone by default, an .off-toned "warn" variant for a parse
-   failure or an editor-facing heads-up. */
-.callout {
-  display: flex; gap: .6rem; align-items: flex-start; padding: .75rem .9rem;
-  border-radius: 3px; font-size: .875rem; border: 1px solid var(--accent);
-  background: var(--accent-wash); color: var(--accent);
+/* ── Callout grammar (G2): two shapes, three tones each ─────────────────
+   Status card (.edgecard): an ongoing state -- raise ground, left edge in
+   the tone colour. Anatomy classes (.standing/.next/.upgradebox/.feedbox)
+   compose it and keep their own padding/layout.
+   Banner (.banner): needs attention -- wash ground, full border in the tone
+   colour. Absorbs the old .callout(+warn), .banner-warn, .signin-note,
+   .dupe's colours and the .danger-row/.danger borders. */
+.edgecard {
+  border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 3px; background: var(--raise); box-shadow: var(--shadow);
 }
-.callout.warn { border-color: var(--off); background: var(--off-wash); color: var(--off); }
+.edgecard.dg { border-left-color: var(--danger); }
+.edgecard.ok { border-left-color: var(--ok); }
+.banner {
+  display: flex; gap: .6rem; align-items: flex-start;
+  border: 1px solid var(--accent); background: var(--accent-wash); color: var(--accent);
+  border-radius: 3px; padding: .6rem .9rem; font-size: .875rem;
+}
+.banner.warn { border-color: var(--off); background: var(--off-wash); color: var(--off); }
+.banner.dgr { border-color: var(--danger); background: var(--danger-wash); color: var(--danger); }
+.banner b { font-weight: 700; }
+.banner a { color: inherit; font-weight: 600; text-decoration: underline; }
 /* Multiple parse warnings on the import preview stack edge to edge without
-   this -- one gap between every .callout.warn in the list. */
+   this -- one gap between every .banner.warn in the list. */
 .warnlist { display: grid; gap: .5rem; }
-.callout b { font-weight: 700; }
-.callout a { color: inherit; text-decoration: underline; }
 /* A bare fallback for the "more" link pattern (`.col .more` / `.steps
    .more` are the scoped originals) for pages with neither wrapper --
    same accent-on-hover-underline look, just not nested under one. */
-.clock .more { color: var(--accent); text-decoration: none; font-weight: 550; }
+.clock .more { color: var(--accent); text-decoration: none; font-weight: 600; }
 .clock .more:hover { text-decoration: underline; }
 /* The landing page's Discover-teaser link (demo's `.head .more`): a plain
    inline link at the end of a .head row, not a button. */
 .head .more {
   margin-left: auto; font-size: .8125rem; color: var(--accent);
-  text-decoration: none; font-weight: 550;
+  text-decoration: none; font-weight: 600;
 }
 .head .more:hover { text-decoration: underline; }
 
@@ -1260,7 +1366,7 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .pick .tile:has(input:checked) .tick { background: var(--ok); border-color: var(--ok); color: var(--raise); }
 .pick .tile .who-t {
   font-size: .68rem; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650;
+  color: var(--dim); font-weight: 700;
 }
 .pick .tile .t { font-weight: 600; line-height: 1.3; letter-spacing: -.01em; padding-right: 1.4rem; }
 .pick .tile .v { font-size: .8125rem; color: var(--dim); }
@@ -1291,7 +1397,7 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
    the fold displaced on laptop widths in en/ja while zh stayed on one row.
    `min-width: 0` is what actually lets a flex item shrink below min-content. */
 .bar .tally { color: var(--dim); font-size: .875rem; flex: 1 1 0; min-width: 0; }
-.bar .tally b { color: var(--ink); font-weight: 650; }
+.bar .tally b { color: var(--ink); font-weight: 700; }
 /* `.stacked` puts the hint on its own row ABOVE the control rather than
    beside it -- for bars whose hint is a full sentence of context, where
    sitting inline reads as a footnote to the list above the bar's rule. */
@@ -1304,26 +1410,26 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .reveal { text-align: center; padding: 3rem 0 1rem; }
 .reveal .eyebrow {
   font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650;
+  color: var(--dim); font-weight: 700;
 }
-.reveal .big { font-size: 2.4rem; font-weight: 650; letter-spacing: -.03em; margin-top: .3rem; }
+.reveal .big { font-size: 2.4rem; font-weight: 700; letter-spacing: -.03em; margin-top: .3rem; }
 .tallies { display: flex; gap: 2.5rem; justify-content: center; margin: 2rem 0; flex-wrap: wrap; }
 .tallies div { text-align: center; }
-.tallies .n { font-size: 1.8rem; font-weight: 650; letter-spacing: -.02em; }
+.tallies .n { font-size: 1.8rem; font-weight: 700; letter-spacing: -.02em; }
 /* The next-deadline tile's dual JST+local clock (invariant 1), one size
    down from `.n` so it never overflows the tile the way the full one-line
    dual string used to. */
 .tallies .stat { font-size: .72rem; color: var(--dim); margin-top: .1rem; }
 .tallies .l {
   font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--dim); font-weight: 650;
+  color: var(--dim); font-weight: 700;
 }
 
 /* The step tracker's escape link back to Preferences (demo's `.head .more`,
    scoped here to `.steps` since the app has no matching `.head` wrapper). */
 .steps .more {
   margin-left: auto; font-size: .8125rem; color: var(--accent);
-  text-decoration: none; font-weight: 550;
+  text-decoration: none; font-weight: 600;
 }
 .steps .more:hover { text-decoration: underline; }
 
@@ -1364,7 +1470,7 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
    inline dropdowns; picking a card above resets it wholesale. */
 .remtune { margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
 .remtune-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; margin-bottom: .6rem; }
-.remtune-head h3 { margin: 0; font-size: .9rem; font-weight: 650; letter-spacing: -.01em; }
+.remtune-head h3 { margin: 0; font-size: .9rem; font-weight: 700; letter-spacing: -.01em; }
 .remtune-head .note { color: var(--dim); font-size: .8125rem; }
 .remrules { border: 1px solid var(--line); border-radius: 3px; background: var(--raise); }
 .remrule {
@@ -1397,22 +1503,21 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--accent);
   display: grid; place-items: center; color: #fff; font-weight: 700;
 }
-.dmcard .bn { font-weight: 650; font-size: .9rem; display: flex; align-items: center; gap: .4rem; }
+.dmcard .bn { font-weight: 700; font-size: .9rem; display: flex; align-items: center; gap: .4rem; }
 .dmcard .bn .bg {
   background: #5865f2; color: #fff; font-size: .58rem; padding: .05rem .3em;
   border-radius: 3px; letter-spacing: .04em; font-weight: 700; text-transform: uppercase;
 }
 .dmcard .bn .ts { color: var(--dim); font-weight: 400; font-size: .72rem; }
 .dmcard .msg { font-size: .9rem; margin-top: .35rem; line-height: 1.5; }
-.dmcard .msg b { font-weight: 650; }
+.dmcard .msg b { font-weight: 700; }
 
 /* Calendar step: the feed-link reveal, an ok-toned card with the one-time
    URL and a copy control. */
 .feedbox {
-  border: 1px solid var(--ok); background: var(--ok-wash); border-radius: 3px;
   padding: .9rem 1rem; display: grid; gap: .5rem; max-width: 42rem; margin-top: 1.25rem;
 }
-.feedbox .fl { font-size: .8125rem; color: var(--ok); font-weight: 650; }
+.feedbox .fl { font-size: .8125rem; color: var(--ok); font-weight: 700; }
 .feedbox code {
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: .78rem;
   background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
@@ -1546,7 +1651,7 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
     min-width: 64px; padding: .15rem .5rem; border-radius: 3px;
   }
   .tab svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.7; }
-  .tab[aria-current="page"] { color: var(--accent); font-weight: 650; }
+  .tab[aria-current="page"] { color: var(--accent); font-weight: 700; }
   .tab .ava, .tab img.ava {
     width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line);
     background: linear-gradient(135deg, var(--accent-wash), var(--chip));
@@ -1608,8 +1713,8 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
     display: inline-flex; align-items: center; justify-content: center;
   }
 
-  /* Up next + discover teaser: single column, per the demo's stacked frames. */
-  .next, .teaser, .peek { grid-template-columns: 1fr; }
+  /* Up next + discovery block: single column, per the demo's stacked frames. */
+  .next, .peek { grid-template-columns: 1fr; }
   .next .countdown { text-align: left; }
 
   /* Discover: content-first + filter bottom sheet (spec §6; demo frames 3-4).

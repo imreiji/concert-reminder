@@ -23,7 +23,7 @@
     data-qualifier-id (a numeric round id), never an inline on* handler
     (invariant 7). data-qualifier-id rather than data-name, which collides
     with base.html's filterChips(). -#}
-<div class="upgradebox" data-qualifier-box{% if kind_value != "upgrade" %} hidden{% endif %}>
+<div class="edgecard upgradebox" data-qualifier-box{% if kind_value != "upgrade" %} hidden{% endif %}>
   <p class="u1">{% trans %}<b>Upgrade round.</b> Only people holding a ticket from a
     qualifying round can enter.{% endtrans %}</p>
   <div class="leg-chips" data-qualifier-chips>

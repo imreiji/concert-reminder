@@ -28,6 +28,11 @@
     {% endif %}
     {% set notes_text = loc(concert, "notes") %}
     {% if notes_text %}<p class="dim">{{ notes_text }}</p>{% endif %}
+    {#- C1: "Next for you" lives in the header -- the page's one answer to
+        "what do I do here?". Rendered from the same context the rounds
+        region below uses (next_row), and re-rendered out of band by the
+        outcome POST so it never goes stale. -#}
+    {% include "_standing_strip.html" %}
     {#- Each link names its destination. "source" said nothing; the source is
         ramen.events, which PR #39 made actually populate on import. -#}
     {% if concert.eventernote_url or concert.official_url or concert.source_url %}

@@ -666,7 +666,7 @@ async def test_the_danger_row_says_what_duplicate_copies(client, db):
     await seed(db, legs=[], rounds=[("R", [])])
 
     body = client.get("/concerts/tour/edit").text
-    assert 'class="danger-row"' in body
+    assert 'class="banner dgr danger-row"' in body
     assert "/concerts/tour/duplicate" in body
     assert "/concerts/tour/delete" in body
     assert "copy rounds or performances" in body

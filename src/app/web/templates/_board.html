@@ -45,7 +45,7 @@
 <div class="board">
   {% for key, heading, dot in COLUMNS %}
   {% set cards = columns.get(key, []) %}
-  <div class="col">
+  <div class="col {{ key }}">
     <div class="col-head">
       <span class="dot {{ dot }}"></span> {{ heading }}
       <span class="count num">{{ open_total if key == "open" else cards | length }}</span>

@@ -76,10 +76,32 @@
         chip.textContent = leg.label;
         box.appendChild(chip);
       }
+      updateCovers(box);
     }
 
     const renderAllChips = () =>
       document.querySelectorAll("#round-rows [data-leg-chips]").forEach(renderChips);
+
+    // The covers legend: one plain sentence under a round's leg chips naming
+    // what the round covers ("whole event" when nothing is selected -- the
+    // case the old form silently collapsed). ONE msgid each way; the span in
+    // _round_leg_chips.html renders empty and only JS fills it, so there is
+    // no second server-side msgid to drift.
+    const COVERS_ALL = {{ _("Nothing selected — applies to the whole event.") | tojson }};
+    const COVERS_SOME = {{ _("This round covers {names}.") | tojson }};
+    function updateCovers(box) {
+      const line = box?.querySelector("[data-covers]");
+      const field = box?.querySelector('input[name="round_legs"]');
+      if (!line || !field) return;
+      const chosen = new Set(field.value.split(/[\s,]+/).filter(Boolean));
+      const names = legsInDom().filter((l) => chosen.has(l.key)).map((l) => l.label);
+      // Leg labels are user-controlled: textContent, never innerHTML (inv. 7).
+      // The joiner is ", " in every locale; the msgid carries {names} so
+      // translators control where the list lands in the sentence.
+      line.textContent = names.length
+        ? COVERS_SOME.replace("{names}", function () { return names.join(", "); })
+        : COVERS_ALL;
+    }
 
     window.addRow = function (listId, templateId) {
       const tpl = document.getElementById(templateId);
@@ -115,6 +137,7 @@
       field.value = keys.join(" ");
       chip.classList.toggle("on", on);
       chip.setAttribute("aria-pressed", on ? "true" : "false");
+      updateCovers(chip.closest("[data-leg-chips]"));
     });
 
     const days = document.getElementById("day-rows");
@@ -155,5 +178,10 @@
         if (!k.contains(e.target)) k.removeAttribute("open");
       });
     });
+
+    // Initial legend fill, server-rendered rows included: a saved leg's
+    // day_key IS its ConcertDay id, so the hidden value and legsInDom()
+    // already agree on the edit page.
+    document.querySelectorAll("[data-leg-chips]").forEach(updateCovers);
   })();
 </script>

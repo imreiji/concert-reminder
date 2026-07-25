@@ -366,8 +366,10 @@
     <h3>{{ _("Account") }}</h3>
     <p class="blurb">{% trans username=user.username %}Signed in with Discord as <b>{{ username }}</b>.{% endtrans %}</p>
 
-    {# Non-destructive item: the danger card frame with a neutral border. #}
-    <div class="danger" style="border-color: var(--line); margin-top:0">
+    {# Non-destructive item: the danger card FRAME, neutral. Not a .banner (it
+       is not an attention callout) -- the edgecard shape with its edge
+       neutralized inline keeps the old white-card look. #}
+    <div class="edgecard danger" style="border-left-color: var(--line); margin-top:0">
       <div>
         <div class="t2">{{ _("Re-run first-time setup") }}</div>
         <div class="s2">{% trans %}Review your events again. Turn off any you are not going to, and mark the rounds you have already applied to. Your current choices stay selected.{% endtrans %}</div>
@@ -381,7 +383,7 @@
        POST fires. A deliberate second action, not a one-click. The dialog id in
        the on* handlers is STATIC and the copy is static, so invariant 7 (no
        user-controlled text in on* handlers) holds. #}
-    <div class="danger" style="margin-top:1rem">
+    <div class="banner dgr danger" style="margin-top:1rem">
       <div>
         <div class="t2">{{ _("Delete my account") }}</div>
         <div class="s2">{{ _("Your reminders, subscriptions, and settings are deleted. Events and tags you created stay, but your name is removed from them.") }}</div>

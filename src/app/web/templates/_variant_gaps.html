@@ -20,7 +20,7 @@
     Import `with context`, or the `_` in here resolves to nothing. -#}
 {% macro variant_gaps(gaps) %}
 {%- if gaps %}
-<div class="banner-warn variant-gaps">
+<div class="banner warn variant-gaps">
   <b>{{ _("Not translated everywhere yet.") }}</b>
   {{ _("You can still save — this is a reminder, not a block.") }}
   {%- for gap in gaps %}

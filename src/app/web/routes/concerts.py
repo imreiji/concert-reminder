@@ -36,12 +36,14 @@ from sqlalchemy.orm import selectinload
 from app.db.models import (
     Concert,
     ConcertDay,
+    ConcertTag,
     LegOptOut,
     ReminderRule,
     Round,
     RoundOutcome,
     RoundQualifier,
     Tag,
+    TagSubscription,
     User,
 )
 from app.db.service import (
@@ -871,9 +873,23 @@ async def following_toggle_context(
     no-row default (follow-subscribes). `won_payment_at_utc` is set when the
     user holds a WON/PAID outcome anywhere on this concert -- the concert-page
     opt-out button uses it to raise the heavy confirmation naming the ticket
-    it would forfeit (a client-side gate; the write still goes through)."""
+    it would forfeit (a client-side gate; the write still goes through).
+    `via_tags` names WHY the reader tracks this concert (C3): the viewer's
+    followed tags attached to it -- the derivation `tracked_concert_ids`
+    performs, surfaced. Empty for a manually subscribed concert."""
     tracked = await tracked_concert_ids(session, user_id)
     states = await concert_subscription_states(session, user_id)
+    followed_tag_ids = set((await session.execute(
+        select(TagSubscription.tag_id).where(TagSubscription.user_id == user_id)
+    )).scalars())
+    via_tags: list[Tag] = []
+    if followed_tag_ids:
+        via_tags = list((await session.execute(
+            select(Tag)
+            .join(ConcertTag, ConcertTag.tag_id == Tag.id)
+            .where(ConcertTag.concert_id == concert.id, Tag.id.in_(followed_tag_ids))
+            .order_by(Tag.kind, Tag.name)
+        )).scalars())
     round_ids = list((await session.execute(
         select(Round.id).where(Round.concert_id == concert.id)
     )).scalars())
@@ -903,6 +919,7 @@ async def following_toggle_context(
         "sub_state": states.get(concert.id),
         "holds_ticket": holds_ticket,
         "won_payment_at_utc": won_payment_at_utc,
+        "via_tags": via_tags,
     }
 
 

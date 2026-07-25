@@ -435,6 +435,35 @@ performer chips - see its Shipped entry below.)
 
 ## Shipped
 
+### UX pass 2026-07: page polish + the callout grammar (2026-07-24)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-24-ux-pass-diffs.md` +
+concept demo `docs/superpowers/demo/dekimasen-ux-pass-demo.html` + impl plan
+`docs/superpowers/plans/2026-07-24-ux-pass-impl.md`, from one brainstorm arc.
+Not a Proposed entry -- logged in Shipped per the convention. 20 changes in
+five batches: board column-head colours (A1), Home discovery teaser+peek
+merge (A2), Discover active-filter chips with full client-side rebuild (B1)
+and live section counts (B2), the "Next for you" strip moved into the
+concert header with a countdown over the standing pill and oob-swapped on
+outcome capture (C1), "via <tags>" beside Following (C3), the numbered
+create-form spine (D1), the single-msgid JS-built covers legend (D2), the
+tags chips⇄table view (E1) and follow bell (E2, notify ON, next=/tags), the
+htmx progress bar (F1), the global focus ring + the picker input's
+`outline: none` fix (F2), the outcome toast (F3 -- not_applied excluded: the
+prune dialog is its confirmation), the 400/600/700 weight ramp (G1), the
+two-shape callout grammar `.edgecard`/`.banner` absorbing ten one-off
+treatments (G2), the radius-system comment (G3), light `--ok` nudged to
+`#187a49` for WCAG AA (G5), and `.badge` at 3px (G7). Rejected on review:
+C2 (kebab stays destructive-only) and the A1 breathing dot (motion budget:
+one hover, zero decoration). Owner review caught a C1 staleness regression
+(strip froze on outcome capture) before it shipped -- fixed via the oob
+contract, with `test_concert_page.py` pinning it. Revision pass: nothing
+re-ranked; the pass touched no Proposed entry's ground. Local-env note for
+#8: the owner's `.venv` drifted to Python 3.12 against `.python-version`
+3.14 with dev deps missing, which broke `uv run` outright until the
+project's own processes holding `.venv/Scripts` were worked around -- the
+pinning entry now has a reproduction on record.
+
 ### Inline tag creation for unmatched scraped/draft tags (2026-07-24)
 
 Shipped as: PR #96, after an owner UI checkup that picked per-name create

@@ -41,7 +41,7 @@ from app.db.service import (
 )
 from app.db.session import get_session
 from app.domain.types import ConcertKind, TagKind
-from app.i18n import N_
+from app.i18n import N_, get_locale, loc_field
 from app.i18n import gettext as _
 from app.web.auth import SessionUser, current_user
 
@@ -230,6 +230,13 @@ async def discover(
             "by_kind": by_kind,
             "region_links": region_sidebar_links(by_kind.get("venue", []), tag, sort, facet),
             "selected_tags": selected_tags,
+            # The active-filter chip row (B1): the selected tags as objects for
+            # the server-side render, and a full id→localized-name map so the
+            # client-side rebuild can label chips for filters ADDED via the
+            # sidebar mid-session (tojson'd in the template, raw dict here).
+            "selected_tag_objs": [t for t in tags if t.id in selected_tags],
+            "active_filter_names": {t.id: loc_field(t, "name", get_locale()) for t in tags},
+            "status_facet_labels": {key: _(label) for key, label in STATUS_FACETS},
             "visible_concert_ids": visible_concert_ids,
             "deadlines": await upcoming_deadlines(session, now, limit=DEADLINE_LIST_LIMIT),
             "concert_tags_by_event_id": {

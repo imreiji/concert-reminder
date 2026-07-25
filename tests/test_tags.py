@@ -883,7 +883,7 @@ def test_confirmation_page_shows_info_callout_and_bar_actions(client):
     client.post("/tags/1/members", data={"member_tag_id": 2})
     r = client.get("/tags/1/members/2/retroactive-apply")
     assert r.status_code == 200
-    assert 'class="callout info"' in r.text
+    assert 'class="banner info"' in r.text
     # states it adds only the new member: no re-expansion, no un-pruning
     assert "not</b> add the whole group again" in r.text
     assert 'class="bar"' in r.text
@@ -908,7 +908,7 @@ def test_confirmation_empty_case_keeps_styled_framing(client):
     assert "Nothing to apply" in r.text
     assert 'class="dim"' in r.text
     assert 'class="btn quiet"' in r.text
-    assert 'class="callout info"' not in r.text  # nothing to caveat about
+    assert 'class="banner info"' not in r.text  # nothing to caveat about
 
 
 async def test_apply_to_all_attaches_tag_and_notifies_subscriber(client):
@@ -1525,7 +1525,7 @@ async def test_index_open_upcoming_bucket_shown_first(client):
     r = client.get("/discover").text
     assert "Open &amp; upcoming" in r
     open_heading_pos = r.index("Open &amp; upcoming")
-    upcoming_heading_pos = r.index(">Upcoming<")
+    upcoming_heading_pos = r.index("<h2>Upcoming <span")
     open_show_pos = r.index("Open Round Show")
     no_open_pos = r.index("No Open Round")
     assert open_heading_pos < open_show_pos < upcoming_heading_pos < no_open_pos

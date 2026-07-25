@@ -41,6 +41,7 @@ already committed either way, so the worst case is landing on the wrong page,
 never a lost press.
 """
 
+import json
 import re
 from urllib.parse import urlsplit
 
@@ -131,12 +132,19 @@ async def record_outcome(
         # MissingGreenlet during async rendering.
         concert = await get_concert_by_event_id(session, event_id)
         db_user = await session.get(User, user.id)
-        return HTMLResponse(templates.get_template("_round_rows.html").render(
-            request=request,
-            user=user,
-            tz=db_user.timezone if db_user else settings.default_timezone,
-            **await concert_rounds_context(session, user.id, concert),
-        ))
+        tz = db_user.timezone if db_user else settings.default_timezone
+        ctx = await concert_rounds_context(session, user.id, concert)
+        # The rounds region is the hx-target swap; the header's "Next for you"
+        # strip rides along as an out-of-band re-render of the very partial the
+        # GET included (_standing_strip.html), or it would show the stale round
+        # until reload -- the contract _board.html keeps on Home.
+        return HTMLResponse(
+            templates.get_template("_round_rows.html").render(
+                request=request, user=user, tz=tz, **ctx)
+            + templates.get_template("_standing_strip.html").render(
+                request=request, user=user, tz=tz, oob=True, **ctx),
+            headers={"HX-Trigger": json.dumps({"toast": {"outcome": outcome.value}})},
+        )
 
     # No explicit limit here, and none on Home either: both take
     # my_deadline_rows' DEADLINE_ROWS_LIMIT default, which is the only thing
@@ -168,5 +176,9 @@ async def record_outcome(
     ]
     # One response, three top-level fragments: the first is the hx-target
     # swap, the other two carry hx-swap-oob. htmx only honours OOB elements at
-    # the top level of the response body, so do not wrap this.
-    return HTMLResponse("\n".join(fragments))
+    # the top level of the response body, so do not wrap this. The HX-Trigger
+    # header asks base.html for the confirmation toast.
+    return HTMLResponse(
+        "\n".join(fragments),
+        headers={"HX-Trigger": json.dumps({"toast": {"outcome": outcome.value}})},
+    )

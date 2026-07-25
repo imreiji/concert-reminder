@@ -21,6 +21,8 @@
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
 </head>
 <body class="has-tabbar" data-tz="{{ tz or '' }}" data-tz-auto="{{ '1' if tz_auto else '0' }}">
+  <div id="hxbar" aria-hidden="true"></div>
+  <div id="toasts" aria-live="polite"></div>
   <header class="site">
     <div class="site-in">
     <a class="home" href="/"><span class="mark">できません</span><span class="wordmark">dekimasen.app</span></a>
@@ -78,7 +80,7 @@
     </div>
   </header>
   {% if user and user.dm_blocked %}
-  <div class="banner-warn">
+  <div class="banner warn banner-block">
     {% trans %}Your last Discord DM couldn't be delivered — check your Discord privacy
     settings to allow DMs from server members, or
     <a href="/preferences">test it from Preferences</a>.{% endtrans %}
@@ -204,6 +206,47 @@
       setInterval(refreshCountdowns, 60000);
     }
     document.body.addEventListener("htmx:afterSwap", refreshCountdowns);
+    // htmx progress bar: creep while any request is in flight, snap to full
+    // and fade on completion. No timing is asserted -- it's a feel, not a meter.
+    (function () {
+      var bar = document.getElementById("hxbar");
+      document.body.addEventListener("htmx:beforeRequest", function () {
+        bar.classList.remove("done"); bar.classList.add("on");
+      });
+      document.body.addEventListener("htmx:afterRequest", function () {
+        bar.classList.remove("on"); bar.classList.add("done");
+        setTimeout(function () { bar.classList.remove("done"); }, 700);
+      });
+    })();
+    {% if user %}
+    // Outcome toast: the outcome POST names what happened in an HX-Trigger
+    // header, which htmx re-fires as a DOM event named "toast". Keys are
+    // LotteryOutcome values -- but not_applied is deliberately ABSENT: its
+    // confirmation is the prune follow-up dialog (home.html), and a toast on
+    // top of that dialog would be two confirmations for one press. An outcome
+    // with no mapping gets no toast, not a wrong one. The whole block renders
+    // signed-in only: a signed-out reader can never record an outcome, and
+    // the message strings must not leak into public pages.
+    var TOAST_MSGS = {{ {
+      "applied": _("Recorded — moved to Applied"),
+      "won": _("Marked as won — payment reminder set"),
+      "lost": _("Recorded — marked as lost"),
+      "paid": _("Recorded — ticket secured"),
+    } | tojson }};
+    document.body.addEventListener("toast", function (e) {
+      var msg = TOAST_MSGS[e.detail && e.detail.outcome];
+      if (!msg) return;
+      var host = document.getElementById("toasts");
+      var t = document.createElement("div");
+      t.className = "toast";
+      var dot = document.createElement("span");
+      dot.className = "ok-dot";
+      t.appendChild(dot);
+      t.appendChild(document.createTextNode(msg));
+      host.appendChild(t);
+      setTimeout(function () { t.remove(); }, 3200);
+    });
+    {% endif %}
   </script>
 {% if user %}
   <script>

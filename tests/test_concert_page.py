@@ -706,7 +706,10 @@ async def test_recording_an_outcome_swaps_the_concert_pages_own_rounds(client):
     assert 'id="concert-rounds"' in r.text     # the declared hx-target
     assert "Lottery round 1" in r.text
     assert 'id="deadline-rows"' not in r.text  # not Home's fragment
-    assert "hx-swap-oob" not in r.text         # nothing to swap out of band here
+    # The header's "Next for you" strip rides along out of band (C1), or it
+    # would show the stale round until reload.
+    assert 'id="concert-standing"' in r.text
+    assert "hx-swap-oob" in r.text
     assert "Applied" in r.text                 # and the write really happened
 
 

@@ -296,9 +296,21 @@ Key structural rules:
   section just before it (the `.layout`/`.fsheet` flip shares the 1040/1041
   boundary); a nested `@media (max-width: 380px)` inside the phone block
   handles narrow phones. `test_theme_and_tokens.py` pins the top-level
-  breakpoint count — scattered breakpoints fail CI. Border-radius is 3px
-  everywhere (bottom sheets' `14px 14px 0 0` is the deliberate exception;
-  `test_style_uses_3px_radius_not_6or8` guards it).
+  breakpoint count — scattered breakpoints fail CI. Radiuses: 3px default,
+  999px chips, 4px overlay cards (`.kmenu`, `.prune`), 50% circles, bottom
+  sheets `14px 14px 0 0` (documented at the top of `style.css`;
+  `test_style_uses_3px_radius_not_6or8` guards the default).
+- **Callouts come in two shapes** (G2, 2026-07-24): `.edgecard` (raise ground,
+  left edge in the tone colour — ongoing state; `.dg`/`.ok` tones) and
+  `.banner` (wash ground, full border — needs attention; `.warn`/`.dgr`
+  tones). Anatomy classes (`.standing`, `.next`, `.upgradebox`, `.feedbox`,
+  `.danger`, `.danger-row`) compose the shape and keep only their layout.
+  Don't invent a third callout shape.
+- Motion budget: one 150ms card-lift hover and the `#hxbar` progress bar
+  (functional), nothing decorative — no pulses, loops, or breathing dots
+  (owner ruling, 2026-07-24). New animation needs owner approval first.
+- Type ramp is 400/600/700 only (Windows renders `system-ui` = Segoe UI,
+  which snaps intermediate weights anyway).
 - Tile display rules: franchise+group → "F · G"; group only → G; artists only
   → artist chips; >1 venue → "📍 Multiple".
 

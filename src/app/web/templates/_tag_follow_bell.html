@@ -1,0 +1,23 @@
+{#- One tag's follow state as a quiet toggle (E2), reusing the Preferences
+    .swb vocabulary (aria-pressed is the state). Real forms, no JS needed.
+
+    The redirect is the `next` FORM FIELD: POST /subscriptions and
+    /subscriptions/{id}/delete both take next_url = Form("/preferences",
+    alias="next") and bounce through _safe_next (preferences.py). Without the
+    hidden input the bell would dump the user on Preferences after every
+    toggle. `notify` rides along true, matching the Preferences follow
+    default ("DM me on new events" starts checked) -- one action, one default. -#}
+{% set sub = sub_by_tag.get(t.id) %}
+{% if sub %}
+<form method="post" action="/subscriptions/{{ sub.id }}/delete" class="inline">
+  <input type="hidden" name="next" value="/tags">
+  <button class="swb" aria-pressed="true" title="{{ _('Stop following this tag') }}">🔔 {{ _("Following") }}</button>
+</form>
+{% else %}
+<form method="post" action="/subscriptions" class="inline">
+  <input type="hidden" name="tag_id" value="{{ t.id }}">
+  <input type="hidden" name="notify" value="true">
+  <input type="hidden" name="next" value="/tags">
+  <button class="swb" aria-pressed="false" title="{{ _('Follow this tag') }}">{{ _("Follow") }}</button>
+</form>
+{% endif %}

@@ -20,8 +20,13 @@
 {#- data-variant-guard: a CREATE form, so the browser blocks a
     half-translated field before it can be lost to a raw 422 (see
     _variant_guard.html). The edit form deliberately carries no guard. -#}
-<form class="stack wide editor" method="post" action="/concerts" id="new-concert"
+<form class="stack wide editor numbered" method="post" action="/concerts" id="new-concert"
       data-variant-scope data-variant-guard>
+
+  <div class="section-head">
+    <h2>{{ _("Event") }}</h2>
+    <p class="dim tiny">{{ _("Title and URL — required.") }}</p>
+  </div>
 
   <div class="ebar">
     <label class="grow">{{ _("Title (JP)") }} <input class="title-input" name="title" id="ec-title" required

@@ -8,7 +8,7 @@
 </div>
 
 {% if error %}
-<div class="callout warn" style="margin-top:1.25rem; max-width:42rem">
+<div class="banner warn" style="margin-top:1.25rem; max-width:42rem">
   <span>&#9888;</span>
   <span>{% trans error=error %}We couldn't read that page: {{ error }}. You can still
     <a href="/">create the event manually</a>.{% endtrans %}</span>
@@ -23,7 +23,7 @@
   <div><button class="btn" type="submit">{{ _("Import draft") }}</button></div>
 </form>
 
-<div class="callout" style="margin-top:1.75rem; max-width:42rem">
+<div class="banner" style="margin-top:1.75rem; max-width:42rem">
   <span>&#128274;</span>
   <span>{% trans %}Only <b>https ramen.events</b> URLs are accepted. For safety, we limit the page size and check each redirect. This tool only imports ramen.events pages.{% endtrans %}</span>
 </div>

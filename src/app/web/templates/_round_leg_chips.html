@@ -31,4 +31,8 @@
           aria-pressed="{{ 'true' if selected and d.id in selected else 'false' }}"
     >{{ loc(d, "label") or (loc(d.venue_tag, "name") if d.venue_tag else "") or (jst(d.starts_at_utc).strftime('%b %d') if d.starts_at_utc else _('Leg')) }}</button>
   {% endfor %}
+  {#- Empty on purpose: _leg_chips_script.html fills this on load and on every
+      toggle from ONE msgid. No server-side text here -- a {% trans %} copy
+      would be a second msgid for the same sentence, free to drift. -#}
+  <span class="covers" data-covers></span>
 </div>

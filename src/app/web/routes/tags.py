@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Tag, TagMember
+from app.db.models import Tag, TagMember, TagSubscription
 from app.db.service import (
     active_concerts_missing_member,
     attach_tag,
@@ -57,6 +57,12 @@ async def tag_directory(
 ):
     tags = await all_tags(session)
     ctx = await tag_directory_context(session)
+    # The viewer's own subscriptions, for the table view's follow bell (E2) --
+    # the same tag_id->sub map Preferences builds inline (preferences.py).
+    subs = list((await session.execute(
+        select(TagSubscription).where(TagSubscription.user_id == user.id)
+    )).scalars())
+    sub_by_tag = {sub.tag_id: sub for sub in subs}
     groups = [t for t in tags if t.kind is TagKind.GROUP]
     members = {t.id: await group_members(session, t.id) for t in groups}
     grouped_artist_ids = {m.id for ms in members.values() for m in ms}
@@ -79,6 +85,7 @@ async def tag_directory(
         {
             "user": user, "nav_page": "tags", "members": members, "kinds": list(TagKind),
             "all_tags": tags,
+            "sub_by_tag": sub_by_tag,
             "franchise_tags": [t for t in tags if t.kind is TagKind.FRANCHISE],
             "franchises": [t for t in tags if t.kind is TagKind.FRANCHISE],
             "groups": groups,

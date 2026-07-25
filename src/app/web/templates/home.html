@@ -68,7 +68,7 @@
      Without this the redirect is silent and the visitor's click just looks
      broken -- they asked for a page and landed somewhere else unexplained. #}
   {% if request.query_params.get("next") %}
-  <p class="signin-note">{{ _("Sign in to continue to the page you asked for.") }}</p>
+  <p class="banner banner-block">{{ _("Sign in to continue to the page you asked for.") }}</p>
   {% endif %}
   <div class="hero">
     <span class="eyebrow">{% trans %}dekimasen.app · Japanese event ticketing, tracked{% endtrans %}</span>
@@ -119,7 +119,7 @@
         a real board for, so this is fixed markup mirroring the shape
         _board.html renders once you are signed in and following someone. -#}
     <div class="board">
-      <div class="col">
+      <div class="col open">
         <div class="col-head"><span class="dot d-open"></span> {{ _("Open now") }} <span class="count num">2</span></div>
         <div class="card thesiscard">
           <span class="eyebrow">Liella!</span>
@@ -134,7 +134,7 @@
           <span class="foot"><span class="pill p-off">{{ _("General presale · 4d") }}</span></span>
         </div>
       </div>
-      <div class="col">
+      <div class="col applied">
         <div class="col-head"><span class="dot d-applied"></span> {{ _("Applied") }} <span class="count num">1</span></div>
         <div class="card thesiscard">
           <span class="eyebrow">Aqours</span>
@@ -143,7 +143,7 @@
           <span class="foot"><span class="pill p-off">{{ _("Lottery R1 · result 21 Jul") }}</span></span>
         </div>
       </div>
-      <div class="col">
+      <div class="col won">
         <div class="col-head"><span class="dot d-won"></span> {{ _("Won — pay") }} <span class="count num">1</span></div>
         <div class="card thesiscard" data-column="won">
           <span class="eyebrow">Poppin'Party</span>
@@ -152,7 +152,7 @@
           <span class="foot"><span class="pill p-danger">{{ _("Pay by 22 Jul") }}</span><span class="clock num">¥9,800</span></span>
         </div>
       </div>
-      <div class="col">
+      <div class="col secured">
         <div class="col-head"><span class="dot d-secured"></span> {{ _("Secured") }} <span class="count num">2</span></div>
         <div class="card thesiscard">
           <span class="eyebrow">Nijigasaki</span>
@@ -209,7 +209,7 @@
    which kind of moment this is. #}
 {% if up_next %}
 {% set d = up_next.deadline %}
-<div class="next">
+<div class="edgecard dg next">
   <div>
     <div class="label">{{ _("Up next") }}</div>
     <div class="what">
@@ -249,32 +249,28 @@
   {% include "_deadline_rows.html" %}
 </section>
 
-{# 4. Discovery teaser -- discovery still exists, it just stops being the
-   front door. #}
-<div class="teaser">
-  <div>
-    <div class="eyebrow">{{ _("Not tracking these yet") }}</div>
-    <h2>{{ _("Discover") }}</h2>
-    <p>
-      {% trans count=catalogue_count %}{{ count }} event in the catalogue,{% pluralize %}{{ count }} events in the catalogue,{% endtrans %}
-      {#- The count is what /discover would LIST, not every Concert row:
-          a concert whose every leg is cancelled is hidden there. -#}
-      {% trans n=open_round_count %}{{ n }} with a round still open.{% endtrans %}
-      {{ _("Browse by franchise, group, artist or region — or search everything.") }}
-    </p>
+{# 4. Discovery -- the teaser's copy is the peek grid's header; one section.
+   The header + copy render ALWAYS (the old teaser did -- its counts describe
+   the whole catalogue, not the peek grid); only the grid is guarded, since it
+   deliberately excludes tracked concerts (see the handler) to stay a door OUT. #}
+<section class="discover-block">
+  <div class="head">
+    <h2>{{ _("Not tracking these yet") }}</h2>
+    {#- The count is what /discover would LIST, not every Concert row:
+        a concert whose every leg is cancelled is hidden there. -#}
+    <a class="more" href="/discover">{{ _("Open discover →") }}</a>
   </div>
-  <a class="btn" href="/discover">{{ _("Open discover →") }}</a>
-</div>
-
-{# The peek grid: a taste of what /discover holds, reusing the same card
-   shape and status pill the board and Discover both use (peek_card, defined
-   once at the top of this file). Deliberately excludes tracked concerts
-   (see the handler) so this stays a door OUT. #}
-{% if peek_concerts %}
-<div class="peek" id="peek">
-  {% for c in peek_concerts %}{{ peek_card(c, peek_statuses.get(c.id)) }}{% endfor %}
-</div>
-{% endif %}
+  <p class="sub">
+    {% trans count=catalogue_count %}{{ count }} event in the catalogue,{% pluralize %}{{ count }} events in the catalogue,{% endtrans %}
+    {% trans n=open_round_count %}{{ n }} with a round still open.{% endtrans %}
+    {{ _("Browse by franchise, group, artist or region — or search everything.") }}
+  </p>
+  {% if peek_concerts %}
+  <div class="peek" id="peek">
+    {% for c in peek_concerts %}{{ peek_card(c, peek_statuses.get(c.id)) }}{% endfor %}
+  </div>
+  {% endif %}
+</section>
 
 <p class="foot-note">
   {% trans %}<b>Home shows your current status.</b> Everything above is yours — your rounds, results, and deadlines. Use the section at the bottom to find more events.{% endtrans %}

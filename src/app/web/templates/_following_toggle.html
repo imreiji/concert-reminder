@@ -21,11 +21,24 @@
    only user-controlled value, the payment moment, goes through `dual()` in
    normal element text. #}
 <div class="follow-toggle" id="following-toggle">
+{#- C3: WHY you're tracking, beside the control it explains -- the viewer's
+    followed tags attached to this concert (the derivation tracked_concert_ids
+    performs). Empty for a manually subscribed concert: then the follow is the
+    direct row, no explanation needed. #}
+{% macro via_line() %}
+  {% if via_tags %}
+  <span class="via">{{ _("via") }}
+    {% for t in via_tags[:2] %} <span class="tchip">{{ loc(t, "name") }}</span>{% endfor %}
+    {% if via_tags | length > 2 %} {% trans n=via_tags | length - 2 %}+{{ n }} more{% endtrans %}{% endif %}
+  </span>
+  {% endif %}
+{% endmacro %}
 {% if following %}
   {% if holds_ticket %}
   <button type="button" class="btn follow on"
           onclick="document.getElementById('unfollowConfirm').showModal()">{{ _("Following") }}</button>
   <span class="clock">{{ _("You will be reminded about every round below.") }}</span>
+  {{ via_line() }}
   <dialog id="unfollowConfirm" class="prune">
     <div class="dh">{{ _("Stop following this event?") }}
       <button type="button" class="x" aria-label="{{ _('Close') }}"
@@ -56,6 +69,7 @@
     <button class="btn follow on" type="submit">{{ _("Following") }}</button>
   </form>
   <span class="clock">{{ _("You will be reminded about every round below.") }}</span>
+  {{ via_line() }}
   {% endif %}
 {% else %}
   {% set next_state = "default" if sub_state and sub_state.value == "opted_out" else "subscribed" %}

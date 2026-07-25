@@ -28,6 +28,30 @@
       <button class="quiet" type="submit">{{ _("Search") }}</button>
     </form>
 
+    {#- Active filters (B1), visible without opening the sheet: one removable
+        chip per selection + the status facet. The row ALWAYS renders (hidden
+        when empty) so the client-side rebuild has a target; with JS off each
+        chip is a real link to the URL without that selection -- the same
+        contract the sidebar chips keep. -#}
+    <div class="active-filters{% if not selected_tags and not status %} allclear{% endif %}" id="active-filters">
+      <span class="af-label">{{ _("Filters") }}</span>
+      {% for t in selected_tag_objs %}
+      {% set rest = selected_tags | reject("equalto", t.id) | list %}
+      <a class="chip on" data-af-tag="{{ t.id }}"
+         href="/discover?{{ filter_query(sort, rest, status) }}"
+         onclick="return removeTagFilter(event, this)">{{ loc(t, "name") }}<span class="x">×</span></a>
+      {% endfor %}
+      {% if status %}
+      <a class="chip on" data-af-status
+         href="/discover?{{ filter_query(sort, selected_tags, "") }}"
+         onclick="return clearStatusFilter(event)">{{ status_facet_labels[status] }}<span class="x">×</span></a>
+      {% endif %}
+      {% if selected_tags or status %}
+      <a class="af-clear" href="/discover?sort={{ sort }}"
+         onclick="return clearAllFilters(event)">{{ _("Clear all") }}</a>
+      {% endif %}
+    </div>
+
     {% macro tile(c) %}
     {% set ctags = c.tags %}
     {% set st = statuses.get(c.id) %}
@@ -91,14 +115,14 @@
     {% set open_concerts = concerts | selectattr("id", "in", open_concert_ids) | list %}
     {% set upcoming_concerts = concerts | rejectattr("id", "in", open_concert_ids) | list %}
     {% if open_concerts %}
-    <h2>{{ _("Open &amp; upcoming") }}</h2>
-    <div class="tiles">
+    <h2>{{ _("Open &amp; upcoming") }} <span data-sec-count="open">{{ open_concerts | length }}</span></h2>
+    <div class="tiles" data-section="open">
       {% for c in open_concerts %}{{ tile(c) }}{% endfor %}
     </div>
     {% endif %}
     {% if upcoming_concerts %}
-    <h2>{{ _("Upcoming") }}</h2>
-    <div class="tiles">
+    <h2>{{ _("Upcoming") }} <span data-sec-count="upcoming">{{ upcoming_concerts | length }}</span></h2>
+    <div class="tiles" data-section="upcoming">
       {% for c in upcoming_concerts %}{{ tile(c) }}{% endfor %}
     </div>
     {% endif %}
@@ -238,6 +262,71 @@
   (function () {
     let currentQuery = new URLSearchParams(location.search).get("q") || "";
 
+    // B1: the active-filter row. Server-rendered on load; rebuilt client-side
+    // on every change so chips APPEAR when filters are added via the sidebar,
+    // not just disappear. Names come from raw dicts tojson'd here (invariant
+    // 7: never | safe, never pre-serialised); every label reaches the DOM as
+    // textContent.
+    const AF_NAMES = {{ active_filter_names | tojson }};
+    const AF_STATUS_LABELS = {{ status_facet_labels | tojson }};
+    const AF_CLEAR = {{ _("Clear all") | tojson }};
+
+    function currentSort() {
+      return document.querySelector(".sorts a.on[data-sort]")?.dataset.sort
+        || new URLSearchParams(location.search).get("sort") || "event";
+    }
+
+    function afChip(cls, dataKey, dataVal, label, href, onremove) {
+      const a = document.createElement("a");
+      a.className = cls;
+      a.dataset[dataKey] = dataVal;
+      a.href = href;
+      a.appendChild(document.createTextNode(label));
+      const x = document.createElement("span");
+      x.className = "x";
+      x.textContent = "×";
+      a.appendChild(x);
+      a.onclick = function (e) { return onremove(e, a); };
+      return a;
+    }
+
+    function rebuildActiveRow(selected, status) {
+      const row = document.getElementById("active-filters");
+      if (!row) return;
+      const sort = currentSort();
+      row.querySelectorAll(".chip, .af-clear").forEach((el) => el.remove());
+      selected.forEach((id) => {
+        const rest = [...selected].filter((x) => x !== id);
+        row.appendChild(afChip(
+          "chip on", "afTag", id,
+          AF_NAMES[id] || ("#" + id),
+          "/discover?" + query_string(sort, rest, status),
+          removeTagFilter));
+      });
+      if (status) {
+        row.appendChild(afChip(
+          "chip on", "afStatus", "",
+          AF_STATUS_LABELS[status] || status,
+          "/discover?" + query_string(sort, [...selected], ""),
+          clearStatusFilter));
+      }
+      if (selected.size || status) {
+        const clear = document.createElement("a");
+        clear.className = "af-clear";
+        clear.href = "/discover?sort=" + sort;
+        clear.textContent = AF_CLEAR;
+        clear.onclick = function (e) { return clearAllFilters(e); };
+        row.appendChild(clear);
+      }
+      syncActiveRow();
+    }
+
+    // The whole row hides once its last chip is gone (CSS: .allclear).
+    function syncActiveRow() {
+      const row = document.getElementById("active-filters");
+      if (row) row.classList.toggle("allclear", !row.querySelector(".chip"));
+    }
+
     function selectedIds() {
       return new Set(new URLSearchParams(location.search).getAll("tag").map(Number));
     }
@@ -248,6 +337,7 @@
 
     function applyVisibility(selected, query, status) {
       let anyVisible = false;
+      const secCounts = {};
       const q = query.trim().toLowerCase();
       document.querySelectorAll(".tile, #deadline-list li").forEach((tile) => {
         const tags = (tile.dataset.tags || "").split(",").filter(Boolean).map(Number);
@@ -258,7 +348,16 @@
         const statusMatch = !status || !tile.dataset.status || tile.dataset.status === status;
         const visible = tagMatch && searchMatch && statusMatch;
         tile.style.display = visible ? "" : "none";
+        // Section counts track the tiles only -- deadline-list rows share this
+        // selector but belong to no .tiles section.
+        if (visible && tile.classList.contains("tile")) {
+          const sec = tile.closest(".tiles")?.dataset.section;
+          if (sec) secCounts[sec] = (secCounts[sec] || 0) + 1;
+        }
         if (visible) anyVisible = true;
+      });
+      document.querySelectorAll("[data-sec-count]").forEach((el) => {
+        el.textContent = secCounts[el.dataset.secCount] || 0;
       });
       const noMatch = document.getElementById("no-match");
       if (noMatch) noMatch.style.display = anyVisible ? "none" : "";
@@ -320,6 +419,7 @@
       applyVisibility(selected, query, status);
       updateChipState(selected, status);
       updateLinks(selected, status);
+      rebuildActiveRow(selected, status);
     }
 
     window.toggleTagFilter = function (event, el) {
@@ -342,6 +442,27 @@
     window.clearTagFilters = function (event) {
       event.preventDefault();
       applyAll(new Set(), currentQuery, currentStatus());
+      return false;
+    };
+
+    window.removeTagFilter = function (event, el) {
+      event.preventDefault();
+      const selected = selectedIds();
+      selected.delete(Number(el.dataset.afTag));
+      applyAll(selected, currentQuery, currentStatus());
+      return false;
+    };
+
+    window.clearStatusFilter = function (event) {
+      event.preventDefault();
+      applyAll(selectedIds(), currentQuery, "");
+      return false;
+    };
+
+    window.clearAllFilters = function (event) {
+      event.preventDefault();
+      document.getElementById("concert-search").value = "";
+      applyAll(new Set(), "", "");
       return false;
     };
 

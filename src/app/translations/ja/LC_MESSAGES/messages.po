@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 13:52-0300\n"
+"POT-Creation-Date: 2026-07-25 00:21-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -64,11 +64,11 @@ msgid "{unit} ago"
 msgstr "{unit}前"
 
 #: src/app/bot/messages.py:76 src/app/bot/messages.py:169
-#: src/app/db/service.py:834 src/app/web/templates/tags.html:311
+#: src/app/db/service.py:834 src/app/web/templates/tags.html:370
 msgid "event"
 msgstr "イベント"
 
-#: src/app/bot/messages.py:110 src/app/web/templates/tags.html:235
+#: src/app/bot/messages.py:110 src/app/web/templates/tags.html:294
 msgid "Venue"
 msgstr "会場"
 
@@ -274,11 +274,11 @@ msgstr "エディターはまだいません。"
 msgid "env"
 msgstr "env"
 
-#: src/app/bot/cogs/ping.py:25 src/app/web/templates/base.html:62
+#: src/app/bot/cogs/ping.py:25 src/app/web/templates/base.html:64
 msgid "admin"
 msgstr "管理者"
 
-#: src/app/bot/cogs/ping.py:26 src/app/web/templates/base.html:62
+#: src/app/bot/cogs/ping.py:26 src/app/web/templates/base.html:64
 msgid "editor"
 msgstr "エディター"
 
@@ -395,7 +395,7 @@ msgid "Other"
 msgstr "その他"
 
 #: src/app/db/service.py:1541 src/app/db/service.py:1606
-#: src/app/web/templates/_board.html:67 src/app/web/templates/discover.html:55
+#: src/app/web/templates/_board.html:67 src/app/web/templates/discover.html:79
 #: src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "複数"
@@ -480,9 +480,9 @@ msgstr "すべての受付が終了"
 #: src/app/db/service.py:3719 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
-#: src/app/web/templates/concert_new.html:30
-#: src/app/web/templates/concert_new.html:96
+#: src/app/web/templates/concert_new.html:35
 #: src/app/web/templates/concert_new.html:101
+#: src/app/web/templates/concert_new.html:106
 #: src/app/web/templates/import_preview.html:52
 msgid "Title"
 msgstr "タイトル"
@@ -491,10 +491,10 @@ msgstr "タイトル"
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
-#: src/app/web/templates/concert_new.html:84
-#: src/app/web/templates/concert_new.html:86
-#: src/app/web/templates/concert_new.html:98
+#: src/app/web/templates/concert_new.html:89
+#: src/app/web/templates/concert_new.html:91
 #: src/app/web/templates/concert_new.html:103
+#: src/app/web/templates/concert_new.html:108
 #: src/app/web/templates/import_preview.html:165
 #: src/app/web/templates/import_preview.html:167
 msgid "Notes"
@@ -518,10 +518,10 @@ msgstr "受付{n}の名称"
 #: src/app/web/templates/_venue_create_dialog.html:37
 #: src/app/web/templates/_venue_create_dialog.html:39
 #: src/app/web/templates/preferences.html:241
-#: src/app/web/templates/tags.html:76 src/app/web/templates/tags.html:78
-#: src/app/web/templates/tags.html:81 src/app/web/templates/tags.html:83
-#: src/app/web/templates/tags.html:240 src/app/web/templates/tags.html:244
-#: src/app/web/templates/tags.html:245 src/app/web/templates/tags.html:248
+#: src/app/web/templates/tags.html:90 src/app/web/templates/tags.html:92
+#: src/app/web/templates/tags.html:95 src/app/web/templates/tags.html:97
+#: src/app/web/templates/tags.html:299 src/app/web/templates/tags.html:303
+#: src/app/web/templates/tags.html:304 src/app/web/templates/tags.html:307
 msgid "Name"
 msgstr "名前"
 
@@ -747,6 +747,7 @@ msgid "Closes"
 msgstr "締切"
 
 #: src/app/web/templates/_deadline_rows.html:31
+#: src/app/web/templates/concert_new.html:27
 msgid "Event"
 msgstr "イベント"
 
@@ -777,7 +778,7 @@ msgid "A cancelled performance stays in the list, but appears faded with a label
 msgstr "中止された公演は一覧に残り、薄く表示されてラベルが付きます。"
 
 #: src/app/web/templates/_editor_leg_card.html:44
-#: src/app/web/templates/_round_rows.html:127
+#: src/app/web/templates/_round_rows.html:116
 msgid "Cancelled"
 msgstr "中止"
 
@@ -853,54 +854,76 @@ msgstr "申込URL（任意）"
 msgid "Notes (optional)"
 msgstr "メモ（任意）"
 
-#: src/app/web/templates/_following_toggle.html:27
-#: src/app/web/templates/_following_toggle.html:56
+#: src/app/web/templates/_following_toggle.html:30
+msgid "via"
+msgstr "経由："
+
+#: src/app/web/templates/_following_toggle.html:32
+#: src/app/web/templates/concert_edit.html:141
+#, python-format
+msgid "+%(n)s more"
+msgstr "ほか%(n)s件"
+
+#: src/app/web/templates/_following_toggle.html:39
+#: src/app/web/templates/_following_toggle.html:69
+#: src/app/web/templates/_tag_follow_bell.html:14
 #: src/app/web/templates/preferences.html:16
 #: src/app/web/templates/preferences.html:28
 #: src/app/web/templates/preferences.html:117
+#: src/app/web/templates/tags.html:230
 msgid "Following"
 msgstr "フォロー中"
 
-#: src/app/web/templates/_following_toggle.html:28
-#: src/app/web/templates/_following_toggle.html:58
+#: src/app/web/templates/_following_toggle.html:40
+#: src/app/web/templates/_following_toggle.html:71
 msgid "You will be reminded about every round below."
 msgstr "以下のすべての受付について通知します。"
 
-#: src/app/web/templates/_following_toggle.html:30
+#: src/app/web/templates/_following_toggle.html:43
 msgid "Stop following this event?"
 msgstr "このイベントのフォローをやめますか？"
 
-#: src/app/web/templates/_following_toggle.html:31
-#: src/app/web/templates/home.html:287
+#: src/app/web/templates/_following_toggle.html:44
+#: src/app/web/templates/home.html:283
 #: src/app/web/templates/preferences.html:396
 msgid "Close"
 msgstr "閉じる"
 
-#: src/app/web/templates/_following_toggle.html:35
+#: src/app/web/templates/_following_toggle.html:48
 #, python-format
 msgid ""
 "This ticket is marked as won. Payment is due %(when)s. If you stop "
 "following this event, we'll remove that mark and the payment reminder."
 msgstr "このチケットは「当選」に設定されています。入金締切は%(when)sです。このイベントのフォローをやめると、この設定と入金リマインダーが削除されます。"
 
-#: src/app/web/templates/_following_toggle.html:37
+#: src/app/web/templates/_following_toggle.html:50
 msgid ""
 "You marked that you have a ticket for this event. If you stop following "
 "it, we'll remove that mark and its reminders."
 msgstr "このイベントは「チケットあり」に設定されています。フォローをやめると、この設定とリマインダーが削除されます。"
 
-#: src/app/web/templates/_following_toggle.html:42
+#: src/app/web/templates/_following_toggle.html:55
 msgid "Keep following"
 msgstr "フォローを続ける"
 
-#: src/app/web/templates/_following_toggle.html:47
+#: src/app/web/templates/_following_toggle.html:60
 msgid "Stop following"
 msgstr "フォローをやめる"
 
-#: src/app/web/templates/_following_toggle.html:66
+#: src/app/web/templates/_following_toggle.html:80
+#: src/app/web/templates/_tag_follow_bell.html:21
 #: src/app/web/templates/setup.html:9 src/app/web/templates/welcome.html:8
 msgid "Follow"
 msgstr "フォロー"
+
+#: src/app/web/templates/_leg_chips_script.html:90
+msgid "Nothing selected — applies to the whole event."
+msgstr "未選択 — イベント全体に適用されます。"
+
+#: src/app/web/templates/_leg_chips_script.html:91
+#, python-brace-format
+msgid "This round covers {names}."
+msgstr "このラウンドは {names} が対象です。"
 
 #: src/app/web/templates/_round_leg_chips.html:25
 msgid "Applies to"
@@ -971,44 +994,36 @@ msgstr "必要なチケット：%(names)s"
 msgid "Requires a ticket from an earlier round"
 msgstr "以前の受付で取得したチケットが必要"
 
-#: src/app/web/templates/_round_rows.html:99
-msgid "Next for you"
-msgstr "あなたの次の予定"
-
-#: src/app/web/templates/_round_rows.html:101
-msgid "No date announced yet"
-msgstr "公演日未定"
-
-#: src/app/web/templates/_round_rows.html:127
+#: src/app/web/templates/_round_rows.html:116
 msgid "Not going"
 msgstr "不参加"
 
-#: src/app/web/templates/_round_rows.html:129
+#: src/app/web/templates/_round_rows.html:118
 #, python-format
 msgid "doors %(when)s"
 msgstr "開場：%(when)s"
 
-#: src/app/web/templates/_round_rows.html:144
+#: src/app/web/templates/_round_rows.html:133
 msgid "Going again"
 msgstr "また参加する"
 
-#: src/app/web/templates/_round_rows.html:144
+#: src/app/web/templates/_round_rows.html:133
 msgid "Not going to this day"
 msgstr "この公演には参加しない"
 
-#: src/app/web/templates/_round_rows.html:148
+#: src/app/web/templates/_round_rows.html:137
 msgid "No rounds yet for this leg."
 msgstr "この公演の受付はまだありません。"
 
-#: src/app/web/templates/_round_rows.html:159
+#: src/app/web/templates/_round_rows.html:148
 msgid "All legs"
 msgstr "すべての公演"
 
-#: src/app/web/templates/_round_rows.html:159
+#: src/app/web/templates/_round_rows.html:148
 msgid "Rounds"
 msgstr "受付"
 
-#: src/app/web/templates/_round_rows.html:165
+#: src/app/web/templates/_round_rows.html:154
 msgid "No performances yet."
 msgstr "公演はまだありません。"
 
@@ -1075,6 +1090,14 @@ msgstr "&ldquo;%(name)s&rdquo;を適用"
 msgid "Edit presets"
 msgstr "プリセットを編集"
 
+#: src/app/web/templates/_standing_strip.html:17
+msgid "Next for you"
+msgstr "あなたの次の予定"
+
+#: src/app/web/templates/_standing_strip.html:19
+msgid "No date announced yet"
+msgstr "公演日未定"
+
 #: src/app/web/templates/_tag_create_dialog.html:22
 msgid "Could not add that tag."
 msgstr "タグを追加できませんでした。"
@@ -1084,71 +1107,80 @@ msgid "That tag already exists."
 msgstr "そのタグはすでに存在します。"
 
 #: src/app/web/templates/_tag_create_dialog.html:25
-#: src/app/web/templates/tags.html:224
+#: src/app/web/templates/tags.html:283
 msgid "New tag"
 msgstr "新規タグ"
 
 #: src/app/web/templates/_tag_create_dialog.html:30
 #: src/app/web/templates/concert_edit.html:44
-#: src/app/web/templates/concert_new.html:72
+#: src/app/web/templates/concert_new.html:77
 #: src/app/web/templates/import_preview.html:53
-#: src/app/web/templates/tags.html:230
+#: src/app/web/templates/tags.html:228 src/app/web/templates/tags.html:289
 msgid "Kind"
 msgstr "種別"
 
 #: src/app/web/templates/_tag_create_dialog.html:32
-#: src/app/web/templates/tags.html:232
+#: src/app/web/templates/tags.html:291
 msgid "Franchise"
 msgstr "フランチャイズ"
 
 #: src/app/web/templates/_tag_create_dialog.html:33
-#: src/app/web/templates/tags.html:233
+#: src/app/web/templates/tags.html:292
 msgid "Group"
 msgstr "グループ"
 
 #: src/app/web/templates/_tag_create_dialog.html:34
-#: src/app/web/templates/tags.html:234
+#: src/app/web/templates/tags.html:293
 msgid "Performer"
 msgstr "出演者"
 
 #: src/app/web/templates/_tag_create_dialog.html:45
-#: src/app/web/templates/tags.html:258
+#: src/app/web/templates/tags.html:317
 msgid "Parent franchise"
 msgstr "親フランチャイズ"
 
-#: src/app/web/templates/_tag_create_dialog.html:47
+#: src/app/web/templates/_tag_create_dialog.html:51
 #: src/app/web/templates/concert_edit.html:46
-#: src/app/web/templates/concert_new.html:74
+#: src/app/web/templates/concert_new.html:79
 #: src/app/web/templates/import_preview.html:55
-#: src/app/web/templates/tags.html:260
+#: src/app/web/templates/tags.html:319
 msgid "— none —"
 msgstr "— なし —"
 
-#: src/app/web/templates/_tag_create_dialog.html:54
+#: src/app/web/templates/_tag_create_dialog.html:58
 msgid "Select existing tag"
 msgstr "既存のタグを選択"
 
-#: src/app/web/templates/_tag_create_dialog.html:55
+#: src/app/web/templates/_tag_create_dialog.html:59
 msgid "Create & select"
 msgstr "作成して選択"
 
-#: src/app/web/templates/_tag_create_dialog.html:66
-#: src/app/web/templates/tags.html:305
+#: src/app/web/templates/_tag_create_dialog.html:70
+#: src/app/web/templates/tags.html:364
 msgid "A franchise is the top level. It contains groups."
 msgstr "フランチャイズが最上位で、その中にグループがあります。"
 
-#: src/app/web/templates/_tag_create_dialog.html:67
-#: src/app/web/templates/tags.html:237 src/app/web/templates/tags.html:306
+#: src/app/web/templates/_tag_create_dialog.html:71
+#: src/app/web/templates/tags.html:296 src/app/web/templates/tags.html:365
 msgid "A group contains performers. Attaching it to an event adds its members."
 msgstr "グループには出演者を登録できます。イベントにグループを追加すると、そのメンバーも追加されます。"
 
-#: src/app/web/templates/_tag_create_dialog.html:68
-#: src/app/web/templates/tags.html:307
+#: src/app/web/templates/_tag_create_dialog.html:72
+#: src/app/web/templates/tags.html:366
 msgid "A single performer. Can belong to a group, or stand alone."
 msgstr "個々の出演者です。グループに所属させることも、単独で登録することもできます。"
 
+#: src/app/web/templates/_tag_follow_bell.html:14
+#: src/app/web/templates/preferences.html:60
+msgid "Stop following this tag"
+msgstr "このタグのフォローを解除"
+
+#: src/app/web/templates/_tag_follow_bell.html:21
+msgid "Follow this tag"
+msgstr "このタグをフォロー"
+
 #: src/app/web/templates/_tag_picker_fields.html:13
-#: src/app/web/templates/discover.html:182
+#: src/app/web/templates/discover.html:206
 msgid "Franchises"
 msgstr "フランチャイズ"
 
@@ -1157,7 +1189,7 @@ msgid "+ Add franchise"
 msgstr "+ フランチャイズを追加"
 
 #: src/app/web/templates/_tag_picker_fields.html:17
-#: src/app/web/templates/discover.html:182
+#: src/app/web/templates/discover.html:206
 msgid "Groups"
 msgstr "グループ"
 
@@ -1166,7 +1198,7 @@ msgid "+ Add group"
 msgstr "+ グループを追加"
 
 #: src/app/web/templates/_tag_picker_fields.html:21
-#: src/app/web/templates/discover.html:182
+#: src/app/web/templates/discover.html:206
 msgid "Artists"
 msgstr "アーティスト"
 
@@ -1220,7 +1252,7 @@ msgid "New venue"
 msgstr "新しい会場"
 
 #: src/app/web/templates/_venue_create_dialog.html:48
-#: src/app/web/templates/tags.html:93 src/app/web/templates/tags.html:271
+#: src/app/web/templates/tags.html:107 src/app/web/templates/tags.html:330
 msgid "Region"
 msgstr "地域"
 
@@ -1236,53 +1268,52 @@ msgstr "地図リンク"
 msgid "Add venue"
 msgstr "会場を追加"
 
-#: src/app/web/templates/base.html:35 src/app/web/templates/base.html:92
+#: src/app/web/templates/base.html:37 src/app/web/templates/base.html:94
 msgid "Home"
 msgstr "ホーム"
 
-#: src/app/web/templates/base.html:35 src/app/web/templates/base.html:94
-#: src/app/web/templates/home.html:257
+#: src/app/web/templates/base.html:37 src/app/web/templates/base.html:96
 msgid "Discover"
 msgstr "探す"
 
-#: src/app/web/templates/base.html:36 src/app/web/templates/base.html:97
+#: src/app/web/templates/base.html:38 src/app/web/templates/base.html:99
 #: src/app/web/templates/concert_detail.html:25
 #: src/app/web/templates/concert_edit.html:140
-#: src/app/web/templates/concert_new.html:109
+#: src/app/web/templates/concert_new.html:114
 #: src/app/web/templates/import_preview.html:176
-#: src/app/web/templates/tags.html:6
+#: src/app/web/templates/tags.html:7
 msgid "Tags"
 msgstr "タグ"
 
-#: src/app/web/templates/base.html:44
+#: src/app/web/templates/base.html:46
 msgid "Toggle dark mode"
 msgstr "ダークモード切替"
 
-#: src/app/web/templates/base.html:58
+#: src/app/web/templates/base.html:60
 #: src/app/web/templates/preferences.html:295
 #: src/app/web/templates/welcome.html:377
 msgid "Language"
 msgstr "言語"
 
-#: src/app/web/templates/base.html:63
+#: src/app/web/templates/base.html:65
 msgid "+ Add"
 msgstr "+ 追加"
 
-#: src/app/web/templates/base.html:71 src/app/web/templates/preferences.html:11
+#: src/app/web/templates/base.html:73 src/app/web/templates/preferences.html:11
 #: src/app/web/templates/setup.html:13
 msgid "Preferences"
 msgstr "設定"
 
-#: src/app/web/templates/base.html:73
+#: src/app/web/templates/base.html:75
 msgid "Log out"
 msgstr "サインアウト"
 
-#: src/app/web/templates/base.html:75 src/app/web/templates/home.html:80
+#: src/app/web/templates/base.html:77 src/app/web/templates/home.html:80
 #: src/app/web/templates/home.html:191
 msgid "Sign in with Discord"
 msgstr "Discordでサインイン"
 
-#: src/app/web/templates/base.html:82
+#: src/app/web/templates/base.html:84
 msgid ""
 "Your last Discord DM couldn't be delivered — check your Discord privacy\n"
 "    settings to allow DMs from server members, or\n"
@@ -1291,108 +1322,124 @@ msgstr ""
 "前回のDiscord DMを送信できませんでした。Discordのプライバシー設定でサーバーメンバーからのDMを許可するか、<a "
 "href=\"/preferences\">設定画面からテスト</a>してください。"
 
-#: src/app/web/templates/base.html:99
+#: src/app/web/templates/base.html:101
 msgid "Me"
 msgstr "マイページ"
 
-#: src/app/web/templates/base.html:102
+#: src/app/web/templates/base.html:104
 msgid "Sign in"
 msgstr "サインイン"
 
-#: src/app/web/templates/base.html:106
+#: src/app/web/templates/base.html:108
 msgid "Add event"
 msgstr "イベントを追加"
 
-#: src/app/web/templates/base.html:110
+#: src/app/web/templates/base.html:112
 msgid ""
 "Times are entered in <strong>JST</strong> and shown as JST + your local "
 "time."
 msgstr "時刻は<strong>JST</strong>で入力し、JSTと現地時刻の両方で表示します。"
 
-#: src/app/web/templates/base.html:111 src/app/web/templates/privacy.html:2
+#: src/app/web/templates/base.html:113 src/app/web/templates/privacy.html:2
 #: src/app/web/templates/privacy.html:8
 msgid "Privacy policy"
 msgstr "プライバシーポリシー"
 
-#: src/app/web/templates/base.html:112 src/app/web/templates/terms.html:2
+#: src/app/web/templates/base.html:114 src/app/web/templates/terms.html:2
 #: src/app/web/templates/terms.html:8
 msgid "Terms of service"
 msgstr "利用規約"
 
-#: src/app/web/templates/base.html:152
+#: src/app/web/templates/base.html:154
 #, python-brace-format
 msgid "Delete tag {name} everywhere?"
 msgstr "タグ「{name}」をすべての箇所から削除しますか？"
 
-#: src/app/web/templates/base.html:153
+#: src/app/web/templates/base.html:155
 #, python-brace-format
 msgid "Delete preset {name}?"
 msgstr "プリセット「{name}」を削除しますか？"
 
-#: src/app/web/templates/concert_detail.html:35
+#: src/app/web/templates/base.html:231
+msgid "Recorded — moved to Applied"
+msgstr "記録しました — 申込済みに移動"
+
+#: src/app/web/templates/base.html:232
+msgid "Marked as won — payment reminder set"
+msgstr "当選を記録 — 入金リマインダーを設定"
+
+#: src/app/web/templates/base.html:233
+msgid "Recorded — marked as lost"
+msgstr "記録しました — 落選に設定"
+
+#: src/app/web/templates/base.html:234
+msgid "Recorded — ticket secured"
+msgstr "記録しました — 確保済みに"
+
+#: src/app/web/templates/concert_detail.html:40
 msgid "Links"
 msgstr "リンク"
 
-#: src/app/web/templates/concert_detail.html:37
+#: src/app/web/templates/concert_detail.html:42
 msgid "official site"
 msgstr "公式サイト"
 
-#: src/app/web/templates/concert_detail.html:52
+#: src/app/web/templates/concert_detail.html:57
 #: src/app/web/templates/concert_edit.html:22
 msgid "Edit event"
 msgstr "イベントを編集"
 
-#: src/app/web/templates/concert_detail.html:53
+#: src/app/web/templates/concert_detail.html:58
 msgid "Export YAML"
 msgstr "YAMLをエクスポート"
 
-#: src/app/web/templates/concert_detail.html:74
+#: src/app/web/templates/concert_detail.html:79
 msgid "Performing"
 msgstr "出演"
 
-#: src/app/web/templates/concert_detail.html:75
+#: src/app/web/templates/concert_detail.html:80
 msgid "member"
 msgid_plural "members"
 msgstr[0] "メンバー"
 
-#: src/app/web/templates/concert_detail.html:75
-#: src/app/web/templates/concert_detail.html:76
+#: src/app/web/templates/concert_detail.html:80
+#: src/app/web/templates/concert_detail.html:81
 #, python-format
 msgid "from the %(names)s"
 msgstr "%(names)s所属"
 
-#: src/app/web/templates/concert_detail.html:75
-#: src/app/web/templates/concert_detail.html:76
+#: src/app/web/templates/concert_detail.html:80
+#: src/app/web/templates/concert_detail.html:81
 msgid "group tag"
 msgid_plural "group tags"
 msgstr[0] "グループタグ"
 
-#: src/app/web/templates/concert_detail.html:77
-#: src/app/web/templates/tags.html:52
+#: src/app/web/templates/concert_detail.html:82
+#: src/app/web/templates/tags.html:5
 msgid "performer"
 msgid_plural "performers"
 msgstr[0] "出演者"
 
-#: src/app/web/templates/concert_detail.html:80
-#: src/app/web/templates/concert_detail.html:81
+#: src/app/web/templates/concert_detail.html:85
+#: src/app/web/templates/concert_detail.html:86
 msgid "No eventernote link yet"
 msgstr "eventernoteのリンクはまだありません"
 
-#: src/app/web/templates/concert_detail.html:90
+#: src/app/web/templates/concert_detail.html:95
 msgid "My reminders"
 msgstr "マイリマインダー"
 
-#: src/app/web/templates/concert_detail.html:96
+#: src/app/web/templates/concert_detail.html:101
 #, python-format
 msgid "Edit history (%(n)s)"
 msgstr "編集履歴（%(n)s）"
 
-#: src/app/web/templates/concert_detail.html:102
+#: src/app/web/templates/concert_detail.html:107
 #: src/app/web/templates/concert_edit.html:156
 msgid "Deleted user"
 msgstr "削除済みユーザー"
 
-#: src/app/web/templates/concert_detail.html:106
+#: src/app/web/templates/concert_detail.html:111
 #: src/app/web/templates/concert_edit.html:160
 msgid "(empty)"
 msgstr "（空）"
@@ -1424,18 +1471,18 @@ msgid_plural "%(n)s links"
 msgstr[0] "%(n)s件のリンク"
 
 #: src/app/web/templates/concert_edit.html:37
-#: src/app/web/templates/concert_new.html:27
+#: src/app/web/templates/concert_new.html:32
 #: src/app/web/templates/import_preview.html:49
 msgid "Title (JP)"
 msgstr "タイトル（日本語）"
 
 #: src/app/web/templates/concert_edit.html:41
-#: src/app/web/templates/concert_new.html:31
+#: src/app/web/templates/concert_new.html:36
 msgid "Event ID"
 msgstr "イベントID"
 
 #: src/app/web/templates/concert_edit.html:41
-#: src/app/web/templates/concert_new.html:31
+#: src/app/web/templates/concert_new.html:36
 msgid "(this event's URL — letters, digits, hyphens, underscores only)"
 msgstr "（このイベントのURL：英字、数字、ハイフン、アンダースコアのみ）"
 
@@ -1462,7 +1509,7 @@ msgid_plural "%(count)s rounds"
 msgstr[0] "%(count)s件の受付"
 
 #: src/app/web/templates/concert_edit.html:63
-#: src/app/web/templates/concert_new.html:59
+#: src/app/web/templates/concert_new.html:64
 #: src/app/web/templates/import_preview.html:124
 msgid "Add a round"
 msgstr "受付を追加"
@@ -1472,7 +1519,7 @@ msgid "Add a leg"
 msgstr "公演を追加"
 
 #: src/app/web/templates/concert_edit.html:81
-#: src/app/web/templates/concert_new.html:63
+#: src/app/web/templates/concert_new.html:68
 msgid "No rounds yet — add the first one above."
 msgstr "受付はまだありません。上のフォームから最初の受付を追加してください。"
 
@@ -1489,7 +1536,7 @@ msgid "No legs yet — add the first one above."
 msgstr "公演はまだありません。上のフォームから最初の公演を追加してください。"
 
 #: src/app/web/templates/concert_edit.html:103
-#: src/app/web/templates/concert_new.html:67
+#: src/app/web/templates/concert_new.html:72
 #: src/app/web/templates/import_preview.html:133
 msgid "Details and links"
 msgstr "詳細とリンク"
@@ -1499,63 +1546,58 @@ msgid "nothing set yet"
 msgstr "まだ何も設定されていません"
 
 #: src/app/web/templates/concert_edit.html:107
-#: src/app/web/templates/concert_new.html:71
+#: src/app/web/templates/concert_new.html:76
 #: src/app/web/templates/import_preview.html:147
 msgid "Artist / organizer"
 msgstr "アーティスト／主催"
 
 #: src/app/web/templates/concert_edit.html:108
-#: src/app/web/templates/concert_new.html:78
+#: src/app/web/templates/concert_new.html:83
 #: src/app/web/templates/import_preview.html:149
 msgid "Categories (comma-sep)"
 msgstr "カテゴリー（カンマ区切り）"
 
 #: src/app/web/templates/concert_edit.html:109
-#: src/app/web/templates/concert_new.html:79
+#: src/app/web/templates/concert_new.html:84
 #: src/app/web/templates/import_preview.html:151
-#: src/app/web/templates/tags.html:86 src/app/web/templates/tags.html:266
+#: src/app/web/templates/tags.html:100 src/app/web/templates/tags.html:325
 msgid "eventernote URL"
 msgstr "eventernote URL"
 
 #: src/app/web/templates/concert_edit.html:110
-#: src/app/web/templates/concert_new.html:80
+#: src/app/web/templates/concert_new.html:85
 #: src/app/web/templates/import_preview.html:153
 msgid "Official URL"
 msgstr "公式URL"
 
 #: src/app/web/templates/concert_edit.html:111
-#: src/app/web/templates/concert_new.html:81
+#: src/app/web/templates/concert_new.html:86
 #: src/app/web/templates/import_preview.html:155
 msgid "Source URL"
 msgstr "ソースURL"
 
 #: src/app/web/templates/concert_edit.html:113
-#: src/app/web/templates/concert_new.html:83
+#: src/app/web/templates/concert_new.html:88
 #: src/app/web/templates/import_preview.html:158
 msgid "Performers (one per line)"
 msgstr "出演者（1行に1名）"
 
 #: src/app/web/templates/concert_edit.html:123
-#: src/app/web/templates/concert_new.html:92
+#: src/app/web/templates/concert_new.html:97
 msgid "Translations"
 msgstr "翻訳"
 
 #: src/app/web/templates/concert_edit.html:124
-#: src/app/web/templates/concert_new.html:93
+#: src/app/web/templates/concert_new.html:98
 msgid ""
 "Optional — shown to people using that language. If left blank, the text "
 "above is used."
 msgstr "任意です。その言語を使用しているユーザーに表示されます。空欄の場合は、上の内容が表示されます。"
 
 #: src/app/web/templates/concert_edit.html:126
-#: src/app/web/templates/concert_new.html:95
+#: src/app/web/templates/concert_new.html:100
 msgid "English"
 msgstr "英語"
-
-#: src/app/web/templates/concert_edit.html:141
-#, python-format
-msgid "+%(n)s more"
-msgstr "ほか%(n)s件"
 
 #: src/app/web/templates/concert_edit.html:141
 msgid "no tags yet"
@@ -1629,68 +1671,72 @@ msgid "Prefer to import from a ramen.events URL instead? →"
 msgstr "ramen.eventsのURLからインポートする場合はこちら →"
 
 #: src/app/web/templates/concert_new.html:28
+msgid "Title and URL — required."
+msgstr "タイトルとURL — 必須。"
+
+#: src/app/web/templates/concert_new.html:33
 msgid "Hasunosora 6th Live"
 msgstr "蓮ノ空 6thライブ"
 
-#: src/app/web/templates/concert_new.html:33
+#: src/app/web/templates/concert_new.html:38
 msgid "hasunosora-6th-live"
 msgstr "hasunosora-6th-live"
 
-#: src/app/web/templates/concert_new.html:37
+#: src/app/web/templates/concert_new.html:42
 msgid "Performances"
 msgstr "公演"
 
-#: src/app/web/templates/concert_new.html:38
+#: src/app/web/templates/concert_new.html:43
 msgid "One per show / day — the first is open below. Times are JST."
 msgstr "1公演／1日につき1件です。最初の公演は下に表示されています。時刻はJSTです。"
 
-#: src/app/web/templates/concert_new.html:42
+#: src/app/web/templates/concert_new.html:47
 msgid "Add performance"
 msgstr "公演を追加"
 
-#: src/app/web/templates/concert_new.html:54
+#: src/app/web/templates/concert_new.html:59
 msgid "Lottery rounds"
 msgstr "抽選受付"
 
-#: src/app/web/templates/concert_new.html:55
+#: src/app/web/templates/concert_new.html:60
 msgid ""
 "Select the performances for each round. If you select none, the round "
 "applies to the whole event. Times are JST."
 msgstr "各受付の対象公演を選択してください。何も選択しない場合、その受付はイベント全体に適用されます。時刻はJSTです。"
 
-#: src/app/web/templates/concert_new.html:68
+#: src/app/web/templates/concert_new.html:73
 msgid "Optional — title EN, organizer, kind, categories, links, performers, notes"
 msgstr "任意：英語タイトル（EN）、主催、種別、カテゴリー、リンク、出演者、メモ"
 
-#: src/app/web/templates/concert_new.html:71
+#: src/app/web/templates/concert_new.html:76
 #: src/app/web/templates/import_preview.html:148
 msgid "non-series acts, etc."
 msgstr "シリーズ外の出演者など"
 
-#: src/app/web/templates/concert_new.html:78
+#: src/app/web/templates/concert_new.html:83
 #: src/app/web/templates/import_preview.html:150
 msgid "event, tour"
 msgstr "イベント、ツアー"
 
-#: src/app/web/templates/concert_new.html:81
+#: src/app/web/templates/concert_new.html:86
 #: src/app/web/templates/import_preview.html:156
 msgid "where this was sourced from"
 msgstr "情報の出典"
 
-#: src/app/web/templates/concert_new.html:110
+#: src/app/web/templates/concert_new.html:115
 msgid "Franchise, group, artists, venue — optional"
 msgstr "フランチャイズ、グループ、アーティスト、会場（任意）"
 
-#: src/app/web/templates/concert_new.html:116
+#: src/app/web/templates/concert_new.html:121
 #: src/app/web/templates/import_preview.html:197
 msgid "Create event"
 msgstr "イベントを作成"
 
-#: src/app/web/templates/discover.html:15
+#: src/app/web/templates/discover.html:15 src/app/web/templates/tags.html:229
 msgid "Events"
 msgstr "イベント"
 
-#: src/app/web/templates/discover.html:17 src/app/web/templates/tags.html:11
+#: src/app/web/templates/discover.html:17 src/app/web/templates/tags.html:12
 #, python-format
 msgid "%(count)s event"
 msgid_plural "%(count)s events"
@@ -1709,62 +1755,68 @@ msgstr "イベントを検索…"
 msgid "Search"
 msgstr "検索"
 
-#: src/app/web/templates/discover.html:58
+#: src/app/web/templates/discover.html:37
+#: src/app/web/templates/discover.html:168
+msgid "Filters"
+msgstr "絞り込み"
+
+#: src/app/web/templates/discover.html:51
+#: src/app/web/templates/discover.html:272
+msgid "Clear all"
+msgstr "すべてクリア"
+
+#: src/app/web/templates/discover.html:82
 #, python-format
 msgid "%(day)s JST"
 msgstr "%(day)s JST"
 
-#: src/app/web/templates/discover.html:94
+#: src/app/web/templates/discover.html:118
 msgid "Open &amp; upcoming"
 msgstr "受付中 &amp; 開催予定"
 
-#: src/app/web/templates/discover.html:100
+#: src/app/web/templates/discover.html:124 src/app/web/templates/tags.html:230
 msgid "Upcoming"
 msgstr "開催予定"
 
-#: src/app/web/templates/discover.html:106
-#: src/app/web/templates/discover.html:108
+#: src/app/web/templates/discover.html:130
+#: src/app/web/templates/discover.html:132
 msgid "No events match."
 msgstr "一致するイベントはありません。"
 
-#: src/app/web/templates/discover.html:108
+#: src/app/web/templates/discover.html:132
 msgid "Create the first one →"
 msgstr "最初の1件を作成 →"
 
-#: src/app/web/templates/discover.html:112
+#: src/app/web/templates/discover.html:136
 msgid "Coming up soon"
 msgstr "まもなく開始"
 
-#: src/app/web/templates/discover.html:144
-msgid "Filters"
-msgstr "絞り込み"
-
-#: src/app/web/templates/discover.html:146
+#: src/app/web/templates/discover.html:170
 msgid "Sort"
 msgstr "並び替え"
 
-#: src/app/web/templates/discover.html:162
+#: src/app/web/templates/discover.html:186
 msgid "Round status"
 msgstr "受付状況"
 
-#: src/app/web/templates/discover.html:172
+#: src/app/web/templates/discover.html:196
 msgid "Filter by tag"
 msgstr "タグで絞り込み"
 
-#: src/app/web/templates/discover.html:173
+#: src/app/web/templates/discover.html:197
 #: src/app/web/templates/preferences.html:110
 msgid "Search tags…"
 msgstr "タグを検索…"
 
-#: src/app/web/templates/discover.html:193
+#: src/app/web/templates/discover.html:217
 msgid "Regions"
 msgstr "地域"
 
-#: src/app/web/templates/discover.html:205
+#: src/app/web/templates/discover.html:229
 msgid "Clear filters"
 msgstr "フィルターをクリア"
 
-#: src/app/web/templates/discover.html:207
+#: src/app/web/templates/discover.html:231
 msgid "Manage tags"
 msgstr "タグを管理"
 
@@ -1924,41 +1976,41 @@ msgstr "今後の予定"
 msgid "All times JST and yours, always both"
 msgstr "時刻は常にJSTと現地時刻の両方で表示"
 
-#: src/app/web/templates/home.html:256
+#: src/app/web/templates/home.html:258
 msgid "Not tracking these yet"
 msgstr "まだフォローしていません"
 
-#: src/app/web/templates/home.html:259
+#: src/app/web/templates/home.html:261
+msgid "Open discover →"
+msgstr "公演を探す →"
+
+#: src/app/web/templates/home.html:264
 #, python-format
 msgid "%(count)s event in the catalogue,"
 msgid_plural "%(count)s events in the catalogue,"
 msgstr[0] "カタログには%(count)s件のイベント、"
 
-#: src/app/web/templates/home.html:262
+#: src/app/web/templates/home.html:265
 #, python-format
 msgid "%(n)s with a round still open."
 msgstr "うち%(n)s件は受付中。"
 
-#: src/app/web/templates/home.html:263
+#: src/app/web/templates/home.html:266
 msgid "Browse by franchise, group, artist or region — or search everything."
 msgstr "フランチャイズ、グループ、アーティスト、地域から探すか、キーワードで検索できます。"
 
-#: src/app/web/templates/home.html:266
-msgid "Open discover →"
-msgstr "公演を探す →"
-
-#: src/app/web/templates/home.html:280
+#: src/app/web/templates/home.html:276
 msgid ""
 "<b>Home shows your current status.</b> Everything above is yours — your "
 "rounds, results, and deadlines. Use the section at the bottom to find "
 "more events."
 msgstr "<b>ホームでは現在の状況を確認できます。</b>上に表示されるのは、自分の受付、当落、締切です。その他のイベントは、ページ下部から探せます。"
 
-#: src/app/web/templates/home.html:286
+#: src/app/web/templates/home.html:282
 msgid "Not applying to this round"
 msgstr "この受付には申し込まない"
 
-#: src/app/web/templates/home.html:289
+#: src/app/web/templates/home.html:285
 msgid ""
 "Done — you won't get reminders for this round. You'll still get reminders"
 " for later rounds of\n"
@@ -1967,15 +2019,15 @@ msgstr ""
 "完了しました。この受付のリマインダーは停止しました。<b "
 "id=\"pruneName\">このイベント</b>の今後の受付については引き続き通知します。"
 
-#: src/app/web/templates/home.html:293
+#: src/app/web/templates/home.html:289
 msgid "That's right"
 msgstr "そのとおり"
 
-#: src/app/web/templates/home.html:301
+#: src/app/web/templates/home.html:297
 msgid "Skip this event entirely"
 msgstr "このイベントをフォロー対象から外す"
 
-#: src/app/web/templates/home.html:303
+#: src/app/web/templates/home.html:299
 msgid "Manage this event →"
 msgstr "このイベントを管理 →"
 
@@ -2224,10 +2276,6 @@ msgid "Auto-apply"
 msgstr "自動適用"
 
 #: src/app/web/templates/preferences.html:60
-msgid "Stop following this tag"
-msgstr "このタグのフォローを解除"
-
-#: src/app/web/templates/preferences.html:60
 msgid "Unfollow"
 msgstr "フォロー解除"
 
@@ -2292,7 +2340,7 @@ msgid "Solo artists"
 msgstr "ソロアーティスト"
 
 #: src/app/web/templates/preferences.html:156
-#: src/app/web/templates/tags.html:186 src/app/web/templates/welcome.html:72
+#: src/app/web/templates/tags.html:200 src/app/web/templates/welcome.html:72
 msgid "Venues"
 msgstr "会場"
 
@@ -2353,7 +2401,7 @@ msgstr "削除"
 
 #: src/app/web/templates/preferences.html:218
 #: src/app/web/templates/preferences.html:268
-#: src/app/web/templates/tags.html:135
+#: src/app/web/templates/tags.html:149
 msgid "Save"
 msgstr "保存"
 
@@ -3007,31 +3055,43 @@ msgstr "マイボードへ"
 msgid "tags"
 msgstr "タグ"
 
-#: src/app/web/templates/tags.html:12
+#: src/app/web/templates/tags.html:5
+msgid "franchise"
+msgstr "フランチャイズ"
+
+#: src/app/web/templates/tags.html:5
+msgid "group"
+msgstr "グループ"
+
+#: src/app/web/templates/tags.html:5
+msgid "venue"
+msgstr "会場"
+
+#: src/app/web/templates/tags.html:13
 #, python-format
 msgid "%(count)s franchise"
 msgid_plural "%(count)s franchises"
 msgstr[0] "%(count)s件のフランチャイズ"
 
-#: src/app/web/templates/tags.html:13
+#: src/app/web/templates/tags.html:14
 #, python-format
 msgid "%(count)s group"
 msgid_plural "%(count)s groups"
 msgstr[0] "%(count)s件のグループ"
 
-#: src/app/web/templates/tags.html:14
+#: src/app/web/templates/tags.html:15
 #, python-format
 msgid "%(count)s performer"
 msgid_plural "%(count)s performers"
 msgstr[0] "%(count)s名の出演者"
 
-#: src/app/web/templates/tags.html:15
+#: src/app/web/templates/tags.html:16
 #, python-format
 msgid "%(count)s venue"
 msgid_plural "%(count)s venues"
 msgstr[0] "%(count)s件の会場"
 
-#: src/app/web/templates/tags.html:16
+#: src/app/web/templates/tags.html:17
 #, python-format
 msgid ""
 "%(concerts)s\n"
@@ -3046,154 +3106,158 @@ msgstr ""
 "    %(venues)sにまたがる\n"
 "    %(concerts)s"
 
-#: src/app/web/templates/tags.html:31
+#: src/app/web/templates/tags.html:32
 #, python-format
 msgid "%(count)s tag is not translated everywhere yet"
 msgid_plural "%(count)s tags are not translated everywhere yet"
 msgstr[0] "翻訳が揃っていないタグが%(count)s件あります"
 
-#: src/app/web/templates/tags.html:35
+#: src/app/web/templates/tags.html:36
 msgid "+ New tag"
 msgstr "+ 新規タグ"
 
-#: src/app/web/templates/tags.html:38
+#: src/app/web/templates/tags.html:39
 msgid ""
 "Following a tag follows every future event with that tag. The counts show"
 " how many events will change if you rename or delete the tag."
 msgstr "タグをフォローすると、そのタグが付いた今後のすべてのイベントもフォローします。表示件数は、タグの名前を変更または削除したときに影響するイベント数です。"
 
-#: src/app/web/templates/tags.html:40
+#: src/app/web/templates/tags.html:41
 msgid "Search franchises, groups, performers, venues…"
 msgstr "フランチャイズ、グループ、出演者、会場を検索…"
 
-#: src/app/web/templates/tags.html:52
-msgid "franchise"
-msgstr "フランチャイズ"
+#: src/app/web/templates/tags.html:49
+msgid "Chips"
+msgstr "チップ"
 
-#: src/app/web/templates/tags.html:52
-msgid "group"
-msgstr "グループ"
+#: src/app/web/templates/tags.html:50
+msgid "Table"
+msgstr "表"
 
-#: src/app/web/templates/tags.html:52
-msgid "venue"
-msgstr "会場"
-
-#: src/app/web/templates/tags.html:61 src/app/web/templates/tags.html:312
+#: src/app/web/templates/tags.html:75 src/app/web/templates/tags.html:371
 msgid "events"
 msgstr "イベント"
 
-#: src/app/web/templates/tags.html:62 src/app/web/templates/tags.html:314
+#: src/app/web/templates/tags.html:76 src/app/web/templates/tags.html:373
 msgid "followers"
 msgstr "フォロワー"
 
-#: src/app/web/templates/tags.html:63
+#: src/app/web/templates/tags.html:77
 msgid "members"
 msgstr "メンバー"
 
-#: src/app/web/templates/tags.html:64
+#: src/app/web/templates/tags.html:78
 msgid "upcoming"
 msgstr "開催予定"
 
-#: src/app/web/templates/tags.html:91
+#: src/app/web/templates/tags.html:105
 msgid "Location link"
 msgstr "地図リンク"
 
-#: src/app/web/templates/tags.html:105
+#: src/app/web/templates/tags.html:119
 msgid "Members"
 msgstr "メンバー"
 
-#: src/app/web/templates/tags.html:113
+#: src/app/web/templates/tags.html:127
 msgid "none yet"
 msgstr "まだありません"
 
-#: src/app/web/templates/tags.html:121
+#: src/app/web/templates/tags.html:135
 msgid "+ Add member"
 msgstr "+ メンバーを追加"
 
-#: src/app/web/templates/tags.html:127
+#: src/app/web/templates/tags.html:141
 msgid ""
 "<b>Apply to existing events.</b> Adding a member does not update events "
 "that already have this group. Group members are added when the group is "
 "first attached. Use this to add the new member to active events."
 msgstr "<b>既存のイベントに適用。</b>メンバーを追加しても、このグループがすでに付いているイベントは更新されません。グループのメンバーは、グループを最初に追加したときに反映されます。新しいメンバーを進行中のイベントに追加するには、ここから適用してください。"
 
-#: src/app/web/templates/tags.html:129
+#: src/app/web/templates/tags.html:143
 #, python-format
 msgid "Apply %(name)s to %(count)s upcoming event"
 msgid_plural "Apply %(name)s to %(count)s upcoming events"
 msgstr[0] "%(name)sを%(count)s件の今後のイベントに適用"
 
-#: src/app/web/templates/tags.html:136 src/app/web/templates/tags.html:292
+#: src/app/web/templates/tags.html:150 src/app/web/templates/tags.html:351
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: src/app/web/templates/tags.html:139
+#: src/app/web/templates/tags.html:153
 msgid "Delete tag"
 msgstr "タグを削除"
 
-#: src/app/web/templates/tags.html:163
+#: src/app/web/templates/tags.html:177
 msgid "no members yet"
 msgstr "メンバーはまだいません"
 
-#: src/app/web/templates/tags.html:169
+#: src/app/web/templates/tags.html:183
 msgid "Franchises and groups"
 msgstr "フランチャイズとグループ"
 
-#: src/app/web/templates/tags.html:169
+#: src/app/web/templates/tags.html:183
 msgid "— click any tag to edit"
 msgstr "— 編集するにはタグをクリック"
 
-#: src/app/web/templates/tags.html:178
+#: src/app/web/templates/tags.html:192
 msgid "No franchise"
 msgstr "フランチャイズなし"
 
-#: src/app/web/templates/tags.html:186
+#: src/app/web/templates/tags.html:200
 msgid "— grouped by the region used in the Discover sidebar"
 msgstr "「探す」サイドバーで使われる地域別に表示"
 
-#: src/app/web/templates/tags.html:199
+#: src/app/web/templates/tags.html:213
 msgid "Performers with no group"
 msgstr "グループに属さない出演者"
 
-#: src/app/web/templates/tags.html:199
+#: src/app/web/templates/tags.html:213
 msgid "— solo artists, or members not yet attached"
 msgstr "— ソロアーティスト、またはまだ所属していないメンバー"
 
-#: src/app/web/templates/tags.html:242
+#: src/app/web/templates/tags.html:228
+msgid "Tag"
+msgstr "タグ"
+
+#: src/app/web/templates/tags.html:229
+msgid "Followers"
+msgstr "フォロワー"
+
+#: src/app/web/templates/tags.html:301
 msgid "As it is written on the official site"
 msgstr "公式サイトに記載されているとおり"
 
-#: src/app/web/templates/tags.html:254
+#: src/app/web/templates/tags.html:313
 msgid "Already exists."
 msgstr "すでに存在します。"
 
-#: src/app/web/templates/tags.html:266 src/app/web/templates/tags.html:282
+#: src/app/web/templates/tags.html:325 src/app/web/templates/tags.html:341
 msgid "(optional)"
 msgstr "（任意）"
 
-#: src/app/web/templates/tags.html:278
+#: src/app/web/templates/tags.html:337
 msgid ""
 "The Discover page groups venues by region. A venue without a region "
 "appears under “No region” and cannot be found with a region filter."
 msgstr "「探す」ページでは会場を地域別に表示します。地域が未設定の会場は「地域なし」に表示され、地域フィルターでは見つかりません。"
 
-#: src/app/web/templates/tags.html:282
+#: src/app/web/templates/tags.html:341
 msgid "Map or venue URL"
 msgstr "地図または会場のURL"
 
-#: src/app/web/templates/tags.html:287
+#: src/app/web/templates/tags.html:346
 msgid "A franchise is just a parent for groups — nothing else to set."
 msgstr "フランチャイズはグループをまとめる上位分類です。ほかに設定する項目はありません。"
 
-#: src/app/web/templates/tags.html:291
+#: src/app/web/templates/tags.html:350
 msgid "Create tag"
 msgstr "タグを作成"
 
-#: src/app/web/templates/tags.html:308
+#: src/app/web/templates/tags.html:367
 msgid "A place. Discover filters venues by region, not individually."
 msgstr "会場です。「探す」画面では、個別の会場ではなく地域で絞り込みます。"
 
-#: src/app/web/templates/tags.html:310
+#: src/app/web/templates/tags.html:369
 #, python-brace-format
 msgid ""
 "A {kind} tag with this name is already used by {concerts} and followed by"
@@ -3201,7 +3265,7 @@ msgid ""
 "cannot be merged yet."
 msgstr "同名の{kind}タグはすでに{concerts}で使用され、{followers}にフォローされています。別のタグを作成すると分かれたままになります。現在、タグは統合できません。"
 
-#: src/app/web/templates/tags.html:313
+#: src/app/web/templates/tags.html:372
 msgid "follower"
 msgstr "フォロワー"
 

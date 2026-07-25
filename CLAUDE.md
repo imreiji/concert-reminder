@@ -556,7 +556,18 @@ deleting them.
   hooks). It is the app's ONLY overflow menu and stays single-purpose:
   destructive actions only, never a place to bury regular controls. The
   inline × beside the Cancelled toggle was removed deliberately (owner
-  call) -- do not reintroduce it.
+  call) -- do not reintroduce it. (2026-07-24: folding the concert header's
+  Edit/Export into the kebab was proposed and rejected -- the rule stays.)
+- Callouts come in two shapes (G2, 2026-07-24): `.edgecard` (raise ground,
+  left edge in the tone colour -- ongoing state; `.dg`/`.ok`) and `.banner`
+  (wash ground, full border -- needs attention; `.warn`/`.dgr`). Anatomy
+  classes (`.standing`, `.next`, `.upgradebox`, `.feedbox`, `.danger`,
+  `.danger-row`) compose the shape and keep only their layout. Don't invent
+  a third callout shape. Radiuses: 3px default, 999px chips, 4px overlay
+  cards, 50% circles, bottom sheets `14px 14px 0 0` (documented at the top
+  of `style.css`). Type ramp is 400/600/700 only. Motion budget: one 150ms
+  card-lift hover plus the functional `#hxbar` progress bar -- nothing
+  decorative (owner ruling, 2026-07-24).
 - The sentence-style reminder builders (welcome, Preferences) render
   through locale-ordered slot patterns: ONE translatable pattern msgid per
   builder (e.g. ja 「{anchor}の{offset}{direction}に通知。」), split by

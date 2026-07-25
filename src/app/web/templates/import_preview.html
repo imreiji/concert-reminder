@@ -20,7 +20,7 @@
     {% trans %}Edit anything below, then create the event.{% endtrans %}</p>
 </div>
 
-<div class="callout info">
+<div class="banner info">
   <span>💾</span>
   <span>{% trans %}<b>Nothing is saved yet.</b> This is a draft in your browser. It becomes a real
     event only when you press <b>Create event</b> at the bottom.{% endtrans %}</span>
@@ -29,7 +29,7 @@
 {% if parsed.warnings %}
 <div class="warnlist">
   {% for w in parsed.warnings %}
-  <div class="callout warn"><span>⚠</span><span>{{ w }}</span></div>
+  <div class="banner warn"><span>⚠</span><span>{{ w }}</span></div>
   {% endfor %}
 </div>
 {% endif %}

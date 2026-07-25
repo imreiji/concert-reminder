@@ -126,7 +126,7 @@ def test_import_form_matches_design_system(client):
     assert r.status_code == 200
     assert '<div class="lede">' in r.text
     assert '<label class="fld">' in r.text
-    assert 'class="callout"' in r.text
+    assert 'class="banner"' in r.text
     # SSRF guard: unchanged POST target and pattern (do not loosen either).
     assert 'action="/concerts/import/preview"' in r.text
     assert 'pattern="https://ramen\\.events/.*"' in r.text
@@ -140,7 +140,7 @@ def test_import_form_error_uses_warn_callout(client):
     mock_fetch(client, "<html><body>not an event</body></html>")
     r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
     assert r.status_code == 200
-    assert 'class="callout warn"' in r.text
+    assert 'class="banner warn"' in r.text
     assert "couldn't read that page" in r.text
 
 
