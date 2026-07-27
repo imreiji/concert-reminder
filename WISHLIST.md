@@ -156,6 +156,22 @@ anywhere. Entries renumbered 1-14; performer-chip grouping rises to #1 by
 pure removal, unchanged in substance, and the sign-in-bounce entry's
 demo-parity/Discover-head pointer was bumped in place once more.
 
+The ladder-declutter branch's own final review (2026-07-27) then ADDED two
+entries without shipping anything, which is the rarer kind of pass: both are
+pre-existing defects that build surfaced rather than caused, so neither is a
+regression to fix on the branch. The cancelled-leg-only concert enters at #3 --
+above the event_id slugs it displaces -- because it is wrong in a way the user
+can act on (an irreversible APPLIED press on a concert that is not happening)
+while a meaningless slug is only ugly, and it is the more visible of the two
+now that the per-leg fold empties such a leg's body. The opt-out fold reset
+enters at #5, below the slugs, as a place-losing annoyance in one flow. Every
+entry from the old #3 down was pushed down by insertion, never demoted on
+merit; entries renumbered 1-16 and the sign-in-bounce entry's
+demo-parity/Discover-head pointer was bumped in place once more. The branch's
+third defect -- a declined round taking a board card's "what's next" slot --
+was FIXED in the same review wave rather than filed, so it is deliberately
+absent from Proposed and recorded inside the board-ladder Shipped entry.
+
 ## Proposed (highest impact first)
 
 
@@ -193,7 +209,33 @@ region/city/address, urls), zipped under `GET /admin/export.zip` behind
 re-importability matters or a read-only JSON dump is enough -- the YAML
 shape costs a little more and pays only if it does.
 
-### 3. event_id slugs should prefer title_en
+### 3. A concert whose every leg is cancelled still asks you to act
+
+Impact: low-medium - effort: small. Raised: 2026-07-27 (final review of the
+ladder-declutter branch; pre-existing, and starker since that build).
+
+`is_round_cancelled` implicitly cancels a round only when every leg in its
+`applies_to` is cancelled, and a GENERAL round -- empty/None `applies_to` --
+is deliberately exempt, because it is not tied to any leg. That exemption is
+right for a live concert and wrong for a dead one: on a concert whose only
+leg is cancelled, a general round is still "live" everywhere, so the concert
+keeps its "Next for you" strip, sits in the board's *Open now* column, and
+offers capture buttons on its Coming up row -- inviting an APPLIED press
+that `record_round_outcome` will never let the user take back (invariant 2:
+starting states apply once). The per-leg fold shipped on 2026-07-27 made it
+starker rather than causing it: the leg's own body now folds to nothing, so
+the page shows an urgency strip above a leg with visibly no rounds on it.
+
+The fix is not to widen `is_round_cancelled` -- a general round on a
+multi-leg concert with one cancelled leg must stay live -- but to add the
+concert-level question it cannot answer: every leg cancelled (and at least
+one leg existing, so a legitimately dateless concert is untouched) means
+nothing on this concert can be acted on. One derivation, consumed by the
+three surfaces, exactly as `_wants_you` is. Decide with the owner whether
+such a concert leaves the board entirely or shows as a cancelled card:
+invariant 2 keeps the rows themselves, so this is a display question.
+
+### 4. event_id slugs should prefer title_en
 
 Impact: low-medium - effort: small. Raised: 2026-07-23 (assistant, while
 verifying the import path).
@@ -208,7 +250,27 @@ at every create boundary, the fix is one line of preference -- slug from
 concerts keep their ids (event_id is editor-owned after creation; no
 backfill).
 
-### 4. Agent-import review-debt batch (deferred minors)
+### 5. Opting a leg out snaps the concert page's round folds shut
+
+Impact: low - effort: small-medium. Raised: 2026-07-27 (final review of the
+ladder-declutter branch).
+
+`POST /concerts/{event_id}/legs/{day_id}/opt-out` (`routes/subscriptions.py`)
+re-renders `_round_rows.html` as a whole-region outerHTML swap, and passes no
+fold state -- so a reader who had expanded a leg's "+N more rounds" history to
+check what they missed, then toggled a leg off, watches every fold on the page
+snap shut and loses their place.
+
+`open_round_id` is the WRONG instrument here, and reaching for it is the trap
+this entry exists to flag: it reopens the fold that OWNS a specific round, and
+an opt-out writes no round -- there is nothing to reopen around. The honest fix
+is general expanded-state preservation across an htmx swap of this region (the
+open `<details>` collected client-side before the request and restored after,
+or the fold state hoisted somewhere a re-render can read), which would also
+cover the outcome routes' folds without their per-round special case. Sized
+small-medium for that reason: the mechanism is the work, not the caller.
+
+### 6. Agent-import review-debt batch (deferred minors)
 
 Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
 whole-branch review of the agent-import build; the first three triaged
@@ -229,7 +291,7 @@ it works today, but it's a typo waiting to confuse someone (spotted
 behavior-safe today; batched so they stop being rediscovered by every
 future reviewer.
 
-### 5. Minute-level reminder offsets
+### 7. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -269,7 +331,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 6. Eventernote actor-page discovery
+### 8. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -289,7 +351,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 7. Franchise-aware round-label suggestions
+### 9. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -310,7 +372,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 8. Nine of ten `RoundKind` members are purely cosmetic
+### 10. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -333,7 +395,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 9. Pin the Python version across dev, CI and the server
+### 11. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -357,7 +419,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 10. PWA / installability
+### 12. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -377,7 +439,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 11. In-app LLM extraction behind the same draft seam
+### 13. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -395,7 +457,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 12. Minor demo-parity cosmetics
+### 14. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -423,7 +485,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 13. Discover sort in the content head, plus the catalogue-count note
+### 15. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -449,7 +511,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 14. Name the destination on the sign-in bounce
+### 16. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -465,7 +527,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#12) and the Discover head (#13) because
+Ranked below the demo-parity batch (#14) and the Discover head (#15) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -540,6 +602,21 @@ takes #1: this build ADDS a reason to look at the concert page's chip wall,
 since the page's round list is now short enough that the chips are the most
 crowded thing left on it. Entries renumbered 1-14; the sign-in-bounce
 entry's demo-parity/Discover-head pointer was bumped in place once more.
+
+Final-review addendum (2026-07-27): the cap surfaced a latent defect in the
+rung vocabulary and the same wave fixed it, so it is recorded here rather
+than filed as its own entry. `_rung_state` mapped NOT_APPLIED onto "todo",
+making a round the viewer had declined indistinguishable from one that had
+not opened -- so with only two rungs to spend, a closed declined round could
+take the card's "what's next" slot and hide a genuinely open one, while the
+per-leg fold below counted that same round under its "skipped" chip. A
+declined round now has its own state, mark and label, sharing `_FOLD_KINDS`'
+word so the two declutter surfaces agree. `visible_rungs` needed no change:
+"skipped" is settled, so it already qualified for the state-rung fallback and
+was already excluded from the live/todo lookahead, and it takes no
+`_RUNG_STANDING` entry because `column_for`'s `_RANK` places nothing for
+NOT_APPLIED. The review's other two findings were pre-existing and are filed
+in Proposed (#3, #5).
 
 ### Fold settled rounds per leg on the concert page (2026-07-27)
 
