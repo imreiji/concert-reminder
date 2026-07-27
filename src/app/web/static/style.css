@@ -816,7 +816,9 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
   width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line);
   display: grid; place-items: center; font-size: 9px; font-weight: 700; line-height: 1;
 }
-.m-lost { border-color: var(--dim); color: var(--dim); }
+/* Settled-and-inert marks share one dim treatment; the GLYPH tells them apart
+   (x lost, en dash skipped), so a declined round needs no colour of its own. */
+.m-lost, .m-skip { border-color: var(--dim); color: var(--dim); }
 .m-live { border-color: var(--danger); background: var(--danger); color: var(--raise); }
 .m-wait { border-color: var(--off); color: var(--off); }
 .m-todo { border-color: var(--line); color: transparent; }

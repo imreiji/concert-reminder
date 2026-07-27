@@ -1768,10 +1768,11 @@ async def set_leg_opt_out(
 class Rung:
     """One step of a concert's round ladder as this user experienced it.
 
-    `state` is presentation-ready: "lost" | "won" | "paid" | "applied" render
-    the recorded outcome, and rounds with no outcome fall back to where they
-    sit in time -- "live" (open right now) or "todo" (not open yet, or open
-    with nothing recorded and already closed). `detail` is the one moment
+    `state` is presentation-ready: "lost" | "won" | "paid" | "applied" |
+    "skipped" render the recorded outcome, and rounds with no outcome fall
+    back to where they sit in time -- "live" (open right now) or "todo" (not
+    open yet, or open with nothing recorded and already closed). `detail` is
+    the one moment
     worth showing next to the rung: the payment deadline once you have won,
     otherwise the close (falling back to the open). Templates render it with
     fmt_dual; the dataclass stays timezone-agnostic.
@@ -1817,6 +1818,24 @@ def _round_is_open(round_: Round, now: datetime) -> bool:
 
 
 def _rung_state(outcome: LotteryOutcome | None, is_open: bool) -> str:
+    """The rung's presentation state: a recorded outcome if there is one,
+    otherwise where the round sits in time.
+
+    NOT_APPLIED maps to its OWN state, "skipped", rather than to the timing
+    fallback. It used to fall through to "todo", which made a round the user
+    declined indistinguishable from one that has not opened -- so the capped
+    ladder (`visible_rungs`) could spend the card's "what's next" slot on a
+    closed round the user had already said no to and hide a genuinely open one
+    behind the fold, while the concert page counted that same round under its
+    "skipped" fold chip. The name is deliberately `_FOLD_KINDS`' word, so the
+    two declutter surfaces say the same thing about one round.
+
+    "skipped" is SETTLED, not pending: `visible_rungs` may use it as the state
+    rung (it is a non-"todo" rung, like "lost") but never as the next
+    actionable one, and it carries no standing in `_RUNG_STANDING` -- exactly
+    as `column_for`'s `_RANK` places nothing for NOT_APPLIED."""
+    if outcome is LotteryOutcome.NOT_APPLIED:
+        return "skipped"
     if outcome in (
         LotteryOutcome.LOST, LotteryOutcome.WON, LotteryOutcome.PAID, LotteryOutcome.APPLIED
     ):

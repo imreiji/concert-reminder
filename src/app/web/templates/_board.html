@@ -24,8 +24,14 @@
 ] %}
 
 {% macro rung(r, i) %}
+  {#- One entry per db.service._rung_state. "skipped" is a round the viewer
+      pressed "Not applying" on: settled, so it reads dim like "lost", but its
+      own glyph and label, because "you declined" and "you lost" are different
+      stories -- and the SAME word the concert page's fold chip uses, so the
+      two declutter surfaces never disagree about one round. -#}
   {%- set marks = {
     "lost": ("m-lost", "×", _("lost")),
+    "skipped": ("m-skip", "–", _("skipped")),
     "applied": ("m-wait", "?", _("applied")),
     "won": ("m-live", "✓", _("won")),
     "paid": ("m-live", "✓", _("paid")),
@@ -33,7 +39,7 @@
     "todo": ("m-todo", i|string, ""),
   } -%}
   {%- set m = marks.get(r.state, ("m-todo", i|string, "")) -%}
-  <span class="rung {% if r.state == 'lost' %}is-done{% elif r.state == 'todo' %}is-todo{% endif %}">
+  <span class="rung {% if r.state in ('lost', 'skipped') %}is-done{% elif r.state == 'todo' %}is-todo{% endif %}">
     <span class="rmark {{ m[0] }}">{{ m[1] }}</span>
     <span class="name">{{ r.label }}</span>
     <span class="stat">{{ m[2] }}</span>

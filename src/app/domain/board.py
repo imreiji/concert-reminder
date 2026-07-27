@@ -109,9 +109,10 @@ def pill_tone(column: Column, next_deadline: datetime | None, now: datetime) -> 
 VISIBLE_RUNGS = 2
 
 # Which rung STATES carry a standing, ranked the way column_for ranks the
-# outcomes behind them (paid > won > applied). "lost" is absent for the same
-# reason LOST places no column: it is not an end state. "live"/"todo" are
-# absent because they are timing, not standing.
+# outcomes behind them (paid > won > applied). "lost" and "skipped" are absent
+# for the same reason LOST and NOT_APPLIED place no column in _RANK above:
+# neither is an end state. "live"/"todo" are absent because they are timing,
+# not standing.
 _RUNG_STANDING: dict[str, int] = {"applied": 1, "won": 2, "paid": 3}
 
 # The upgrade exception, mirroring _UPGRADE_WON_RANK above so the two rankings
@@ -152,9 +153,19 @@ def visible_rungs(
     surface the open round and hide the win, leaving the card naming a column
     nothing on it explains.
     Only when NO standing is recorded does position decide: the last non-"todo"
-    rung, which picks the "live" one for an Open-now card and a "lost" one
-    otherwise, and failing even that (nothing has happened at all) the head of
-    the ladder, since there the whole story is what comes first.
+    rung, which picks the "live" one for an Open-now card and a "lost" or
+    "skipped" one otherwise, and failing even that (nothing has happened at
+    all) the head of the ladder, since there the whole story is what comes
+    first.
+
+    SETTLED vs PENDING is the line the two picks divide on, and "skipped" (a
+    round the user declined -- `db.service._rung_state`) is settled. It is
+    eligible to be the state rung, exactly as "lost" is, and it is NOT eligible
+    for the lookahead, which takes only "live"/"todo": a round you have said no
+    to is not what you could act on next. It gets no `_RUNG_STANDING` entry for
+    the same reason `column_for`'s `_RANK` has no NOT_APPLIED entry -- giving it
+    one would make a declined round outrank the win that actually placed the
+    card, and the card would name a column nothing on it explains.
 
     Returns `(pairs, hidden)` where each pair is `(position, rung)` with
     `position` the rung's ORIGINAL 1-based place in the full ladder. That

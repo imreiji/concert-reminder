@@ -415,6 +415,33 @@ async def test_board_card_ladder_is_capped_with_a_plain_text_remainder(client):
     assert "<details" not in card and "<summary" not in card
 
 
+async def test_board_card_marks_a_declined_round_as_skipped(client):
+    """A round the viewer pressed "Not applying" on gets its OWN mark and
+    label on the card -- the same "skipped" vocabulary the concert page's fold
+    chip uses -- not the blank todo mark of a round that has not opened."""
+    async def build(seed):
+        now = datetime.now(UTC)
+        c = await seed.concert("declined", title="Declined then open")
+        r1 = await seed.round(c, "FC presale", opens=now - timedelta(days=20),
+                              closes=now - timedelta(days=10))
+        await seed.open_round(c, "General presale")
+        await record_round_outcome(seed.s, USER, r1.id, LotteryOutcome.NOT_APPLIED)
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    card = html.split('data-event-id="declined"', 1)[1].split("</a>", 1)[0]
+
+    assert 'class="rmark m-skip"' in card
+    assert ">skipped<" in card
+    # Not the mark it used to borrow, and not lost's either.
+    assert 'class="rmark m-todo"' not in card
+    assert "m-lost" not in card
+    # The open round still gets its own rung, un-hidden.
+    assert ">General presale<" in card
+
+
 # ── Coming up: the capture surface ───────────────────────────────────────
 
 

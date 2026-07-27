@@ -227,6 +227,22 @@ def test_visible_rungs_applied_upgrade_does_not_outrank_a_paid_base_ticket():
     assert hidden == 1
 
 
+def test_visible_rungs_a_skipped_rung_can_be_the_state_rung():
+    """"skipped" is SETTLED, like "lost" -- not pending, like "todo".
+
+    Neither carries a standing (column_for's _RANK deliberately places neither
+    LOST nor NOT_APPLIED), so the position fallback decides, and it takes the
+    LAST non-todo rung. A round you declined is the last thing that happened
+    on this ladder, so it is the rung that tells the story, with the next
+    unopened round as what comes after."""
+    rungs = [R(1, "1次", "lost", None), R(2, "2次", "skipped", None),
+             R(3, "一般", "todo", None), R(4, "FCFS", "todo", None)]
+    visible, hidden = visible_rungs(rungs)
+    assert [p for p, _ in visible] == [2, 3]
+    assert [r.state for _, r in visible] == ["skipped", "todo"]
+    assert hidden == 2
+
+
 def test_visible_rungs_empty_ladder():
     assert visible_rungs([]) == ([], 0)
 
