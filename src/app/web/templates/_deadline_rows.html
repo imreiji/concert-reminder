@@ -1,9 +1,21 @@
-{# "Coming up" -- the five-column deadline table, and Home's ONLY capture
-   surface.
+{# "Coming up" -- one BLOCK per concert, and Home's ONLY capture surface.
 
    Its own partial because POST /rounds/{id}/outcome swaps it back in after a
    capture action; keep the outer <div id="deadline-rows">, that is the htmx
    target for an outerHTML swap.
+
+   Why blocks and not a flat list: `upcoming_deadlines` emits one row per
+   future ANCHOR, so a single campaign could fill the page with four lines
+   saying almost the same thing while the concert underneath it never
+   appeared. The service (`my_deadline_blocks`) collapses a round to its
+   soonest anchor and groups what is left per concert; this file only
+   RENDERS that -- the concert is named once, in the block header, the round
+   that wants the reader first leads, and the rest sit behind a <details>.
+
+   The folds are presentation, never filtering. Every member row and every
+   overflow block is in the DOM with its capture form intact, just collapsed
+   -- rendering on expand would need a round trip and would turn the fold
+   into a second, silent limit alongside DEADLINE_ROWS_LIMIT.
 
    Why the buttons live here and not on a board card: a row is exactly ONE
    round on ONE leg, where "I have applied" has a single meaning. A board card
@@ -26,42 +38,114 @@
   {%- endif -%}
 {%- endmacro %}
 
+{% macro member_row(row, tz) -%}
+{% set d = row.deadline %}
+<div class="row">
+  {# No round behind the row means no standing to have: an event-start row
+     is the show itself, not something you enter. "Not applied" there would
+     be a claim about nothing. #}
+  <span>{% if d.round_id %}{{ status_pill(row.outcome) }}{% endif %}</span>
+  <span class="when-c num">{% set wl = dual_lines(d.at_utc, tz) %}<b>{{ wl[0] }}</b>{{ wl[1] }}</span>
+  {# The concert title moved to the block header, so this cell now names the
+     ROUND. Five cells either way -- the desktop grid is unchanged.
+
+     `d.label` is rendered bare, with no loc(): UpcomingDeadline.label is
+     COPIED out of the round in `upcoming_deadlines`, which already resolved
+     the viewer's variant through loc_field at that copy site. A second
+     localization here would be a second source of truth for the same string.
+
+     data-happens folds the what-happens context (the .act-c cell) into
+     this small line via a ::after in the tablet band (701-1040px), where
+     the what-happens COLUMN is dropped. Desktop shows the column and
+     ignores the attribute; the phone drops the context (act-c hidden),
+     same as before. It carries the ANCHOR VERB ALONE: it used to carry
+     "<label> <verb>" because this cell held the concert TITLE, and now that
+     the cell names the round, repeating the label would fold the band's
+     line into "FC lottery · FC lottery closes". The attribute adds only
+     what the dropped column actually contributes. #}
+  <span class="title-c">
+    {{ d.label }}
+    <small data-happens="{{ deadline_label(d.anchor) }}"></small>
+  </span>
+  {# The verb ALONE, no round label. The label used to lead this cell because
+     the cell one over held the concert TITLE; now that cell names the round,
+     so repeating it here printed "FC senkou lottery | FC senkou lottery
+     closes" side by side and pushed long labels onto a second line. Same
+     reasoning that emptied data-happens above -- this cell contributes the
+     MOMENT, and the round it belongs to is already read. #}
+  <span class="act-c">{{ deadline_label(d.anchor) }}</span>
+  <span class="acts">
+    {# A row with no round id came from a ConcertDay (the show itself), so
+       there is nothing to record against -- render no form at all rather
+       than one that would post to /rounds/None/outcome. #}
+    {% if d.round_id %}
+      {{ capture_actions(row, d.round_id, "#deadline-rows",
+                         prune_title=d.concert_title,
+                         prune_url="/concerts/" ~ d.event_id,
+                         is_upgrade=row.is_upgrade) }}
+    {% endif %}
+  </span>
+</div>
+{%- endmacro %}
+
+{# `open_round_id` is the round a capture press just wrote, or none on a plain
+   GET. The swap replaces this whole element, so a fold the reader had opened
+   comes back closed unless the server says otherwise -- and the page-level one
+   closing takes the block they pressed on off the screen entirely. Reopening
+   it server-side keeps the fix free of JS and of any client-held state: the
+   route already knows the round, and the round is enough to find both folds.
+   Passed down explicitly rather than read from the template namespace so the
+   macro keeps working wherever it is imported. #}
+{% macro concert_block(block, tz, open_round_id=none) -%}
+<div class="cblock">
+  <div class="blockhead">
+    <a href="/concerts/{{ block.event_id }}">{{ block.concert_title }}</a>
+    <small>{% if block.venue %}📍 {{ block.venue }}{% endif %}{% if block.venue and block.starts_at_utc %} · {% endif %}{% if block.starts_at_utc %}{{ day_month(block.starts_at_utc) }}{% endif %}</small>
+  </div>
+  {{ member_row(block.lead, tz) }}
+  {% if block.others %}
+  {# Only when the written round is behind THIS fold. It may equally have
+     stayed (or become) the block's lead -- the lead rule re-sorts on the new
+     standing -- and a lead is already visible, so there is nothing to reopen. #}
+  <details class="morerounds"{% if open_round_id is not none and open_round_id in block.others|map(attribute="deadline.round_id")|list %} open{% endif %}>
+    <summary>{% trans count=block.others|length %}+{{ count }} more round{% pluralize %}+{{ count }} more rounds{% endtrans %}</summary>
+    {% for row in block.others %}{{ member_row(row, tz) }}{% endfor %}
+  </details>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{# GET / passes no such context, so default it once here rather than guarding
+   at each use -- an undefined is not none, and every fold would open. #}
+{% set open_round_id = open_round_id|default(none) %}
+
 <div class="deadline-rows" id="deadline-rows">
   <div class="rowhead">
-    <span>{{ _("Your status") }}</span><span>{{ _("Closes") }}</span><span>{{ _("Event") }}</span>
+    <span>{{ _("Your status") }}</span><span>{{ _("Closes") }}</span><span>{{ _("Round") }}</span>
     <span>{{ _("What happens") }}</span><span>{{ _("You") }}</span>
   </div>
-  {% for row in rows %}
-  {% set d = row.deadline %}
-  <div class="row">
-    {# No round behind the row means no standing to have: an event-start row
-       is the show itself, not something you enter. "Not applied" there would
-       be a claim about nothing. #}
-    <span>{% if d.round_id %}{{ status_pill(row.outcome) }}{% endif %}</span>
-    <span class="when-c num">{% set wl = dual_lines(d.at_utc, tz) %}<b>{{ wl[0] }}</b>{{ wl[1] }}</span>
-    <span class="title-c">
-      <a href="/concerts/{{ d.event_id }}">{{ d.concert_title }}</a>
-      {# data-happens folds the what-happens context (the .act-c cell) into
-         this small line via a ::after in the tablet band (701-1040px), where
-         the what-happens COLUMN is dropped. Desktop shows the column and
-         ignores the attribute; the phone drops the context (act-c hidden),
-         same as before. #}
-      <small data-happens="{{ d.label }} {{ deadline_label(d.anchor) }}">{% if row.venue %}📍 {{ row.venue }}{% endif %}{% if row.venue and row.starts_at_utc %} · {% endif %}{% if row.starts_at_utc %}{{ day_month(row.starts_at_utc) }}{% endif %}</small>
-    </span>
-    <span class="act-c"><b>{{ d.label }}</b> {{ deadline_label(d.anchor) }}</span>
-    <span class="acts">
-      {# A row with no round id came from a ConcertDay (the show itself), so
-         there is nothing to record against -- render no form at all rather
-         than one that would post to /rounds/None/outcome. #}
-      {% if d.round_id %}
-        {{ capture_actions(row, d.round_id, "#deadline-rows",
-                           prune_title=d.concert_title,
-                           prune_url="/concerts/" ~ d.event_id,
-                           is_upgrade=row.is_upgrade) }}
-      {% endif %}
-    </span>
-  </div>
+  {% for block in blocks[:visible_blocks] %}{{ concert_block(block, tz, open_round_id) }}
   {% else %}
   <p class="dim">{{ _("Nothing coming up on the events you follow.") }}</p>
   {% endfor %}
+  {% set overflow = blocks[visible_blocks:] %}
+  {% if overflow %}
+  {# The page-level fold reopens when the written round's block is IN the
+     overflow -- lead or folded, either way that block is off screen while
+     this <details> is closed, which is the sharp case: press a button on
+     block 8 and every overflow block collapses under you. #}
+  {% set page_fold = namespace(open=false) %}
+  {% if open_round_id is not none %}
+    {% for block in overflow %}
+      {% if block.lead.deadline.round_id == open_round_id
+            or open_round_id in block.others|map(attribute="deadline.round_id")|list %}
+        {% set page_fold.open = true %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+  <details class="moreconcerts"{% if page_fold.open %} open{% endif %}>
+    <summary>{% trans count=overflow|length %}+{{ count }} more event{% pluralize %}+{{ count }} more events{% endtrans %}</summary>
+    {% for block in overflow %}{{ concert_block(block, tz, open_round_id) }}{% endfor %}
+  </details>
+  {% endif %}
 </div>
