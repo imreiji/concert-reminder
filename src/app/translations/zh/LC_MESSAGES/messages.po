@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-26 23:16-0300\n"
+"POT-Creation-Date: 2026-07-26 23:34-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -198,7 +198,7 @@ msgid "No worries — you won't get results/payment reminders for this one."
 msgstr "没问题 — 你不会收到这个活动的结果或付款提醒。"
 
 #: src/app/bot/views.py:289 src/app/web/templates/_deadline_rows.html:22
-#: src/app/web/templates/_round_rows.html:27
+#: src/app/web/templates/_round_rows.html:28
 msgid "Won"
 msgstr "中签"
 
@@ -207,7 +207,7 @@ msgid "Congrats! I'll remind you when payment is due."
 msgstr "恭喜！我会在付款截止临近时提醒你。"
 
 #: src/app/bot/views.py:310 src/app/web/templates/_deadline_rows.html:24
-#: src/app/web/templates/_round_rows.html:29
+#: src/app/web/templates/_round_rows.html:30
 msgid "Lost"
 msgstr "落选"
 
@@ -217,7 +217,7 @@ msgid ""
 " the next round opens if there is one."
 msgstr "很遗憾 — 无需付款提醒；如果还有下一轮，我会在开放申请时通知你。"
 
-#: src/app/bot/views.py:332 src/app/web/templates/_capture_actions.html:136
+#: src/app/bot/views.py:332 src/app/web/templates/_capture_actions.html:159
 #: src/app/web/templates/home.html:161 src/app/web/templates/home.html:167
 msgid "Paid"
 msgstr "已付款"
@@ -439,7 +439,7 @@ msgstr "升级 · 申请开放中"
 
 #: src/app/db/service.py:3052 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:23
-#: src/app/web/templates/_round_rows.html:28
+#: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "已获票"
@@ -632,7 +632,7 @@ msgstr "演出"
 
 #: src/app/web/templates/_board.html:21
 #: src/app/web/templates/_deadline_rows.html:21
-#: src/app/web/templates/_round_rows.html:26
+#: src/app/web/templates/_round_rows.html:27
 #: src/app/web/templates/home.html:138
 msgid "Applied"
 msgstr "已申请"
@@ -698,73 +698,73 @@ msgstr "%(n)s 项待付款"
 msgid "%(n)s secured"
 msgstr "%(n)s 项已获票"
 
-#: src/app/web/templates/_capture_actions.html:44
+#: src/app/web/templates/_capture_actions.html:53
 msgid "Covered — you already hold this day"
 msgstr "已获票 — 这一场你已经有票了"
 
-#: src/app/web/templates/_capture_actions.html:46
+#: src/app/web/templates/_capture_actions.html:55
 msgid "Not open yet"
 msgstr "尚未开放"
 
-#: src/app/web/templates/_capture_actions.html:51
+#: src/app/web/templates/_capture_actions.html:60
 msgid "Entered upgrade"
 msgstr "已申请升级"
 
-#: src/app/web/templates/_capture_actions.html:51
+#: src/app/web/templates/_capture_actions.html:60
 msgid "I have applied"
 msgstr "我已申请"
 
-#: src/app/web/templates/_capture_actions.html:61
+#: src/app/web/templates/_capture_actions.html:70
 msgid "Skipping"
 msgstr "跳过"
 
-#: src/app/web/templates/_capture_actions.html:61
+#: src/app/web/templates/_capture_actions.html:70
 #: src/app/web/templates/_deadline_rows.html:25
-#: src/app/web/templates/_round_rows.html:30
+#: src/app/web/templates/_round_rows.html:31
 msgid "Not applying"
 msgstr "不申请"
 
-#: src/app/web/templates/_capture_actions.html:78
+#: src/app/web/templates/_capture_actions.html:99
 msgid "Won (all)"
 msgstr "全场中签"
 
-#: src/app/web/templates/_capture_actions.html:86
+#: src/app/web/templates/_capture_actions.html:107
 #, python-brace-format
 msgid "Won — {day}"
 msgstr "中签 — {day}"
 
-#: src/app/web/templates/_capture_actions.html:92
+#: src/app/web/templates/_capture_actions.html:113
 #, python-brace-format
 msgid "Lost — {day}"
 msgstr "落选 — {day}"
 
-#: src/app/web/templates/_capture_actions.html:98
+#: src/app/web/templates/_capture_actions.html:119
 #, python-brace-format
 msgid "Not going — {day}"
 msgstr "不参加 — {day}"
 
-#: src/app/web/templates/_capture_actions.html:105
+#: src/app/web/templates/_capture_actions.html:127
 msgid "Lost the rest"
 msgstr "其余落选"
 
-#: src/app/web/templates/_capture_actions.html:111
+#: src/app/web/templates/_capture_actions.html:133
 msgid "Lost (all)"
 msgstr "全场落选"
 
-#: src/app/web/templates/_capture_actions.html:124
+#: src/app/web/templates/_capture_actions.html:147
 msgid "I won"
 msgstr "我中签了"
 
-#: src/app/web/templates/_capture_actions.html:129
+#: src/app/web/templates/_capture_actions.html:152
 msgid "I lost"
 msgstr "我落选了"
 
-#: src/app/web/templates/_capture_actions.html:139
+#: src/app/web/templates/_capture_actions.html:162
 msgid "Nothing to do"
 msgstr "无需操作"
 
 #: src/app/web/templates/_deadline_rows.html:20
-#: src/app/web/templates/_round_rows.html:25
+#: src/app/web/templates/_round_rows.html:32
 msgid "Not applied"
 msgstr "未申请"
 
@@ -809,7 +809,7 @@ msgid "A cancelled performance stays in the list, but appears faded with a label
 msgstr "已取消的场次仍会保留在列表中，但会以淡色显示并带有标记。"
 
 #: src/app/web/templates/_editor_leg_card.html:44
-#: src/app/web/templates/_round_rows.html:117
+#: src/app/web/templates/_round_rows.html:150
 msgid "Cancelled"
 msgstr "已取消"
 
@@ -1008,49 +1008,49 @@ msgid ""
 "    after you save."
 msgstr "你刚添加的轮次要在保存后才能在此选择。"
 
-#: src/app/web/templates/_round_rows.html:71
+#: src/app/web/templates/_round_rows.html:104
 msgid "Add to calendar"
 msgstr "添加到日历"
 
-#: src/app/web/templates/_round_rows.html:72
+#: src/app/web/templates/_round_rows.html:105
 msgid "Round page"
 msgstr "轮次页面"
 
-#: src/app/web/templates/_round_rows.html:78
+#: src/app/web/templates/_round_rows.html:111
 #, python-format
 msgid "Requires a ticket from: %(names)s"
 msgstr "需要持有以下轮次的门票：%(names)s"
 
-#: src/app/web/templates/_round_rows.html:78
+#: src/app/web/templates/_round_rows.html:111
 msgid "Requires a ticket from an earlier round"
 msgstr "需要持有前一轮次的门票"
 
-#: src/app/web/templates/_round_rows.html:117
+#: src/app/web/templates/_round_rows.html:150
 msgid "Not going"
 msgstr "不参加"
 
-#: src/app/web/templates/_round_rows.html:119
+#: src/app/web/templates/_round_rows.html:152
 #, python-format
 msgid "doors %(when)s"
 msgstr "入场 %(when)s"
 
-#: src/app/web/templates/_round_rows.html:134
+#: src/app/web/templates/_round_rows.html:167
 msgid "Going again"
 msgstr "再次参加"
 
-#: src/app/web/templates/_round_rows.html:134
+#: src/app/web/templates/_round_rows.html:167
 msgid "Not going to this day"
 msgstr "不参加这一场"
 
-#: src/app/web/templates/_round_rows.html:138
+#: src/app/web/templates/_round_rows.html:171
 msgid "No rounds yet for this leg."
 msgstr "这个场次还没有轮次。"
 
-#: src/app/web/templates/_round_rows.html:155
+#: src/app/web/templates/_round_rows.html:188
 msgid "Rounds"
 msgstr "轮次"
 
-#: src/app/web/templates/_round_rows.html:161
+#: src/app/web/templates/_round_rows.html:194
 msgid "No performances yet."
 msgstr "还没有场次。"
 

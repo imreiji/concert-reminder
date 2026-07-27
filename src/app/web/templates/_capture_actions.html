@@ -27,7 +27,16 @@
    identical: an upgrade round captures through the same one write path as any
    round. The caller is responsible for NOT rendering this at all for an
    upgrade round the viewer is ineligible for -- an entry they cannot make. #}
-{% macro capture_actions(row, round_id, target, prune_title=None, prune_url=None, is_upgrade=False) -%}
+
+{# `only_day` scopes the per-day branch to ONE leg. The concert page renders
+   a round under each leg it covers, and each of those cards passes its own
+   day id: without it every card repeats every leg's three questions (nine
+   forms on a three-leg concert, stacked full-width on a phone) and offers
+   "Won — Day 2" under Day 1's heading, which is a mode error as well as
+   clutter. Left None -- Home's rows, and the catch-up dialog -- the branch
+   asks about the whole round, which is where the all-legs shortcuts belong:
+   "Lost the rest" scoped to one leg would be a button about the others. #}
+{% macro capture_actions(row, round_id, target, prune_title=None, prune_url=None, is_upgrade=False, only_day=None) -%}
 {# `upcoming_deadlines` emits one row per FUTURE anchor, so one round can
    produce three or four rows. Gating on row.can_capture (the round has
    opened) stops every one of them from offering an independent "I have
@@ -41,7 +50,7 @@
    instead (its rows are DeadlineRows, where the attribute is undefined and
    therefore falsy), so the same macro serves both shapes. #}
 {% if row.covered %}
-<span class="done ok">{{ _("Covered — you already hold this day") }}</span>
+<span class="done">{{ _("Covered — you already hold this day") }}</span>
 {% elif not row.can_capture %}
 <span class="done">{{ _("Not open yet") }}</span>
 {% elif row.outcome is none %}
@@ -70,15 +79,27 @@
    with legs still unanswered is not yet at the payment question. `capture_days`
    is empty for every single-leg round and for a round already fully resolved
    (see `_day_capture_context`), so both of those branches keep their old
-   behaviour untouched. #}
-{% if not row.any_day_won %}
+   behaviour untouched.
+
+   `ns.days` is the round's unresolved legs narrowed to `only_day` when the
+   caller scoped this card to one (see the macro header). Filtering here
+   rather than in the service keeps `capture_days` a fact about the ROUND --
+   the dialog and Home both need the whole list. An empty result means this
+   leg is answered while its siblings are not: the card renders no forms at
+   all, and the per-leg pill in `_round_rows.html` is what says how it
+   went. #}
+{% set ns = namespace(days=[]) %}
+{% for pair in row.capture_days %}
+  {%- if only_day is none or pair[0] == only_day %}{% set ns.days = ns.days + [pair] %}{% endif -%}
+{% endfor %}
+{% if only_day is none and not row.any_day_won %}
 <form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}" hx-swap="outerHTML"
       method="post" action="/rounds/{{ round_id }}/outcome">
   <input type="hidden" name="outcome" value="won">
   <button class="act yes" type="submit">{{ _("Won (all)") }}</button>
 </form>
 {% endif %}
-{% for day_id, day_label in row.capture_days %}
+{% for day_id, day_label in ns.days %}
 <form hx-post="/rounds/{{ round_id }}/day-result" hx-target="{{ target }}" hx-swap="outerHTML"
       method="post" action="/rounds/{{ round_id }}/day-result">
   <input type="hidden" name="day_id" value="{{ day_id }}">
@@ -98,6 +119,7 @@
   <button class="act no" type="submit">{{ _("Not going — {day}").format(day=day_label) }}</button>
 </form>
 {% endfor %}
+{% if only_day is none %}
 {% if row.any_day_won %}
 <form hx-post="/rounds/{{ round_id }}/day-result" hx-target="{{ target }}" hx-swap="outerHTML"
       method="post" action="/rounds/{{ round_id }}/day-result">
@@ -110,6 +132,7 @@
   <input type="hidden" name="outcome" value="lost">
   <button class="act no" type="submit">{{ _("Lost (all)") }}</button>
 </form>
+{% endif %}
 {% endif %}
 {% elif row.can_report_result %}
 {# The web's only exit from APPLIED. WON/LOST live on the DM buttons too, but

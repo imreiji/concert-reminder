@@ -652,6 +652,20 @@ def legs_of(body: str) -> str:
     return body.split("<!-- /standing -->", 1)[-1]
 
 
+def leg_sections(body: str) -> dict[str, str]:
+    """Each leg's section keyed by its heading, from that heading to the next.
+
+    A round covering both legs renders under EACH of them, so "the block for
+    that round" is now ambiguous -- stopping at the first occurrence would
+    silently test Day 1's copy and call it the page. Every per-leg assertion
+    goes through this instead."""
+    sections = {}
+    for chunk in legs_of(body).split('class="leg-heading')[1:]:
+        heading = chunk.split(">", 1)[1].split("<", 1)[0].strip()
+        sections[heading] = chunk
+    return sections
+
+
 async def test_a_covered_round_states_it_and_offers_no_buttons(client):
     """Once some round has secured this leg, a later round selling the same
     leg has nothing left to ask: it renders quietly, with a note saying why
@@ -678,57 +692,106 @@ async def test_a_covered_round_states_it_and_offers_no_buttons(client):
     assert "I have applied" not in block
 
 
-async def test_a_multi_leg_round_asks_about_each_unresolved_leg(client):
-    """A lottery covering Saturday and Sunday has no single answer, so the
-    flat won/lost pair is replaced by one question per leg, plus the two
-    whole-round shortcuts."""
-    cid = await seed_concert(client.db)
-    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
-    d2 = await add_day(client.db, cid, "Day 2", days_ahead=61)
+async def multi_leg_lottery(db, concert_id):
+    """A two-leg round the viewer is in, whose results are out -- the shape
+    every per-leg assertion below is about."""
+    d1 = await add_day(db, concert_id, "Day 1", days_ahead=60)
+    d2 = await add_day(db, concert_id, "Day 2", days_ahead=61)
     rid = await add_round(
-        client.db, cid, "Fan club lottery", applies_to=[d1, d2],
+        db, concert_id, "Fan club lottery", applies_to=[d1, d2],
         opens=datetime.now(UTC) - timedelta(days=10),
         closes=datetime.now(UTC) - timedelta(days=3),
         results=datetime.now(UTC) - timedelta(hours=1),
     )
-    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    await set_outcome(db, rid, LotteryOutcome.APPLIED)
+    return d1, d2, rid
+
+
+async def test_a_leg_card_asks_about_that_leg_and_no_other(client):
+    """A round covering both legs renders under BOTH of them, and each copy
+    asks only about the leg it is sitting under. Repeating all three
+    questions per section would put nine forms on a three-leg concert, and
+    "Won — Day 2" under Day 1's heading is a mode error besides.
+
+    The whole-round shortcuts (Won/Lost all, Lost the rest) belong to the
+    unfiltered caller -- Home's rows and the catch-up dialog -- not to a card
+    that is scoped to one leg."""
+    cid = await seed_concert(client.db)
+    _d1, _d2, rid = await multi_leg_lottery(client.db, cid)
     login(client)
 
-    block = round_block(legs_of(client.get("/concerts/np").text), "Fan club lottery")
-    assert "Won — Day 1" in block
-    assert "Lost — Day 1" in block
-    assert "Not going — Day 1" in block
-    assert "Won — Day 2" in block
-    assert "Won (all)" in block
-    assert "Lost (all)" in block
+    body = client.get("/concerts/np").text
+    sections = leg_sections(body)
+    assert set(sections) == {"Day 1", "Day 2"}
+    # The round is a fact about each leg, so its label appears under both.
+    assert all("Fan club lottery" in s for s in sections.values())
+
+    assert "Won — Day 1" in sections["Day 1"]
+    assert "Lost — Day 1" in sections["Day 1"]
+    assert "Not going — Day 1" in sections["Day 1"]
+    assert "Day 2" not in sections["Day 1"].split("Fan club lottery", 1)[1]
+
+    assert "Won — Day 2" in sections["Day 2"]
+    assert "Lost — Day 2" in sections["Day 2"]
+    assert "Not going — Day 2" in sections["Day 2"]
+    assert "Won — Day 1" not in sections["Day 2"]
+
+    assert "Won (all)" not in body
+    assert "Lost (all)" not in body
+    assert "Lost the rest" not in body
     # The single-leg pair is gone: it could only have lied about one of them.
-    assert ">I won<" not in block
-    assert ">I lost<" not in block
-    assert f"/rounds/{rid}/day-result" in block
+    assert ">I won<" not in body
+    assert ">I lost<" not in body
+    assert f"/rounds/{rid}/day-result" in body
 
 
-async def test_a_partial_win_asks_only_about_the_rest(client):
-    """Saturday won: the remaining question is no longer "won or lost?" but
-    "lost the rest?", and the won leg is not asked about again."""
+async def test_a_resolved_leg_asks_nothing_while_its_sibling_pends(client):
+    """Saturday answered, Sunday not: Saturday's card falls silent (its pill
+    already says how it went) and only Sunday still asks."""
     cid = await seed_concert(client.db)
-    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
-    d2 = await add_day(client.db, cid, "Day 2", days_ahead=61)
-    rid = await add_round(
-        client.db, cid, "Fan club lottery", applies_to=[d1, d2],
-        opens=datetime.now(UTC) - timedelta(days=10),
-        closes=datetime.now(UTC) - timedelta(days=3),
-        results=datetime.now(UTC) - timedelta(hours=1),
-    )
-    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    d1, _d2, rid = await multi_leg_lottery(client.db, cid)
     await set_day_result(client.db, rid, d1, LegResult.WON)
     login(client)
 
-    block = round_block(legs_of(client.get("/concerts/np").text), "Fan club lottery")
-    assert "Lost — Day 2" in block
-    assert "Lost the rest" in block
-    assert "Won — Day 1" not in block   # already answered
-    assert "Won (all)" not in block     # a leg is already won
-    assert "Lost (all)" not in block    # that would contradict the win
+    sections = leg_sections(client.get("/concerts/np").text)
+    assert "day-result" not in sections["Day 1"]
+    assert "Won — Day 2" in sections["Day 2"]
+    assert "Lost — Day 2" in sections["Day 2"]
+
+
+async def test_each_leg_pills_its_own_result_after_a_split_decision(client):
+    """Won Saturday, lost Sunday. The round-level outcome is WON, so a pill
+    read off it would tell Sunday it had a ticket. `leg_result` is that leg's
+    own answer and outranks the round wherever it has one."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    await set_day_result(client.db, rid, d2, LegResult.LOST)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    assert '<span class="pill p-danger">Won</span>' in sections["Day 1"]
+    assert '<span class="pill p-quiet">Lost</span>' in sections["Day 2"]
+    assert '<span class="pill p-danger">Won</span>' not in sections["Day 2"]
+
+
+async def test_a_secured_single_leg_round_still_pills_secured(client):
+    """The per-leg pill must not flatten PAID into WON: a leg cannot carry
+    the payment distinction, so a won leg defers to the round for it."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    rid = await add_round(
+        client.db, cid, "Paid round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.WON)
+    await set_outcome(client.db, rid, LotteryOutcome.PAID)
+    login(client)
+
+    assert '<span class="pill p-ok">Secured</span>' in leg_sections(
+        client.get("/concerts/np").text
+    )["Day 1"]
 
 
 async def test_a_concert_with_no_legs_heads_its_rounds_plainly(client):

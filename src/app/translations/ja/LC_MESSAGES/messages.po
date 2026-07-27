@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-26 23:16-0300\n"
+"POT-Creation-Date: 2026-07-26 23:34-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -198,7 +198,7 @@ msgid "No worries — you won't get results/payment reminders for this one."
 msgstr "わかりました。この公演の当落・入金リマインダーは届きません。"
 
 #: src/app/bot/views.py:289 src/app/web/templates/_deadline_rows.html:22
-#: src/app/web/templates/_round_rows.html:27
+#: src/app/web/templates/_round_rows.html:28
 msgid "Won"
 msgstr "当選"
 
@@ -207,7 +207,7 @@ msgid "Congrats! I'll remind you when payment is due."
 msgstr "おめでとうございます！入金締切が近づいたら通知します。"
 
 #: src/app/bot/views.py:310 src/app/web/templates/_deadline_rows.html:24
-#: src/app/web/templates/_round_rows.html:29
+#: src/app/web/templates/_round_rows.html:30
 msgid "Lost"
 msgstr "落選"
 
@@ -217,7 +217,7 @@ msgid ""
 " the next round opens if there is one."
 msgstr "承知しました。入金リマインダーは送信しません。次の受付がある場合は、受付開始時にお知らせします。"
 
-#: src/app/bot/views.py:332 src/app/web/templates/_capture_actions.html:136
+#: src/app/bot/views.py:332 src/app/web/templates/_capture_actions.html:159
 #: src/app/web/templates/home.html:161 src/app/web/templates/home.html:167
 msgid "Paid"
 msgstr "入金済み"
@@ -439,7 +439,7 @@ msgstr "アップグレード・受付中"
 
 #: src/app/db/service.py:3052 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:23
-#: src/app/web/templates/_round_rows.html:28
+#: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "確保済み"
@@ -632,7 +632,7 @@ msgstr "公演"
 
 #: src/app/web/templates/_board.html:21
 #: src/app/web/templates/_deadline_rows.html:21
-#: src/app/web/templates/_round_rows.html:26
+#: src/app/web/templates/_round_rows.html:27
 #: src/app/web/templates/home.html:138
 msgid "Applied"
 msgstr "申込済み"
@@ -698,73 +698,73 @@ msgstr "%(n)s件が入金待ち"
 msgid "%(n)s secured"
 msgstr "%(n)s件確保済み"
 
-#: src/app/web/templates/_capture_actions.html:44
+#: src/app/web/templates/_capture_actions.html:53
 msgid "Covered — you already hold this day"
 msgstr "確保済み — この公演日はすでに取れています"
 
-#: src/app/web/templates/_capture_actions.html:46
+#: src/app/web/templates/_capture_actions.html:55
 msgid "Not open yet"
 msgstr "まだ受付前"
 
-#: src/app/web/templates/_capture_actions.html:51
+#: src/app/web/templates/_capture_actions.html:60
 msgid "Entered upgrade"
 msgstr "アップグレード申込済み"
 
-#: src/app/web/templates/_capture_actions.html:51
+#: src/app/web/templates/_capture_actions.html:60
 msgid "I have applied"
 msgstr "申込済み"
 
-#: src/app/web/templates/_capture_actions.html:61
+#: src/app/web/templates/_capture_actions.html:70
 msgid "Skipping"
 msgstr "見送る"
 
-#: src/app/web/templates/_capture_actions.html:61
+#: src/app/web/templates/_capture_actions.html:70
 #: src/app/web/templates/_deadline_rows.html:25
-#: src/app/web/templates/_round_rows.html:30
+#: src/app/web/templates/_round_rows.html:31
 msgid "Not applying"
 msgstr "申し込まない"
 
-#: src/app/web/templates/_capture_actions.html:78
+#: src/app/web/templates/_capture_actions.html:99
 msgid "Won (all)"
 msgstr "全日程で当選"
 
-#: src/app/web/templates/_capture_actions.html:86
+#: src/app/web/templates/_capture_actions.html:107
 #, python-brace-format
 msgid "Won — {day}"
 msgstr "当選 — {day}"
 
-#: src/app/web/templates/_capture_actions.html:92
+#: src/app/web/templates/_capture_actions.html:113
 #, python-brace-format
 msgid "Lost — {day}"
 msgstr "落選 — {day}"
 
-#: src/app/web/templates/_capture_actions.html:98
+#: src/app/web/templates/_capture_actions.html:119
 #, python-brace-format
 msgid "Not going — {day}"
 msgstr "不参加 — {day}"
 
-#: src/app/web/templates/_capture_actions.html:105
+#: src/app/web/templates/_capture_actions.html:127
 msgid "Lost the rest"
 msgstr "残りは落選"
 
-#: src/app/web/templates/_capture_actions.html:111
+#: src/app/web/templates/_capture_actions.html:133
 msgid "Lost (all)"
 msgstr "全日程で落選"
 
-#: src/app/web/templates/_capture_actions.html:124
+#: src/app/web/templates/_capture_actions.html:147
 msgid "I won"
 msgstr "当選した"
 
-#: src/app/web/templates/_capture_actions.html:129
+#: src/app/web/templates/_capture_actions.html:152
 msgid "I lost"
 msgstr "落選した"
 
-#: src/app/web/templates/_capture_actions.html:139
+#: src/app/web/templates/_capture_actions.html:162
 msgid "Nothing to do"
 msgstr "対応不要"
 
 #: src/app/web/templates/_deadline_rows.html:20
-#: src/app/web/templates/_round_rows.html:25
+#: src/app/web/templates/_round_rows.html:32
 msgid "Not applied"
 msgstr "未申込"
 
@@ -809,7 +809,7 @@ msgid "A cancelled performance stays in the list, but appears faded with a label
 msgstr "中止された公演は一覧に残り、薄く表示されてラベルが付きます。"
 
 #: src/app/web/templates/_editor_leg_card.html:44
-#: src/app/web/templates/_round_rows.html:117
+#: src/app/web/templates/_round_rows.html:150
 msgid "Cancelled"
 msgstr "中止"
 
@@ -1008,49 +1008,49 @@ msgid ""
 "    after you save."
 msgstr "追加したばかりの受付は、保存後にここで選択できるようになります。"
 
-#: src/app/web/templates/_round_rows.html:71
+#: src/app/web/templates/_round_rows.html:104
 msgid "Add to calendar"
 msgstr "カレンダーに追加"
 
-#: src/app/web/templates/_round_rows.html:72
+#: src/app/web/templates/_round_rows.html:105
 msgid "Round page"
 msgstr "受付ページ"
 
-#: src/app/web/templates/_round_rows.html:78
+#: src/app/web/templates/_round_rows.html:111
 #, python-format
 msgid "Requires a ticket from: %(names)s"
 msgstr "必要なチケット：%(names)s"
 
-#: src/app/web/templates/_round_rows.html:78
+#: src/app/web/templates/_round_rows.html:111
 msgid "Requires a ticket from an earlier round"
 msgstr "以前の受付で取得したチケットが必要"
 
-#: src/app/web/templates/_round_rows.html:117
+#: src/app/web/templates/_round_rows.html:150
 msgid "Not going"
 msgstr "不参加"
 
-#: src/app/web/templates/_round_rows.html:119
+#: src/app/web/templates/_round_rows.html:152
 #, python-format
 msgid "doors %(when)s"
 msgstr "開場：%(when)s"
 
-#: src/app/web/templates/_round_rows.html:134
+#: src/app/web/templates/_round_rows.html:167
 msgid "Going again"
 msgstr "また参加する"
 
-#: src/app/web/templates/_round_rows.html:134
+#: src/app/web/templates/_round_rows.html:167
 msgid "Not going to this day"
 msgstr "この公演には参加しない"
 
-#: src/app/web/templates/_round_rows.html:138
+#: src/app/web/templates/_round_rows.html:171
 msgid "No rounds yet for this leg."
 msgstr "この公演の受付はまだありません。"
 
-#: src/app/web/templates/_round_rows.html:155
+#: src/app/web/templates/_round_rows.html:188
 msgid "Rounds"
 msgstr "受付"
 
-#: src/app/web/templates/_round_rows.html:161
+#: src/app/web/templates/_round_rows.html:194
 msgid "No performances yet."
 msgstr "公演はまだありません。"
 
