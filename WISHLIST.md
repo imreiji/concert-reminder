@@ -172,26 +172,30 @@ third defect -- a declined round taking a board card's "what's next" slot --
 was FIXED in the same review wave rather than filed, so it is deliberately
 absent from Proposed and recorded inside the board-ladder Shipped entry.
 
+The fourth 2026-07-27 pass ships #1 the day after it inherited the spot, and
+with it the LAST of the owner's 2026-07-26 usage-feedback batch except the
+admin catalogue export: five entries filed on 2026-07-26, four shipped
+inside two days. Performer chips are per-group clusters now, and the entry's
+three open decisions were all answered by the owner rather than by the
+build -- an artist in two attached groups appears under BOTH (the repetition
+is information), big clusters do NOT fold (the panel is reference, not a
+to-do), and clustering keys off tags actually attached, which was already
+the entry's own leaning. A fourth question the entry could not have
+anticipated came up mid-build and the owner ruled on that too: a group
+attached with none of its members shows its label row and NO count at all,
+rather than "0 performers". Entries renumbered 1-15. The re-rank moves
+nothing on merit and, unusually, found nothing made cheaper either: the
+admin export rises to #1 by pure removal and is the same size it was, since
+it touches the catalogue tables and a zip route, nothing this build went
+near. Worth recording for whoever takes it: it is now the only entry left
+that the owner personally asked for, so the list is back to
+assistant-raised and review-raised items behind it. The sign-in-bounce
+entry's demo-parity/Discover-head pointer was bumped in place once more.
+
 ## Proposed (highest impact first)
 
 
-### 1. Group the performer chips by group on the concert page
-
-Impact: medium - effort: small. Raised: 2026-07-26 (owner usage feedback).
-
-A big lineup renders the Performing section as a flat chip wall --
-"insanely crowded" in the owner's words. The concert already carries the
-structure to fix it: attached GROUP tags plus `tag_members`. Regroup the
-DISPLAY only -- each attached group becomes a labeled cluster holding the
-attached artists that are its members, ungrouped artists trail in their
-own cluster. Invariant 3 untouched by construction: attachment stays the
-materialized truth, this reads it. Decisions to settle: an artist in two
-attached groups (show once under the first, or under both), whether big
-clusters default collapsed, and that clustering keys off tags actually
-attached to the concert (members whose group tag is absent stay
-ungrouped).
-
-### 2. Admin-only catalogue export (never any user data)
+### 1. Admin-only catalogue export (never any user data)
 
 Impact: medium - effort: small-medium. Raised: 2026-07-26 (owner).
 
@@ -209,7 +213,7 @@ region/city/address, urls), zipped under `GET /admin/export.zip` behind
 re-importability matters or a read-only JSON dump is enough -- the YAML
 shape costs a little more and pays only if it does.
 
-### 3. A concert whose every leg is cancelled still asks you to act
+### 2. A concert whose every leg is cancelled still asks you to act
 
 Impact: low-medium - effort: small. Raised: 2026-07-27 (final review of the
 ladder-declutter branch; pre-existing, and starker since that build).
@@ -235,7 +239,7 @@ three surfaces, exactly as `_wants_you` is. Decide with the owner whether
 such a concert leaves the board entirely or shows as a cancelled card:
 invariant 2 keeps the rows themselves, so this is a display question.
 
-### 4. event_id slugs should prefer title_en
+### 3. event_id slugs should prefer title_en
 
 Impact: low-medium - effort: small. Raised: 2026-07-23 (assistant, while
 verifying the import path).
@@ -250,7 +254,7 @@ at every create boundary, the fix is one line of preference -- slug from
 concerts keep their ids (event_id is editor-owned after creation; no
 backfill).
 
-### 5. Opting a leg out snaps the concert page's round folds shut
+### 4. Opting a leg out snaps the concert page's round folds shut
 
 Impact: low - effort: small-medium. Raised: 2026-07-27 (final review of the
 ladder-declutter branch).
@@ -270,7 +274,7 @@ or the fold state hoisted somewhere a re-render can read), which would also
 cover the outcome routes' folds without their per-round special case. Sized
 small-medium for that reason: the mechanism is the work, not the caller.
 
-### 6. Agent-import review-debt batch (deferred minors)
+### 5. Agent-import review-debt batch (deferred minors)
 
 Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
 whole-branch review of the agent-import build; the first three triaged
@@ -291,7 +295,7 @@ it works today, but it's a typo waiting to confuse someone (spotted
 behavior-safe today; batched so they stop being rediscovered by every
 future reviewer.
 
-### 7. Minute-level reminder offsets
+### 6. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -331,7 +335,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 8. Eventernote actor-page discovery
+### 7. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -351,7 +355,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 9. Franchise-aware round-label suggestions
+### 8. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -372,7 +376,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 10. Nine of ten `RoundKind` members are purely cosmetic
+### 9. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -395,7 +399,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 11. Pin the Python version across dev, CI and the server
+### 10. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -419,7 +423,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 12. PWA / installability
+### 11. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -439,7 +443,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 13. In-app LLM extraction behind the same draft seam
+### 12. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -457,7 +461,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 14. Minor demo-parity cosmetics
+### 13. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -485,7 +489,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 15. Discover sort in the content head, plus the catalogue-count note
+### 14. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -511,7 +515,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 16. Name the destination on the sign-in bounce
+### 15. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -527,7 +531,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#14) and the Discover head (#15) because
+Ranked below the demo-parity batch (#13) and the Discover head (#14) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -545,6 +549,60 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Group the performer chips by group on the concert page (2026-07-27)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-27-performer-clusters-design.md`
++ impl plan `docs/superpowers/plans/2026-07-27-performer-clusters.md`, three
+tasks on branch `performer-clusters`. Proposed #1, filed 2026-07-26 from the
+owner's usage feedback ("insanely crowded") and built the day after the entry
+that outranked it shipped. The Performing panel is one labelled block per
+attached GROUP now -- the group's chip on a row of its own, that group's
+attached performers wrapping underneath -- followed by an unlabelled trailer
+for performers in no attached group. The flat row it replaced listed every
+group chip and then every artist chip, which on a two-group bill said nothing
+about who belonged to which.
+
+**Owner decision 1: a performer in several attached groups appears under EACH
+of them.** The repetition is information -- she really is in both -- and the
+clustering, not deduplication, is what fixes the wall. Showing her once under
+the "most specific" group would leave the other group's cluster looking
+incomplete, misleading exactly the reader who came to see that group.
+**Owner decision 2: no folding.** The Performing panel is reference, not a
+to-do: you read it, you never act on it, so a click to see who is playing is
+friction without payoff. Labelled clusters are the whole fix. **Owner ruling,
+mid-build: at zero the count disappears.** A group attached with none of its
+members attached kept its label row (deliberate -- dropping it would hide a
+tag that IS attached) but the new header then read "-- 0 performers". That is
+the opposite of the truth: a groups-only bill is a line-up nobody has listed
+yet, not a concert with nobody on it. The count is simply absent in that
+state, which needed no new msgid -- the absence carries it.
+
+The grouping is derived SERVICE-side (`db/service.py:performer_clusters`),
+never in the template: `Tag.members` is a lazy self-referential m2m and a lazy
+load during async template rendering is the `MissingGreenlet` 500 this project
+has already shipped once. Membership is ONE batched query over `tag_members`
+for the attached group ids -- deliberately not the existing per-group
+`group_members` helper, which would be an N+1 on a franchise bill -- and a
+test asserts the statement count so the loop cannot creep back in.
+
+No new msgid anywhere, which was the point: the header's distinct-performer
+count reuses the existing plural pair `%(count)s performer(s)` already on the
+Tags page, and the three composed msgids the old header assembled ("N members,
+from the X group tags") were retired from both catalogues by hand -- pybabel
+had only commented them out as `#~`, which is the drift that goes uncaught.
+The count is DISTINCT, not the sum of the blocks: someone in two attached
+groups occupies two seats but is one person.
+
+Revision pass: this closes the LAST of the owner's 2026-07-26 usage-feedback
+batch except the admin catalogue export, which rises to #1 by pure removal and
+is unchanged in size -- it touches the catalogue tables and a zip route,
+nothing this build went near. Nothing moved on merit and nothing got cheaper.
+Entries renumbered 1-15; the sign-in-bounce entry's demo-parity/Discover-head
+pointer and the ladder-declutter entry's pointer at its two filed defects were
+both bumped in place. Worth recording: with this gone the list is entirely
+assistant-raised and review-raised behind the export, the first time since
+2026-07-26 that no owner-reported pain point sits in the top few.
 
 ### Cap the board card ladder at the rungs that matter (2026-07-27)
 
@@ -616,7 +674,7 @@ word so the two declutter surfaces agree. `visible_rungs` needed no change:
 was already excluded from the live/todo lookahead, and it takes no
 `_RUNG_STANDING` entry because `column_for`'s `_RANK` places nothing for
 NOT_APPLIED. The review's other two findings were pre-existing and are filed
-in Proposed (#3, #5).
+in Proposed (#2, #4).
 
 ### Fold settled rounds per leg on the concert page (2026-07-27)
 
