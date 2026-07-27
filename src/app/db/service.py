@@ -1861,12 +1861,17 @@ async def my_upcoming_deadlines(
     return await upcoming_deadlines(session, now=now, limit=limit, concert_ids=ids)
 
 
-# How many "Coming up" rows Home shows. It lives here, next to the function
-# that uses it as a default, because TWO callers render the same fragment:
+# How much "Coming up" Home shows. It lives here, next to the two functions
+# that use it as a default, because TWO callers render the same fragment:
 # GET / builds it first, and POST /rounds/{id}/outcome swaps it back in after
 # a capture action. If those two disagreed on the count, recording an outcome
 # would silently lengthen or shorten the list. One constant, one default, no
 # literals at either call site.
+#
+# It counts CONCERTS, not rows: Home renders `my_deadline_blocks`, one block
+# per concert. The name is unchanged because it is still the same limit on the
+# same list -- `my_deadline_rows` keeps it as a ROW cap for the internal fetch
+# blocks are built from (widened there by ANCHOR_FAN_OUT).
 DEADLINE_ROWS_LIMIT = 10
 
 

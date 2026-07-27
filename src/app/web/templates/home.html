@@ -202,7 +202,9 @@
    The header is deliberately moment-AGNOSTIC. It used to read "Closes next"
    while the body underneath it said "Opens ...", because the row picked is
    the soonest one with a round behind it, whatever anchor that row carries
-   -- and the rows[0] fallback can even be an event start. Narrowing the pick
+   -- and the fallback (the soonest row of any kind, once the blocks below
+   are flattened back into one chronological list) can even be an event
+   start. Narrowing the pick
    to Anchor.CLOSES was the wrong repair: an opening round or a results
    announcement genuinely needs your attention, and hiding it would hide real
    urgency. So the header stays honest and the body (below) always names

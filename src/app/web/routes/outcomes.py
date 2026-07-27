@@ -54,9 +54,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.models import ConcertDay, Round, User
 from app.db.service import (
+    VISIBLE_BLOCKS,
     board_cards,
     ensure_user,
-    my_deadline_rows,
+    my_deadline_blocks,
     record_remaining_days_lost,
     record_round_day_result,
     record_round_outcome,
@@ -151,14 +152,17 @@ async def _outcome_response(
         )
 
     # No explicit limit here, and none on Home either: both take
-    # my_deadline_rows' DEADLINE_ROWS_LIMIT default, which is the only thing
-    # keeping this swap from silently changing how many rows the page shows.
+    # my_deadline_blocks' DEADLINE_ROWS_LIMIT default, which is the only thing
+    # keeping this swap from silently changing how many concerts the page
+    # shows. VISIBLE_BLOCKS below is the same contract for the page-level fold
+    # -- both paths read the constant, never a literal 6, or an outcome press
+    # would re-fold the list under the reader.
     #
     # tracked_concert_ids is resolved ONCE and shared by both queries below,
-    # exactly as GET / does -- the rows and the board are two views of the
+    # exactly as GET / does -- the blocks and the board are two views of the
     # same tracked set.
     tracked = await tracked_concert_ids(session, user.id)
-    rows = await my_deadline_rows(session, user.id, concert_ids=tracked)
+    blocks = await my_deadline_blocks(session, user.id, concert_ids=tracked)
     db_user = await session.get(User, user.id)
     tz = db_user.timezone if db_user else settings.default_timezone
 
@@ -168,7 +172,8 @@ async def _outcome_response(
     columns, open_total = await board_cards(session, user.id, concert_ids=tracked)
     ctx = {
         "user": user,
-        "rows": rows,
+        "blocks": blocks,
+        "visible_blocks": VISIBLE_BLOCKS,
         "tz": tz,
         "columns": {col.value: cards for col, cards in columns.items()},
         "open_total": open_total,

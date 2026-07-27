@@ -268,18 +268,21 @@ def create_app() -> FastAPI:
 
         A thin shell: every query below is a single service call, and the only
         logic here is picking which row is "up next". Note the deliberate
-        ABSENCE of a limit argument on my_deadline_rows -- POST
+        ABSENCE of a limit argument on my_deadline_blocks -- POST
         /rounds/{id}/outcome re-renders the same fragment and also omits it, so
-        both take DEADLINE_ROWS_LIMIT and the htmx swap can never change the
-        number of rows on the page."""
+        both take DEADLINE_ROWS_LIMIT and the htmx swap can never change how
+        many concerts the page shows. VISIBLE_BLOCKS (where the page-level fold
+        starts) is passed for the same reason: both paths read the one constant
+        rather than a literal, or the swap would silently re-fold the list."""
         from app.db.service import (
+            VISIBLE_BLOCKS,
             board_cards,
             catalogue_tag_counts,
             discover_peek,
             discover_statuses,
             discoverable_concert_count,
             discoverable_open_round_count,
-            my_deadline_rows,
+            my_deadline_blocks,
             tracked_concert_ids,
         )
 
@@ -296,14 +299,24 @@ def create_app() -> FastAPI:
             # re-derive it with its own query on every render.
             tracked = await tracked_concert_ids(session, user.id)
             columns, open_total = await board_cards(session, user.id, concert_ids=tracked)
-            rows = await my_deadline_rows(session, user.id, concert_ids=tracked)
+            blocks = await my_deadline_blocks(session, user.id, concert_ids=tracked)
+            # "Up next" names ONE moment, so it still reads a row, not a block.
+            # The block layer only groups and folds the rows it was built from,
+            # so flattening them back into chronological order hands this pick
+            # exactly what the flat list used to -- no second query, and no
+            # second definition of what is upcoming.
+            upcoming = sorted(
+                (r for b in blocks for r in (b.lead, *b.others)),
+                key=lambda r: r.deadline.at_utc,
+            )
             # Column is a StrEnum, but an Enum member does not hash equal to
             # its value -- so a template doing columns["open"] would silently
             # miss. Re-key to plain strings at the boundary.
             ctx |= {
                 "columns": {col.value: cards for col, cards in columns.items()},
                 "open_total": open_total,
-                "rows": rows,
+                "blocks": blocks,
+                "visible_blocks": VISIBLE_BLOCKS,
                 # The nearest thing that needs the user's attention: a row
                 # with a round behind it, whatever anchor that row carries.
                 # Falls back to the soonest row of any kind (an event start)
@@ -312,8 +325,8 @@ def create_app() -> FastAPI:
                 # home.html for why narrowing this to Anchor.CLOSES would be
                 # the wrong repair.
                 "up_next": next(
-                    (r for r in rows if r.deadline.round_id is not None),
-                    rows[0] if rows else None,
+                    (r for r in upcoming if r.deadline.round_id is not None),
+                    upcoming[0] if upcoming else None,
                 ),
                 # What /discover would actually LIST, not every Concert row.
                 "catalogue_count": await discoverable_concert_count(session),
