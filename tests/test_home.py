@@ -1445,11 +1445,10 @@ async def test_a_folded_round_is_present_but_collapsed(client):
 async def test_capturing_a_folded_round_swaps_the_block_back_with_its_standing(client):
     """The other half of the fold being real DOM: pressing a button INSIDE it
     must swap the whole fragment back with that round's new standing, and the
-    block must come back with the same shape. The fold's open/closed state is
-    not preserved -- an outerHTML swap replaces the <details> element, so the
-    freshly recorded row is behind a closed fold again. That is the swap's
-    nature, not a bug to route around: the standing also lands on the board in
-    the same response, which is what the reader sees without expanding."""
+    block must come back with the same shape. The fold it lives in comes back
+    OPEN (see the reopening tests at the end of this file); this test is about
+    the CONTENT of the swap, so it splits on the class rather than the whole
+    tag."""
     async def build(seed):
         c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
         await seed.open_round(c, "Open now", days=2)
@@ -1466,7 +1465,7 @@ async def test_capturing_a_folded_round_swaps_the_block_back_with_its_standing(c
     assert rows.count('class="cblock"') == 1
     assert rows.count('class="row"') == 2
     assert "+1 more round" in rows
-    fold = rows.split('<details class="morerounds">', 1)[1]
+    fold = rows.split('class="morerounds"', 1)[1]
     assert "Also open" in fold
     assert "Applied" in fold.split("</details>", 1)[0]
 
@@ -1536,3 +1535,86 @@ async def test_the_page_level_fold_appears_only_past_six_blocks(client):
     assert '<details class="moreconcerts">' in rows
     assert "+2 more events" in rows
     assert rows.count('class="cblock"') == VISIBLE_BLOCKS + 2
+
+
+# ── the swap reopens the fold the reader was acting in ───────────────────
+
+
+async def test_capturing_a_folded_round_reopens_its_per_round_fold(client):
+    """An outerHTML swap replaces the <details> element, so its open state is
+    gone unless the server re-renders it. Mild here (the write landed, the
+    board updated) but it still collapses the very fold the reader was acting
+    in, so the response marks the fold that owns the round it just wrote."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        await seed.open_round(c, "Open now", days=2)
+        return (await seed.open_round(c, "Also open", days=9)).id
+
+    folded_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{folded_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    rows = r.text.split('id="deadline-rows"', 1)[1]
+    assert '<details class="morerounds" open>' in rows
+    # The round it wrote really is the one behind that fold.
+    fold = rows.split('class="morerounds"', 1)[1]
+    assert "Also open" in fold.split("</details>", 1)[0]
+
+
+async def test_capturing_a_round_in_an_overflow_block_reopens_the_page_fold(client):
+    """The sharp case: a reader with more than VISIBLE_BLOCKS concerts expands
+    "+N more events", presses a button on block 8, and the swap folds every
+    overflow block away under them. The response reopens the page-level fold
+    when the block that owns the written round sits in the overflow slice."""
+    async def build(seed):
+        overflow_round_id = None
+        for i in range(VISIBLE_BLOCKS + 2):
+            c = await seed.concert(f"c-{i:02d}", title=f"Concert {i:02d}", day_offset=None)
+            r = await seed.open_round(c, "R1", days=1 + i)
+            if i == VISIBLE_BLOCKS + 1:
+                overflow_round_id = r.id
+        return overflow_round_id
+
+    overflow_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{overflow_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    rows = r.text.split('id="deadline-rows"', 1)[1]
+    assert '<details class="moreconcerts" open>' in rows
+
+
+async def test_get_home_renders_neither_fold_open(client):
+    """The default path is untouched: a plain GET has no round to reopen
+    around, so both folds render closed exactly as they did before."""
+    async def build(seed):
+        for i in range(VISIBLE_BLOCKS + 2):
+            c = await seed.concert(f"c-{i:02d}", title=f"Concert {i:02d}", day_offset=None)
+            await seed.open_round(c, "R1", days=1 + i)
+            await seed.open_round(c, "R2", days=20 + i)
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert '<details class="morerounds">' in rows
+    assert '<details class="moreconcerts">' in rows
+    assert "morerounds\" open" not in rows
+    assert "moreconcerts\" open" not in rows
+
+
+async def test_capturing_a_visible_blocks_lead_opens_no_per_round_fold(client):
+    """The written round can still be the block's LEAD after the write, and a
+    lead is not behind the per-round fold -- so nothing there needs reopening.
+    The block's other member here is the show itself (no round id), which can
+    never be the round that was written."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=60)
+        return (await seed.open_round(c, "Open now", days=2)).id
+
+    lead_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{lead_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    rows = r.text.split('id="deadline-rows"', 1)[1]
+    assert '<details class="morerounds">' in rows      # the show row is folded
+    assert "morerounds\" open" not in rows

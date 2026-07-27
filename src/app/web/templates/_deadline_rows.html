@@ -88,7 +88,15 @@
 </div>
 {%- endmacro %}
 
-{% macro concert_block(block, tz) -%}
+{# `open_round_id` is the round a capture press just wrote, or none on a plain
+   GET. The swap replaces this whole element, so a fold the reader had opened
+   comes back closed unless the server says otherwise -- and the page-level one
+   closing takes the block they pressed on off the screen entirely. Reopening
+   it server-side keeps the fix free of JS and of any client-held state: the
+   route already knows the round, and the round is enough to find both folds.
+   Passed down explicitly rather than read from the template namespace so the
+   macro keeps working wherever it is imported. #}
+{% macro concert_block(block, tz, open_round_id=none) -%}
 <div class="cblock">
   <div class="blockhead">
     <a href="/concerts/{{ block.event_id }}">{{ block.concert_title }}</a>
@@ -96,7 +104,10 @@
   </div>
   {{ member_row(block.lead, tz) }}
   {% if block.others %}
-  <details class="morerounds">
+  {# Only when the written round is behind THIS fold. It may equally have
+     stayed (or become) the block's lead -- the lead rule re-sorts on the new
+     standing -- and a lead is already visible, so there is nothing to reopen. #}
+  <details class="morerounds"{% if open_round_id is not none and open_round_id in block.others|map(attribute="deadline.round_id")|list %} open{% endif %}>
     <summary>{% trans count=block.others|length %}+{{ count }} more round{% pluralize %}+{{ count }} more rounds{% endtrans %}</summary>
     {% for row in block.others %}{{ member_row(row, tz) }}{% endfor %}
   </details>
@@ -104,20 +115,37 @@
 </div>
 {%- endmacro %}
 
+{# GET / passes no such context, so default it once here rather than guarding
+   at each use -- an undefined is not none, and every fold would open. #}
+{% set open_round_id = open_round_id|default(none) %}
+
 <div class="deadline-rows" id="deadline-rows">
   <div class="rowhead">
     <span>{{ _("Your status") }}</span><span>{{ _("Closes") }}</span><span>{{ _("Round") }}</span>
     <span>{{ _("What happens") }}</span><span>{{ _("You") }}</span>
   </div>
-  {% for block in blocks[:visible_blocks] %}{{ concert_block(block, tz) }}
+  {% for block in blocks[:visible_blocks] %}{{ concert_block(block, tz, open_round_id) }}
   {% else %}
   <p class="dim">{{ _("Nothing coming up on the events you follow.") }}</p>
   {% endfor %}
   {% set overflow = blocks[visible_blocks:] %}
   {% if overflow %}
-  <details class="moreconcerts">
+  {# The page-level fold reopens when the written round's block is IN the
+     overflow -- lead or folded, either way that block is off screen while
+     this <details> is closed, which is the sharp case: press a button on
+     block 8 and every overflow block collapses under you. #}
+  {% set page_fold = namespace(open=false) %}
+  {% if open_round_id is not none %}
+    {% for block in overflow %}
+      {% if block.lead.deadline.round_id == open_round_id
+            or open_round_id in block.others|map(attribute="deadline.round_id")|list %}
+        {% set page_fold.open = true %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+  <details class="moreconcerts"{% if page_fold.open %} open{% endif %}>
     <summary>{% trans count=overflow|length %}+{{ count }} more event{% pluralize %}+{{ count }} more events{% endtrans %}</summary>
-    {% for block in overflow %}{{ concert_block(block, tz) }}{% endfor %}
+    {% for block in overflow %}{{ concert_block(block, tz, open_round_id) }}{% endfor %}
   </details>
   {% endif %}
 </div>

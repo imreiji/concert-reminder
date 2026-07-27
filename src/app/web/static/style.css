@@ -1606,8 +1606,10 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
    .plyt/.prail strip, and the .layout collapse (now max-width:1040, coupled
    to the .fsheet summary-flip at min-width:1041 -- both must also reach
    phones, and a min-width rule cannot live in a max-width section). The
-   phone bottom-sheet .fsheet block (max-width:760) also stays put; in this
-   band the fsheet is an inline disclosure panel, styled below. */
+   phone bottom-sheet .fsheet block (its own max-width:700 query -- it was
+   760 until .layout's collapse moved to 1040 and took the sheet boundary
+   with it) also stays put; in this band the fsheet is an inline disclosure
+   panel, styled below. */
 @media (min-width: 701px) and (max-width: 1040px) {
   /* T2 -- compact header: one row, never wraps under ja/zh. */
   header.site a.home .mark { white-space: nowrap; }

@@ -104,6 +104,7 @@ async def _outcome_response(
     session: AsyncSession,
     user: SessionUser,
     toast: str | None,
+    round_id: int,
 ):
     """What both capture routes answer with once the write is committed.
 
@@ -114,7 +115,16 @@ async def _outcome_response(
     state until reload.
 
     `toast` is the key base.html's TOAST_MSGS map renders, or None for a press
-    that has no honest entry there (see the day-result route)."""
+    that has no honest entry there (see the day-result route).
+
+    `round_id` is the round just written, and it rides into Home's fragment as
+    `open_round_id`. The swap is an outerHTML replacement, so every <details>
+    in "Coming up" comes back closed -- including the page-level "+N more
+    events" fold, which takes the block the reader just pressed a button on off
+    the screen entirely. The template reopens the fold(s) that own this round;
+    no JS and no client-held state, because the round is enough to find them.
+    The concert-page branch below wants none of this: it renders
+    _round_rows.html, which has no such folds."""
     headers = {"HX-Trigger": json.dumps({"toast": {"outcome": toast}})} if toast else {}
     event_id = _concert_event_id(request)
 
@@ -178,6 +188,7 @@ async def _outcome_response(
         "columns": {col.value: cards for col, cards in columns.items()},
         "open_total": open_total,
         "oob": True,
+        "open_round_id": round_id,
     }
     fragments = [
         templates.get_template(name).render(request=request, **ctx)
@@ -207,7 +218,7 @@ async def record_outcome(
     await ensure_user(session, user.id, user.username)
     await record_round_outcome(session, user.id, round_id, outcome)
     await session.commit()
-    return await _outcome_response(request, session, user, outcome.value)
+    return await _outcome_response(request, session, user, outcome.value, round_id)
 
 
 # The four things a reader can say about ONE leg, and which toast each earns.
@@ -288,4 +299,6 @@ async def record_day_result(
             session, user.id, round_id, day_id, LegResult(result)
         )
     await session.commit()
-    return await _outcome_response(request, session, user, _TOAST_BY_RESULT[result])
+    return await _outcome_response(
+        request, session, user, _TOAST_BY_RESULT[result], round_id
+    )
