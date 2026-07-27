@@ -755,6 +755,74 @@ async def test_remaining_days_lost_keeps_a_partial_win_won(session):
     assert len(await opens_rules_for(session, round_b.id)) == 1
 
 
+async def test_lost_day_on_a_won_all_round_keeps_other_days_secured(session):
+    """A round won with NO day rows means "won every leg" (Task 2's
+    no-rows-means-all). Recording a loss on one leg must materialize that
+    implicit state first -- otherwise the round's secured set collapses to
+    "exactly the WON rows" = nothing, silently losing the other ticket."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+
+    await record_round_day_result(session, 42, round_a.id, leg_b.id, LegResult.LOST, NOW)
+
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.WON
+    assert await day_results(session, round_a.id) == {
+        leg_a.id: LegResult.WON, leg_b.id: LegResult.LOST,
+    }
+    secured = await secured_day_ids_by_round(session, 42, concert.id)
+    assert secured[round_a.id] == {leg_a.id}  # leg A's ticket survives
+
+
+async def test_remaining_days_lost_on_a_won_all_round_is_a_noop(session):
+    """Same materialization from the other entry point: nothing is
+    unresolved on a won-all round, so "lost the rest" loses nothing."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+
+    await record_remaining_days_lost(session, 42, round_a.id, NOW)
+
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.WON
+    assert await day_results(session, round_a.id) == {
+        leg_a.id: LegResult.WON, leg_b.id: LegResult.WON,
+    }
+    secured = await secured_day_ids_by_round(session, 42, concert.id)
+    assert secured[round_a.id] == {leg_a.id, leg_b.id}
+
+
+async def test_won_day_does_not_revert_a_paid_round(session):
+    """PAID is downstream of WON: a per-day win on an already-secured round
+    must not route through record_round_outcome, which would overwrite PAID
+    back to WON and re-arm the payment reminder."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.PAID, NOW)
+
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.PAID
+    assert await day_results(session, round_a.id) == {
+        leg_a.id: LegResult.WON, leg_b.id: LegResult.WON,
+    }
+
+
+async def test_won_day_on_an_already_won_round_still_resyncs_rules(session):
+    """The skip is only of the outcome WRITE -- the secured set still
+    changed, so the planner must be re-run: winning leg B here is what makes
+    round B (leg B only) redundant, and its queued reminder must go."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+    rule = ReminderRule(user_id=42, round_id=round_b.id, anchor=Anchor.CLOSES, offset_days=-1)
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert len(await queue_rows_for(session, rule.id)) == 1  # leg B not secured yet
+
+    await record_round_day_result(session, 42, round_a.id, leg_b.id, LegResult.WON, NOW)
+
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.WON
+    assert await queue_rows_for(session, rule.id) == []
+
+
 async def test_unresolved_day_ids_excludes_cancelled_resolved_and_opted_out(session):
     await ensure_user(session, 42, "reiji")
     concert = Concert(title="Four-Leg Tour", event_id="four-leg-tour", created_by=42)

@@ -544,6 +544,53 @@ async def unresolved_day_ids(
     return [d.id for d in remaining]
 
 
+async def _round_outcome_value(
+    session: AsyncSession, user_id: int, round_id: int
+) -> LotteryOutcome | None:
+    """This user's round-level outcome, or None if they have recorded none."""
+    return (await session.execute(
+        select(RoundOutcome.outcome).where(
+            RoundOutcome.user_id == user_id, RoundOutcome.round_id == round_id
+        )
+    )).scalar_one_or_none()
+
+
+async def _materialize_implicit_won_rows(
+    session: AsyncSession, user_id: int, round_: Round
+) -> None:
+    """Write out the day rows a secured round has been asserting implicitly,
+    before the first EXPLICIT row makes them unreadable.
+
+    A WON/PAID round with zero day rows means "won every covered leg" (the
+    no-rows-means-all convention). But the moment ANY row exists, the secured
+    set is read as exactly the WON rows -- so writing a single LOST row would
+    silently throw away every other leg's ticket, and could then settle the
+    round itself to LOST. Materializing first makes the implicit state
+    explicit and unchanged (same secured set, same outcome), and every
+    subsequent per-day write edits from there.
+
+    A no-op for rounds that are not secured, or that already have rows."""
+    if await _round_outcome_value(session, user_id, round_.id) not in (
+        LotteryOutcome.WON, LotteryOutcome.PAID
+    ):
+        return
+    already = (await session.execute(
+        select(RoundOutcomeDay.id).where(
+            RoundOutcomeDay.user_id == user_id, RoundOutcomeDay.round_id == round_.id
+        ).limit(1)
+    )).scalar_one_or_none()
+    if already is not None:
+        return
+    all_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(ConcertDay.concert_id == round_.concert_id)
+    )).scalars())
+    for day_id in sorted(_covered_day_ids(round_, all_day_ids)):
+        session.add(RoundOutcomeDay(
+            user_id=user_id, round_id=round_.id, day_id=day_id, result=LegResult.WON,
+        ))
+    await session.flush()
+
+
 async def _won_day_ids(session: AsyncSession, user_id: int, round_id: int) -> set[int]:
     """This user's WON day rows on one round -- the "is any leg of this round
     actually secured" question the LOST settle path turns on."""
@@ -596,7 +643,10 @@ async def record_round_day_result(
 
     Both layers stay consistent: a WON leg flips the round outcome to WON
     (a win is a win, whatever the other legs do), while a LOST leg settles
-    the round only when nothing is left to wait on (see _settle_lost_days)."""
+    the round only when nothing is left to wait on (see _settle_lost_days).
+    A round already WON or PAID keeps that outcome -- routing a per-day win
+    through record_round_outcome there would overwrite PAID back to WON and
+    re-arm the payment reminder for a ticket already paid for."""
     now = now or _now()
     round_ = await session.get(Round, round_id)
     if round_ is None:
@@ -606,6 +656,9 @@ async def record_round_day_result(
     )).scalars())
     if day_id not in _covered_day_ids(round_, all_day_ids):
         return
+    # Validation first, materialization second: a forged id must write
+    # nothing at all, materialized rows included.
+    await _materialize_implicit_won_rows(session, user_id, round_)
 
     existing = (await session.execute(
         select(RoundOutcomeDay).where(
@@ -623,7 +676,15 @@ async def record_round_day_result(
     await session.flush()
 
     if result is LegResult.WON:
-        await record_round_outcome(session, user_id, round_id, LotteryOutcome.WON, now)
+        if await _round_outcome_value(session, user_id, round_id) in (
+            LotteryOutcome.WON, LotteryOutcome.PAID
+        ):
+            # Already secured at round level -- only the day layer moved, so
+            # skip the outcome write (it would demote PAID) and just re-plan:
+            # the secured set changed, and the planner reads it.
+            await reinstate_user_rules(session, user_id, round_.concert_id, now)
+        else:
+            await record_round_outcome(session, user_id, round_id, LotteryOutcome.WON, now)
         return
     await _settle_lost_days(session, user_id, round_, {day_id}, now)
 
@@ -635,11 +696,16 @@ async def record_remaining_days_lost(
     the same settle the last individual LOST would have run. Writing the rows
     in one pass (rather than looping record_round_day_result) keeps the settle
     to a single decision: with everything resolved, the round is LOST unless
-    some leg was won."""
+    some leg was won.
+
+    Materializing first (see _materialize_implicit_won_rows) is what makes
+    this a no-op on a round already won outright -- there is nothing
+    unresolved to lose."""
     now = now or _now()
     round_ = await session.get(Round, round_id)
     if round_ is None:
         return
+    await _materialize_implicit_won_rows(session, user_id, round_)
     remaining = await unresolved_day_ids(session, user_id, round_)
     for day_id in remaining:
         session.add(RoundOutcomeDay(
