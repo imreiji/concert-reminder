@@ -999,9 +999,13 @@ async def concert_detail(
     # who-changed-what, and it's one extra query worth skipping for them.
     audit_log = await concert_audit_log(session, concert.id) if user.is_editor else []
     # The Performing panel's per-group blocks. AWAITED HERE, never in the
-    # template: it reads Tag.members, a lazy self-referential m2m, and a lazy
-    # load during async rendering is a MissingGreenlet 500. The refresh above
-    # is what makes `concert.tags` safe for it to walk.
+    # template: group membership has to be read from the `tag_members`
+    # association table, and a template doing that walk would have to go
+    # through `Tag.members` -- a lazy self-referential m2m whose load during
+    # async rendering is a MissingGreenlet 500. The service reads the
+    # association table directly instead, so the query lands here, awaited,
+    # rather than mid-render. The refresh above is what makes `concert.tags`
+    # safe for it to walk.
     clusters = await performer_clusters(session, concert)
     rounds_ctx = await concert_rounds_context(session, user.id, concert)
     return templates.TemplateResponse(

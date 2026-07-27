@@ -3953,9 +3953,13 @@ async def performer_clusters(
 
     Three things about the shape of this, each deliberate:
 
-    * It is service-side, not a template loop, because `Tag.members` is a lazy
-      self-referential m2m: touching it during async template rendering raises
-      `MissingGreenlet` -- a 500 this project has shipped once.
+    * It is service-side, not a template loop. The relationship a template
+      would have to reach for is `Tag.members`, a lazy self-referential m2m,
+      and touching that during async template rendering raises
+      `MissingGreenlet` -- a 500 this project has shipped once. This function
+      never touches the relationship at all: it reads the `tag_members`
+      association table directly, in one awaited query, so there is no lazy
+      load left to fire.
     * `group_members()` is NOT reused. It is per-group, so a franchise concert
       with several units would issue one query per unit. Membership is read
       here in ONE batched query over `tag_members` for the attached group ids.

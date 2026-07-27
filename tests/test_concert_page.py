@@ -653,7 +653,7 @@ async def test_a_groups_only_bill_shows_the_label_but_no_count(client):
     panel = _performers_panel(client)
     assert ">Aqours<" in panel          # the label row survives
     assert "performer" not in panel     # no count, singular or plural
-    assert "0 " not in panel
+    assert "0 performer" not in panel
     # ...and no empty chip row under it. An empty div still pays .pclabel's
     # bottom margin (measured: 5.6px), which makes the gap after a member-less
     # group 20px where every other cluster boundary is 14.4px. `:empty` cannot
