@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-27 11:32-0300\n"
+"POT-Creation-Date: 2026-07-27 13:35-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -727,20 +727,26 @@ msgstr "已付款"
 msgid "open"
 msgstr "开放中"
 
-#: src/app/web/templates/_board.html:104
+#: src/app/web/templates/_board.html:97
+#, python-format
+msgid "+%(count)s earlier round"
+msgid_plural "+%(count)s earlier rounds"
+msgstr[0] "+更早的 %(count)s 个轮次"
+
+#: src/app/web/templates/_board.html:116
 #, python-format
 msgid "+%(n)s more →"
 msgstr "+还有 %(n)s 项 →"
 
-#: src/app/web/templates/_board.html:106
+#: src/app/web/templates/_board.html:118
 msgid "Nothing here yet."
 msgstr "这里暂时还没有内容。"
 
-#: src/app/web/templates/_board.html:111
+#: src/app/web/templates/_board.html:123
 msgid "Nothing on your board yet."
 msgstr "你的看板上暂时还没有内容。"
 
-#: src/app/web/templates/_board.html:111
+#: src/app/web/templates/_board.html:123
 msgid "Find events to follow →"
 msgstr "查找想关注的活动 →"
 
@@ -807,38 +813,38 @@ msgstr "无需操作"
 msgid "Not applied"
 msgstr "未申请"
 
-#: src/app/web/templates/_deadline_rows.html:100
+#: src/app/web/templates/_deadline_rows.html:111
 #, python-format
 msgid "+%(count)s more round"
 msgid_plural "+%(count)s more rounds"
 msgstr[0] "+还有 %(count)s 个轮次"
 
-#: src/app/web/templates/_deadline_rows.html:109
+#: src/app/web/templates/_deadline_rows.html:124
 msgid "Your status"
 msgstr "你的申请状态"
 
-#: src/app/web/templates/_deadline_rows.html:109
+#: src/app/web/templates/_deadline_rows.html:124
 #: src/app/web/templates/preferences.html:192
 msgid "Closes"
 msgstr "截止时间"
 
-#: src/app/web/templates/_deadline_rows.html:109
+#: src/app/web/templates/_deadline_rows.html:124
 msgid "Round"
 msgstr "轮次"
 
-#: src/app/web/templates/_deadline_rows.html:110
+#: src/app/web/templates/_deadline_rows.html:125
 msgid "What happens"
 msgstr "状态说明"
 
-#: src/app/web/templates/_deadline_rows.html:110
+#: src/app/web/templates/_deadline_rows.html:125
 msgid "You"
 msgstr "你"
 
-#: src/app/web/templates/_deadline_rows.html:114
+#: src/app/web/templates/_deadline_rows.html:129
 msgid "Nothing coming up on the events you follow."
 msgstr "你关注的活动暂无即将到来的安排。"
 
-#: src/app/web/templates/_deadline_rows.html:119
+#: src/app/web/templates/_deadline_rows.html:147
 #, python-format
 msgid "+%(count)s more event"
 msgid_plural "+%(count)s more events"

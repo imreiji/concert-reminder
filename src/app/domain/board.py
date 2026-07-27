@@ -19,7 +19,9 @@ you already have.
 """
 
 import enum
+from collections.abc import Sequence
 from datetime import datetime, timedelta
+from typing import Any
 
 from app.domain.types import LotteryOutcome
 
@@ -100,3 +102,56 @@ def pill_tone(column: Column, next_deadline: datetime | None, now: datetime) -> 
     if remaining <= _SOON_WITHIN:
         return "p-off"
     return "p-quiet"
+
+
+# How many ladder rungs one board card shows. Two, because two answer the only
+# questions a card is asked: where do I stand, and what is next.
+VISIBLE_RUNGS = 2
+
+
+def visible_rungs(
+    rungs: Sequence[Any],
+) -> tuple[list[tuple[int, Any]], int]:
+    """The rungs one board card shows, numbered, plus how many it hid.
+
+    A long campaign has a long ladder, and a card that renders all of it stops
+    being scannable -- uniform card height is what makes the four columns read
+    as a board. Two rungs carry the whole story: the one that EXPLAINS the
+    card's column (the last rung something has actually happened on -- the last
+    non-"todo") and the next thing the user could act on after it (the first
+    following "live" or "todo"). Everything else is either settled history or
+    too far ahead to matter, and the full ladder is one click away on the
+    concert page. Nothing here is interactive, so nothing is lost by hiding it
+    -- capture actions live on Coming up rows, never on a card.
+
+    Returns `(pairs, hidden)` where each pair is `(position, rung)` with
+    `position` the rung's ORIGINAL 1-based place in the full ladder. That
+    matters: the card's mark for a "live"/"todo" rung is its ladder number, so
+    filtering must not renumber what survives -- rungs 3 and 4 of five stay
+    "3" and "4", not "1" and "2".
+
+    `rungs` is typed loosely on purpose: it is `db.service.Rung`, and importing
+    that here would drag the ORM into pure domain code. Only `.state` is read.
+    """
+    if len(rungs) <= VISIBLE_RUNGS:
+        return [(i, r) for i, r in enumerate(rungs, start=1)], 0
+
+    # The rung that explains the column: the last one something happened on.
+    state_at = None
+    for i, r in enumerate(rungs):
+        if r.state != "todo":
+            state_at = i
+    if state_at is None:
+        # Nothing recorded and nothing open yet -- there is no standing to
+        # explain, so the head of the ladder is what is next.
+        keep = list(range(min(VISIBLE_RUNGS, len(rungs))))
+    else:
+        keep = [state_at]
+        for i in range(state_at + 1, len(rungs)):
+            if rungs[i].state in ("live", "todo"):
+                keep.append(i)
+                break
+
+    # Ladder order, no repeats, never more than the cap.
+    keep = sorted(set(keep))[:VISIBLE_RUNGS]
+    return [(i + 1, rungs[i]) for i in keep], len(rungs) - len(keep)

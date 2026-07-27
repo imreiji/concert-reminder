@@ -823,6 +823,14 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .rung.is-done .name { color: var(--dim); text-decoration: line-through; }
 .rung.is-todo .name { color: var(--dim); }
 .rung .stat { font-size: .75rem; color: var(--dim); }
+/* The capped ladder's remainder line (domain.board.visible_rungs). A count,
+   not a control: it never expands, so it gets no pointer, no hover and no
+   affordance -- it sits in the mark column's gutter so the rung labels above
+   it keep their alignment. */
+.rmore {
+  padding: .3rem 0 0 calc(14px + .55rem);
+  font-size: .75rem; color: var(--dim);
+}
 
 /* Coming up -- five aligned columns: where you stand, when, what, what
    happens, what you can do. Its own class rather than the older `.rows`

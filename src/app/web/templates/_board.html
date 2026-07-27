@@ -82,8 +82,20 @@
         {%- if live_days %}{{ day_month(live_days[0].starts_at_utc) }}{% endif -%}
       </span>
       {% if card.rungs %}
+      {#- The ladder is CAPPED (domain.board.visible_rungs): the rung that
+          explains this card's column plus the next actionable one. Uniform
+          card height is what makes the four columns scannable, and nothing
+          on a card is interactive, so hiding rungs costs nothing -- the full
+          ladder is one click away on the concert page. The hidden count is
+          PLAIN TEXT, never a <details>: a card must not expand (owner
+          decision). Positions come from visible_rungs, not loop.index --
+          a live/todo rung's mark IS its ladder number. -#}
+      {% set vis, hidden = visible_rungs(card.rungs) %}
       <span class="ladder">
-        {% for r in card.rungs %}{{ rung(r, loop.index) }}{% endfor %}
+        {% for pos, r in vis %}{{ rung(r, pos) }}{% endfor %}
+        {% if hidden %}
+        <span class="rmore">{% trans count=hidden %}+{{ count }} earlier round{% pluralize %}+{{ count }} earlier rounds{% endtrans %}</span>
+        {% endif %}
       </span>
       {% endif %}
       {% if card.next_deadline %}

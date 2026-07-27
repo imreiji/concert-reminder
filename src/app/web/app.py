@@ -17,6 +17,7 @@ from app.config import settings
 from app.db.models import User
 from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
 from app.db.session import get_session
+from app.domain.board import visible_rungs
 from app.domain.sentence import split_slots
 from app.domain.timezones import fmt_day_month, fmt_dual, fmt_dual_lines, utc_to_jst
 from app.domain.types import TagKind
@@ -56,6 +57,9 @@ templates.env.globals["day_month"] = lambda dt: fmt_day_month(dt, i18n.get_local
 templates.env.globals["deadline_label"] = lambda anchor: i18n.gettext(LABEL_BY_ANCHOR[anchor])
 templates.env.globals["round_kind_label"] = lambda kind: i18n.gettext(LABEL_BY_ROUND_KIND[kind])
 templates.env.globals["current_locale"] = i18n.get_locale  # {{ current_locale() }}
+# The board card's ladder cap. Pure (domain.board), registered here so the
+# rule has exactly one definition and _board.html can call it inline.
+templates.env.globals["visible_rungs"] = visible_rungs
 
 
 def sentence_slots(pattern: str, slots: dict[str, Markup]) -> Markup:

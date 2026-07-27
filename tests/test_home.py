@@ -372,6 +372,47 @@ async def test_open_column_renders_the_cap_and_reports_the_true_remainder(client
     assert "+3 more" in html
 
 
+async def test_board_card_ladder_is_capped_with_a_plain_text_remainder(client):
+    """A long campaign renders only the two rungs that matter -- the one that
+    explains the column and the next actionable one -- plus a plain-text count
+    of what was hidden. It is NOT a <details>: a board card must not expand,
+    because uniform card height is what makes the columns scannable and
+    nothing on a card is interactive anyway. The kept rungs also keep their
+    ORIGINAL ladder numbers, since a todo rung's mark IS its position."""
+    async def build(seed):
+        now = datetime.now(UTC)
+        c = await seed.concert("long-ladder", title="Long ladder")
+        r1 = await seed.round(c, "R1", opens=now - timedelta(days=30),
+                              closes=now - timedelta(days=25))
+        r2 = await seed.round(c, "R2", opens=now - timedelta(days=20),
+                              closes=now - timedelta(days=15))
+        r3 = await seed.round(c, "R3", opens=now - timedelta(days=10),
+                              closes=now - timedelta(days=5))
+        await seed.round(c, "R4", opens=now + timedelta(days=5),
+                         closes=now + timedelta(days=10))
+        await seed.round(c, "R5", opens=now + timedelta(days=15),
+                         closes=now + timedelta(days=20))
+        await record_round_outcome(seed.s, USER, r1.id, LotteryOutcome.LOST)
+        await record_round_outcome(seed.s, USER, r2.id, LotteryOutcome.LOST)
+        await record_round_outcome(seed.s, USER, r3.id, LotteryOutcome.APPLIED)
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    card = html.split('data-event-id="long-ladder"', 1)[1].split("</a>", 1)[0]
+
+    assert card.count('class="rung') == 2
+    assert ">R3<" in card and ">R4<" in card
+    assert ">R1<" not in card and ">R5<" not in card
+    # Original 1-based ladder position, not a renumbering of what survived.
+    assert '<span class="rmark m-todo">4</span>' in card
+    # One plain-text remainder, no disclosure widget anywhere on the card.
+    assert card.count('class="rmore"') == 1
+    assert "+3 earlier rounds" in card
+    assert "<details" not in card and "<summary" not in card
+
+
 # ── Coming up: the capture surface ───────────────────────────────────────
 
 

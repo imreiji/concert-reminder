@@ -1,10 +1,16 @@
 """Pure board placement. A concert lands in exactly one column, chosen by its
 most advanced outcome across all rounds -- money owed outranks a round you
 could still enter, and a won-but-unpaid upgrade outranks a secured base."""
+from collections import namedtuple
 from datetime import UTC, datetime, timedelta
 
-from app.domain.board import Column, column_for, pill_tone
+from app.domain.board import Column, column_for, pill_tone, visible_rungs
 from app.domain.types import LotteryOutcome as LO
+
+# A stand-in for db/service.py's Rung, which is ORM-side: importing it here
+# would drag sqlalchemy into a pure-domain test. visible_rungs only ever reads
+# `.state`, so a namedtuple with the same field names is a faithful double.
+R = namedtuple("R", "round_id label state detail")
 
 
 def base(*outcomes):
@@ -125,3 +131,40 @@ def test_over_a_week_is_quiet():
 
 def test_no_next_deadline_is_quiet():
     assert pill_tone(Column.APPLIED, None, NOW) == "p-quiet"
+
+
+# -- visible_rungs: the board card's ladder cap -------------------------------
+
+
+def test_visible_rungs_returns_everything_when_short():
+    rungs = [R(1, "1次", "lost", None), R(2, "2次", "live", None)]
+    visible, hidden = visible_rungs(rungs)
+    assert [p for p, _ in visible] == [1, 2]
+    assert hidden == 0
+
+
+def test_visible_rungs_keeps_the_state_rung_and_the_next_actionable():
+    rungs = [
+        R(1, "最速", "lost", None), R(2, "1次", "lost", None),
+        R(3, "2次", "applied", None), R(4, "一般", "todo", None),
+        R(5, "FCFS", "todo", None),
+    ]
+    visible, hidden = visible_rungs(rungs)
+    assert [p for p, _ in visible] == [3, 4]      # original positions kept
+    assert [r.label for _, r in visible] == ["2次", "一般"]
+    assert hidden == 3
+
+
+def test_visible_rungs_all_settled_ladder():
+    rungs = [R(1, "1次", "lost", None), R(2, "2次", "lost", None),
+             R(3, "一般", "paid", None)]
+    visible, hidden = visible_rungs(rungs)
+    assert [r.label for _, r in visible] == ["一般"]
+    assert hidden == 2
+
+
+def test_visible_rungs_nothing_recorded_yet_keeps_the_head():
+    rungs = [R(i, f"r{i}", "todo", None) for i in range(1, 6)]
+    visible, hidden = visible_rungs(rungs)
+    assert [p for p, _ in visible] == [1, 2]
+    assert hidden == 3
