@@ -619,6 +619,48 @@ async def test_the_header_counts_distinct_performers_not_the_sum(client):
     assert "4 performers" not in panel
 
 
+async def test_the_trailer_block_renders_without_a_label_row(client):
+    """The `{% if cluster.group %}` branch, from the other side. A performer
+    in no attached group belongs to nobody, so her block must carry NO
+    `.pclabel` -- an empty label row would read as an unnamed group, and
+    borrowing the neighbouring group's label would be a lie."""
+    cid = await seed_concert(client.db)
+    await add_group_with_members(client.db, cid, "Aqours", ["Chika"])
+    await add_tag(client.db, cid, "Guest Star", TagKind.ARTIST)
+    login(client)
+
+    panel = _performers_panel(client)
+    blocks = panel.split('class="pcluster"')[1:]
+    assert len(blocks) == 2
+    trailer = next(b for b in blocks if ">Guest Star<" in b)
+    assert "pclabel" not in trailer
+    assert ">Aqours<" not in trailer
+    # ...and the labelled one still has its row, or the assertion above
+    # would pass on a panel that lost every label.
+    assert sum(1 for b in blocks if "pclabel" in b) == 1
+
+
+async def test_a_groups_only_bill_shows_the_label_but_no_count(client):
+    """Owner ruling, 2026-07-27: at zero the count disappears rather than
+    reading "0 performers". A group attached with none of its members
+    attached is a line-up nobody has listed yet -- the label row says that
+    already, and a zero would say the opposite."""
+    cid = await seed_concert(client.db)
+    gid, _members = await make_group(client.db, "Aqours", ["Chika", "Riko"])
+    await attach_existing(client.db, cid, [gid])
+    login(client)
+
+    panel = _performers_panel(client)
+    assert ">Aqours<" in panel          # the label row survives
+    assert "performer" not in panel     # no count, singular or plural
+    assert "0 " not in panel
+    # ...and no empty chip row under it. An empty div still pays .pclabel's
+    # bottom margin (measured: 5.6px), which makes the gap after a member-less
+    # group 20px where every other cluster boundary is 14.4px. `:empty` cannot
+    # reach it -- the template's indentation puts whitespace inside the div.
+    assert "chiprow" not in panel
+
+
 async def test_a_concert_page_with_groups_renders(client):
     """The MissingGreenlet guard. Tag.members is a lazy self-referential m2m:
     a template that walked it during async rendering would answer 500 here,
