@@ -106,7 +106,9 @@ def test_no_scattered_max_width_breakpoints_reappear():
     # it is deliberately excluded from this max-width tally). The tablet work
     # absorbed the old 1024 and 960 breakpoints; what remains is:
     #   1040 (.layout collapse), 900 (.rnd2), 860 (.plyt), 700 (mobile),
-    #   380 (nested, inside the 700 block), 760 (.fsheet bottom sheet) = 6.
+    #   380 (nested, inside the 700 block), and a SECOND 700 (the .fsheet
+    #   bottom sheet, which was the old 760 query until .layout's collapse
+    #   moved to 1040 and took the sheet boundary with it) = 6.
     # A new scattered breakpoint bumps this and fails the guard, which is the
     # point -- band rules belong in the one section above, not a fresh query.
     blocks = re.findall(r"@media \(max-width: \d+px\) \{", css())

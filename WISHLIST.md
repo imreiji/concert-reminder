@@ -127,49 +127,23 @@ it already sat directly behind the entry that shipped, so it rises by
 removal alone. Everything below it was pushed up one by the same removal,
 never demoted or promoted on merit.
 
+The second 2026-07-27 pass ships the new #1 the same day it inherited the
+spot: de-crowding "Coming up", four tasks, spec and plan first. Home's
+deadline list is per-concert blocks now -- one lead row chosen by the same
+`_wants_you` rule the concert page's "Next for you" uses, the rest behind a
+"+N more rounds" fold, and 6 of 10 concerts visible with a page-level
+"+N more events" fold. Two owner rulings closed it out (the fold says
+"events", and member rows keep a hairline between them), and the
+measurement pass found a pre-existing tablet-band bug worth fixing on the
+spot. Entries renumbered 1-15. The re-rank moves nothing on merit: board-card
+ladder collapse rises to #1 by removal and is cheaper for it -- the fold
+vocabulary now exists and is proven, and that entry can reuse it -- but its
+open question was never the mechanism, so its impact reading is unchanged.
+
 ## Proposed (highest impact first)
 
 
-### 1. De-crowd "Coming up": one row per round, one block per concert
-
-Impact: medium-high (raised from medium) - effort: medium. Raised:
-2026-07-19 (Home/Discover split, branch review) as the per-anchor half;
-expanded and re-ranked 2026-07-26 (owner usage feedback).
-
-`upcoming_deadlines` emits one row per future anchor, so a single round
-with opens/closes/results/payment ahead of it takes up to four of Home's
-ten "Coming up" slots, all naming the same round. The correctness half of
-this (each of those rows offering its own independent capture buttons,
-including on a round nobody could have entered yet) was fixed on
-2026-07-19 by gating capture on `DeadlineRow.can_capture`; what remains is
-purely the row budget. Deferred rather than done because collapsing
-changes the shape of the fragment that `POST /rounds/{id}/outcome` swaps
-back in via htmx, and the no-buttons gate already removed the harm.
-
-The collapsed shape already exists with tests behind it: the concert
-page's per-leg round rows (2026-07-19) render one row per ROUND with a
-single primary anchor chosen by `_primary_anchor`. What remains is
-deciding whether Home wants the same rule and re-pointing the htmx swap
-at it.
-
-Expanded 2026-07-26 (owner usage feedback): the second crowding dimension
-is multiple ROUNDS per concert, not just multiple anchors per round -- a
-concert mid-campaign can hold several of Home's ten slots by itself. The
-fix stacks: collapse each round to its `_primary_anchor` row (this entry's
-original half), then group a concert's rows under one block showing the
-next moment plus a "N more rounds" fold. Rose to #2 on the owner's report,
-behind per-leg outcome truth only; that shipped on 2026-07-27, so this
-leads the list now -- and its covered-round suppression has already
-removed some of these rows, so de-crowd against the post-suppression row
-set, not today's.
-
-Reinforced along the way by upgrade rounds (2026-07-19: one more
-anchor-bearing round per concert for eligible viewers) and by the
-2026-07-21 mobile retrofit (each row became a bordered card, so the same
-row budget now costs several screens of scroll on a phone instead of a
-few pixels of table height on desktop).
-
-### 2. Board cards: collapse the ladder on round-heavy concerts
+### 1. Board cards: collapse the ladder on round-heavy concerts
 
 Impact: medium-high - effort: small. Raised: 2026-07-26 (owner usage
 feedback).
@@ -185,7 +159,7 @@ collapsed shape is an owner UX call (fold vs cap vs scroll) -- ask before
 building. Note `board_cards` eager-loads exactly days/rounds/tags; any new
 data a collapsed view needs must ride those loads (MissingGreenlet).
 
-### 3. Group the performer chips by group on the concert page
+### 2. Group the performer chips by group on the concert page
 
 Impact: medium - effort: small. Raised: 2026-07-26 (owner usage feedback).
 
@@ -201,7 +175,7 @@ clusters default collapsed, and that clustering keys off tags actually
 attached to the concert (members whose group tag is absent stay
 ungrouped).
 
-### 4. Admin-only catalogue export (never any user data)
+### 3. Admin-only catalogue export (never any user data)
 
 Impact: medium - effort: small-medium. Raised: 2026-07-26 (owner).
 
@@ -219,7 +193,7 @@ region/city/address, urls), zipped under `GET /admin/export.zip` behind
 re-importability matters or a read-only JSON dump is enough -- the YAML
 shape costs a little more and pays only if it does.
 
-### 5. event_id slugs should prefer title_en
+### 4. event_id slugs should prefer title_en
 
 Impact: low-medium - effort: small. Raised: 2026-07-23 (assistant, while
 verifying the import path).
@@ -234,7 +208,7 @@ at every create boundary, the fix is one line of preference -- slug from
 concerts keep their ids (event_id is editor-owned after creation; no
 backfill).
 
-### 6. Agent-import review-debt batch (deferred minors)
+### 5. Agent-import review-debt batch (deferred minors)
 
 Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
 whole-branch review of the agent-import build; the first three triaged
@@ -255,7 +229,7 @@ it works today, but it's a typo waiting to confuse someone (spotted
 behavior-safe today; batched so they stop being rediscovered by every
 future reviewer.
 
-### 7. Minute-level reminder offsets
+### 6. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -295,7 +269,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 8. Eventernote actor-page discovery
+### 7. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -315,7 +289,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 9. Franchise-aware round-label suggestions
+### 8. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -336,7 +310,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 10. Nine of ten `RoundKind` members are purely cosmetic
+### 9. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -359,7 +333,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 11. Pin the Python version across dev, CI and the server
+### 10. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -383,7 +357,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 12. PWA / installability
+### 11. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -403,7 +377,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 13. In-app LLM extraction behind the same draft seam
+### 12. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -421,7 +395,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 14. Minor demo-parity cosmetics
+### 13. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -449,7 +423,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 15. Discover sort in the content head, plus the catalogue-count note
+### 14. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -475,7 +449,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 16. Name the destination on the sign-in bounce
+### 15. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -491,7 +465,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#14) and the Discover head (#15) because
+Ranked below the demo-parity batch (#13) and the Discover head (#14) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -509,6 +483,71 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### De-crowd "Coming up": one block per concert, two folds (2026-07-27)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-27-coming-up-decrowd-design.md`
++ impl plan `docs/superpowers/plans/2026-07-27-coming-up-decrowd.md`, four
+tasks on branch `coming-up-decrowd`. Proposed #1, filed 2026-07-19 as the
+per-anchor half and expanded 2026-07-26 with the many-rounds-per-concert
+dimension; built the day the entry reached the top of the list. Home's
+"Coming up" is no longer a flat list of anchors: `my_deadline_blocks`
+(`db/service.py`, built ON `my_deadline_rows`, no second derivation)
+collapses each round to its soonest future anchor, groups what is left into
+one `ConcertBlock` per concert, and hands the template a header line
+(title, venue, performance date), a LEAD row, and the rest. The concert is
+named once per block instead of once per anchor, which is the de-crowding.
+
+Which row leads is the same question the concert page's "Next for you"
+already answered, so it is now literally the same rule: `_needs_you` was
+generalized to a primitive `_wants_you(outcome, can_capture, closes_at_utc,
+now)` that both surfaces call -- standing first (APPLIED awaiting a result,
+WON owing payment), then soonest -- pinned by a test asserting the two
+answer identically on shared inputs, so a future edit cannot drift them.
+Two native `<details>` folds carry the overflow: "+N more rounds" inside a
+block and, past `VISIBLE_BLOCKS = 6` of `DEADLINE_ROWS_LIMIT = 10`
+concerts, a page-level "+N more events". Both are PRESENTATION, never
+filtering -- every folded row is in the DOM with its capture form intact,
+so the fold can never become a second silent limit and the htmx swap and
+the fold always agree about how much exists. `DEADLINE_ROWS_LIMIT` keeps
+its name and its role as the one constant `GET /` and
+`POST /rounds/{id}/outcome` share, and now counts concerts.
+
+Two owner rulings landed at the end. The page-level fold says "events",
+not "concerts", matching the empty state directly above it -- a msgid
+change, with both catalogues' existing msgstrs carried across byte-for-byte
+because ja/zh already used their event-word. And the hairline BETWEEN
+member rows came back: the first pass moved it to the block boundary only,
+which read as one run-on paragraph once a three-round block was expanded.
+It returns as a border-top on revealed rows only, so a collapsed block
+still shows exactly one rule and the fold summary is never boxed.
+
+Measurement (seeded temp DB + iframe harness at 375/730/1200 in both
+themes, per the measure-don't-reason rule) earned its keep twice: it caught
+a PRE-EXISTING tablet-band bug -- the band's `data-happens` `::after` had
+been dead since the band shipped, killed by a main-body `display: none`,
+and its content string's CSS escape ate its own separator space -- and it
+rejected the first separator placement, which sandwiched the collapsed
+fold's summary between two hairlines. Both fixed, the first with a new
+guard test so a silent re-break fails CI. Other deviations from the spec
+are recorded in the spec itself: `_needs_you` keeps its `covered` veto
+outside the shared primitive (per-leg outcomes added it after the plan was
+written), and both `data-happens` and `.act-c` carry the anchor verb alone
+now that the cell beside them names the round.
+
+Revision pass: board-card ladder collapse rises to #1 by removal, and this
+build makes it CHEAPER without making it more urgent -- the fold vocabulary
+it will need now exists and is proven (native `<details>`, our own rotating
+caret, the "+N more" summary shape, and a house rule that a fold hides
+nothing the DOM lacks), so the open question there is unchanged and still
+the only real work: what the collapsed ladder SHOWS is an owner UX call,
+not a mechanism. Not re-ranked on merit: cheaper is not higher-impact, its
+medium-high reading stands, and it already sat directly behind the entry
+that just shipped. Nothing else moved -- performer-chip grouping, the
+catalogue export and everything below touch other surfaces entirely, and
+this build neither obsoletes nor enables them. Entries renumbered 1-15; the
+sign-in-bounce entry's demo-parity/Discover-head pointer was bumped in
+place once more.
 
 ### Per-leg outcome truth: covered rounds stop asking, wins record per day (2026-07-27)
 

@@ -616,7 +616,21 @@ deleting them.
   row carries, so the header must stay moment-agnostic while the body names
   the moment. Narrowing the pick to `Anchor.CLOSES` to justify the old header
   was considered and rejected -- an opening round or a results announcement
-  genuinely needs attention, and filtering would hide real urgency. `/discover` (`routes/discover.py` +
+  genuinely needs attention, and filtering would hide real urgency.
+  **Coming up is per-concert BLOCKS, not a flat list**: `my_deadline_blocks`
+  collapses each round to its soonest future anchor and groups what is left
+  under one block per concert -- a header naming the concert once, the LEAD
+  row, and the rest behind a fold -- so the row budget counts concerts, not
+  anchors. Which row leads is `_wants_you`, the SAME predicate the concert
+  page's "Next for you" uses (`_needs_you` is a thin adapter over it): keep
+  them one rule, don't grow a second. Both folds -- "+N more rounds" in a
+  block, "+N more events" past `VISIBLE_BLOCKS` -- are native `<details>`
+  and are presentation ONLY: every folded row is in the DOM with its
+  capture form intact, since rendering on expand would need a round trip
+  and would make the fold a second silent limit beside
+  `DEADLINE_ROWS_LIMIT`. Discover's "Coming up soon" list stays FLAT on
+  purpose -- it calls `upcoming_deadlines` directly, and chronological is
+  the right shape for a catalogue nobody has standing on. `/discover` (`routes/discover.py` +
   `discover.html`) is the catalogue: "what's on", and it is **public** --
   `current_user`, not `require_user`, the only content page in the app an
   anonymous visitor can reach. Header nav is Home / Discover / Tags and
@@ -662,9 +676,15 @@ deleting them.
   or a real GET `<form>` so it degrades to slower server-side filtering with
   JS disabled. Add a fourth filter the same way.
 - **Mobile is a retrofit, not a second design**: every phone rule lives in
-  `style.css`'s single `@media (max-width: 700px)` section at the end of
-  the file (banner comment marks its start) -- desktop pixels stay
-  untouched by construction, since nothing outside that block may change.
+  a banner-commented `@media (max-width: 700px)` section at the end of the
+  file -- desktop pixels stay untouched by construction, since nothing
+  outside those blocks may change. There are TWO such top-level blocks, not
+  one: the main retrofit section, and a second one right after it holding
+  the `.fsheet` bottom-sheet presentation alone (its own banner explains
+  why it is separate -- it used to be a 760px query, and moved to 700 when
+  `.layout`'s collapse went to 1040). New phone rules go in the FIRST
+  block; the second stays single-purpose. Both are counted by
+  `test_theme_and_tokens.py`'s top-level query pin.
   **The tablet band (701-1040px) follows the same discipline**: one
   banner-commented `@media (min-width: 701px) and (max-width: 1040px)`
   section (just before the phone section) holds every band rule -- the

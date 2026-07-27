@@ -1,9 +1,11 @@
 # De-crowd "Coming up": one row per round, one block per concert
 
-Date: 2026-07-27. Status: designed with the owner (three decisions
-recorded below), pending implementation. WISHLIST Proposed #1. Branch
-`coming-up-decrowd`, stacked on `per-leg-outcomes` (PR #97) because this
-de-crowds the row set that branch reshaped.
+Date: 2026-07-27. Status: **implemented (2026-07-27)** — four tasks on
+branch `coming-up-decrowd`, stacked on `per-leg-outcomes` (PR #97)
+because this de-crowds the row set that branch reshaped. Designed with
+the owner (three decisions recorded below); the deviations the build
+made against this text are recorded at the bottom. WISHLIST Proposed #1
+at design time, Shipped since.
 
 ## Problem
 
@@ -184,6 +186,60 @@ keep the existing full-width 44px action buttons.
   (`test_i18n_catalogues.py` enforces).
 - Mobile: block header and fold render inside the phone section; the
   breakpoint-count guard still passes.
+
+## Implementation deviations (recorded)
+
+Everything below shipped differently from the text above. Each is
+deliberate; none was an oversight found afterwards.
+
+1. **`_needs_you` keeps its `covered` veto, outside the shared rule.**
+   §B says `_needs_you(row, now)` becomes a one-line adapter over
+   `_wants_you`. It is a one-line adapter *plus* a conjunct: per-leg
+   outcomes (shipped days earlier on the branch below this one) had
+   already given the concert page's predicate a `not row.covered` veto —
+   a round whose legs are all secured elsewhere wants nothing from you.
+   `DeadlineRow` has no equivalent field at that point (covered rounds
+   are filtered out of the deadline set upstream), so the veto stays at
+   the `_needs_you` call site rather than moving into the shared
+   primitive. The plan text was simply written before that branch
+   landed. Pinned by a test asserting both surfaces answer identically
+   on the inputs they share.
+2. **`data-happens` carries the anchor verb ALONE.** §F only requires
+   the tablet band's fold to keep working. It could not keep working
+   unchanged: the attribute used to carry "<round label> <verb>" because
+   the cell it decorates held the concert TITLE. Blocks moved the title
+   into the header and gave that cell the ROUND, so the old content
+   printed "FC lottery · FC lottery closes" in the band. The attribute
+   now adds only what the dropped column contributes.
+3. **`.act-c` carries the verb alone too**, for the same reason at
+   desktop width: the round is named once per row, in `.title-c`. The
+   bold-label `b` styling that led that cell went with it.
+4. **A pre-existing tablet-band bug was fixed in passing.** Measurement
+   during Task 3 found the band's `::after` had been dead since the band
+   section was written: the `.title-c small` it hangs off was
+   `display: none` from the main body, and its content string's leading
+   CSS escape (`" \00b7 "`) ate its own trailing space, so even alive it
+   would have rendered "·closes". Both fixed inside the band, with a new
+   guard test so a silent re-break fails CI.
+5. **Owner ruling — the page-level fold says "events", not
+   "concerts".** §C names the msgid "+{n} more concert(s)"; the rest of
+   the UI (including the empty state directly above it) says *event*.
+   The msgid pair was changed to "+{n} more event(s)" and both
+   catalogues carried their existing msgstrs across unchanged — ja
+   「ほか{n}件のイベント」 and zh「+还有 {n} 场活动」 already used each
+   language's event-word, so no retranslation was needed. The CSS class
+   stays `.moreconcerts`: it is not user-visible, and renaming it would
+   churn the stylesheet and the tests for nothing.
+6. **Owner ruling — member rows inside a block keep a separator.** The
+   first pass moved the hairline to the block boundary only (§ nothing
+   in this spec required that; it was Task 3's reading of "de-crowding")
+   and an expanded three-round block read as one run-on paragraph. A
+   `--line` hairline is back as a border-TOP on REVEALED rows only:
+   a collapsed block (the common case) still shows exactly one rule, the
+   fold's summary is never boxed between two hairlines, and the last row
+   in a block can never carry a trailing rule. No new media query — the
+   phone needs no counterpart, since a phone member row is already a
+   bordered card drawing that same 1px on all four sides.
 
 ## Out of scope
 
