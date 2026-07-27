@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-27 11:32-0300\n"
+"POT-Creation-Date: 2026-07-27 15:44-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -15,21 +15,21 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:32
-#: src/app/bot/views.py:195 src/app/db/service.py:1376
+#: src/app/bot/views.py:195 src/app/db/service.py:1474
 msgid "opens"
 msgstr "申请开始"
 
 #: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:33
-#: src/app/bot/views.py:197 src/app/db/service.py:1377
+#: src/app/bot/views.py:197 src/app/db/service.py:1475
 msgid "closes"
 msgstr "截止"
 
-#: src/app/bot/messages.py:34 src/app/db/service.py:1378
+#: src/app/bot/messages.py:34 src/app/db/service.py:1476
 msgid "results announced"
 msgstr "结果公布"
 
 #: src/app/bot/messages.py:35 src/app/bot/views.py:202
-#: src/app/db/service.py:1379 src/app/web/templates/setup.html:155
+#: src/app/db/service.py:1477 src/app/web/templates/setup.html:155
 msgid "payment due"
 msgstr "付款截止"
 
@@ -64,7 +64,7 @@ msgid "{unit} ago"
 msgstr "{unit}前"
 
 #: src/app/bot/messages.py:76 src/app/bot/messages.py:173
-#: src/app/db/service.py:1380 src/app/web/templates/tags.html:370
+#: src/app/db/service.py:1478 src/app/web/templates/tags.html:370
 msgid "event"
 msgstr "活动"
 
@@ -297,7 +297,7 @@ msgstr "落选 — {day}"
 msgid "Not going — {day}"
 msgstr "不参加 — {day}"
 
-#: src/app/bot/views.py:710 src/app/web/templates/_round_rows.html:150
+#: src/app/bot/views.py:710 src/app/web/templates/_round_rows.html:200
 msgid "Not going"
 msgstr "不参加"
 
@@ -420,130 +420,130 @@ msgstr "延后"
 msgid "same-day"
 msgstr "当天"
 
-#: src/app/db/service.py:1384
+#: src/app/db/service.py:1482
 msgid "Lottery round"
 msgstr "抽选轮次"
 
-#: src/app/db/service.py:1385
+#: src/app/db/service.py:1483
 msgid "Eligibility item sale"
 msgstr "抽选资格商品发售"
 
-#: src/app/db/service.py:1386
+#: src/app/db/service.py:1484
 msgid "Stream ticket sale"
 msgstr "直播票发售"
 
-#: src/app/db/service.py:1387
+#: src/app/db/service.py:1485
 msgid "General sale"
 msgstr "一般发售"
 
-#: src/app/db/service.py:1388
+#: src/app/db/service.py:1486
 msgid "Result announcement"
 msgstr "结果公布"
 
-#: src/app/db/service.py:1389
+#: src/app/db/service.py:1487
 msgid "Payment deadline"
 msgstr "付款截止"
 
-#: src/app/db/service.py:1390
+#: src/app/db/service.py:1488
 msgid "First come, first served"
 msgstr "先到先得"
 
-#: src/app/db/service.py:1391
+#: src/app/db/service.py:1489
 msgid "Overseas tour package"
 msgstr "海外观演旅行套餐"
 
-#: src/app/db/service.py:1392
+#: src/app/db/service.py:1490
 msgid "Upgrade round"
 msgstr "升级抽选"
 
-#: src/app/db/service.py:1393
+#: src/app/db/service.py:1491
 msgid "Other"
 msgstr "其他"
 
-#: src/app/db/service.py:2264 src/app/db/service.py:2410
-#: src/app/web/templates/_board.html:67 src/app/web/templates/discover.html:79
+#: src/app/db/service.py:2394 src/app/db/service.py:2540
+#: src/app/web/templates/_board.html:73 src/app/web/templates/discover.html:79
 #: src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "多个"
 
-#: src/app/db/service.py:3238
+#: src/app/db/service.py:3495
 #, python-brace-format
 msgid "{n}d"
 msgstr "{n}天"
 
-#: src/app/db/service.py:3240
+#: src/app/db/service.py:3497
 #, python-brace-format
 msgid "{n}h"
 msgstr "{n}小时"
 
-#: src/app/db/service.py:3241
+#: src/app/db/service.py:3498
 #, python-brace-format
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/service.py:3338
+#: src/app/db/service.py:3595
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "升级中签 — 最迟于 {day} 付款"
 
-#: src/app/db/service.py:3339
+#: src/app/db/service.py:3596
 msgid "Upgrade won — payment due"
 msgstr "升级中签 — 付款截止"
 
-#: src/app/db/service.py:3358
+#: src/app/db/service.py:3615
 msgid "Upgrade · Applied"
 msgstr "升级 · 已申请"
 
-#: src/app/db/service.py:3361
+#: src/app/db/service.py:3618
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "升级 · {n}后截止"
 
-#: src/app/db/service.py:3364
+#: src/app/db/service.py:3621
 msgid "Upgrade · Open now"
 msgstr "升级 · 申请开放中"
 
-#: src/app/db/service.py:3370 src/app/web/templates/_board.html:23
+#: src/app/db/service.py:3627 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:35
 #: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "已获票"
 
-#: src/app/db/service.py:3381
+#: src/app/db/service.py:3638
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "中签 — 最迟于 {day} 付款"
 
-#: src/app/db/service.py:3382
+#: src/app/db/service.py:3639
 msgid "Won — payment due"
 msgstr "中签 — 付款截止"
 
-#: src/app/db/service.py:3391
+#: src/app/db/service.py:3648
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind} · 已申请"
 
-#: src/app/db/service.py:3411
+#: src/app/db/service.py:3668
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind} · {n}后截止"
 
-#: src/app/db/service.py:3416
+#: src/app/db/service.py:3673
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind} · 开放中"
 
-#: src/app/db/service.py:3422
+#: src/app/db/service.py:3679
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind} · {n}后开放"
 
-#: src/app/db/service.py:3429
+#: src/app/db/service.py:3686
 msgid "All rounds closed"
 msgstr "所有轮次均已截止"
 
-#: src/app/db/service.py:4654 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:4911 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -553,7 +553,7 @@ msgstr "所有轮次均已截止"
 msgid "Title"
 msgstr "标题"
 
-#: src/app/db/service.py:4658 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:4915 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -566,17 +566,17 @@ msgstr "标题"
 msgid "Notes"
 msgstr "备注"
 
-#: src/app/db/service.py:4664
+#: src/app/db/service.py:4921
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "场次 {n} 名称"
 
-#: src/app/db/service.py:4669
+#: src/app/db/service.py:4926
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "轮次 {n} 名称"
 
-#: src/app/db/service.py:4678 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:4935 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -591,13 +591,37 @@ msgstr "轮次 {n} 名称"
 msgid "Name"
 msgstr "名称"
 
-#: src/app/db/service.py:4683
+#: src/app/db/service.py:4940
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
 #: src/app/web/templates/_venue_create_dialog.html:46
 msgid "City"
 msgstr "城市"
+
+#: src/app/web/app.py:106
+#, python-format
+msgid "%(count)s lost"
+msgid_plural "%(count)s lost"
+msgstr[0] "落选 %(count)s 个"
+
+#: src/app/web/app.py:108
+#, python-format
+msgid "%(count)s skipped"
+msgid_plural "%(count)s skipped"
+msgstr[0] "跳过 %(count)s 个"
+
+#: src/app/web/app.py:110
+#, python-format
+msgid "%(count)s covered"
+msgid_plural "%(count)s covered"
+msgstr[0] "已获票 %(count)s 个"
+
+#: src/app/web/app.py:112
+#, python-format
+msgid "%(count)s upcoming"
+msgid_plural "%(count)s upcoming"
+msgstr[0] "尚未开放 %(count)s 个"
 
 #: src/app/web/routes/discover.py:55 src/app/web/templates/_board.html:20
 #: src/app/web/templates/home.html:123
@@ -707,40 +731,52 @@ msgstr "已申请"
 msgid "Won — pay"
 msgstr "中签 — 去付款"
 
-#: src/app/web/templates/_board.html:28
+#: src/app/web/templates/_board.html:33
 msgid "lost"
 msgstr "落选"
 
-#: src/app/web/templates/_board.html:29 src/app/web/templates/setup.html:154
+#: src/app/web/templates/_board.html:34
+msgid "skipped"
+msgstr "跳过"
+
+#: src/app/web/templates/_board.html:35 src/app/web/templates/setup.html:154
 msgid "applied"
 msgstr "已申请"
 
-#: src/app/web/templates/_board.html:30
+#: src/app/web/templates/_board.html:36
 msgid "won"
 msgstr "中签"
 
-#: src/app/web/templates/_board.html:31
+#: src/app/web/templates/_board.html:37
 msgid "paid"
 msgstr "已付款"
 
-#: src/app/web/templates/_board.html:32
+#: src/app/web/templates/_board.html:38
 msgid "open"
 msgstr "开放中"
 
-#: src/app/web/templates/_board.html:104
+#: src/app/web/templates/_board.html:109
+#: src/app/web/templates/_deadline_rows.html:111
+#: src/app/web/templates/_round_rows.html:165
+#, python-format
+msgid "+%(count)s more round"
+msgid_plural "+%(count)s more rounds"
+msgstr[0] "+还有 %(count)s 个轮次"
+
+#: src/app/web/templates/_board.html:128
 #, python-format
 msgid "+%(n)s more →"
 msgstr "+还有 %(n)s 项 →"
 
-#: src/app/web/templates/_board.html:106
+#: src/app/web/templates/_board.html:130
 msgid "Nothing here yet."
 msgstr "这里暂时还没有内容。"
 
-#: src/app/web/templates/_board.html:111
+#: src/app/web/templates/_board.html:135
 msgid "Nothing on your board yet."
 msgstr "你的看板上暂时还没有内容。"
 
-#: src/app/web/templates/_board.html:111
+#: src/app/web/templates/_board.html:135
 msgid "Find events to follow →"
 msgstr "查找想关注的活动 →"
 
@@ -807,38 +843,32 @@ msgstr "无需操作"
 msgid "Not applied"
 msgstr "未申请"
 
-#: src/app/web/templates/_deadline_rows.html:100
-#, python-format
-msgid "+%(count)s more round"
-msgid_plural "+%(count)s more rounds"
-msgstr[0] "+还有 %(count)s 个轮次"
-
-#: src/app/web/templates/_deadline_rows.html:109
+#: src/app/web/templates/_deadline_rows.html:124
 msgid "Your status"
 msgstr "你的申请状态"
 
-#: src/app/web/templates/_deadline_rows.html:109
+#: src/app/web/templates/_deadline_rows.html:124
 #: src/app/web/templates/preferences.html:192
 msgid "Closes"
 msgstr "截止时间"
 
-#: src/app/web/templates/_deadline_rows.html:109
+#: src/app/web/templates/_deadline_rows.html:124
 msgid "Round"
 msgstr "轮次"
 
-#: src/app/web/templates/_deadline_rows.html:110
+#: src/app/web/templates/_deadline_rows.html:125
 msgid "What happens"
 msgstr "状态说明"
 
-#: src/app/web/templates/_deadline_rows.html:110
+#: src/app/web/templates/_deadline_rows.html:125
 msgid "You"
 msgstr "你"
 
-#: src/app/web/templates/_deadline_rows.html:114
+#: src/app/web/templates/_deadline_rows.html:129
 msgid "Nothing coming up on the events you follow."
 msgstr "你关注的活动暂无即将到来的安排。"
 
-#: src/app/web/templates/_deadline_rows.html:119
+#: src/app/web/templates/_deadline_rows.html:147
 #, python-format
 msgid "+%(count)s more event"
 msgid_plural "+%(count)s more events"
@@ -859,7 +889,7 @@ msgid "A cancelled performance stays in the list, but appears faded with a label
 msgstr "已取消的场次仍会保留在列表中，但会以淡色显示并带有标记。"
 
 #: src/app/web/templates/_editor_leg_card.html:44
-#: src/app/web/templates/_round_rows.html:150
+#: src/app/web/templates/_round_rows.html:200
 msgid "Cancelled"
 msgstr "已取消"
 
@@ -1091,28 +1121,28 @@ msgstr "需要持有以下轮次的门票：%(names)s"
 msgid "Requires a ticket from an earlier round"
 msgstr "需要持有前一轮次的门票"
 
-#: src/app/web/templates/_round_rows.html:152
+#: src/app/web/templates/_round_rows.html:202
 #, python-format
 msgid "doors %(when)s"
 msgstr "入场 %(when)s"
 
-#: src/app/web/templates/_round_rows.html:167
+#: src/app/web/templates/_round_rows.html:217
 msgid "Going again"
 msgstr "再次参加"
 
-#: src/app/web/templates/_round_rows.html:167
+#: src/app/web/templates/_round_rows.html:217
 msgid "Not going to this day"
 msgstr "不参加这一场"
 
-#: src/app/web/templates/_round_rows.html:171
+#: src/app/web/templates/_round_rows.html:221
 msgid "No rounds yet for this leg."
 msgstr "这个场次还没有轮次。"
 
-#: src/app/web/templates/_round_rows.html:188
+#: src/app/web/templates/_round_rows.html:238
 msgid "Rounds"
 msgstr "轮次"
 
-#: src/app/web/templates/_round_rows.html:194
+#: src/app/web/templates/_round_rows.html:244
 msgid "No performances yet."
 msgstr "还没有场次。"
 

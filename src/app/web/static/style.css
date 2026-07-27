@@ -816,13 +816,23 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
   width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line);
   display: grid; place-items: center; font-size: 9px; font-weight: 700; line-height: 1;
 }
-.m-lost { border-color: var(--dim); color: var(--dim); }
+/* Settled-and-inert marks share one dim treatment; the GLYPH tells them apart
+   (x lost, en dash skipped), so a declined round needs no colour of its own. */
+.m-lost, .m-skip { border-color: var(--dim); color: var(--dim); }
 .m-live { border-color: var(--danger); background: var(--danger); color: var(--raise); }
 .m-wait { border-color: var(--off); color: var(--off); }
 .m-todo { border-color: var(--line); color: transparent; }
 .rung.is-done .name { color: var(--dim); text-decoration: line-through; }
 .rung.is-todo .name { color: var(--dim); }
 .rung .stat { font-size: .75rem; color: var(--dim); }
+/* The capped ladder's remainder line (domain.board.visible_rungs). A count,
+   not a control: it never expands, so it gets no pointer, no hover and no
+   affordance -- it sits in the mark column's gutter so the rung labels above
+   it keep their alignment. */
+.rmore {
+  padding: .3rem 0 0 calc(14px + .55rem);
+  font-size: .75rem; color: var(--dim);
+}
 
 /* Coming up -- five aligned columns: where you stand, when, what, what
    happens, what you can do. Its own class rather than the older `.rows`
@@ -1100,6 +1110,32 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .rnd2 .dts .more { display: block; font-size: .75rem; }
 .rnd2 .acts { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; }
 .rnd2 .acts .ics { text-decoration: none; }
+
+/* The per-leg fold. Same quiet affordance as Home's .morerounds -- UA marker
+   off, our own rotating caret, dim .78rem -- because it is the same promise:
+   nothing is filtered away, it is one click below. Kept as its own selector
+   rather than folded into the .deadline-rows rules, which are scoped to that
+   page's row grid and would drag its padding onto a leg card. */
+.moreround > summary {
+  list-style: none; cursor: pointer; width: fit-content;
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: .4rem;
+  font-size: .78rem; color: var(--dim);
+  padding: .5rem .35rem .5rem .1rem; border-radius: 3px;
+}
+.moreround > summary::-webkit-details-marker { display: none; }
+.moreround > summary::before {
+  content: "\25B8"; font-size: .7rem; transition: transform 150ms ease;
+}
+.moreround[open] > summary::before { transform: rotate(90deg); }
+.moreround > summary:hover { color: var(--ink); }
+/* The composition chips. They restate what is inside the fold, so they read
+   as annotation, not as tags you can press -- border and wash only, no
+   hover, no pointer. */
+.fchip {
+  font-size: .7rem; line-height: 1; padding: .2rem .4rem;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--chip); color: var(--dim); white-space: nowrap;
+}
 
 @media (max-width: 900px) {
   .rnd2 { grid-template-columns: 7rem 1fr; }

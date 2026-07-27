@@ -954,9 +954,11 @@ async def test_my_deadline_blocks_query_count_is_pinned(session):
 
     `my_deadline_blocks` fetches `limit * ANCHOR_FAN_OUT` (6x) rows so that
     grouping by concert does not under-fill, and `my_deadline_rows` still runs
-    two loops that scale with what comes back: `covered_round_ids` once per
-    concert the viewer holds a ticket on, and `_day_capture_context` once per
-    round they are partway through. Everything else there is batched.
+    ONE loop that scales with what comes back: `_day_capture_context`, once per
+    round the viewer is partway through. The covered-round derivation used to
+    be a second such loop -- once per concert they hold a ticket on, ~6
+    statements each -- and is now a single batched pass over the whole set.
+    Everything else there is batched.
 
     So this pins the number rather than a design. Same technique as
     `test_due_reminders_batches_queries_regardless_of_row_count` above: count
@@ -1018,12 +1020,15 @@ async def test_my_deadline_blocks_query_count_is_pinned(session):
         event.remove(session.bind.sync_engine, "before_cursor_execute", _count)
 
     assert blocks  # the page is not empty, or the count would measure nothing
-    # MEASURED: 42 statements for this page (2026-07-27). Not a target -- a
-    # record. Roughly 12 of those are the batched reads the row decorator does
-    # once each; the other ~30 are the two per-item loops, ~6 statements per
-    # secured concert (covered_round_ids re-derives its rounds, legs, opt-outs
-    # and day results per concert) plus one per round partway through. Four
-    # secured concerts is not an unusual page. Left pinned rather than
-    # redesigned: the shape is a known cost, and a bound is what makes the
-    # next change to it visible.
-    assert len(queries) <= 45, f"my_deadline_blocks ran {len(queries)} queries"
+    # MEASURED: 19 statements for this page (2026-07-27), down from 42 before
+    # covered_round_ids_by_concert batched the per-concert derivation. Not a
+    # target -- a record. The composition: 8 batched reads for the deadline
+    # fetch and the row decorator, 1 probe for which concerts the viewer holds
+    # a ticket on, 5 for the covered derivation (now ONE pass no matter how
+    # many of those concerts there are, where it was ~6 EACH), 1 for the
+    # rounds with per-day results, and 4 -- the only per-item ones left -- for
+    # _day_capture_context, one per round partway through. Four secured
+    # concerts is not an unusual page. The remaining loop is left pinned
+    # rather than redesigned: it is a known cost, and a bound is what makes
+    # the next change to it visible.
+    assert len(queries) <= 22, f"my_deadline_blocks ran {len(queries)} queries"

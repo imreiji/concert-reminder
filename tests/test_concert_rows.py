@@ -570,3 +570,248 @@ async def test_covered_still_vetoes_a_round_you_applied_to(session):
 
     rows = [row for leg in legs for row in leg.rounds]
     assert concert_next_moment(rows, now=NOW).round_.label != "A-only"
+
+
+# ── the per-leg fold: what still bears on you ────────────────────────────
+#
+# `LegRounds` splits its own rounds into `visible` and `folded` (the full set
+# stays on `.rounds`, which "Next for you" still reads). The four clauses that
+# keep a round visible live in `_split_leg_rounds`; these pin one story each.
+
+
+async def one_leg(s, event_id: str = "solo"):
+    """A single-leg concert, so a test can state exactly the ladder it means
+    instead of working around `seed`'s three already-open rounds."""
+    await ensure_user(s, 42, "reiji")
+    await ensure_user(s, 99, "someone-else")
+    concert = Concert(title="One Night", event_id=event_id, created_by=42)
+    s.add(concert)
+    await s.flush()
+    leg = ConcertDay(concert_id=concert.id, label="The night", starts_at_utc=dt(9, 1, 9))
+    s.add(leg)
+    await s.flush()
+    await s.commit()
+    return concert, leg
+
+
+async def add_round(s, concert, label, *, opens=None, closes=None, results=None,
+                    applies_to=None, kind=RoundKind.LOTTERY_ROUND):
+    r = Round(
+        concert_id=concert.id, kind=kind, label=label, opens_at_utc=opens,
+        closes_at_utc=closes, results_at_utc=results, applies_to=applies_to,
+    )
+    s.add(r)
+    await s.flush()
+    await s.commit()
+    return r
+
+
+def leg_group(legs, leg_id: int):
+    return next(leg for leg in legs if leg.day.id == leg_id)
+
+
+async def test_a_secured_leg_keeps_its_receipt_and_folds_the_rest(session):
+    """Owner decision 2: the round that got you in stays a full row even once
+    it is settled -- you can always see WHICH round did it without expanding.
+    Everything else on that leg is history or moot, so it folds."""
+    concert, leg = await one_leg(session)
+    early = await add_round(session, concert, "Early lottery",
+                            opens=dt(3, 1), closes=dt(3, 20), applies_to=[leg.id])
+    winner = await add_round(session, concert, "FC lottery",
+                             opens=dt(4, 1), closes=dt(4, 20), applies_to=[leg.id])
+    # Open right now, and moot: the leg is already secured through FC lottery.
+    await add_round(session, concert, "General sale",
+                    opens=dt(5, 25), closes=dt(6, 20), applies_to=[leg.id])
+    await record_round_outcome(session, 42, early.id, LotteryOutcome.APPLIED)
+    await record_round_outcome(session, 42, early.id, LotteryOutcome.LOST)
+    # The receipt: won, then paid -- fully settled, still visible.
+    await record_round_outcome(session, 42, winner.id, LotteryOutcome.APPLIED)
+    await record_round_outcome(session, 42, winner.id, LotteryOutcome.WON)
+    await record_round_outcome(session, 42, winner.id, LotteryOutcome.PAID)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    group = leg_group(legs, leg.id)
+
+    assert [r.round_.id for r in group.visible] == [winner.id]
+    assert labels(group.folded) == ["Early lottery", "General sale"]
+    assert dict(group.fold_counts)["lost"] == 1
+    # The general sale is moot on a leg already secured -- it folds as covered.
+    assert dict(group.fold_counts)["covered"] == 1
+
+
+async def test_an_unsecured_leg_shows_awaited_open_and_exactly_one_upcoming(session):
+    """Clause 4: `_wants_you` gates on the round having OPENED, so without it
+    the whole upcoming ladder would vanish. Exactly one shows -- the soonest --
+    and the rest fold."""
+    concert, leg = await one_leg(session)
+    awaiting = await add_round(session, concert, "Awaiting",
+                               opens=dt(5, 1), closes=dt(5, 20), results=dt(6, 20),
+                               applies_to=[leg.id])
+    open_now = await add_round(session, concert, "Open now",
+                               opens=dt(5, 25), closes=dt(6, 20), applies_to=[leg.id])
+    soonest = await add_round(session, concert, "Later 1",
+                              opens=dt(6, 10), closes=dt(6, 30), applies_to=[leg.id])
+    await add_round(session, concert, "Later 2",
+                    opens=dt(6, 15), closes=dt(7, 5), applies_to=[leg.id])
+    await add_round(session, concert, "Later 3",
+                    opens=dt(6, 20), closes=dt(7, 10), applies_to=[leg.id])
+    await record_round_outcome(session, 42, awaiting.id, LotteryOutcome.APPLIED)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    group = leg_group(legs, leg.id)
+
+    assert {r.round_.id for r in group.visible} == {awaiting.id, open_now.id, soonest.id}
+    assert len([r for r in group.visible if r.round_.opens_at_utc > NOW]) == 1
+    assert dict(group.fold_counts)["upcoming"] == 2
+
+
+async def test_an_eligible_upgrade_is_always_visible_and_a_locked_one_folds(session):
+    """Clause 3. The upgrade here is long closed and unrecorded, so nothing
+    else could keep it up: eligibility alone is what does."""
+    concert, leg = await one_leg(session)
+    base = await add_round(session, concert, "FC lottery",
+                           opens=dt(4, 1), closes=dt(4, 20), applies_to=[leg.id])
+    upgrade = await add_round(session, concert, "Seat upgrade",
+                              opens=dt(4, 25), closes=dt(5, 10), applies_to=[leg.id],
+                              kind=RoundKind.UPGRADE)
+    await record_round_outcome(session, 42, base.id, LotteryOutcome.APPLIED)
+    await record_round_outcome(session, 42, base.id, LotteryOutcome.WON)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    holder = leg_group(legs, leg.id)
+    assert upgrade.id in {r.round_.id for r in holder.visible}
+
+    # Someone holding no qualifying ticket cannot enter it, so it folds like
+    # any other settled row.
+    legs, _fallback = await concert_round_rows(session, 99, concert, now=NOW)
+    outsider = leg_group(legs, leg.id)
+    assert outsider.visible == ()
+    assert upgrade.id in {r.round_.id for r in outsider.folded}
+
+
+async def test_a_cancelled_leg_folds_everything(session):
+    """Nothing on a cancelled leg can bear on anyone. The leg row itself
+    stays (invariant 2) -- only its rounds go behind the fold."""
+    concert, _leg_a, leg_b, _r_a, r_both, _r_none = await seed(session, cancel_leg_b=True)
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    group = leg_group(legs, leg_b.id)
+
+    assert labels(group.rounds) == ["Both-legs"]
+    assert group.visible == ()
+    assert [r.round_.id for r in group.folded] == [r_both.id]
+
+
+async def test_a_viewer_with_no_standing_still_sees_the_open_round(session):
+    """Clause 2's no-standing half: an open round is a decision still yours to
+    make, so it never folds on someone who has recorded nothing."""
+    concert, leg_a, _leg_b, *_ = await seed(session)
+
+    legs, _fallback = await concert_round_rows(session, None, concert, now=NOW)
+    group = leg_group(legs, leg_a.id)
+
+    assert labels(group.visible) == ["A-only", "Both-legs", "General"]
+    assert group.folded == ()
+    assert group.fold_counts == ()
+
+
+async def test_rounds_stays_the_full_set_for_next_for_you(session):
+    """`concert_next_moment` iterates `.rounds`, and the header strip must
+    still be able to name a round the body has folded."""
+    concert, leg_a, _leg_b, r_a, r_both, _r_none = await seed(session)
+    await record_round_outcome(session, 42, r_a.id, LotteryOutcome.APPLIED)
+    await record_round_outcome(session, 42, r_a.id, LotteryOutcome.WON)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.LOST)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    for group in legs:
+        assert len(group.visible) + len(group.folded) == len(group.rounds)
+    assert labels(leg_group(legs, leg_a.id).rounds) == ["A-only", "Both-legs", "General"]
+
+
+async def test_a_locked_upgrade_never_takes_the_single_upcoming_slot(session):
+    """Clause 4 is "the next round you could still ENTER", and a locked upgrade
+    is not one. It is also the exact thing clause 3 exists to fold, so letting
+    it win the singular slot would both surface what should be hidden and bury
+    the base round the reader can actually enter."""
+    concert, leg = await one_leg(session)
+    upgrade = await add_round(session, concert, "Seat upgrade",
+                              opens=dt(6, 5), closes=dt(6, 15), applies_to=[leg.id],
+                              kind=RoundKind.UPGRADE)
+    base = await add_round(session, concert, "General sale",
+                           opens=dt(6, 10), closes=dt(6, 20), applies_to=[leg.id])
+
+    # No secured ticket anywhere, so the upgrade is locked -- and it opens
+    # FIRST, which is what would hand it the slot.
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    group = leg_group(legs, leg.id)
+
+    assert row_for(legs, leg.id, "Seat upgrade").upgrade_locked is True
+    assert [r.round_.id for r in group.visible] == [base.id]
+    assert [r.round_.id for r in group.folded] == [upgrade.id]
+
+
+async def test_an_eligible_upgrade_does_not_consume_the_upcoming_slot_either(session):
+    """Clause 3 already makes it visible on its own merit. Counting it twice
+    would spend the one clause-4 slot on a round that did not need it, folding
+    the next base round for nothing."""
+    await ensure_user(session, 42, "reiji")
+    concert = Concert(title="Two Nights", event_id="two-nights", created_by=42)
+    session.add(concert)
+    await session.flush()
+    leg_a = ConcertDay(concert_id=concert.id, label="Night A", starts_at_utc=dt(9, 1, 9))
+    leg_b = ConcertDay(concert_id=concert.id, label="Night B", starts_at_utc=dt(9, 2, 9))
+    session.add_all([leg_a, leg_b])
+    await session.flush()
+    await session.commit()
+
+    # The ticket is on Night A, so Night B is unsecured (clause 4 live there)
+    # while the upgrade is eligible concert-wide (no qualifiers = any secured
+    # ticket).
+    fc = await add_round(session, concert, "FC lottery",
+                         opens=dt(4, 1), closes=dt(4, 20), applies_to=[leg_a.id])
+    upgrade = await add_round(session, concert, "Seat upgrade",
+                              opens=dt(6, 5), closes=dt(6, 15), applies_to=[leg_b.id],
+                              kind=RoundKind.UPGRADE)
+    base = await add_round(session, concert, "General sale",
+                           opens=dt(6, 10), closes=dt(6, 20), applies_to=[leg_b.id])
+    await record_round_outcome(session, 42, fc.id, LotteryOutcome.APPLIED)
+    await record_round_outcome(session, 42, fc.id, LotteryOutcome.WON)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    group = leg_group(legs, leg_b.id)
+
+    assert row_for(legs, leg_b.id, "Seat upgrade").upgrade_locked is False
+    assert {r.round_.id for r in group.visible} == {upgrade.id, base.id}
+    assert group.folded == ()
+
+
+async def test_a_covered_round_you_applied_to_stays_visible(session):
+    """The ONE place this code and spec §A's prose read differently, pinned so
+    a future reader has to argue with it rather than flip it by accident.
+
+    §A says covered rounds fold; clause 2 is `_wants_you`, NOT `_needs_you`, so
+    a covered round you recorded APPLIED on stays up. Deliberate: the covered
+    veto exists to stop a button-less round LEADING the urgency panel, and
+    every other covered round folds anyway (both capture gates are shut, so
+    `_wants_you`'s no-standing arm is false). What is left is a result you are
+    genuinely still waiting on, and hiding your own recorded application
+    behind a fold reads as having lost it."""
+    concert, leg_a, _leg_b, r_a, r_both, _r_none = await seed(session)
+    await record_round_outcome(session, 42, r_a.id, LotteryOutcome.APPLIED)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.WON)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    row = row_for(legs, leg_a.id, "A-only")
+    assert row.covered is True
+    assert row.outcome is LotteryOutcome.APPLIED
+    # It offers no buttons (both gates shut) and it never leads "Next for you"
+    # -- `_needs_you` is what says so -- but it is not folded away.
+    assert _needs_you(row, NOW) is False
+    assert r_a.id in {r.round_.id for r in leg_group(legs, leg_a.id).visible}

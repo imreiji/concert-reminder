@@ -17,6 +17,7 @@ from app.config import settings
 from app.db.models import User
 from app.db.service import LABEL_BY_ANCHOR, LABEL_BY_ROUND_KIND
 from app.db.session import get_session
+from app.domain.board import visible_rungs
 from app.domain.sentence import split_slots
 from app.domain.timezones import fmt_day_month, fmt_dual, fmt_dual_lines, utc_to_jst
 from app.domain.types import TagKind
@@ -56,6 +57,9 @@ templates.env.globals["day_month"] = lambda dt: fmt_day_month(dt, i18n.get_local
 templates.env.globals["deadline_label"] = lambda anchor: i18n.gettext(LABEL_BY_ANCHOR[anchor])
 templates.env.globals["round_kind_label"] = lambda kind: i18n.gettext(LABEL_BY_ROUND_KIND[kind])
 templates.env.globals["current_locale"] = i18n.get_locale  # {{ current_locale() }}
+# The board card's ladder cap. Pure (domain.board), registered here so the
+# rule has exactly one definition and _board.html can call it inline.
+templates.env.globals["visible_rungs"] = visible_rungs
 
 
 def sentence_slots(pattern: str, slots: dict[str, Markup]) -> Markup:
@@ -76,6 +80,42 @@ def sentence_slots(pattern: str, slots: dict[str, Markup]) -> Markup:
 
 
 templates.env.globals["sentence_slots"] = sentence_slots
+
+
+def fold_count_label(kind: str, n: int) -> str:
+    """One state chip in a leg's fold summary ("2 lost", "1 upcoming").
+
+    Each kind is its OWN msgid rather than a sentence assembled from pieces:
+    composing "3 rounds - 2 lost, 1 skipped" out of fragments is a word-order
+    trap in ja/zh, and this project's rule is that translators own word order.
+    Chips turn the ordering into a layout question instead.
+
+    The English singular and plural are identical -- none of these words
+    inflects for number -- but the entries stay ngettext ones so a locale whose
+    plural rules DO differ has somewhere to say so; ja/zh are nplurals=1 and
+    collapse to one form. The literals are spelled out at each branch because
+    `pybabel extract` only sees literal arguments -- a lookup table keyed by
+    kind would extract nothing.
+
+    An unknown kind RAISES rather than falling through to a default, following
+    `domain/sentence.py:split_slots`: a silent default here would render a new
+    `_FOLD_KINDS` entry as somebody else's chip -- "3 cancelled" quietly
+    reading "3 upcoming" -- and nothing would fail. Loud at the seam instead.
+    """
+    if kind == "lost":
+        text = i18n.ngettext("%(count)s lost", "%(count)s lost", n)
+    elif kind == "skipped":
+        text = i18n.ngettext("%(count)s skipped", "%(count)s skipped", n)
+    elif kind == "covered":
+        text = i18n.ngettext("%(count)s covered", "%(count)s covered", n)
+    elif kind == "upcoming":
+        text = i18n.ngettext("%(count)s upcoming", "%(count)s upcoming", n)
+    else:
+        raise ValueError(f"no fold chip for {kind!r}")
+    return text % {"count": n}
+
+
+templates.env.globals["fold_count_label"] = fold_count_label
 # UGC parallel-column display: {{ loc(concert, "title") }} / {{ loc(tag, "name") }}
 # renders the viewer-locale variant, falling back to the original. Display
 # ONLY -- form values, data-* filter keys and URLs keep the original field.

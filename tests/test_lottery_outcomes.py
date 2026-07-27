@@ -22,6 +22,7 @@ from app.db.models import (
 )
 from app.db.service import (
     covered_round_ids,
+    covered_round_ids_by_concert,
     ensure_user,
     my_deadline_rows,
     record_remaining_days_lost,
@@ -483,13 +484,18 @@ async def test_auto_arm_catches_up_when_next_round_added_later(session):
 # ── Shared secured-days / covered-rounds derivation ────────────────────────
 
 
-async def seed_ab(s) -> tuple[Concert, ConcertDay, ConcertDay, Round, Round]:
+async def seed_ab(s, event_id: str = "ab-tour") -> tuple[
+    Concert, ConcertDay, ConcertDay, Round, Round
+]:
     """Minimal world for the derivation helpers: two legs, round A covering
     both legs, round B covering leg B only -- and nothing else, so
     `covered_round_ids` returns exactly what these tests reason about
-    (seed_two_legs' extra rounds would each answer the question too)."""
+    (seed_two_legs' extra rounds would each answer the question too).
+
+    `event_id` is a parameter only so the batched-derivation tests can stand up
+    a SECOND concert of the same shape; every other caller takes the default."""
     await ensure_user(s, 42, "reiji")
-    concert = Concert(title="AB Tour", event_id="ab-tour", created_by=42)
+    concert = Concert(title=f"AB Tour ({event_id})", event_id=event_id, created_by=42)
     s.add(concert)
     await s.flush()
     leg_a = ConcertDay(concert_id=concert.id, label="Leg A", starts_at_utc=dt(8, 1, 9))
@@ -730,6 +736,57 @@ async def test_covered_round_ids_excludes_upgrade_rounds(session):
     await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
 
     assert upgrade.id not in await covered_round_ids(session, 42, concert.id)
+
+
+async def test_batched_covered_matches_the_single_concert_helper(session):
+    """No concert's rows leak into another concert's fold.
+
+    NOT an equivalence proof between two implementations: `covered_round_ids`
+    is a thin wrapper over `covered_round_ids_by_concert` now, so both sides of
+    the comparison run the same code and this pins a batch of two against a
+    batch of one. That is still the interesting axis -- the batch loads
+    outcomes, day results and opt-outs across ALL concerts at once and folds
+    them per concert in memory, and a bug there shows up exactly as one
+    concert's rows reaching another's. The two shapes are chosen so it would:
+    one round covered only because a partial win and an opt-out COMPOUND, one
+    plain full win.
+
+    The real evidence that the fold's MEANING did not change when it was
+    batched is that the fold itself (`_covered_from_secured`) was left
+    byte-identical and the planner's suppression suites -- this file's
+    `_apply_outcome_suppression` tests and
+    `tests/test_leg_opt_out_suppression.py` -- were untouched and stayed
+    green."""
+    c1, c1_a, c1_b, c1_round_a, _c1_round_b = await seed_ab(session)
+    c1_round_c = await add_second_both_legs_round(session, c1, c1_a, c1_b)
+    await record_round_outcome(session, 42, c1_round_a.id, LotteryOutcome.APPLIED, NOW)
+    await record_round_day_result(session, 42, c1_round_a.id, c1_a.id, LegResult.WON, NOW)
+    await set_leg_opt_out(session, 42, c1_b.id, True, NOW)
+
+    c2, _c2_a, _c2_b, c2_round_a, c2_round_b = await seed_ab(session, event_id="ab-two")
+    await record_round_outcome(session, 42, c2_round_a.id, LotteryOutcome.WON, NOW)
+
+    batched = await covered_round_ids_by_concert(session, 42, {c1.id, c2.id})
+
+    assert batched[c1.id] == await covered_round_ids(session, 42, c1.id)
+    assert batched[c2.id] == await covered_round_ids(session, 42, c2.id)
+    # And the answers are not both trivially empty.
+    assert c1_round_c.id in batched[c1.id]
+    assert c2_round_b.id in batched[c2.id]
+
+
+async def test_batched_covered_skips_concerts_with_no_standing(session):
+    """A concert where the user holds nothing contributes nothing -- the empty
+    set, whether by absence or by an empty value."""
+    c1, _a, _b, c1_round_a, c1_round_b = await seed_ab(session)
+    c2, *_ = await seed_ab(session, event_id="ab-two")
+    await record_round_outcome(session, 42, c1_round_a.id, LotteryOutcome.WON, NOW)
+
+    batched = await covered_round_ids_by_concert(session, 42, {c1.id, c2.id})
+
+    assert c1_round_b.id in batched[c1.id]
+    assert batched.get(c2.id, set()) == set()
+    assert await covered_round_ids_by_concert(session, 42, set()) == {}
 
 
 # ── Per-day results: record_round_day_result / record_remaining_days_lost ──

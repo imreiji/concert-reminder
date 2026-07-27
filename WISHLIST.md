@@ -140,26 +140,42 @@ ladder collapse rises to #1 by removal and is cheaper for it -- the fold
 vocabulary now exists and is proven, and that entry can reuse it -- but its
 open question was never the mechanism, so its impact reading is unchanged.
 
+The third 2026-07-27 pass ships that #1 the day after it inherited the spot,
+and the owner answered its open UX question the way the entry could not:
+the board CAPS its ladder at two rungs plus an inert count line and never
+expands, because uniform card height is the whole point of a board. The same
+branch carried a second, unlisted piece -- the concert page's per-leg fold,
+raised by the owner on 2026-07-26 after per-leg outcomes turned a 3-leg
+x 6-round concert into eighteen rows -- so it is logged in Shipped as its
+own entry rather than backfilled into Proposed, exactly as the mobile
+retrofit and the signed-out redirect were. The arc also paid off the query
+debt the spec had been carrying since the "Coming up" build amplified it
+(Home 42 statements -> 19); no Proposed entry ever tracked that, so it is
+recorded inside the board-ladder Shipped entry rather than moved from
+anywhere. Entries renumbered 1-14; performer-chip grouping rises to #1 by
+pure removal, unchanged in substance, and the sign-in-bounce entry's
+demo-parity/Discover-head pointer was bumped in place once more.
+
+The ladder-declutter branch's own final review (2026-07-27) then ADDED two
+entries without shipping anything, which is the rarer kind of pass: both are
+pre-existing defects that build surfaced rather than caused, so neither is a
+regression to fix on the branch. The cancelled-leg-only concert enters at #3 --
+above the event_id slugs it displaces -- because it is wrong in a way the user
+can act on (an irreversible APPLIED press on a concert that is not happening)
+while a meaningless slug is only ugly, and it is the more visible of the two
+now that the per-leg fold empties such a leg's body. The opt-out fold reset
+enters at #5, below the slugs, as a place-losing annoyance in one flow. Every
+entry from the old #3 down was pushed down by insertion, never demoted on
+merit; entries renumbered 1-16 and the sign-in-bounce entry's
+demo-parity/Discover-head pointer was bumped in place once more. The branch's
+third defect -- a declined round taking a board card's "what's next" slot --
+was FIXED in the same review wave rather than filed, so it is deliberately
+absent from Proposed and recorded inside the board-ladder Shipped entry.
+
 ## Proposed (highest impact first)
 
 
-### 1. Board cards: collapse the ladder on round-heavy concerts
-
-Impact: medium-high - effort: small. Raised: 2026-07-26 (owner usage
-feedback).
-
-`_board.html` renders one ladder rung per round, so a concert with many
-rounds (every early wave plus general plus FCFS plus an upgrade) makes its
-kanban tile extremely long -- worst in the tablet/phone swipe rails, where
-one tall card stretches the whole board row. The board is read-only by
-design (capture lives on deadline rows), so the ladder is pure orientation
-and can compress: show the rung that explains the card's column plus the
-next actionable rung, and fold the rest into a "+N earlier" line. Exact
-collapsed shape is an owner UX call (fold vs cap vs scroll) -- ask before
-building. Note `board_cards` eager-loads exactly days/rounds/tags; any new
-data a collapsed view needs must ride those loads (MissingGreenlet).
-
-### 2. Group the performer chips by group on the concert page
+### 1. Group the performer chips by group on the concert page
 
 Impact: medium - effort: small. Raised: 2026-07-26 (owner usage feedback).
 
@@ -175,7 +191,7 @@ clusters default collapsed, and that clustering keys off tags actually
 attached to the concert (members whose group tag is absent stay
 ungrouped).
 
-### 3. Admin-only catalogue export (never any user data)
+### 2. Admin-only catalogue export (never any user data)
 
 Impact: medium - effort: small-medium. Raised: 2026-07-26 (owner).
 
@@ -193,6 +209,32 @@ region/city/address, urls), zipped under `GET /admin/export.zip` behind
 re-importability matters or a read-only JSON dump is enough -- the YAML
 shape costs a little more and pays only if it does.
 
+### 3. A concert whose every leg is cancelled still asks you to act
+
+Impact: low-medium - effort: small. Raised: 2026-07-27 (final review of the
+ladder-declutter branch; pre-existing, and starker since that build).
+
+`is_round_cancelled` implicitly cancels a round only when every leg in its
+`applies_to` is cancelled, and a GENERAL round -- empty/None `applies_to` --
+is deliberately exempt, because it is not tied to any leg. That exemption is
+right for a live concert and wrong for a dead one: on a concert whose only
+leg is cancelled, a general round is still "live" everywhere, so the concert
+keeps its "Next for you" strip, sits in the board's *Open now* column, and
+offers capture buttons on its Coming up row -- inviting an APPLIED press
+that `record_round_outcome` will never let the user take back (invariant 2:
+starting states apply once). The per-leg fold shipped on 2026-07-27 made it
+starker rather than causing it: the leg's own body now folds to nothing, so
+the page shows an urgency strip above a leg with visibly no rounds on it.
+
+The fix is not to widen `is_round_cancelled` -- a general round on a
+multi-leg concert with one cancelled leg must stay live -- but to add the
+concert-level question it cannot answer: every leg cancelled (and at least
+one leg existing, so a legitimately dateless concert is untouched) means
+nothing on this concert can be acted on. One derivation, consumed by the
+three surfaces, exactly as `_wants_you` is. Decide with the owner whether
+such a concert leaves the board entirely or shows as a cancelled card:
+invariant 2 keeps the rows themselves, so this is a display question.
+
 ### 4. event_id slugs should prefer title_en
 
 Impact: low-medium - effort: small. Raised: 2026-07-23 (assistant, while
@@ -208,7 +250,27 @@ at every create boundary, the fix is one line of preference -- slug from
 concerts keep their ids (event_id is editor-owned after creation; no
 backfill).
 
-### 5. Agent-import review-debt batch (deferred minors)
+### 5. Opting a leg out snaps the concert page's round folds shut
+
+Impact: low - effort: small-medium. Raised: 2026-07-27 (final review of the
+ladder-declutter branch).
+
+`POST /concerts/{event_id}/legs/{day_id}/opt-out` (`routes/subscriptions.py`)
+re-renders `_round_rows.html` as a whole-region outerHTML swap, and passes no
+fold state -- so a reader who had expanded a leg's "+N more rounds" history to
+check what they missed, then toggled a leg off, watches every fold on the page
+snap shut and loses their place.
+
+`open_round_id` is the WRONG instrument here, and reaching for it is the trap
+this entry exists to flag: it reopens the fold that OWNS a specific round, and
+an opt-out writes no round -- there is nothing to reopen around. The honest fix
+is general expanded-state preservation across an htmx swap of this region (the
+open `<details>` collected client-side before the request and restored after,
+or the fold state hoisted somewhere a re-render can read), which would also
+cover the outcome routes' folds without their per-round special case. Sized
+small-medium for that reason: the mechanism is the work, not the caller.
+
+### 6. Agent-import review-debt batch (deferred minors)
 
 Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
 whole-branch review of the agent-import build; the first three triaged
@@ -229,7 +291,7 @@ it works today, but it's a typo waiting to confuse someone (spotted
 behavior-safe today; batched so they stop being rediscovered by every
 future reviewer.
 
-### 6. Minute-level reminder offsets
+### 7. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -269,7 +331,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 7. Eventernote actor-page discovery
+### 8. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -289,7 +351,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 8. Franchise-aware round-label suggestions
+### 9. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -310,7 +372,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 9. Nine of ten `RoundKind` members are purely cosmetic
+### 10. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -333,7 +395,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 10. Pin the Python version across dev, CI and the server
+### 11. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -357,7 +419,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 11. PWA / installability
+### 12. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -377,7 +439,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 12. In-app LLM extraction behind the same draft seam
+### 13. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -395,7 +457,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 13. Minor demo-parity cosmetics
+### 14. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -423,7 +485,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 14. Discover sort in the content head, plus the catalogue-count note
+### 15. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -449,7 +511,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 15. Name the destination on the sign-in bounce
+### 16. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -465,7 +527,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#13) and the Discover head (#14) because
+Ranked below the demo-parity batch (#14) and the Discover head (#15) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -483,6 +545,127 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Cap the board card ladder at the rungs that matter (2026-07-27)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-27-ladder-declutter-design.md`
++ impl plan `docs/superpowers/plans/2026-07-27-ladder-declutter.md`, four
+tasks on branch `ladder-declutter`. Proposed #1, filed 2026-07-26 from the
+owner's usage feedback and built the day after the entry that outranked it
+shipped. The entry's one open question -- "exact collapsed shape is an owner
+UX call (fold vs cap vs scroll)" -- was answered: **cap, never expand.** A
+board card shows at most `VISIBLE_RUNGS = 2` rungs plus a plain, inert
+"+N more rounds" line. Not a `<details>`, deliberately: uniform card height
+is what makes four columns scan as a board, and an expandable card gives
+that back the moment anyone opens one. Nothing on a card is interactive
+anyway -- capture lives on Coming-up rows, an existing invariant -- so
+hiding rungs costs the reader nothing, and the full ladder is one click away
+on the concert page.
+
+The selection is a pure function, `domain/board.py:visible_rungs`, sitting
+beside `column_for` and `pill_tone` and taking the already-built rung list
+so the ORM stays out of pure code. It keeps the rung that EXPLAINS the
+card's column plus the first "live"/"todo" rung after it. Which rung
+explains the column is the one thing the plan got wrong and review caught:
+"the last non-todo rung" reads by POSITION, and on the ordinary
+mid-campaign shape `[lost, won, live]` -- a card sitting in "Won -- pay"
+because money owed outranks a round you could still enter -- position
+surfaces the open round and hides the win, leaving the card naming a column
+nothing on it explains. It now ranks by STANDING using `column_for`'s own
+precedence (won-upgrade > paid > won > applied), which forced `Rung` to
+carry `is_upgrade`: without it a `[paid, todo, won-upgrade]` ladder shows
+the paid rung while the card sits in "Won -- pay", the same failure in the
+upgrade corner. Surviving rungs keep their ORIGINAL ladder numbers -- a
+rung's mark IS its place in the full ladder, so rungs 3 and 4 of five stay
+"3" and "4". The count line reuses the existing "+N more round(s)" msgid
+from the Coming-up fold rather than minting an "earlier rounds" pair, which
+would have been a lie: the state rung can sit mid-ladder, so hidden rungs
+are not all earlier ones.
+
+Also paid off here: the query debt the spec carried in section D, which NO wishlist
+entry tracked -- it was recorded in the spec when the "Coming up" build
+amplified it, and folded into this arc rather than filed. `covered_round_ids`
+was called once per secured concert; the batched sibling
+`covered_round_ids_by_concert` takes one pass over the whole page. Home fell
+from **42 statements to 19** on a 12-concert page (pin tightened 45 -> 22).
+It is a pure refactor by construction: the shared fold `_covered_from_secured`
+is byte-identical and the planner's suppression suites were untouched and
+stayed green, which is the equivalence evidence.
+
+Revision pass: the concert-page per-leg fold shipped alongside this on the
+same branch and has its own Shipped entry below -- it was raised by the
+owner after this list was written, so it never appeared in Proposed.
+Performer-chip grouping rises to #1 by pure removal, unchanged in substance:
+it touches the concert page's Performing section, which neither half of this
+build goes near. Nothing else moved on merit. Worth recording for whoever
+takes #1: this build ADDS a reason to look at the concert page's chip wall,
+since the page's round list is now short enough that the chips are the most
+crowded thing left on it. Entries renumbered 1-14; the sign-in-bounce
+entry's demo-parity/Discover-head pointer was bumped in place once more.
+
+Final-review addendum (2026-07-27): the cap surfaced a latent defect in the
+rung vocabulary and the same wave fixed it, so it is recorded here rather
+than filed as its own entry. `_rung_state` mapped NOT_APPLIED onto "todo",
+making a round the viewer had declined indistinguishable from one that had
+not opened -- so with only two rungs to spend, a closed declined round could
+take the card's "what's next" slot and hide a genuinely open one, while the
+per-leg fold below counted that same round under its "skipped" chip. A
+declined round now has its own state, mark and label, sharing `_FOLD_KINDS`'
+word so the two declutter surfaces agree. `visible_rungs` needed no change:
+"skipped" is settled, so it already qualified for the state-rung fallback and
+was already excluded from the live/todo lookahead, and it takes no
+`_RUNG_STANDING` entry because `column_for`'s `_RANK` places nothing for
+NOT_APPLIED. The review's other two findings were pre-existing and are filed
+in Proposed (#3, #5).
+
+### Fold settled rounds per leg on the concert page (2026-07-27)
+
+Shipped as: the second half of the same spec, plan and branch as the entry
+above. Never a Proposed entry -- the owner raised it on 2026-07-26, after
+the per-leg-outcomes build made a round render under EVERY leg it covers and
+a 3-leg x 6-round concert became eighteen rows, most of them settled
+history. Logged here rather than backfilled into Proposed, the same way the
+mobile retrofit and the signed-out redirect were.
+
+One `<details class="moreround">` per leg, closed by default -- the owner's
+call over a single page-level toggle: you expand the leg you came for
+without expanding the other two, which is also how the page is already
+structured and how Home's blocks work. What stays visible is ONE rule, in
+`service._split_leg_rounds`: the round that secured the leg (its receipt --
+a second owner decision, so you can always see which round got you in
+without expanding, even once fully paid), anything that still wants
+something from you, an upgrade round you are eligible for, and -- when the
+leg is not secured -- exactly one upcoming round you could still enter.
+Everything else folds: losses, skips, rounds made moot by a ticket you
+already hold, locked upgrades, and every unopened round after the next one.
+A cancelled leg folds entirely.
+
+That "still wants something from you" clause is `_wants_you`, and this is
+its THIRD consumer, not a redefinition: Home's block lead, the concert
+page's "Next for you" strip and this fold now answer the same question the
+same way, pinned by the agreement test #98 added. Two rulings came out of
+review. Clause 4 excludes upgrades from its single slot entirely -- a locked
+upgrade is not enterable and an eligible one is already visible, and without
+the exclusion the slot could go to the locked one and fold the round you
+could actually enter. And a COVERED round with a recorded APPLIED stays
+visible: a pending application is an open obligation regardless of what else
+you hold, so `_needs_you`'s covered veto is a ranking rule for the
+one-moment strip, not a hiding rule. The spec's prose was corrected to match
+the code, not the other way round.
+
+The summary carries `+N more round(s)` plus state chips -- `N lost`,
+`N skipped`, `N covered`, `N upcoming` -- each its OWN msgid with its own
+plural. Deliberately chips rather than a composed sentence: assembling
+"3 earlier rounds -- 2 lost, 1 skipped" from fragments is a word-order trap
+in ja/zh, and this project's i18n rule is that translators own word order.
+Chips make the ordering a layout question instead. Folded rows are the SAME
+markup as visible ones through the same partial, so the fold hides rows and
+never changes them, and a folded round's capture form stays in the DOM and
+works -- verified by pressing one. One unbriefed fix earned its place: the
+outcome POST swaps the whole region, so a round answered from inside a fold
+used to vanish at the moment the reader acted on it; the route now passes
+the written round's id and that fold comes back open, the same server-side
+fix (no JS, no client-held state) Home got in #98.
 
 ### De-crowd "Coming up": one block per concert, two folds (2026-07-27)
 

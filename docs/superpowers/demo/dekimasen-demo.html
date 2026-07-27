@@ -153,13 +153,25 @@
     width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line);
     display: grid; place-items: center; font-size: 9px; font-weight: 700; line-height: 1;
   }
-  .m-lost { border-color: var(--dim); color: var(--dim); }
+  /* Settled-and-inert marks share one dim treatment; the glyph tells them
+     apart (x lost, en dash skipped -- a round you pressed "Not applying" on),
+     so a declined round needs no colour of its own. */
+  .m-lost, .m-skip { border-color: var(--dim); color: var(--dim); }
   .m-live { border-color: var(--danger); background: var(--danger); color: var(--raise); }
   .m-wait { border-color: var(--off); color: var(--off); }
   .m-todo { border-color: var(--line); color: transparent; }
   .rung.is-done .name { color: var(--dim); text-decoration: line-through; text-decoration-thickness: 1px; }
   .rung.is-todo .name { color: var(--dim); }
   .rung .stat { font-size: .75rem; color: var(--dim); }
+
+  /* The capped ladder's remainder line (domain.board.visible_rungs). A count,
+     not a control: it never expands, so it gets no pointer, no hover and no
+     affordance -- it sits in the mark column's gutter so the rung labels above
+     it keep their alignment. */
+  .rmore {
+    padding: .3rem 0 0 calc(14px + .55rem);
+    font-size: .75rem; color: var(--dim);
+  }
 
   /* ---- deadline rows --------------------------------------------------- */
   /* Five aligned columns: where you stand, when, what, what happens, what
@@ -398,6 +410,30 @@
   .rnd2 .dts b { display: block; color: var(--ink); font-weight: 600; }
   .rnd2 .dts .more { font-size: .75rem; }
   .rnd2 .acts { display: flex; gap: .4rem; justify-content: flex-end; }
+
+  /* The per-leg fold. Same quiet affordance as Home's .morerounds -- UA marker
+     off, our own rotating caret, dim .78rem -- because it is the same promise:
+     nothing is filtered away, it is one click below. */
+  .moreround > summary {
+    list-style: none; cursor: pointer; width: fit-content;
+    display: inline-flex; align-items: center; flex-wrap: wrap; gap: .4rem;
+    font-size: .78rem; color: var(--dim);
+    padding: .5rem .35rem .5rem .1rem; border-radius: 3px;
+  }
+  .moreround > summary::-webkit-details-marker { display: none; }
+  .moreround > summary::before {
+    content: "\25B8"; font-size: .7rem; transition: transform 150ms ease;
+  }
+  .moreround[open] > summary::before { transform: rotate(90deg); }
+  .moreround > summary:hover { color: var(--ink); }
+  /* The composition chips. They restate what is inside the fold, so they read
+     as annotation, not as tags you can press -- border and wash only, no
+     hover, no pointer. */
+  .fchip {
+    font-size: .7rem; line-height: 1; padding: .2rem .4rem;
+    border: 1px solid var(--line); border-radius: 999px;
+    background: var(--chip); color: var(--dim); white-space: nowrap;
+  }
 
   @media (max-width: 900px) {
     .rnd2 { grid-template-columns: 6rem 1fr; }
@@ -844,7 +880,7 @@
   <section>
     <div class="head">
       <h2>Your campaigns</h2>
-      <span class="note"><strong>2 open</strong> &middot; 2 awaiting results &middot; 1 payment due &middot; 3 secured</span>
+      <span class="note"><strong>2 open</strong> &middot; 3 awaiting results &middot; 1 payment due &middot; 3 secured</span>
     </div>
 
     <div class="board">
@@ -857,7 +893,7 @@
           <div class="ladder">
             <div class="rung"><span class="mark m-live">1</span><span class="name">FC presale R1</span><span class="stat">open</span></div>
             <div class="rung is-todo"><span class="mark m-todo">2</span><span class="name">General presale</span><span class="stat">28 Jul</span></div>
-            <div class="rung is-todo"><span class="mark m-todo">3</span><span class="name">General sale</span><span class="stat">10 Aug</span></div>
+            <div class="rmore">+1 more round</div>
           </div>
           <div class="foot"><span class="pill p-danger">6h left</span><span class="clock num">23:59 JST</span></div>
         </a>
@@ -866,7 +902,7 @@
           <div class="title">Live at Nakano</div>
           <div class="venue">中野サンプラザ &middot; 3 Sep</div>
           <div class="ladder">
-            <div class="rung is-done"><span class="mark m-lost">&times;</span><span class="name">FC presale</span><span class="stat">lost</span></div>
+            <div class="rung is-done"><span class="mark m-skip">&ndash;</span><span class="name">FC presale</span><span class="stat">skipped</span></div>
             <div class="rung"><span class="mark m-live">2</span><span class="name">General presale</span><span class="stat">open</span></div>
           </div>
           <div class="foot"><span class="pill p-off">4 days</span><span class="clock num">23:59 JST</span></div>
@@ -874,7 +910,7 @@
       </div>
 
       <div class="col">
-        <div class="col-head"><span class="dot d-applied"></span> Applied <span class="count num">2</span></div>
+        <div class="col-head"><span class="dot d-applied"></span> Applied <span class="count num">3</span></div>
         <a class="card" href="#" data-view="concert">
           <div class="artist">Aqours</div>
           <div class="title">9th LoveLive! Day 2</div>
@@ -893,6 +929,17 @@
             <div class="rung"><span class="mark m-wait">?</span><span class="name">Fan-club lottery</span><span class="stat">result 2 Aug</span></div>
           </div>
           <div class="foot"><span class="pill p-quiet">14 days</span></div>
+        </a>
+        <a class="card" href="#" data-view="concert">
+          <div class="artist">MyGO!!!!!</div>
+          <div class="title">Live at Zepp DiverCity</div>
+          <div class="venue">Zepp DiverCity (Tokyo) &middot; 14 Sep</div>
+          <div class="ladder">
+            <div class="rung"><span class="mark m-wait">2</span><span class="name">FC lottery R1</span><span class="stat">result 5 Aug</span></div>
+            <div class="rung is-todo"><span class="mark m-todo">3</span><span class="name">Lottery R2</span><span class="stat">if lost</span></div>
+            <div class="rmore">+4 more rounds</div>
+          </div>
+          <div class="foot"><span class="pill p-off">Result in 10 days</span></div>
         </a>
       </div>
 
@@ -1263,28 +1310,37 @@
         <button class="act no" type="button" data-leg="1">Not going to this day</button>
       </span>
     </div>
+    <!-- Secured: the round that won the ticket stays a full row outside the
+         fold (the receipt), everything else the reader no longer needs to
+         act on folds away. -->
     <div class="rnds">
-      <div class="rnd2 past">
-        <span><span class="pill p-quiet">Not applied</span></span>
-        <span class="nm">最速先行<em>Fastest presale &middot; fan club</em></span>
-        <span class="dts num"><b>Closed 30 Jun</b><span class="more">Result 4 Jul</span></span>
-        <span class="acts"></span>
-      </div>
       <div class="rnd2">
-        <span><span class="pill p-quiet">Not applied</span></span>
-        <span class="nm">先行抽選 R1<em>Lottery round 1</em></span>
-        <span class="dts num"><b>Closes Wed 23 Jul</b><span class="more">Result 28 Jul &middot; pay by 3 Aug</span></span>
-        <span class="acts">
-          <button class="act yes" type="button">I have applied</button>
-          <button class="act no" type="button" data-prune="Aqours 9th &mdash; Day 1">Not applying</button>
-        </span>
+        <span><span class="pill p-ok">Paid</span></span>
+        <span class="nm">先行抽選 R2<em>Lottery round 2</em></span>
+        <span class="dts num"><b>Won 18 Jul</b><span class="more">Paid 20 Jul &middot; Seat 1F B-08</span></span>
+        <span class="acts"><span class="done">Nothing to do</span></span>
       </div>
-      <div class="rnd2">
-        <span><span class="pill p-quiet">&mdash;</span></span>
-        <span class="nm">一般発売<em>General sale &middot; first come</em></span>
-        <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span></span>
-        <span class="acts"></span>
-      </div>
+      <details class="moreround">
+        <summary>+3 more rounds<span class="fchip">2 lost</span><span class="fchip">1 covered</span></summary>
+        <div class="rnd2 past">
+          <span><span class="pill p-quiet">Lost</span></span>
+          <span class="nm">最速先行<em>Fastest presale &middot; fan club</em></span>
+          <span class="dts num"><b>Result 20 Jun</b><span class="more">Applied 1 Jun</span></span>
+          <span class="acts"></span>
+        </div>
+        <div class="rnd2 past">
+          <span><span class="pill p-quiet">Lost</span></span>
+          <span class="nm">先行抽選 R1<em>Lottery round 1</em></span>
+          <span class="dts num"><b>Result 5 Jul</b><span class="more">Applied 25 Jun</span></span>
+          <span class="acts"></span>
+        </div>
+        <div class="rnd2">
+          <span><span class="pill p-quiet">&mdash;</span></span>
+          <span class="nm">一般発売<em>General sale &middot; first come</em></span>
+          <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span></span>
+          <span class="acts"></span>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -1296,13 +1352,10 @@
         <button class="act no" type="button" data-leg="2">Not going to this day</button>
       </span>
     </div>
+    <!-- Unsecured: the round awaiting result and the round armed behind it
+         still bear on the reader, so both stay visible; the round already
+         missed and the round too far out to matter yet fold away. -->
     <div class="rnds">
-      <div class="rnd2 past">
-        <span><span class="pill p-quiet">Not applied</span></span>
-        <span class="nm">最速先行<em>Fastest presale &middot; fan club</em></span>
-        <span class="dts num"><b>Closed 30 Jun</b><span class="more">Result 4 Jul</span></span>
-        <span class="acts"></span>
-      </div>
       <div class="rnd2">
         <span><span class="pill p-ok">Applied</span></span>
         <span class="nm">先行抽選 R1<em>Lottery round 1</em></span>
@@ -1315,12 +1368,21 @@
         <span class="dts num"><b>Opens Wed 30 Jul</b><span class="more">Closes 5 Aug &middot; result 9 Aug</span></span>
         <span class="acts"></span>
       </div>
-      <div class="rnd2">
-        <span><span class="pill p-quiet">&mdash;</span></span>
-        <span class="nm">一般発売<em>General sale &middot; first come</em></span>
-        <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span></span>
-        <span class="acts"></span>
-      </div>
+      <details class="moreround">
+        <summary>+2 more rounds<span class="fchip">1 skipped</span><span class="fchip">1 upcoming</span></summary>
+        <div class="rnd2 past">
+          <span><span class="pill p-quiet">Not applied</span></span>
+          <span class="nm">最速先行<em>Fastest presale &middot; fan club</em></span>
+          <span class="dts num"><b>Closed 30 Jun</b><span class="more">Result 4 Jul</span></span>
+          <span class="acts"></span>
+        </div>
+        <div class="rnd2">
+          <span><span class="pill p-quiet">&mdash;</span></span>
+          <span class="nm">一般発売<em>General sale &middot; first come</em></span>
+          <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span></span>
+          <span class="acts"></span>
+        </div>
+      </details>
     </div>
   </div>
 

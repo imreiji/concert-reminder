@@ -19,7 +19,9 @@ you already have.
 """
 
 import enum
+from collections.abc import Sequence
 from datetime import datetime, timedelta
+from typing import Any
 
 from app.domain.types import LotteryOutcome
 
@@ -100,3 +102,113 @@ def pill_tone(column: Column, next_deadline: datetime | None, now: datetime) -> 
     if remaining <= _SOON_WITHIN:
         return "p-off"
     return "p-quiet"
+
+
+# How many ladder rungs one board card shows. Two, because two answer the only
+# questions a card is asked: where do I stand, and what is next.
+VISIBLE_RUNGS = 2
+
+# Which rung STATES carry a standing, ranked the way column_for ranks the
+# outcomes behind them (paid > won > applied). "lost" and "skipped" are absent
+# for the same reason LOST and NOT_APPLIED place no column in _RANK above:
+# neither is an end state. "live"/"todo" are absent because they are timing,
+# not standing.
+_RUNG_STANDING: dict[str, int] = {"applied": 1, "won": 2, "paid": 3}
+
+# The upgrade exception, mirroring _UPGRADE_WON_RANK above so the two rankings
+# cannot disagree: a won-but-unpaid UPGRADE rung outranks a PAID one. Without
+# it a [paid, todo, won-upgrade] ladder lands the card in "Won -- pay" (money
+# owed) while surfacing the paid rung, so the card names a column nothing on
+# it explains.
+_UPGRADE_WON_STANDING = 4
+
+
+def _rung_standing(rung: Any) -> int:
+    if rung.is_upgrade and rung.state == "won":
+        return _UPGRADE_WON_STANDING
+    return _RUNG_STANDING.get(rung.state, 0)
+
+
+def visible_rungs(
+    rungs: Sequence[Any],
+) -> tuple[list[tuple[int, Any]], int]:
+    """The rungs one board card shows, numbered, plus how many it hid.
+
+    A long campaign has a long ladder, and a card that renders all of it stops
+    being scannable -- uniform card height is what makes the four columns read
+    as a board. Two rungs carry the whole story: the one that EXPLAINS the
+    card's column and the next thing the user could act on after it (the first
+    following "live" or "todo"). Everything else is either settled history or
+    too far ahead to matter, and the full ladder is one click away on the
+    concert page. Nothing here is interactive, so nothing is lost by hiding it
+    -- capture actions live on Coming up rows, never on a card.
+
+    The state rung is picked by column_for's OWN precedence -- the highest
+    standing recorded anywhere on the ladder (won-upgrade > paid > won >
+    applied, the upgrade rung ranked exactly as _UPGRADE_WON_RANK ranks its
+    outcome), latest such rung wins a tie -- not by position. Taking the last
+    non-"todo" rung instead inverts the card on the ordinary mid-campaign
+    shape: a ladder of [lost, won, live] sits in "Won -- pay" because money
+    owed outranks a round you could still enter, but position alone would
+    surface the open round and hide the win, leaving the card naming a column
+    nothing on it explains.
+    Only when NO standing is recorded does position decide: the last non-"todo"
+    rung, which picks the "live" one for an Open-now card and a "lost" or
+    "skipped" one otherwise, and failing even that (nothing has happened at
+    all) the head of the ladder, since there the whole story is what comes
+    first.
+
+    SETTLED vs PENDING is the line the two picks divide on, and "skipped" (a
+    round the user declined -- `db.service._rung_state`) is settled. It is
+    eligible to be the state rung, exactly as "lost" is, and it is NOT eligible
+    for the lookahead, which takes only "live"/"todo": a round you have said no
+    to is not what you could act on next. It gets no `_RUNG_STANDING` entry for
+    the same reason `column_for`'s `_RANK` has no NOT_APPLIED entry -- giving it
+    one would make a declined round outrank the win that actually placed the
+    card, and the card would name a column nothing on it explains.
+
+    Returns `(pairs, hidden)` where each pair is `(position, rung)` with
+    `position` the rung's ORIGINAL 1-based place in the full ladder. That
+    matters: the card's mark for a "live"/"todo" rung is its ladder number, so
+    filtering must not renumber what survives -- rungs 3 and 4 of five stay
+    "3" and "4", not "1" and "2".
+
+    `rungs` is typed loosely on purpose: it is `db.service.Rung`, and importing
+    that here would drag the ORM into pure domain code. Only `.state` and
+    `.is_upgrade` are read.
+    """
+    if len(rungs) <= VISIBLE_RUNGS:
+        return [(i, r) for i, r in enumerate(rungs, start=1)], 0
+
+    # The rung that explains the column: the highest standing on the ladder,
+    # ties going to the later rung (the most advanced one at that standing).
+    state_at = None
+    best = 0
+    for i, r in enumerate(rungs):
+        standing = _rung_standing(r)
+        if standing and standing >= best:
+            state_at, best = i, standing
+    if state_at is None:
+        # No standing recorded: fall back to position -- the last rung that is
+        # not "todo", which is the open one on an Open-now card.
+        for i, r in enumerate(rungs):
+            if r.state != "todo":
+                state_at = i
+
+    if state_at is None:
+        # Nothing has happened at all, so the head of the ladder is the story.
+        keep = list(range(min(VISIBLE_RUNGS, len(rungs))))
+    else:
+        keep = [state_at]
+        # What is next: the first thing after it the user could still act on.
+        # Reachable now that the state rung can sit BEFORE a live/todo one.
+        for i in range(state_at + 1, len(rungs)):
+            if rungs[i].state in ("live", "todo"):
+                keep.append(i)
+                break
+
+    # Indices are strictly increasing by construction (the second is searched
+    # strictly after the first), so no sort or dedupe is needed; the slice is
+    # belt and braces, pinning the output to the constant.
+    keep = keep[:VISIBLE_RUNGS]
+    return [(i + 1, rungs[i]) for i in keep], len(rungs) - len(keep)

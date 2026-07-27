@@ -30,7 +30,7 @@ from app.db.service import (
     record_round_outcome,
     tracked_concert_ids,
 )
-from app.domain.board import OPEN_COLUMN_LIMIT, Column
+from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, visible_rungs
 from app.domain.types import Anchor, LotteryOutcome, RoundKind, TagKind
 
 USER = 42
@@ -88,10 +88,11 @@ async def add_round(
     closes=None,
     payment=None,
     applies_to=None,
+    kind=RoundKind.LOTTERY_ROUND,
 ) -> Round:
     r = Round(
         concert_id=concert.id,
-        kind=RoundKind.LOTTERY_ROUND,
+        kind=kind,
         label=label,
         opens_at_utc=opens,
         closes_at_utc=closes,
@@ -257,6 +258,94 @@ async def test_rung_states_follow_recorded_outcomes(session):
         (applied.id, "applied"),
         (won.id, "won"),
     ]
+
+
+async def test_a_declined_round_gets_its_own_rung_state(session):
+    """"Not applying" is not "not yet open".
+
+    Mapping NOT_APPLIED onto "todo" made a declined, already-closed round
+    indistinguishable from a round that has not opened -- so the capped ladder
+    offered it as the card's "what's next" and hid the round the user could
+    actually still enter behind the fold, while the concert page counted the
+    same round under its "skipped" fold chip. Two declutter surfaces, two
+    stories about one round. `skipped` is the state that makes them agree."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+    concert = await make_concert(session, "declined-ladder", tag)
+    applied = await add_round(session, concert, "R1", opens=dt(4, 1), closes=dt(4, 20))
+    # Declined and already closed, and it OPENED BEFORE the live round below --
+    # so position alone would hand it the lookahead slot.
+    declined = await add_round(session, concert, "R2", opens=dt(5, 1), closes=dt(5, 20))
+    live = await open_round(session, concert, "R3")
+    await record_round_outcome(session, USER, applied.id, LotteryOutcome.APPLIED, now=NOW)
+    await record_round_outcome(session, USER, declined.id, LotteryOutcome.NOT_APPLIED, now=NOW)
+
+    columns, _ = await board_cards(session, USER, now=NOW)
+    (card,) = columns[Column.APPLIED]
+
+    assert [(r.round_id, r.state) for r in card.rungs] == [
+        (applied.id, "applied"),
+        (declined.id, "skipped"),
+        (live.id, "live"),
+    ]
+    # The cap: the APPLIED rung explains the column, and what is next is the
+    # OPEN round -- never the one the user has already said no to.
+    visible, hidden = visible_rungs(card.rungs)
+    assert [r.round_id for _, r in visible] == [applied.id, live.id]
+    assert hidden == 1
+
+
+async def test_board_card_state_rung_agrees_with_the_cards_own_column(session):
+    """End-to-end wiring, not ladder arithmetic: the pure tests hand-build
+    rungs, so nothing pinned that `board_cards` feeds `visible_rungs` a ladder
+    whose surviving state rung actually explains the column `board_cards`
+    computed. The mid-campaign shape is where those two can disagree -- a WON
+    round followed by an open one places the card in "Won -- pay" while
+    position alone would surface the open round."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+    concert = await make_concert(session, "wired", tag)
+    lost = await add_round(session, concert, "R1", opens=dt(3, 1), closes=dt(3, 20))
+    won = await add_round(session, concert, "R2", opens=dt(4, 1), closes=dt(4, 20))
+    await open_round(session, concert, "R3")
+    await record_round_outcome(session, USER, lost.id, LotteryOutcome.LOST, now=NOW)
+    await record_round_outcome(session, USER, won.id, LotteryOutcome.WON, now=NOW)
+
+    columns, _ = await board_cards(session, USER, now=NOW)
+    (card,) = columns[Column.WON]
+
+    visible, _hidden = visible_rungs(card.rungs)
+    state_rung = visible[0][1]
+    assert card.column is column_for(
+        [(card.outcome_by_round[state_rung.round_id], state_rung.is_upgrade)],
+        has_open_round=False,
+    )
+    assert state_rung.round_id == won.id
+
+
+async def test_a_rung_carries_the_rounds_upgrade_kind(session):
+    """`is_upgrade` is what lets `visible_rungs` prefer a won-but-unpaid
+    UPGRADE over a PAID base ticket -- "won" reads the same either way, so the
+    flag is the only thing carrying the distinction. Nothing else in the suite
+    touches the CONSTRUCTION site, so deleting the kwarg in `board_cards` left
+    the whole suite green while the card went back to naming the paid rung."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+    concert = await make_concert(session, "upgrade-ladder", tag)
+    base = await add_round(session, concert, "R1", opens=dt(4, 1), closes=dt(4, 20))
+    upgrade = await add_round(
+        session, concert, "Seat upgrade", opens=dt(5, 1), closes=dt(5, 20),
+        kind=RoundKind.UPGRADE,
+    )
+    await record_round_outcome(session, USER, base.id, LotteryOutcome.WON, now=NOW)
+
+    columns, _ = await board_cards(session, USER, now=NOW)
+    (card,) = columns[Column.WON]
+
+    assert {r.round_id: r.is_upgrade for r in card.rungs} == {
+        base.id: False,
+        upgrade.id: True,
+    }
 
 
 async def test_board_card_pill_tone_follows_urgency_not_just_column(session):

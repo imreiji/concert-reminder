@@ -38,6 +38,7 @@ from app.db.models import (
     User,
 )
 from app.db.service import (
+    _FOLD_KINDS,
     attach_tag,
     ensure_user,
     record_round_day_result,
@@ -46,7 +47,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.types import LegResult, LotteryOutcome, RoundKind, TagKind
 from app.web import auth
-from app.web.app import create_app
+from app.web.app import create_app, fold_count_label
 
 USER = 4242
 EDITOR = 777
@@ -1322,3 +1323,153 @@ async def test_leg_label_renders_in_the_viewers_language(client):
     ja = client.get("/concerts/ll1")
     assert "2日目 夜公演" in ja.text
     assert "Day 2 evening" not in ja.text
+
+
+# ── the per-leg fold ─────────────────────────────────────────────────────
+#
+# A mid-campaign leg is mostly settled history. One <details class="moreround">
+# per leg keeps the rounds that still bear on this reader in front of them and
+# puts the rest one click away -- per leg, so expanding one story never expands
+# the others. The rule itself is pinned in tests/test_concert_rows.py; these
+# pin what the page does with it.
+
+
+def fold_of(section: str) -> str:
+    """One leg section's fold, from the <details> to the end of the section."""
+    assert 'class="moreround"' in section, "expected a fold in this leg section"
+    return section.split('class="moreround"', 1)[1]
+
+
+async def settled_leg(db, cid):
+    """A leg part-way through a campaign: one lost round, one that closed
+    without the reader, and one still open."""
+    d1 = await add_day(db, cid, "Day 1", days_ahead=60)
+    lost = await add_round(
+        db, cid, "Early lottery", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=30),
+        closes=datetime.now(UTC) - timedelta(days=20),
+        results=datetime.now(UTC) - timedelta(days=15),
+    )
+    await add_round(
+        db, cid, "Missed sale", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=2),
+    )
+    await add_round(
+        db, cid, "Open round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=7),
+    )
+    await set_outcome(db, lost, LotteryOutcome.APPLIED)
+    await set_outcome(db, lost, LotteryOutcome.LOST)
+    return d1
+
+
+async def test_settled_rounds_fold_behind_a_per_leg_summary(client):
+    cid = await seed_concert(client.db)
+    await settled_leg(client.db, cid)
+    login(client)
+
+    section = leg_sections(client.get("/concerts/np").text)["Day 1"]
+    assert 'class="moreround"' in section
+    # The summary counts the whole fold; the chips explain the part they can.
+    assert "+2 more rounds" in section
+    assert "1 lost" in section
+    # What still bears on the reader stays above the fold.
+    assert section.index("Open round") < section.index('class="moreround"')
+
+
+async def test_a_folded_rounds_capture_form_stays_in_the_dom(client):
+    """The fold is presentation, never filtering. A round that opened and
+    closed with nothing recorded can still be answered -- the form is behind
+    the disclosure, not removed from the page."""
+    cid = await seed_concert(client.db)
+    await settled_leg(client.db, cid)
+    login(client)
+
+    fold = fold_of(leg_sections(client.get("/concerts/np").text)["Day 1"])
+    block = round_block(fold, "Missed sale")
+    assert "I have applied" in block
+    assert 'name="outcome"' in block
+
+
+async def test_no_fold_when_every_round_still_bears_on_you(client):
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    await add_round(
+        client.db, cid, "Open round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=7),
+    )
+    login(client)
+
+    assert "moreround" not in client.get("/concerts/np").text
+
+
+async def test_a_secured_leg_shows_its_receipt_outside_the_fold(client):
+    """Owner decision 2: the round that got you in never collapses to a
+    summary line -- you can see which one it was without expanding."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    won = await add_round(
+        client.db, cid, "FC lottery", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=30),
+        closes=datetime.now(UTC) - timedelta(days=20),
+        payment=datetime.now(UTC) + timedelta(days=10),
+    )
+    await add_round(
+        client.db, cid, "General sale", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=7),
+    )
+    await set_outcome(client.db, won, LotteryOutcome.APPLIED)
+    await set_outcome(client.db, won, LotteryOutcome.WON)
+    login(client)
+
+    section = leg_sections(client.get("/concerts/np").text)["Day 1"]
+    assert section.index("FC lottery") < section.index('class="moreround"')
+    assert "General sale" in fold_of(section)
+    assert "1 covered" in section
+
+
+async def test_answering_a_folded_round_swaps_that_fold_back_open(client):
+    """The swap is an outerHTML replacement, so every <details> returns closed
+    -- which would take the round the reader just answered off the screen at
+    the moment they acted on it. Same server-side reopen Home's folds get."""
+    cid = await seed_concert(client.db)
+    await settled_leg(client.db, cid)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert '<details class="moreround">' in body  # closed on a plain GET
+
+    missed = await _round_id(client.db, cid, "Missed sale")
+    r = client.post(
+        f"/rounds/{missed}/outcome", data={"outcome": "not_applied"},
+        headers={"HX-Request": "true", "HX-Current-URL": "http://x/concerts/np"},
+    )
+    # Still folded (nothing wants the reader on a round they declined), but the
+    # fold it sits in comes back open.
+    assert '<details class="moreround" open>' in r.text
+    # The strip rides along after the rounds region in this fragment, so cut
+    # there rather than at the marker `legs_of` looks for on a full page.
+    rounds_fragment = r.text.split('id="concert-standing"', 1)[0]
+    assert "Missed sale" in fold_of(leg_sections(rounds_fragment)["Day 1"])
+
+
+async def _round_id(db, concert_id, label):
+    async with db() as s:
+        return (await s.execute(
+            select(Round).where(Round.concert_id == concert_id, Round.label == label)
+        )).scalar_one().id
+
+
+def test_every_fold_kind_has_a_chip_and_an_unknown_one_raises():
+    """`_FOLD_KINDS` and `fold_count_label` are two halves of one list, in two
+    files. A silent default would render a newly added kind as somebody else's
+    chip and nothing would fail, so the seam raises -- the same call
+    `split_slots` makes for an unknown sentence slot."""
+    for kind in _FOLD_KINDS:
+        assert fold_count_label(kind, 2).startswith("2 ")
+    with pytest.raises(ValueError):
+        fold_count_label("cancelled", 1)
