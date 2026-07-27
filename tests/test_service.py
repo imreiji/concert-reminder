@@ -837,6 +837,37 @@ async def test_due_reminder_non_results_row_has_no_covered_days(session):
     assert due.covered_days == ()
 
 
+async def test_due_reminder_closes_row_stays_empty_beside_a_results_row(session):
+    """The real test of the anchor guard: ONE round carrying BOTH a RESULTS
+    and a CLOSES queue row in the SAME batch. The legs are loaded (the RESULTS
+    row needs them), so only the per-row anchor check keeps them off the
+    CLOSES row -- a CLOSES-only batch never loads legs at all and would pass
+    with the guard deleted."""
+    round_, days = await seed_results_round(session, ["Leg A", "Leg B"])
+    await queue_anchor(session, round_, Anchor.RESULTS)
+    await queue_anchor(session, round_, Anchor.CLOSES)
+
+    due = await due_reminders(session, dt(6, 26))
+    by_anchor = {d.anchor: d for d in due}
+    assert set(by_anchor) == {Anchor.RESULTS, Anchor.CLOSES}
+    assert by_anchor[Anchor.RESULTS].covered_days == (
+        (days[0].id, "Leg A"), (days[1].id, "Leg B")
+    )
+    assert by_anchor[Anchor.CLOSES].covered_days == ()
+
+
+async def test_due_reminder_covered_days_honours_all_legs_convention(session):
+    """An empty applies_to means every leg (the all-legs convention), so the
+    pairs come out the same as an explicit list would give."""
+    round_, days = await seed_results_round(session, ["Leg A", "Leg B"])
+    round_.applies_to = None
+    await session.flush()
+    await queue_anchor(session, round_, Anchor.RESULTS)
+
+    (due,) = await due_reminders(session, dt(6, 26))
+    assert due.covered_days == ((days[0].id, "Leg A"), (days[1].id, "Leg B"))
+
+
 async def test_due_reminder_single_leg_round_has_no_covered_days(session):
     round_, _ = await seed_results_round(session, ["Leg A"])
     await queue_anchor(session, round_, Anchor.RESULTS)
