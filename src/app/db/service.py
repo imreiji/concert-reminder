@@ -44,6 +44,7 @@ from app.db.models import (
     Round,
     RoundLabelPhrase,
     RoundOutcome,
+    RoundOutcomeDay,
     RoundQualifier,
     Tag,
     TagMember,
@@ -54,7 +55,14 @@ from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
-from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
+from app.domain.types import (
+    Anchor,
+    LegResult,
+    LotteryOutcome,
+    RoundKind,
+    SubscriptionState,
+    TagKind,
+)
 from app.domain.upgrades import is_upgrade_eligible
 from app.i18n import N_, get_locale, gettext_in, loc_field
 from app.i18n import gettext as _
@@ -189,6 +197,123 @@ def is_round_cancelled(round_: Round, cancelled_day_ids: set[int]) -> bool:
 # ── Queue sync ───────────────────────────────────────────────────────────
 
 
+def _covered_day_ids(round_: Round, all_day_ids: set[int]) -> set[int]:
+    """The legs a round actually covers: its applies_to narrowed to days that
+    still exist, or -- empty/None applies_to being the all-legs convention --
+    every day on the concert. Stale ids in applies_to (a leg deleted after the
+    round was written) are dropped: a day that no longer exists is not a leg
+    anyone can still be waiting on."""
+    if not round_.applies_to:
+        return set(all_day_ids)
+    return set(round_.applies_to) & all_day_ids
+
+
+async def secured_day_ids_by_round(
+    session: AsyncSession, user_id: int, concert_id: int
+) -> dict[int, set[int]]:
+    """round_id -> the EXACT day ids this user secured through that round, for
+    every round on the concert whose outcome is WON or PAID.
+
+    Per-day resolution follows RoundOutcomeDay's no-rows-means-all convention:
+    a secured round with no day rows secured every leg it covers, which is the
+    common single-leg (and the "won the whole tour") case; once ANY day row
+    exists for that round the answer is exactly its WON rows, so a partial win
+    stops over-claiming the legs that were actually lost. A round whose rows
+    are all LOST therefore maps to the empty set -- present in the dict (its
+    outcome is still WON/PAID) but securing nothing.
+
+    Rounds with no outcome, or an outcome short of WON/PAID, are absent.
+    Batched: at most four queries regardless of how many rounds the concert
+    has -- never one per round."""
+    rounds = list((await session.execute(
+        select(Round).where(Round.concert_id == concert_id)
+    )).scalars())
+    if not rounds:
+        return {}
+    round_ids = [r.id for r in rounds]
+
+    secured_round_ids = set((await session.execute(
+        select(RoundOutcome.round_id).where(
+            RoundOutcome.user_id == user_id,
+            RoundOutcome.round_id.in_(round_ids),
+            RoundOutcome.outcome.in_([LotteryOutcome.WON, LotteryOutcome.PAID]),
+        )
+    )).scalars())
+    if not secured_round_ids:
+        return {}
+
+    all_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(ConcertDay.concert_id == concert_id)
+    )).scalars())
+
+    # Both halves of the split are needed: the WON rows say what was secured,
+    # while the presence of ANY row is what switches off the no-rows-means-all
+    # fallback.
+    won_days: dict[int, set[int]] = {}
+    resolved_rounds: set[int] = set()
+    for round_id, day_id, result in (await session.execute(
+        select(RoundOutcomeDay.round_id, RoundOutcomeDay.day_id, RoundOutcomeDay.result).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id.in_(sorted(secured_round_ids)),
+        )
+    )).all():
+        resolved_rounds.add(round_id)
+        if result is LegResult.WON:
+            won_days.setdefault(round_id, set()).add(day_id)
+
+    secured: dict[int, set[int]] = {}
+    for r in rounds:
+        if r.id not in secured_round_ids:
+            continue
+        covered = _covered_day_ids(r, all_day_ids)
+        if r.id in resolved_rounds:
+            # Intersect so the answer can never claim a leg the round does not
+            # cover -- day rows outlive an applies_to edit.
+            secured[r.id] = won_days.get(r.id, set()) & covered
+        else:
+            secured[r.id] = covered
+    return secured
+
+
+async def covered_round_ids(
+    session: AsyncSession, user_id: int, concert_id: int
+) -> set[int]:
+    """The rounds this user has no reason left to act on: every leg they cover
+    is already secured by some OTHER round on the concert. The single
+    "stop asking about this" definition, shared by the reminder planner and
+    every read surface, so a page can never disagree with the DMs.
+
+    A round never covers itself (its own WON outcome is not a reason to hide
+    its own payment deadline), a round covering no existing leg is never
+    covered, and UPGRADE rounds are excluded outright -- holding a ticket is
+    the PREREQUISITE for entering an upgrade, not a reason to stop showing it
+    (see _apply_outcome_suppression's docstring)."""
+    secured_by = await secured_day_ids_by_round(session, user_id, concert_id)
+    if not secured_by:
+        return set()
+    rounds = list((await session.execute(
+        select(Round).where(Round.concert_id == concert_id)
+    )).scalars())
+    all_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(ConcertDay.concert_id == concert_id)
+    )).scalars())
+
+    covered_ids: set[int] = set()
+    for r in rounds:
+        if r.kind is RoundKind.UPGRADE:
+            continue
+        covered = _covered_day_ids(r, all_day_ids)
+        if not covered:
+            continue
+        secured_elsewhere: set[int] = set()
+        for other_id, days in secured_by.items():
+            if other_id != r.id:
+                secured_elsewhere |= days
+        if covered <= secured_elsewhere:
+            covered_ids.add(r.id)
+    return covered_ids
+
+
 async def _apply_outcome_suppression(
     session: AsyncSession, user_id: int, rounds: list[Round], anchor: Anchor
 ) -> list[Round]:
@@ -270,11 +395,11 @@ async def _apply_outcome_suppression(
     # Per-round contribution, so each round's own outcome can be excluded
     # when checking IT for cross-round suppression -- "secured elsewhere"
     # must not let a round's own WON/PAID outcome suppress itself; a round
-    # can only be cross-suppressed by OTHER rounds covering its legs.
-    secured_by: dict[int, set[int]] = {}
-    for r in all_concert_rounds:
-        if outcomes.get(r.id) in (LotteryOutcome.WON, LotteryOutcome.PAID):
-            secured_by[r.id] = set(r.applies_to) if r.applies_to else all_day_ids
+    # can only be cross-suppressed by OTHER rounds covering its legs. The
+    # derivation is shared with every read surface (see
+    # secured_day_ids_by_round) so the DMs and the pages agree on which legs
+    # a partial win actually secured.
+    secured_by = await secured_day_ids_by_round(session, user_id, concert_id)
 
     survivors = []
     for r in rounds:
@@ -300,7 +425,7 @@ async def _apply_outcome_suppression(
             ):
                 continue
         else:
-            applies = set(r.applies_to) if r.applies_to else all_day_ids
+            applies = _covered_day_ids(r, all_day_ids)
             secured_elsewhere: set[int] = set()
             for other_id, legs in secured_by.items():
                 if other_id != r.id:

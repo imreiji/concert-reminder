@@ -18,9 +18,17 @@ from app.db.models import (
     ReminderRule,
     Round,
     RoundOutcome,
+    RoundOutcomeDay,
 )
-from app.db.service import ensure_user, sync_concert, sync_rule
-from app.domain.types import Anchor, LotteryOutcome, RoundKind
+from app.db.service import (
+    covered_round_ids,
+    ensure_user,
+    record_round_outcome,
+    secured_day_ids_by_round,
+    sync_concert,
+    sync_rule,
+)
+from app.domain.types import Anchor, LegResult, LotteryOutcome, RoundKind
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)
 
@@ -464,3 +472,123 @@ async def test_auto_arm_catches_up_when_next_round_added_later(session):
         )
     )).scalars()
     assert len(await queue_rows_for(session, rule.id)) == 1
+
+
+# ── Shared secured-days / covered-rounds derivation ────────────────────────
+
+
+async def seed_ab(s) -> tuple[Concert, ConcertDay, ConcertDay, Round, Round]:
+    """Minimal world for the derivation helpers: two legs, round A covering
+    both legs, round B covering leg B only -- and nothing else, so
+    `covered_round_ids` returns exactly what these tests reason about
+    (seed_two_legs' extra rounds would each answer the question too)."""
+    await ensure_user(s, 42, "reiji")
+    concert = Concert(title="AB Tour", event_id="ab-tour", created_by=42)
+    s.add(concert)
+    await s.flush()
+    leg_a = ConcertDay(concert_id=concert.id, label="Leg A", starts_at_utc=dt(8, 1, 9))
+    leg_b = ConcertDay(concert_id=concert.id, label="Leg B", starts_at_utc=dt(8, 2, 9))
+    s.add_all([leg_a, leg_b])
+    await s.flush()
+    round_a = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="Both legs",
+        closes_at_utc=dt(6, 25), applies_to=[leg_a.id, leg_b.id],
+    )
+    round_b = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="B only",
+        closes_at_utc=dt(6, 26), applies_to=[leg_b.id],
+    )
+    s.add_all([round_a, round_b])
+    await s.flush()
+    return concert, leg_a, leg_b, round_a, round_b
+
+
+async def test_secured_days_no_rows_means_all(session):
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+
+    secured = await secured_day_ids_by_round(session, 42, concert.id)
+
+    assert secured[round_a.id] == {leg_a.id, leg_b.id}
+    assert round_b.id not in secured  # no outcome recorded -- secures nothing
+
+
+async def test_secured_days_partial_win_is_exact(session):
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+    session.add(RoundOutcomeDay(
+        user_id=42, round_id=round_a.id, day_id=leg_a.id, result=LegResult.WON,
+    ))
+    await session.flush()
+
+    secured = await secured_day_ids_by_round(session, 42, concert.id)
+
+    assert secured[round_a.id] == {leg_a.id}
+
+
+async def test_secured_days_all_legs_lost_secures_nothing(session):
+    """Day rows exist, none of them WON -- the round secured no day at all.
+    The no-rows-means-all fallback must not fire once rows exist."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+    session.add_all([
+        RoundOutcomeDay(user_id=42, round_id=round_a.id, day_id=leg_a.id, result=LegResult.LOST),
+        RoundOutcomeDay(user_id=42, round_id=round_a.id, day_id=leg_b.id, result=LegResult.LOST),
+    ])
+    await session.flush()
+
+    secured = await secured_day_ids_by_round(session, 42, concert.id)
+
+    assert secured[round_a.id] == set()
+
+
+async def test_secured_days_ignores_another_users_rows(session):
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await ensure_user(session, 99, "someone-else")
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+    session.add(RoundOutcomeDay(
+        user_id=99, round_id=round_a.id, day_id=leg_a.id, result=LegResult.WON,
+    ))
+    await session.flush()
+
+    secured = await secured_day_ids_by_round(session, 42, concert.id)
+
+    assert secured[round_a.id] == {leg_a.id, leg_b.id}  # user 99's partial row is not ours
+
+
+async def test_covered_round_ids_partial_win_does_not_cover_other_day(session):
+    """Round A covers both legs but only won leg A; round B covers leg B,
+    which was never actually secured -- B must stay uncovered."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+    session.add(RoundOutcomeDay(
+        user_id=42, round_id=round_a.id, day_id=leg_a.id, result=LegResult.WON,
+    ))
+    await session.flush()
+
+    assert await covered_round_ids(session, 42, concert.id) == set()
+
+
+async def test_covered_round_ids_full_win_covers_single_day_round(session):
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+
+    covered = await covered_round_ids(session, 42, concert.id)
+
+    assert round_b.id in covered
+    assert round_a.id not in covered  # a round never covers itself
+
+
+async def test_covered_round_ids_excludes_upgrade_rounds(session):
+    """An upgrade round is entered BECAUSE you hold a ticket -- holding one
+    must never mark it "stop asking" (invariant 2's upgrade exemption)."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    upgrade = Round(
+        concert_id=concert.id, kind=RoundKind.UPGRADE, label="Upgrade",
+        closes_at_utc=dt(6, 28), applies_to=[leg_a.id, leg_b.id],
+    )
+    session.add(upgrade)
+    await session.flush()
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+
+    assert upgrade.id not in await covered_round_ids(session, 42, concert.id)
