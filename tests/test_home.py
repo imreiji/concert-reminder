@@ -33,13 +33,16 @@ from app.db.models import (
 )
 from app.db.service import (
     DEADLINE_ROWS_LIMIT,
+    VISIBLE_BLOCKS,
+    my_deadline_blocks,
+    my_deadline_rows,
     record_round_day_result,
     record_round_outcome,
 )
 from app.db.session import get_session
 from app.domain.board import OPEN_COLUMN_LIMIT
 from app.domain.timezones import fmt_dual_lines
-from app.domain.types import LegResult, LotteryOutcome, RoundKind, TagKind
+from app.domain.types import Anchor, LegResult, LotteryOutcome, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -528,11 +531,15 @@ async def test_up_next_falls_back_to_an_event_start_without_calling_it_a_close(c
 
 
 async def test_a_round_that_has_not_opened_offers_no_capture_actions(client):
-    """upcoming_deadlines emits one row per FUTURE anchor, so a single round
-    with opens/closes/results ahead of it produces three rows. None of them
-    may offer capture: you cannot have applied to a round that has not
-    opened, and recording APPLIED is a one-way write (record_round_outcome
-    refuses to overwrite a starting state)."""
+    """You cannot have applied to a round that has not opened, and recording
+    APPLIED is a one-way write (record_round_outcome refuses to overwrite a
+    starting state) -- so its row offers nothing to press.
+
+    The gate predates the block layer, where it mattered four times over:
+    upcoming_deadlines emits one row per FUTURE anchor, so this round's
+    opens/closes/results each carried their own button pair. Blocks collapse a
+    round to its soonest anchor, so the same round is now ONE member line --
+    the multiplication is gone, the gate on that line is not."""
     now = datetime.now(UTC)
 
     async def build(seed):
@@ -549,13 +556,12 @@ async def test_a_round_that_has_not_opened_offers_no_capture_actions(client):
 
     html = client.get("/").text
     assert "Future round concert" in html
-    # One row per future anchor: three for this round (opens/closes/results),
-    # plus the show itself. That multiplication is exactly why the capture
-    # gate has to exist -- four rows, four independent button pairs.
     rows_html = html.split('id="deadline-rows"', 1)[1]
-    assert rows_html.count("Future round concert</a>") == 4
-    for label in ("opens", "closes", "results announced"):
-        assert label in rows_html
+    # Named once, in the block header -- not once per row as the flat list did.
+    assert rows_html.count("Future round concert</a>") == 1
+    # Two member lines: the round's soonest anchor, and the show itself.
+    assert rows_html.count('class="row"') == 2
+    assert "opens" in rows_html
     assert ">I have applied</button>" not in html
     assert ">Not applying</button>" not in html
     assert 'value="applied"' not in html
@@ -805,11 +811,15 @@ async def test_times_render_dual_jst_first(client):
 # ── the two limits must agree ────────────────────────────────────────────
 
 
-async def test_home_and_the_outcome_fragment_render_the_same_row_count(client):
+async def test_home_and_the_outcome_fragment_render_the_same_block_count(client):
     """POST /rounds/{id}/outcome swaps the Coming up fragment back in. If Home
-    renders a different number of rows than the fragment does, the swap
+    renders a different number of BLOCKS than the fragment does, the swap
     silently changes the list length -- so both go through the one
-    DEADLINE_ROWS_LIMIT default."""
+    DEADLINE_ROWS_LIMIT default, which now caps CONCERTS.
+
+    Fifteen concerts, one round each: the cap makes ten blocks, six of them
+    above the page-level fold and the rest inside it. Both surfaces must
+    render all ten either way -- a folded block is in the DOM, just closed."""
     async def build(seed):
         rounds = []
         for i in range(DEADLINE_ROWS_LIMIT + 5):
@@ -820,14 +830,18 @@ async def test_home_and_the_outcome_fragment_render_the_same_row_count(client):
     round_id = await seeded(client.db, build)
     login(client)
 
-    home_rows = client.get("/").text.count('class="row"')
-    assert home_rows == DEADLINE_ROWS_LIMIT
+    home = client.get("/").text
+    home_blocks = home.count('class="cblock"')
+    assert home_blocks == DEADLINE_ROWS_LIMIT
+    # One concert per block, and one member row inside each -- the cap counts
+    # concerts, not the rows they contain.
+    assert home.count('class="row"') == DEADLINE_ROWS_LIMIT
 
     fragment = client.post(
         f"/rounds/{round_id}/outcome", data={"outcome": "applied"}, headers=HX,
     )
     assert fragment.status_code == 200
-    assert fragment.text.count('class="row"') == home_rows
+    assert fragment.text.count('class="cblock"') == home_blocks
 
 
 # ── the board moves when you record an outcome ───────────────────────────
@@ -1130,3 +1144,477 @@ async def test_coming_up_rows_render_the_localized_round_label(client):
     html_en = client.get("/").text
     assert "1st-round lottery" in html_en
     assert "第一轮抽选" not in html_en
+
+
+# ── Task 1: Coming up, grouped into per-concert blocks ───────────────────
+
+
+@pytest_asyncio.fixture()
+async def blocks_seed(db):
+    """The service-level counterpart to `seeded`: the same subscribed-ARTIST-tag
+    world, but yielding the live `Seed` (and with it `seed.s`, the session) so a
+    test can call `my_deadline_blocks` directly instead of reading the grouping
+    back out of rendered HTML.
+
+    Times here are relative to the real clock rather than a frozen NOW, because
+    `Seed` builds its concert days from `datetime.now(UTC)` and a test mixing
+    the two would compare against a moment nothing was seeded around.
+    """
+    async with db() as s:
+        s.add(User(discord_id=USER, username="reiji"))
+        await s.flush()
+        tag = Tag(name="Aqours", kind=TagKind.ARTIST)
+        s.add(tag)
+        await s.flush()
+        s.add(TagSubscription(user_id=USER, tag_id=tag.id))
+        await s.flush()
+        yield Seed(s, tag)
+
+
+async def test_blocks_collapse_a_round_to_its_soonest_anchor(blocks_seed):
+    """One round carrying a close, a result announcement and a payment is ONE
+    thing to watch, not three rows. The block keeps the soonest anchor and
+    folds nothing behind it, because there is nothing else here."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=None)
+    await blocks_seed.round(
+        c, "FC lottery",
+        opens=now - timedelta(days=1), closes=now + timedelta(days=1),
+        results=now + timedelta(days=8), payment=now + timedelta(days=15),
+    )
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert len(blocks) == 1
+    assert blocks[0].others == ()
+    assert blocks[0].lead.deadline.anchor is Anchor.CLOSES
+    assert blocks[0].concert_title == "aqours-live"
+
+
+async def test_standing_beats_time_for_the_lead(blocks_seed):
+    """A payment you owe in three weeks outranks a round that has not even
+    opened tomorrow: the lead is what wants you, not what is soonest."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=None)
+    round_a = await blocks_seed.round(
+        c, "FC lottery",
+        opens=now - timedelta(days=30), closes=now - timedelta(days=10),
+        payment=now + timedelta(days=20),
+    )
+    round_b = await blocks_seed.round(
+        c, "General sale",
+        opens=now + timedelta(days=1), closes=now + timedelta(days=10),
+    )
+    await record_round_outcome(blocks_seed.s, USER, round_a.id, LotteryOutcome.WON, now)
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert blocks[0].lead.deadline.round_id == round_a.id
+    assert [r.deadline.round_id for r in blocks[0].others] == [round_b.id]
+
+
+async def test_a_settled_round_never_leads(blocks_seed):
+    """LOST is over. Its results row is still worth showing (the block folds
+    it in), but leading with it would head the block with a dead campaign."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=None)
+    settled = await blocks_seed.round(
+        c, "FC lottery",
+        opens=now - timedelta(days=10), closes=now - timedelta(days=1),
+        results=now + timedelta(days=1),
+    )
+    live = await blocks_seed.round(
+        c, "General sale",
+        opens=now - timedelta(days=1), closes=now + timedelta(days=5),
+    )
+    await record_round_outcome(blocks_seed.s, USER, settled.id, LotteryOutcome.LOST, now)
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert blocks[0].lead.deadline.round_id == live.id
+    assert [r.deadline.round_id for r in blocks[0].others] == [settled.id]
+
+
+async def test_a_round_that_closed_without_you_never_leads(blocks_seed):
+    """The other half of "settled", and the one that needs `closes_at_utc`:
+    a round you never entered whose close has PASSED is a chance already gone,
+    even though it still has a results announcement ahead of it and no
+    outcome recorded. Standing alone cannot tell it apart from a live round --
+    both carry `outcome is None` and `can_capture` True (it opened) -- so the
+    lead rule reads the close off the row, and the row only has one because
+    `my_deadline_rows` copies it there.
+
+    Drop `DeadlineRow.closes_at_utc` and this concert leads with a dead
+    round's results row purely because it is sooner."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=None)
+    gone = await blocks_seed.round(
+        c, "FC lottery",
+        opens=now - timedelta(days=10), closes=now - timedelta(days=1),
+        results=now + timedelta(days=1),
+    )
+    live = await blocks_seed.round(
+        c, "General sale",
+        opens=now - timedelta(days=1), closes=now + timedelta(days=5),
+    )
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    # The dead round's results row is SOONER, and would lead on time alone.
+    assert blocks[0].lead.deadline.round_id == live.id
+    assert [r.deadline.round_id for r in blocks[0].others] == [gone.id]
+    # The field the rule reads is really on the row, not merely implied by it.
+    assert blocks[0].lead.closes_at_utc is not None
+
+
+async def test_others_stay_chronological(blocks_seed):
+    """Only the LEAD is chosen by standing. Everything folded behind it reads
+    as a diary again, soonest first -- so the second open round does not jump
+    ahead of a round that opens before it."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=None)
+    lead = await blocks_seed.round(
+        c, "Open now", opens=now - timedelta(days=1), closes=now + timedelta(days=2),
+    )
+    also_open = await blocks_seed.round(
+        c, "Also open", opens=now - timedelta(days=1), closes=now + timedelta(days=3),
+    )
+    unopened = await blocks_seed.round(
+        c, "Not open yet", opens=now + timedelta(days=1), closes=now + timedelta(days=9),
+    )
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert blocks[0].lead.deadline.round_id == lead.id
+    # `also_open` wants you and `unopened` does not, so the lead rule would
+    # have ordered these two the other way round.
+    assert [r.deadline.round_id for r in blocks[0].others] == [unopened.id, also_open.id]
+
+
+async def test_blocks_sort_by_their_lead_moment(blocks_seed):
+    """Between concerts it is the LEAD that competes, not the earliest row a
+    concert happens to carry -- otherwise a block would sort on a line folded
+    out of sight."""
+    now = datetime.now(UTC)
+    noisy = await blocks_seed.concert("aqours-live", day_offset=None)
+    await blocks_seed.round(
+        noisy, "Not open yet",
+        opens=now + timedelta(days=1), closes=now + timedelta(days=20),
+    )
+    await blocks_seed.round(
+        noisy, "Open now", opens=now - timedelta(days=1), closes=now + timedelta(days=5),
+    )
+    other = await blocks_seed.concert("muse-live", day_offset=None)
+    await blocks_seed.round(
+        other, "Open now", opens=now - timedelta(days=1), closes=now + timedelta(days=2),
+    )
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert [b.event_id for b in blocks] == ["muse-live", "aqours-live"]
+
+
+async def test_block_cap_counts_concerts_not_rows(blocks_seed):
+    """Twelve concerts of three anchors each. The cap is ten CONCERTS, and the
+    internal fetch is wide enough to actually find them -- grouping a
+    limit-sized row fetch would have under-filled the list."""
+    now = datetime.now(UTC)
+    for i in range(12):
+        c = await blocks_seed.concert(f"concert-{i:02d}", day_offset=None)
+        await blocks_seed.round(
+            c, "FC lottery",
+            opens=now - timedelta(days=1),
+            closes=now + timedelta(days=i + 1),
+            results=now + timedelta(days=i + 1, hours=1),
+            payment=now + timedelta(days=i + 1, hours=2),
+        )
+
+    # The regression this guards: a limit-sized ROW fetch reaches barely a
+    # third of these concerts.
+    rows = await my_deadline_rows(blocks_seed.s, USER, now=now, limit=DEADLINE_ROWS_LIMIT)
+    assert len({r.deadline.event_id for r in rows}) < DEADLINE_ROWS_LIMIT
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert len(blocks) == 10
+    assert [b.event_id for b in blocks] == [f"concert-{i:02d}" for i in range(10)]
+    assert all(b.others == () for b in blocks)
+
+
+async def test_event_start_only_concert_leads_with_the_show(blocks_seed):
+    """A concert with no rounds ahead still has a block: the show itself."""
+    now = datetime.now(UTC)
+    await blocks_seed.concert("aqours-live", day_offset=30)
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert len(blocks) == 1
+    assert blocks[0].lead.deadline.round_id is None
+    assert blocks[0].lead.deadline.anchor is Anchor.EVENT_START
+    assert blocks[0].others == ()
+    assert blocks[0].starts_at_utc is not None
+
+
+async def test_every_leg_keeps_its_own_show_row(blocks_seed):
+    """Rows with no round id have nothing to collapse onto -- a two-night
+    stand is two shows, and folding them together would lose a date."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=30)
+    blocks_seed.s.add(ConcertDay(
+        concert_id=c.id, label="Day 2", starts_at_utc=now + timedelta(days=31),
+    ))
+    await blocks_seed.s.flush()
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert len(blocks) == 1
+    assert len(blocks[0].others) == 1
+    assert blocks[0].others[0].deadline.round_id is None
+
+
+# ── Task 2: Coming up renders those blocks ───────────────────────────────
+
+
+async def test_home_renders_one_block_header_per_concert(client):
+    """The concert's name left the rows and became ONE header per block. Two
+    concerts, three rounds between them: two headers, each naming its concert
+    exactly once."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        await seed.open_round(c, "Open now", days=2)
+        await seed.open_round(c, "Also open", days=9)
+        other = await seed.concert("muse-live", title="Muse Live", day_offset=None)
+        await seed.open_round(other, "FC lottery", days=5)
+
+    await seeded(client.db, build)
+    login(client)
+
+    # Scoped to the Coming up fragment: the board above names concerts too.
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert rows.count('class="cblock"') == 2
+    assert rows.count('class="blockhead"') == 2
+    assert rows.count(">Aqours Live</a>") == 1
+    assert rows.count(">Muse Live</a>") == 1
+    # Three rounds, three member lines -- grouping folds them, never drops them.
+    assert rows.count('class="row"') == 3
+
+
+async def test_the_block_header_carries_the_venue_and_the_performance_date(client):
+    """`ConcertBlock.venue` and `.starts_at_utc` are rendered in exactly ONE
+    place -- the block header's <small> -- so nothing else would catch them
+    going missing. The date is a performance date, so it renders day-month
+    with no zone (fmt_day_month), not the dual deadline shape."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        venue = Tag(name="Zepp Haneda", kind=TagKind.VENUE, region="Kanto")
+        seed.s.add(venue)
+        await seed.s.flush()
+        seed.s.add(ConcertTag(concert_id=c.id, tag_id=venue.id))
+        seed.s.add(ConcertDay(
+            concert_id=c.id, label="Day 1",
+            starts_at_utc=datetime(2026, 10, 12, 10, 0, tzinfo=UTC),
+        ))
+        await seed.s.flush()
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    head = rows.split('class="blockhead"', 1)[1].split("</div>", 1)[0]
+    # Venue, separator, day-month -- all three, in the header, in that order.
+    assert "<small>📍 Zepp Haneda · 12 Oct</small>" in head
+
+
+async def test_a_folded_round_is_present_but_collapsed(client):
+    """A fold is presentation, not filtering: the second round's capture form
+    is IN the DOM and posts to the same target, it is merely behind a closed
+    <details>. Rendering it only on expand would need a round trip and would
+    make the fold a second, silent limit."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        await seed.open_round(c, "Open now", days=2)
+        return (await seed.open_round(c, "Also open", days=9)).id
+
+    folded_id = await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert '<details class="morerounds">' in rows
+    # Closed: no `open` attribute anywhere on that element.
+    assert '<details class="morerounds" open' not in rows
+    assert "+1 more round" in rows
+
+    fold = rows.split('<details class="morerounds">', 1)[1]
+    assert "Also open" in fold
+    assert f'/rounds/{folded_id}/outcome' in fold
+    assert 'hx-target="#deadline-rows"' in fold
+
+
+async def test_capturing_a_folded_round_swaps_the_block_back_with_its_standing(client):
+    """The other half of the fold being real DOM: pressing a button INSIDE it
+    must swap the whole fragment back with that round's new standing, and the
+    block must come back with the same shape. The fold it lives in comes back
+    OPEN (see the reopening tests at the end of this file); this test is about
+    the CONTENT of the swap, so it splits on the class rather than the whole
+    tag."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        await seed.open_round(c, "Open now", days=2)
+        return (await seed.open_round(c, "Also open", days=9)).id
+
+    folded_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{folded_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    assert r.status_code == 200
+    rows = r.text.split('id="deadline-rows"', 1)[1]
+    # One concert, one block, both rounds still rendered -- the fold neither
+    # dropped the round it holds nor promoted it out.
+    assert rows.count('class="cblock"') == 1
+    assert rows.count('class="row"') == 2
+    assert "+1 more round" in rows
+    fold = rows.split('class="morerounds"', 1)[1]
+    assert "Also open" in fold
+    assert "Applied" in fold.split("</details>", 1)[0]
+
+
+async def test_data_happens_carries_only_the_anchor_verb(client):
+    """The tablet band (701-1040px) drops the what-happens COLUMN and folds it
+    back into the title cell via `content: " · " attr(data-happens)`. That cell
+    used to hold the CONCERT TITLE, so the attribute carried "<round> <verb>"
+    to make "Aqours Live · FC lottery closes".
+
+    The block header owns the concert title now and the cell names the ROUND,
+    so carrying the label again would print it twice in one line -- "FC lottery
+    · FC lottery closes". The attribute keeps only what the dropped column
+    actually adds: the anchor verb."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert 'data-happens="closes"' in rows
+    assert 'data-happens="FC lottery closes"' not in rows
+    # The visible cell still names the round; only the folded copy shrank.
+    assert "FC lottery" in rows
+
+
+async def test_no_fold_link_for_a_single_round_concert(client):
+    """Nothing to fold means no affordance at all -- an empty "+0 more" line
+    would be noise on the common single-round block."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    body = client.get("/").text
+    assert '<div class="cblock">' in body
+    assert "morerounds" not in body
+
+
+async def test_the_page_level_fold_appears_only_past_six_blocks(client):
+    """VISIBLE_BLOCKS concerts fit on the page; the rest go behind the second,
+    page-level fold -- and are still rendered, so the swap and the fold agree
+    on how much exists."""
+    async def build(seed, n):
+        for i in range(n):
+            c = await seed.concert(f"c-{i:02d}", title=f"Concert {i:02d}", day_offset=None)
+            await seed.open_round(c, "R1", days=1 + i)
+
+    await seeded(client.db, lambda seed: build(seed, VISIBLE_BLOCKS))
+    login(client)
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert rows.count('class="cblock"') == VISIBLE_BLOCKS
+    assert "moreconcerts" not in rows
+
+    async with client.db() as s:
+        seed = Seed(s, (await s.execute(select(Tag))).scalars().first())
+        for i in range(VISIBLE_BLOCKS, VISIBLE_BLOCKS + 2):
+            c = await seed.concert(f"c-{i:02d}", title=f"Concert {i:02d}", day_offset=None)
+            await seed.open_round(c, "R1", days=1 + i)
+        await s.commit()
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert '<details class="moreconcerts">' in rows
+    assert "+2 more events" in rows
+    assert rows.count('class="cblock"') == VISIBLE_BLOCKS + 2
+
+
+# ── the swap reopens the fold the reader was acting in ───────────────────
+
+
+async def test_capturing_a_folded_round_reopens_its_per_round_fold(client):
+    """An outerHTML swap replaces the <details> element, so its open state is
+    gone unless the server re-renders it. Mild here (the write landed, the
+    board updated) but it still collapses the very fold the reader was acting
+    in, so the response marks the fold that owns the round it just wrote."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        await seed.open_round(c, "Open now", days=2)
+        return (await seed.open_round(c, "Also open", days=9)).id
+
+    folded_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{folded_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    rows = r.text.split('id="deadline-rows"', 1)[1]
+    assert '<details class="morerounds" open>' in rows
+    # The round it wrote really is the one behind that fold.
+    fold = rows.split('class="morerounds"', 1)[1]
+    assert "Also open" in fold.split("</details>", 1)[0]
+
+
+async def test_capturing_a_round_in_an_overflow_block_reopens_the_page_fold(client):
+    """The sharp case: a reader with more than VISIBLE_BLOCKS concerts expands
+    "+N more events", presses a button on block 8, and the swap folds every
+    overflow block away under them. The response reopens the page-level fold
+    when the block that owns the written round sits in the overflow slice."""
+    async def build(seed):
+        overflow_round_id = None
+        for i in range(VISIBLE_BLOCKS + 2):
+            c = await seed.concert(f"c-{i:02d}", title=f"Concert {i:02d}", day_offset=None)
+            r = await seed.open_round(c, "R1", days=1 + i)
+            if i == VISIBLE_BLOCKS + 1:
+                overflow_round_id = r.id
+        return overflow_round_id
+
+    overflow_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{overflow_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    rows = r.text.split('id="deadline-rows"', 1)[1]
+    assert '<details class="moreconcerts" open>' in rows
+
+
+async def test_get_home_renders_neither_fold_open(client):
+    """The default path is untouched: a plain GET has no round to reopen
+    around, so both folds render closed exactly as they did before."""
+    async def build(seed):
+        for i in range(VISIBLE_BLOCKS + 2):
+            c = await seed.concert(f"c-{i:02d}", title=f"Concert {i:02d}", day_offset=None)
+            await seed.open_round(c, "R1", days=1 + i)
+            await seed.open_round(c, "R2", days=20 + i)
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert '<details class="morerounds">' in rows
+    assert '<details class="moreconcerts">' in rows
+    assert "morerounds\" open" not in rows
+    assert "moreconcerts\" open" not in rows
+
+
+async def test_capturing_a_visible_blocks_lead_opens_no_per_round_fold(client):
+    """The written round can still be the block's LEAD after the write, and a
+    lead is not behind the per-round fold -- so nothing there needs reopening.
+    The block's other member here is the show itself (no round id), which can
+    never be the round that was written."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=60)
+        return (await seed.open_round(c, "Open now", days=2)).id
+
+    lead_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{lead_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    rows = r.text.split('id="deadline-rows"', 1)[1]
+    assert '<details class="morerounds">' in rows      # the show row is folded
+    assert "morerounds\" open" not in rows

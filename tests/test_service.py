@@ -21,6 +21,7 @@ from app.db.models import (
     ReminderQueue,
     ReminderRule,
     Round,
+    RoundOutcome,
     Tag,
     User,
 )
@@ -32,6 +33,7 @@ from app.db.service import (
     leg_cancelled_context,
     list_editors,
     mark_sent,
+    my_deadline_blocks,
     notify_newly_cancelled_legs,
     record_concert_edit,
     record_dm_outcome,
@@ -44,7 +46,13 @@ from app.db.service import (
     upcoming_rounds,
     user_calendar_events,
 )
-from app.domain.types import Anchor, ConcertKind, RoundKind, TagKind
+from app.domain.types import (
+    Anchor,
+    ConcertKind,
+    LotteryOutcome,
+    RoundKind,
+    TagKind,
+)
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)
 
@@ -939,3 +947,83 @@ def test_label_by_round_kind_exact_text():
     assert LABEL_BY_ROUND_KIND[RoundKind.FCFS_SALE] == "First come, first served"
     assert LABEL_BY_ROUND_KIND[RoundKind.TOUR_PACKAGE] == "Overseas tour package"
     assert LABEL_BY_ROUND_KIND[RoundKind.UPGRADE] == "Upgrade round"
+
+
+async def test_my_deadline_blocks_query_count_is_pinned(session):
+    """Measurement debt, paid: Home's "Coming up" has never had a number on it.
+
+    `my_deadline_blocks` fetches `limit * ANCHOR_FAN_OUT` (6x) rows so that
+    grouping by concert does not under-fill, and `my_deadline_rows` still runs
+    two loops that scale with what comes back: `covered_round_ids` once per
+    concert the viewer holds a ticket on, and `_day_capture_context` once per
+    round they are partway through. Everything else there is batched.
+
+    So this pins the number rather than a design. Same technique as
+    `test_due_reminders_batches_queries_regardless_of_row_count` above: count
+    statements over one call, with a realistic-worst-ish page (12 concerts,
+    two legs and two rounds each, four of them secured so the per-concert loop
+    actually runs). The bound is deliberately loose enough not to fail on an
+    incidental extra batch query and tight enough that a return to per-ROW
+    work would blow it.
+    """
+    await ensure_user(session, 42, "reiji")
+    concert_ids: set[int] = set()
+    for i in range(12):
+        concert = Concert(title=f"Concert {i}", event_id=f"c-{i:02d}", created_by=42)
+        session.add(concert)
+        await session.flush()
+        concert_ids.add(concert.id)
+        session.add_all([
+            ConcertDay(concert_id=concert.id, label="Day 1", starts_at_utc=dt(8, 1, 9)),
+            ConcertDay(concert_id=concert.id, label="Day 2", starts_at_utc=dt(8, 2, 9)),
+        ])
+        # A settled round: results are out, payment is not due yet -- so it
+        # still emits a future anchor row AND it is the shape that drives both
+        # per-item loops (secured concert -> covered_round_ids, WON with two
+        # live legs past its result moment -> _day_capture_context).
+        settled = Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label=f"FC {i}",
+            opens_at_utc=dt(5, 1), closes_at_utc=dt(5, 20),
+            results_at_utc=dt(5, 25), payment_deadline_at_utc=dt(6, 20),
+        )
+        # An open round: three future anchors each, which is where the 6x
+        # fan-out comes from in the first place.
+        open_ = Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label=f"General {i}",
+            opens_at_utc=dt(6, 5), closes_at_utc=dt(6, 25), results_at_utc=dt(7, 1),
+        )
+        session.add_all([settled, open_])
+        await session.flush()
+        if i < 4:
+            session.add(RoundOutcome(
+                user_id=42, round_id=settled.id, outcome=LotteryOutcome.WON
+            ))
+        if i < 8:
+            session.add(RoundOutcome(
+                user_id=42, round_id=open_.id, outcome=LotteryOutcome.APPLIED
+            ))
+    await session.commit()
+
+    queries: list[str] = []
+
+    def _count(conn, cursor, statement, parameters, context, executemany):
+        queries.append(statement)
+
+    event.listen(session.bind.sync_engine, "before_cursor_execute", _count)
+    try:
+        blocks = await my_deadline_blocks(
+            session, 42, now=NOW, concert_ids=concert_ids
+        )
+    finally:
+        event.remove(session.bind.sync_engine, "before_cursor_execute", _count)
+
+    assert blocks  # the page is not empty, or the count would measure nothing
+    # MEASURED: 42 statements for this page (2026-07-27). Not a target -- a
+    # record. Roughly 12 of those are the batched reads the row decorator does
+    # once each; the other ~30 are the two per-item loops, ~6 statements per
+    # secured concert (covered_round_ids re-derives its rounds, legs, opt-outs
+    # and day results per concert) plus one per round partway through. Four
+    # secured concerts is not an unusual page. Left pinned rather than
+    # redesigned: the shape is a known cost, and a bound is what makes the
+    # next change to it visible.
+    assert len(queries) <= 45, f"my_deadline_blocks ran {len(queries)} queries"

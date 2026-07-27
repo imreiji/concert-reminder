@@ -1861,12 +1861,17 @@ async def my_upcoming_deadlines(
     return await upcoming_deadlines(session, now=now, limit=limit, concert_ids=ids)
 
 
-# How many "Coming up" rows Home shows. It lives here, next to the function
-# that uses it as a default, because TWO callers render the same fragment:
+# How much "Coming up" Home shows. It lives here, next to the two functions
+# that use it as a default, because TWO callers render the same fragment:
 # GET / builds it first, and POST /rounds/{id}/outcome swaps it back in after
 # a capture action. If those two disagreed on the count, recording an outcome
 # would silently lengthen or shorten the list. One constant, one default, no
 # literals at either call site.
+#
+# It counts CONCERTS, not rows: Home renders `my_deadline_blocks`, one block
+# per concert. The name is unchanged because it is still the same limit on the
+# same list -- `my_deadline_rows` keeps it as a ROW cap for the internal fetch
+# blocks are built from (widened there by ANCHOR_FAN_OUT).
 DEADLINE_ROWS_LIMIT = 10
 
 
@@ -1919,6 +1924,9 @@ class DeadlineRow:
     # a whole-round WON write against a round that has one secures NOTHING --
     # which is why the capture surfaces withdraw "Won (all)" once it is true.
     has_day_results: bool = False
+    # The round's close, carried so the block lead rule can ask `_wants_you`
+    # without re-loading the round. None for a row with no round behind it.
+    closes_at_utc: datetime | None = None
 
 
 def _round_has_opened(round_: Round, now: datetime) -> bool:
@@ -2249,6 +2257,7 @@ async def my_deadline_rows(
             capture_days=capture_days,
             any_day_won=any_day_won,
             has_day_results=d.round_id in rounds_with_day_rows,
+            closes_at_utc=round_.closes_at_utc if round_ is not None else None,
             # Same display rule as the tile macro: >1 venue tag collapses to
             # "Multiple", one wins outright, no venue tag means no venue.
             venue=(
@@ -2258,6 +2267,87 @@ async def my_deadline_rows(
             starts_at_utc=live_days[0].starts_at_utc if live_days else None,
         ))
     return rows
+
+
+# How many anchor rows per concert the block layer's internal fetch allows
+# for, and how many blocks Home renders before its page-level fold.
+ANCHOR_FAN_OUT = 6
+VISIBLE_BLOCKS = 6
+
+
+@dataclass(frozen=True)
+class ConcertBlock:
+    """One concert's slice of "Coming up": the round that wants this reader
+    first, plus the rest folded behind it. Built ON my_deadline_rows, never
+    beside it -- the per-row decoration (gates, outcome, venue, covered and
+    upgrade filtering) is exactly what a member line needs."""
+
+    event_id: str
+    concert_title: str
+    venue: str | None
+    starts_at_utc: datetime | None
+    lead: DeadlineRow
+    others: tuple[DeadlineRow, ...] = ()
+
+
+async def my_deadline_blocks(
+    session: AsyncSession,
+    user_id: int,
+    now: datetime | None = None,
+    limit: int = DEADLINE_ROWS_LIMIT,
+    concert_ids: set[int] | None = None,
+) -> list[ConcertBlock]:
+    """Home's "Coming up", grouped: one block per concert, capped at `limit`
+    CONCERTS (not rows).
+
+    Two collapses. Per ROUND: upcoming_deadlines emits one row per future
+    anchor in chronological order, so keeping the FIRST row per round id is
+    exactly the moment the concert page's _primary_anchor picks -- the two
+    surfaces agree by construction rather than by a second rule. Per
+    CONCERT: the remaining rows become one block.
+
+    The internal fetch is `limit * ANCHOR_FAN_OUT` rows because
+    my_upcoming_deadlines truncates BEFORE decoration: ten anchor rows can
+    be two concerts, so grouping a limit-sized fetch would under-fill. The
+    window bounds work; it is not a promise, exactly as today's truncation
+    is not.
+    """
+    now = now or _now()
+    rows = await my_deadline_rows(
+        session, user_id, now=now, limit=limit * ANCHOR_FAN_OUT,
+        concert_ids=concert_ids,
+    )
+
+    seen_rounds: set[int] = set()
+    by_event: dict[str, list[DeadlineRow]] = {}
+    for row in rows:
+        round_id = row.deadline.round_id
+        if round_id is not None:
+            if round_id in seen_rounds:
+                continue  # a later anchor of a round already represented
+            seen_rounds.add(round_id)
+        # A row with no round id is the show itself (one per leg): nothing to
+        # collapse onto, so every one survives as its own member line.
+        by_event.setdefault(row.deadline.event_id, []).append(row)
+
+    blocks: list[ConcertBlock] = []
+    for event_id, members in by_event.items():
+        ordered = sorted(members, key=lambda r: (
+            not _wants_you(r.outcome, r.can_capture, r.closes_at_utc, now),
+            r.deadline.at_utc,
+        ))
+        lead = ordered[0]
+        others = sorted(ordered[1:], key=lambda r: r.deadline.at_utc)
+        blocks.append(ConcertBlock(
+            event_id=event_id,
+            concert_title=lead.deadline.concert_title,
+            venue=lead.venue,
+            starts_at_utc=lead.starts_at_utc,
+            lead=lead,
+            others=tuple(others),
+        ))
+    blocks.sort(key=lambda b: (b.lead.deadline.at_utc, b.event_id))
+    return blocks[:limit]
 
 
 # ── First-run capture flow (/setup) ──────────────────────────────────────
@@ -2890,8 +2980,16 @@ def _leg_result_for(
     return None
 
 
-def _needs_you(row: RoundRow, now: datetime) -> bool:
+def _wants_you(
+    outcome: LotteryOutcome | None, can_capture: bool,
+    closes_at_utc: datetime | None, now: datetime,
+) -> bool:
     """Does this round still want something from this reader?
+
+    Primitives, not a row type, because TWO row shapes ask it: the concert
+    page's RoundRow (via `_needs_you`) and Home's DeadlineRow (via the block
+    lead in `my_deadline_blocks`). One rule, so the two surfaces cannot drift
+    on what "wants me first" means.
 
     Two ways it can. You have live standing -- APPLIED (waiting on a result)
     or WON (you owe a payment). Or you have no standing at all and the round
@@ -2902,19 +3000,26 @@ def _needs_you(row: RoundRow, now: datetime) -> bool:
     without you is a chance already gone. `can_capture` alone is not enough
     for the no-standing case -- it only means the round has OPENED, and a
     long-closed round would otherwise sit at the top of the page forever.
+    """
+    if outcome in (LotteryOutcome.APPLIED, LotteryOutcome.WON):
+        return True
+    if outcome is not None:
+        return False
+    return can_capture and (closes_at_utc is None or closes_at_utc > now)
+
+
+def _needs_you(row: RoundRow, now: datetime) -> bool:
+    """`_wants_you` for a concert-page row, plus that page's own veto.
 
     A covered round wants nothing whatever its outcome says: every leg it
     sells is already secured elsewhere, and leading the urgency panel with a
-    round that offers no buttons is a panel you cannot act on.
+    round that offers no buttons is a panel you cannot act on. It is not part
+    of the shared rule because Home never meets the case -- `my_deadline_rows`
+    drops covered rows outright, so no DeadlineRow can carry one.
     """
-    if row.covered:
-        return False
-    if row.outcome in (LotteryOutcome.APPLIED, LotteryOutcome.WON):
-        return True
-    if row.outcome is not None:
-        return False
-    closes = row.round_.closes_at_utc
-    return row.can_capture and (closes is None or closes > now)
+    return not row.covered and _wants_you(
+        row.outcome, row.can_capture, row.round_.closes_at_utc, now
+    )
 
 
 def _next_moment_key(row: RoundRow, now: datetime) -> tuple[int, float]:

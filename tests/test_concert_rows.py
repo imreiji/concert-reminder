@@ -21,6 +21,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.models import Base, Concert, ConcertDay, Round
 from app.db.service import (
+    RoundRow,
+    _needs_you,
+    _wants_you,
     concert_next_moment,
     concert_round_rows,
     ensure_user,
@@ -519,3 +522,51 @@ async def test_a_wholly_past_round_falls_back_to_its_last_moment(session):
     row = row_for(legs, leg_a.id, "All over")
     assert row.primary_anchor is Anchor.RESULTS
     assert row.primary_at_utc == dt(5, 2)
+
+
+# ── one "wants me?" rule, two row shapes ─────────────────────────────────
+
+
+async def test_the_lead_rule_matches_the_concert_pages_needs_you():
+    """Both surfaces answer 'does this want me?' identically for the same
+    inputs -- one rule, two row shapes. No DB: the predicate is pure, and the
+    point is the agreement, not the plumbing that reaches it."""
+    now = NOW
+    for outcome, can_capture, closes in [
+        (None, True, now + timedelta(days=1)),
+        (None, True, now - timedelta(days=1)),
+        (None, False, None),
+        (LotteryOutcome.APPLIED, True, None),
+        (LotteryOutcome.WON, False, None),
+        (LotteryOutcome.LOST, True, now + timedelta(days=1)),
+        (LotteryOutcome.PAID, True, None),
+        (LotteryOutcome.NOT_APPLIED, True, None),
+    ]:
+        round_ = Round(id=1, concert_id=1, kind=RoundKind.LOTTERY_ROUND,
+                       label="x", closes_at_utc=closes)
+        row = RoundRow(round_=round_, outcome=outcome, can_capture=can_capture,
+                       can_report_result=False)
+        assert _needs_you(row, now) == _wants_you(outcome, can_capture, closes, now)
+
+
+async def test_covered_still_vetoes_a_round_you_applied_to(session):
+    """`covered` is the concert page's OWN veto, on top of the shared rule:
+    the shared rule says APPLIED wants you, and every leg being secured
+    elsewhere says it does not. Generalising the predicate must not lose it --
+    Home never meets this case, because `my_deadline_rows` drops covered rows
+    before a block ever sees them."""
+    concert, leg_a, _leg_b, r_a, r_both, _r_none = await seed(session)
+    await record_round_outcome(session, 42, r_a.id, LotteryOutcome.APPLIED)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.WON)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    covered = row_for(legs, leg_a.id, "A-only")
+    assert covered.covered is True
+    assert covered.outcome is LotteryOutcome.APPLIED
+    assert _wants_you(covered.outcome, covered.can_capture,
+                      covered.round_.closes_at_utc, NOW) is True
+    assert _needs_you(covered, NOW) is False
+
+    rows = [row for leg in legs for row in leg.rounds]
+    assert concert_next_moment(rows, now=NOW).round_.label != "A-only"

@@ -830,11 +830,12 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .deadline-rows { border-top: 1px solid var(--line); }
 .rowhead, .deadline-rows .row {
   display: grid; grid-template-columns: 6.5rem 15rem 1fr 11rem 14rem;
-  gap: 1rem; border-bottom: 1px solid var(--line);
+  gap: 1rem;
 }
 .rowhead {
   padding: .4rem .1rem; font-size: .68rem; letter-spacing: .12em;
   text-transform: uppercase; color: var(--dim); font-weight: 700;
+  border-bottom: 1px solid var(--line);
 }
 .rowhead span:nth-child(5) { text-align: right; }
 .deadline-rows .row { align-items: center; padding: .65rem .1rem; }
@@ -846,9 +847,74 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 .row .title-c a { color: inherit; text-decoration: none; }
 .row .title-c a:hover { text-decoration: underline; }
 .row .title-c small { display: block; font-weight: 400; font-size: .78rem; color: var(--dim); }
+/* Coming up's copy of that small is EMPTY -- the venue/date it used to carry
+   moved to the block header, and what remains is a hook: the tablet band
+   composes the dropped what-happens column onto it via `::after
+   attr(data-happens)`. Everywhere else it would be a zero-height stray, so
+   say so out loud rather than leaving an invisible empty box in the cell.
+   Scoped to .deadline-rows: #rules' rows use the same class and their small
+   carries real text ("DM - applies to every round above"). */
+.deadline-rows .row .title-c small { display: none; }
+/* The what-happens cell is the anchor VERB and nothing else. It used to lead
+   with a bold round label, which was right when the cell one over held the
+   concert TITLE; blocks moved the title into the header and gave that cell
+   the round, so the label was being read twice per row. The `b` rule that
+   styled it went with it -- nothing else in the app puts a <b> in here. */
 .row .act-c { font-size: .8125rem; color: var(--dim); }
-.row .act-c b { color: var(--ink); font-weight: 600; }
 .row .acts { display: flex; align-items: center; gap: .4rem; justify-content: flex-end; }
+
+/* ── Coming up, per concert ──────────────────────────────────────────────
+   One BLOCK per concert: a header line naming it, the round that wants this
+   reader first, and the rest behind a fold. Because the page is now a list
+   of CONCERTS, the heavy structural boundary is the one under a block --
+   one per concert instead of one per anchor, which is the de-crowding
+   itself. */
+.deadline-rows .cblock { padding: .45rem 0 .35rem; border-bottom: 1px solid var(--line); }
+/* Inside a block, member rows still need telling apart: the first pass left
+   them to their own shape (pill, bold date) plus the :hover wash, and an
+   expanded three-round block read as one run-on paragraph (owner call).
+   Same --line hairline as the block boundary, on the REVEALED rows only, and
+   as a border-TOP. Three things follow from that placement, all of them the
+   point:
+     * the last row in a block can never carry a trailing rule -- the block's
+       own bottom border is the only line that closes it;
+     * a COLLAPSED block (the common case: lead row + summary) shows no
+       internal line at all, so the fold's label is never boxed between two
+       hairlines the way a rule on the <details> itself left it;
+     * the lead row needs no rule of its own -- the summary already sits
+       between it and everything the fold reveals. */
+.deadline-rows .cblock details.morerounds > .row { border-top: 1px solid var(--line); }
+.blockhead {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .5rem;
+  padding: .1rem .1rem .15rem;
+}
+/* The link was rendering in the UA's default blue: nothing in the app styles
+   a bare <a>, and .row .title-c a (which used to cover this title) no longer
+   reaches it. Match the row title it replaced -- ink, 600, underline on hover. */
+.blockhead a { font-weight: 600; color: var(--ink); text-decoration: none; }
+.blockhead a:hover { text-decoration: underline; }
+.blockhead small { font-size: .78rem; color: var(--dim); }
+
+/* The folds are presentation, never filtering -- every row is already in the
+   DOM. So they read as a quiet footnote to the block, not as another row:
+   the same disclosure vocabulary as .fsheet's summary (UA marker off, our own
+   rotating caret), at the dim .78rem the row's own small line uses. */
+.deadline-rows details > summary {
+  list-style: none; cursor: pointer; width: fit-content;
+  display: inline-flex; align-items: center; gap: .4rem;
+  font-size: .78rem; color: var(--dim);
+  padding: .2rem .35rem .2rem .1rem; border-radius: 3px;
+}
+.deadline-rows details > summary::-webkit-details-marker { display: none; }
+.deadline-rows details > summary::before {
+  content: "\25B8"; font-size: .7rem; transition: transform 150ms ease;
+}
+.deadline-rows details[open] > summary::before { transform: rotate(90deg); }
+.deadline-rows details > summary:hover { color: var(--ink); }
+/* The page-level fold is about whole EVENTS, not rounds, so it sits outside
+   the block rules with a little more air -- otherwise "+4 more events" reads
+   as one more round fold belonging to the block above it. */
+.deadline-rows > details.moreconcerts > summary { padding: .55rem .35rem .55rem .1rem; }
 .act {
   font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: .03em;
   padding: .22rem .5rem; border-radius: 3px; cursor: pointer; white-space: nowrap;
@@ -1540,8 +1606,10 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
    .plyt/.prail strip, and the .layout collapse (now max-width:1040, coupled
    to the .fsheet summary-flip at min-width:1041 -- both must also reach
    phones, and a min-width rule cannot live in a max-width section). The
-   phone bottom-sheet .fsheet block (max-width:760) also stays put; in this
-   band the fsheet is an inline disclosure panel, styled below. */
+   phone bottom-sheet .fsheet block (its own max-width:700 query -- it was
+   760 until .layout's collapse moved to 1040 and took the sheet boundary
+   with it) also stays put; in this band the fsheet is an inline disclosure
+   panel, styled below. */
 @media (min-width: 701px) and (max-width: 1040px) {
   /* T2 -- compact header: one row, never wraps under ja/zh. */
   header.site a.home .mark { white-space: nowrap; }
@@ -1576,10 +1644,28 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      data-happens, rather than the old 1024 rule's outright display:none with
      no replacement. Scoped to .deadline-rows so the ::after never lands on
      #rules rows or any other .row .title-c small (their attr(data-happens) is
-     empty and would paint a stray separator). */
-  .rowhead, .deadline-rows .row { grid-template-columns: 6.5rem 10.5rem 1fr 14rem; }
+     empty and would paint a stray separator).
+     The tracks were sized when the third cell held the concert TITLE plus a
+     venue/date line. It now holds a ROUND LABEL and nothing else, and at
+     6.5/10.5/1fr/14rem that track measured 119.8px at a 730px viewport --
+     "FC senkou lottery" wrapped to two lines and "Precedence lottery
+     (members only)" to three. The status pill and the two capture buttons
+     both have fixed content, so the width comes out of them, not out of the
+     one cell whose text varies. */
+  .rowhead, .deadline-rows .row { grid-template-columns: 5.5rem 9.5rem 1fr 13rem; }
   .rowhead span:nth-child(4), .deadline-rows .row .act-c { display: none; }
-  .deadline-rows .row .title-c small::after { content: " \00b7 " attr(data-happens); }
+  /* The small is display:none everywhere else (see the main-body rule) -- the
+     band is the one place it is alive, because the band is the one place its
+     ::after has anything to say. Both halves of that decision live here and
+     there so neither reads as an accident.
+     The content dropped its leading " \00b7 " too. That separator joined the
+     verb to the venue/date this small used to carry; with the small empty it
+     rendered as a dangling "· closes" -- the stray separator the note above
+     warns about, arriving from the other direction. (It was doubly wrong:
+     a CSS escape eats one following whitespace as its terminator, so the
+     computed value was " ·closes", with no space at all.) */
+  .deadline-rows .row .title-c small { display: block; }
+  .deadline-rows .row .title-c small::after { content: attr(data-happens); }
 
   /* T4 -- Discover: .layout already collapsed to one column (the 1040 rule);
      the filter sheet's summary shows (the 1041 flip no longer hides it) and
@@ -1712,6 +1798,42 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
     width: 100%; min-height: 44px; font-size: .8rem;
     display: inline-flex; align-items: center; justify-content: center;
   }
+
+  /* Coming up is one BLOCK per concert here too. The member cards keep the
+     treatment set just above -- bordered, filled, 44px actions -- and the
+     block header becomes the TITLE ROW they hang under, at the phone's
+     card-title size rather than the desktop's 1rem (at 344px a 16px title
+     took two lines before the venue even started). The venue/date small takes
+     a whole line of its own instead of wrapping mid-flex-row.
+
+     The folds become real touch targets: full-width and 44px, the same floor
+     as the capture buttons. OUTLINED, not filled, because the member cards
+     are filled (var(--raise)) -- a filled fold would read as one more card
+     rather than the thing that reveals them. Same shape as the phone
+     .fsheet summary further down the file, which is this app's other
+     disclosure-as-button.
+
+     The desktop hairline between blocks is deliberately KEPT: every member
+     card here is already a bordered box, so without the rule there is nothing
+     saying where one concert's stack of them ends and the next begins. */
+  .deadline-rows .cblock { padding: .2rem 0 .15rem; }
+  /* The desktop's in-block row separator needs no counterpart here and no
+     undoing either: it sets border-TOP on a revealed row, and a phone member
+     row is already a bordered card whose own `border` shorthand draws that
+     same 1px --line on all four sides. The rule lands on an edge that exists,
+     with the value it already had. */
+  .blockhead { padding: .5rem .1rem .4rem; font-size: .92rem; }
+  .blockhead small { flex: 1 1 100%; }
+  .deadline-rows details > summary {
+    width: 100%; min-height: 44px; justify-content: center;
+    padding: .3rem .7rem; margin-bottom: .55rem;
+    border: 1px solid var(--line); border-radius: 3px; background: none;
+    font-size: .8rem;
+  }
+  /* The desktop rule gives this one extra vertical padding to separate it
+     from the round folds; here every fold is already a 44px button, so it
+     goes back to matching them. */
+  .deadline-rows > details.moreconcerts > summary { padding: .3rem .7rem; }
 
   /* Up next + discovery block: single column, per the demo's stacked frames. */
   .next, .peek { grid-template-columns: 1fr; }

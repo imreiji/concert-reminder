@@ -54,9 +54,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.models import ConcertDay, Round, User
 from app.db.service import (
+    VISIBLE_BLOCKS,
     board_cards,
     ensure_user,
-    my_deadline_rows,
+    my_deadline_blocks,
     record_remaining_days_lost,
     record_round_day_result,
     record_round_outcome,
@@ -103,6 +104,7 @@ async def _outcome_response(
     session: AsyncSession,
     user: SessionUser,
     toast: str | None,
+    round_id: int,
 ):
     """What both capture routes answer with once the write is committed.
 
@@ -113,7 +115,16 @@ async def _outcome_response(
     state until reload.
 
     `toast` is the key base.html's TOAST_MSGS map renders, or None for a press
-    that has no honest entry there (see the day-result route)."""
+    that has no honest entry there (see the day-result route).
+
+    `round_id` is the round just written, and it rides into Home's fragment as
+    `open_round_id`. The swap is an outerHTML replacement, so every <details>
+    in "Coming up" comes back closed -- including the page-level "+N more
+    events" fold, which takes the block the reader just pressed a button on off
+    the screen entirely. The template reopens the fold(s) that own this round;
+    no JS and no client-held state, because the round is enough to find them.
+    The concert-page branch below wants none of this: it renders
+    _round_rows.html, which has no such folds."""
     headers = {"HX-Trigger": json.dumps({"toast": {"outcome": toast}})} if toast else {}
     event_id = _concert_event_id(request)
 
@@ -151,14 +162,17 @@ async def _outcome_response(
         )
 
     # No explicit limit here, and none on Home either: both take
-    # my_deadline_rows' DEADLINE_ROWS_LIMIT default, which is the only thing
-    # keeping this swap from silently changing how many rows the page shows.
+    # my_deadline_blocks' DEADLINE_ROWS_LIMIT default, which is the only thing
+    # keeping this swap from silently changing how many concerts the page
+    # shows. VISIBLE_BLOCKS below is the same contract for the page-level fold
+    # -- both paths read the constant, never a literal 6, or an outcome press
+    # would re-fold the list under the reader.
     #
     # tracked_concert_ids is resolved ONCE and shared by both queries below,
-    # exactly as GET / does -- the rows and the board are two views of the
+    # exactly as GET / does -- the blocks and the board are two views of the
     # same tracked set.
     tracked = await tracked_concert_ids(session, user.id)
-    rows = await my_deadline_rows(session, user.id, concert_ids=tracked)
+    blocks = await my_deadline_blocks(session, user.id, concert_ids=tracked)
     db_user = await session.get(User, user.id)
     tz = db_user.timezone if db_user else settings.default_timezone
 
@@ -168,11 +182,13 @@ async def _outcome_response(
     columns, open_total = await board_cards(session, user.id, concert_ids=tracked)
     ctx = {
         "user": user,
-        "rows": rows,
+        "blocks": blocks,
+        "visible_blocks": VISIBLE_BLOCKS,
         "tz": tz,
         "columns": {col.value: cards for col, cards in columns.items()},
         "open_total": open_total,
         "oob": True,
+        "open_round_id": round_id,
     }
     fragments = [
         templates.get_template(name).render(request=request, **ctx)
@@ -202,7 +218,7 @@ async def record_outcome(
     await ensure_user(session, user.id, user.username)
     await record_round_outcome(session, user.id, round_id, outcome)
     await session.commit()
-    return await _outcome_response(request, session, user, outcome.value)
+    return await _outcome_response(request, session, user, outcome.value, round_id)
 
 
 # The four things a reader can say about ONE leg, and which toast each earns.
@@ -283,4 +299,6 @@ async def record_day_result(
             session, user.id, round_id, day_id, LegResult(result)
         )
     await session.commit()
-    return await _outcome_response(request, session, user, _TOAST_BY_RESULT[result])
+    return await _outcome_response(
+        request, session, user, _TOAST_BY_RESULT[result], round_id
+    )

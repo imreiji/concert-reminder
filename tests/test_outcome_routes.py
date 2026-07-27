@@ -18,6 +18,7 @@ from app.db.models import (
     Base,
     Concert,
     ConcertDay,
+    ConcertSubscription,
     LegOptOut,
     ReminderQueue,
     ReminderRule,
@@ -33,7 +34,13 @@ from app.db.service import (
     upcoming_deadlines,
 )
 from app.db.session import get_session
-from app.domain.types import Anchor, LegResult, LotteryOutcome, RoundKind
+from app.domain.types import (
+    Anchor,
+    LegResult,
+    LotteryOutcome,
+    RoundKind,
+    SubscriptionState,
+)
 from app.web import auth
 from app.web.app import create_app
 
@@ -481,6 +488,40 @@ async def test_day_result_answers_home_with_homes_own_fragments(client):
     assert 'id="deadline-rows"' in r.text
     assert 'id="board"' in r.text
     assert 'id="board-summary"' in r.text
+
+
+async def test_outcome_swap_returns_the_same_block_structure(client):
+    """htmx parity. GET / and this swap render the SAME partial, so the
+    fragment must come back block-structured too: the outer #deadline-rows
+    target intact (an outerHTML swap replaces that very element), a block
+    header inside it, and the two out-of-band fragments still riding along.
+
+    The concert is force-subscribed rather than tag-matched because
+    `tracked_concert_ids` is what decides whether Coming up has anything in
+    it at all, and this file's seeds carry no tags -- an untracked concert
+    would render an empty (but structurally valid) fragment and the block
+    assertion below would pass for the wrong reason."""
+    rid = await seed_round(client.db)
+    async with client.db() as s:
+        concert_id = (await s.execute(select(Concert.id))).scalars().one()
+        s.add(ConcertSubscription(
+            user_id=USER_A, concert_id=concert_id, state=SubscriptionState.SUBSCRIBED,
+        ))
+        await s.commit()
+    login_as(client, USER_A, "reiji")
+
+    r = post_outcome(client, rid, "applied")
+    assert r.status_code == 200
+    # The hx-target element itself, and the block shape inside it.
+    assert r.text.lstrip().startswith('<div class="deadline-rows" id="deadline-rows">')
+    rows = r.text.split('id="deadline-rows"', 1)[1]
+    assert '<div class="cblock">' in rows
+    assert 'class="blockhead"' in rows
+    assert ">Hasunosora 6th</a>" in rows
+    # ...and the two out-of-band fragments the swap has always carried.
+    assert 'id="board"' in r.text
+    assert 'id="board-summary"' in r.text
+    assert 'hx-swap-oob="true"' in r.text
 
 
 async def test_day_result_without_htmx_returns_where_it_came_from(client):
