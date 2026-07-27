@@ -1,5 +1,6 @@
-{# The concert page's body: "Next for you", then one section per leg, then
-   the all-legs group.
+{# The concert page's body: one section per leg, each with that leg's own
+   rounds. (A concert with no legs at all falls back to a plain "Rounds"
+   list at the foot; there is no longer a separate "all legs" group.)
 
    Its own partial because POST /rounds/{id}/outcome swaps it back in after a
    capture action; keep the outer <div id="concert-rounds">, that is the htmx
@@ -138,14 +139,20 @@
   </div>
   {% endfor %}
 
-  {# Last, and only when it has something in it. This group is NOT "everything
-     not leg-specific": a round naming only cancelled legs sits under those
-     legs. What lands here is a round tied to no leg at all, or one covering
-     every live leg -- where repeating it under each would bury the rounds
-     that really are leg-specific. #}
-  {% if all_legs_rows %}
+  {# The separate "All legs" section is GONE. A round covering every leg now
+     renders under EACH of them (concert_round_rows), because standing on it
+     is per-leg -- won Saturday, lost Sunday -- and one shared row could only
+     lie about one of them. Repeating the round is the trade: each leg reads
+     as a complete story instead of one you cross-reference.
+
+     What is left in the second list is the fallback for a concert with NO
+     legs at all, where there is no group to put a round under. Its heading
+     must not claim legs the concert does not have, so it is plainly
+     "Rounds"; `not leg_groups` guards it because the service returns this
+     list empty for any concert that does have legs. #}
+  {% if all_legs_rows and not leg_groups %}
   <div class="leg">
-    <div class="leghead"><h3 class="leg-heading">{% if leg_groups %}{{ _("All legs") }}{% else %}{{ _("Rounds") }}{% endif %}</h3></div>
+    <div class="leghead"><h3 class="leg-heading">{{ _("Rounds") }}</h3></div>
     {{ rounds_or_note(all_legs_rows, tz, "") }}
   </div>
   {% endif %}

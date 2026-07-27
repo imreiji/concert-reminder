@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -31,11 +31,15 @@ from app.db.models import (
     TagSubscription,
     User,
 )
-from app.db.service import DEADLINE_ROWS_LIMIT, record_round_outcome
+from app.db.service import (
+    DEADLINE_ROWS_LIMIT,
+    record_round_day_result,
+    record_round_outcome,
+)
 from app.db.session import get_session
 from app.domain.board import OPEN_COLUMN_LIMIT
 from app.domain.timezones import fmt_dual_lines
-from app.domain.types import LotteryOutcome, RoundKind, TagKind
+from app.domain.types import LegResult, LotteryOutcome, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -636,6 +640,81 @@ async def test_applied_row_withholds_won_and_lost_until_results_are_due(client):
     assert ">I won</button>" not in html
     assert ">I lost</button>" not in html
     assert "Nothing to do" in html
+
+
+async def test_a_multi_leg_row_asks_leg_by_leg(client):
+    """Coming up shares `_capture_actions.html` with the concert page, so a
+    round covering two legs asks about each of them here too. Its rows are a
+    DIFFERENT dataclass (DeadlineRow, which carries no `covered` -- a covered
+    row is dropped upstream instead), so this also pins that the shared macro
+    renders against both shapes."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        c = await seed.concert("two-legs", title="Two leg concert", day_offset=60)
+        second = ConcertDay(
+            concert_id=c.id, label="Day 2",
+            starts_at_utc=now + timedelta(days=61),
+        )
+        seed.s.add(second)
+        await seed.s.flush()
+        r = await seed.round(
+            c, "FC lottery",
+            opens=now - timedelta(days=30),
+            closes=now - timedelta(days=10),
+            results=now - timedelta(days=1),
+            payment=now + timedelta(days=5),
+        )
+        await record_round_outcome(seed.s, USER, r.id, LotteryOutcome.APPLIED)
+        return r
+
+    round_ = await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "Won — Day 1" in rows
+    assert "Lost — Day 2" in rows
+    assert "Not going — Day 1" in rows
+    assert f"/rounds/{round_.id}/day-result" in rows
+    assert ">I won</button>" not in rows
+
+
+async def test_a_partially_won_multi_leg_row_offers_lost_the_rest(client):
+    """One leg secured turns the remaining question into "lost the rest?" --
+    and the won leg stops being asked about."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        c = await seed.concert("part-win", title="Partial win concert", day_offset=60)
+        second = ConcertDay(
+            concert_id=c.id, label="Day 2",
+            starts_at_utc=now + timedelta(days=61),
+        )
+        seed.s.add(second)
+        await seed.s.flush()
+        r = await seed.round(
+            c, "FC lottery",
+            opens=now - timedelta(days=30),
+            closes=now - timedelta(days=10),
+            results=now - timedelta(days=1),
+            payment=now + timedelta(days=5),
+        )
+        await record_round_outcome(seed.s, USER, r.id, LotteryOutcome.APPLIED)
+        first = (await seed.s.execute(
+            select(ConcertDay.id)
+            .where(ConcertDay.concert_id == c.id)
+            .order_by(ConcertDay.starts_at_utc)
+        )).scalars().first()
+        await record_round_day_result(seed.s, USER, r.id, first, LegResult.WON)
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "Lost the rest" in rows
+    assert "Lost — Day 2" in rows
+    assert "Won — Day 1" not in rows
+    assert "Won (all)" not in rows
 
 
 # ── the Discover teaser counts what the link actually leads to ────────────

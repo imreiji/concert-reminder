@@ -7,8 +7,12 @@
    come from one place in the service layer (`capture_gates`), and splitting
    the markup that reads them would put the two halves back out of step.
 
-   `row` is anything carrying `.outcome`, `.can_capture` and
-   `.can_report_result` -- a DeadlineRow or a RoundRow. `target` is the htmx
+   `row` is anything carrying `.outcome`, `.can_capture`,
+   `.can_report_result`, `.capture_days` and `.any_day_won` -- a DeadlineRow
+   or a RoundRow. Only a RoundRow adds `.covered`; on a DeadlineRow the
+   attribute is undefined (and so falsy), which is correct rather than
+   accidental: Home drops a covered row before it ever renders, so the
+   covered branch is dead code there. `target` is the htmx
    selector the POST swaps, which differs per surface, so the caller supplies
    it. `prune_title`/`prune_url` feed Home's follow-up dialog; a caller
    without one omits them and the attributes simply do not render.
@@ -29,7 +33,16 @@
    opened) stops every one of them from offering an independent "I have
    applied" against a round nobody could have entered yet -- an irreversible
    write, since record_round_outcome refuses to overwrite a starting state. #}
-{% if not row.can_capture %}
+{# A round every leg of which this reader already secured elsewhere. It comes
+   FIRST because it outranks every gate below: `capture_gates` shuts both of
+   them for a covered round, so without this branch the row would fall through
+   to "Not open yet" -- a statement about the round that is simply false.
+   Only a RoundRow carries `covered`; Home drops a covered row upstream
+   instead (its rows are DeadlineRows, where the attribute is undefined and
+   therefore falsy), so the same macro serves both shapes. #}
+{% if row.covered %}
+<span class="done ok">{{ _("Covered — you already hold this day") }}</span>
+{% elif not row.can_capture %}
 <span class="done">{{ _("Not open yet") }}</span>
 {% elif row.outcome is none %}
 <form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
@@ -47,6 +60,57 @@
   <input type="hidden" name="outcome" value="not_applied">
   <button class="act no" type="submit">{{ _("Skipping") if is_upgrade else _("Not applying") }}</button>
 </form>
+{% elif row.capture_days %}
+{# Multi-leg result capture: one form per unresolved day + the shortcuts.
+   Same write path as Discord's progressive buttons (invariant 2).
+
+   It sits ABOVE the flat won/lost pair and above the Paid branch on purpose:
+   a round covering Saturday and Sunday can come back won on one and lost on
+   the other, so "I won" would have to lie about one of them, and a WON round
+   with legs still unanswered is not yet at the payment question. `capture_days`
+   is empty for every single-leg round and for a round already fully resolved
+   (see `_day_capture_context`), so both of those branches keep their old
+   behaviour untouched. #}
+{% if not row.any_day_won %}
+<form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}" hx-swap="outerHTML"
+      method="post" action="/rounds/{{ round_id }}/outcome">
+  <input type="hidden" name="outcome" value="won">
+  <button class="act yes" type="submit">{{ _("Won (all)") }}</button>
+</form>
+{% endif %}
+{% for day_id, day_label in row.capture_days %}
+<form hx-post="/rounds/{{ round_id }}/day-result" hx-target="{{ target }}" hx-swap="outerHTML"
+      method="post" action="/rounds/{{ round_id }}/day-result">
+  <input type="hidden" name="day_id" value="{{ day_id }}">
+  <input type="hidden" name="result" value="won">
+  <button class="act yes" type="submit">{{ _("Won — {day}").format(day=day_label) }}</button>
+</form>
+<form hx-post="/rounds/{{ round_id }}/day-result" hx-target="{{ target }}" hx-swap="outerHTML"
+      method="post" action="/rounds/{{ round_id }}/day-result">
+  <input type="hidden" name="day_id" value="{{ day_id }}">
+  <input type="hidden" name="result" value="lost">
+  <button class="act no" type="submit">{{ _("Lost — {day}").format(day=day_label) }}</button>
+</form>
+<form hx-post="/rounds/{{ round_id }}/day-result" hx-target="{{ target }}" hx-swap="outerHTML"
+      method="post" action="/rounds/{{ round_id }}/day-result">
+  <input type="hidden" name="day_id" value="{{ day_id }}">
+  <input type="hidden" name="result" value="skip">
+  <button class="act no" type="submit">{{ _("Not going — {day}").format(day=day_label) }}</button>
+</form>
+{% endfor %}
+{% if row.any_day_won %}
+<form hx-post="/rounds/{{ round_id }}/day-result" hx-target="{{ target }}" hx-swap="outerHTML"
+      method="post" action="/rounds/{{ round_id }}/day-result">
+  <input type="hidden" name="result" value="lost_rest">
+  <button class="act no" type="submit">{{ _("Lost the rest") }}</button>
+</form>
+{% else %}
+<form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}" hx-swap="outerHTML"
+      method="post" action="/rounds/{{ round_id }}/outcome">
+  <input type="hidden" name="outcome" value="lost">
+  <button class="act no" type="submit">{{ _("Lost (all)") }}</button>
+</form>
+{% endif %}
 {% elif row.can_report_result %}
 {# The web's only exit from APPLIED. WON/LOST live on the DM buttons too, but
    a dm_blocked user -- or a deploy with bot_enabled=False -- has no DM to
