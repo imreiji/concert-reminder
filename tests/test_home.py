@@ -33,13 +33,15 @@ from app.db.models import (
 )
 from app.db.service import (
     DEADLINE_ROWS_LIMIT,
+    my_deadline_blocks,
+    my_deadline_rows,
     record_round_day_result,
     record_round_outcome,
 )
 from app.db.session import get_session
 from app.domain.board import OPEN_COLUMN_LIMIT
 from app.domain.timezones import fmt_dual_lines
-from app.domain.types import LegResult, LotteryOutcome, RoundKind, TagKind
+from app.domain.types import Anchor, LegResult, LotteryOutcome, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -1130,3 +1132,189 @@ async def test_coming_up_rows_render_the_localized_round_label(client):
     html_en = client.get("/").text
     assert "1st-round lottery" in html_en
     assert "第一轮抽选" not in html_en
+
+
+# ── Task 1: Coming up, grouped into per-concert blocks ───────────────────
+
+
+@pytest_asyncio.fixture()
+async def blocks_seed(db):
+    """The service-level counterpart to `seeded`: the same subscribed-ARTIST-tag
+    world, but yielding the live `Seed` (and with it `seed.s`, the session) so a
+    test can call `my_deadline_blocks` directly instead of reading the grouping
+    back out of rendered HTML.
+
+    Times here are relative to the real clock rather than a frozen NOW, because
+    `Seed` builds its concert days from `datetime.now(UTC)` and a test mixing
+    the two would compare against a moment nothing was seeded around.
+    """
+    async with db() as s:
+        s.add(User(discord_id=USER, username="reiji"))
+        await s.flush()
+        tag = Tag(name="Aqours", kind=TagKind.ARTIST)
+        s.add(tag)
+        await s.flush()
+        s.add(TagSubscription(user_id=USER, tag_id=tag.id))
+        await s.flush()
+        yield Seed(s, tag)
+
+
+async def test_blocks_collapse_a_round_to_its_soonest_anchor(blocks_seed):
+    """One round carrying a close, a result announcement and a payment is ONE
+    thing to watch, not three rows. The block keeps the soonest anchor and
+    folds nothing behind it, because there is nothing else here."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=None)
+    await blocks_seed.round(
+        c, "FC lottery",
+        opens=now - timedelta(days=1), closes=now + timedelta(days=1),
+        results=now + timedelta(days=8), payment=now + timedelta(days=15),
+    )
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert len(blocks) == 1
+    assert blocks[0].others == ()
+    assert blocks[0].lead.deadline.anchor is Anchor.CLOSES
+    assert blocks[0].concert_title == "aqours-live"
+
+
+async def test_standing_beats_time_for_the_lead(blocks_seed):
+    """A payment you owe in three weeks outranks a round that has not even
+    opened tomorrow: the lead is what wants you, not what is soonest."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=None)
+    round_a = await blocks_seed.round(
+        c, "FC lottery",
+        opens=now - timedelta(days=30), closes=now - timedelta(days=10),
+        payment=now + timedelta(days=20),
+    )
+    round_b = await blocks_seed.round(
+        c, "General sale",
+        opens=now + timedelta(days=1), closes=now + timedelta(days=10),
+    )
+    await record_round_outcome(blocks_seed.s, USER, round_a.id, LotteryOutcome.WON, now)
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert blocks[0].lead.deadline.round_id == round_a.id
+    assert [r.deadline.round_id for r in blocks[0].others] == [round_b.id]
+
+
+async def test_a_settled_round_never_leads(blocks_seed):
+    """LOST is over. Its results row is still worth showing (the block folds
+    it in), but leading with it would head the block with a dead campaign."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=None)
+    settled = await blocks_seed.round(
+        c, "FC lottery",
+        opens=now - timedelta(days=10), closes=now - timedelta(days=1),
+        results=now + timedelta(days=1),
+    )
+    live = await blocks_seed.round(
+        c, "General sale",
+        opens=now - timedelta(days=1), closes=now + timedelta(days=5),
+    )
+    await record_round_outcome(blocks_seed.s, USER, settled.id, LotteryOutcome.LOST, now)
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert blocks[0].lead.deadline.round_id == live.id
+    assert [r.deadline.round_id for r in blocks[0].others] == [settled.id]
+
+
+async def test_others_stay_chronological(blocks_seed):
+    """Only the LEAD is chosen by standing. Everything folded behind it reads
+    as a diary again, soonest first -- so the second open round does not jump
+    ahead of a round that opens before it."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=None)
+    lead = await blocks_seed.round(
+        c, "Open now", opens=now - timedelta(days=1), closes=now + timedelta(days=2),
+    )
+    also_open = await blocks_seed.round(
+        c, "Also open", opens=now - timedelta(days=1), closes=now + timedelta(days=3),
+    )
+    unopened = await blocks_seed.round(
+        c, "Not open yet", opens=now + timedelta(days=1), closes=now + timedelta(days=9),
+    )
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert blocks[0].lead.deadline.round_id == lead.id
+    # `also_open` wants you and `unopened` does not, so the lead rule would
+    # have ordered these two the other way round.
+    assert [r.deadline.round_id for r in blocks[0].others] == [unopened.id, also_open.id]
+
+
+async def test_blocks_sort_by_their_lead_moment(blocks_seed):
+    """Between concerts it is the LEAD that competes, not the earliest row a
+    concert happens to carry -- otherwise a block would sort on a line folded
+    out of sight."""
+    now = datetime.now(UTC)
+    noisy = await blocks_seed.concert("aqours-live", day_offset=None)
+    await blocks_seed.round(
+        noisy, "Not open yet",
+        opens=now + timedelta(days=1), closes=now + timedelta(days=20),
+    )
+    await blocks_seed.round(
+        noisy, "Open now", opens=now - timedelta(days=1), closes=now + timedelta(days=5),
+    )
+    other = await blocks_seed.concert("muse-live", day_offset=None)
+    await blocks_seed.round(
+        other, "Open now", opens=now - timedelta(days=1), closes=now + timedelta(days=2),
+    )
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert [b.event_id for b in blocks] == ["muse-live", "aqours-live"]
+
+
+async def test_block_cap_counts_concerts_not_rows(blocks_seed):
+    """Twelve concerts of three anchors each. The cap is ten CONCERTS, and the
+    internal fetch is wide enough to actually find them -- grouping a
+    limit-sized row fetch would have under-filled the list."""
+    now = datetime.now(UTC)
+    for i in range(12):
+        c = await blocks_seed.concert(f"concert-{i:02d}", day_offset=None)
+        await blocks_seed.round(
+            c, "FC lottery",
+            opens=now - timedelta(days=1),
+            closes=now + timedelta(days=i + 1),
+            results=now + timedelta(days=i + 1, hours=1),
+            payment=now + timedelta(days=i + 1, hours=2),
+        )
+
+    # The regression this guards: a limit-sized ROW fetch reaches barely a
+    # third of these concerts.
+    rows = await my_deadline_rows(blocks_seed.s, USER, now=now, limit=DEADLINE_ROWS_LIMIT)
+    assert len({r.deadline.event_id for r in rows}) < DEADLINE_ROWS_LIMIT
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert len(blocks) == 10
+    assert [b.event_id for b in blocks] == [f"concert-{i:02d}" for i in range(10)]
+    assert all(b.others == () for b in blocks)
+
+
+async def test_event_start_only_concert_leads_with_the_show(blocks_seed):
+    """A concert with no rounds ahead still has a block: the show itself."""
+    now = datetime.now(UTC)
+    await blocks_seed.concert("aqours-live", day_offset=30)
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert len(blocks) == 1
+    assert blocks[0].lead.deadline.round_id is None
+    assert blocks[0].lead.deadline.anchor is Anchor.EVENT_START
+    assert blocks[0].others == ()
+    assert blocks[0].starts_at_utc is not None
+
+
+async def test_every_leg_keeps_its_own_show_row(blocks_seed):
+    """Rows with no round id have nothing to collapse onto -- a two-night
+    stand is two shows, and folding them together would lose a date."""
+    now = datetime.now(UTC)
+    c = await blocks_seed.concert("aqours-live", day_offset=30)
+    blocks_seed.s.add(ConcertDay(
+        concert_id=c.id, label="Day 2", starts_at_utc=now + timedelta(days=31),
+    ))
+    await blocks_seed.s.flush()
+
+    blocks = await my_deadline_blocks(blocks_seed.s, USER, now=now)
+    assert len(blocks) == 1
+    assert len(blocks[0].others) == 1
+    assert blocks[0].others[0].deadline.round_id is None
