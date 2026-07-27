@@ -624,6 +624,56 @@ async def _won_day_ids(session: AsyncSession, user_id: int, round_id: int) -> se
     )).scalars())
 
 
+async def round_result_state(
+    session: AsyncSession, user_id: int, round_: Round, locale: str,
+) -> tuple[tuple[tuple[int, str], ...], bool, LotteryOutcome | None]:
+    """`(unresolved legs, any leg secured, round outcome)` for one user --
+    the snapshot Discord's progressive result buttons re-derive on EVERY
+    press (`bot/views.py`).
+
+    It exists because a DM outlives the state it was built for: those buttons
+    are persistent, so the same message can be pressed months later against a
+    round already resolved on the web, and the reply has to render what is
+    true NOW rather than what the message said. Deriving that from
+    `DueReminder.covered_days` would be exactly the mistake -- that tuple is
+    leg PRESENCE, fixed when the DM was composed, and knows nothing about
+    what has since been recorded or opted out of.
+
+    The no-rows-means-all convention (see `_leg_result_for`) is what the first
+    branch handles: a round settled as a WHOLE, with zero day rows, settled
+    every leg it covers, so nothing is waiting on an answer -- without it a
+    "Won (all)" press would write the round-level outcome and then be asked
+    about the very days it just answered for.
+
+    `locale` is explicit rather than read from the ContextVar: the caller is a
+    click handler that has just set the clicking user's language, and passing
+    it keeps this callable from the scheduler's per-recipient path too."""
+    outcome = await _round_outcome_value(session, user_id, round_.id)
+    day_rows = (await session.execute(
+        select(RoundOutcomeDay.day_id, RoundOutcomeDay.result).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id == round_.id,
+        )
+    )).all()
+    any_won = any(result == LegResult.WON for _day_id, result in day_rows)
+    if not day_rows and outcome in (
+        LotteryOutcome.WON, LotteryOutcome.PAID, LotteryOutcome.LOST,
+        LotteryOutcome.NOT_APPLIED,
+    ):
+        return (), outcome in (LotteryOutcome.WON, LotteryOutcome.PAID), outcome
+
+    unresolved = await unresolved_day_ids(session, user_id, round_)
+    if not unresolved:
+        return (), any_won, outcome
+    label_by_id = {
+        d.id: loc_field(d, "label", locale)
+        for d in (await session.execute(
+            select(ConcertDay).where(ConcertDay.id.in_(unresolved))
+        )).scalars()
+    }
+    return tuple((did, label_by_id.get(did, "")) for did in unresolved), any_won, outcome
+
+
 async def _settle_lost_days(
     session: AsyncSession, user_id: int, round_: Round, lost_day_ids: set[int],
     now: datetime,

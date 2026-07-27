@@ -19,24 +19,38 @@ custom_id namespace:
     dk:lost:{round_id}        mark this round as lost
     dk:paid:{round_id}        mark this round's payment as done
     dk:remindlater:{queue_id} open a modal asking how many days to snooze
+
+    -- progressive capture, for a round covering two or more legs:
+    dk:wonall:{round_id}          every leg of this round was won
+    dk:lostall:{round_id}         every leg of this round was lost
+    dk:wonday:{round_id}:{day_id}   this ONE leg was won
+    dk:lostday:{round_id}:{day_id}  this ONE leg was lost
+    dk:skipday:{round_id}:{day_id}  not going to this leg (a leg opt-out)
+    dk:lostrest:{round_id}        every leg still unanswered was lost
+    dk:paidnow:{round_id}         the payment for it is done
+    dk:paylater:{round_id}        not paid yet (records nothing)
 """
 
 import re
 
 import discord
 
-from app.db.models import User
+from app.db.models import ConcertDay, Round, User
 from app.db.service import (
     apply_default_preset,
     is_round_cancelled,
+    record_remaining_days_lost,
+    record_round_day_result,
     record_round_outcome,
     reinstate_user_rules,
     remove_user_rules,
+    round_result_state,
+    set_leg_opt_out,
     snooze_reminder,
 )
 from app.db.session import SessionMaker
 from app.domain.timezones import fmt_dual
-from app.domain.types import LotteryOutcome
+from app.domain.types import LegResult, LotteryOutcome
 from app.i18n import N_, get_locale, loc_field, ngettext, set_locale
 from app.i18n import gettext as _
 
@@ -400,8 +414,334 @@ class RemindLaterButton(
         await interaction.response.send_modal(RemindLaterModal(self.queue_id))
 
 
+# ── Progressive per-day result capture ───────────────────────────────────
+#
+# A round covering two or more legs can come back won on one night and lost on
+# another, so the flat Won/Lost pair above would have to lie about one of them.
+# These buttons ask leg by leg instead, and each press EDITS the DM it was
+# pressed on: the question changes as legs get answered, and a thread of
+# replies would leave the stale question pressable above the current one.
+#
+# Nothing about the flow is stored. Every press re-derives its whole reply from
+# `round_result_state` -- these buttons are persistent, so the same message can
+# be pressed months later against a round already resolved on the site, and the
+# only honest answer to that is what is true now. The service writers no-op on
+# a state that has moved on (a won leg never demotes a PAID round, "lost the
+# rest" writes nothing on a round with nothing unresolved), so a stale press
+# costs a re-render and never a wrong write.
+
+# Discord allows 25 components across 5 rows, and the follow-up view gives each
+# leg a row of its own -- so a long tour is asked about a batch at a time.
+# Answering one shrinks the unresolved list, which is what brings the next legs
+# into reach on the following press.
+MAX_DAY_BUTTONS = 4
+
+# Discord rejects a button label over 80 characters with an HTTPException,
+# which the scheduler classes as a transient failure and retries every tick
+# forever -- the same trap `safe_button_url` guards. Leg labels are
+# editor-supplied text, so trim rather than risk wedging the queue.
+_LABEL_MAX = 80
+
+
+def _fit_label(text: str) -> str:
+    return text if len(text) <= _LABEL_MAX else text[: _LABEL_MAX - 1] + "…"
+
+
+async def _result_state(session, user_id: int, round_):
+    """`(unresolved [(day_id, label), ...], any_won, outcome)` under the locale
+    already set for the clicking user.
+
+    Deliberately NOT derived from the DM's own buttons or from
+    `DueReminder.covered_days`: that tuple is leg PRESENCE at compose time and
+    knows nothing about what has been recorded or opted out of since."""
+    return await round_result_state(session, user_id, round_, get_locale())
+
+
+async def _leg_label(session, round_, day_id: int) -> str | None:
+    """This leg's label in the clicking user's language, or None when the id
+    names no leg of THIS round's concert.
+
+    Day ids arrive inside a custom_id, so they are re-validated server side
+    exactly as `web/routes/outcomes.py` re-validates its form-supplied ones:
+    `record_round_day_result` refuses an uncovered day itself, but
+    `set_leg_opt_out` validates nothing and would raise an FK error at commit
+    on a made-up id. One class of input, one answer -- write nothing."""
+    day = await session.get(ConcertDay, day_id)
+    if day is None or day.concert_id != round_.concert_id:
+        return None
+    return loc_field(day, "label", get_locale())
+
+
+async def _apply_press(session, user_id: int, round_, action: str, day_id: int | None) -> None:
+    """What each button MEANS, in one table. Every branch is an existing
+    service writer -- the bot adds no write path of its own, or the reminder
+    queue would desync (invariant 2)."""
+    if action == "wonall":
+        await record_round_outcome(session, user_id, round_.id, LotteryOutcome.WON)
+    elif action == "lostall":
+        await record_round_outcome(session, user_id, round_.id, LotteryOutcome.LOST)
+    elif action == "paid":
+        await record_round_outcome(session, user_id, round_.id, LotteryOutcome.PAID)
+    elif action == "lostrest":
+        await record_remaining_days_lost(session, user_id, round_.id)
+    elif action == "skip":
+        # "Not going" is a leg opt-out, never a RoundOutcomeDay row: the reader
+        # is declining the night, not reporting how the draw went. No resync
+        # call here -- set_leg_opt_out re-plans this user's rules itself
+        # (invariant 8), so no caller can forget it.
+        await set_leg_opt_out(session, user_id, day_id, True)
+    else:
+        await record_round_day_result(session, user_id, round_.id, day_id, LegResult(action))
+
+
+def _progress_reply(round_id: int, unresolved, any_won: bool, outcome, day_label: str | None):
+    """`(content, view)` for the state a press left behind."""
+    if unresolved:
+        content = (
+            _("{day} recorded — and the other days?").format(day=day_label)
+            if day_label else _("Got it — and the other days?")
+        )
+        return content, build_result_followup_view(round_id, unresolved, any_won)
+    if any_won and outcome is not LotteryOutcome.PAID:
+        return _("All recorded — have you paid for it yet?"), build_payment_view(round_id)
+    if any_won:
+        return _("Marked as paid — all set!"), None
+    if outcome is LotteryOutcome.LOST:
+        return _("Sorry to hear it — no payment reminder needed, and I'll let you know "
+                 "when the next round opens if there is one."), None
+    # Every leg answered, none secured, and the round itself not settled as
+    # lost: the reader skipped the ones they were not going to. Nothing was
+    # lost, so neither the congratulations nor the condolences are true.
+    return _("Nothing left to record for this one."), None
+
+
+async def _progressive_click(
+    interaction: discord.Interaction, round_id: int, action: str, day_id: int | None = None,
+) -> None:
+    """The shared body of every progressive button: set the locale, validate
+    the ids, apply this button's meaning, then re-render from the state that
+    leaves rather than from the message that was pressed."""
+    async with SessionMaker() as session:
+        await _apply_locale(session, interaction.user.id)
+        round_ = await session.get(Round, round_id)
+        if round_ is None:
+            await interaction.response.edit_message(
+                content=_("That round no longer exists."), view=None
+            )
+            return
+        day_label = await _leg_label(session, round_, day_id) if day_id is not None else None
+        if day_id is None or day_label is not None:
+            await _apply_press(session, interaction.user.id, round_, action, day_id)
+        unresolved, any_won, outcome = await _result_state(
+            session, interaction.user.id, round_
+        )
+        await session.commit()
+    content, view = _progress_reply(round_id, unresolved, any_won, outcome, day_label)
+    await interaction.response.edit_message(content=content, view=view)
+
+
+class WonAllButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:wonall:(?P<rid>\d+)"
+):
+    def __init__(self, round_id: int, row: int | None = None) -> None:
+        super().__init__(discord.ui.Button(
+            label=_("Won (all)"), style=discord.ButtonStyle.success,
+            custom_id=f"dk:wonall:{round_id}",
+        ), row=row)
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _progressive_click(interaction, self.round_id, "wonall")
+
+
+class LostAllButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:lostall:(?P<rid>\d+)"
+):
+    def __init__(self, round_id: int, row: int | None = None) -> None:
+        super().__init__(discord.ui.Button(
+            label=_("Lost (all)"), style=discord.ButtonStyle.secondary,
+            custom_id=f"dk:lostall:{round_id}",
+        ), row=row)
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _progressive_click(interaction, self.round_id, "lostall")
+
+
+class LostRestButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:lostrest:(?P<rid>\d+)"
+):
+    """The all-legs shortcut once SOMETHING is secured: "Lost (all)" there
+    would throw away a ticket the reader has already recorded."""
+
+    def __init__(self, round_id: int, row: int | None = None) -> None:
+        super().__init__(discord.ui.Button(
+            label=_("Lost the rest"), style=discord.ButtonStyle.secondary,
+            custom_id=f"dk:lostrest:{round_id}",
+        ), row=row)
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _progressive_click(interaction, self.round_id, "lostrest")
+
+
+class _DayButtonMixin:
+    """Shared shape of the three per-leg buttons (a mixin, so each concrete
+    class still declares its own `template` to discord.py).
+
+    Two ids in one custom_id: the round the press is about and the leg it
+    answers for.
+
+    `day_label` is the LEG's name, not the finished button text: the class
+    composes "Won — {day}" itself, so the two callers (the reminder DM and the
+    follow-up view) cannot drift on wording or on the 80-character trim. It is
+    optional because `from_custom_id` re-hydrates a press with no DB access in
+    hand -- and the label is never displayed in that direction anyway, since
+    the message already carries the text it was sent with."""
+
+    ACTION: str = ""
+    STYLE: discord.ButtonStyle = discord.ButtonStyle.secondary
+
+    def __init__(
+        self, round_id: int, day_id: int, day_label: str | None = None,
+        row: int | None = None,
+    ) -> None:
+        super().__init__(discord.ui.Button(
+            label=_fit_label(self.compose_label(day_label)), style=self.STYLE,
+            custom_id=f"dk:{self.ACTION}day:{round_id}:{day_id}",
+        ), row=row)
+        self.round_id = round_id
+        self.day_id = day_id
+
+    @classmethod
+    def compose_label(cls, day_label: str | None) -> str:
+        raise NotImplementedError
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]), int(match["did"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _progressive_click(interaction, self.round_id, self.ACTION, self.day_id)
+
+
+class WonDayButton(
+    _DayButtonMixin, discord.ui.DynamicItem[discord.ui.Button],
+    template=r"dk:wonday:(?P<rid>\d+):(?P<did>\d+)",
+):
+    ACTION = "won"
+    STYLE = discord.ButtonStyle.success
+
+    @classmethod
+    def compose_label(cls, day_label: str | None) -> str:
+        return _("Won — {day}").format(day=day_label) if day_label else _("Won")
+
+
+class LostDayButton(
+    _DayButtonMixin, discord.ui.DynamicItem[discord.ui.Button],
+    template=r"dk:lostday:(?P<rid>\d+):(?P<did>\d+)",
+):
+    ACTION = "lost"
+
+    @classmethod
+    def compose_label(cls, day_label: str | None) -> str:
+        return _("Lost — {day}").format(day=day_label) if day_label else _("Lost")
+
+
+class SkipDayButton(
+    _DayButtonMixin, discord.ui.DynamicItem[discord.ui.Button],
+    template=r"dk:skipday:(?P<rid>\d+):(?P<did>\d+)",
+):
+    ACTION = "skip"
+
+    @classmethod
+    def compose_label(cls, day_label: str | None) -> str:
+        return _("Not going — {day}").format(day=day_label) if day_label else _("Not going")
+
+
+class PaidNowButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:paidnow:(?P<rid>\d+)"
+):
+    def __init__(self, round_id: int, row: int | None = None) -> None:
+        super().__init__(discord.ui.Button(
+            label=_("Paid already"), style=discord.ButtonStyle.success,
+            custom_id=f"dk:paidnow:{round_id}",
+        ), row=row)
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _progressive_click(interaction, self.round_id, "paid")
+
+
+class PayLaterButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:paylater:(?P<rid>\d+)"
+):
+    """"Not yet" is an answer, not a write: the round stays WON, which is
+    exactly the state its payment reminder is armed from."""
+
+    def __init__(self, round_id: int, row: int | None = None) -> None:
+        super().__init__(discord.ui.Button(
+            label=_("Not yet"), style=discord.ButtonStyle.secondary,
+            custom_id=f"dk:paylater:{round_id}",
+        ), row=row)
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        async with SessionMaker() as session:
+            await _apply_locale(session, interaction.user.id)
+        await interaction.response.edit_message(
+            content=_("No rush — mark it paid whenever you're done."), view=None
+        )
+
+
+def build_result_followup_view(round_id: int, unresolved, any_won: bool) -> discord.ui.View:
+    """The per-leg question: one row per unanswered leg, then the all-legs
+    shortcut. Callers pass the CURRENT unresolved list, so the view shrinks by
+    one row with every press."""
+    view = discord.ui.View(timeout=None)
+    for row, (day_id, label) in enumerate(unresolved[:MAX_DAY_BUTTONS]):
+        view.add_item(WonDayButton(round_id, day_id, label, row=row))
+        view.add_item(LostDayButton(round_id, day_id, label, row=row))
+        view.add_item(SkipDayButton(round_id, day_id, label, row=row))
+    shortcut_row = min(len(unresolved), MAX_DAY_BUTTONS)
+    if any_won:
+        view.add_item(LostRestButton(round_id, row=shortcut_row))
+    else:
+        view.add_item(LostAllButton(round_id, row=shortcut_row))
+    return view
+
+
+def build_payment_view(round_id: int) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    view.add_item(PaidNowButton(round_id))
+    view.add_item(PayLaterButton(round_id))
+    return view
+
+
 DYNAMIC_ITEMS = [
     ApplyDefaultButton, RemoveRemindersButton, ReinstateRemindersButton, ShowDeadlinesButton,
     SnoozeButton, AppliedButton, NotAppliedButton, WonButton, LostButton, PaidButton,
     RemindLaterButton,
+    WonAllButton, LostAllButton, LostRestButton, WonDayButton, LostDayButton, SkipDayButton,
+    PaidNowButton, PayLaterButton,
 ]

@@ -233,6 +233,64 @@ def test_build_reminder_message_shows_won_lost_buttons_on_results_when_applied()
     assert any(cid and cid.startswith("dk:lost:") for cid in custom_ids)
 
 
+def test_build_reminder_message_multi_leg_results_offers_per_day_buttons():
+    """A round covering two legs can come back won on one and lost on the
+    other, so the flat Won/Lost pair would have to lie about one of them.
+    `covered_days` (leg PRESENCE, filled by due_reminders) is the switch."""
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.RESULTS, fire_at_utc=dt(6, 25),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25), outcome=LotteryOutcome.APPLIED,
+        covered_days=((11, "Day 1"), (12, "Day 2")),
+    )
+    _, view = build_reminder_message(item)
+    custom_ids = [getattr(c, "custom_id", None) for c in view.children]
+    assert "dk:wonall:7" in custom_ids
+    assert "dk:wonday:7:11" in custom_ids
+    assert "dk:wonday:7:12" in custom_ids
+    assert "dk:lostall:7" in custom_ids
+    # The flat pair would be a second, contradictory way to answer the same
+    # question -- one round, one vocabulary.
+    assert not any(cid and cid.startswith(("dk:won:", "dk:lost:")) for cid in custom_ids)
+    # A DynamicItem proxies custom_id but not label -- the wrapped Button
+    # carries it, so the leg's name has to be read one level down.
+    labels = {getattr(getattr(c, "item", c), "label", None) for c in view.children}
+    assert "Won — Day 1" in labels
+
+
+def test_build_reminder_message_single_leg_results_keeps_the_flat_pair():
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.RESULTS, fire_at_utc=dt(6, 25),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25), outcome=LotteryOutcome.APPLIED,
+        covered_days=(),
+    )
+    _, view = build_reminder_message(item)
+    custom_ids = [getattr(c, "custom_id", None) for c in view.children]
+    assert "dk:won:7" in custom_ids and "dk:lost:7" in custom_ids
+    assert not any(cid and cid.startswith("dk:wonall:") for cid in custom_ids)
+
+
+def test_build_reminder_message_caps_the_per_day_buttons():
+    """Discord allows 25 components across 5 rows, and the follow-up view
+    gives each leg a row of its own -- so the questions are asked a batch at a
+    time. Resolving one shrinks the unresolved list, which is what makes the
+    remaining legs reachable on the next press."""
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Long tour", anchor=Anchor.RESULTS, fire_at_utc=dt(6, 25),
+        round_id=7, round_label="全国ツアー", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25), outcome=LotteryOutcome.APPLIED,
+        covered_days=tuple((100 + n, f"Day {n}") for n in range(9)),
+    )
+    _, view = build_reminder_message(item)
+    custom_ids = [getattr(c, "custom_id", None) for c in view.children]
+    assert len([c for c in custom_ids if c and c.startswith("dk:wonday:")]) == 4
+    assert len(view.children) <= 25
+
+
 def test_build_reminder_message_shows_paid_button_on_payment_when_won():
     item = DueReminder(
         queue_id=1, discord_id=42, user_timezone="America/Moncton",
