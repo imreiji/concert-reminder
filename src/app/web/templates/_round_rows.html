@@ -1,5 +1,6 @@
-{# The concert page's body: "Next for you", then one section per leg, then
-   the all-legs group.
+{# The concert page's body: one section per leg, each with that leg's own
+   rounds. (A concert with no legs at all falls back to a plain "Rounds"
+   list at the foot; there is no longer a separate "all legs" group.)
 
    Its own partial because POST /rounds/{id}/outcome swaps it back in after a
    capture action; keep the outer <div id="concert-rounds">, that is the htmx
@@ -20,13 +21,40 @@
 
 {% from "_capture_actions.html" import capture_actions %}
 
+{# The pill arms, keyed by a plain state string so the round-level pill and
+   the per-leg one below cannot drift into different markup or msgids. #}
+{% macro pill(state) -%}
+  {%- if state == "applied" -%}<span class="pill p-ok">{{ _("Applied") }}</span>
+  {%- elif state == "won" -%}<span class="pill p-danger">{{ _("Won") }}</span>
+  {%- elif state == "paid" -%}<span class="pill p-ok">{{ _("Secured") }}</span>
+  {%- elif state == "lost" -%}<span class="pill p-quiet">{{ _("Lost") }}</span>
+  {%- elif state == "not_applied" -%}<span class="pill p-quiet">{{ _("Not applying") }}</span>
+  {%- else -%}<span class="pill p-quiet">{{ _("Not applied") }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{# The round-level pill. `_standing_strip.html` imports this one; keep its
+   signature. #}
 {% macro status_pill(outcome) -%}
-  {%- if outcome is none -%}<span class="pill p-quiet">{{ _("Not applied") }}</span>
-  {%- elif outcome.value == "applied" -%}<span class="pill p-ok">{{ _("Applied") }}</span>
-  {%- elif outcome.value == "won" -%}<span class="pill p-danger">{{ _("Won") }}</span>
-  {%- elif outcome.value == "paid" -%}<span class="pill p-ok">{{ _("Secured") }}</span>
-  {%- elif outcome.value == "lost" -%}<span class="pill p-quiet">{{ _("Lost") }}</span>
-  {%- else -%}<span class="pill p-quiet">{{ _("Not applying") }}</span>
+  {{- pill(outcome.value if outcome is not none else none) -}}
+{%- endmacro %}
+
+{# The per-LEG pill. A round renders once per leg it covers, and a lottery
+   over Saturday and Sunday really can come back won on one and lost on the
+   other -- so a pill read off the round's own outcome would tell Sunday it
+   had a ticket it does not hold. `leg_result` is that leg's own answer and
+   outranks the round wherever it has one.
+
+   A LOST leg is lost whatever the round says. A WON leg defers back to the
+   round for the ONE distinction a leg cannot carry: whether the ticket is
+   still owed a payment ("Won") or already secured ("Secured"), which is a
+   fact about the order, not about the night. No leg answer at all (the
+   common case, and every dateless round) falls through to the round. #}
+{% macro leg_status_pill(row) -%}
+  {%- if row.leg_result is none -%}{{ status_pill(row.outcome) }}
+  {%- elif row.leg_result.value == "lost" -%}{{ pill("lost") }}
+  {%- elif row.outcome is not none and row.outcome.value == "paid" -%}{{ pill("paid") }}
+  {%- else -%}{{ pill("won") }}
   {%- endif -%}
 {%- endmacro %}
 
@@ -37,8 +65,14 @@
    empty, and the one you needed was not the one you read first.
 
    Every moment renders dual (JST + your timezone) including the demoted
-   ones. A bare JST date is not the same day everywhere. #}
-{% macro round_row(row, tz) %}
+   ones. A bare JST date is not the same day everywhere.
+
+   `day_id` is the leg this card is sitting under, and it is what makes the
+   row per-leg rather than per-round: it selects the per-leg pill and scopes
+   the capture buttons to this one leg. None is the dateless fallback group,
+   where there is no leg to be specific about, so both fall back to the
+   round's own outcome. #}
+{% macro round_row(row, tz, day_id=None) %}
 {% set r = row.round_ %}
 {# `primary_at_utc` is the NEXT moment ahead of now, or the last one behind
    it when they have all passed -- so "in the past" is exactly "the leading
@@ -48,7 +82,7 @@
    `deadline_label(Anchor.CLOSES)` does -- no second label table needed here. #}
 {% set lead = row.primary_anchor.value if row.primary_anchor else none %}
 <div class="rnd2{% if past %} past{% endif %}">
-  <span>{{ status_pill(row.outcome) }}</span>
+  <span>{% if day_id is none %}{{ status_pill(row.outcome) }}{% else %}{{ leg_status_pill(row) }}{% endif %}</span>
   <span class="nm">{{ loc(r, "label") }}<em>{{ round_kind_label(r.kind) }}</em></span>
   <span class="dts">
     {# The leading moment as the demo's two lines: a bold weekday+day+month
@@ -76,16 +110,16 @@
     {% if row.upgrade_locked %}
     <span class="done">{% if row.qualifier_labels %}{% trans names=row.qualifier_labels | join(", ") %}Requires a ticket from: {{ names }}{% endtrans %}{% else %}{{ _("Requires a ticket from an earlier round") }}{% endif %}</span>
     {% else %}
-    {{ capture_actions(row, r.id, "#concert-rounds", is_upgrade=(r.kind.value == "upgrade")) }}
+    {{ capture_actions(row, r.id, "#concert-rounds", is_upgrade=(r.kind.value == "upgrade"), only_day=day_id) }}
     {% endif %}
   </span>
 </div>
 <!-- /rnd -->
 {% endmacro %}
 
-{% macro rounds_or_note(rows, tz, note) %}
+{% macro rounds_or_note(rows, tz, note, day_id=None) %}
 <div class="rnds">
-  {% for row in rows %}{{ round_row(row, tz) }}{% else %}<p class="dim tiny">{{ note }}</p>{% endfor %}
+  {% for row in rows %}{{ round_row(row, tz, day_id) }}{% else %}<p class="dim tiny">{{ note }}</p>{% endfor %}
 </div>
 {% endmacro %}
 
@@ -134,18 +168,24 @@
       </form>
       {% endif %}
     </div>
-    {{ rounds_or_note(group.rounds, tz, _("No rounds yet for this leg.")) }}
+    {{ rounds_or_note(group.rounds, tz, _("No rounds yet for this leg."), day_id=day.id) }}
   </div>
   {% endfor %}
 
-  {# Last, and only when it has something in it. This group is NOT "everything
-     not leg-specific": a round naming only cancelled legs sits under those
-     legs. What lands here is a round tied to no leg at all, or one covering
-     every live leg -- where repeating it under each would bury the rounds
-     that really are leg-specific. #}
-  {% if all_legs_rows %}
+  {# The separate "All legs" section is GONE. A round covering every leg now
+     renders under EACH of them (concert_round_rows), because standing on it
+     is per-leg -- won Saturday, lost Sunday -- and one shared row could only
+     lie about one of them. Repeating the round is the trade: each leg reads
+     as a complete story instead of one you cross-reference.
+
+     What is left in the second list is the fallback for a concert with NO
+     legs at all, where there is no group to put a round under. Its heading
+     must not claim legs the concert does not have, so it is plainly
+     "Rounds"; `not leg_groups` guards it because the service returns this
+     list empty for any concert that does have legs. #}
+  {% if all_legs_rows and not leg_groups %}
   <div class="leg">
-    <div class="leghead"><h3 class="leg-heading">{% if leg_groups %}{{ _("All legs") }}{% else %}{{ _("Rounds") }}{% endif %}</h3></div>
+    <div class="leghead"><h3 class="leg-heading">{{ _("Rounds") }}</h3></div>
     {{ rounds_or_note(all_legs_rows, tz, "") }}
   </div>
   {% endif %}

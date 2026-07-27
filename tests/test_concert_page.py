@@ -37,9 +37,14 @@ from app.db.models import (
     TagMember,
     User,
 )
-from app.db.service import attach_tag, ensure_user, record_round_outcome
+from app.db.service import (
+    attach_tag,
+    ensure_user,
+    record_round_day_result,
+    record_round_outcome,
+)
 from app.db.session import get_session
-from app.domain.types import LotteryOutcome, RoundKind, TagKind
+from app.domain.types import LegResult, LotteryOutcome, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -206,6 +211,13 @@ async def set_outcome(db, round_id, outcome, user_id=USER):
     """Through the one service path, so the sequence rule applies here too."""
     async with db() as s:
         await record_round_outcome(s, user_id, round_id, outcome)
+        await s.commit()
+
+
+async def set_day_result(db, round_id, day_id, result, user_id=USER):
+    """One leg of one round resolved, through the one per-day write path."""
+    async with db() as s:
+        await record_round_day_result(s, user_id, round_id, day_id, result)
         await s.commit()
 
 
@@ -514,7 +526,10 @@ async def test_a_round_naming_only_cancelled_legs_sits_under_those_legs(client):
     assert "All legs" not in body
 
 
-async def test_a_round_covering_every_live_leg_renders_once_in_the_all_legs_group(client):
+async def test_a_round_covering_every_live_leg_renders_under_each_leg(client):
+    """The separate all-legs section is gone: a round covering both legs is a
+    fact about each of them, and the viewer's standing on it is per-leg now
+    (won Saturday, lost Sunday), so each leg reads as a complete story."""
     cid = await seed_concert(client.db)
     d1 = await add_day(client.db, cid, "Day 1", days_ahead=30)
     d2 = await add_day(client.db, cid, "Day 2", days_ahead=31)
@@ -522,11 +537,10 @@ async def test_a_round_covering_every_live_leg_renders_once_in_the_all_legs_grou
     login(client)
 
     body = client.get("/concerts/np").text
-    # Scoped past "Next for you", which legitimately names this round too --
-    # what must not happen is the round being repeated under BOTH legs.
+    # Scoped past "Next for you", which legitimately names this round too.
     legs = body.split("<!-- /standing -->", 1)[-1]
-    assert legs.count("Fan club presale") == 1
-    assert "All legs" in legs
+    assert legs.count("Fan club presale") == 2
+    assert "All legs" not in legs
 
 
 async def test_no_horizontal_scroll_table_wrapper_remains(client):
@@ -627,6 +641,183 @@ async def test_a_won_round_offers_paid(client):
 
     block = round_block(client.get("/concerts/np").text, "Won round")
     assert ">Paid<" in block
+
+
+# ── body: covered rounds and per-day results ─────────────────────────────
+
+
+def legs_of(body: str) -> str:
+    """The page past the standing strip and short of the catch-up dialog --
+    both legitimately name a round too, and these tests are about the leg
+    sections between them.
+
+    The dialog cut matters as much as the strip cut: it renders the UNFILTERED
+    capture macro (every leg's questions plus the whole-round shortcuts), so a
+    leg assertion reading to the end of the body would find "Won — Day 1"
+    inside Day 2's section and pass or fail for the wrong reason."""
+    return body.split("<!-- /standing -->", 1)[-1].split('id="resultDlg"', 1)[0]
+
+
+def leg_sections(body: str) -> dict[str, str]:
+    """Each leg's section keyed by its heading, from that heading to the next.
+
+    A round covering both legs renders under EACH of them, so "the block for
+    that round" is now ambiguous -- stopping at the first occurrence would
+    silently test Day 1's copy and call it the page. Every per-leg assertion
+    goes through this instead."""
+    sections = {}
+    for chunk in legs_of(body).split('class="leg-heading')[1:]:
+        heading = chunk.split(">", 1)[1].split("<", 1)[0].strip()
+        sections[heading] = chunk
+    return sections
+
+
+async def test_a_covered_round_states_it_and_offers_no_buttons(client):
+    """Once some round has secured this leg, a later round selling the same
+    leg has nothing left to ask: it renders quietly, with a note saying why
+    rather than buttons whose answer is already known."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    won = await add_round(
+        client.db, cid, "FC lottery", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=30),
+        closes=datetime.now(UTC) - timedelta(days=10),
+        results=datetime.now(UTC) - timedelta(days=5),
+    )
+    await add_round(
+        client.db, cid, "General sale", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=7),
+    )
+    await set_outcome(client.db, won, LotteryOutcome.WON)
+    login(client)
+
+    block = round_block(legs_of(client.get("/concerts/np").text), "General sale")
+    assert "Covered" in block
+    assert "<form" not in block
+    assert "I have applied" not in block
+
+
+async def multi_leg_lottery(db, concert_id):
+    """A two-leg round the viewer is in, whose results are out -- the shape
+    every per-leg assertion below is about."""
+    d1 = await add_day(db, concert_id, "Day 1", days_ahead=60)
+    d2 = await add_day(db, concert_id, "Day 2", days_ahead=61)
+    rid = await add_round(
+        db, concert_id, "Fan club lottery", applies_to=[d1, d2],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+        results=datetime.now(UTC) - timedelta(hours=1),
+    )
+    await set_outcome(db, rid, LotteryOutcome.APPLIED)
+    return d1, d2, rid
+
+
+async def test_a_leg_card_asks_about_that_leg_and_no_other(client):
+    """A round covering both legs renders under BOTH of them, and each copy
+    asks only about the leg it is sitting under. Repeating all three
+    questions per section would put nine forms on a three-leg concert, and
+    "Won — Day 2" under Day 1's heading is a mode error besides.
+
+    The whole-round shortcuts (Won/Lost all, Lost the rest) belong to the
+    unfiltered caller -- Home's rows and the catch-up dialog -- not to a card
+    that is scoped to one leg."""
+    cid = await seed_concert(client.db)
+    _d1, _d2, rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    sections = leg_sections(body)
+    assert set(sections) == {"Day 1", "Day 2"}
+    # The round is a fact about each leg, so its label appears under both.
+    assert all("Fan club lottery" in s for s in sections.values())
+
+    assert "Won — Day 1" in sections["Day 1"]
+    assert "Lost — Day 1" in sections["Day 1"]
+    assert "Not going — Day 1" in sections["Day 1"]
+    assert "Day 2" not in sections["Day 1"].split("Fan club lottery", 1)[1]
+
+    assert "Won — Day 2" in sections["Day 2"]
+    assert "Lost — Day 2" in sections["Day 2"]
+    assert "Not going — Day 2" in sections["Day 2"]
+    assert "Won — Day 1" not in sections["Day 2"]
+
+    # Scoped to the leg sections, not the whole page: the catch-up dialog at
+    # the foot is the unfiltered caller and DOES carry these (see
+    # test_the_catch_up_dialog_carries_the_whole_round_shortcuts).
+    assert "Won (all)" not in legs_of(body)
+    assert "Lost (all)" not in legs_of(body)
+    assert "Lost the rest" not in legs_of(body)
+    # The single-leg pair is gone: it could only have lied about one of them.
+    assert ">I won<" not in body
+    assert ">I lost<" not in body
+    assert f"/rounds/{rid}/day-result" in body
+
+
+async def test_a_resolved_leg_asks_nothing_while_its_sibling_pends(client):
+    """Saturday answered, Sunday not: Saturday's card falls silent (its pill
+    already says how it went) and only Sunday still asks."""
+    cid = await seed_concert(client.db)
+    d1, _d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    assert "day-result" not in sections["Day 1"]
+    assert "Won — Day 2" in sections["Day 2"]
+    assert "Lost — Day 2" in sections["Day 2"]
+
+
+async def test_each_leg_pills_its_own_result_after_a_split_decision(client):
+    """Won Saturday, lost Sunday. The round-level outcome is WON, so a pill
+    read off it would tell Sunday it had a ticket. `leg_result` is that leg's
+    own answer and outranks the round wherever it has one."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    await set_day_result(client.db, rid, d2, LegResult.LOST)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    assert '<span class="pill p-danger">Won</span>' in sections["Day 1"]
+    assert '<span class="pill p-quiet">Lost</span>' in sections["Day 2"]
+    assert '<span class="pill p-danger">Won</span>' not in sections["Day 2"]
+
+
+async def test_a_secured_single_leg_round_still_pills_secured(client):
+    """The per-leg pill must not flatten PAID into WON: a leg cannot carry
+    the payment distinction, so a won leg defers to the round for it."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    rid = await add_round(
+        client.db, cid, "Paid round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.WON)
+    await set_outcome(client.db, rid, LotteryOutcome.PAID)
+    login(client)
+
+    assert '<span class="pill p-ok">Secured</span>' in leg_sections(
+        client.get("/concerts/np").text
+    )["Day 1"]
+
+
+async def test_a_concert_with_no_legs_heads_its_rounds_plainly(client):
+    """The all-legs section is gone. The only thing left in the second list is
+    a round on a concert with no legs at all, and it needs a heading that does
+    not claim legs the concert does not have."""
+    cid = await seed_concert(client.db)
+    await add_round(
+        client.db, cid, "Dateless round",
+        closes=datetime.now(UTC) + timedelta(days=7),
+    )
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert "Dateless round" in body
+    assert ">Rounds<" in body
+    assert "All legs" not in body
 
 
 # ── body: "Next for you" ─────────────────────────────────────────────────
@@ -737,6 +928,182 @@ async def test_recording_without_htmx_returns_to_the_concert(client):
     r = client.post(f"/rounds/{rid}/outcome", data={"outcome": "won"})
     assert r.status_code == 303
     assert r.headers["location"] == "/"
+
+
+async def test_a_day_result_press_swaps_this_pages_rounds_and_strip(client):
+    """The per-leg write answers exactly like the round-level one: this page's
+    rounds region as the declared target, plus the header strip out of band.
+    Anything less leaves the strip naming a round the reader just resolved."""
+    cid = await seed_concert(client.db)
+    d1, _d2, rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    r = client.post(
+        f"/rounds/{rid}/day-result",
+        data={"result": "won", "day_id": d1},
+        headers={"HX-Request": "true", "HX-Current-URL": "http://testserver/concerts/np"},
+    )
+    assert r.status_code == 200
+    assert 'id="concert-rounds"' in r.text     # the declared hx-target
+    assert "Fan club lottery" in r.text
+    assert 'id="deadline-rows"' not in r.text  # not Home's fragment
+    assert 'id="concert-standing"' in r.text   # the OOB strip contract
+    assert "hx-swap-oob" in r.text
+    # And the write really happened: Day 1 now pills its own result. The
+    # rounds fragment comes FIRST in the response (the strip trails it as the
+    # oob swap), so the leg sections are everything ahead of the strip.
+    rounds_fragment = r.text.split('id="concert-standing"', 1)[0]
+    assert '<span class="pill p-danger">Won</span>' in leg_sections(rounds_fragment)["Day 1"]
+
+
+# ── the catch-up dialog ──────────────────────────────────────────────────
+#
+# Opening a concert page whose results are out and unrecorded is exactly the
+# moment to ask, so the page asks -- once, in a dialog, over the leg sections
+# that will still be there when it closes. It is also the page's ONLY
+# unfiltered caller of the capture macro, so the whole-round shortcuts are
+# pinned here and nowhere else.
+
+
+def dialog_of(body: str) -> str:
+    return body.split('id="resultDlg"', 1)[1].split("</dialog>", 1)[0]
+
+
+async def test_a_pending_multi_leg_result_opens_the_catch_up_dialog(client):
+    cid = await seed_concert(client.db)
+    _d1, _d2, _rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert 'id="resultDlg"' in body
+    dlg = dialog_of(body)
+    # It names what it is asking about, and asks about EVERY unresolved leg.
+    assert "Fan club lottery" in dlg
+    assert "Won — Day 1" in dlg
+    assert "Won — Day 2" in dlg
+
+
+async def test_the_catch_up_dialog_carries_the_whole_round_shortcuts(client):
+    """The unfiltered macro call. "Won (all)" / "Lost (all)" answer a whole
+    round in one press, and the dialog is now the only place on this page they
+    render -- a leg card is scoped to one leg, where they would be a button
+    about the others."""
+    cid = await seed_concert(client.db)
+    _d1, _d2, _rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    dlg = dialog_of(client.get("/concerts/np").text)
+    assert "Won (all)" in dlg
+    assert "Lost (all)" in dlg
+
+
+async def test_the_dialog_offers_lost_the_rest_once_a_leg_is_won(client):
+    """With a ticket in hand the round is no longer losable as a whole, so
+    "Lost (all)" gives way to "Lost the rest" -- the same swap the macro makes
+    for Home's rows."""
+    cid = await seed_concert(client.db)
+    d1, _d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    login(client)
+
+    dlg = dialog_of(client.get("/concerts/np").text)
+    assert "Lost the rest" in dlg
+    assert "Lost (all)" not in dlg
+
+
+async def test_the_dialog_withdraws_won_all_once_a_leg_is_answered(client):
+    """A LOST leg turns the no-rows-means-all fallback off, so a whole-round
+    WON press would leave a WON round with zero WON legs -- securing nothing,
+    and thrown away entirely by the next "Lost — Day 2". "Lost (all)" stays:
+    with no leg won, losing the whole round is still an honest thing to say."""
+    cid = await seed_concert(client.db)
+    d1, _d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.LOST)
+    login(client)
+
+    dlg = dialog_of(client.get("/concerts/np").text)
+    assert "Won (all)" not in dlg
+    assert "Won — Day 2" in dlg
+    assert "Lost (all)" in dlg
+
+
+async def test_no_dialog_once_every_leg_is_resolved(client):
+    """Nothing left to ask, so nothing pops up. A dialog that reopened on every
+    visit to a settled concert would be the page's most annoying feature."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    await set_day_result(client.db, rid, d2, LegResult.LOST)
+    login(client)
+
+    assert 'id="resultDlg"' not in client.get("/concerts/np").text
+
+
+async def test_no_dialog_before_the_results_are_due(client):
+    """Applied, results not out yet: there is no answer to give."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    d2 = await add_day(client.db, cid, "Day 2", days_ahead=61)
+    rid = await add_round(
+        client.db, cid, "Fan club lottery", applies_to=[d1, d2],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) + timedelta(days=3),
+        results=datetime.now(UTC) + timedelta(days=5),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    login(client)
+
+    assert 'id="resultDlg"' not in client.get("/concerts/np").text
+
+
+async def test_no_dialog_with_no_standing_at_all(client):
+    """An open round nobody entered asks for an application, not a result --
+    that question belongs on the leg card, not in a modal."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    await add_round(
+        client.db, cid, "Open round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=6),
+    )
+    login(client)
+
+    assert 'id="resultDlg"' not in client.get("/concerts/np").text
+
+
+async def test_a_single_leg_result_still_gets_the_dialog(client):
+    """A one-night concert has no per-day questions, but the reader is just as
+    overdue to say how it went -- so the dialog carries the flat pair."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    rid = await add_round(
+        client.db, cid, "Decided round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+        results=datetime.now(UTC) - timedelta(hours=1),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    login(client)
+
+    dlg = dialog_of(client.get("/concerts/np").text)
+    assert ">I won<" in dlg
+    assert ">I lost<" in dlg
+    assert f"/rounds/{rid}/outcome" in dlg
+
+
+async def test_the_dialog_posts_to_this_pages_rounds_region(client):
+    """Its buttons are the same macro the leg cards use, so they must swap the
+    same target -- a dialog answering with Home's fragments would splice Home
+    into this page."""
+    cid = await seed_concert(client.db)
+    _d1, _d2, rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    dlg = dialog_of(client.get("/concerts/np").text)
+    assert f'hx-post="/rounds/{rid}/day-result"' in dlg
+    assert 'hx-target="#concert-rounds"' in dlg
+    # Plain-POST fallback intact: the forms carry a real method/action too.
+    assert f'action="/rounds/{rid}/day-result"' in dlg
 
 
 # ── Task 4: follow toggle CSS, performer-chip centring, reminders redesign ─

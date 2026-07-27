@@ -156,13 +156,17 @@ def build_reminder_message(item: DueReminder) -> tuple:
     import discord
 
     from app.bot.views import (
+        MAX_DAY_BUTTONS,
         AppliedButton,
+        LostAllButton,
         LostButton,
         NotAppliedButton,
         PaidButton,
         RemindLaterButton,
         SnoozeButton,
+        WonAllButton,
         WonButton,
+        WonDayButton,
     )
     from app.config import settings
 
@@ -194,8 +198,23 @@ def build_reminder_message(item: DueReminder) -> tuple:
             view.add_item(AppliedButton(item.round_id))
             view.add_item(NotAppliedButton(item.round_id))
         elif item.anchor is Anchor.RESULTS and item.outcome in (None, LotteryOutcome.APPLIED):
-            view.add_item(WonButton(item.round_id))
-            view.add_item(LostButton(item.round_id))
+            # A round covering two or more legs (covered_days is filled for
+            # exactly those, and only on a RESULTS row) asks leg by leg
+            # instead: it can come back won on one night and lost on another,
+            # so the flat pair would have to lie about one of them. The DM
+            # opens with the wins -- "Won — Day 2" and the two all-legs
+            # shortcuts -- and the per-leg lost/not-going questions arrive in
+            # the follow-up view the first press edits in, which keeps the
+            # reminder itself readable. Same vocabulary as the web's
+            # _capture_actions.html macro.
+            if len(item.covered_days) >= 2:
+                view.add_item(WonAllButton(item.round_id))
+                for day_id, day_label in item.covered_days[:MAX_DAY_BUTTONS]:
+                    view.add_item(WonDayButton(item.round_id, day_id, day_label))
+                view.add_item(LostAllButton(item.round_id))
+            else:
+                view.add_item(WonButton(item.round_id))
+                view.add_item(LostButton(item.round_id))
         elif item.anchor is Anchor.PAYMENT and item.outcome is LotteryOutcome.WON:
             view.add_item(PaidButton(item.round_id))
 

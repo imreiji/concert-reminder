@@ -1,7 +1,8 @@
 """Recording lottery progress from the web.
 
-  POST /rounds/{round_id}/outcome    record one outcome, re-render Home's
-                                     three affected fragments
+  POST /rounds/{round_id}/outcome     record one outcome, re-render Home's
+                                      three affected fragments
+  POST /rounds/{round_id}/day-result  the same, for ONE leg of a round
 
 The web counterpart to the DM buttons in `bot/views.py`
 (`_handle_outcome_click`). Both funnel into the SAME `record_round_outcome`,
@@ -43,6 +44,7 @@ never a lost press.
 
 import json
 import re
+from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -50,16 +52,19 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db.models import Round, User
+from app.db.models import ConcertDay, Round, User
 from app.db.service import (
     board_cards,
     ensure_user,
     my_deadline_rows,
+    record_remaining_days_lost,
+    record_round_day_result,
     record_round_outcome,
+    set_leg_opt_out,
     tracked_concert_ids,
 )
 from app.db.session import get_session
-from app.domain.types import LotteryOutcome
+from app.domain.types import LegResult, LotteryOutcome
 from app.web.auth import SessionUser, require_user
 
 router = APIRouter()
@@ -93,24 +98,23 @@ def _concert_event_id(request: Request) -> str | None:
     return None
 
 
-@router.post("/rounds/{round_id}/outcome", response_class=HTMLResponse)
-async def record_outcome(
+async def _outcome_response(
     request: Request,
-    round_id: int,
-    user: SessionUser = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-    # Typing the form field as the enum gets the 422 for a bad value for free.
-    outcome: LotteryOutcome = Form(...),
+    session: AsyncSession,
+    user: SessionUser,
+    toast: str | None,
 ):
-    round_ = await session.get(Round, round_id)
-    if round_ is None:
-        raise HTTPException(status_code=404)
-    # RoundOutcome.user_id is an FK to users.discord_id; login creates the row,
-    # but ensure_user keeps a stale session from turning into a 500.
-    await ensure_user(session, user.id, user.username)
-    await record_round_outcome(session, user.id, round_id, outcome)
-    await session.commit()
+    """What both capture routes answer with once the write is committed.
 
+    ONE helper because the surface split below is the same question for a
+    round-level outcome and a per-leg one -- and the two answers going out of
+    step is a bug nobody would see in a test asserting only the write: the
+    press would look like it worked while some region of the page kept its old
+    state until reload.
+
+    `toast` is the key base.html's TOAST_MSGS map renders, or None for a press
+    that has no honest entry there (see the day-result route)."""
+    headers = {"HX-Trigger": json.dumps({"toast": {"outcome": toast}})} if toast else {}
     event_id = _concert_event_id(request)
 
     # No JS: the forms carry a real method/action, so the browser navigates
@@ -143,7 +147,7 @@ async def record_outcome(
                 request=request, user=user, tz=tz, **ctx)
             + templates.get_template("_standing_strip.html").render(
                 request=request, user=user, tz=tz, oob=True, **ctx),
-            headers={"HX-Trigger": json.dumps({"toast": {"outcome": outcome.value}})},
+            headers=headers,
         )
 
     # No explicit limit here, and none on Home either: both take
@@ -178,7 +182,105 @@ async def record_outcome(
     # swap, the other two carry hx-swap-oob. htmx only honours OOB elements at
     # the top level of the response body, so do not wrap this. The HX-Trigger
     # header asks base.html for the confirmation toast.
-    return HTMLResponse(
-        "\n".join(fragments),
-        headers={"HX-Trigger": json.dumps({"toast": {"outcome": outcome.value}})},
-    )
+    return HTMLResponse("\n".join(fragments), headers=headers)
+
+
+@router.post("/rounds/{round_id}/outcome", response_class=HTMLResponse)
+async def record_outcome(
+    request: Request,
+    round_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    # Typing the form field as the enum gets the 422 for a bad value for free.
+    outcome: LotteryOutcome = Form(...),
+):
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
+        raise HTTPException(status_code=404)
+    # RoundOutcome.user_id is an FK to users.discord_id; login creates the row,
+    # but ensure_user keeps a stale session from turning into a 500.
+    await ensure_user(session, user.id, user.username)
+    await record_round_outcome(session, user.id, round_id, outcome)
+    await session.commit()
+    return await _outcome_response(request, session, user, outcome.value)
+
+
+# The four things a reader can say about ONE leg, and which toast each earns.
+# Only base.html's TOAST_MSGS keys render, so this maps into that vocabulary
+# rather than inventing a fifth:
+#   - "lost the rest" only ever renders once some leg is already WON (see
+#     _capture_actions.html), so the round ends secured and "won" is the true
+#     thing to say about the press.
+#   - "not going" earns NO toast: it is not a lottery result at all (it writes
+#     a LegOptOut, not a day row), and the nearest existing message would tell
+#     the reader they had been marked as LOST -- worse than silence. The leg
+#     dims and re-badges in the swapped-in fragment, which is the feedback.
+_TOAST_BY_RESULT: dict[str, str | None] = {
+    "won": "won", "lost": "lost", "lost_rest": "won", "skip": None,
+}
+
+
+async def _leg_of_concert(session: AsyncSession, day_id: int, concert_id: int) -> bool:
+    """Does `day_id` name a leg of this concert? The id arrives in a form post,
+    so it is re-validated server side exactly as the leg opt-out route
+    re-validates its own (a leg of a DIFFERENT concert is no more this round's
+    leg than a made-up id is)."""
+    day = await session.get(ConcertDay, day_id)
+    return day is not None and day.concert_id == concert_id
+
+
+@router.post("/rounds/{round_id}/day-result", response_class=HTMLResponse)
+async def record_day_result(
+    request: Request,
+    round_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    # A Literal gets the 422 for a bad value for free, exactly as the enum does
+    # above. It is deliberately NOT LegResult: two of these four values are not
+    # results at all, which is why the form vocabulary is wider than the domain
+    # enum (LegResult has only WON and LOST).
+    result: Literal["won", "lost", "skip", "lost_rest"] = Form(...),
+    day_id: int | None = Form(None),
+):
+    """One leg of one round, resolved by its reader.
+
+    The same thin shell as `record_outcome`, for the same reasons: the Task 3
+    writers own every rule (a forged day id writes nothing, a won leg never
+    demotes a PAID round, a lost leg settles the round only when nothing is
+    left to wait on), and Discord's progressive buttons call the very same
+    ones -- a second write path here would desync the queue (invariant 2).
+
+    Two rules the route does own. `day_id` is REQUIRED for anything but "lost
+    the rest": each of those presses is a statement about one named leg, and
+    defaulting a missing id would resolve a leg nobody named. And a `day_id`
+    that names no leg of THIS round's concert writes nothing at all -- the
+    same answer `record_round_day_result` gives a forged id, extended to the
+    "not going" branch, which would otherwise reach `set_leg_opt_out` (it
+    validates nothing) and raise an FK IntegrityError at commit. One class of
+    input, one answer.
+    """
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
+        raise HTTPException(status_code=404)
+    if day_id is None and result != "lost_rest":
+        raise HTTPException(status_code=422, detail="day_id is required")
+    # RoundOutcomeDay.user_id and LegOptOut.user_id are both FKs to
+    # users.discord_id, so the same stale-session guard applies.
+    await ensure_user(session, user.id, user.username)
+    if result == "lost_rest":
+        await record_remaining_days_lost(session, user.id, round_id)
+    elif not await _leg_of_concert(session, day_id, round_.concert_id):
+        pass  # forged, stale, or another concert's leg: a committed no-op
+    elif result == "skip":
+        # "Not going" is a per-leg opt-out, never a RoundOutcomeDay row: the
+        # reader is declining the night, not reporting how the lottery went.
+        # No resync call here: `set_leg_opt_out` re-plans this user's rules for
+        # the leg's concert itself (invariant 8), so both write surfaces get it
+        # and neither can forget it.
+        await set_leg_opt_out(session, user.id, day_id, True)
+    else:
+        await record_round_day_result(
+            session, user.id, round_id, day_id, LegResult(result)
+        )
+    await session.commit()
+    return await _outcome_response(request, session, user, _TOAST_BY_RESULT[result])

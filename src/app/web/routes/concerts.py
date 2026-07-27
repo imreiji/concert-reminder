@@ -47,6 +47,7 @@ from app.db.models import (
     User,
 )
 from app.db.service import (
+    RoundRow,
     _qualifiers_by_upgrade_round,
     attach_tag,
     concert_audit_log,
@@ -861,6 +862,52 @@ async def concert_rounds_context(
     }
 
 
+def pending_capture_row(ctx: dict) -> RoundRow | None:
+    """The one round the concert page's catch-up dialog asks about, or None.
+
+    Read entirely off the rows `concert_rounds_context` already built -- no
+    second query, and no second definition of "still owes an answer": a round
+    qualifies when it has unresolved legs to ask about (`capture_days`), or
+    when it is the single-leg case where the web's only exit from APPLIED is
+    open (`can_report_result`). `covered` rounds are excluded because their
+    answer is already known elsewhere; the gate resolvers shut both flags for
+    them anyway, so the check is belt and braces.
+
+    De-duplicated by round id, because a round covering several legs renders
+    once per leg and would otherwise compete with itself -- exactly what
+    `concert_next_moment` does, and for the same reason. Any of those copies
+    will do here: `capture_days` is a fact about the ROUND (only `leg_result`
+    differs between copies), and the dialog asks the whole-round question.
+
+    ONE round, not all of them: two modal dialogs stacked over each other is
+    not a design, and the soonest result moment is the one the reader is most
+    overdue on. Answering it re-renders the page without it, so the next one
+    surfaces on the following visit.
+    """
+    seen: set[int] = set()
+    candidates: list[RoundRow] = []
+    for row in [r for g in ctx["leg_groups"] for r in g.rounds] + ctx["all_legs_rows"]:
+        # `upgrade_locked` never reaches the gates as a capture row anyway (an
+        # ineligible viewer cannot have applied), but a modal asking how a
+        # round went that this reader could not enter is the one failure worth
+        # spending a clause to make impossible.
+        if row.round_.id in seen or row.covered or row.upgrade_locked:
+            continue
+        seen.add(row.round_.id)
+        if row.capture_days or row.can_report_result:
+            candidates.append(row)
+    if not candidates:
+        return None
+    # Soonest knowable result first; a round announcing neither results nor a
+    # close sorts last rather than jumping the queue on a missing value.
+    return min(
+        candidates,
+        key=lambda r: (
+            r.round_.results_at_utc or r.round_.closes_at_utc or datetime.max.replace(tzinfo=UTC)
+        ),
+    )
+
+
 async def following_toggle_context(
     session: AsyncSession, user_id: int, concert: Concert
 ) -> dict:
@@ -950,6 +997,7 @@ async def concert_detail(
     # Editor-only, and only fetched for editors -- viewers have no use for
     # who-changed-what, and it's one extra query worth skipping for them.
     audit_log = await concert_audit_log(session, concert.id) if user.is_editor else []
+    rounds_ctx = await concert_rounds_context(session, user.id, concert)
     return templates.TemplateResponse(
         request,
         "concert_detail.html",
@@ -958,8 +1006,13 @@ async def concert_detail(
          "default_preset": default_preset,
          "display_title": display_title,
          "audit_log": audit_log,
+         # The catch-up dialog's subject, or None for a page with nothing
+         # outstanding. GET-only on purpose: the htmx re-render after a press
+         # answers with the rounds region alone, so the dialog does not
+         # re-open over the answer the reader just gave.
+         "pending_capture": pending_capture_row(rounds_ctx),
          **await following_toggle_context(session, user.id, concert),
-         **await concert_rounds_context(session, user.id, concert)},
+         **rounds_ctx},
     )
 
 

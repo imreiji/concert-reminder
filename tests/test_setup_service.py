@@ -251,6 +251,31 @@ async def test_does_not_ask_cancelled_round(session):
     assert await setup_application_rows(session, USER, now=NOW) == []
 
 
+async def test_setup_skips_covered_round(session):
+    """A round every one of whose legs the user already secured through
+    another round asks nothing: they are going, and "did you apply?" has no
+    useful answer left. Same "stop asking" definition the reminder planner
+    uses -- /setup must not contradict it."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", user=USER)
+    concert = await make_concert(session, "aqours-9th", tag)
+    await add_day(session, concert, dt(8, 1))
+    won = await add_round(
+        session, concert, "Lottery R1", opens_at_utc=dt(5, 1), closes_at_utc=dt(5, 10),
+        results_at_utc=dt(5, 20),
+    )
+    await add_round(
+        session, concert, "Lottery R2", opens_at_utc=dt(5, 20), closes_at_utc=dt(6, 20)
+    )
+
+    rows = await setup_application_rows(session, USER, now=NOW)
+    assert [r.round_.label for r in rows] == ["Lottery R2"]
+
+    await record_round_outcome(session, USER, won.id, LotteryOutcome.WON, NOW)
+
+    assert await setup_application_rows(session, USER, now=NOW) == []
+
+
 async def test_asks_predicate_carries_branch5_hook(session):
     """The predicate is directly callable and reused by both screens; a bare
     smoke test that it agrees with setup_application_rows for one open round."""

@@ -20,9 +20,10 @@ from app.db.models import (
     ReminderQueue,
     ReminderRule,
     Round,
+    RoundOutcomeDay,
     User,
 )
-from app.domain.types import Anchor, RoundKind
+from app.domain.types import Anchor, LegResult, RoundKind
 
 AWARE = datetime(2026, 8, 1, 10, 0, tzinfo=UTC)
 
@@ -106,3 +107,19 @@ def test_deleting_concert_cascades(session):
     assert session.query(ReminderRule).count() == 0
     assert session.query(ReminderQueue).count() == 0
     assert session.query(User).count() == 1  # users survive their concerts
+
+
+def test_round_outcome_day_unique_per_user_round_day(session):
+    concert, round_, _ = seed(session)
+    day = ConcertDay(concert_id=concert.id, label="Day 1", starts_at_utc=AWARE)
+    session.add(day)
+    session.flush()
+    session.add(
+        RoundOutcomeDay(user_id=42, round_id=round_.id, day_id=day.id, result=LegResult.WON)
+    )
+    session.flush()
+    session.add(
+        RoundOutcomeDay(user_id=42, round_id=round_.id, day_id=day.id, result=LegResult.LOST)
+    )
+    with pytest.raises(IntegrityError):
+        session.flush()

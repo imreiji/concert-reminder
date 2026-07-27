@@ -5,9 +5,11 @@
 
 Both are thin shells over Task 2's writers -- `set_concert_subscription`,
 `clear_concert_subscription`, `set_leg_opt_out` -- which own the whole
-override model AND the invariant-2 reminder-queue resync (the subscription
-writers re-plan this user's rules; the leg writer feeds a read-side planner
-pass, so it needs no resync of its own). This module holds no business logic:
+override model AND the invariant-2 reminder-queue resync -- all three re-plan
+this user's rules for the concert themselves, the leg writer included: its
+suppression is a read-side pass, but `reminder_queue` is materialized, so
+without a resync an opted-out leg's ALREADY-QUEUED reminders still went out.
+This module holds no business logic:
 it resolves the caller from the SESSION, checks the concert/day exists, hands
 off, commits, and re-renders. There is no user field on either form -- two
 users acting on the same concert keep entirely separate override rows.

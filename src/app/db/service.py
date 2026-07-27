@@ -19,7 +19,7 @@ Sync semantics (per rule):
 import hashlib
 import secrets
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, exists, func, or_, select
@@ -44,6 +44,7 @@ from app.db.models import (
     Round,
     RoundLabelPhrase,
     RoundOutcome,
+    RoundOutcomeDay,
     RoundQualifier,
     Tag,
     TagMember,
@@ -54,7 +55,14 @@ from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
-from app.domain.types import Anchor, LotteryOutcome, RoundKind, SubscriptionState, TagKind
+from app.domain.types import (
+    Anchor,
+    LegResult,
+    LotteryOutcome,
+    RoundKind,
+    SubscriptionState,
+    TagKind,
+)
 from app.domain.upgrades import is_upgrade_eligible
 from app.i18n import N_, get_locale, gettext_in, loc_field
 from app.i18n import gettext as _
@@ -189,6 +197,189 @@ def is_round_cancelled(round_: Round, cancelled_day_ids: set[int]) -> bool:
 # ── Queue sync ───────────────────────────────────────────────────────────
 
 
+def _covered_day_ids(round_: Round, all_day_ids: set[int]) -> set[int]:
+    """The legs a round actually covers: its applies_to narrowed to days that
+    still exist, or -- empty/None applies_to being the all-legs convention --
+    every day on the concert. Stale ids in applies_to (a leg deleted after the
+    round was written) are dropped: a day that no longer exists is not a leg
+    anyone can still be waiting on."""
+    if not round_.applies_to:
+        return set(all_day_ids)
+    return set(round_.applies_to) & all_day_ids
+
+
+async def secured_day_ids_by_round(
+    session: AsyncSession, user_id: int, concert_id: int
+) -> dict[int, set[int]]:
+    """round_id -> the EXACT day ids this user secured through that round, for
+    every round on the concert whose outcome is WON or PAID.
+
+    Per-day resolution follows RoundOutcomeDay's no-rows-means-all convention:
+    a secured round with no day rows secured every leg it covers, which is the
+    common single-leg (and the "won the whole tour") case; once ANY day row
+    exists for that round the answer is exactly its WON rows, so a partial win
+    stops over-claiming the legs that were actually lost. A round whose rows
+    are all LOST therefore maps to the empty set -- present in the dict (its
+    outcome is still WON/PAID) but securing nothing.
+
+    Rounds with no outcome, or an outcome short of WON/PAID, are absent.
+    Batched: at most four queries regardless of how many rounds the concert
+    has -- never one per round."""
+    rounds = list((await session.execute(
+        select(Round).where(Round.concert_id == concert_id)
+    )).scalars())
+    if not rounds:
+        return {}
+    round_ids = [r.id for r in rounds]
+
+    secured_round_ids = set((await session.execute(
+        select(RoundOutcome.round_id).where(
+            RoundOutcome.user_id == user_id,
+            RoundOutcome.round_id.in_(round_ids),
+            RoundOutcome.outcome.in_([LotteryOutcome.WON, LotteryOutcome.PAID]),
+        )
+    )).scalars())
+    if not secured_round_ids:
+        return {}
+
+    all_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(ConcertDay.concert_id == concert_id)
+    )).scalars())
+
+    # Both halves of the split are needed: the WON rows say what was secured,
+    # while the presence of ANY row is what switches off the no-rows-means-all
+    # fallback.
+    won_days: dict[int, set[int]] = {}
+    resolved_rounds: set[int] = set()
+    for round_id, day_id, result in (await session.execute(
+        select(RoundOutcomeDay.round_id, RoundOutcomeDay.day_id, RoundOutcomeDay.result).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id.in_(sorted(secured_round_ids)),
+        )
+    )).all():
+        resolved_rounds.add(round_id)
+        if result is LegResult.WON:
+            won_days.setdefault(round_id, set()).add(day_id)
+
+    secured: dict[int, set[int]] = {}
+    for r in rounds:
+        if r.id not in secured_round_ids:
+            continue
+        covered = _covered_day_ids(r, all_day_ids)
+        if r.id in resolved_rounds:
+            # Intersect so the answer can never claim a leg the round does not
+            # cover -- day rows outlive an applies_to edit.
+            secured[r.id] = won_days.get(r.id, set()) & covered
+        else:
+            secured[r.id] = covered
+    return secured
+
+
+async def covered_round_ids(
+    session: AsyncSession, user_id: int, concert_id: int
+) -> set[int]:
+    """The rounds this user has no reason left to act on: every leg they cover
+    that this user is still waiting on is already secured by some OTHER round
+    on the concert. The single "stop asking about this" definition, shared by
+    the reminder planner and every read surface, so a page can never disagree
+    with the DMs.
+
+    "Still waiting on" is the load-bearing part: legs this user opted out of,
+    and legs that are cancelled, are subtracted first (see
+    `_covered_from_secured`).
+
+    A round the user has WON or PAID is never covered AT ALL -- not just by
+    itself. "Covered" answers the apply/results question; on a round you won,
+    the open question is payment, and money you owe is not settled by holding
+    a seat for the same night through some other round. Two rounds won over
+    the same legs would otherwise each be "secured elsewhere" by the other and
+    both go quiet, leaving two tickets to pay for and nowhere to record it.
+
+    A round covering no existing leg is never covered either, and UPGRADE
+    rounds are excluded outright -- holding a ticket is the PREREQUISITE for
+    entering an upgrade, not a reason to stop showing it (see
+    _apply_outcome_suppression's docstring)."""
+    secured_by = await secured_day_ids_by_round(session, user_id, concert_id)
+    if not secured_by:
+        return set()
+    rounds = list((await session.execute(
+        select(Round).where(Round.concert_id == concert_id)
+    )).scalars())
+    # id AND cancelled in one pass: the fold has to subtract the nights that
+    # are not happening, and a second query for them would be the same read
+    # twice.
+    day_rows = (await session.execute(
+        select(ConcertDay.id, ConcertDay.cancelled).where(
+            ConcertDay.concert_id == concert_id
+        )
+    )).all()
+    all_day_ids = {did for did, _cancelled in day_rows}
+    cancelled_day_ids = {did for did, cancelled in day_rows if cancelled}
+    opted_out_day_ids = set((await session.execute(
+        select(LegOptOut.concert_day_id).where(
+            LegOptOut.user_id == user_id,
+            LegOptOut.concert_day_id.in_(sorted(all_day_ids)),
+        )
+    )).scalars()) if all_day_ids else set()
+
+    return _covered_from_secured(
+        rounds, secured_by, all_day_ids, opted_out_day_ids, cancelled_day_ids
+    )
+
+
+def _covered_from_secured(
+    rounds: list[Round], secured_by: dict[int, set[int]], all_day_ids: set[int],
+    opted_out_day_ids: set[int] = frozenset(), cancelled_day_ids: set[int] = frozenset(),
+) -> set[int]:
+    """The fold itself, pure, over data the caller has already loaded.
+
+    It exists so the reminder planner (`_apply_outcome_suppression`, which
+    holds all three inputs already) and every read surface (through
+    `covered_round_ids`) share ONE definition without either paying for the
+    other's queries. They were two copies of this loop until a defect in one
+    -- a won round covered by another won round, its payment silenced -- had
+    to be fixed in both.
+
+    Opt-out and cancellation COMPOUND with a win rather than sitting beside
+    it. "Won Saturday, not going Sunday" leaves nothing a second Sat+Sun round
+    could still give this reader, but a literal read of the covered set sees
+    Sunday unsecured and keeps nagging -- on Home, on the concert page and in
+    the DMs -- for a night they already said they were skipping. So the legs
+    they opted out of and the legs that are not happening come OUT of the set
+    before the subset check: what is left is what they are genuinely still
+    waiting on, and a round securing all of THAT is done asking.
+
+    What the subtraction must NOT do is turn this into "covered by default".
+    A round whose every leg is opted out (or cancelled) subtracts down to
+    nothing, and nothing is a subset of anything -- so the check alone would
+    call it covered on the strength of no win at all, quietly taking over the
+    every-leg opt-out pass and the every-leg cancellation rule, which own that
+    case and say it in language a reader can act on. Hence the second
+    condition: at least one leg this round covers has to be genuinely secured
+    elsewhere. "Covered" then keeps meaning what it says on the page -- you
+    already hold this night -- and opt-out/cancellation only ever excuse the
+    REMAINING legs, never supply the whole answer."""
+    covered_ids: set[int] = set()
+    for r in rounds:
+        if r.kind is RoundKind.UPGRADE:
+            continue
+        if r.id in secured_by:
+            continue  # own outcome WON/PAID: still owed a payment, never covered
+        covered = _covered_day_ids(r, all_day_ids)
+        if not covered:
+            continue
+        secured_elsewhere: set[int] = set()
+        for other_id, days in secured_by.items():
+            if other_id != r.id:
+                secured_elsewhere |= days
+        if not covered & secured_elsewhere:
+            continue  # no leg of this round is secured: not this pass's case
+        remaining = covered - opted_out_day_ids - cancelled_day_ids
+        if remaining <= secured_elsewhere:
+            covered_ids.add(r.id)
+    return covered_ids
+
+
 async def _apply_outcome_suppression(
     session: AsyncSession, user_id: int, rounds: list[Round], anchor: Anchor
 ) -> list[Round]:
@@ -198,8 +389,16 @@ async def _apply_outcome_suppression(
 
       * per-leg opt-out -- every leg a round covers has a LegOptOut row for
         this user.
-      * cross-round "secured elsewhere" -- every leg a round covers is
-        already secured (WON/PAID) by some OTHER round on this concert.
+      * cross-round "secured elsewhere" -- every leg a round covers that this
+        user is still waiting on (its legs minus the ones they opted out of
+        and the ones that are cancelled) is already secured (WON/PAID) by some
+        OTHER round on this concert, and this round is not itself one the user
+        WON (a won round still owes a payment, whoever else holds the seat).
+        Shared with every read surface through `_covered_from_secured`, so the
+        DMs and the pages cannot disagree. Note the overlap with the opt-out
+        pass above is deliberate and harmless: that pass drops a round whose
+        EVERY leg is opted out, this one folds a PARTIAL opt-out into the
+        secured check.
       * upgrade eligibility (this pass replaces the cross-round pass for
         UPGRADE rounds only) -- see below.
       * same-round anchor -- this rule's own anchor (RESULTS/PAYMENT) is
@@ -250,9 +449,15 @@ async def _apply_outcome_suppression(
         rid for rid, outcome in outcomes.items()
         if outcome in (LotteryOutcome.WON, LotteryOutcome.PAID)
     }
-    all_day_ids = set((await session.execute(
-        select(ConcertDay.id).where(ConcertDay.concert_id == concert_id)
-    )).scalars())
+    # id AND cancelled together: `_covered_from_secured` subtracts the nights
+    # that are not happening, and the read side loads the same pair.
+    day_rows = (await session.execute(
+        select(ConcertDay.id, ConcertDay.cancelled).where(
+            ConcertDay.concert_id == concert_id
+        )
+    )).all()
+    all_day_ids = {did for did, _cancelled in day_rows}
+    cancelled_day_ids = {did for did, cancelled in day_rows if cancelled}
 
     # Per-user leg opt-out: this user's LegOptOut rows over this concert's
     # days. A round drops only when EVERY leg it covers is opted out -- the
@@ -270,11 +475,15 @@ async def _apply_outcome_suppression(
     # Per-round contribution, so each round's own outcome can be excluded
     # when checking IT for cross-round suppression -- "secured elsewhere"
     # must not let a round's own WON/PAID outcome suppress itself; a round
-    # can only be cross-suppressed by OTHER rounds covering its legs.
-    secured_by: dict[int, set[int]] = {}
-    for r in all_concert_rounds:
-        if outcomes.get(r.id) in (LotteryOutcome.WON, LotteryOutcome.PAID):
-            secured_by[r.id] = set(r.applies_to) if r.applies_to else all_day_ids
+    # can only be cross-suppressed by OTHER rounds covering its legs. The
+    # derivation is shared with every read surface (see
+    # secured_day_ids_by_round) so the DMs and the pages agree on which legs
+    # a partial win actually secured.
+    secured_by = await secured_day_ids_by_round(session, user_id, concert_id)
+    covered_ids = _covered_from_secured(
+        all_concert_rounds, secured_by, all_day_ids,
+        opted_out_day_ids, cancelled_day_ids,
+    )
 
     survivors = []
     for r in rounds:
@@ -299,14 +508,8 @@ async def _apply_outcome_suppression(
                 user_secured_round_ids - {r.id},
             ):
                 continue
-        else:
-            applies = set(r.applies_to) if r.applies_to else all_day_ids
-            secured_elsewhere: set[int] = set()
-            for other_id, legs in secured_by.items():
-                if other_id != r.id:
-                    secured_elsewhere |= legs
-            if applies and applies <= secured_elsewhere:
-                continue  # every leg this round covers is already secured elsewhere
+        elif r.id in covered_ids:
+            continue  # every leg this round covers is already secured elsewhere
         outcome = outcomes.get(r.id)
         if anchor is Anchor.RESULTS and outcome is LotteryOutcome.NOT_APPLIED:
             continue
@@ -374,12 +577,307 @@ async def record_round_outcome(
         await _auto_arm_next_round(session, user_id, round_, now)
 
 
-async def _next_round_for_leg(session: AsyncSession, lost_round: Round) -> Round | None:
+async def unresolved_day_ids(
+    session: AsyncSession, user_id: int, round_: Round
+) -> list[int]:
+    """The legs of this round this user is still waiting on: covered days
+    (see _covered_day_ids) minus the ones already resolved by a
+    RoundOutcomeDay row, minus the ones they opted out of, minus cancelled
+    ones. Ordered by starts_at_utc then id, so the capture surfaces ask about
+    legs in the order they happen.
+
+    All three exclusions are the same idea from different directions -- a leg
+    with a recorded result, a leg you are not going to, and a leg that is not
+    happening are all legs nobody is waiting on an answer for. That is also
+    what makes this the terminal check for a LOST day (see
+    _settle_lost_days): "empty" means the round has nothing left to resolve."""
+    days = list((await session.execute(
+        select(ConcertDay).where(ConcertDay.concert_id == round_.concert_id)
+    )).scalars())
+    covered = _covered_day_ids(round_, {d.id for d in days})
+    if not covered:
+        return []
+
+    resolved = set((await session.execute(
+        select(RoundOutcomeDay.day_id).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id == round_.id,
+        )
+    )).scalars())
+    opted_out = set((await session.execute(
+        select(LegOptOut.concert_day_id).where(
+            LegOptOut.user_id == user_id,
+            LegOptOut.concert_day_id.in_(sorted(covered)),
+        )
+    )).scalars())
+
+    remaining = [
+        d for d in days
+        if d.id in covered
+        and not d.cancelled
+        and d.id not in resolved
+        and d.id not in opted_out
+    ]
+    remaining.sort(key=lambda d: (d.starts_at_utc, d.id))
+    return [d.id for d in remaining]
+
+
+async def _round_outcome_value(
+    session: AsyncSession, user_id: int, round_id: int
+) -> LotteryOutcome | None:
+    """This user's round-level outcome, or None if they have recorded none."""
+    return (await session.execute(
+        select(RoundOutcome.outcome).where(
+            RoundOutcome.user_id == user_id, RoundOutcome.round_id == round_id
+        )
+    )).scalar_one_or_none()
+
+
+async def _materialize_implicit_won_rows(
+    session: AsyncSession, user_id: int, round_: Round
+) -> None:
+    """Write out the day rows a secured round has been asserting implicitly,
+    before the first EXPLICIT row makes them unreadable.
+
+    A WON/PAID round with zero day rows means "won every covered leg" (the
+    no-rows-means-all convention). But the moment ANY row exists, the secured
+    set is read as exactly the WON rows -- so writing a single LOST row would
+    silently throw away every other leg's ticket, and could then settle the
+    round itself to LOST. Materializing first makes the implicit state
+    explicit and unchanged (same secured set, same outcome), and every
+    subsequent per-day write edits from there.
+
+    A no-op for rounds that are not secured, or that already have rows."""
+    if await _round_outcome_value(session, user_id, round_.id) not in (
+        LotteryOutcome.WON, LotteryOutcome.PAID
+    ):
+        return
+    already = (await session.execute(
+        select(RoundOutcomeDay.id).where(
+            RoundOutcomeDay.user_id == user_id, RoundOutcomeDay.round_id == round_.id
+        ).limit(1)
+    )).scalar_one_or_none()
+    if already is not None:
+        return
+    all_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(ConcertDay.concert_id == round_.concert_id)
+    )).scalars())
+    for day_id in sorted(_covered_day_ids(round_, all_day_ids)):
+        session.add(RoundOutcomeDay(
+            user_id=user_id, round_id=round_.id, day_id=day_id, result=LegResult.WON,
+        ))
+    await session.flush()
+
+
+async def _won_day_ids(session: AsyncSession, user_id: int, round_id: int) -> set[int]:
+    """This user's WON day rows on one round -- the "is any leg of this round
+    actually secured" question the LOST settle path turns on."""
+    return set((await session.execute(
+        select(RoundOutcomeDay.day_id).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id == round_id,
+            RoundOutcomeDay.result == LegResult.WON,
+        )
+    )).scalars())
+
+
+async def has_day_results(session: AsyncSession, user_id: int, round_id: int) -> bool:
+    """Whether this user is resolving this round LEG BY LEG -- i.e. whether any
+    RoundOutcomeDay row exists for it.
+
+    It is the switch that turns the no-rows-means-all fallback off (see
+    `_leg_result_for`), so a caller about to record a WHOLE-round answer needs
+    it to know whether that answer stands on its own or has to be spelled out
+    leg by leg to mean anything."""
+    return (await session.execute(
+        select(RoundOutcomeDay.id).where(
+            RoundOutcomeDay.user_id == user_id, RoundOutcomeDay.round_id == round_id
+        ).limit(1)
+    )).scalar_one_or_none() is not None
+
+
+async def round_result_state(
+    session: AsyncSession, user_id: int, round_: Round, locale: str,
+) -> tuple[tuple[tuple[int, str], ...], bool, LotteryOutcome | None]:
+    """`(unresolved legs, any leg secured, round outcome)` for one user --
+    the snapshot Discord's progressive result buttons re-derive on EVERY
+    press (`bot/views.py`).
+
+    It exists because a DM outlives the state it was built for: those buttons
+    are persistent, so the same message can be pressed months later against a
+    round already resolved on the web, and the reply has to render what is
+    true NOW rather than what the message said. Deriving that from
+    `DueReminder.covered_days` would be exactly the mistake -- that tuple is
+    leg PRESENCE, fixed when the DM was composed, and knows nothing about
+    what has since been recorded or opted out of.
+
+    The no-rows-means-all convention (see `_leg_result_for`) is what the first
+    branch handles: a round settled as a WHOLE, with zero day rows, settled
+    every leg it covers, so nothing is waiting on an answer -- without it a
+    "Won (all)" press would write the round-level outcome and then be asked
+    about the very days it just answered for.
+
+    `locale` is explicit rather than read from the ContextVar: the caller is a
+    click handler that has just set the clicking user's language, and passing
+    it keeps this callable from the scheduler's per-recipient path too."""
+    outcome = await _round_outcome_value(session, user_id, round_.id)
+    day_rows = (await session.execute(
+        select(RoundOutcomeDay.day_id, RoundOutcomeDay.result).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id == round_.id,
+        )
+    )).all()
+    # A round-level WON/PAID counts as secured whether or not any WON day row
+    # spells it out: the row may simply not exist yet (no-rows-means-all), or
+    # the only rows may be losses on other legs. Reading this off the rows
+    # alone offers "Lost (all)" as the shortcut on a round already won --
+    # a button that throws the win away.
+    any_won = any(result == LegResult.WON for _day_id, result in day_rows) or outcome in (
+        LotteryOutcome.WON, LotteryOutcome.PAID
+    )
+    if not day_rows and outcome in (
+        LotteryOutcome.WON, LotteryOutcome.PAID, LotteryOutcome.LOST,
+        LotteryOutcome.NOT_APPLIED,
+    ):
+        return (), any_won, outcome
+
+    unresolved = await unresolved_day_ids(session, user_id, round_)
+    if not unresolved:
+        return (), any_won, outcome
+    label_by_id = {
+        d.id: loc_field(d, "label", locale)
+        for d in (await session.execute(
+            select(ConcertDay).where(ConcertDay.id.in_(unresolved))
+        )).scalars()
+    }
+    return tuple((did, label_by_id.get(did, "")) for did in unresolved), any_won, outcome
+
+
+async def _settle_lost_days(
+    session: AsyncSession, user_id: int, round_: Round, lost_day_ids: set[int],
+    now: datetime,
+) -> None:
+    """Shared tail of every LOST day write: either the round is done, or it
+    is a partial loss inside a round that is still alive.
+
+    Done means no leg of it was won AND nothing is left unresolved -- then the
+    round-level LOST is the truth, and record_round_outcome's existing
+    semantics (re-sync + whole-round auto-arm) settle it. Otherwise the round
+    keeps whatever outcome it has (a partial win stays WON) and only the lost
+    LEGS move: re-sync this user's rules so the planner sees the new day rows,
+    then arm the next round covering just those legs -- narrowing the arm to
+    lost_day_ids is what stops a lost Saturday from arming a round that only
+    sells Friday."""
+    if not await _won_day_ids(session, user_id, round_.id) and not await unresolved_day_ids(
+        session, user_id, round_
+    ):
+        await record_round_outcome(session, user_id, round_.id, LotteryOutcome.LOST, now)
+        return
+    await reinstate_user_rules(session, user_id, round_.concert_id, now)
+    if lost_day_ids:
+        await _auto_arm_next_round(session, user_id, round_, now, day_ids=lost_day_ids)
+
+
+async def record_round_day_result(
+    session: AsyncSession, user_id: int, round_id: int, day_id: int,
+    result: LegResult, now: datetime | None = None,
+) -> None:
+    """One leg of one round resolved for one user -- the per-day sibling of
+    record_round_outcome, and (with record_remaining_days_lost) the only
+    writer of RoundOutcomeDay (invariant 2).
+
+    A day the round does not cover, or a round that no longer exists, writes
+    nothing: ids arrive from Discord custom_ids and form posts, so they are
+    re-validated server-side and a forged or stale one simply does nothing --
+    the same rule /setup's capture screens follow.
+
+    Both layers stay consistent: a WON leg flips the round outcome to WON
+    (a win is a win, whatever the other legs do), while a LOST leg settles
+    the round only when nothing is left to wait on (see _settle_lost_days).
+    A round already WON or PAID keeps that outcome -- routing a per-day win
+    through record_round_outcome there would overwrite PAID back to WON and
+    re-arm the payment reminder for a ticket already paid for."""
+    now = now or _now()
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
+        return
+    all_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(ConcertDay.concert_id == round_.concert_id)
+    )).scalars())
+    if day_id not in _covered_day_ids(round_, all_day_ids):
+        return
+    # Validation first, materialization second: a forged id must write
+    # nothing at all, materialized rows included.
+    await _materialize_implicit_won_rows(session, user_id, round_)
+
+    existing = (await session.execute(
+        select(RoundOutcomeDay).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id == round_id,
+            RoundOutcomeDay.day_id == day_id,
+        )
+    )).scalar_one_or_none()
+    if existing is None:
+        session.add(RoundOutcomeDay(
+            user_id=user_id, round_id=round_id, day_id=day_id, result=result,
+        ))
+    else:
+        existing.result = result
+    await session.flush()
+
+    if result is LegResult.WON:
+        if await _round_outcome_value(session, user_id, round_id) in (
+            LotteryOutcome.WON, LotteryOutcome.PAID
+        ):
+            # Already secured at round level -- only the day layer moved, so
+            # skip the outcome write (it would demote PAID) and just re-plan:
+            # the secured set changed, and the planner reads it.
+            await reinstate_user_rules(session, user_id, round_.concert_id, now)
+        else:
+            await record_round_outcome(session, user_id, round_id, LotteryOutcome.WON, now)
+        return
+    await _settle_lost_days(session, user_id, round_, {day_id}, now)
+
+
+async def record_remaining_days_lost(
+    session: AsyncSession, user_id: int, round_id: int, now: datetime | None = None,
+) -> None:
+    """["Lost the rest"] -- one LOST row for every leg still unresolved, then
+    the same settle the last individual LOST would have run. Writing the rows
+    in one pass (rather than looping record_round_day_result) keeps the settle
+    to a single decision: with everything resolved, the round is LOST unless
+    some leg was won.
+
+    Materializing first (see _materialize_implicit_won_rows) is what makes
+    this a no-op on a round already won outright -- there is nothing
+    unresolved to lose."""
+    now = now or _now()
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
+        return
+    await _materialize_implicit_won_rows(session, user_id, round_)
+    remaining = await unresolved_day_ids(session, user_id, round_)
+    for day_id in remaining:
+        session.add(RoundOutcomeDay(
+            user_id=user_id, round_id=round_id, day_id=day_id, result=LegResult.LOST,
+        ))
+    await session.flush()
+    await _settle_lost_days(session, user_id, round_, set(remaining), now)
+
+
+async def _next_round_for_leg(
+    session: AsyncSession, lost_round: Round, day_ids: set[int] | None = None
+) -> Round | None:
     """The next round for the same leg(s) a just-lost round applied to --
     the earliest-opening round (of those with an opens_at_utc set) whose
     applies_to overlaps the lost round's (or is empty -- General rounds
     cover every leg), opening strictly after the lost round's own close
-    (falling back to its open time if it has no close)."""
+    (falling back to its open time if it has no close).
+
+    `day_ids` narrows the overlap to specific legs, for a per-day loss inside
+    a round that was not lost as a whole: only rounds covering THOSE legs are
+    candidates. Callers with a whole-round loss pass nothing and get the
+    round's own applies_to, unchanged."""
     candidates = list((await session.execute(
         select(Round).where(
             Round.concert_id == lost_round.concert_id,
@@ -392,7 +890,11 @@ async def _next_round_for_leg(session: AsyncSession, lost_round: Round) -> Round
             Round.kind != RoundKind.UPGRADE,
         )
     )).scalars())
-    lost_legs = set(lost_round.applies_to) if lost_round.applies_to else None
+    lost_legs: set[int] | None
+    if day_ids is not None:
+        lost_legs = day_ids
+    else:
+        lost_legs = set(lost_round.applies_to) if lost_round.applies_to else None
     after = lost_round.closes_at_utc or lost_round.opens_at_utc
 
     def overlaps(r: Round) -> bool:
@@ -407,18 +909,22 @@ async def _next_round_for_leg(session: AsyncSession, lost_round: Round) -> Round
 
 
 async def _auto_arm_next_round(
-    session: AsyncSession, user_id: int, lost_round: Round, now: datetime | None = None
+    session: AsyncSession, user_id: int, lost_round: Round, now: datetime | None = None,
+    day_ids: set[int] | None = None,
 ) -> None:
     """After a LOST outcome: find the next round for the same leg and
     auto-create a real ReminderRule for its OPENS anchor, using the
-    user's default preset offset if they have one, else immediate."""
+    user's default preset offset if they have one, else immediate.
+
+    `day_ids` narrows which legs count as lost (see _next_round_for_leg) --
+    a per-day loss arms only rounds covering the legs actually lost."""
     now = now or _now()
     if lost_round.kind is RoundKind.UPGRADE:
         # Losing an upgrade ends that nested side-campaign -- there is no
         # "next round" to fall back to; the user still holds their base
         # ticket. Auto-arming a later base round here would be wrong.
         return
-    next_round = await _next_round_for_leg(session, lost_round)
+    next_round = await _next_round_for_leg(session, lost_round, day_ids)
     if next_round is None:
         return  # nothing to arm yet -- sync_concert catches up when it's added
 
@@ -699,6 +1205,11 @@ class DueReminder:
     url: str | None = None
     # day-anchored:
     day_label: str | None = None
+    # (day_id, label) for every LIVE leg a RESULTS-anchored round covers, in
+    # performance order -- and only when there are at least two of them, since
+    # a one-leg round has nothing to disambiguate. Empty for every other row.
+    # bot/messages.py turns a non-empty tuple into per-day result buttons.
+    covered_days: tuple[tuple[int, str], ...] = ()
 
 
 async def due_reminders(
@@ -753,6 +1264,34 @@ async def due_reminders(
         )).scalars())
         outcomes = {(o.user_id, o.round_id): o.outcome for o in outcome_rows}
 
+    # The legs behind each multi-leg RESULTS row, for the per-day capture
+    # buttons. Gated on RESULTS specifically so a batch that raises no such
+    # question costs no extra query at all -- and batched by CONCERT, not by
+    # round, so ten rounds on one tour still read their legs once.
+    legs_by_round: dict[int, list[ConcertDay]] = {}
+    results_round_ids = {
+        row.round_id for row in rows
+        if row.anchor is Anchor.RESULTS and row.round_id in rounds
+    }
+    if results_round_ids:
+        leg_concert_ids = {rounds[rid].concert_id for rid in results_round_ids}
+        legs_by_concert: dict[int, list[ConcertDay]] = {}
+        leg_rows = (await session.execute(
+            select(ConcertDay)
+            .where(ConcertDay.concert_id.in_(leg_concert_ids))
+            .order_by(ConcertDay.starts_at_utc, ConcertDay.id)
+        )).scalars()
+        for leg in leg_rows:
+            legs_by_concert.setdefault(leg.concert_id, []).append(leg)
+        for rid in results_round_ids:
+            round_ = rounds[rid]
+            # Cancelled legs are excluded before the count, not after: a
+            # two-leg round with one leg cancelled is a one-leg question.
+            live = [d for d in legs_by_concert.get(round_.concert_id, []) if not d.cancelled]
+            covered = _covered_day_ids(round_, {d.id for d in live})
+            if len(covered) >= 2:
+                legs_by_round[rid] = [d for d in live if d.id in covered]
+
     out: list[DueReminder] = []
     for row in rows:
         rule = rules.get(row.rule_id)
@@ -786,6 +1325,13 @@ async def due_reminders(
                 ),
                 url=round_.url if round_ else None,
                 day_label=loc_field(day, "label", user.language) if day else None,
+                # Same per-RECIPIENT rule as round_label above: a round can
+                # also carry a CLOSES row, so the anchor is re-checked here
+                # rather than trusted from legs_by_round's membership.
+                covered_days=tuple(
+                    (d.id, loc_field(d, "label", user.language))
+                    for d in legs_by_round.get(row.round_id, ())
+                ) if row.anchor is Anchor.RESULTS else (),
             )
         )
     return out
@@ -1077,12 +1623,29 @@ async def clear_concert_subscription(
 
 
 async def set_leg_opt_out(
-    session: AsyncSession, user_id: int, day_id: int, opted_out: bool
+    session: AsyncSession, user_id: int, day_id: int, opted_out: bool,
+    now: datetime | None = None,
 ) -> None:
     """Toggle a per-leg opt-out by row presence: add a row when opting out,
-    delete it when opting back in. The suppression this drives is a
-    read-side planner pass added in Task 3 -- there is no concert-level
-    resync here."""
+    delete it when opting back in.
+
+    Then re-plan this user's rules for the leg's concert (invariant 8). The
+    suppression itself is a read-side pass folded into `sync_rule`, which is
+    why this used to write and stop -- but `reminder_queue` is a MATERIALIZED
+    outbox (invariant 2), so a read-side rule only governs what the NEXT sync
+    decides. Without this, opting out of every leg of a round left its
+    already-queued reminders in place and the scheduler duly delivered them:
+    the reader said "not going" and kept being reminded, which is precisely
+    what invariant 8 forbids.
+
+    It lives here rather than in the two routes that write (the day-result
+    capture and the leg opt-out toggle) so neither can forget it, and so a
+    third caller inherits it -- the same reason `record_round_outcome` owns
+    its own resync.
+
+    The concert lookup stays forgiving: a `day_id` naming no leg has no
+    concert to re-plan, and these ids arrive from form posts and Discord
+    custom_ids, so it returns quietly rather than raising."""
     existing = (await session.execute(
         select(LegOptOut).where(
             LegOptOut.user_id == user_id,
@@ -1094,6 +1657,13 @@ async def set_leg_opt_out(
     elif not opted_out and existing is not None:
         await session.delete(existing)
     await session.flush()
+
+    concert_id = (await session.execute(
+        select(ConcertDay.concert_id).where(ConcertDay.id == day_id)
+    )).scalar_one_or_none()
+    if concert_id is None:
+        return
+    await reinstate_user_rules(session, user_id, concert_id, now)
 
 
 @dataclass(frozen=True)
@@ -1335,6 +1905,20 @@ class DeadlineRow:
     # Has this round's result become knowable, so "I won"/"I lost" are real
     # answers rather than guesses?
     can_report_result: bool = False
+    # The legs of this round still waiting on an answer, as (day_id, label)
+    # in performance order -- non-empty only when the round covers two or
+    # more live legs and its result is knowable, which is exactly when
+    # "did you win?" stops having one answer. Empty everywhere else, so the
+    # flat won/lost pair stays the single-leg story it always was.
+    capture_days: tuple[tuple[int, str], ...] = ()
+    # Whether some leg of this round is already won -- what turns the
+    # remaining question from "won or lost?" into "lost the rest?".
+    any_day_won: bool = False
+    # Whether ANY day row exists for this round, won or lost. It is the switch
+    # that turns the no-rows-means-all fallback off (see `_leg_result_for`), so
+    # a whole-round WON write against a round that has one secures NOTHING --
+    # which is why the capture surfaces withdraw "Won (all)" once it is true.
+    has_day_results: bool = False
 
 
 def _round_has_opened(round_: Round, now: datetime) -> bool:
@@ -1402,7 +1986,7 @@ def _eligible_upgrade_ids(
 
 def capture_gates(
     round_: Round | None, outcome: LotteryOutcome | None, now: datetime,
-    qualifies: bool = True,
+    qualifies: bool = True, covered: bool = False,
 ) -> tuple[bool, bool]:
     """The two gates on WHICH capture buttons a row may offer, as ONE
     definition shared by every surface that offers them (Home's "Coming up"
@@ -1420,7 +2004,15 @@ def capture_gates(
     for: they hold no qualifying ticket, so offering "I have applied" would let
     them record an entry to a campaign they cannot join. Callers resolve it
     from the outcomes they already hold (see `_eligible_upgrade_ids`); it
-    defaults True so every ordinary round is unaffected."""
+    defaults True so every ordinary round is unaffected.
+
+    `covered` is True for a round every one of whose legs this viewer already
+    secured through some OTHER round (`covered_round_ids`). Both gates shut:
+    they are going to every leg it sells, so "I have applied" and "I won" have
+    no answer left worth recording. The row itself still renders -- the
+    concert page shows the whole campaign, quietly."""
+    if covered:
+        return False, False
     can_capture = round_ is not None and _round_has_opened(round_, now) and qualifies
     moment = _result_moment(round_) if round_ is not None else None
     can_report_result = (
@@ -1429,6 +2021,76 @@ def capture_gates(
         and (moment is None or moment <= now)
     )
     return can_capture, can_report_result
+
+
+def _can_resolve_days(
+    round_: Round, outcome: LotteryOutcome | None, now: datetime,
+    unresolved: list[int], covered_live: set[int],
+) -> bool:
+    """Should this row ask about legs one at a time instead of the round as a
+    whole? Four conditions, all of them about the round rather than the
+    reader's screen, which is why they live here and not in a template:
+
+      * it covers two or more LIVE legs -- one leg has only one answer, and
+        the flat "I won"/"I lost" pair already is that answer;
+      * the reader is in it (APPLIED) or partway through it (WON) -- there is
+        nothing per-leg to say about a round you skipped or already lost;
+      * its result is knowable (`_result_moment` unset or passed), the same
+        rule `capture_gates` applies to the flat pair;
+      * something is actually left unresolved.
+
+    `covered_live` is the round's covered legs minus the cancelled ones. It is
+    a parameter rather than derived here because a Round alone cannot answer
+    it: the all-legs convention (empty `applies_to`) means "every leg of the
+    concert", which only the caller's day list knows."""
+    if len(covered_live) < 2:
+        return False
+    if outcome not in (LotteryOutcome.APPLIED, LotteryOutcome.WON):
+        return False
+    moment = _result_moment(round_)
+    if moment is not None and moment > now:
+        return False
+    return bool(unresolved)
+
+
+async def _day_capture_context(
+    session: AsyncSession, user_id: int | None, round_: Round,
+    outcome: LotteryOutcome | None, now: datetime, days: Sequence[ConcertDay],
+    locale: str,
+) -> tuple[tuple[tuple[int, str], ...], bool]:
+    """`(capture_days, any_day_won)` for one round and one viewer -- the one
+    place both capture surfaces (Home's rows, the concert page's rows) resolve
+    them, so they cannot start offering different legs.
+
+    `_can_resolve_days` stays the single definition of the rule; the same
+    conditions appear once more above it here, in the order that needs no
+    query first, purely so the common round -- nobody applied, or the result
+    is not out -- reads no rows at all. Only the handful of rounds a viewer is
+    actually partway through cost a query.
+
+    A round secured with NO day rows is the no-rows-means-all whole-round win
+    (§A of the design): every covered leg was won, so nothing is unresolved
+    and the row moves on to the payment question rather than asking about
+    days it has already been told about."""
+    if user_id is None or outcome not in (LotteryOutcome.APPLIED, LotteryOutcome.WON):
+        return (), False
+    covered_live = _covered_day_ids(round_, {d.id for d in days}) - {
+        d.id for d in days if d.cancelled
+    }
+    if len(covered_live) < 2:
+        return (), False
+    moment = _result_moment(round_)
+    if moment is not None and moment > now:
+        return (), False
+
+    any_day_won = bool(await _won_day_ids(session, user_id, round_.id))
+    if outcome is LotteryOutcome.WON and not any_day_won:
+        return (), False
+    unresolved = await unresolved_day_ids(session, user_id, round_)
+    if not _can_resolve_days(round_, outcome, now, unresolved, covered_live):
+        return (), any_day_won
+    label_by_id = {d.id: loc_field(d, "label", locale) for d in days}
+    return tuple((did, label_by_id.get(did, "")) for did in unresolved), any_day_won
 
 
 async def my_deadline_rows(
@@ -1510,14 +2172,53 @@ async def my_deadline_rows(
             if is_upgrade_eligible(qualifiers_by_round.get(rid, []), secured - {rid}):
                 eligible_upgrade_ids.add(rid)
 
+    # "Stop asking about this": rounds every one of whose legs this viewer
+    # already secured through some OTHER round. The reminder planner has
+    # always dropped them (_apply_outcome_suppression's cross-round pass), so
+    # resolving them here is what stops Coming up and the DM stream
+    # disagreeing about what is still worth asking.
+    #
+    # Only a concert where this user holds a ticket can produce one, and that
+    # is ONE query for the whole row set -- Home is the hottest page in the
+    # app, and the common reader (nothing secured anywhere) must not pay a
+    # per-concert derivation to be told "nothing is covered".
+    covered_ids: set[int] = set()
+    secured_concert_ids = set((await session.execute(
+        select(Round.concert_id)
+        .join(RoundOutcome, RoundOutcome.round_id == Round.id)
+        .where(
+            RoundOutcome.user_id == user_id,
+            Round.concert_id.in_({c.id for c in concerts.values()}),
+            RoundOutcome.outcome.in_([LotteryOutcome.WON, LotteryOutcome.PAID]),
+        )
+    )).scalars()) if concerts else set()
+    for cid in secured_concert_ids:
+        covered_ids |= await covered_round_ids(session, user_id, cid)
+
+    # Which of these rounds this viewer is resolving LEG BY LEG. One batched
+    # query for the whole row set, the same shape as `outcomes` above -- never
+    # one per row, and never per (round, anchor) pair, since a single round
+    # emits several rows and they must all agree.
+    rounds_with_day_rows: set[int] = set((await session.execute(
+        select(RoundOutcomeDay.round_id).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id.in_(round_ids),
+        ).distinct()
+    )).scalars()) if round_ids else set()
+
+    locale = get_locale()
+    day_capture: dict[int, tuple[tuple[tuple[int, str], ...], bool]] = {}
+
     rows = []
     for d in deadlines:
+        if d.round_id is not None and d.round_id in covered_ids:
+            continue
         concert = concerts.get(d.event_id)
         live_days = sorted(
             (day for day in concert.days if not day.cancelled), key=lambda day: day.starts_at_utc
         ) if concert else []
         venue_tags = [
-            loc_field(t, "name", get_locale())
+            loc_field(t, "name", locale)
             for t in concert.tags if t.kind is TagKind.VENUE
         ] if concert else []
         round_ = rounds.get(d.round_id) if d.round_id is not None else None
@@ -1529,12 +2230,25 @@ async def my_deadline_rows(
             round_, outcome, now,
             qualifies=(not is_upgrade) or round_.id in eligible_upgrade_ids,
         )
+        # One round can produce several rows (one per future anchor), so the
+        # per-day work list is resolved once per ROUND, not once per row.
+        if round_ is not None and concert is not None:
+            if round_.id not in day_capture:
+                day_capture[round_.id] = await _day_capture_context(
+                    session, user_id, round_, outcome, now, concert.days, locale
+                )
+            capture_days, any_day_won = day_capture[round_.id]
+        else:
+            capture_days, any_day_won = (), False
         rows.append(DeadlineRow(
             deadline=d,
             outcome=outcome,
             is_upgrade=is_upgrade,
             can_capture=can_capture,
             can_report_result=can_report_result,
+            capture_days=capture_days,
+            any_day_won=any_day_won,
+            has_day_results=d.round_id in rounds_with_day_rows,
             # Same display rule as the tile macro: >1 venue tag collapses to
             # "Multiple", one wins outright, no venue tag means no venue.
             venue=(
@@ -1781,8 +2495,21 @@ async def setup_application_rows(
     rows = []
     for c in surviving:
         cancelled_day_ids = {d.id for d in c.days if d.cancelled}
+        # Covered rounds ask nothing: every leg they sell is already secured
+        # through another round, so "did you apply?" has no useful answer.
+        # Only concerts where the user actually holds something can produce
+        # one, and covered_round_ids answers the empty case in one query --
+        # checking first keeps /setup from running the derivation over every
+        # tracked concert.
+        covered: set[int] = set()
+        if any(
+            outcomes.get(r.id) in (LotteryOutcome.WON, LotteryOutcome.PAID) for r in c.rounds
+        ):
+            covered = await covered_round_ids(session, user_id, c.id)
         for r in c.rounds:
             if is_round_cancelled(r, cancelled_day_ids):
+                continue
+            if r.id in covered:
                 continue
             if not _round_asks_application(r, outcomes.get(r.id), now):
                 continue
@@ -1912,6 +2639,13 @@ class RoundRow:
     `primary_anchor`/`primary_at_utc` are the one moment the row leads with.
     A round can carry four timestamps and the row shows them all, but only
     one is bold, and picking it is a timing rule rather than presentation.
+
+    A row is per (round, LEG): the same round renders under each leg it
+    applies to, and `leg_result` is that leg's own resolution for this viewer
+    -- a lottery covering Saturday and Sunday really can come back "won
+    Saturday, lost Sunday", and one row for both could only lie about one of
+    them. Everything else on the row is a fact about the round, so the per-leg
+    copies share it.
     """
 
     round_: Round
@@ -1920,6 +2654,18 @@ class RoundRow:
     can_report_result: bool
     primary_anchor: Anchor | None = None
     primary_at_utc: datetime | None = None
+    # Every leg this round covers is already secured through another round:
+    # it renders quietly, with both capture gates shut (see capture_gates).
+    covered: bool = False
+    # This LEG's resolution for this viewer, or None when they have no
+    # standing on it yet.
+    leg_result: LegResult | None = None
+    # The round's still-unresolved legs, whether one is already won, and
+    # whether the round has any day row at all -- same meanings as on
+    # DeadlineRow, so the shared capture macro reads one vocabulary.
+    capture_days: tuple[tuple[int, str], ...] = ()
+    any_day_won: bool = False
+    has_day_results: bool = False
     # `upgrade_locked` is True for an UPGRADE round a signed-in viewer is NOT
     # eligible for: the page shows a "Requires a ticket from ..." line naming
     # `qualifier_labels` instead of capture buttons they cannot honestly press.
@@ -1930,9 +2676,10 @@ class RoundRow:
 
 @dataclass(frozen=True)
 class LegRounds:
-    """One leg and the rounds that apply to it. Cancelled legs get a group
-    like any other -- invariant 2 keeps the row alive and the page dims it
-    rather than hiding it, so dropping it here would lose its rounds."""
+    """One leg and the rounds that apply to it, each as its own RoundRow.
+    Cancelled legs get a group like any other -- invariant 2 keeps the row
+    alive and the page dims it rather than hiding it, so dropping it here
+    would lose its rounds."""
 
     day: ConcertDay
     rounds: list[RoundRow]
@@ -1967,19 +2714,30 @@ async def concert_round_rows(
     now: datetime | None = None,
 ) -> tuple[list[LegRounds], list[RoundRow]]:
     """Every round on `concert`, grouped for the concert page: one group per
-    leg (in date order, cancelled legs included), plus the all-legs group.
+    leg, in date order, cancelled legs included.
 
-    A round belongs to a leg when that leg's id is in its `applies_to`. Two
-    cases skip the per-leg groups and land in the all-legs list instead: an
-    empty/None `applies_to` (never tied to a leg in the first place), and an
-    `applies_to` covering every LIVE leg -- "applies to all of them" is not a
-    per-leg fact, and repeating the same round under each leg would bury the
-    ones that really are leg-specific. A round covering some but not all legs
-    is a real fact about each, so it appears under each of them.
+    Every round renders under EACH live leg it applies to -- including the
+    ones that apply to all of them. That is a deliberate reversal of the old
+    separate "all legs" section (which the owner had to cross-reference to
+    read one leg's story), and per-leg outcomes are what make it truthful: a
+    round covering Saturday and Sunday can come back won on one and lost on
+    the other, and only a per-leg row can say so. A two-leg concert whose
+    rounds all cover both legs therefore shows each round twice; each leg
+    reads as a complete story, which is the trade taken.
+
+    Which legs a round names: the ids in its `applies_to` that still exist,
+    or -- empty/None being the all-legs convention -- every LIVE leg. A round
+    naming only cancelled legs stays under those legs (it is still a fact
+    about them); an all-legs round on a wholly cancelled concert falls back to
+    every leg rather than vanishing.
+
+    The second returned list is the fallback for a concert with NO legs at
+    all, where there is no group to put a round under; it is empty for every
+    concert that has any.
 
     `user_id` is None for a caller with no standing to show; the rows still
-    render, just with `outcome` None throughout. Outcomes load in ONE query
-    for the whole concert, not one per round.
+    render, just with `outcome`/`leg_result` None throughout. Outcomes and day
+    results each load in ONE query for the whole concert, not one per round.
     """
     now = now or _now()
     locale = get_locale()
@@ -1999,6 +2757,11 @@ async def concert_round_rows(
         return [], []
 
     outcomes: dict[int, LotteryOutcome] = {}
+    # (round_id, day_id) -> this viewer's resolution of that leg. One query
+    # for the whole concert; a round absent from it entirely falls back to the
+    # no-rows-means-all convention below.
+    day_results: dict[tuple[int, int], LegResult] = {}
+    covered_ids: set[int] = set()
     if user_id is not None and rounds:
         outcomes = {
             o.round_id: o.outcome
@@ -2009,6 +2772,17 @@ async def concert_round_rows(
                 )
             )).scalars()
         }
+        day_results = {
+            (rid, did): result
+            for rid, did, result in (await session.execute(
+                select(RoundOutcomeDay.round_id, RoundOutcomeDay.day_id, RoundOutcomeDay.result)
+                .where(
+                    RoundOutcomeDay.user_id == user_id,
+                    RoundOutcomeDay.round_id.in_([r.id for r in rounds]),
+                )
+            )).all()
+        }
+        covered_ids = await covered_round_ids(session, user_id, concert.id)
 
     # Upgrade eligibility for the whole concert, ONE query for the qualifier
     # sets (outcomes are already loaded above). A signed-in viewer ineligible
@@ -2026,44 +2800,94 @@ async def concert_round_rows(
 
     day_ids = {d.id for d in days}
     live_leg_ids = {d.id for d in days if not d.cancelled}
+    # Which rounds are being resolved leg by leg -- the switch that turns off
+    # the no-rows-means-all fallback (see _leg_result_for).
+    rounds_with_day_rows = {rid for rid, _did in day_results}
     by_leg: dict[int, list[RoundRow]] = {d.id: [] for d in days}
-    all_legs: list[RoundRow] = []
+    dateless: list[RoundRow] = []
 
     for r in rounds:
         outcome = outcomes.get(r.id)
         is_upgrade = r.kind is RoundKind.UPGRADE
         eligible = r.id in eligible_up
+        covered = r.id in covered_ids
         # Lock only a signed-in ineligible viewer out of an upgrade round --
         # signed out (user_id None) there is no eligibility to judge, so the
         # round renders like any other.
         upgrade_locked = is_upgrade and user_id is not None and not eligible
         can_capture, can_report_result = capture_gates(
-            r, outcome, now, qualifies=(not is_upgrade) or eligible
+            r, outcome, now, qualifies=(not is_upgrade) or eligible, covered=covered
+        )
+        capture_days, any_day_won = await _day_capture_context(
+            session, user_id, r, outcome, now, days, locale
         )
         anchor, at_utc = _primary_anchor(r, now)
         row = RoundRow(
             round_=r, outcome=outcome,
             can_capture=can_capture, can_report_result=can_report_result,
             primary_anchor=anchor, primary_at_utc=at_utc,
+            covered=covered,
+            capture_days=capture_days, any_day_won=any_day_won,
+            has_day_results=r.id in rounds_with_day_rows,
             upgrade_locked=upgrade_locked,
             qualifier_labels=tuple(
                 label_by_id[q] for q in qualifiers_by_round.get(r.id, []) if q in label_by_id
             ),
         )
+        if not days:
+            dateless.append(row)
+            continue
         # Ids for legs that no longer exist are dropped rather than trusted:
         # applies_to is plain JSON with no FK behind it, so a deleted leg can
-        # leave one dangling.
+        # leave one dangling. A round left naming nothing real is treated as
+        # the all-legs case rather than disappearing off the page.
         targets = {i for i in (r.applies_to or []) if i in day_ids}
-        # `live_leg_ids and` guards the vacuous case: with every leg
-        # cancelled, "covers every live leg" would be true of every round and
-        # the per-leg groups would all empty out.
-        if not targets or (live_leg_ids and live_leg_ids <= targets):
-            all_legs.append(row)
-            continue
-        for leg_id in targets:
-            by_leg[leg_id].append(row)
+        if not targets:
+            targets = live_leg_ids or day_ids
+        covered_days = _covered_day_ids(r, day_ids)
+        has_day_rows = r.id in rounds_with_day_rows
+        for d in days:
+            if d.id not in targets:
+                continue
+            by_leg[d.id].append(replace(
+                row,
+                leg_result=_leg_result_for(
+                    r, d.id, outcome, day_results, covered_days, has_day_rows
+                ),
+            ))
 
-    return [LegRounds(day=d, rounds=by_leg[d.id]) for d in days], all_legs
+    return [LegRounds(day=d, rounds=by_leg[d.id]) for d in days], dateless
+
+
+def _leg_result_for(
+    round_: Round, day_id: int, outcome: LotteryOutcome | None,
+    day_results: dict[tuple[int, int], LegResult], covered_days: set[int],
+    has_day_rows: bool,
+) -> LegResult | None:
+    """How ONE leg of one round turned out for this viewer.
+
+    An explicit `RoundOutcomeDay` row wins outright. Failing that, the
+    no-rows-means-all convention is made visible: a round settled as a whole
+    -- WON/PAID, or LOST -- with ZERO day rows settled every leg it covers the
+    same way, which is the common single-outcome case and every row that
+    predates per-day capture.
+
+    `has_day_rows` is what keeps that fallback honest. Once ANY row exists the
+    round is being resolved leg by leg, so a leg without one is still
+    unresolved -- reading the round's WON off it would claim a ticket for a
+    Sunday nobody has heard about yet. A leg the round does not cover, and a
+    round with no settled outcome, resolve to None the same way: no standing
+    to show."""
+    explicit = day_results.get((round_.id, day_id))
+    if explicit is not None:
+        return explicit
+    if has_day_rows or day_id not in covered_days:
+        return None
+    if outcome in (LotteryOutcome.WON, LotteryOutcome.PAID):
+        return LegResult.WON
+    if outcome is LotteryOutcome.LOST:
+        return LegResult.LOST
+    return None
 
 
 def _needs_you(row: RoundRow, now: datetime) -> bool:
@@ -2078,7 +2902,13 @@ def _needs_you(row: RoundRow, now: datetime) -> bool:
     without you is a chance already gone. `can_capture` alone is not enough
     for the no-standing case -- it only means the round has OPENED, and a
     long-closed round would otherwise sit at the top of the page forever.
+
+    A covered round wants nothing whatever its outcome says: every leg it
+    sells is already secured elsewhere, and leading the urgency panel with a
+    round that offers no buttons is a panel you cannot act on.
     """
+    if row.covered:
+        return False
     if row.outcome in (LotteryOutcome.APPLIED, LotteryOutcome.WON):
         return True
     if row.outcome is not None:

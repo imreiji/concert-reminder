@@ -103,6 +103,15 @@ class LotteryOutcome(enum.StrEnum):
     PAID = "paid"
 
 
+class LegResult(enum.StrEnum):
+    """Per-day resolution of a multi-leg round's lottery. Deliberately NOT
+    LotteryOutcome: a day only ever resolves won-or-lost; applied and paid
+    stay round-level concepts (see the 2026-07-26 per-leg-outcomes spec)."""
+
+    WON = "won"
+    LOST = "lost"
+
+
 class SubscriptionState(enum.StrEnum):
     """A user's explicit per-concert override on the tag-derived default,
     stored per (user, concert) in ConcertSubscription. The absence of a row

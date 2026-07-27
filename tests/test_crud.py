@@ -588,14 +588,17 @@ async def test_detail_page_groups_rounds_by_leg(client):
     round1_pos = body.index("Day 1 round")
     day2_pos = body.index('leg-heading">Day 2<')
     round2_pos = body.index("Day 2 round")
-    # The untied round lands in the all-legs group, which renders last.
-    general_heading_pos = body.index('leg-heading">All legs<')
-    general_round_pos = body.index("General round")
-    assert day1_pos < round1_pos < day2_pos < round2_pos < general_heading_pos < general_round_pos
+    assert day1_pos < round1_pos < day2_pos < round2_pos
+    # The untied round is a fact about both legs, so it renders under each of
+    # them -- there is no separate all-legs section to cross-reference.
+    assert "All legs" not in body
+    assert body.count("General round") == 2
 
 
-async def test_round_with_no_day_association_shown_as_general_only(client):
-    """A round with no applies_to shouldn't appear under any day heading."""
+async def test_round_with_no_day_association_shows_under_every_leg(client):
+    """A round with no applies_to covers every leg, so it renders under each
+    of them -- the separate all-legs section is gone (the owner had to
+    cross-reference it to read one leg's story)."""
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
@@ -613,11 +616,10 @@ async def test_round_with_no_day_association_shown_as_general_only(client):
         },
     )
     r = client.get("/concerts/c")
-    assert "All legs" in r.text
-    assert "Untied round" in r.text
-    # ...and specifically NOT under Day 1's own section.
+    assert "All legs" not in r.text
+    # It lands in Day 1's own section, the only leg there is.
     day1 = r.text.split('leg-heading">Day 1<', 1)[1].split("<h3", 1)[0]
-    assert "Untied round" not in day1
+    assert "Untied round" in day1
 
 
 async def test_detail_page_nests_performances_and_their_rounds_together(client):

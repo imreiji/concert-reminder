@@ -118,4 +118,11 @@
   </details>
   {% endif %}
 </article>
+
+{#- The catch-up dialog. Last in the document so the page underneath is fully
+    rendered before it opens, and OUTSIDE the article because it is not part of
+    this concert's content -- it is a question about it. Present only when
+    something is actually outstanding (`pending_capture`); the whole partial,
+    its auto-open script included, is absent otherwise. -#}
+{% if pending_capture %}{% include "_result_capture_dialog.html" %}{% endif %}
 {% endblock %}

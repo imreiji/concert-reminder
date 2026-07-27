@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -31,11 +31,15 @@ from app.db.models import (
     TagSubscription,
     User,
 )
-from app.db.service import DEADLINE_ROWS_LIMIT, record_round_outcome
+from app.db.service import (
+    DEADLINE_ROWS_LIMIT,
+    record_round_day_result,
+    record_round_outcome,
+)
 from app.db.session import get_session
 from app.domain.board import OPEN_COLUMN_LIMIT
 from app.domain.timezones import fmt_dual_lines
-from app.domain.types import LotteryOutcome, RoundKind, TagKind
+from app.domain.types import LegResult, LotteryOutcome, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -446,6 +450,38 @@ async def test_a_row_with_no_round_id_renders_no_capture_actions(client):
     assert ">Not applying</button>" not in html
 
 
+async def test_coming_up_drops_a_round_the_viewer_already_holds_a_ticket_for(client):
+    """Once a round is won, later rounds selling the same leg are noise --
+    the reminder planner has always dropped them, and Coming up now agrees."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        c = await seed.concert("covered", title="Covered concert", day_offset=60)
+        won = await seed.round(
+            c, "FC lottery", opens=now - timedelta(days=30), closes=now - timedelta(days=5),
+            results=now - timedelta(days=1),
+        )
+        await seed.round(
+            c, "General sale", opens=now - timedelta(days=1), closes=now + timedelta(days=7)
+        )
+        return won
+
+    won = await seeded(client.db, build)
+    login(client)
+
+    # Scoped to the Coming up rows: the board legitimately keeps naming the
+    # concert's open round, which is a campaign summary, not a question.
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "General sale" in rows
+
+    async with client.db() as s:
+        await record_round_outcome(s, USER, won.id, LotteryOutcome.WON)
+        await s.commit()
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "General sale" not in rows
+
+
 # ── "Up next": the header must not claim a moment the body contradicts ────
 
 
@@ -604,6 +640,121 @@ async def test_applied_row_withholds_won_and_lost_until_results_are_due(client):
     assert ">I won</button>" not in html
     assert ">I lost</button>" not in html
     assert "Nothing to do" in html
+
+
+async def test_a_multi_leg_row_asks_leg_by_leg(client):
+    """Coming up shares `_capture_actions.html` with the concert page, so a
+    round covering two legs asks about each of them here too. Its rows are a
+    DIFFERENT dataclass (DeadlineRow, which carries no `covered` -- a covered
+    row is dropped upstream instead), so this also pins that the shared macro
+    renders against both shapes."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        c = await seed.concert("two-legs", title="Two leg concert", day_offset=60)
+        second = ConcertDay(
+            concert_id=c.id, label="Day 2",
+            starts_at_utc=now + timedelta(days=61),
+        )
+        seed.s.add(second)
+        await seed.s.flush()
+        r = await seed.round(
+            c, "FC lottery",
+            opens=now - timedelta(days=30),
+            closes=now - timedelta(days=10),
+            results=now - timedelta(days=1),
+            payment=now + timedelta(days=5),
+        )
+        await record_round_outcome(seed.s, USER, r.id, LotteryOutcome.APPLIED)
+        return r
+
+    round_ = await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "Won — Day 1" in rows
+    assert "Lost — Day 2" in rows
+    assert "Not going — Day 1" in rows
+    assert f"/rounds/{round_.id}/day-result" in rows
+    assert ">I won</button>" not in rows
+
+
+async def test_a_partially_won_multi_leg_row_offers_lost_the_rest(client):
+    """One leg secured turns the remaining question into "lost the rest?" --
+    and the won leg stops being asked about."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        c = await seed.concert("part-win", title="Partial win concert", day_offset=60)
+        second = ConcertDay(
+            concert_id=c.id, label="Day 2",
+            starts_at_utc=now + timedelta(days=61),
+        )
+        seed.s.add(second)
+        await seed.s.flush()
+        r = await seed.round(
+            c, "FC lottery",
+            opens=now - timedelta(days=30),
+            closes=now - timedelta(days=10),
+            results=now - timedelta(days=1),
+            payment=now + timedelta(days=5),
+        )
+        await record_round_outcome(seed.s, USER, r.id, LotteryOutcome.APPLIED)
+        first = (await seed.s.execute(
+            select(ConcertDay.id)
+            .where(ConcertDay.concert_id == c.id)
+            .order_by(ConcertDay.starts_at_utc)
+        )).scalars().first()
+        await record_round_day_result(seed.s, USER, r.id, first, LegResult.WON)
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "Lost the rest" in rows
+    assert "Lost — Day 2" in rows
+    assert "Won — Day 1" not in rows
+    assert "Won (all)" not in rows
+
+
+async def test_a_lost_leg_withdraws_the_whole_round_won_shortcut(client):
+    """Once ANY leg is answered the round is being resolved leg by leg, and a
+    whole-round WON write would create a WON round with zero WON legs: it
+    secures nothing, and the next "Lost — Day 2" settles the round LOST and
+    erases the win. So the shortcut goes and the per-leg buttons stay -- the
+    same answer `_apply_press` gives in the DM."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        c = await seed.concert("lost-first", title="Lost first concert", day_offset=60)
+        seed.s.add(ConcertDay(
+            concert_id=c.id, label="Day 2", starts_at_utc=now + timedelta(days=61),
+        ))
+        await seed.s.flush()
+        r = await seed.round(
+            c, "FC lottery",
+            opens=now - timedelta(days=30),
+            closes=now - timedelta(days=10),
+            results=now - timedelta(days=1),
+            payment=now + timedelta(days=5),
+        )
+        await record_round_outcome(seed.s, USER, r.id, LotteryOutcome.APPLIED)
+        first = (await seed.s.execute(
+            select(ConcertDay.id)
+            .where(ConcertDay.concert_id == c.id)
+            .order_by(ConcertDay.starts_at_utc)
+        )).scalars().first()
+        await record_round_day_result(seed.s, USER, r.id, first, LegResult.LOST)
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "Won (all)" not in rows
+    assert "Won — Day 2" in rows
+    assert "Lost — Day 2" in rows
+    # No leg is won, so the whole round is still honestly losable.
+    assert "Lost (all)" in rows
 
 
 # ── the Discover teaser counts what the link actually leads to ────────────

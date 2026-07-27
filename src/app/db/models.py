@@ -33,6 +33,7 @@ from app.domain.types import (
     Anchor,
     Channel,
     ConcertKind,
+    LegResult,
     LotteryOutcome,
     RoundKind,
     SubscriptionState,
@@ -440,6 +441,30 @@ class RoundOutcome(Base):
     round_id: Mapped[int] = mapped_column(ForeignKey("rounds.id", ondelete="CASCADE"))
     outcome: Mapped[LotteryOutcome] = mapped_column(
         Enum(LotteryOutcome, values_callable=lambda e: [m.value for m in e])
+    )
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now, onupdate=_now)
+
+
+class RoundOutcomeDay(Base):
+    """Per-day resolution of one user's round outcome. No-rows-means-all
+    convention (mirrors applies_to / round_qualifiers): a round outcome of
+    WON with zero rows here means every covered day was won; rows exist only
+    when resolution is explicit/partial. "Not going" is NOT stored here --
+    that is LegOptOut's job."""
+
+    __tablename__ = "round_outcome_days"
+    __table_args__ = (
+        Index("uq_round_outcome_day", "user_id", "round_id", "day_id", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
+    round_id: Mapped[int] = mapped_column(ForeignKey("rounds.id", ondelete="CASCADE"))
+    day_id: Mapped[int] = mapped_column(ForeignKey("concert_days.id", ondelete="CASCADE"))
+    result: Mapped[LegResult] = mapped_column(
+        Enum(LegResult, values_callable=lambda e: [m.value for m in e])
     )
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now, onupdate=_now)
 

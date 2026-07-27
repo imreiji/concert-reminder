@@ -199,8 +199,9 @@ async def test_two_users_overrides_are_independent(session):
 
 
 async def test_set_leg_opt_out_toggles_row_presence(session):
-    """set_leg_opt_out is a presence toggle. (Suppression itself is Task 3;
-    here we only pin the writer's add/delete behaviour.)"""
+    """set_leg_opt_out is a presence toggle. (Suppression itself is Task 3 and
+    the invariant-8 resync the writer runs is pinned in
+    tests/test_leg_opt_out_suppression.py; here we only pin the add/delete.)"""
     from app.db.models import ConcertDay, LegOptOut
 
     await ensure_user(session, USER, "reiji")
