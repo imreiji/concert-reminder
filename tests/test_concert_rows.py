@@ -1,6 +1,12 @@
 """`concert_round_rows` -- the per-leg round grouping the concert page renders,
 carrying each round's per-user standing and the two capture gates.
 
+Every round renders under EACH live leg it applies to, including the ones that
+apply to all of them: a leg is a complete story, and the viewer's standing is a
+per-leg fact now (a lottery covering Sat+Sun really can come back "won Sat,
+lost Sun"). The second returned list is only the fallback for a concert with no
+legs at all.
+
 The gates themselves are Home's ("Coming up") gates, shared rather than
 re-derived; the tests here pin the behaviour so a future edit to one caller
 cannot quietly change the other.
@@ -14,8 +20,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.db.models import Base, Concert, ConcertDay, Round
-from app.db.service import concert_round_rows, ensure_user, record_round_outcome
-from app.domain.types import Anchor, LotteryOutcome, RoundKind
+from app.db.service import (
+    concert_next_moment,
+    concert_round_rows,
+    ensure_user,
+    record_round_day_result,
+    record_round_outcome,
+)
+from app.domain.types import Anchor, LegResult, LotteryOutcome, RoundKind
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)
 
@@ -44,8 +56,8 @@ async def session():
 
 
 async def seed(s, *, cancel_leg_b: bool = False):
-    """Two legs and four rounds, one per applies_to shape: leg A only, both
-    legs, neither leg, and leg A + leg B where a third leg exists."""
+    """Two legs and three rounds, one per applies_to shape: leg A only, both
+    legs, and neither leg (the all-legs convention)."""
     await ensure_user(s, 42, "reiji")
     await ensure_user(s, 99, "someone-else")
     concert = Concert(title="Two-Leg Tour", event_id="two-leg-tour", created_by=42)
@@ -80,42 +92,68 @@ def labels(rows) -> list[str]:
     return [row.round_.label for row in rows]
 
 
+def by_leg(legs) -> dict[int, list[str]]:
+    return {leg.day.id: labels(leg.rounds) for leg in legs}
+
+
+def row_for(legs, leg_id: int, label: str):
+    """The one RoundRow for (leg, round label) -- rows are per-leg instances
+    now, so which leg you ask about is part of the question."""
+    return next(
+        row for leg in legs if leg.day.id == leg_id
+        for row in leg.rounds if row.round_.label == label
+    )
+
+
 # ── grouping ─────────────────────────────────────────────────────────────
 
 
 async def test_a_single_leg_round_appears_only_under_that_leg(session):
     concert, leg_a, leg_b, *_ = await seed(session)
-    legs, all_legs = await concert_round_rows(session, 42, concert, now=NOW)
+    legs, fallback = await concert_round_rows(session, 42, concert, now=NOW)
 
-    by_leg = {leg.day.id: labels(leg.rounds) for leg in legs}
-    assert "A-only" in by_leg[leg_a.id]
-    assert "A-only" not in by_leg[leg_b.id]
-    assert "A-only" not in labels(all_legs)
+    grouped = by_leg(legs)
+    assert "A-only" in grouped[leg_a.id]
+    assert "A-only" not in grouped[leg_b.id]
+    assert fallback == []
 
 
-async def test_a_round_covering_every_live_leg_goes_in_the_all_legs_group(session):
-    """Covering all of them is the same statement as covering none of them --
-    it is not a per-leg fact, so repeating it under each leg is noise."""
+async def test_concert_rows_all_legs_round_appears_under_each_live_leg(session):
+    """A round covering every leg is a real fact about each of them: the page
+    reads leg by leg, so it renders under both rather than in a separate
+    section the owner had to cross-reference."""
     concert, leg_a, leg_b, *_ = await seed(session)
-    legs, all_legs = await concert_round_rows(session, 42, concert, now=NOW)
+    legs, fallback = await concert_round_rows(session, 42, concert, now=NOW)
 
-    assert "Both-legs" in labels(all_legs)
-    for leg in legs:
-        assert "Both-legs" not in labels(leg.rounds)
+    grouped = by_leg(legs)
+    assert "Both-legs" in grouped[leg_a.id]
+    assert "Both-legs" in grouped[leg_b.id]
+    # Empty applies_to (the all-legs convention) expands the same way.
+    assert "General" in grouped[leg_a.id]
+    assert "General" in grouped[leg_b.id]
+    assert fallback == []
 
 
-async def test_a_round_with_no_applies_to_goes_in_the_all_legs_group(session):
-    concert, *_ = await seed(session)
-    legs, all_legs = await concert_round_rows(session, 42, concert, now=NOW)
+async def test_concert_rows_fallback_group_only_when_no_days(session):
+    """The second list survives for exactly one case: a concert with no legs
+    at all, where there is no group to put a round under."""
+    await ensure_user(session, 42, "reiji")
+    concert = Concert(title="Dateless", event_id="dateless", created_by=42)
+    session.add(concert)
+    await session.flush()
+    session.add(Round(
+        concert_id=concert.id, kind=RoundKind.GENERAL_SALE, label="Sale",
+        opens_at_utc=dt(5, 1), closes_at_utc=dt(6, 27),
+    ))
+    await session.commit()
 
-    assert "General" in labels(all_legs)
-    for leg in legs:
-        assert "General" not in labels(leg.rounds)
+    legs, fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    assert legs == []
+    assert labels(fallback) == ["Sale"]
 
 
 async def test_a_round_covering_some_but_not_all_legs_appears_under_each(session):
-    """Three legs, one round on two of them: it is a real fact about both, so
-    it renders twice rather than being demoted to the all-legs group."""
+    """Three legs, one round on two of them."""
     concert, leg_a, leg_b, *_ = await seed(session)
     leg_c = ConcertDay(concert_id=concert.id, label="Leg C", starts_at_utc=dt(8, 3, 9))
     session.add(leg_c)
@@ -126,12 +164,12 @@ async def test_a_round_covering_some_but_not_all_legs_appears_under_each(session
     ))
     await session.commit()
 
-    legs, all_legs = await concert_round_rows(session, 42, concert, now=NOW)
-    by_leg = {leg.day.id: labels(leg.rounds) for leg in legs}
-    assert "A-and-B" in by_leg[leg_a.id]
-    assert "A-and-B" in by_leg[leg_b.id]
-    assert "A-and-B" not in by_leg[leg_c.id]
-    assert "A-and-B" not in labels(all_legs)
+    legs, fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    grouped = by_leg(legs)
+    assert "A-and-B" in grouped[leg_a.id]
+    assert "A-and-B" in grouped[leg_b.id]
+    assert "A-and-B" not in grouped[leg_c.id]
+    assert fallback == []
 
 
 async def test_a_cancelled_leg_still_yields_its_group_with_its_rounds(session):
@@ -145,22 +183,24 @@ async def test_a_cancelled_leg_still_yields_its_group_with_its_rounds(session):
     ))
     await session.commit()
 
-    legs, _all_legs = await concert_round_rows(session, 42, concert, now=NOW)
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
     cancelled = [leg for leg in legs if leg.day.id == leg_b.id]
     assert len(cancelled) == 1
     assert cancelled[0].day.cancelled is True
     assert "B-only" in labels(cancelled[0].rounds)
 
 
-async def test_every_live_leg_ignores_a_cancelled_one(session):
-    """With Leg B cancelled, Leg A is the only live leg -- so an A-only round
-    now covers every live leg and belongs in the all-legs group."""
-    concert, leg_a, _leg_b, *_ = await seed(session, cancel_leg_b=True)
-    legs, all_legs = await concert_round_rows(session, 42, concert, now=NOW)
+async def test_an_all_legs_round_skips_a_cancelled_leg(session):
+    """"Every live leg" is what an empty applies_to means -- a cancelled leg
+    is not one of them, so the round does not appear under it. A round that
+    NAMES the cancelled leg still does (the test above)."""
+    concert, leg_a, leg_b, *_ = await seed(session, cancel_leg_b=True)
+    legs, fallback = await concert_round_rows(session, 42, concert, now=NOW)
 
-    assert "A-only" in labels(all_legs)
-    by_leg = {leg.day.id: labels(leg.rounds) for leg in legs}
-    assert "A-only" not in by_leg[leg_a.id]
+    grouped = by_leg(legs)
+    assert "General" in grouped[leg_a.id]
+    assert "General" not in grouped[leg_b.id]
+    assert fallback == []
 
 
 # ── gates ────────────────────────────────────────────────────────────────
@@ -170,26 +210,25 @@ async def test_can_capture_is_false_for_a_round_that_has_not_opened(session):
     """Recording APPLIED against a round nobody could have entered is both
     false and irreversible -- record_round_outcome refuses to overwrite a
     starting state."""
-    concert, *_ = await seed(session)
+    concert, leg_a, *_ = await seed(session)
     session.add(Round(
         concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="Not open yet",
         opens_at_utc=NOW + timedelta(days=3), closes_at_utc=NOW + timedelta(days=10),
     ))
     await session.commit()
 
-    _legs, all_legs = await concert_round_rows(session, 42, concert, now=NOW)
-    row = next(r for r in all_legs if r.round_.label == "Not open yet")
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    row = row_for(legs, leg_a.id, "Not open yet")
     assert row.can_capture is False
     assert row.can_report_result is False
 
-    open_row = next(r for r in all_legs if r.round_.label == "General")
-    assert open_row.can_capture is True
+    assert row_for(legs, leg_a.id, "General").can_capture is True
 
 
 async def test_can_report_result_only_once_the_result_is_due(session):
     """APPLIED alone is not enough: "I won"/"I lost" are guesses until the
     announced results time (or, failing that, the close) has passed."""
-    concert, *_ = await seed(session)
+    concert, leg_a, *_ = await seed(session)
     pending = Round(
         concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="Awaiting results",
         opens_at_utc=dt(5, 1), closes_at_utc=dt(5, 20),
@@ -205,51 +244,204 @@ async def test_can_report_result_only_once_the_result_is_due(session):
     await record_round_outcome(session, 42, due.id, LotteryOutcome.APPLIED)
     await session.commit()
 
-    _legs, all_legs = await concert_round_rows(session, 42, concert, now=NOW)
-    rows = {r.round_.label: r for r in all_legs}
-    assert rows["Awaiting results"].outcome is LotteryOutcome.APPLIED
-    assert rows["Awaiting results"].can_report_result is False
-    assert rows["Results due"].can_report_result is True
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    assert row_for(legs, leg_a.id, "Awaiting results").outcome is LotteryOutcome.APPLIED
+    assert row_for(legs, leg_a.id, "Awaiting results").can_report_result is False
+    assert row_for(legs, leg_a.id, "Results due").can_report_result is True
     # Not applied at all: nothing to report either way.
-    assert rows["General"].can_report_result is False
+    assert row_for(legs, leg_a.id, "General").can_report_result is False
+
+
+async def test_concert_rows_covered_round_renders_quiet(session):
+    """A round every one of whose legs the viewer already secured elsewhere
+    still renders -- the page shows the whole campaign -- but it offers
+    nothing to press: there is no honest answer left to give."""
+    concert, leg_a, leg_b, r_a, r_both, _r_none = await seed(session)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.WON)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    covered = row_for(legs, leg_a.id, "A-only")
+    assert covered.covered is True
+    assert covered.can_capture is False
+    assert covered.can_report_result is False
+    # The round that DID the securing is never covered by its own outcome.
+    assert row_for(legs, leg_a.id, "Both-legs").covered is False
+
+
+async def test_a_covered_round_never_leads_next_for_you(session):
+    """It closes soonest, so it would win the urgency pick outright -- but it
+    offers nothing to press, and a panel you cannot act on is worse than the
+    round it displaced."""
+    concert, leg_a, _leg_b, r_a, r_both, _r_none = await seed(session)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.WON)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    rows = [row for leg in legs for row in leg.rounds]
+    assert concert_next_moment(rows, now=NOW).round_.label != "A-only"
+
+
+async def test_a_covered_round_is_quiet_for_that_viewer_only(session):
+    concert, leg_a, _leg_b, _r_a, r_both, _r_none = await seed(session)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.WON)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 99, concert, now=NOW)
+    assert row_for(legs, leg_a.id, "A-only").covered is False
+
+
+# ── per-leg standing ─────────────────────────────────────────────────────
+
+
+async def test_concert_rows_leg_result_reflects_partial_win(session):
+    """One round, two legs, one ticket: the leg you won and the leg you lost
+    must not read the same."""
+    concert, leg_a, leg_b, _r_a, r_both, _r_none = await seed(session)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.APPLIED)
+    await record_round_day_result(session, 42, r_both.id, leg_a.id, LegResult.WON, NOW)
+    await record_round_day_result(session, 42, r_both.id, leg_b.id, LegResult.LOST, NOW)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    assert row_for(legs, leg_a.id, "Both-legs").leg_result is LegResult.WON
+    assert row_for(legs, leg_b.id, "Both-legs").leg_result is LegResult.LOST
+    # A round with no standing at all resolves to nothing on either leg.
+    assert row_for(legs, leg_a.id, "General").leg_result is None
+
+
+async def test_leg_result_falls_back_to_the_no_rows_means_all_convention(session):
+    """A whole-round WON with no day rows means every covered leg was won --
+    the convention made visible, so a page never renders a won round blank."""
+    concert, leg_a, leg_b, _r_a, r_both, _r_none = await seed(session)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.WON)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    assert row_for(legs, leg_a.id, "Both-legs").leg_result is LegResult.WON
+    assert row_for(legs, leg_b.id, "Both-legs").leg_result is LegResult.WON
+
+
+async def test_leg_result_is_lost_on_every_leg_of_a_lost_round(session):
+    concert, leg_a, leg_b, _r_a, r_both, _r_none = await seed(session)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.LOST)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    assert row_for(legs, leg_a.id, "Both-legs").leg_result is LegResult.LOST
+    assert row_for(legs, leg_b.id, "Both-legs").leg_result is LegResult.LOST
+
+
+# ── per-day result capture ───────────────────────────────────────────────
+
+
+async def test_capture_days_lists_every_unresolved_leg_once_results_are_out(session):
+    concert, leg_a, leg_b, _r_a, r_both, _r_none = await seed(session)
+    r_both.results_at_utc = dt(5, 28)
+    await session.flush()
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.APPLIED)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    row = row_for(legs, leg_a.id, "Both-legs")
+    assert row.capture_days == ((leg_a.id, "Leg A"), (leg_b.id, "Leg B"))
+    assert row.any_day_won is False
+    # Every leg's copy of the round carries the same work list.
+    assert row_for(legs, leg_b.id, "Both-legs").capture_days == row.capture_days
+
+
+async def test_capture_days_narrows_to_the_legs_still_unresolved(session):
+    concert, leg_a, leg_b, _r_a, r_both, _r_none = await seed(session)
+    r_both.results_at_utc = dt(5, 28)
+    await session.flush()
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.APPLIED)
+    await record_round_day_result(session, 42, r_both.id, leg_a.id, LegResult.WON, NOW)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    row = row_for(legs, leg_a.id, "Both-legs")
+    assert row.capture_days == ((leg_b.id, "Leg B"),)
+    assert row.any_day_won is True
+    # And the leg still waiting shows no standing -- the round-level WON must
+    # not be read as a ticket for a leg nobody has heard about yet.
+    assert row.leg_result is LegResult.WON
+    assert row_for(legs, leg_b.id, "Both-legs").leg_result is None
+
+
+async def test_no_capture_days_before_the_result_is_knowable(session):
+    concert, leg_a, _leg_b, _r_a, r_both, _r_none = await seed(session)
+    r_both.results_at_utc = NOW + timedelta(days=5)
+    await session.flush()
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.APPLIED)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    assert row_for(legs, leg_a.id, "Both-legs").capture_days == ()
+
+
+async def test_no_capture_days_for_a_single_leg_round(session):
+    """One leg is not a per-day question -- the flat "I won"/"I lost" pair
+    already says everything there is to say."""
+    concert, leg_a, _leg_b, r_a, _r_both, _r_none = await seed(session)
+    r_a.results_at_utc = dt(5, 28)
+    await session.flush()
+    await record_round_outcome(session, 42, r_a.id, LotteryOutcome.APPLIED)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    assert row_for(legs, leg_a.id, "A-only").capture_days == ()
+
+
+async def test_no_capture_days_once_the_round_is_won_outright(session):
+    """WON with no day rows is the no-rows-means-all whole-round win: there is
+    nothing left unresolved, so the row moves on to the payment question
+    instead of asking about days again."""
+    concert, leg_a, _leg_b, _r_a, r_both, _r_none = await seed(session)
+    r_both.results_at_utc = dt(5, 28)
+    await session.flush()
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.APPLIED)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.WON)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    assert row_for(legs, leg_a.id, "Both-legs").capture_days == ()
 
 
 # ── outcomes ─────────────────────────────────────────────────────────────
 
 
 async def test_two_users_see_independent_standings_on_the_same_concert(session):
-    concert, *_ = await seed(session)
-    _legs, mine = await concert_round_rows(session, 42, concert, now=NOW)
-    general = next(r for r in mine if r.round_.label == "General")
+    concert, leg_a, *_ = await seed(session)
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    general = row_for(legs, leg_a.id, "General")
     await record_round_outcome(session, 42, general.round_.id, LotteryOutcome.APPLIED)
     await session.commit()
 
-    _legs, mine = await concert_round_rows(session, 42, concert, now=NOW)
-    _legs, theirs = await concert_round_rows(session, 99, concert, now=NOW)
-    assert next(r for r in mine if r.round_.label == "General").outcome \
-        is LotteryOutcome.APPLIED
-    assert next(r for r in theirs if r.round_.label == "General").outcome is None
+    mine, _f = await concert_round_rows(session, 42, concert, now=NOW)
+    theirs, _f2 = await concert_round_rows(session, 99, concert, now=NOW)
+    assert row_for(mine, leg_a.id, "General").outcome is LotteryOutcome.APPLIED
+    assert row_for(theirs, leg_a.id, "General").outcome is None
 
 
 async def test_an_anonymous_caller_gets_rows_with_no_outcome(session):
     """The concert page is reachable without a standing to show; user_id=None
     must yield rows, not an exception."""
-    concert, *_ = await seed(session)
-    legs, all_legs = await concert_round_rows(session, None, concert, now=NOW)
+    concert, leg_a, *_ = await seed(session)
+    legs, _fallback = await concert_round_rows(session, None, concert, now=NOW)
 
     assert len(legs) == 2
-    assert labels(all_legs)
-    assert all(row.outcome is None for row in all_legs)
     assert all(row.outcome is None for leg in legs for row in leg.rounds)
+    assert all(row.covered is False for leg in legs for row in leg.rounds)
+    assert all(row.leg_result is None for leg in legs for row in leg.rounds)
     # A gate that depends only on round timing still resolves.
-    assert next(r for r in all_legs if r.round_.label == "General").can_capture is True
+    assert row_for(legs, leg_a.id, "General").can_capture is True
 
 
 # ── the prominent anchor ─────────────────────────────────────────────────
 
 
 async def test_the_primary_anchor_is_the_next_moment_still_ahead(session):
-    concert, *_ = await seed(session)
+    concert, leg_a, *_ = await seed(session)
     session.add(Round(
         concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="Full ladder",
         opens_at_utc=dt(5, 1), closes_at_utc=dt(6, 10),
@@ -257,8 +449,8 @@ async def test_the_primary_anchor_is_the_next_moment_still_ahead(session):
     ))
     await session.commit()
 
-    _legs, all_legs = await concert_round_rows(session, 42, concert, now=NOW)
-    row = next(r for r in all_legs if r.round_.label == "Full ladder")
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    row = row_for(legs, leg_a.id, "Full ladder")
     # Opens is behind us; the close is the next thing that happens.
     assert row.primary_anchor is Anchor.CLOSES
     assert row.primary_at_utc == dt(6, 10)
@@ -267,14 +459,14 @@ async def test_the_primary_anchor_is_the_next_moment_still_ahead(session):
 async def test_a_wholly_past_round_falls_back_to_its_last_moment(session):
     """Nothing ahead to lead with, so the row still says something rather than
     rendering a blank date column."""
-    concert, *_ = await seed(session)
+    concert, leg_a, *_ = await seed(session)
     session.add(Round(
         concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="All over",
         opens_at_utc=dt(4, 1), closes_at_utc=dt(4, 20), results_at_utc=dt(5, 2),
     ))
     await session.commit()
 
-    _legs, all_legs = await concert_round_rows(session, 42, concert, now=NOW)
-    row = next(r for r in all_legs if r.round_.label == "All over")
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    row = row_for(legs, leg_a.id, "All over")
     assert row.primary_anchor is Anchor.RESULTS
     assert row.primary_at_utc == dt(5, 2)

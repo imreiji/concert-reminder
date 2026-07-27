@@ -23,6 +23,7 @@ from app.db.models import (
 from app.db.service import (
     covered_round_ids,
     ensure_user,
+    my_deadline_rows,
     record_remaining_days_lost,
     record_round_day_result,
     record_round_outcome,
@@ -852,3 +853,50 @@ async def test_unresolved_day_ids_excludes_cancelled_resolved_and_opted_out(sess
     await session.flush()
 
     assert await unresolved_day_ids(session, 42, round_all) == [open_early.id, open_late.id]
+
+
+# ── read-side covered gates ──────────────────────────────────────────────
+
+
+async def round_row_labels(s, concert: Concert) -> set[str]:
+    """The round labels Home's "Coming up" would show for user 42 (the
+    EVENT_START rows a leg produces carry no round and are not the subject
+    here)."""
+    rows = await my_deadline_rows(s, 42, now=NOW, limit=50, concert_ids={concert.id})
+    return {r.deadline.label for r in rows if r.deadline.round_id is not None}
+
+
+async def test_coming_up_drops_secured_elsewhere_round(session):
+    """Home's "Coming up" and the DM planner must agree on what is still
+    worth asking about: once the two-leg round is won, the leg-A round and
+    the General round cover nothing the user is still waiting on, so their
+    rows go -- exactly as _apply_outcome_suppression already drops them from
+    the queue."""
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    await session.flush()
+
+    before = await round_row_labels(session, concert)
+    assert before == {"A-only", "Both-legs", "General"}
+
+    await record_round_outcome(session, 42, round_both.id, LotteryOutcome.WON, NOW)
+
+    assert await round_row_labels(session, concert) == {"Both-legs"}
+
+
+async def test_coming_up_keeps_a_round_a_partial_win_did_not_secure(session):
+    """Won Saturday, still waiting on Sunday: the round that sells Sunday is
+    not covered, and dropping it would hide a live chance."""
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    b_only = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="B-only",
+        closes_at_utc=dt(6, 28), applies_to=[leg_b.id],
+    )
+    session.add(b_only)
+    await session.flush()
+    await record_round_outcome(session, 42, round_both.id, LotteryOutcome.APPLIED, NOW)
+    await record_round_day_result(session, 42, round_both.id, leg_a.id, LegResult.WON, NOW)
+    await record_round_day_result(session, 42, round_both.id, leg_b.id, LegResult.LOST, NOW)
+
+    labels = await round_row_labels(session, concert)
+    assert "B-only" in labels      # leg B was never secured
+    assert "A-only" not in labels  # leg A was

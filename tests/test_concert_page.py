@@ -514,7 +514,10 @@ async def test_a_round_naming_only_cancelled_legs_sits_under_those_legs(client):
     assert "All legs" not in body
 
 
-async def test_a_round_covering_every_live_leg_renders_once_in_the_all_legs_group(client):
+async def test_a_round_covering_every_live_leg_renders_under_each_leg(client):
+    """The separate all-legs section is gone: a round covering both legs is a
+    fact about each of them, and the viewer's standing on it is per-leg now
+    (won Saturday, lost Sunday), so each leg reads as a complete story."""
     cid = await seed_concert(client.db)
     d1 = await add_day(client.db, cid, "Day 1", days_ahead=30)
     d2 = await add_day(client.db, cid, "Day 2", days_ahead=31)
@@ -522,11 +525,10 @@ async def test_a_round_covering_every_live_leg_renders_once_in_the_all_legs_grou
     login(client)
 
     body = client.get("/concerts/np").text
-    # Scoped past "Next for you", which legitimately names this round too --
-    # what must not happen is the round being repeated under BOTH legs.
+    # Scoped past "Next for you", which legitimately names this round too.
     legs = body.split("<!-- /standing -->", 1)[-1]
-    assert legs.count("Fan club presale") == 1
-    assert "All legs" in legs
+    assert legs.count("Fan club presale") == 2
+    assert "All legs" not in legs
 
 
 async def test_no_horizontal_scroll_table_wrapper_remains(client):

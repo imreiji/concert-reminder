@@ -446,6 +446,38 @@ async def test_a_row_with_no_round_id_renders_no_capture_actions(client):
     assert ">Not applying</button>" not in html
 
 
+async def test_coming_up_drops_a_round_the_viewer_already_holds_a_ticket_for(client):
+    """Once a round is won, later rounds selling the same leg are noise --
+    the reminder planner has always dropped them, and Coming up now agrees."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        c = await seed.concert("covered", title="Covered concert", day_offset=60)
+        won = await seed.round(
+            c, "FC lottery", opens=now - timedelta(days=30), closes=now - timedelta(days=5),
+            results=now - timedelta(days=1),
+        )
+        await seed.round(
+            c, "General sale", opens=now - timedelta(days=1), closes=now + timedelta(days=7)
+        )
+        return won
+
+    won = await seeded(client.db, build)
+    login(client)
+
+    # Scoped to the Coming up rows: the board legitimately keeps naming the
+    # concert's open round, which is a campaign summary, not a question.
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "General sale" in rows
+
+    async with client.db() as s:
+        await record_round_outcome(s, USER, won.id, LotteryOutcome.WON)
+        await s.commit()
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "General sale" not in rows
+
+
 # ── "Up next": the header must not claim a moment the body contradicts ────
 
 

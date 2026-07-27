@@ -516,10 +516,10 @@ async def test_qualifier_labels_localize_on_the_concert_page(session, _en_locale
     await session.refresh(concert, ["days", "rounds", "tags"])
 
     i18n.set_locale("zh")
-    _by_leg, all_legs = await concert_round_rows(
+    leg_groups, _dateless = await concert_round_rows(
         session, user.discord_id, concert, now=datetime(2030, 6, 1, tzinfo=UTC)
     )
-    quals = {q for row in all_legs for q in row.qualifier_labels}
+    quals = {q for group in leg_groups for row in group.rounds for q in row.qualifier_labels}
     assert quals == {"第一轮抽选"}
 
 

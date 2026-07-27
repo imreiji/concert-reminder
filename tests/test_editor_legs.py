@@ -247,8 +247,8 @@ async def test_three_rounds_keep_their_own_leg_selections(client, db):
 
 async def test_selecting_no_legs_stores_nothing(client, db):
     """An empty selection means "not tied to a specific leg" — stored as
-    None (not []), which is what concert_round_rows reads to put the round
-    in the all-legs group."""
+    None (not []), which is what concert_round_rows reads to render the round
+    under every live leg."""
     await make_editor(db)
     login(client)
     (day1, day2), (round_id,) = await seed(
@@ -266,10 +266,10 @@ async def test_selecting_no_legs_stores_nothing(client, db):
     assert await applies_to(db, round_id) is None
 
     # Scoped past "Next for you", which names whichever round wants the reader
-    # first and so legitimately mentions this one before its group heading.
+    # first and so legitimately mentions this one before either leg heading.
     body = client.get("/concerts/tour").text.split("<!-- /standing -->", 1)[-1]
-    assert 'leg-heading">All legs<' in body
-    assert body.index("All legs") < body.index("Was leg-specific")
+    assert "All legs" not in body
+    assert body.count("Was leg-specific") == 2  # once under each live leg
 
 
 async def test_selecting_every_leg_round_trips(client, db):
