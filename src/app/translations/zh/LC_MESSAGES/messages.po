@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-26 23:34-0300\n"
+"POT-Creation-Date: 2026-07-26 23:54-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -915,6 +915,7 @@ msgid "Stop following this event?"
 msgstr "不再关注此活动吗？"
 
 #: src/app/web/templates/_following_toggle.html:44
+#: src/app/web/templates/_result_capture_dialog.html:25
 #: src/app/web/templates/home.html:283
 #: src/app/web/templates/preferences.html:398
 msgid "Close"
@@ -955,6 +956,21 @@ msgstr "未选择 — 适用于整个活动。"
 #, python-brace-format
 msgid "This round covers {names}."
 msgstr "本轮涵盖 {names}。"
+
+#: src/app/web/templates/_result_capture_dialog.html:24
+msgid "Results are out — how did it go?"
+msgstr "结果已公布 — 情况如何？"
+
+#: src/app/web/templates/_result_capture_dialog.html:27
+#, python-format
+msgid ""
+"<b>%(label)s</b> — %(title)s. Record how it went and your board, "
+"reminders and deadlines follow."
+msgstr "<b>%(label)s</b> — %(title)s。记录结果后，看板、提醒和截止日期都会随之更新。"
+
+#: src/app/web/templates/_result_capture_dialog.html:32
+msgid "Not now"
+msgstr "稍后再说"
 
 #: src/app/web/templates/_round_leg_chips.html:25
 msgid "Applies to"

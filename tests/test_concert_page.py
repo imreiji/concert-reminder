@@ -647,9 +647,15 @@ async def test_a_won_round_offers_paid(client):
 
 
 def legs_of(body: str) -> str:
-    """The page past the standing strip -- the strip legitimately names a
-    round too, and these tests are about the leg sections underneath it."""
-    return body.split("<!-- /standing -->", 1)[-1]
+    """The page past the standing strip and short of the catch-up dialog --
+    both legitimately name a round too, and these tests are about the leg
+    sections between them.
+
+    The dialog cut matters as much as the strip cut: it renders the UNFILTERED
+    capture macro (every leg's questions plus the whole-round shortcuts), so a
+    leg assertion reading to the end of the body would find "Won — Day 1"
+    inside Day 2's section and pass or fail for the wrong reason."""
+    return body.split("<!-- /standing -->", 1)[-1].split('id="resultDlg"', 1)[0]
 
 
 def leg_sections(body: str) -> dict[str, str]:
@@ -736,9 +742,12 @@ async def test_a_leg_card_asks_about_that_leg_and_no_other(client):
     assert "Not going — Day 2" in sections["Day 2"]
     assert "Won — Day 1" not in sections["Day 2"]
 
-    assert "Won (all)" not in body
-    assert "Lost (all)" not in body
-    assert "Lost the rest" not in body
+    # Scoped to the leg sections, not the whole page: the catch-up dialog at
+    # the foot is the unfiltered caller and DOES carry these (see
+    # test_the_catch_up_dialog_carries_the_whole_round_shortcuts).
+    assert "Won (all)" not in legs_of(body)
+    assert "Lost (all)" not in legs_of(body)
+    assert "Lost the rest" not in legs_of(body)
     # The single-leg pair is gone: it could only have lied about one of them.
     assert ">I won<" not in body
     assert ">I lost<" not in body
@@ -919,6 +928,166 @@ async def test_recording_without_htmx_returns_to_the_concert(client):
     r = client.post(f"/rounds/{rid}/outcome", data={"outcome": "won"})
     assert r.status_code == 303
     assert r.headers["location"] == "/"
+
+
+async def test_a_day_result_press_swaps_this_pages_rounds_and_strip(client):
+    """The per-leg write answers exactly like the round-level one: this page's
+    rounds region as the declared target, plus the header strip out of band.
+    Anything less leaves the strip naming a round the reader just resolved."""
+    cid = await seed_concert(client.db)
+    d1, _d2, rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    r = client.post(
+        f"/rounds/{rid}/day-result",
+        data={"result": "won", "day_id": d1},
+        headers={"HX-Request": "true", "HX-Current-URL": "http://testserver/concerts/np"},
+    )
+    assert r.status_code == 200
+    assert 'id="concert-rounds"' in r.text     # the declared hx-target
+    assert "Fan club lottery" in r.text
+    assert 'id="deadline-rows"' not in r.text  # not Home's fragment
+    assert 'id="concert-standing"' in r.text   # the OOB strip contract
+    assert "hx-swap-oob" in r.text
+    # And the write really happened: Day 1 now pills its own result. The
+    # rounds fragment comes FIRST in the response (the strip trails it as the
+    # oob swap), so the leg sections are everything ahead of the strip.
+    rounds_fragment = r.text.split('id="concert-standing"', 1)[0]
+    assert '<span class="pill p-danger">Won</span>' in leg_sections(rounds_fragment)["Day 1"]
+
+
+# ── the catch-up dialog ──────────────────────────────────────────────────
+#
+# Opening a concert page whose results are out and unrecorded is exactly the
+# moment to ask, so the page asks -- once, in a dialog, over the leg sections
+# that will still be there when it closes. It is also the page's ONLY
+# unfiltered caller of the capture macro, so the whole-round shortcuts are
+# pinned here and nowhere else.
+
+
+def dialog_of(body: str) -> str:
+    return body.split('id="resultDlg"', 1)[1].split("</dialog>", 1)[0]
+
+
+async def test_a_pending_multi_leg_result_opens_the_catch_up_dialog(client):
+    cid = await seed_concert(client.db)
+    _d1, _d2, _rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert 'id="resultDlg"' in body
+    dlg = dialog_of(body)
+    # It names what it is asking about, and asks about EVERY unresolved leg.
+    assert "Fan club lottery" in dlg
+    assert "Won — Day 1" in dlg
+    assert "Won — Day 2" in dlg
+
+
+async def test_the_catch_up_dialog_carries_the_whole_round_shortcuts(client):
+    """The unfiltered macro call. "Won (all)" / "Lost (all)" answer a whole
+    round in one press, and the dialog is now the only place on this page they
+    render -- a leg card is scoped to one leg, where they would be a button
+    about the others."""
+    cid = await seed_concert(client.db)
+    _d1, _d2, _rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    dlg = dialog_of(client.get("/concerts/np").text)
+    assert "Won (all)" in dlg
+    assert "Lost (all)" in dlg
+
+
+async def test_the_dialog_offers_lost_the_rest_once_a_leg_is_won(client):
+    """With a ticket in hand the round is no longer losable as a whole, so
+    "Lost (all)" gives way to "Lost the rest" -- the same swap the macro makes
+    for Home's rows."""
+    cid = await seed_concert(client.db)
+    d1, _d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    login(client)
+
+    dlg = dialog_of(client.get("/concerts/np").text)
+    assert "Lost the rest" in dlg
+    assert "Lost (all)" not in dlg
+
+
+async def test_no_dialog_once_every_leg_is_resolved(client):
+    """Nothing left to ask, so nothing pops up. A dialog that reopened on every
+    visit to a settled concert would be the page's most annoying feature."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    await set_day_result(client.db, rid, d2, LegResult.LOST)
+    login(client)
+
+    assert 'id="resultDlg"' not in client.get("/concerts/np").text
+
+
+async def test_no_dialog_before_the_results_are_due(client):
+    """Applied, results not out yet: there is no answer to give."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    d2 = await add_day(client.db, cid, "Day 2", days_ahead=61)
+    rid = await add_round(
+        client.db, cid, "Fan club lottery", applies_to=[d1, d2],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) + timedelta(days=3),
+        results=datetime.now(UTC) + timedelta(days=5),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    login(client)
+
+    assert 'id="resultDlg"' not in client.get("/concerts/np").text
+
+
+async def test_no_dialog_with_no_standing_at_all(client):
+    """An open round nobody entered asks for an application, not a result --
+    that question belongs on the leg card, not in a modal."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    await add_round(
+        client.db, cid, "Open round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=6),
+    )
+    login(client)
+
+    assert 'id="resultDlg"' not in client.get("/concerts/np").text
+
+
+async def test_a_single_leg_result_still_gets_the_dialog(client):
+    """A one-night concert has no per-day questions, but the reader is just as
+    overdue to say how it went -- so the dialog carries the flat pair."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    rid = await add_round(
+        client.db, cid, "Decided round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+        results=datetime.now(UTC) - timedelta(hours=1),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    login(client)
+
+    dlg = dialog_of(client.get("/concerts/np").text)
+    assert ">I won<" in dlg
+    assert ">I lost<" in dlg
+    assert f"/rounds/{rid}/outcome" in dlg
+
+
+async def test_the_dialog_posts_to_this_pages_rounds_region(client):
+    """Its buttons are the same macro the leg cards use, so they must swap the
+    same target -- a dialog answering with Home's fragments would splice Home
+    into this page."""
+    cid = await seed_concert(client.db)
+    _d1, _d2, rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    dlg = dialog_of(client.get("/concerts/np").text)
+    assert f'hx-post="/rounds/{rid}/day-result"' in dlg
+    assert 'hx-target="#concert-rounds"' in dlg
+    # Plain-POST fallback intact: the forms carry a real method/action too.
+    assert f'action="/rounds/{rid}/day-result"' in dlg
 
 
 # ── Task 4: follow toggle CSS, performer-chip centring, reminders redesign ─

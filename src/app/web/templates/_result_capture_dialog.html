@@ -1,0 +1,54 @@
+{# The catch-up dialog: "results are out, how did it go?", asked once when the
+   page opens on a round whose answer is overdue.
+
+   It exists because the answer is easy to never give. The leg cards below
+   already carry the same buttons, but they sit inside a page you came to read
+   -- so an applied round quietly stays applied, the board keeps a card in the
+   wrong column, and reminders keep arming for a lottery that has been decided
+   for a week. Asking at the moment of arrival costs one Esc when the reader
+   does not care.
+
+   It is the page's ONLY unfiltered `capture_actions` call, and deliberately:
+   the leg cards each pass their own `only_day`, so the whole-round shortcuts
+   ("Won (all)", "Lost (all)", "Lost the rest") have nowhere else to live here
+   -- scoped to one leg they would be buttons about the others.
+
+   `pending_capture` is chosen in `routes/concerts.py:pending_capture_row` and
+   the dialog renders only when it is not None, so nothing here re-tests it.
+   The target is `#concert-rounds`, the same region every leg card swaps: a
+   press from the dialog updates the page underneath it. #}
+
+{% from "_capture_actions.html" import capture_actions %}
+
+<dialog class="prune" id="resultDlg">
+  <div class="dh">{{ _("Results are out — how did it go?") }}
+    <button type="button" data-close aria-label="{{ _('Close') }}">×</button></div>
+  <p>
+    {% trans label=loc(pending_capture.round_, "label"), title=display_title %}<b>{{ label }}</b> — {{ title }}. Record how it went and your board, reminders and deadlines follow.{% endtrans %}
+  </p>
+  <div class="da">
+    {{ capture_actions(pending_capture, pending_capture.round_.id, "#concert-rounds",
+                       is_upgrade=(pending_capture.round_.kind.value == "upgrade")) }}
+    <button class="btn quiet" type="button" data-close>{{ _("Not now") }}</button>
+  </div>
+</dialog>
+
+<script>
+  // Open on arrival, and close once a press has been answered. Both are
+  // plain DOM calls on a server-emitted id: no user-controlled text is
+  // interpolated into this script (invariant 7) -- the round label and the
+  // concert title live in the markup above, escaped by Jinja.
+  (function () {
+    var dlg = document.getElementById("resultDlg");
+    if (!dlg) return;
+    dlg.showModal?.();
+    dlg.addEventListener("click", function (e) {
+      if (e.target.closest("[data-close]")) dlg.close();
+    });
+    // The buttons swap #concert-rounds, which is BEHIND this dialog -- leaving
+    // it open would show the questions the reader has just answered.
+    dlg.addEventListener("htmx:afterRequest", function (e) {
+      if (e.detail && e.detail.successful) dlg.close();
+    });
+  })();
+</script>

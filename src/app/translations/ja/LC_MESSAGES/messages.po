@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-26 23:34-0300\n"
+"POT-Creation-Date: 2026-07-26 23:54-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -915,6 +915,7 @@ msgid "Stop following this event?"
 msgstr "このイベントのフォローをやめますか？"
 
 #: src/app/web/templates/_following_toggle.html:44
+#: src/app/web/templates/_result_capture_dialog.html:25
 #: src/app/web/templates/home.html:283
 #: src/app/web/templates/preferences.html:398
 msgid "Close"
@@ -955,6 +956,23 @@ msgstr "未選択 — イベント全体に適用されます。"
 #, python-brace-format
 msgid "This round covers {names}."
 msgstr "このラウンドは {names} が対象です。"
+
+#: src/app/web/templates/_result_capture_dialog.html:24
+msgid "Results are out — how did it go?"
+msgstr "結果が出ました — どうでしたか？"
+
+#: src/app/web/templates/_result_capture_dialog.html:27
+#, python-format
+msgid ""
+"<b>%(label)s</b> — %(title)s. Record how it went and your board, "
+"reminders and deadlines follow."
+msgstr ""
+"<b>%(label)s</b> — %(title)s。結果を記録すると、ボード・リマインダー・締め切"
+"りに反映されます。"
+
+#: src/app/web/templates/_result_capture_dialog.html:32
+msgid "Not now"
+msgstr "あとで"
 
 #: src/app/web/templates/_round_leg_chips.html:25
 msgid "Applies to"
