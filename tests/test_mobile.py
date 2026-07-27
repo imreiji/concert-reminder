@@ -197,6 +197,22 @@ def test_editor_name_cell_wraps_so_a_long_discord_id_cannot_floor_the_row():
     assert ".subrow .nm3 { flex-wrap: wrap; overflow-wrap: anywhere; }" in _phone_block()
 
 
+# ── Coming up: per-concert blocks (2026-07-27 de-crowding) ───────────────
+# Home's "Coming up" is no longer a flat row list -- it is one `.cblock` per
+# concert (header + lead row + a `details.morerounds` fold), with the blocks
+# past the sixth inside a page-level `details.moreconcerts`. The phone
+# retrofit has to say something about that grouping: without a rule, each
+# `.row` keeps its bordered card and the blocks read as an undifferentiated
+# stack of cards with unstyled header lines floating between them. Guarded as
+# CSS text, the same parity-guard idiom as `.prail` above -- and pinned to the
+# 700px block specifically, because the retrofit's one rule is that every
+# phone rule lives in that single section.
+
+
+def test_phone_section_styles_the_concert_blocks():
+    assert ".cblock" in _phone_block()
+
+
 def test_editors_row_carries_its_grid_as_a_class_not_an_inline_style():
     """An inline style beats media queries, so an inline grid-template-columns
     is a row the phone collapse can never reach -- that was the bug."""

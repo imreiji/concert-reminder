@@ -67,7 +67,13 @@
     {{ d.label }}
     <small data-happens="{{ deadline_label(d.anchor) }}"></small>
   </span>
-  <span class="act-c"><b>{{ d.label }}</b> {{ deadline_label(d.anchor) }}</span>
+  {# The verb ALONE, no round label. The label used to lead this cell because
+     the cell one over held the concert TITLE; now that cell names the round,
+     so repeating it here printed "FC senkou lottery | FC senkou lottery
+     closes" side by side and pushed long labels onto a second line. Same
+     reasoning that emptied data-happens above -- this cell contributes the
+     MOMENT, and the round it belongs to is already read. #}
+  <span class="act-c">{{ deadline_label(d.anchor) }}</span>
   <span class="acts">
     {# A row with no round id came from a ConcertDay (the show itself), so
        there is nothing to record against -- render no form at all rather

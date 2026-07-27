@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-27 10:45-0300\n"
+"POT-Creation-Date: 2026-07-27 11:20-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -807,38 +807,38 @@ msgstr "无需操作"
 msgid "Not applied"
 msgstr "未申请"
 
-#: src/app/web/templates/_deadline_rows.html:94
+#: src/app/web/templates/_deadline_rows.html:100
 #, python-format
 msgid "+%(count)s more round"
 msgid_plural "+%(count)s more rounds"
 msgstr[0] "+还有 %(count)s 个轮次"
 
-#: src/app/web/templates/_deadline_rows.html:103
+#: src/app/web/templates/_deadline_rows.html:109
 msgid "Your status"
 msgstr "你的申请状态"
 
-#: src/app/web/templates/_deadline_rows.html:103
+#: src/app/web/templates/_deadline_rows.html:109
 #: src/app/web/templates/preferences.html:192
 msgid "Closes"
 msgstr "截止时间"
 
-#: src/app/web/templates/_deadline_rows.html:103
+#: src/app/web/templates/_deadline_rows.html:109
 msgid "Round"
 msgstr "轮次"
 
-#: src/app/web/templates/_deadline_rows.html:104
+#: src/app/web/templates/_deadline_rows.html:110
 msgid "What happens"
 msgstr "状态说明"
 
-#: src/app/web/templates/_deadline_rows.html:104
+#: src/app/web/templates/_deadline_rows.html:110
 msgid "You"
 msgstr "你"
 
-#: src/app/web/templates/_deadline_rows.html:108
+#: src/app/web/templates/_deadline_rows.html:114
 msgid "Nothing coming up on the events you follow."
 msgstr "你关注的活动暂无即将到来的安排。"
 
-#: src/app/web/templates/_deadline_rows.html:113
+#: src/app/web/templates/_deadline_rows.html:119
 #, python-format
 msgid "+%(count)s more concert"
 msgid_plural "+%(count)s more concerts"
