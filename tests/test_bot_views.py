@@ -372,6 +372,25 @@ async def test_progressive_buttons_localize_leg_labels(db):
     assert "2日目" not in labels, "a zh reader must not be shown the Japanese original"
 
 
+def test_followup_view_stays_inside_discords_row_budget():
+    """Five rows, five components each. Each unanswered leg takes a row of its
+    own, so a long tour is asked about a batch at a time -- exceeding the
+    budget would raise while BUILDING the reply, losing the press entirely."""
+    unresolved = tuple((100 + n, f"Day {n}") for n in range(9))
+    view = views_module.build_result_followup_view(7, unresolved, any_won=True)
+    assert len(view.children) == views_module.MAX_DAY_BUTTONS * 3 + 1
+    assert max(c.row for c in view.children) <= 4
+    assert custom_ids(view)[-1] == "dk:lostrest:7"
+
+
+def test_leg_labels_are_trimmed_to_discords_limit():
+    """An over-long label is an HTTPException at send time, which the
+    scheduler classes as transient and retries forever -- the same trap
+    safe_button_url guards against."""
+    button = views_module.WonDayButton(7, 11, "月" * 200)
+    assert len(button.item.label) <= 80
+
+
 def test_dynamic_items_registers_every_progressive_button():
     """Miss one here and its custom_id has no handler after a bot restart:
     the button renders and does nothing at all."""
