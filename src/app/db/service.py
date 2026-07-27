@@ -333,7 +333,11 @@ async def covered_round_ids_by_concert(
     per-concert version was ~6 statements EACH. Concerts are folded
     separately in memory afterwards -- "secured elsewhere" means elsewhere on
     the same concert, and a batch that leaked one concert's wins into
-    another's fold would silence rounds the user still has to enter."""
+    another's fold would silence rounds the user still has to enter.
+
+    Constant STATEMENTS, not constant work: every `.in_()` here is as wide as
+    the batch, so callers should pass a bounded concert set (a page's worth,
+    the way Home does) rather than everything the viewer tracks."""
     if not concert_ids:
         return {}
     cids = sorted(concert_ids)

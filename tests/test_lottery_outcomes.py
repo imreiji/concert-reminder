@@ -739,13 +739,24 @@ async def test_covered_round_ids_excludes_upgrade_rounds(session):
 
 
 async def test_batched_covered_matches_the_single_concert_helper(session):
-    """The batched helper is the same derivation, not a second one.
+    """No concert's rows leak into another concert's fold.
 
-    Two concerts of deliberately different shapes -- one where the round is
-    covered only because a partial win and an opt-out COMPOUND, one plain full
-    win -- so a batching bug that mixed one concert's legs, opt-outs or day
-    results into the other's fold could not agree with the per-concert answer
-    on both."""
+    NOT an equivalence proof between two implementations: `covered_round_ids`
+    is a thin wrapper over `covered_round_ids_by_concert` now, so both sides of
+    the comparison run the same code and this pins a batch of two against a
+    batch of one. That is still the interesting axis -- the batch loads
+    outcomes, day results and opt-outs across ALL concerts at once and folds
+    them per concert in memory, and a bug there shows up exactly as one
+    concert's rows reaching another's. The two shapes are chosen so it would:
+    one round covered only because a partial win and an opt-out COMPOUND, one
+    plain full win.
+
+    The real evidence that the fold's MEANING did not change when it was
+    batched is that the fold itself (`_covered_from_secured`) was left
+    byte-identical and the planner's suppression suites -- this file's
+    `_apply_outcome_suppression` tests and
+    `tests/test_leg_opt_out_suppression.py` -- were untouched and stayed
+    green."""
     c1, c1_a, c1_b, c1_round_a, _c1_round_b = await seed_ab(session)
     c1_round_c = await add_second_both_legs_round(session, c1, c1_a, c1_b)
     await record_round_outcome(session, 42, c1_round_a.id, LotteryOutcome.APPLIED, NOW)
