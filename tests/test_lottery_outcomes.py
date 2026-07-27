@@ -27,6 +27,7 @@ from app.db.service import (
     record_remaining_days_lost,
     record_round_day_result,
     record_round_outcome,
+    round_result_state,
     secured_day_ids_by_round,
     set_leg_opt_out,
     sync_concert,
@@ -855,6 +856,36 @@ async def test_won_day_on_an_already_won_round_still_resyncs_rules(session):
 
     assert await outcome_of(session, round_a.id) is LotteryOutcome.WON
     assert await queue_rows_for(session, rule.id) == []
+
+
+async def test_round_result_state_reads_a_round_won_outright(session):
+    """The read side of no-rows-means-all: a round WON as a whole has nothing
+    left unresolved and IS secured. Discord's progressive buttons turn on
+    exactly this -- get it wrong and a "Won (all)" press is immediately asked
+    about the very days it just answered for."""
+    _concert, _leg_a, _leg_b, round_a, _round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+
+    unresolved, any_won, outcome = await round_result_state(session, 42, round_a, "en")
+
+    assert unresolved == ()
+    assert any_won is True
+    assert outcome is LotteryOutcome.WON
+
+
+async def test_round_result_state_counts_a_round_level_win_as_secured(session):
+    """A round-level WON is a win even while explicit day rows exist and none
+    of them is a WON row. Reading `any_won` off the rows alone would offer
+    "Lost (all)" as the shortcut -- a button that throws away the win."""
+    _concert, leg_a, leg_b, round_a, _round_b = await seed_ab(session)
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.LOST, NOW)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+
+    unresolved, any_won, outcome = await round_result_state(session, 42, round_a, "en")
+
+    assert unresolved == ((leg_b.id, "Leg B"),)
+    assert any_won is True
+    assert outcome is LotteryOutcome.WON
 
 
 async def test_unresolved_day_ids_excludes_cancelled_resolved_and_opted_out(session):

@@ -624,6 +624,21 @@ async def _won_day_ids(session: AsyncSession, user_id: int, round_id: int) -> se
     )).scalars())
 
 
+async def has_day_results(session: AsyncSession, user_id: int, round_id: int) -> bool:
+    """Whether this user is resolving this round LEG BY LEG -- i.e. whether any
+    RoundOutcomeDay row exists for it.
+
+    It is the switch that turns the no-rows-means-all fallback off (see
+    `_leg_result_for`), so a caller about to record a WHOLE-round answer needs
+    it to know whether that answer stands on its own or has to be spelled out
+    leg by leg to mean anything."""
+    return (await session.execute(
+        select(RoundOutcomeDay.id).where(
+            RoundOutcomeDay.user_id == user_id, RoundOutcomeDay.round_id == round_id
+        ).limit(1)
+    )).scalar_one_or_none() is not None
+
+
 async def round_result_state(
     session: AsyncSession, user_id: int, round_: Round, locale: str,
 ) -> tuple[tuple[tuple[int, str], ...], bool, LotteryOutcome | None]:
@@ -655,12 +670,19 @@ async def round_result_state(
             RoundOutcomeDay.round_id == round_.id,
         )
     )).all()
-    any_won = any(result == LegResult.WON for _day_id, result in day_rows)
+    # A round-level WON/PAID counts as secured whether or not any WON day row
+    # spells it out: the row may simply not exist yet (no-rows-means-all), or
+    # the only rows may be losses on other legs. Reading this off the rows
+    # alone offers "Lost (all)" as the shortcut on a round already won --
+    # a button that throws the win away.
+    any_won = any(result == LegResult.WON for _day_id, result in day_rows) or outcome in (
+        LotteryOutcome.WON, LotteryOutcome.PAID
+    )
     if not day_rows and outcome in (
         LotteryOutcome.WON, LotteryOutcome.PAID, LotteryOutcome.LOST,
         LotteryOutcome.NOT_APPLIED,
     ):
-        return (), outcome in (LotteryOutcome.WON, LotteryOutcome.PAID), outcome
+        return (), any_won, outcome
 
     unresolved = await unresolved_day_ids(session, user_id, round_)
     if not unresolved:

@@ -21,7 +21,7 @@ from app.db.models import (
     RoundOutcomeDay,
     User,
 )
-from app.db.service import record_round_outcome
+from app.db.service import record_round_day_result, record_round_outcome
 from app.domain.types import LegResult, LotteryOutcome, RoundKind
 
 
@@ -267,6 +267,110 @@ async def test_won_day_press_on_an_already_paid_round_keeps_paid(db):
     assert interaction.response.edited["kwargs"]["view"] is None, (
         "nothing is left to ask about a round paid for in full"
     )
+
+
+async def test_won_all_on_an_already_paid_round_writes_nothing(db):
+    """The all-legs shortcuts are as stale-prone as the per-day ones: this DM
+    can be pressed after the round was resolved and PAID on the site, and
+    `record_round_outcome` would happily overwrite PAID back to WON --
+    re-arming the payment reminder for a ticket already paid for."""
+    rid, _days = await three_leg_round(db, outcome=LotteryOutcome.WON)
+    async with db() as s:
+        await record_round_outcome(s, 42, rid, LotteryOutcome.PAID)
+        await s.commit()
+        before = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one().updated_at
+
+    interaction = FakeInteraction(42)
+    await views_module.WonAllButton(rid).callback(interaction)
+
+    async with db() as s:
+        row = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert row.outcome is LotteryOutcome.PAID
+    assert row.updated_at == before, "a stale press must not write at all"
+    assert interaction.response.edited["kwargs"]["view"] is None
+
+
+async def test_lost_all_on_an_already_paid_round_writes_nothing(db):
+    """The same guard from the other direction, where the loss is worse: LOST
+    can be set from any state, so an unguarded stale press would wipe a
+    secured -- and paid for -- round."""
+    rid, _days = await three_leg_round(db, outcome=LotteryOutcome.WON)
+    async with db() as s:
+        await record_round_outcome(s, 42, rid, LotteryOutcome.PAID)
+        await s.commit()
+        before = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one().updated_at
+
+    interaction = FakeInteraction(42)
+    await views_module.LostAllButton(rid).callback(interaction)
+
+    async with db() as s:
+        row = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert row.outcome is LotteryOutcome.PAID
+    assert row.updated_at == before
+    assert interaction.response.edited["kwargs"]["view"] is None
+
+
+async def test_won_all_after_a_lost_leg_wins_the_legs_still_open(db):
+    """'Won (all)' on a round already being resolved leg by leg -- the reader
+    recorded "Lost — Day 1" on the site first. The round-level WON alone would
+    leave a contradiction (outcome WON, not one WON row) whose follow-ups can
+    erase the win, so the legs still open get real WON rows. The recorded loss
+    stands: "all" means all the ones still open."""
+    rid, (d1, d2, d3) = await three_leg_round(db, outcome=LotteryOutcome.APPLIED)
+    async with db() as s:
+        await record_round_day_result(s, 42, rid, d1, LegResult.LOST)
+        await s.commit()
+
+    interaction = FakeInteraction(42)
+    await views_module.WonAllButton(rid).callback(interaction)
+
+    async with db() as s:
+        outcome = (await s.execute(
+            select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+        rows = {
+            r.day_id: r.result for r in (await s.execute(
+                select(RoundOutcomeDay).where(RoundOutcomeDay.round_id == rid)
+            )).scalars()
+        }
+    assert outcome is LotteryOutcome.WON
+    assert rows == {d1: LegResult.LOST, d2: LegResult.WON, d3: LegResult.WON}
+    assert custom_ids(interaction.response.edited["kwargs"]["view"]) == [
+        f"dk:paidnow:{rid}", f"dk:paylater:{rid}"
+    ]
+
+
+async def test_lost_day_on_the_last_open_leg_settles_the_round(db):
+    """The settle tail, driven through the bot: once every leg is lost and
+    none was won, the round itself is LOST -- and the reply says so instead of
+    asking another question."""
+    rid, (d1, d2, d3) = await three_leg_round(db, outcome=LotteryOutcome.APPLIED)
+    await views_module.LostDayButton(rid, d1, "Day 1").callback(FakeInteraction(42))
+    await views_module.LostDayButton(rid, d2, "Day 2").callback(FakeInteraction(42))
+
+    interaction = FakeInteraction(42)
+    await views_module.LostDayButton(rid, d3, "Day 3").callback(interaction)
+
+    async with db() as s:
+        outcome = (await s.execute(
+            select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+        results = list((await s.execute(
+            select(RoundOutcomeDay.result).where(RoundOutcomeDay.round_id == rid)
+        )).scalars())
+    assert outcome is LotteryOutcome.LOST
+    assert results == [LegResult.LOST] * 3
+    edited = interaction.response.edited
+    assert edited["kwargs"]["view"] is None
+    assert "Sorry to hear it" in edited["kwargs"]["content"]
 
 
 async def test_won_all_on_a_multi_leg_round_resolves_every_leg(db):

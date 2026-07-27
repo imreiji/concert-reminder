@@ -38,6 +38,7 @@ import discord
 from app.db.models import ConcertDay, Round, User
 from app.db.service import (
     apply_default_preset,
+    has_day_results,
     is_round_cancelled,
     record_remaining_days_lost,
     record_round_day_result,
@@ -425,10 +426,15 @@ class RemindLaterButton(
 # Nothing about the flow is stored. Every press re-derives its whole reply from
 # `round_result_state` -- these buttons are persistent, so the same message can
 # be pressed months later against a round already resolved on the site, and the
-# only honest answer to that is what is true now. The service writers no-op on
-# a state that has moved on (a won leg never demotes a PAID round, "lost the
-# rest" writes nothing on a round with nothing unresolved), so a stale press
-# costs a re-render and never a wrong write.
+# only honest answer to that is what is true now.
+#
+# A stale press costs a re-render and never a wrong write, which takes guards
+# in two places. The per-day writers bring their own (a won leg never demotes a
+# PAID round; "lost the rest" writes nothing on a round with nothing
+# unresolved). The two ALL-legs shortcuts do not -- `record_round_outcome`
+# accepts WON and LOST from any state by design, since the web's own buttons
+# are the correction path -- so `_apply_press` guards them here, against the
+# state read before the write.
 
 # Discord allows 25 components across 5 rows, and the follow-up view gives each
 # leg a row of its own -- so a long tour is asked about a batch at a time.
@@ -472,15 +478,45 @@ async def _leg_label(session, round_, day_id: int) -> str | None:
     return loc_field(day, "label", get_locale())
 
 
-async def _apply_press(session, user_id: int, round_, action: str, day_id: int | None) -> None:
+async def _apply_press(
+    session, user_id: int, round_, action: str, day_id: int | None, before,
+) -> None:
     """What each button MEANS, in one table. Every branch is an existing
     service writer -- the bot adds no write path of its own, or the reminder
-    queue would desync (invariant 2)."""
-    if action == "wonall":
+    queue would desync (invariant 2).
+
+    `before` is the state snapshot taken BEFORE the write, which is what the
+    two all-legs shortcuts need: unlike the per-day writers, they would
+    otherwise happily overwrite a round somebody has already settled."""
+    _unresolved_before, _any_won_before, outcome_before = before
+    if action in ("wonall", "lostall"):
+        # The round-level twin of the guard inside record_round_day_result.
+        # This DM can be pressed long after the round was secured (and paid
+        # for) on the site, and both of these would overwrite that: WON
+        # demotes PAID and re-arms its payment reminder, LOST wipes the ticket
+        # outright. A settled win is not something a stale press may undo --
+        # the site owns corrections.
+        if outcome_before in (LotteryOutcome.WON, LotteryOutcome.PAID):
+            return
+        if action == "lostall":
+            await record_round_outcome(session, user_id, round_.id, LotteryOutcome.LOST)
+            return
         await record_round_outcome(session, user_id, round_.id, LotteryOutcome.WON)
-    elif action == "lostall":
-        await record_round_outcome(session, user_id, round_.id, LotteryOutcome.LOST)
-    elif action == "paid":
+        # A round nobody has answered leg by leg is fully described by that
+        # one write (no-rows-means-all). Once ANY day row exists the fallback
+        # is off, so stopping here would leave a WON round without a single
+        # WON leg -- a contradiction whose own follow-ups can settle it back
+        # to LOST. Spell the still-open legs out instead: the losses already
+        # recorded stand ("all" means all the ones still open), and each
+        # per-day write self-skips the round-level write, since the round now
+        # reads WON.
+        if await has_day_results(session, user_id, round_.id):
+            for open_day_id, _label in _unresolved_before:
+                await record_round_day_result(
+                    session, user_id, round_.id, open_day_id, LegResult.WON
+                )
+        return
+    if action == "paid":
         await record_round_outcome(session, user_id, round_.id, LotteryOutcome.PAID)
     elif action == "lostrest":
         await record_remaining_days_lost(session, user_id, round_.id)
@@ -531,7 +567,10 @@ async def _progressive_click(
             return
         day_label = await _leg_label(session, round_, day_id) if day_id is not None else None
         if day_id is None or day_label is not None:
-            await _apply_press(session, interaction.user.id, round_, action, day_id)
+            # The state BEFORE the write decides what a whole-round press may
+            # do; the state after it decides what the reply says.
+            before = await _result_state(session, interaction.user.id, round_)
+            await _apply_press(session, interaction.user.id, round_, action, day_id, before)
         unresolved, any_won, outcome = await _result_state(
             session, interaction.user.id, round_
         )
