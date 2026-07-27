@@ -96,6 +96,11 @@ def fold_count_label(kind: str, n: int) -> str:
     collapse to one form. The literals are spelled out at each branch because
     `pybabel extract` only sees literal arguments -- a lookup table keyed by
     kind would extract nothing.
+
+    An unknown kind RAISES rather than falling through to a default, following
+    `domain/sentence.py:split_slots`: a silent default here would render a new
+    `_FOLD_KINDS` entry as somebody else's chip -- "3 cancelled" quietly
+    reading "3 upcoming" -- and nothing would fail. Loud at the seam instead.
     """
     if kind == "lost":
         text = i18n.ngettext("%(count)s lost", "%(count)s lost", n)
@@ -103,8 +108,10 @@ def fold_count_label(kind: str, n: int) -> str:
         text = i18n.ngettext("%(count)s skipped", "%(count)s skipped", n)
     elif kind == "covered":
         text = i18n.ngettext("%(count)s covered", "%(count)s covered", n)
-    else:
+    elif kind == "upcoming":
         text = i18n.ngettext("%(count)s upcoming", "%(count)s upcoming", n)
+    else:
+        raise ValueError(f"no fold chip for {kind!r}")
     return text % {"count": n}
 
 

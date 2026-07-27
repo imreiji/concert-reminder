@@ -3117,6 +3117,15 @@ def _split_leg_rounds(
        upcoming ladder would vanish entirely; on a secured leg every later base
        round is moot, which is what `covered_round_ids` already says.
 
+       UPGRADE rounds are excluded from the candidates outright, for two
+       reasons that happen to point the same way. A LOCKED one is not a round
+       you "could still enter" at all -- it is precisely what clause 3 exists to
+       fold, and because the slot is singular, promoting it would ALSO bury the
+       base round the reader can actually enter behind the fold. An ELIGIBLE one
+       is already visible on clause 3's own merit, so spending the slot on it
+       would fold the next base round for nothing. Either way the slot belongs
+       to a base round.
+
     A CANCELLED leg folds entirely -- nothing on it can bear on anyone. The leg
     itself still renders (invariant 2); only its rounds go behind the fold.
 
@@ -3126,13 +3135,17 @@ def _split_leg_rounds(
         return (), tuple(rows), _fold_counts(rows, now)
 
     secured = any(row.leg_result is LegResult.WON for row in rows)
-    # Clause 4's "single soonest": rounds with no opening time at all are not
-    # upcoming -- there is no moment to be the next one.
+    # Clause 4's "single soonest". Rounds with no opening time at all are not
+    # upcoming -- there is no moment to be the next one -- and UPGRADE rounds
+    # are out entirely, eligible or not (see the docstring): clause 3 is the
+    # only clause that ever speaks for them, so the slot always goes to a base
+    # round the reader could genuinely enter.
     next_open_id: int | None = None
     if not secured:
         unopened = [
             row for row in rows
-            if row.round_.opens_at_utc is not None and row.round_.opens_at_utc > now
+            if row.round_.kind is not RoundKind.UPGRADE
+            and row.round_.opens_at_utc is not None and row.round_.opens_at_utc > now
         ]
         if unopened:
             next_open_id = min(

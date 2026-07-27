@@ -38,6 +38,7 @@ from app.db.models import (
     User,
 )
 from app.db.service import (
+    _FOLD_KINDS,
     attach_tag,
     ensure_user,
     record_round_day_result,
@@ -46,7 +47,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.types import LegResult, LotteryOutcome, RoundKind, TagKind
 from app.web import auth
-from app.web.app import create_app
+from app.web.app import create_app, fold_count_label
 
 USER = 4242
 EDITOR = 777
@@ -1461,3 +1462,14 @@ async def _round_id(db, concert_id, label):
         return (await s.execute(
             select(Round).where(Round.concert_id == concert_id, Round.label == label)
         )).scalar_one().id
+
+
+def test_every_fold_kind_has_a_chip_and_an_unknown_one_raises():
+    """`_FOLD_KINDS` and `fold_count_label` are two halves of one list, in two
+    files. A silent default would render a newly added kind as somebody else's
+    chip and nothing would fail, so the seam raises -- the same call
+    `split_slots` makes for an unknown sentence slot."""
+    for kind in _FOLD_KINDS:
+        assert fold_count_label(kind, 2).startswith("2 ")
+    with pytest.raises(ValueError):
+        fold_count_label("cancelled", 1)
