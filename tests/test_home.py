@@ -409,7 +409,9 @@ async def test_board_card_ladder_is_capped_with_a_plain_text_remainder(client):
     assert '<span class="rmark m-todo">4</span>' in card
     # One plain-text remainder, no disclosure widget anywhere on the card.
     assert card.count('class="rmore"') == 1
-    assert "+3 earlier rounds" in card
+    # The app's existing fold vocabulary, shared with the Coming up summary --
+    # NOT "earlier", since the hidden set can include later rungs too.
+    assert "+3 more rounds" in card
     assert "<details" not in card and "<summary" not in card
 
 

@@ -108,6 +108,12 @@ def pill_tone(column: Column, next_deadline: datetime | None, now: datetime) -> 
 # questions a card is asked: where do I stand, and what is next.
 VISIBLE_RUNGS = 2
 
+# Which rung STATES carry a standing, ranked the way column_for ranks the
+# outcomes behind them (paid > won > applied). "lost" is absent for the same
+# reason LOST places no column: it is not an end state. "live"/"todo" are
+# absent because they are timing, not standing.
+_RUNG_STANDING: dict[str, int] = {"applied": 1, "won": 2, "paid": 3}
+
 
 def visible_rungs(
     rungs: Sequence[Any],
@@ -117,12 +123,23 @@ def visible_rungs(
     A long campaign has a long ladder, and a card that renders all of it stops
     being scannable -- uniform card height is what makes the four columns read
     as a board. Two rungs carry the whole story: the one that EXPLAINS the
-    card's column (the last rung something has actually happened on -- the last
-    non-"todo") and the next thing the user could act on after it (the first
+    card's column and the next thing the user could act on after it (the first
     following "live" or "todo"). Everything else is either settled history or
     too far ahead to matter, and the full ladder is one click away on the
     concert page. Nothing here is interactive, so nothing is lost by hiding it
     -- capture actions live on Coming up rows, never on a card.
+
+    The state rung is picked by column_for's OWN precedence -- the highest
+    standing recorded anywhere on the ladder (paid > won > applied), latest
+    such rung wins a tie -- not by position. Taking the last non-"todo" rung
+    instead inverts the card on the ordinary mid-campaign shape: a ladder of
+    [lost, won, live] sits in "Won -- pay" because money owed outranks a round
+    you could still enter, but position alone would surface the open round and
+    hide the win, leaving the card naming a column nothing on it explains.
+    Only when NO standing is recorded does position decide: the last non-"todo"
+    rung, which picks the "live" one for an Open-now card and a "lost" one
+    otherwise, and failing even that (nothing has happened at all) the head of
+    the ladder, since there the whole story is what comes first.
 
     Returns `(pairs, hidden)` where each pair is `(position, rung)` with
     `position` the rung's ORIGINAL 1-based place in the full ladder. That
@@ -136,22 +153,35 @@ def visible_rungs(
     if len(rungs) <= VISIBLE_RUNGS:
         return [(i, r) for i, r in enumerate(rungs, start=1)], 0
 
-    # The rung that explains the column: the last one something happened on.
+    # The rung that explains the column: the highest standing on the ladder,
+    # ties going to the later rung (the most advanced one at that standing).
     state_at = None
+    best = 0
     for i, r in enumerate(rungs):
-        if r.state != "todo":
-            state_at = i
+        standing = _RUNG_STANDING.get(r.state, 0)
+        if standing and standing >= best:
+            state_at, best = i, standing
     if state_at is None:
-        # Nothing recorded and nothing open yet -- there is no standing to
-        # explain, so the head of the ladder is what is next.
+        # No standing recorded: fall back to position -- the last rung that is
+        # not "todo", which is the open one on an Open-now card.
+        for i, r in enumerate(rungs):
+            if r.state != "todo":
+                state_at = i
+
+    if state_at is None:
+        # Nothing has happened at all, so the head of the ladder is the story.
         keep = list(range(min(VISIBLE_RUNGS, len(rungs))))
     else:
         keep = [state_at]
+        # What is next: the first thing after it the user could still act on.
+        # Reachable now that the state rung can sit BEFORE a live/todo one.
         for i in range(state_at + 1, len(rungs)):
             if rungs[i].state in ("live", "todo"):
                 keep.append(i)
                 break
 
-    # Ladder order, no repeats, never more than the cap.
-    keep = sorted(set(keep))[:VISIBLE_RUNGS]
+    # Indices are strictly increasing by construction (the second is searched
+    # strictly after the first), so no sort or dedupe is needed; the slice is
+    # belt and braces, pinning the output to the constant.
+    keep = keep[:VISIBLE_RUNGS]
     return [(i + 1, rungs[i]) for i in keep], len(rungs) - len(keep)

@@ -160,7 +160,40 @@ def test_visible_rungs_all_settled_ladder():
              R(3, "一般", "paid", None)]
     visible, hidden = visible_rungs(rungs)
     assert [r.label for _, r in visible] == ["一般"]
+    # The single-survivor case: it must still say "3", not renumber to 1.
+    assert [p for p, _ in visible] == [3]
     assert hidden == 2
+
+
+def test_visible_rungs_shows_the_outcome_that_placed_the_card_not_a_later_open_round():
+    """The rung that EXPLAINS the column outranks a still-open later round.
+
+    A concert where you won round 2 and never applied to round 3 sits in
+    "Won -- pay" (column_for: money owed beats a round you could still enter),
+    so the WON rung is the one that must survive the cap. Picking the last
+    non-todo rung instead would surface the open round and hide the win --
+    the card would name a column nothing on it explains."""
+    rungs = [R(1, "1次", "lost", None), R(2, "2次", "won", None),
+             R(3, "一般", "live", None)]
+    visible, hidden = visible_rungs(rungs)
+    assert [p for p, _ in visible] == [2, 3]
+    assert [r.state for _, r in visible] == ["won", "live"]
+    assert hidden == 1
+
+
+def test_visible_rungs_applied_outranks_a_later_live_round():
+    """The same inversion one rung earlier: APPLIED places the card, so it is
+    the state rung, and the live round after it is what is next."""
+    rungs = [R(1, "1次", "applied", None), R(2, "2次", "live", None),
+             R(3, "一般", "todo", None)]
+    visible, hidden = visible_rungs(rungs)
+    assert [p for p, _ in visible] == [1, 2]
+    assert [r.state for _, r in visible] == ["applied", "live"]
+    assert hidden == 1
+
+
+def test_visible_rungs_empty_ladder():
+    assert visible_rungs([]) == ([], 0)
 
 
 def test_visible_rungs_nothing_recorded_yet_keeps_the_head():

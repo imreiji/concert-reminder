@@ -94,7 +94,13 @@
       <span class="ladder">
         {% for pos, r in vis %}{{ rung(r, pos) }}{% endfor %}
         {% if hidden %}
-        <span class="rmore">{% trans count=hidden %}+{{ count }} earlier round{% pluralize %}+{{ count }} earlier rounds{% endtrans %}</span>
+        {#- Deliberately the SAME msgid the Coming up fold uses: the hidden
+            rungs are not all earlier ones (the state rung can sit mid-ladder,
+            leaving later rungs hidden too), and "+N more rounds" is already
+            this app's fold vocabulary in both catalogues. Sharing it between
+            a real <summary> and this inert count is fine -- the text means
+            the same thing. -#}
+        <span class="rmore">{% trans count=hidden %}+{{ count }} more round{% pluralize %}+{{ count }} more rounds{% endtrans %}</span>
         {% endif %}
       </span>
       {% endif %}

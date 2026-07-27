@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-27 13:35-0300\n"
+"POT-Creation-Date: 2026-07-27 13:48-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -727,26 +727,27 @@ msgstr "入金済み"
 msgid "open"
 msgstr "受付中"
 
-#: src/app/web/templates/_board.html:97
+#: src/app/web/templates/_board.html:103
+#: src/app/web/templates/_deadline_rows.html:111
 #, python-format
-msgid "+%(count)s earlier round"
-msgid_plural "+%(count)s earlier rounds"
-msgstr[0] "以前の受付%(count)s件"
+msgid "+%(count)s more round"
+msgid_plural "+%(count)s more rounds"
+msgstr[0] "ほか%(count)s件の受付"
 
-#: src/app/web/templates/_board.html:116
+#: src/app/web/templates/_board.html:122
 #, python-format
 msgid "+%(n)s more →"
 msgstr "ほか%(n)s件 →"
 
-#: src/app/web/templates/_board.html:118
+#: src/app/web/templates/_board.html:124
 msgid "Nothing here yet."
 msgstr "まだ何もありません。"
 
-#: src/app/web/templates/_board.html:123
+#: src/app/web/templates/_board.html:129
 msgid "Nothing on your board yet."
 msgstr "ボードにはまだ何もありません。"
 
-#: src/app/web/templates/_board.html:123
+#: src/app/web/templates/_board.html:129
 msgid "Find events to follow →"
 msgstr "フォローするイベントを探す →"
 
@@ -812,12 +813,6 @@ msgstr "対応不要"
 #: src/app/web/templates/_round_rows.html:32
 msgid "Not applied"
 msgstr "未申込"
-
-#: src/app/web/templates/_deadline_rows.html:111
-#, python-format
-msgid "+%(count)s more round"
-msgid_plural "+%(count)s more rounds"
-msgstr[0] "ほか%(count)s件の受付"
 
 #: src/app/web/templates/_deadline_rows.html:124
 msgid "Your status"
