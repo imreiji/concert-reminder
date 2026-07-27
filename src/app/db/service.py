@@ -2880,10 +2880,27 @@ class LegRounds:
     """One leg and the rounds that apply to it, each as its own RoundRow.
     Cancelled legs get a group like any other -- invariant 2 keeps the row
     alive and the page dims it rather than hiding it, so dropping it here
-    would lose its rounds."""
+    would lose its rounds.
+
+    `rounds` is the FULL set and stays that way: `concert_next_moment` picks
+    the header strip's round out of it, and the strip must still be able to
+    name a round the body has folded. `visible`/`folded` are the presentation
+    split (`_split_leg_rounds`) laid ALONGSIDE it, and they partition it
+    exactly -- adding a third bucket here, or filtering `rounds` itself, is
+    what would put the header and the body out of step.
+
+    `fold_counts` is the composition of `folded` as ordered
+    ("lost"|"skipped"|"covered"|"upcoming", n) pairs, zero counts dropped. The
+    chips explain PART of the fold: the summary's own number is `len(folded)`,
+    and a folded round matching no category (a round that opened, closed and
+    was never recorded) is counted in none of them.
+    """
 
     day: ConcertDay
     rounds: list[RoundRow]
+    visible: tuple[RoundRow, ...] = ()
+    folded: tuple[RoundRow, ...] = ()
+    fold_counts: tuple[tuple[str, int], ...] = ()
 
 
 def _primary_anchor(round_: Round, now: datetime) -> tuple[Anchor | None, datetime | None]:
@@ -3057,7 +3074,104 @@ async def concert_round_rows(
                 ),
             ))
 
-    return [LegRounds(day=d, rounds=by_leg[d.id]) for d in days], dateless
+    groups = []
+    for d in days:
+        rows = by_leg[d.id]
+        visible, folded, counts = _split_leg_rounds(rows, d, now)
+        groups.append(LegRounds(
+            day=d, rounds=rows, visible=visible, folded=folded, fold_counts=counts,
+        ))
+    return groups, dateless
+
+
+# The fold's chip categories, in the order the summary emits them. A row is
+# tallied under the FIRST one it matches, so the order is the precedence too.
+_FOLD_KINDS = ("lost", "skipped", "covered", "upcoming")
+
+
+def _split_leg_rounds(
+    rows: list[RoundRow], day: ConcertDay, now: datetime,
+) -> tuple[tuple[RoundRow, ...], tuple[RoundRow, ...], tuple[tuple[str, int], ...]]:
+    """Which of a leg's rounds still bear on this reader, and what the rest are.
+
+    ONE rule (spec `2026-07-27-ladder-declutter-design.md` §A), four clauses --
+    a round stays visible on its leg when ANY of them holds:
+
+    1. **It explains your standing**: `leg_result` is WON. The receipt, per the
+       owner's decision that a secured leg keeps its winning round as a full
+       row -- visible even once PAID and wholly settled, so you never have to
+       expand a fold to see which round got you in.
+    2. **It still wants something from you**: `_wants_you`, the predicate Home's
+       block lead and the "Next for you" strip already share. This is its third
+       consumer and it is consumed, never redefined. Note it is `_wants_you` and
+       not `_needs_you`: the covered veto is not applied here, because a covered
+       round has both capture gates shut and therefore fails `_wants_you`'s
+       no-standing arm anyway, while a covered round you APPLIED to is still a
+       result you are waiting on and belongs in front of you.
+    3. **It is an upgrade you can enter**: eligibility is already derived per
+       viewer, and `upgrade_locked` is its inverse. A locked upgrade folds like
+       anything else.
+    4. **It is the next round you could still enter**: the single soonest round
+       on this leg that has not opened, and only while the leg is NOT secured.
+       `_wants_you` gates on the round having OPENED, so without this clause the
+       upcoming ladder would vanish entirely; on a secured leg every later base
+       round is moot, which is what `covered_round_ids` already says.
+
+    A CANCELLED leg folds entirely -- nothing on it can bear on anyone. The leg
+    itself still renders (invariant 2); only its rounds go behind the fold.
+
+    Folded rows keep the order they came in, which is chronological.
+    """
+    if day.cancelled:
+        return (), tuple(rows), _fold_counts(rows, now)
+
+    secured = any(row.leg_result is LegResult.WON for row in rows)
+    # Clause 4's "single soonest": rounds with no opening time at all are not
+    # upcoming -- there is no moment to be the next one.
+    next_open_id: int | None = None
+    if not secured:
+        unopened = [
+            row for row in rows
+            if row.round_.opens_at_utc is not None and row.round_.opens_at_utc > now
+        ]
+        if unopened:
+            next_open_id = min(
+                unopened, key=lambda row: (row.round_.opens_at_utc, row.round_.id)
+            ).round_.id
+
+    visible: list[RoundRow] = []
+    folded: list[RoundRow] = []
+    for row in rows:
+        keeps = (
+            row.leg_result is LegResult.WON
+            or _wants_you(row.outcome, row.can_capture, row.round_.closes_at_utc, now)
+            or (row.round_.kind is RoundKind.UPGRADE and not row.upgrade_locked)
+            or row.round_.id == next_open_id
+        )
+        (visible if keeps else folded).append(row)
+    return tuple(visible), tuple(folded), _fold_counts(folded, now)
+
+
+def _fold_counts(
+    folded: Sequence[RoundRow], now: datetime,
+) -> tuple[tuple[str, int], ...]:
+    """The fold's composition, first match wins per row, `_FOLD_KINDS` order.
+
+    Deliberately partial: a row matching nothing here (a round that opened,
+    closed and was never recorded -- a chance simply gone) is counted in no
+    chip. The summary's own "+N more rounds" is the total; the chips only say
+    what part of it is."""
+    counts = dict.fromkeys(_FOLD_KINDS, 0)
+    for row in folded:
+        if row.leg_result is LegResult.LOST or row.outcome is LotteryOutcome.LOST:
+            counts["lost"] += 1
+        elif row.outcome is LotteryOutcome.NOT_APPLIED:
+            counts["skipped"] += 1
+        elif row.covered:
+            counts["covered"] += 1
+        elif row.round_.opens_at_utc is not None and row.round_.opens_at_utc > now:
+            counts["upcoming"] += 1
+    return tuple((kind, n) for kind, n in counts.items() if n)
 
 
 def _leg_result_for(

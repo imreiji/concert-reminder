@@ -1109,6 +1109,32 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .rnd2 .acts { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; }
 .rnd2 .acts .ics { text-decoration: none; }
 
+/* The per-leg fold. Same quiet affordance as Home's .morerounds -- UA marker
+   off, our own rotating caret, dim .78rem -- because it is the same promise:
+   nothing is filtered away, it is one click below. Kept as its own selector
+   rather than folded into the .deadline-rows rules, which are scoped to that
+   page's row grid and would drag its padding onto a leg card. */
+.moreround > summary {
+  list-style: none; cursor: pointer; width: fit-content;
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: .4rem;
+  font-size: .78rem; color: var(--dim);
+  padding: .5rem .35rem .5rem .1rem; border-radius: 3px;
+}
+.moreround > summary::-webkit-details-marker { display: none; }
+.moreround > summary::before {
+  content: "\25B8"; font-size: .7rem; transition: transform 150ms ease;
+}
+.moreround[open] > summary::before { transform: rotate(90deg); }
+.moreround > summary:hover { color: var(--ink); }
+/* The composition chips. They restate what is inside the fold, so they read
+   as annotation, not as tags you can press -- border and wash only, no
+   hover, no pointer. */
+.fchip {
+  font-size: .7rem; line-height: 1; padding: .2rem .4rem;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--chip); color: var(--dim); white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .rnd2 { grid-template-columns: 7rem 1fr; }
   .rnd2 .dts, .rnd2 .acts { grid-column: 1 / -1; justify-content: flex-start; }

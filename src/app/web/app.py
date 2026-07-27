@@ -80,6 +80,35 @@ def sentence_slots(pattern: str, slots: dict[str, Markup]) -> Markup:
 
 
 templates.env.globals["sentence_slots"] = sentence_slots
+
+
+def fold_count_label(kind: str, n: int) -> str:
+    """One state chip in a leg's fold summary ("2 lost", "1 upcoming").
+
+    Each kind is its OWN msgid rather than a sentence assembled from pieces:
+    composing "3 rounds - 2 lost, 1 skipped" out of fragments is a word-order
+    trap in ja/zh, and this project's rule is that translators own word order.
+    Chips turn the ordering into a layout question instead.
+
+    The English singular and plural are identical -- none of these words
+    inflects for number -- but the entries stay ngettext ones so a locale whose
+    plural rules DO differ has somewhere to say so; ja/zh are nplurals=1 and
+    collapse to one form. The literals are spelled out at each branch because
+    `pybabel extract` only sees literal arguments -- a lookup table keyed by
+    kind would extract nothing.
+    """
+    if kind == "lost":
+        text = i18n.ngettext("%(count)s lost", "%(count)s lost", n)
+    elif kind == "skipped":
+        text = i18n.ngettext("%(count)s skipped", "%(count)s skipped", n)
+    elif kind == "covered":
+        text = i18n.ngettext("%(count)s covered", "%(count)s covered", n)
+    else:
+        text = i18n.ngettext("%(count)s upcoming", "%(count)s upcoming", n)
+    return text % {"count": n}
+
+
+templates.env.globals["fold_count_label"] = fold_count_label
 # UGC parallel-column display: {{ loc(concert, "title") }} / {{ loc(tag, "name") }}
 # renders the viewer-locale variant, falling back to the original. Display
 # ONLY -- form values, data-* filter keys and URLs keep the original field.

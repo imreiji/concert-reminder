@@ -88,10 +88,11 @@ async def add_round(
     closes=None,
     payment=None,
     applies_to=None,
+    kind=RoundKind.LOTTERY_ROUND,
 ) -> Round:
     r = Round(
         concert_id=concert.id,
-        kind=RoundKind.LOTTERY_ROUND,
+        kind=kind,
         label=label,
         opens_at_utc=opens,
         closes_at_utc=closes,
@@ -257,6 +258,31 @@ async def test_rung_states_follow_recorded_outcomes(session):
         (applied.id, "applied"),
         (won.id, "won"),
     ]
+
+
+async def test_a_rung_carries_the_rounds_upgrade_kind(session):
+    """`is_upgrade` is what lets `visible_rungs` prefer a won-but-unpaid
+    UPGRADE over a PAID base ticket -- "won" reads the same either way, so the
+    flag is the only thing carrying the distinction. Nothing else in the suite
+    touches the CONSTRUCTION site, so deleting the kwarg in `board_cards` left
+    the whole suite green while the card went back to naming the paid rung."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+    concert = await make_concert(session, "upgrade-ladder", tag)
+    base = await add_round(session, concert, "R1", opens=dt(4, 1), closes=dt(4, 20))
+    upgrade = await add_round(
+        session, concert, "Seat upgrade", opens=dt(5, 1), closes=dt(5, 20),
+        kind=RoundKind.UPGRADE,
+    )
+    await record_round_outcome(session, USER, base.id, LotteryOutcome.WON, now=NOW)
+
+    columns, _ = await board_cards(session, USER, now=NOW)
+    (card,) = columns[Column.WON]
+
+    assert {r.round_id: r.is_upgrade for r in card.rungs} == {
+        base.id: False,
+        upgrade.id: True,
+    }
 
 
 async def test_board_card_pill_tone_follows_urgency_not_just_column(session):

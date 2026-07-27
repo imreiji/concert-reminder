@@ -117,14 +117,14 @@ async def _outcome_response(
     `toast` is the key base.html's TOAST_MSGS map renders, or None for a press
     that has no honest entry there (see the day-result route).
 
-    `round_id` is the round just written, and it rides into Home's fragment as
+    `round_id` is the round just written, and it rides into BOTH fragments as
     `open_round_id`. The swap is an outerHTML replacement, so every <details>
-    in "Coming up" comes back closed -- including the page-level "+N more
-    events" fold, which takes the block the reader just pressed a button on off
-    the screen entirely. The template reopens the fold(s) that own this round;
-    no JS and no client-held state, because the round is enough to find them.
-    The concert-page branch below wants none of this: it renders
-    _round_rows.html, which has no such folds."""
+    in the swapped region comes back closed -- in "Coming up" that includes the
+    page-level "+N more events" fold, which takes the block the reader just
+    pressed a button on off the screen entirely, and on the concert page it is
+    the per-leg round fold, which does the same to a round answered from inside
+    it. Each template reopens the fold(s) that own this round; no JS and no
+    client-held state, because the round is enough to find them."""
     headers = {"HX-Trigger": json.dumps({"toast": {"outcome": toast}})} if toast else {}
     event_id = _concert_event_id(request)
 
@@ -155,7 +155,7 @@ async def _outcome_response(
         # until reload -- the contract _board.html keeps on Home.
         return HTMLResponse(
             templates.get_template("_round_rows.html").render(
-                request=request, user=user, tz=tz, **ctx)
+                request=request, user=user, tz=tz, open_round_id=round_id, **ctx)
             + templates.get_template("_standing_strip.html").render(
                 request=request, user=user, tz=tz, oob=True, **ctx),
             headers=headers,

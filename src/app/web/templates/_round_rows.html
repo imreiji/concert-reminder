@@ -123,6 +123,56 @@
 </div>
 {% endmacro %}
 
+{# One LEG's rounds, split into what still bears on this reader and the rest.
+   A mid-campaign leg is mostly settled history -- lost rounds, skipped ones,
+   sales made moot by a ticket already in hand -- and rendering all of it at
+   equal weight is what made a 3-leg x 6-round concert eighteen rows.
+
+   The fold is PRESENTATION, never filtering: every row is still in the DOM,
+   `round_row` is the same single definition either side of the disclosure
+   (never a second copy), and a folded round's capture form stays reachable --
+   exactly the contract Home's `.morerounds` fold shipped with.
+
+   The split itself is `service._split_leg_rounds` (spec §A): four clauses, none
+   of them a presentation question, so none of them decided here. One fold per
+   leg rather than one per page is the owner's call -- you expand the story you
+   came for without expanding the other two.
+
+   The summary counts the WHOLE fold; the chips explain the part they can (a
+   round that opened, closed and was never recorded belongs to no category).
+   Each chip is its own msgid -- see `fold_count_label` in web/app.py.
+
+   `open_round_id` is the round a capture press just wrote, or none on a plain
+   GET. The outcome POST swaps this whole region by outerHTML, so every
+   <details> comes back closed -- and a round answered from INSIDE a fold (a
+   sale that opened and closed unrecorded is still answerable) would drop off
+   the screen at the moment the reader acted on it. Reopening the fold that
+   owns the written round is the same fix #98 shipped for Home, and it stays
+   server-side for the same reason: the round id is enough to find the fold, so
+   no JS and no client-held state. Passed in as a macro argument rather than
+   read from the template namespace -- an undefined is not none, and every fold
+   on the page would spring open. #}
+{% macro leg_rounds(group, tz, note, open_round_id=none) %}
+<div class="rnds">
+  {% for row in group.visible %}{{ round_row(row, tz, group.day.id) }}
+  {%- else -%}
+  {# Only a leg with NO rounds at all gets the note; a leg whose rounds have
+     all folded has the summary to say so. #}
+  {%- if not group.folded %}<p class="dim tiny">{{ note }}</p>{% endif -%}
+  {% endfor %}
+  {% if group.folded %}
+  <details class="moreround"{% if open_round_id is not none and open_round_id in group.folded|map(attribute="round_.id")|list %} open{% endif %}>
+    <summary>{% trans count=group.folded|length %}+{{ count }} more round{% pluralize %}+{{ count }} more rounds{% endtrans %}{% for kind, n in group.fold_counts %}<span class="fchip">{{ fold_count_label(kind, n) }}</span>{% endfor %}</summary>
+    {% for row in group.folded %}{{ round_row(row, tz, group.day.id) }}{% endfor %}
+  </details>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{# GET /concerts/{event_id} passes no such context, so default it once here
+   rather than guarding at each use -- an undefined is not none. #}
+{% set open_round_id = open_round_id|default(none) %}
+
 <div class="crounds" id="concert-rounds">
   {# "Next for you" moved to the concert header (_standing_strip.html, C1):
      the strip is the header's answer to "what do I do here?", and the outcome
@@ -168,7 +218,7 @@
       </form>
       {% endif %}
     </div>
-    {{ rounds_or_note(group.rounds, tz, _("No rounds yet for this leg."), day_id=day.id) }}
+    {{ leg_rounds(group, tz, _("No rounds yet for this leg."), open_round_id) }}
   </div>
   {% endfor %}
 
