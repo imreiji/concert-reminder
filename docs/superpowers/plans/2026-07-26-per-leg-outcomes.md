@@ -413,7 +413,9 @@ async def test_day_result_htmx_from_concert_page_returns_round_rows_plus_oob_str
 - [ ] **Step 2-4:** Implement inside `due_reminders`' existing batched loads (days are already fetched there — extend, don't add per-row queries), run, full suite + ruff.
 - [ ] **Step 5: Commit** — `feat: DueReminder carries covered days for results capture (task 7)`
 
----### Task 8: Discord progressive capture buttons
+---
+
+### Task 8: Discord progressive capture buttons
 
 **Files:**
 - Modify: `src/app/bot/views.py` (8 new DynamicItems + two helpers; extend `DYNAMIC_ITEMS` at :403 and the module docstring's namespace table at :10-21)
