@@ -1,8 +1,10 @@
 # Per-leg outcome truth: covered rounds stop asking, wins record per day
 
-Date: 2026-07-26. Status: designed with the owner (four decisions recorded
-below), pending spec review. WISHLIST Proposed #1 — two of the six
-2026-07-26 usage-feedback pain points share this root.
+Date: 2026-07-26. Status: **implemented (2026-07-27)**, branch
+`per-leg-outcomes` (tasks 1-9; deviations recorded at the foot of this
+file). Designed with the owner (four decisions recorded below). WISHLIST
+Proposed #1 — two of the six 2026-07-26 usage-feedback pain points share
+this root.
 
 ## Problem
 
@@ -229,3 +231,63 @@ apply. No backfill by design (§A). Normal deploy order.
 - Per-day PAID.
 - WISHLIST #2 (Coming-up de-crowding — builds on this, separately),
   #3 (board ladder), #4 (performer grouping), #5 (admin export).
+
+## Implementation deviations (recorded)
+
+Each of these is a place the shipped code is deliberately not what the
+text above says. They came out of per-task review and were ruled on
+during the build, not discovered afterwards.
+
+- **Implicit WON rows materialize before the first explicit day row.**
+  §A's no-rows-means-all convention is lossy the moment a resolution
+  becomes partial: writing a LOST row against a WON round with no rows
+  would de-secure every other day. `record_round_day_result` therefore
+  materializes the implied WON rows for the round's covered days first,
+  so the explicit row narrows the win instead of erasing it.
+- **PAID is never demoted by the day path, and the DM's `Won (all)` /
+  `Lost (all)` are stale-guarded.** A won-day press on an already-PAID
+  round leaves the round outcome alone (§A's sequence rule is not
+  relaxed — the day layer simply declines to move it), and both
+  whole-round shortcuts re-check the outcome before writing. The
+  intended asymmetry: the DM cannot correct WON/PAID *down* to LOST;
+  the site owns downward corrections (documented in `bot/views.py`).
+- **A round whose own outcome is WON/PAID is never "covered".** §D's
+  covered gate would otherwise hide the round you must still pay for.
+  The rule lives in the shared helper, so it holds in the read-side
+  gates and in the reminder planner's PAYMENT suppression alike.
+- **`set_leg_opt_out` now re-syncs rules itself.** §B's "Not going"
+  writes the existing opt-out; the writer did not re-plan, so an
+  every-leg opt-out left queued reminders standing (CLAUDE.md invariant
+  8's stated contract). The resync moved inside the writer, which fixes
+  both call sites and stops the bot adding a second one.
+- **Leg cards render only their own day's buttons.** §E renders a round
+  under each leg it covers, which repeated every day's question in every
+  copy ("Won — Day 2" under Day 1's heading). `capture_actions` gained an
+  only-day filter; the whole-round shortcuts (`Won (all)`, `Lost (all)`,
+  `Lost the rest`) now live in the catch-up dialog only, which is
+  therefore load-bearing rather than pure enhancement.
+- **The leg pill prefers `leg_result`, and a WON leg defers to the round
+  outcome.** §E's per-leg standing read off the round would tell a lost
+  Sunday it had a ticket. The day row outranks the round wherever it has
+  one — except that a WON leg still renders the round's pill, so a PAID
+  round reads "Secured" (a leg cannot carry the payment distinction).
+- **The form value `skip` maps to the existing leg opt-out.** It has no
+  `LegResult` member on purpose: the web form vocabulary
+  (`won/lost/skip/lost_rest`) is wider than the domain enum, because two
+  of the four presses are not lottery results.
+- **`Won (all)` on a round that already has day rows records WON for the
+  still-unresolved days only.** Flipping the round outcome alone would
+  leave WON-with-contradictory-LOST-rows, from which a later press could
+  erase a real win; the shortcut writes through
+  `record_round_day_result` for each unresolved day instead.
+
+Residual edges, known and deferred (not fixed on this branch):
+
+- `Won (all)` on an already fully-settled LOST round yields WON with zero
+  WON day rows; the correction path is per-day or `Lost the rest`. A
+  `record_remaining_days_won` sibling would close it.
+- A PAID round can still fall to LOST if every materialized day row goes
+  LOST (`_settle_lost_days` records the round-level LOST).
+- JS-off, the dialog never opens, so `Won (all)` / `Lost the rest` are
+  unreachable on the concert page — the inline fallback §C promises
+  covers the per-day presses only.
