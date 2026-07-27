@@ -8,8 +8,9 @@
    the markup that reads them would put the two halves back out of step.
 
    `row` is anything carrying `.outcome`, `.can_capture`,
-   `.can_report_result`, `.capture_days` and `.any_day_won` -- a DeadlineRow
-   or a RoundRow. Only a RoundRow adds `.covered`; on a DeadlineRow the
+   `.can_report_result`, `.capture_days`, `.any_day_won` and
+   `.has_day_results` -- a DeadlineRow or a RoundRow. Only a RoundRow adds
+   `.covered`; on a DeadlineRow the
    attribute is undefined (and so falsy), which is correct rather than
    accidental: Home drops a covered row before it ever renders, so the
    covered branch is dead code there. `target` is the htmx
@@ -92,7 +93,17 @@
 {% for pair in row.capture_days %}
   {%- if only_day is none or pair[0] == only_day %}{% set ns.days = ns.days + [pair] %}{% endif -%}
 {% endfor %}
-{% if only_day is none and not row.any_day_won %}
+{# "Won (all)" is a WHOLE-ROUND write, and it only means anything while the
+   round still has NO day rows -- that is the no-rows-means-all convention it
+   leans on. Once any row exists (`has_day_results`), a round-level WON
+   secures zero legs: the reader who pressed "Lost — Day 1" first would get a
+   WON round with no WON leg, and the next "Lost — Day 2" settles it LOST,
+   erasing the win they just recorded. So the shortcut withdraws and only the
+   per-leg buttons remain -- the same answer `_apply_press` gives in the DM,
+   which composes WON day rows for the unresolved legs instead of writing the
+   round. `any_day_won` shuts it too, for the older reason: a round with a
+   ticket in hand is answered by "Lost the rest", below. #}
+{% if only_day is none and not row.any_day_won and not row.has_day_results %}
 <form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}" hx-swap="outerHTML"
       method="post" action="/rounds/{{ round_id }}/outcome">
   <input type="hidden" name="outcome" value="won">

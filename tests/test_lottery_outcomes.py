@@ -618,6 +618,105 @@ async def test_payment_reminder_survives_when_another_round_secured_the_same_leg
     assert len(await queue_rows_for(session, rule.id)) == 1
 
 
+async def add_second_both_legs_round(s, concert, leg_a, leg_b) -> Round:
+    """A SECOND round over both legs -- the one the "still nagging" cases are
+    about. `seed_ab`'s round A is the one the reader has standing on, so the
+    question "is there anything left to do here" has to be asked of a
+    different round covering the same nights."""
+    round_c = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="Both again",
+        closes_at_utc=dt(6, 27), applies_to=[leg_a.id, leg_b.id],
+    )
+    s.add(round_c)
+    await s.flush()
+    return round_c
+
+
+async def test_covered_discounts_a_leg_the_reader_opted_out_of(session):
+    """Won Saturday, not going Sunday: there is nothing left that a second
+    Saturday+Sunday round could give this reader, so it must go quiet. Opting
+    out COMPOUNDS with a win -- reading the covered set literally left every
+    such round nagging on every surface."""
+    concert, leg_a, leg_b, round_a, _round_b = await seed_ab(session)
+    round_c = await add_second_both_legs_round(session, concert, leg_a, leg_b)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.APPLIED, NOW)
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+    await set_leg_opt_out(session, 42, leg_b.id, True, NOW)
+
+    assert round_c.id in await covered_round_ids(session, 42, concert.id)
+
+
+async def test_covered_discounts_a_cancelled_leg(session):
+    """The same subtraction from the other direction: a night that is not
+    happening is not a night anyone is still waiting on."""
+    concert, leg_a, leg_b, round_a, _round_b = await seed_ab(session)
+    round_c = await add_second_both_legs_round(session, concert, leg_a, leg_b)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.APPLIED, NOW)
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+    leg_b.cancelled = True
+    await session.flush()
+
+    assert round_c.id in await covered_round_ids(session, 42, concert.id)
+
+
+async def test_covered_still_needs_the_secured_legs(session):
+    """The subtraction must not become "covered by default": leg A is neither
+    secured nor opted out, so the second round still sells this reader
+    something."""
+    concert, leg_a, leg_b, round_a, _round_b = await seed_ab(session)
+    round_c = await add_second_both_legs_round(session, concert, leg_a, leg_b)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.APPLIED, NOW)
+    await record_round_day_result(session, 42, round_a.id, leg_b.id, LegResult.WON, NOW)
+    await set_leg_opt_out(session, 42, leg_b.id, True, NOW)
+
+    assert round_c.id not in await covered_round_ids(session, 42, concert.id)
+
+
+async def test_opting_out_of_every_leg_does_not_make_a_round_covered(session):
+    """The subtraction must not become "covered by default". A round whose
+    every leg is opted out subtracts down to nothing, and nothing is a subset
+    of anything -- so without the "some leg is actually secured" guard this
+    pass would quietly take over the every-leg opt-out rule and start telling
+    readers they already hold a night they declined."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    # A win somewhere on the concert, so covered_round_ids does not short out
+    # before the fold -- but on a leg round B does not sell.
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.APPLIED, NOW)
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+    await set_leg_opt_out(session, 42, leg_b.id, True, NOW)
+
+    assert round_b.id not in await covered_round_ids(session, 42, concert.id)
+
+
+async def test_planner_suppresses_a_round_the_opt_out_completed(session):
+    """The DM half of the same rule -- the planner and the pages share
+    `_covered_from_secured`, so a divergence here is the bug the helper
+    exists to prevent."""
+    concert, leg_a, leg_b, round_a, _round_b = await seed_ab(session)
+    round_c = await add_second_both_legs_round(session, concert, leg_a, leg_b)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.APPLIED, NOW)
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+    await set_leg_opt_out(session, 42, leg_b.id, True, NOW)
+
+    rule = ReminderRule(user_id=42, round_id=round_c.id, anchor=Anchor.CLOSES, offset_days=1)
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+
+    assert await queue_rows_for(session, rule.id) == []
+
+
+async def test_coming_up_drops_a_round_the_opt_out_completed(session):
+    """And Home agrees: the row is gone, not merely quiet."""
+    concert, leg_a, leg_b, round_a, _round_b = await seed_ab(session)
+    await add_second_both_legs_round(session, concert, leg_a, leg_b)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.APPLIED, NOW)
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+    await set_leg_opt_out(session, 42, leg_b.id, True, NOW)
+
+    assert "Both again" not in await round_row_labels(session, concert)
+
+
 async def test_covered_round_ids_excludes_upgrade_rounds(session):
     """An upgrade round is entered BECAUSE you hold a ticket -- holding one
     must never mark it "stop asking" (invariant 2's upgrade exemption)."""
@@ -964,6 +1063,30 @@ async def test_coming_up_keeps_a_round_a_partial_win_did_not_secure(session):
     labels = await round_row_labels(session, concert)
     assert "B-only" in labels      # leg B was never secured
     assert "A-only" not in labels  # leg A was
+
+
+async def test_deadline_rows_carry_has_day_results(session):
+    """The flag Home's rows hide the whole-round "Won (all)" shortcut behind.
+    A single round emits one row per future anchor, so every one of them must
+    agree -- offering the shortcut on the CLOSES row and not the RESULTS row
+    would be the same erasure through a different door."""
+    concert, leg_a, _leg_b, _a_only, round_both, _general = await seed_two_legs(session)
+    await record_round_outcome(session, 42, round_both.id, LotteryOutcome.APPLIED, NOW)
+
+    def rows_for_both(rows):
+        return [r for r in rows if r.deadline.round_id == round_both.id]
+
+    before = rows_for_both(
+        await my_deadline_rows(session, 42, now=NOW, limit=50, concert_ids={concert.id})
+    )
+    assert before and all(r.has_day_results is False for r in before)
+
+    await record_round_day_result(session, 42, round_both.id, leg_a.id, LegResult.LOST, NOW)
+
+    after = rows_for_both(
+        await my_deadline_rows(session, 42, now=NOW, limit=50, concert_ids={concert.id})
+    )
+    assert after and all(r.has_day_results is True for r in after)
 
 
 async def test_coming_up_keeps_both_payment_rows_when_two_wins_overlap(session):

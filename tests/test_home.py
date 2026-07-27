@@ -717,6 +717,46 @@ async def test_a_partially_won_multi_leg_row_offers_lost_the_rest(client):
     assert "Won (all)" not in rows
 
 
+async def test_a_lost_leg_withdraws_the_whole_round_won_shortcut(client):
+    """Once ANY leg is answered the round is being resolved leg by leg, and a
+    whole-round WON write would create a WON round with zero WON legs: it
+    secures nothing, and the next "Lost — Day 2" settles the round LOST and
+    erases the win. So the shortcut goes and the per-leg buttons stay -- the
+    same answer `_apply_press` gives in the DM."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        c = await seed.concert("lost-first", title="Lost first concert", day_offset=60)
+        seed.s.add(ConcertDay(
+            concert_id=c.id, label="Day 2", starts_at_utc=now + timedelta(days=61),
+        ))
+        await seed.s.flush()
+        r = await seed.round(
+            c, "FC lottery",
+            opens=now - timedelta(days=30),
+            closes=now - timedelta(days=10),
+            results=now - timedelta(days=1),
+            payment=now + timedelta(days=5),
+        )
+        await record_round_outcome(seed.s, USER, r.id, LotteryOutcome.APPLIED)
+        first = (await seed.s.execute(
+            select(ConcertDay.id)
+            .where(ConcertDay.concert_id == c.id)
+            .order_by(ConcertDay.starts_at_utc)
+        )).scalars().first()
+        await record_round_day_result(seed.s, USER, r.id, first, LegResult.LOST)
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "Won (all)" not in rows
+    assert "Won — Day 2" in rows
+    assert "Lost — Day 2" in rows
+    # No leg is won, so the whole round is still honestly losable.
+    assert "Lost (all)" in rows
+
+
 # ── the Discover teaser counts what the link actually leads to ────────────
 
 

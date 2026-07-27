@@ -409,6 +409,38 @@ async def test_no_capture_days_for_a_single_leg_round(session):
     assert row_for(legs, leg_a.id, "A-only").capture_days == ()
 
 
+async def test_has_day_results_is_false_until_a_leg_is_answered(session):
+    """The switch the whole-round "Won (all)" shortcut hides behind: once ANY
+    day row exists the round is being resolved leg by leg, and a whole-round
+    WON write would secure nothing (see the template gate)."""
+    concert, _leg_a, _leg_b, _r_a, r_both, _r_none = await seed(session)
+    r_both.results_at_utc = dt(5, 28)
+    await session.flush()
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.APPLIED)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    assert row_for(legs, _leg_a.id, "Both-legs").has_day_results is False
+
+
+async def test_has_day_results_is_true_once_any_leg_is_answered(session):
+    """A LOST leg counts as much as a won one -- it is the EXISTENCE of a row
+    that turns the no-rows-means-all fallback off, not what the row says."""
+    concert, leg_a, _leg_b, _r_a, r_both, _r_none = await seed(session)
+    r_both.results_at_utc = dt(5, 28)
+    await session.flush()
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.APPLIED)
+    await record_round_day_result(session, 42, r_both.id, leg_a.id, LegResult.LOST, NOW)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    row = row_for(legs, leg_a.id, "Both-legs")
+    assert row.has_day_results is True
+    assert row.any_day_won is False  # and so "Won (all)" has no honest meaning
+    # Another round on the same concert has rows of its own to answer for.
+    assert row_for(legs, leg_a.id, "A-only").has_day_results is False
+
+
 async def test_no_capture_days_once_the_round_is_won_outright(session):
     """WON with no day rows is the no-rows-means-all whole-round win: there is
     nothing left unresolved, so the row moves on to the payment question

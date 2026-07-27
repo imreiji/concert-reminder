@@ -1011,6 +1011,22 @@ async def test_the_dialog_offers_lost_the_rest_once_a_leg_is_won(client):
     assert "Lost (all)" not in dlg
 
 
+async def test_the_dialog_withdraws_won_all_once_a_leg_is_answered(client):
+    """A LOST leg turns the no-rows-means-all fallback off, so a whole-round
+    WON press would leave a WON round with zero WON legs -- securing nothing,
+    and thrown away entirely by the next "Lost — Day 2". "Lost (all)" stays:
+    with no leg won, losing the whole round is still an honest thing to say."""
+    cid = await seed_concert(client.db)
+    d1, _d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.LOST)
+    login(client)
+
+    dlg = dialog_of(client.get("/concerts/np").text)
+    assert "Won (all)" not in dlg
+    assert "Won — Day 2" in dlg
+    assert "Lost (all)" in dlg
+
+
 async def test_no_dialog_once_every_leg_is_resolved(client):
     """Nothing left to ask, so nothing pops up. A dialog that reopened on every
     visit to a settled concert would be the page's most annoying feature."""
