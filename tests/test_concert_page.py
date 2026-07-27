@@ -292,10 +292,10 @@ async def test_the_performers_panel_shows_materialised_membership(client):
     assert "Member 9" in panel              # the rest are still there
     assert "Joined Later" not in panel      # a later membership edit never reaches here
     assert "Aqours" in panel                # the group chip leads
-    # The label says where the members came from, which quietly explains the
-    # expansion rule on the one page an editor would wonder about it.
-    assert "8 members" in panel
-    assert "Aqours group tag" in panel
+    # The header counts the performers actually on the bill -- the composed
+    # "N members, from the X group tags" line it replaced said the same thing
+    # twice now that every cluster is labelled with its group.
+    assert "8 performers" in panel
 
 
 async def test_no_performers_panel_when_the_concert_has_neither_group_nor_artists(client):
@@ -386,8 +386,13 @@ async def make_group(db, name, member_names):
 
 async def make_artist(db, name):
     """A solo ARTIST tag in no group at all, attached to nothing."""
+    return await make_tag(db, name, TagKind.ARTIST)
+
+
+async def make_tag(db, name, kind):
+    """A tag of any kind, attached to nothing."""
     async with db() as s:
-        t = Tag(name=name, kind=TagKind.ARTIST)
+        t = Tag(name=name, kind=kind)
         s.add(t)
         await s.commit()
         return t.id
@@ -423,11 +428,22 @@ def cluster_names(clusters):
 async def test_clusters_hold_each_groups_attached_members(db):
     """Groups in concert.tags' order, and artists in it too INSIDE each
     cluster: "Riko" is created and attached first but sorts second, so this
-    fails if the derivation ever keeps insertion order instead."""
+    fails if the derivation ever keeps insertion order instead.
+
+    The VENUE and FRANCHISE tags are here because every real concert page
+    carries them — VENUE derived from the legs, franchise usually typed —
+    and neither is a performer: one must not open a cluster of its own, nor
+    fall into the trailer. Widening the two `kind is` filters to a `kind in`
+    is the cheapest regression anyone could introduce here, and the equality
+    below is what catches it."""
     cid = await seed_concert(db)
     b_id, b_members = await make_group(db, "Bearies", ["Mari"])
     a_id, a_members = await make_group(db, "Aqours", ["Riko", "Chika"])
-    await attach_existing(db, cid, [b_id, a_id, *b_members.values(), *a_members.values()])
+    venue = await make_tag(db, "Zepp Haneda", TagKind.VENUE)
+    franchise = await make_tag(db, "Love Live!", TagKind.FRANCHISE)
+    await attach_existing(
+        db, cid, [b_id, a_id, venue, franchise, *b_members.values(), *a_members.values()]
+    )
 
     assert cluster_names(await clusters_for(db, cid)) == [
         ("Aqours", ["Chika", "Riko"]),
@@ -541,6 +557,79 @@ async def test_membership_loads_in_one_query(db):
 
     assert len(clusters) == 3  # three groups, or the count measures nothing
     assert sum(1 for q in queries if "tag_members" in q) == 1
+
+
+# ── header: performer clusters (rendering) ───────────────────────────────
+#
+# The panel renders one labelled block per cluster instead of the flat
+# "every group chip, then every artist chip" row it used to. These pin the
+# markup; the derivation feeding it is pinned above.
+
+
+async def _seed_two_groups_sharing_a_member(db, concert_id):
+    """Aqours + Bearies with one performer in both — three distinct
+    performers occupying four cluster seats."""
+    a_id, a_members = await make_group(db, "Aqours", ["Shared Member", "Chika"])
+    b_id, b_members = await make_group(db, "Bearies", ["Shared Member", "Mari"])
+    await attach_existing(
+        db,
+        concert_id,
+        [a_id, b_id, a_members["Shared Member"], a_members["Chika"], b_members["Mari"]],
+    )
+
+
+async def test_the_performing_panel_groups_chips_under_their_group(client):
+    """Two groups on one bill: each performer sits inside her own group's
+    block. The flat row this replaced put both group chips first and then
+    every artist after them, so a reader could not tell who was in which."""
+    cid = await seed_concert(client.db)
+    await add_group_with_members(client.db, cid, "Aqours", ["Chika", "Riko"])
+    await add_group_with_members(client.db, cid, "Bearies", ["Mari"])
+    login(client)
+
+    panel = _performers_panel(client)
+    blocks = panel.split('class="pcluster"')[1:]
+    assert len(blocks) == 2
+    aqours = next(b for b in blocks if ">Aqours<" in b)
+    bearies = next(b for b in blocks if ">Bearies<" in b)
+    assert ">Chika<" in aqours and ">Riko<" in aqours and ">Mari<" not in aqours
+    assert ">Mari<" in bearies and ">Chika<" not in bearies
+
+
+async def test_a_two_group_performer_appears_under_both(client):
+    """Owner decision 1, at the markup: the repetition is information."""
+    cid = await seed_concert(client.db)
+    await _seed_two_groups_sharing_a_member(client.db, cid)
+    login(client)
+
+    body = _performers_panel(client)
+    assert body.count(">Shared Member<") == 2
+
+
+async def test_the_header_counts_distinct_performers_not_the_sum(client):
+    """Three performers filling four cluster seats. The header counts the
+    attached ARTIST tags, so summing the clusters — which would say 4 — is
+    exactly the shape this forbids."""
+    cid = await seed_concert(client.db)
+    await _seed_two_groups_sharing_a_member(client.db, cid)
+    login(client)
+
+    panel = _performers_panel(client)
+    assert "3 performers" in panel
+    assert "4 performers" not in panel
+
+
+async def test_a_concert_page_with_groups_renders(client):
+    """The MissingGreenlet guard. Tag.members is a lazy self-referential m2m:
+    a template that walked it during async rendering would answer 500 here,
+    which is the whole reason the clustering is derived in the route."""
+    cid = await seed_concert(client.db)
+    await add_group_with_members(client.db, cid, "Aqours", ["Chika", "Riko"])
+    login(client)
+
+    r = client.get("/concerts/np")
+    assert r.status_code == 200
+    assert ">Chika<" in r.text
 
 
 # ── header: links and actions ────────────────────────────────────────────

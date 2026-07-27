@@ -3941,6 +3941,10 @@ async def performer_clusters(
 ) -> list[PerformerCluster]:
     """The concert's attached performers, grouped by their attached GROUP tags.
 
+    CALLER PRECONDITION: `concert.tags` must already be loaded (selectinload
+    or a refresh) -- a bare `session.get(Concert, ...)` hands this the very
+    MissingGreenlet the rest of the docstring is about.
+
     DISPLAY ONLY. The input is the materialized `concert_tags` set exactly as
     invariant 3 left it (attach expanded it once, editors pruned it); nothing
     here writes, and a later membership edit still never reaches an existing

@@ -64,12 +64,24 @@
       with franchise and venue: they are the reason someone is on this page,
       and a nine-member group buried among other chips is unreadable.
 
-      The label states the SOURCE, which quietly explains group expansion on
-      the one page an editor might wonder about it. What is listed is the
-      MATERIALISED membership (invariant 3) -- the members captured when the
-      group tag was attached, minus whatever an editor pruned -- so it can
-      legitimately differ from the group's membership today. Do not "fix"
-      that by reading current members.
+      One block per attached GROUP, its members under its own chip, then a
+      trailing unlabelled block for performers in no attached group. The flat
+      row this replaced listed every group chip and then every artist chip,
+      which on a two-group bill said nothing about who belonged to which. The
+      clustering is derived in the ROUTE (`performer_clusters`), not here:
+      Tag.members is a lazy self-referential m2m and touching it mid-render is
+      a MissingGreenlet 500.
+
+      What is listed is the MATERIALISED membership (invariant 3) -- the
+      members captured when the group tag was attached, minus whatever an
+      editor pruned -- so it can legitimately differ from the group's
+      membership today. Do not "fix" that by reading current members. A group
+      whose members were all pruned keeps its label row and shows no chips;
+      that IS the fact.
+
+      The count is DISTINCT performers (the attached ARTIST tags), not the sum
+      of the blocks: someone in two attached groups appears in both, so the
+      seats outnumber the people.
 
       A performer chip whose tag carries an `eventernote_url` links out to it;
       one without stays a plain span, never a dead link. The group chip follows
@@ -77,14 +89,21 @@
   {% if cg or ca %}
   <div class="performers">
     <div class="plabel">{{ _("Performing") }}
-      <span>{% if cg and ca %}— {{ ca | length }} {{ ngettext("member", "members", ca | length) }}, {% trans names=cg | map("loc_name") | join(", ") %}from the {{ names }}{% endtrans %} {{ ngettext("group tag", "group tags", cg | length) }}
-      {%- elif cg %}— {% trans names=cg | map("loc_name") | join(", ") %}from the {{ names }}{% endtrans %} {{ ngettext("group tag", "group tags", cg | length) }}
-      {%- else %}— {{ ca | length }} {{ ngettext("performer", "performers", ca | length) }}{% endif %}</span>
+      <span>— {% trans count=ca | length %}{{ count }} performer{% pluralize %}{{ count }} performers{% endtrans %}</span>
     </div>
-    <div class="chips">
-      {% for g in cg %}{% if g.eventernote_url %}<a class="chip grp" href="{{ g.eventernote_url }}" target="_blank" rel="noopener">{{ loc(g, "name") }}</a>{% else %}<span class="chip grp nolink" title="{{ _('No eventernote link yet') }}">{{ loc(g, "name") }}</span>{% endif %}{% endfor %}
-      {% for a in ca %}{% if a.eventernote_url %}<a class="chip" href="{{ a.eventernote_url }}" target="_blank" rel="noopener">{{ loc(a, "name") }}</a>{% else %}<span class="chip nolink" title="{{ _('No eventernote link yet') }}">{{ loc(a, "name") }}</span>{% endif %}{% endfor %}
+    {% for cluster in performer_clusters %}
+    <div class="pcluster">
+      {% if cluster.group %}
+      <div class="pclabel">
+        {% if cluster.group.eventernote_url %}<a class="chip grp" href="{{ cluster.group.eventernote_url }}" target="_blank" rel="noopener">{{ loc(cluster.group, "name") }}</a>
+        {% else %}<span class="chip grp nolink" title="{{ _('No eventernote link yet') }}">{{ loc(cluster.group, "name") }}</span>{% endif %}
+      </div>
+      {% endif %}
+      <div class="chiprow">
+        {% for a in cluster.artists %}{% if a.eventernote_url %}<a class="chip" href="{{ a.eventernote_url }}" target="_blank" rel="noopener">{{ loc(a, "name") }}</a>{% else %}<span class="chip nolink" title="{{ _('No eventernote link yet') }}">{{ loc(a, "name") }}</span>{% endif %}{% endfor %}
+      </div>
     </div>
+    {% endfor %}
   </div>
   {% endif %}
   <!-- /performers -->
