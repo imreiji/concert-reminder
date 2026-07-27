@@ -1442,6 +1442,35 @@ async def test_a_folded_round_is_present_but_collapsed(client):
     assert 'hx-target="#deadline-rows"' in fold
 
 
+async def test_capturing_a_folded_round_swaps_the_block_back_with_its_standing(client):
+    """The other half of the fold being real DOM: pressing a button INSIDE it
+    must swap the whole fragment back with that round's new standing, and the
+    block must come back with the same shape. The fold's open/closed state is
+    not preserved -- an outerHTML swap replaces the <details> element, so the
+    freshly recorded row is behind a closed fold again. That is the swap's
+    nature, not a bug to route around: the standing also lands on the board in
+    the same response, which is what the reader sees without expanding."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        await seed.open_round(c, "Open now", days=2)
+        return (await seed.open_round(c, "Also open", days=9)).id
+
+    folded_id = await seeded(client.db, build)
+    login(client)
+
+    r = client.post(f"/rounds/{folded_id}/outcome", data={"outcome": "applied"}, headers=HX)
+    assert r.status_code == 200
+    rows = r.text.split('id="deadline-rows"', 1)[1]
+    # One concert, one block, both rounds still rendered -- the fold neither
+    # dropped the round it holds nor promoted it out.
+    assert rows.count('class="cblock"') == 1
+    assert rows.count('class="row"') == 2
+    assert "+1 more round" in rows
+    fold = rows.split('<details class="morerounds">', 1)[1]
+    assert "Also open" in fold
+    assert "Applied" in fold.split("</details>", 1)[0]
+
+
 async def test_data_happens_carries_only_the_anchor_verb(client):
     """The tablet band (701-1040px) drops the what-happens COLUMN and folds it
     back into the title cell via `content: " · " attr(data-happens)`. That cell
@@ -1505,5 +1534,5 @@ async def test_the_page_level_fold_appears_only_past_six_blocks(client):
 
     rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
     assert '<details class="moreconcerts">' in rows
-    assert "+2 more concerts" in rows
+    assert "+2 more events" in rows
     assert rows.count('class="cblock"') == VISIBLE_BLOCKS + 2

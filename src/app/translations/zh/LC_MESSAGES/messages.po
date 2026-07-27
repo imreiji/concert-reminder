@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-27 11:20-0300\n"
+"POT-Creation-Date: 2026-07-27 11:32-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -840,8 +840,8 @@ msgstr "你关注的活动暂无即将到来的安排。"
 
 #: src/app/web/templates/_deadline_rows.html:119
 #, python-format
-msgid "+%(count)s more concert"
-msgid_plural "+%(count)s more concerts"
+msgid "+%(count)s more event"
+msgid_plural "+%(count)s more events"
 msgstr[0] "+还有 %(count)s 场活动"
 
 #: src/app/web/templates/_editor_leg_card.html:37

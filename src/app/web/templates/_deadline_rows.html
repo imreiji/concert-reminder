@@ -116,7 +116,7 @@
   {% set overflow = blocks[visible_blocks:] %}
   {% if overflow %}
   <details class="moreconcerts">
-    <summary>{% trans count=overflow|length %}+{{ count }} more concert{% pluralize %}+{{ count }} more concerts{% endtrans %}</summary>
+    <summary>{% trans count=overflow|length %}+{{ count }} more event{% pluralize %}+{{ count }} more events{% endtrans %}</summary>
     {% for block in overflow %}{{ concert_block(block, tz) }}{% endfor %}
   </details>
   {% endif %}

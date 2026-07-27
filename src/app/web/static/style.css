@@ -866,11 +866,24 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 /* ── Coming up, per concert ──────────────────────────────────────────────
    One BLOCK per concert: a header line naming it, the round that wants this
    reader first, and the rest behind a fold. Because the page is now a list
-   of CONCERTS, the hairline that used to run under every ROW moves to the
-   block boundary -- one rule per concert instead of one per anchor, which is
-   the de-crowding itself. Inside a block, rows are told apart by their own
-   shape (pill, bold date) and the :hover wash, not by more rules. */
+   of CONCERTS, the heavy structural boundary is the one under a block --
+   one per concert instead of one per anchor, which is the de-crowding
+   itself. */
 .deadline-rows .cblock { padding: .45rem 0 .35rem; border-bottom: 1px solid var(--line); }
+/* Inside a block, member rows still need telling apart: the first pass left
+   them to their own shape (pill, bold date) plus the :hover wash, and an
+   expanded three-round block read as one run-on paragraph (owner call).
+   Same --line hairline as the block boundary, on the REVEALED rows only, and
+   as a border-TOP. Three things follow from that placement, all of them the
+   point:
+     * the last row in a block can never carry a trailing rule -- the block's
+       own bottom border is the only line that closes it;
+     * a COLLAPSED block (the common case: lead row + summary) shows no
+       internal line at all, so the fold's label is never boxed between two
+       hairlines the way a rule on the <details> itself left it;
+     * the lead row needs no rule of its own -- the summary already sits
+       between it and everything the fold reveals. */
+.deadline-rows .cblock details.morerounds > .row { border-top: 1px solid var(--line); }
 .blockhead {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .5rem;
   padding: .1rem .1rem .15rem;
@@ -898,9 +911,9 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
 }
 .deadline-rows details[open] > summary::before { transform: rotate(90deg); }
 .deadline-rows details > summary:hover { color: var(--ink); }
-/* The page-level fold is about CONCERTS, not rounds, so it sits outside the
-   block rules with a little more air -- otherwise "+4 more concerts" reads as
-   one more round fold belonging to the block above it. */
+/* The page-level fold is about whole EVENTS, not rounds, so it sits outside
+   the block rules with a little more air -- otherwise "+4 more events" reads
+   as one more round fold belonging to the block above it. */
 .deadline-rows > details.moreconcerts > summary { padding: .55rem .35rem .55rem .1rem; }
 .act {
   font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: .03em;
@@ -1802,6 +1815,11 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      card here is already a bordered box, so without the rule there is nothing
      saying where one concert's stack of them ends and the next begins. */
   .deadline-rows .cblock { padding: .2rem 0 .15rem; }
+  /* The desktop's in-block row separator needs no counterpart here and no
+     undoing either: it sets border-TOP on a revealed row, and a phone member
+     row is already a bordered card whose own `border` shorthand draws that
+     same 1px --line on all four sides. The rule lands on an edge that exists,
+     with the value it already had. */
   .blockhead { padding: .5rem .1rem .4rem; font-size: .92rem; }
   .blockhead small { flex: 1 1 100%; }
   .deadline-rows details > summary {
