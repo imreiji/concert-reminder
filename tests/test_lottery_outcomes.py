@@ -584,6 +584,39 @@ async def test_covered_round_ids_full_win_covers_single_day_round(session):
     assert round_a.id not in covered  # a round never covers itself
 
 
+async def test_a_won_round_is_never_covered_by_another_win(session):
+    """Two rounds over the same legs, both won: each one's legs are secured
+    "elsewhere" by the other, so a naive fold covers BOTH and the user is left
+    owing payment on two tickets with nowhere to say so. "Covered" answers the
+    apply/results question; on a round you won, the open question is
+    payment."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+    await record_round_outcome(session, 42, round_b.id, LotteryOutcome.WON, NOW)
+
+    covered = await covered_round_ids(session, 42, concert.id)
+
+    assert round_a.id not in covered
+    assert round_b.id not in covered
+
+
+async def test_payment_reminder_survives_when_another_round_secured_the_same_legs(session):
+    """The planner half of the same rule: a WON round's payment deadline is
+    money owed, and no amount of securing the same seat elsewhere pays it."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    round_b.payment_deadline_at_utc = dt(6, 30)
+    await session.flush()
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+    await record_round_outcome(session, 42, round_b.id, LotteryOutcome.WON, NOW)
+
+    rule = ReminderRule(user_id=42, round_id=round_b.id, anchor=Anchor.PAYMENT, offset_days=0)
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+
+    assert len(await queue_rows_for(session, rule.id)) == 1
+
+
 async def test_covered_round_ids_excludes_upgrade_rounds(session):
     """An upgrade round is entered BECAUSE you hold a ticket -- holding one
     must never mark it "stop asking" (invariant 2's upgrade exemption)."""
@@ -900,3 +933,16 @@ async def test_coming_up_keeps_a_round_a_partial_win_did_not_secure(session):
     labels = await round_row_labels(session, concert)
     assert "B-only" in labels      # leg B was never secured
     assert "A-only" not in labels  # leg A was
+
+
+async def test_coming_up_keeps_both_payment_rows_when_two_wins_overlap(session):
+    """The read side of the same rule: two won rounds over the same legs each
+    still owe a payment, so both keep their row on Home."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    round_a.payment_deadline_at_utc = dt(6, 30)
+    round_b.payment_deadline_at_utc = dt(7, 1)
+    await session.flush()
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
+    await record_round_outcome(session, 42, round_b.id, LotteryOutcome.WON, NOW)
+
+    assert await round_row_labels(session, concert) == {"Both legs", "B only"}

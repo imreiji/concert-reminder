@@ -283,11 +283,17 @@ async def covered_round_ids(
     "stop asking about this" definition, shared by the reminder planner and
     every read surface, so a page can never disagree with the DMs.
 
-    A round never covers itself (its own WON outcome is not a reason to hide
-    its own payment deadline), a round covering no existing leg is never
-    covered, and UPGRADE rounds are excluded outright -- holding a ticket is
-    the PREREQUISITE for entering an upgrade, not a reason to stop showing it
-    (see _apply_outcome_suppression's docstring)."""
+    A round the user has WON or PAID is never covered AT ALL -- not just by
+    itself. "Covered" answers the apply/results question; on a round you won,
+    the open question is payment, and money you owe is not settled by holding
+    a seat for the same night through some other round. Two rounds won over
+    the same legs would otherwise each be "secured elsewhere" by the other and
+    both go quiet, leaving two tickets to pay for and nowhere to record it.
+
+    A round covering no existing leg is never covered either, and UPGRADE
+    rounds are excluded outright -- holding a ticket is the PREREQUISITE for
+    entering an upgrade, not a reason to stop showing it (see
+    _apply_outcome_suppression's docstring)."""
     secured_by = await secured_day_ids_by_round(session, user_id, concert_id)
     if not secured_by:
         return set()
@@ -298,10 +304,26 @@ async def covered_round_ids(
         select(ConcertDay.id).where(ConcertDay.concert_id == concert_id)
     )).scalars())
 
+    return _covered_from_secured(rounds, secured_by, all_day_ids)
+
+
+def _covered_from_secured(
+    rounds: list[Round], secured_by: dict[int, set[int]], all_day_ids: set[int]
+) -> set[int]:
+    """The fold itself, pure, over data the caller has already loaded.
+
+    It exists so the reminder planner (`_apply_outcome_suppression`, which
+    holds all three inputs already) and every read surface (through
+    `covered_round_ids`) share ONE definition without either paying for the
+    other's queries. They were two copies of this loop until a defect in one
+    -- a won round covered by another won round, its payment silenced -- had
+    to be fixed in both."""
     covered_ids: set[int] = set()
     for r in rounds:
         if r.kind is RoundKind.UPGRADE:
             continue
+        if r.id in secured_by:
+            continue  # own outcome WON/PAID: still owed a payment, never covered
         covered = _covered_day_ids(r, all_day_ids)
         if not covered:
             continue
@@ -324,7 +346,11 @@ async def _apply_outcome_suppression(
       * per-leg opt-out -- every leg a round covers has a LegOptOut row for
         this user.
       * cross-round "secured elsewhere" -- every leg a round covers is
-        already secured (WON/PAID) by some OTHER round on this concert.
+        already secured (WON/PAID) by some OTHER round on this concert, and
+        this round is not itself one the user WON (a won round still owes a
+        payment, whoever else holds the seat). Shared with every read surface
+        through `_covered_from_secured`, so the DMs and the pages cannot
+        disagree.
       * upgrade eligibility (this pass replaces the cross-round pass for
         UPGRADE rounds only) -- see below.
       * same-round anchor -- this rule's own anchor (RESULTS/PAYMENT) is
@@ -400,6 +426,7 @@ async def _apply_outcome_suppression(
     # secured_day_ids_by_round) so the DMs and the pages agree on which legs
     # a partial win actually secured.
     secured_by = await secured_day_ids_by_round(session, user_id, concert_id)
+    covered_ids = _covered_from_secured(all_concert_rounds, secured_by, all_day_ids)
 
     survivors = []
     for r in rounds:
@@ -424,14 +451,8 @@ async def _apply_outcome_suppression(
                 user_secured_round_ids - {r.id},
             ):
                 continue
-        else:
-            applies = _covered_day_ids(r, all_day_ids)
-            secured_elsewhere: set[int] = set()
-            for other_id, legs in secured_by.items():
-                if other_id != r.id:
-                    secured_elsewhere |= legs
-            if applies and applies <= secured_elsewhere:
-                continue  # every leg this round covers is already secured elsewhere
+        elif r.id in covered_ids:
+            continue  # every leg this round covers is already secured elsewhere
         outcome = outcomes.get(r.id)
         if anchor is Anchor.RESULTS and outcome is LotteryOutcome.NOT_APPLIED:
             continue

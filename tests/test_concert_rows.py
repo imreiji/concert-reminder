@@ -269,6 +269,23 @@ async def test_concert_rows_covered_round_renders_quiet(session):
     assert row_for(legs, leg_a.id, "Both-legs").covered is False
 
 
+async def test_two_won_rounds_over_the_same_legs_both_stay_payable(session):
+    """Each round's legs are secured "elsewhere" by the other, so a naive
+    covered fold would silence BOTH -- and the user owes payment on two
+    tickets with no surface offering Paid. A round you won is never
+    covered."""
+    concert, leg_a, _leg_b, r_a, r_both, _r_none = await seed(session)
+    await record_round_outcome(session, 42, r_a.id, LotteryOutcome.WON)
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.WON)
+    await session.commit()
+
+    legs, _fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    for label in ("A-only", "Both-legs"):
+        row = row_for(legs, leg_a.id, label)
+        assert row.covered is False
+        assert row.outcome is LotteryOutcome.WON  # the Paid path stays reachable
+
+
 async def test_a_covered_round_never_leads_next_for_you(session):
     """It closes soonest, so it would win the urgency pick outright -- but it
     offers nothing to press, and a panel you cannot act on is worse than the
