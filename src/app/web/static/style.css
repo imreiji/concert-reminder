@@ -1040,7 +1040,14 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap;
 }
 .performers .plabel span { letter-spacing: 0; text-transform: none; font-weight: 500; }
-.performers .chips { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+/* One block per attached group: its chip on a row of its own, that group's
+   performers wrapping underneath. The blocks are separated by space alone --
+   a rule or a nested card between them would out-shout the chips, which are
+   what the reader came for. The trailer (performers in no attached group) is
+   a block with no label row, so it simply continues the rhythm. */
+.performers .pcluster + .pcluster { margin-top: .9rem; }
+.performers .pclabel { margin-bottom: .35rem; }
+.performers .chiprow { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
 .performers .chip {
   background: var(--chip); border-color: transparent;
   display: inline-flex; align-items: center; justify-content: center; text-align: center;
@@ -1901,8 +1908,8 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      different ancestor -- so the touch-target treatment needs its own copy
      here. The pre-existing (non-mobile-specific) 900px `.rnd2` breakpoint
      already stacks each round row (badge+name, then date, then actions)
-     below this width, and performer chips (`.performers .chips`) already
-     wrap -- both left alone. */
+     below this width, and performer chips (`.performers .chiprow`) already
+     wrap inside their cluster -- both left alone. */
   #following-toggle .btn { width: 100%; justify-content: center; min-height: 44px; }
   .rnd2 .acts { flex-wrap: wrap; }
   .rnd2 .acts form { flex: 1 1 8rem; }

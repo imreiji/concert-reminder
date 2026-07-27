@@ -62,6 +62,7 @@ from app.db.service import (
     group_members,
     handle_newly_tagged,
     notify_newly_cancelled_legs,
+    performer_clusters,
     record_concert_edit,
     record_round_label_phrase,
     round_label_phrases,
@@ -997,6 +998,15 @@ async def concert_detail(
     # Editor-only, and only fetched for editors -- viewers have no use for
     # who-changed-what, and it's one extra query worth skipping for them.
     audit_log = await concert_audit_log(session, concert.id) if user.is_editor else []
+    # The Performing panel's per-group blocks. AWAITED HERE, never in the
+    # template: group membership has to be read from the `tag_members`
+    # association table, and a template doing that walk would have to go
+    # through `Tag.members` -- a lazy self-referential m2m whose load during
+    # async rendering is a MissingGreenlet 500. The service reads the
+    # association table directly instead, so the query lands here, awaited,
+    # rather than mid-render. The refresh above is what makes `concert.tags`
+    # safe for it to walk.
+    clusters = await performer_clusters(session, concert)
     rounds_ctx = await concert_rounds_context(session, user.id, concert)
     return templates.TemplateResponse(
         request,
@@ -1006,6 +1016,7 @@ async def concert_detail(
          "default_preset": default_preset,
          "display_title": display_title,
          "audit_log": audit_log,
+         "performer_clusters": clusters,
          # The catch-up dialog's subject, or None for a page with nothing
          # outstanding. GET-only on purpose: the htmx re-render after a press
          # answers with the rounds region alone, so the dialog does not

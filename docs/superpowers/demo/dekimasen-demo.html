@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>dekimasen.app — home and discover concept</title>
 <style>
   :root {
@@ -343,7 +344,25 @@
     display: flex; align-items: baseline; gap: .5rem;
   }
   .performers .plabel span { letter-spacing: 0; text-transform: none; font-weight: 500; }
-  .performers .chips { gap: .3rem; }
+  /* One block per attached GROUP: its chip on a row of its own, that group's
+     performers wrapping underneath. Blocks are separated by SPACE alone -- a
+     rule or a nested card between them would out-shout the chips, which are
+     what the reader came for. Three block shapes exist and all three are
+     legitimate:
+       label row + chips  -- the ordinary case, below;
+       chips, no label    -- the trailer, for performers in no attached group;
+       label row, NO chip row at all -- a group attached with none of its
+         members attached. The label stays (dropping it would hide a tag that
+         IS attached); the chip row is not emitted, because an empty one still
+         pays .pclabel's bottom margin and that 5.6px makes the gap after such
+         a block 20px where every other boundary is 14.4px.
+     The header counts DISTINCT performers, not the sum of the blocks -- an
+     artist in two attached groups appears under both, deliberately, so the
+     seats outnumber the people. At ZERO the count is absent entirely rather
+     than reading "0 performers". */
+  .performers .pcluster + .pcluster { margin-top: .9rem; }
+  .performers .pclabel { margin-bottom: .35rem; }
+  .performers .chiprow { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
   .performers .chip.grp {
     background: var(--accent); color: #fff; font-weight: 650;
   }
@@ -362,7 +381,6 @@
   .performers a.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .performers a.chip.grp:hover { opacity: .88; }
   .performers .chip.nolink { opacity: .75; }
-  .performers .chips { align-items: center; }
 
   .chead .othertags { display: flex; gap: .35rem; flex-wrap: wrap; align-items: center; }
   .chead .othertags .lbl { font-size: .72rem; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; font-weight: 650; }
@@ -1286,10 +1304,25 @@
   </div>
 
 
+  <!-- The old flat row listed the group chip and then every artist chip, which
+       on a multi-group bill said nothing about who belonged to which. A guest
+       in no attached group is shown below the Aqours block to demonstrate the
+       trailer -- it is the second block shape, and a single-group panel alone
+       would not show the vocabulary. The header's count is DISTINCT performers
+       and has no "links go to eventernote" rider any more; the hover state on
+       a chip is the affordance. -->
   <div class="performers">
-    <div class="plabel">Performing <span>&mdash; 9 members, from the Aqours group tag &middot; links go to eventernote</span></div>
-    <div class="chips">
-      <a class="chip grp" href="#" target="_blank" rel="noopener" title="Aqours on eventernote">Aqours</a><a class="chip" href="#" target="_blank" rel="noopener" title="伊波杏樹 on eventernote">伊波杏樹</a><a class="chip" href="#" target="_blank" rel="noopener" title="逢田梨香子 on eventernote">逢田梨香子</a><a class="chip" href="#" target="_blank" rel="noopener" title="諏訪ななか on eventernote">諏訪ななか</a><a class="chip" href="#" target="_blank" rel="noopener" title="小宮有紗 on eventernote">小宮有紗</a><a class="chip" href="#" target="_blank" rel="noopener" title="斉藤朱夏 on eventernote">斉藤朱夏</a><a class="chip" href="#" target="_blank" rel="noopener" title="小林愛香 on eventernote">小林愛香</a><a class="chip" href="#" target="_blank" rel="noopener" title="高槻かなこ on eventernote">高槻かなこ</a><a class="chip" href="#" target="_blank" rel="noopener" title="鈴木愛奈 on eventernote">鈴木愛奈</a><span class="chip nolink" title="No eventernote link yet">降幡愛</span>
+    <div class="plabel">Performing <span>&mdash; 10 performers</span></div>
+    <div class="pcluster">
+      <div class="pclabel"><a class="chip grp" href="#" target="_blank" rel="noopener" title="Aqours on eventernote">Aqours</a></div>
+      <div class="chiprow">
+        <a class="chip" href="#" target="_blank" rel="noopener" title="伊波杏樹 on eventernote">伊波杏樹</a><a class="chip" href="#" target="_blank" rel="noopener" title="逢田梨香子 on eventernote">逢田梨香子</a><a class="chip" href="#" target="_blank" rel="noopener" title="諏訪ななか on eventernote">諏訪ななか</a><a class="chip" href="#" target="_blank" rel="noopener" title="小宮有紗 on eventernote">小宮有紗</a><a class="chip" href="#" target="_blank" rel="noopener" title="斉藤朱夏 on eventernote">斉藤朱夏</a><a class="chip" href="#" target="_blank" rel="noopener" title="小林愛香 on eventernote">小林愛香</a><a class="chip" href="#" target="_blank" rel="noopener" title="高槻かなこ on eventernote">高槻かなこ</a><a class="chip" href="#" target="_blank" rel="noopener" title="鈴木愛奈 on eventernote">鈴木愛奈</a><span class="chip nolink" title="No eventernote link yet">降幡愛</span>
+      </div>
+    </div>
+    <div class="pcluster">
+      <div class="chiprow">
+        <a class="chip" href="#" target="_blank" rel="noopener" title="畑亜貴 on eventernote">畑亜貴</a>
+      </div>
     </div>
   </div>
 
@@ -1646,7 +1679,7 @@
   </details>
 
   <details class="fold">
-    <summary>Tags <span class="hint">Love Live! Sunshine!! &middot; Aqours &middot; 9 performers &middot; Kanto</span></summary>
+    <summary>Tags <span class="hint">Love Live! Sunshine!! &middot; Aqours &middot; 10 performers &middot; Kanto</span></summary>
     <div class="foldbody">
       <div class="applies"><span class="lbl3">Franchise</span><span class="chip">Love Live! Sunshine!!</span><button class="legchip" type="button">+ Add</button></div>
       <div class="applies"><span class="lbl3">Group</span><span class="chip">Aqours</span><button class="legchip" type="button">+ Add</button></div>

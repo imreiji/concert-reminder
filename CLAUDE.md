@@ -596,6 +596,24 @@ deleting them.
   `<template id="remrule-template">` -- never by assembling English DOM.
 - Tile display rules: franchise+group → "F · G"; group only → G; artists
   only → artist chips; >1 venue → "📍 Multiple".
+- The concert page's **Performing panel is per-group clusters**
+  (`.pcluster`): one block per attached GROUP -- its chip on a `.pclabel`
+  row, that group's attached performers in the `.chiprow` beneath -- then an
+  unlabelled trailer block for performers in no attached group. Three owner
+  rulings hold it: a performer in several attached groups appears under EACH
+  (the repetition is information), clusters never fold (the panel is
+  reference, not a to-do), and the header's DISTINCT performer count
+  disappears entirely at zero rather than reading "0 performers". A
+  member-less group keeps its label row and emits NO `.chiprow` -- an empty
+  one still pays `.pclabel`'s bottom margin, and `:empty` can't reach it past
+  the template's own whitespace.
+- **Membership is resolved SERVICE-side**, in `db/service.py`'s
+  `performer_clusters` (one batched `tag_members` query, pinned by a
+  statement-count test), and awaited in the route -- never in the template.
+  `Tag.members` is a lazy self-referential m2m and a lazy load during async
+  template rendering is a `MissingGreenlet` 500, the failure this project has
+  already shipped once. Its caller precondition is that `concert.tags` is
+  already eager-loaded, for the same reason.
 - Times always render dual: JST + the user's timezone.
 - VENUE tags filter by `region` (sidebar groups venues into regions like
   "Kanto"/"Kansai"/"Other"; toggling a region (de)selects every venue tag id
