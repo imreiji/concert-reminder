@@ -3926,6 +3926,70 @@ async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
     return list(res.scalars())
 
 
+@dataclass(frozen=True)
+class PerformerCluster:
+    """One labelled row of the concert page's Performing panel: a GROUP tag
+    and the concert's attached ARTIST tags belonging to it. `group is None`
+    is the trailing cluster of performers in no attached group."""
+
+    group: Tag | None
+    artists: tuple[Tag, ...] = ()
+
+
+async def performer_clusters(
+    session: AsyncSession, concert: Concert
+) -> list[PerformerCluster]:
+    """The concert's attached performers, grouped by their attached GROUP tags.
+
+    DISPLAY ONLY. The input is the materialized `concert_tags` set exactly as
+    invariant 3 left it (attach expanded it once, editors pruned it); nothing
+    here writes, and a later membership edit still never reaches an existing
+    concert -- it only changes which cluster an already-attached artist falls
+    into.
+
+    Three things about the shape of this, each deliberate:
+
+    * It is service-side, not a template loop, because `Tag.members` is a lazy
+      self-referential m2m: touching it during async template rendering raises
+      `MissingGreenlet` -- a 500 this project has shipped once.
+    * `group_members()` is NOT reused. It is per-group, so a franchise concert
+      with several units would issue one query per unit. Membership is read
+      here in ONE batched query over `tag_members` for the attached group ids.
+    * A performer in two attached groups appears under BOTH (owner decision,
+      2026-07-27): the repetition is information -- she really is in both --
+      and deduplicating would leave the main group's cluster looking
+      incomplete to exactly the reader who came to see it. Do not "optimize"
+      it away.
+    """
+    groups = [t for t in concert.tags if t.kind is TagKind.GROUP]
+    artists = [t for t in concert.tags if t.kind is TagKind.ARTIST]
+    # Solo-artist concerts are common and have nothing to look up.
+    if not groups:
+        return [PerformerCluster(None, tuple(artists))] if artists else []
+
+    res = await session.execute(
+        select(TagMember.group_tag_id, TagMember.member_tag_id).where(
+            TagMember.group_tag_id.in_([g.id for g in groups])
+        )
+    )
+    members_by_group: dict[int, set[int]] = {g.id: set() for g in groups}
+    for group_tag_id, member_tag_id in res:
+        members_by_group[group_tag_id].add(member_tag_id)
+
+    # `artists` keeps concert.tags' order (Tag.name) inside every cluster.
+    clusters = [
+        PerformerCluster(
+            g, tuple(a for a in artists if a.id in members_by_group[g.id])
+        )
+        for g in groups
+    ]
+    grouped = {mid for ids in members_by_group.values() for mid in ids}
+    trailer = tuple(a for a in artists if a.id not in grouped)
+    if trailer:
+        clusters.append(PerformerCluster(None, trailer))
+    return clusters
+
+
 async def resolve_group_member(
     session: AsyncSession, group_id: int, member_id: int
 ) -> tuple[Tag, Tag] | None:

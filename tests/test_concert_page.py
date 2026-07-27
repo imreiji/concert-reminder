@@ -25,6 +25,7 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import selectinload
 from sqlalchemy.pool import StaticPool
 
 from app.db.models import (
@@ -41,6 +42,7 @@ from app.db.service import (
     _FOLD_KINDS,
     attach_tag,
     ensure_user,
+    performer_clusters,
     record_round_day_result,
     record_round_outcome,
 )
@@ -348,6 +350,197 @@ async def test_group_chip_links_to_eventernote_when_set(client):
     panel = _performers_panel(client)
     assert '<a class="chip grp" href="https://www.eventernote.com/actors/999"' in panel
     assert "Aqours" in panel
+
+
+# ── header: performer clusters (service derivation) ──────────────────────
+#
+# The panel groups its chips by group, and the grouping is derived in
+# db/service.py rather than in the template: Tag.members is a lazy
+# self-referential m2m, so walking it during async rendering is a
+# MissingGreenlet 500. These pin the derivation itself; the rendering is
+# pinned by the panel tests above.
+
+
+async def make_group(db, name, member_names):
+    """A GROUP tag plus its ARTIST members, attached to NOTHING.
+
+    A member name repeated across two calls resolves to the SAME tag with
+    two memberships — which is exactly the performer-in-two-groups case."""
+    async with db() as s:
+        group = Tag(name=name, kind=TagKind.GROUP)
+        s.add(group)
+        await s.flush()
+        ids = {}
+        for n in member_names:
+            res = await s.execute(select(Tag).where(Tag.name == n))
+            t = res.scalar_one_or_none()
+            if t is None:
+                t = Tag(name=n, kind=TagKind.ARTIST)
+                s.add(t)
+                await s.flush()
+            s.add(TagMember(group_tag_id=group.id, member_tag_id=t.id))
+            ids[n] = t.id
+        await s.commit()
+        return group.id, ids
+
+
+async def make_artist(db, name):
+    """A solo ARTIST tag in no group at all, attached to nothing."""
+    async with db() as s:
+        t = Tag(name=name, kind=TagKind.ARTIST)
+        s.add(t)
+        await s.commit()
+        return t.id
+
+
+async def attach_existing(db, concert_id, tag_ids):
+    """Attach already-created tags with NO expansion. The materialised
+    concert_tags set is this derivation's input, so each test states it
+    exactly instead of letting attach_tag decide it."""
+    async with db() as s:
+        for tid in tag_ids:
+            s.add(ConcertTag(concert_id=concert_id, tag_id=tid))
+        await s.commit()
+
+
+async def clusters_for(db, concert_id):
+    async with db() as s:
+        res = await s.execute(
+            select(Concert)
+            .where(Concert.id == concert_id)
+            .options(selectinload(Concert.tags))
+        )
+        return await performer_clusters(s, res.scalar_one())
+
+
+def cluster_names(clusters):
+    return [
+        (c.group.name if c.group else None, [a.name for a in c.artists])
+        for c in clusters
+    ]
+
+
+async def test_clusters_hold_each_groups_attached_members(db):
+    """Groups in concert.tags' order, and artists in it too INSIDE each
+    cluster: "Riko" is created and attached first but sorts second, so this
+    fails if the derivation ever keeps insertion order instead."""
+    cid = await seed_concert(db)
+    b_id, b_members = await make_group(db, "Bearies", ["Mari"])
+    a_id, a_members = await make_group(db, "Aqours", ["Riko", "Chika"])
+    await attach_existing(db, cid, [b_id, a_id, *b_members.values(), *a_members.values()])
+
+    assert cluster_names(await clusters_for(db, cid)) == [
+        ("Aqours", ["Chika", "Riko"]),
+        ("Bearies", ["Mari"]),
+    ]
+
+
+async def test_a_concert_with_no_groups_is_one_trailer(db):
+    """A solo-artist bill: no group to cluster under, but the performers must
+    still come out — the panel renders this list and nothing else."""
+    cid = await seed_concert(db)
+    solo = await make_artist(db, "Solo Star")
+    await attach_existing(db, cid, [solo])
+
+    assert cluster_names(await clusters_for(db, cid)) == [(None, ["Solo Star"])]
+
+
+async def test_a_performer_in_two_groups_appears_in_both(db):
+    """Owner decision 1: the repetition is information, not a bug."""
+    cid = await seed_concert(db)
+    a_id, a_members = await make_group(db, "Aqours", ["Shared Star", "Chika"])
+    b_id, b_members = await make_group(db, "Bearies", ["Shared Star", "Mari"])
+    shared = a_members["Shared Star"]
+    assert b_members["Shared Star"] == shared  # one tag, two memberships
+    await attach_existing(db, cid, [a_id, b_id, shared, a_members["Chika"], b_members["Mari"]])
+
+    clusters = await clusters_for(db, cid)
+    ids = {c.group.id: [a.id for a in c.artists] for c in clusters if c.group}
+    assert shared in ids[a_id]
+    assert shared in ids[b_id]
+
+
+async def test_ungrouped_artists_land_in_the_trailer(db):
+    cid = await seed_concert(db)
+    gid, members = await make_group(db, "Aqours", ["Chika"])
+    solo = await make_artist(db, "Solo Star")
+    await attach_existing(db, cid, [gid, members["Chika"], solo])
+
+    clusters = await clusters_for(db, cid)
+    assert clusters[-1].group is None
+    assert [a.id for a in clusters[-1].artists] == [solo]
+
+
+async def test_the_trailer_is_omitted_when_every_artist_is_grouped(db):
+    cid = await seed_concert(db)
+    gid, members = await make_group(db, "Aqours", ["Chika", "Riko"])
+    await attach_existing(db, cid, [gid, *members.values()])
+
+    clusters = await clusters_for(db, cid)
+    assert clusters
+    assert all(c.group is not None for c in clusters)
+
+
+async def test_a_group_with_no_attached_members_keeps_its_label(db):
+    """The group IS on the bill; dropping the row would hide an attached tag,
+    and an empty row says the line-up was never listed (or pruned to none)."""
+    cid = await seed_concert(db)
+    full_id, full_members = await make_group(db, "Aqours", ["Chika"])
+    empty_id, _ = await make_group(db, "Bearies", ["Mari"])
+    await attach_existing(db, cid, [full_id, empty_id, full_members["Chika"]])
+
+    clusters = await clusters_for(db, cid)
+    assert any(
+        c.group is not None and c.group.id == empty_id and c.artists == ()
+        for c in clusters
+    )
+
+
+async def test_a_member_whose_group_is_not_attached_stays_in_the_trailer(db):
+    """The artist really is in a group — but that group is not on this bill,
+    so there is no cluster to put her in."""
+    cid = await seed_concert(db)
+    absent_id, members = await make_group(db, "Bearies", ["Mari"])
+    gid, on_bill = await make_group(db, "Aqours", ["Chika"])
+    await attach_existing(db, cid, [gid, on_bill["Chika"], members["Mari"]])
+
+    clusters = await clusters_for(db, cid)
+    assert all(c.group is None or c.group.id != absent_id for c in clusters)
+    assert clusters[-1].group is None
+    assert [a.id for a in clusters[-1].artists] == [members["Mari"]]
+
+
+async def test_membership_loads_in_one_query(db):
+    """One batched read over tag_members however many groups are attached —
+    what stops a per-group group_members() loop creeping back in."""
+    cid = await seed_concert(db)
+    attach = []
+    for name, member in [("Aqours", "Chika"), ("Bearies", "Mari"), ("Cerise", "Kanon")]:
+        gid, members = await make_group(db, name, [member])
+        attach += [gid, members[member]]
+    await attach_existing(db, cid, attach)
+
+    async with db() as s:
+        res = await s.execute(
+            select(Concert)
+            .where(Concert.id == cid)
+            .options(selectinload(Concert.tags))
+        )
+        concert = res.scalar_one()
+
+        queries: list[str] = []
+
+        def _count(conn, cursor, statement, parameters, context, executemany):
+            queries.append(statement)
+
+        event.listen(s.bind.sync_engine, "before_cursor_execute", _count)
+        try:
+            clusters = await performer_clusters(s, concert)
+        finally:
+            event.remove(s.bind.sync_engine, "before_cursor_execute", _count)
+
+    assert len(clusters) == 3  # three groups, or the count measures nothing
+    assert sum(1 for q in queries if "tag_members" in q) == 1
 
 
 # ── header: links and actions ────────────────────────────────────────────
