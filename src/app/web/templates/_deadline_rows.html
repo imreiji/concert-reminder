@@ -58,10 +58,14 @@
      this small line via a ::after in the tablet band (701-1040px), where
      the what-happens COLUMN is dropped. Desktop shows the column and
      ignores the attribute; the phone drops the context (act-c hidden),
-     same as before. #}
+     same as before. It carries the ANCHOR VERB ALONE: it used to carry
+     "<label> <verb>" because this cell held the concert TITLE, and now that
+     the cell names the round, repeating the label would fold the band's
+     line into "FC lottery · FC lottery closes". The attribute adds only
+     what the dropped column actually contributes. #}
   <span class="title-c">
     {{ d.label }}
-    <small data-happens="{{ d.label }} {{ deadline_label(d.anchor) }}"></small>
+    <small data-happens="{{ deadline_label(d.anchor) }}"></small>
   </span>
   <span class="act-c"><b>{{ d.label }}</b> {{ deadline_label(d.anchor) }}</span>
   <span class="acts">

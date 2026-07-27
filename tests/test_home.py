@@ -1390,6 +1390,33 @@ async def test_home_renders_one_block_header_per_concert(client):
     assert rows.count('class="row"') == 3
 
 
+async def test_the_block_header_carries_the_venue_and_the_performance_date(client):
+    """`ConcertBlock.venue` and `.starts_at_utc` are rendered in exactly ONE
+    place -- the block header's <small> -- so nothing else would catch them
+    going missing. The date is a performance date, so it renders day-month
+    with no zone (fmt_day_month), not the dual deadline shape."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        venue = Tag(name="Zepp Haneda", kind=TagKind.VENUE, region="Kanto")
+        seed.s.add(venue)
+        await seed.s.flush()
+        seed.s.add(ConcertTag(concert_id=c.id, tag_id=venue.id))
+        seed.s.add(ConcertDay(
+            concert_id=c.id, label="Day 1",
+            starts_at_utc=datetime(2026, 10, 12, 10, 0, tzinfo=UTC),
+        ))
+        await seed.s.flush()
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    head = rows.split('class="blockhead"', 1)[1].split("</div>", 1)[0]
+    # Venue, separator, day-month -- all three, in the header, in that order.
+    assert "<small>📍 Zepp Haneda · 12 Oct</small>" in head
+
+
 async def test_a_folded_round_is_present_but_collapsed(client):
     """A fold is presentation, not filtering: the second round's capture form
     is IN the DOM and posts to the same target, it is merely behind a closed
@@ -1413,6 +1440,30 @@ async def test_a_folded_round_is_present_but_collapsed(client):
     assert "Also open" in fold
     assert f'/rounds/{folded_id}/outcome' in fold
     assert 'hx-target="#deadline-rows"' in fold
+
+
+async def test_data_happens_carries_only_the_anchor_verb(client):
+    """The tablet band (701-1040px) drops the what-happens COLUMN and folds it
+    back into the title cell via `content: " · " attr(data-happens)`. That cell
+    used to hold the CONCERT TITLE, so the attribute carried "<round> <verb>"
+    to make "Aqours Live · FC lottery closes".
+
+    The block header owns the concert title now and the cell names the ROUND,
+    so carrying the label again would print it twice in one line -- "FC lottery
+    · FC lottery closes". The attribute keeps only what the dropped column
+    actually adds: the anchor verb."""
+    async def build(seed):
+        c = await seed.concert("aqours-live", title="Aqours Live", day_offset=None)
+        await seed.open_round(c, "FC lottery")
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert 'data-happens="closes"' in rows
+    assert 'data-happens="FC lottery closes"' not in rows
+    # The visible cell still names the round; only the folded copy shrank.
+    assert "FC lottery" in rows
 
 
 async def test_no_fold_link_for_a_single_round_concert(client):
