@@ -775,6 +775,117 @@ async def test_due_reminder_carries_round_id_and_outcome(session):
     assert due.outcome == LotteryOutcome.APPLIED
 
 
+# ── DueReminder.covered_days ────────────────────────────────────────────
+
+
+async def seed_results_round(
+    s, leg_labels: list[str], cancelled: set[str] | None = None,
+    *, language: str = "en", label_en: dict[str, str] | None = None,
+) -> tuple[Round, list[ConcertDay]]:
+    """A concert with one RESULTS-anchored round covering every leg, plus a
+    queued RESULTS reminder for user 42."""
+    cancelled = cancelled or set()
+    user = await ensure_user(s, 42, "reiji")
+    user.language = language
+    concert = Concert(title="Covered Tour", event_id="covered-tour", created_by=42)
+    s.add(concert)
+    await s.flush()
+    days = [
+        ConcertDay(
+            concert_id=concert.id, label=lbl,
+            label_en=(label_en or {}).get(lbl),
+            starts_at_utc=dt(8, i + 1, 9), cancelled=lbl in cancelled,
+        )
+        for i, lbl in enumerate(leg_labels)
+    ]
+    s.add_all(days)
+    await s.flush()
+    round_ = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="先行",
+        closes_at_utc=dt(6, 20), results_at_utc=dt(6, 25),
+        applies_to=[d.id for d in days],
+    )
+    s.add(round_)
+    await s.flush()
+    return round_, days
+
+
+async def queue_anchor(s, round_: Round, anchor: Anchor) -> None:
+    rule = ReminderRule(user_id=42, round_id=round_.id, anchor=anchor, offset_days=0)
+    s.add(rule)
+    await s.flush()
+    await sync_rule(s, rule, NOW)
+
+
+async def test_due_reminder_results_row_carries_covered_days(session):
+    round_, days = await seed_results_round(session, ["Leg A", "Leg B"])
+    await queue_anchor(session, round_, Anchor.RESULTS)
+
+    (due,) = await due_reminders(session, dt(6, 26))
+    assert due.anchor is Anchor.RESULTS
+    assert due.covered_days == ((days[0].id, "Leg A"), (days[1].id, "Leg B"))
+
+
+async def test_due_reminder_non_results_row_has_no_covered_days(session):
+    """Same multi-leg round, a CLOSES reminder: per-day result capture is a
+    RESULTS-only question, so the field stays empty."""
+    round_, _ = await seed_results_round(session, ["Leg A", "Leg B"])
+    await queue_anchor(session, round_, Anchor.CLOSES)
+
+    (due,) = await due_reminders(session, dt(6, 26))
+    assert due.anchor is Anchor.CLOSES
+    assert due.covered_days == ()
+
+
+async def test_due_reminder_single_leg_round_has_no_covered_days(session):
+    round_, _ = await seed_results_round(session, ["Leg A"])
+    await queue_anchor(session, round_, Anchor.RESULTS)
+
+    (due,) = await due_reminders(session, dt(6, 26))
+    assert due.covered_days == ()
+
+
+async def test_due_reminder_covered_day_labels_use_recipient_language(session):
+    """Scheduler path: labels resolve from the RECIPIENT's stored language,
+    never the ambient ContextVar locale (one pass composes for many users)."""
+    from app.i18n import set_locale
+
+    round_, days = await seed_results_round(
+        session, ["1日目", "2日目"], language="ja",
+        label_en={"1日目": "Day 1", "2日目": "Day 2"},
+    )
+    await queue_anchor(session, round_, Anchor.RESULTS)
+
+    set_locale("en")
+    try:
+        (due,) = await due_reminders(session, dt(6, 26))
+    finally:
+        set_locale("en")
+    assert due.covered_days == ((days[0].id, "1日目"), (days[1].id, "2日目"))
+
+
+async def test_due_reminder_covered_days_excludes_cancelled_leg(session):
+    round_, days = await seed_results_round(
+        session, ["Leg A", "Leg B", "Leg C"], cancelled={"Leg B"}
+    )
+    await queue_anchor(session, round_, Anchor.RESULTS)
+
+    (due,) = await due_reminders(session, dt(6, 26))
+    assert due.covered_days == ((days[0].id, "Leg A"), (days[2].id, "Leg C"))
+
+
+async def test_due_reminder_cancelled_leg_drops_round_below_two_live(session):
+    """A cancelled leg is not just filtered out of the pairs -- it does not
+    count toward the >=2-live-legs threshold either."""
+    round_, _ = await seed_results_round(
+        session, ["Leg A", "Leg B"], cancelled={"Leg B"}
+    )
+    await queue_anchor(session, round_, Anchor.RESULTS)
+
+    (due,) = await due_reminders(session, dt(6, 26))
+    assert due.covered_days == ()
+
+
 # ── LABEL_BY_ROUND_KIND ─────────────────────────────────────────────────
 
 

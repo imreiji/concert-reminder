@@ -1076,6 +1076,11 @@ class DueReminder:
     url: str | None = None
     # day-anchored:
     day_label: str | None = None
+    # (day_id, label) for every LIVE leg a RESULTS-anchored round covers, in
+    # performance order -- and only when there are at least two of them, since
+    # a one-leg round has nothing to disambiguate. Empty for every other row.
+    # bot/messages.py turns a non-empty tuple into per-day result buttons.
+    covered_days: tuple[tuple[int, str], ...] = ()
 
 
 async def due_reminders(
@@ -1130,6 +1135,34 @@ async def due_reminders(
         )).scalars())
         outcomes = {(o.user_id, o.round_id): o.outcome for o in outcome_rows}
 
+    # The legs behind each multi-leg RESULTS row, for the per-day capture
+    # buttons. Gated on RESULTS specifically so a batch that raises no such
+    # question costs no extra query at all -- and batched by CONCERT, not by
+    # round, so ten rounds on one tour still read their legs once.
+    legs_by_round: dict[int, list[ConcertDay]] = {}
+    results_round_ids = {
+        row.round_id for row in rows
+        if row.anchor is Anchor.RESULTS and row.round_id in rounds
+    }
+    if results_round_ids:
+        leg_concert_ids = {rounds[rid].concert_id for rid in results_round_ids}
+        legs_by_concert: dict[int, list[ConcertDay]] = {}
+        leg_rows = (await session.execute(
+            select(ConcertDay)
+            .where(ConcertDay.concert_id.in_(leg_concert_ids))
+            .order_by(ConcertDay.starts_at_utc, ConcertDay.id)
+        )).scalars()
+        for leg in leg_rows:
+            legs_by_concert.setdefault(leg.concert_id, []).append(leg)
+        for rid in results_round_ids:
+            round_ = rounds[rid]
+            # Cancelled legs are excluded before the count, not after: a
+            # two-leg round with one leg cancelled is a one-leg question.
+            live = [d for d in legs_by_concert.get(round_.concert_id, []) if not d.cancelled]
+            covered = _covered_day_ids(round_, {d.id for d in live})
+            if len(covered) >= 2:
+                legs_by_round[rid] = [d for d in live if d.id in covered]
+
     out: list[DueReminder] = []
     for row in rows:
         rule = rules.get(row.rule_id)
@@ -1163,6 +1196,13 @@ async def due_reminders(
                 ),
                 url=round_.url if round_ else None,
                 day_label=loc_field(day, "label", user.language) if day else None,
+                # Same per-RECIPIENT rule as round_label above: a round can
+                # also carry a CLOSES row, so the anchor is re-checked here
+                # rather than trusted from legs_by_round's membership.
+                covered_days=tuple(
+                    (d.id, loc_field(d, "label", user.language))
+                    for d in legs_by_round.get(row.round_id, ())
+                ) if row.anchor is Anchor.RESULTS else (),
             )
         )
     return out
