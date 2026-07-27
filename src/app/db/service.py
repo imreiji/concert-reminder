@@ -499,12 +499,169 @@ async def record_round_outcome(
         await _auto_arm_next_round(session, user_id, round_, now)
 
 
-async def _next_round_for_leg(session: AsyncSession, lost_round: Round) -> Round | None:
+async def unresolved_day_ids(
+    session: AsyncSession, user_id: int, round_: Round
+) -> list[int]:
+    """The legs of this round this user is still waiting on: covered days
+    (see _covered_day_ids) minus the ones already resolved by a
+    RoundOutcomeDay row, minus the ones they opted out of, minus cancelled
+    ones. Ordered by starts_at_utc then id, so the capture surfaces ask about
+    legs in the order they happen.
+
+    All three exclusions are the same idea from different directions -- a leg
+    with a recorded result, a leg you are not going to, and a leg that is not
+    happening are all legs nobody is waiting on an answer for. That is also
+    what makes this the terminal check for a LOST day (see
+    _settle_lost_days): "empty" means the round has nothing left to resolve."""
+    days = list((await session.execute(
+        select(ConcertDay).where(ConcertDay.concert_id == round_.concert_id)
+    )).scalars())
+    covered = _covered_day_ids(round_, {d.id for d in days})
+    if not covered:
+        return []
+
+    resolved = set((await session.execute(
+        select(RoundOutcomeDay.day_id).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id == round_.id,
+        )
+    )).scalars())
+    opted_out = set((await session.execute(
+        select(LegOptOut.concert_day_id).where(
+            LegOptOut.user_id == user_id,
+            LegOptOut.concert_day_id.in_(sorted(covered)),
+        )
+    )).scalars())
+
+    remaining = [
+        d for d in days
+        if d.id in covered
+        and not d.cancelled
+        and d.id not in resolved
+        and d.id not in opted_out
+    ]
+    remaining.sort(key=lambda d: (d.starts_at_utc, d.id))
+    return [d.id for d in remaining]
+
+
+async def _won_day_ids(session: AsyncSession, user_id: int, round_id: int) -> set[int]:
+    """This user's WON day rows on one round -- the "is any leg of this round
+    actually secured" question the LOST settle path turns on."""
+    return set((await session.execute(
+        select(RoundOutcomeDay.day_id).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id == round_id,
+            RoundOutcomeDay.result == LegResult.WON,
+        )
+    )).scalars())
+
+
+async def _settle_lost_days(
+    session: AsyncSession, user_id: int, round_: Round, lost_day_ids: set[int],
+    now: datetime,
+) -> None:
+    """Shared tail of every LOST day write: either the round is done, or it
+    is a partial loss inside a round that is still alive.
+
+    Done means no leg of it was won AND nothing is left unresolved -- then the
+    round-level LOST is the truth, and record_round_outcome's existing
+    semantics (re-sync + whole-round auto-arm) settle it. Otherwise the round
+    keeps whatever outcome it has (a partial win stays WON) and only the lost
+    LEGS move: re-sync this user's rules so the planner sees the new day rows,
+    then arm the next round covering just those legs -- narrowing the arm to
+    lost_day_ids is what stops a lost Saturday from arming a round that only
+    sells Friday."""
+    if not await _won_day_ids(session, user_id, round_.id) and not await unresolved_day_ids(
+        session, user_id, round_
+    ):
+        await record_round_outcome(session, user_id, round_.id, LotteryOutcome.LOST, now)
+        return
+    await reinstate_user_rules(session, user_id, round_.concert_id, now)
+    if lost_day_ids:
+        await _auto_arm_next_round(session, user_id, round_, now, day_ids=lost_day_ids)
+
+
+async def record_round_day_result(
+    session: AsyncSession, user_id: int, round_id: int, day_id: int,
+    result: LegResult, now: datetime | None = None,
+) -> None:
+    """One leg of one round resolved for one user -- the per-day sibling of
+    record_round_outcome, and (with record_remaining_days_lost) the only
+    writer of RoundOutcomeDay (invariant 2).
+
+    A day the round does not cover, or a round that no longer exists, writes
+    nothing: ids arrive from Discord custom_ids and form posts, so they are
+    re-validated server-side and a forged or stale one simply does nothing --
+    the same rule /setup's capture screens follow.
+
+    Both layers stay consistent: a WON leg flips the round outcome to WON
+    (a win is a win, whatever the other legs do), while a LOST leg settles
+    the round only when nothing is left to wait on (see _settle_lost_days)."""
+    now = now or _now()
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
+        return
+    all_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(ConcertDay.concert_id == round_.concert_id)
+    )).scalars())
+    if day_id not in _covered_day_ids(round_, all_day_ids):
+        return
+
+    existing = (await session.execute(
+        select(RoundOutcomeDay).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id == round_id,
+            RoundOutcomeDay.day_id == day_id,
+        )
+    )).scalar_one_or_none()
+    if existing is None:
+        session.add(RoundOutcomeDay(
+            user_id=user_id, round_id=round_id, day_id=day_id, result=result,
+        ))
+    else:
+        existing.result = result
+    await session.flush()
+
+    if result is LegResult.WON:
+        await record_round_outcome(session, user_id, round_id, LotteryOutcome.WON, now)
+        return
+    await _settle_lost_days(session, user_id, round_, {day_id}, now)
+
+
+async def record_remaining_days_lost(
+    session: AsyncSession, user_id: int, round_id: int, now: datetime | None = None,
+) -> None:
+    """["Lost the rest"] -- one LOST row for every leg still unresolved, then
+    the same settle the last individual LOST would have run. Writing the rows
+    in one pass (rather than looping record_round_day_result) keeps the settle
+    to a single decision: with everything resolved, the round is LOST unless
+    some leg was won."""
+    now = now or _now()
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
+        return
+    remaining = await unresolved_day_ids(session, user_id, round_)
+    for day_id in remaining:
+        session.add(RoundOutcomeDay(
+            user_id=user_id, round_id=round_id, day_id=day_id, result=LegResult.LOST,
+        ))
+    await session.flush()
+    await _settle_lost_days(session, user_id, round_, set(remaining), now)
+
+
+async def _next_round_for_leg(
+    session: AsyncSession, lost_round: Round, day_ids: set[int] | None = None
+) -> Round | None:
     """The next round for the same leg(s) a just-lost round applied to --
     the earliest-opening round (of those with an opens_at_utc set) whose
     applies_to overlaps the lost round's (or is empty -- General rounds
     cover every leg), opening strictly after the lost round's own close
-    (falling back to its open time if it has no close)."""
+    (falling back to its open time if it has no close).
+
+    `day_ids` narrows the overlap to specific legs, for a per-day loss inside
+    a round that was not lost as a whole: only rounds covering THOSE legs are
+    candidates. Callers with a whole-round loss pass nothing and get the
+    round's own applies_to, unchanged."""
     candidates = list((await session.execute(
         select(Round).where(
             Round.concert_id == lost_round.concert_id,
@@ -517,7 +674,11 @@ async def _next_round_for_leg(session: AsyncSession, lost_round: Round) -> Round
             Round.kind != RoundKind.UPGRADE,
         )
     )).scalars())
-    lost_legs = set(lost_round.applies_to) if lost_round.applies_to else None
+    lost_legs: set[int] | None
+    if day_ids is not None:
+        lost_legs = day_ids
+    else:
+        lost_legs = set(lost_round.applies_to) if lost_round.applies_to else None
     after = lost_round.closes_at_utc or lost_round.opens_at_utc
 
     def overlaps(r: Round) -> bool:
@@ -532,18 +693,22 @@ async def _next_round_for_leg(session: AsyncSession, lost_round: Round) -> Round
 
 
 async def _auto_arm_next_round(
-    session: AsyncSession, user_id: int, lost_round: Round, now: datetime | None = None
+    session: AsyncSession, user_id: int, lost_round: Round, now: datetime | None = None,
+    day_ids: set[int] | None = None,
 ) -> None:
     """After a LOST outcome: find the next round for the same leg and
     auto-create a real ReminderRule for its OPENS anchor, using the
-    user's default preset offset if they have one, else immediate."""
+    user's default preset offset if they have one, else immediate.
+
+    `day_ids` narrows which legs count as lost (see _next_round_for_leg) --
+    a per-day loss arms only rounds covering the legs actually lost."""
     now = now or _now()
     if lost_round.kind is RoundKind.UPGRADE:
         # Losing an upgrade ends that nested side-campaign -- there is no
         # "next round" to fall back to; the user still holds their base
         # ticket. Auto-arming a later base round here would be wrong.
         return
-    next_round = await _next_round_for_leg(session, lost_round)
+    next_round = await _next_round_for_leg(session, lost_round, day_ids)
     if next_round is None:
         return  # nothing to arm yet -- sync_concert catches up when it's added
 

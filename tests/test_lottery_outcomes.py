@@ -23,10 +23,14 @@ from app.db.models import (
 from app.db.service import (
     covered_round_ids,
     ensure_user,
+    record_remaining_days_lost,
+    record_round_day_result,
     record_round_outcome,
     secured_day_ids_by_round,
+    set_leg_opt_out,
     sync_concert,
     sync_rule,
+    unresolved_day_ids,
 )
 from app.domain.types import Anchor, LegResult, LotteryOutcome, RoundKind
 
@@ -592,3 +596,191 @@ async def test_covered_round_ids_excludes_upgrade_rounds(session):
     await record_round_outcome(session, 42, round_a.id, LotteryOutcome.WON, NOW)
 
     assert upgrade.id not in await covered_round_ids(session, 42, concert.id)
+
+
+# ── Per-day results: record_round_day_result / record_remaining_days_lost ──
+
+
+async def outcome_of(s, round_id) -> LotteryOutcome | None:
+    row = (await s.execute(
+        select(RoundOutcome).where(RoundOutcome.round_id == round_id)
+    )).scalar_one_or_none()
+    return row.outcome if row is not None else None
+
+
+async def day_results(s, round_id) -> dict[int, LegResult]:
+    return {
+        row.day_id: row.result for row in (await s.execute(
+            select(RoundOutcomeDay).where(RoundOutcomeDay.round_id == round_id)
+        )).scalars()
+    }
+
+
+async def opens_rules_for(s, round_id) -> list[ReminderRule]:
+    return list((await s.execute(
+        select(ReminderRule).where(
+            ReminderRule.round_id == round_id, ReminderRule.anchor == Anchor.OPENS,
+        )
+    )).scalars())
+
+
+async def test_won_day_flips_round_to_won(session):
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.APPLIED, NOW)
+
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.WON
+    assert await day_results(session, round_a.id) == {leg_a.id: LegResult.WON}
+    # And the shared derivation now claims exactly the won leg, not both.
+    secured = await secured_day_ids_by_round(session, 42, concert.id)
+    assert secured[round_a.id] == {leg_a.id}
+
+
+async def test_won_day_upserts_in_place(session):
+    """A second click on the same leg updates the row rather than adding a
+    duplicate -- the unique index would otherwise be an IntegrityError."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.LOST, NOW)
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+
+    assert await day_results(session, round_a.id) == {leg_a.id: LegResult.WON}
+
+
+async def test_lost_day_partial_keeps_round_won_and_arms_next_round_for_that_day(session):
+    """Won leg A, lost leg B: the round's own outcome stays WON (a win is a
+    win), and the loss arms the next round covering leg B specifically."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    round_b.opens_at_utc = dt(7, 1)
+    round_b.closes_at_utc = dt(7, 15)
+    await session.flush()
+
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+    await record_round_day_result(session, 42, round_a.id, leg_b.id, LegResult.LOST, NOW)
+
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.WON
+    assert await day_results(session, round_a.id) == {
+        leg_a.id: LegResult.WON, leg_b.id: LegResult.LOST,
+    }
+    (rule,) = await opens_rules_for(session, round_b.id)
+    assert len(await queue_rows_for(session, rule.id)) == 1
+
+
+async def test_lost_day_partial_does_not_arm_a_round_for_another_leg(session):
+    """The per-day narrowing is the point: losing leg B must not arm a later
+    round that only covers leg A."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    a_later = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="A only, later",
+        opens_at_utc=dt(7, 1), closes_at_utc=dt(7, 15), applies_to=[leg_a.id],
+    )
+    session.add(a_later)
+    await session.flush()
+
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+    await record_round_day_result(session, 42, round_a.id, leg_b.id, LegResult.LOST, NOW)
+
+    assert await opens_rules_for(session, a_later.id) == []
+
+
+async def test_all_days_lost_flips_round_to_lost(session):
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.APPLIED, NOW)
+
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.LOST, NOW)
+    # One leg still unresolved -- the round is not settled yet.
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.APPLIED
+
+    await record_round_day_result(session, 42, round_a.id, leg_b.id, LegResult.LOST, NOW)
+
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.LOST
+
+
+async def test_forged_day_id_is_noop(session):
+    """A day the round does not cover (or a round that does not exist) writes
+    nothing at all -- same recompute-server-side rule as /setup."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+
+    # round_b covers leg B only; leg A is not one of its legs.
+    await record_round_day_result(session, 42, round_b.id, leg_a.id, LegResult.WON, NOW)
+    await record_round_day_result(session, 42, round_b.id, 999_999, LegResult.WON, NOW)
+    await record_round_day_result(session, 42, 999_999, leg_b.id, LegResult.WON, NOW)
+
+    assert await day_results(session, round_b.id) == {}
+    assert await outcome_of(session, round_b.id) is None
+
+
+async def test_not_going_day_counts_as_resolved_for_lost_terminal(session):
+    """A leg you opted out of is not a leg anyone is waiting on: with leg B
+    opted out, losing leg A settles the whole round as LOST."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await set_leg_opt_out(session, 42, leg_b.id, True)
+
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.LOST, NOW)
+
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.LOST
+    assert await day_results(session, round_a.id) == {leg_a.id: LegResult.LOST}
+
+
+async def test_remaining_days_lost_writes_rows_and_settles(session):
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    await record_round_outcome(session, 42, round_a.id, LotteryOutcome.APPLIED, NOW)
+
+    await record_remaining_days_lost(session, 42, round_a.id, NOW)
+
+    assert await day_results(session, round_a.id) == {
+        leg_a.id: LegResult.LOST, leg_b.id: LegResult.LOST,
+    }
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.LOST
+
+
+async def test_remaining_days_lost_keeps_a_partial_win_won(session):
+    """"Lost the rest" after a win leaves the round WON and secures exactly
+    the won leg."""
+    concert, leg_a, leg_b, round_a, round_b = await seed_ab(session)
+    round_b.opens_at_utc = dt(7, 1)
+    round_b.closes_at_utc = dt(7, 15)
+    await session.flush()
+    await record_round_day_result(session, 42, round_a.id, leg_a.id, LegResult.WON, NOW)
+
+    await record_remaining_days_lost(session, 42, round_a.id, NOW)
+
+    assert await outcome_of(session, round_a.id) is LotteryOutcome.WON
+    assert await day_results(session, round_a.id) == {
+        leg_a.id: LegResult.WON, leg_b.id: LegResult.LOST,
+    }
+    secured = await secured_day_ids_by_round(session, 42, concert.id)
+    assert secured[round_a.id] == {leg_a.id}
+    # ...and the newly-lost leg still gets its next round armed.
+    assert len(await opens_rules_for(session, round_b.id)) == 1
+
+
+async def test_unresolved_day_ids_excludes_cancelled_resolved_and_opted_out(session):
+    await ensure_user(session, 42, "reiji")
+    concert = Concert(title="Four-Leg Tour", event_id="four-leg-tour", created_by=42)
+    session.add(concert)
+    await session.flush()
+    cancelled = ConcertDay(
+        concert_id=concert.id, label="Cancelled", starts_at_utc=dt(8, 1, 9), cancelled=True,
+    )
+    resolved = ConcertDay(concert_id=concert.id, label="Resolved", starts_at_utc=dt(8, 2, 9))
+    opted_out = ConcertDay(concert_id=concert.id, label="Not going", starts_at_utc=dt(8, 3, 9))
+    # Created last but starting FIRST of the two open legs, so the returned
+    # order proves it sorts by starts_at_utc, not by id.
+    open_early = ConcertDay(concert_id=concert.id, label="Early", starts_at_utc=dt(8, 4, 9))
+    open_late = ConcertDay(concert_id=concert.id, label="Late", starts_at_utc=dt(8, 5, 9))
+    session.add_all([cancelled, resolved, opted_out, open_late, open_early])
+    await session.flush()
+    round_all = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="All legs",
+        closes_at_utc=dt(6, 25),
+    )
+    session.add(round_all)
+    await session.flush()
+    session.add(RoundOutcomeDay(
+        user_id=42, round_id=round_all.id, day_id=resolved.id, result=LegResult.LOST,
+    ))
+    await set_leg_opt_out(session, 42, opted_out.id, True)
+    await session.flush()
+
+    assert await unresolved_day_ids(session, 42, round_all) == [open_early.id, open_late.id]
