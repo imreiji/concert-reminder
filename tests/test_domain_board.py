@@ -10,7 +10,7 @@ from app.domain.types import LotteryOutcome as LO
 # A stand-in for db/service.py's Rung, which is ORM-side: importing it here
 # would drag sqlalchemy into a pure-domain test. visible_rungs only ever reads
 # `.state`, so a namedtuple with the same field names is a faithful double.
-R = namedtuple("R", "round_id label state detail")
+R = namedtuple("R", "round_id label state detail is_upgrade", defaults=(False,))
 
 
 def base(*outcomes):
@@ -189,6 +189,41 @@ def test_visible_rungs_applied_outranks_a_later_live_round():
     visible, hidden = visible_rungs(rungs)
     assert [p for p, _ in visible] == [1, 2]
     assert [r.state for _, r in visible] == ["applied", "live"]
+    assert hidden == 1
+
+
+def test_visible_rungs_won_upgrade_outranks_a_paid_base_ticket():
+    """The same inversion in the upgrade corner, where `column_for` ranks
+    differently from a plain outcome ladder.
+
+    A won-but-unpaid UPGRADE outranks a PAID base ticket (_UPGRADE_WON_RANK),
+    so the card sits in "Won -- pay". Ranking the rungs by outcome alone picks
+    the PAID rung and hides the won upgrade, leaving the card naming a column
+    nothing on it explains -- exactly the defect the state-rung rule closed."""
+    rungs = [R(1, "1次", "paid", None), R(2, "一般", "todo", None),
+             R(3, "アップグレード", "won", None, True)]
+    # The placement this has to mirror, asserted rather than assumed:
+    assert column_for([(LO.PAID, False), (LO.WON, True)], has_open_round=True) is Column.WON
+
+    visible, hidden = visible_rungs(rungs)
+
+    assert [p for p, _ in visible] == [3]
+    assert [r.state for _, r in visible] == ["won"]
+    assert hidden == 2
+
+
+def test_visible_rungs_applied_upgrade_does_not_outrank_a_paid_base_ticket():
+    """Only a WON upgrade is special (column_for ranks an upgrade APPLIED at 1
+    and PAID at 3, exactly as their base twins), so the PAID rung still wins."""
+    rungs = [R(1, "1次", "paid", None), R(2, "一般", "todo", None),
+             R(3, "アップグレード", "applied", None, True)]
+    assert column_for(
+        [(LO.PAID, False), (LO.APPLIED, True)], has_open_round=True
+    ) is Column.SECURED
+
+    visible, hidden = visible_rungs(rungs)
+
+    assert [p for p, _ in visible] == [1, 2]
     assert hidden == 1
 
 

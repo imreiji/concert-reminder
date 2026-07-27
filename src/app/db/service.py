@@ -261,6 +261,30 @@ async def secured_day_ids_by_round(
         if result is LegResult.WON:
             won_days.setdefault(round_id, set()).add(day_id)
 
+    return _secured_from_outcome_rows(
+        rounds, secured_round_ids, all_day_ids, resolved_rounds, won_days
+    )
+
+
+def _secured_from_outcome_rows(
+    rounds: list[Round],
+    secured_round_ids: set[int],
+    all_day_ids: set[int],
+    resolved_rounds: set[int],
+    won_days: dict[int, set[int]],
+) -> dict[int, set[int]]:
+    """The secured-days fold itself, pure, over rows the caller has loaded --
+    the same split, and for the same reason, as `_covered_from_secured` below:
+    the single-concert helper above and the batched
+    `covered_round_ids_by_concert` share ONE definition rather than each
+    growing a copy that can drift.
+
+    `secured_round_ids`, `resolved_rounds` and `won_days` may span more
+    concerts than `rounds` does -- they are keyed by round id, which is global,
+    so a batched caller can load them once and pass the same three to every
+    concert's fold. `all_day_ids` is the one input that must be scoped to THIS
+    concert: it is what `_covered_day_ids` resolves an empty applies_to
+    against, and widening it would hand a round every other concert's legs."""
     secured: dict[int, set[int]] = {}
     for r in rounds:
         if r.id not in secured_round_ids:
@@ -275,14 +299,14 @@ async def secured_day_ids_by_round(
     return secured
 
 
-async def covered_round_ids(
-    session: AsyncSession, user_id: int, concert_id: int
-) -> set[int]:
-    """The rounds this user has no reason left to act on: every leg they cover
-    that this user is still waiting on is already secured by some OTHER round
-    on the concert. The single "stop asking about this" definition, shared by
-    the reminder planner and every read surface, so a page can never disagree
-    with the DMs.
+async def covered_round_ids_by_concert(
+    session: AsyncSession, user_id: int, concert_ids: set[int]
+) -> dict[int, set[int]]:
+    """concert_id -> the rounds this user has no reason left to act on: every
+    leg they cover that this user is still waiting on is already secured by
+    some OTHER round on the SAME concert. The single "stop asking about this"
+    definition, shared by the reminder planner and every read surface, so a
+    page can never disagree with the DMs.
 
     "Still waiting on" is the load-bearing part: legs this user opted out of,
     and legs that are cancelled, are subtracted first (see
@@ -298,23 +322,75 @@ async def covered_round_ids(
     A round covering no existing leg is never covered either, and UPGRADE
     rounds are excluded outright -- holding a ticket is the PREREQUISITE for
     entering an upgrade, not a reason to stop showing it (see
-    _apply_outcome_suppression's docstring)."""
-    secured_by = await secured_day_ids_by_round(session, user_id, concert_id)
-    if not secured_by:
-        return set()
-    rounds = list((await session.execute(
-        select(Round).where(Round.concert_id == concert_id)
-    )).scalars())
-    # id AND cancelled in one pass: the fold has to subtract the nights that
-    # are not happening, and a second query for them would be the same read
-    # twice.
-    day_rows = (await session.execute(
-        select(ConcertDay.id, ConcertDay.cancelled).where(
-            ConcertDay.concert_id == concert_id
+    _apply_outcome_suppression's docstring).
+
+    Concerts where the user has secured nothing are ABSENT from the result
+    rather than mapped to an empty set -- the common case, and callers merge
+    the values, so there is nothing to distinguish.
+
+    BATCHED: five queries regardless of how many concerts come in, because
+    Home asks this about every concert the viewer holds a ticket on and the
+    per-concert version was ~6 statements EACH. Concerts are folded
+    separately in memory afterwards -- "secured elsewhere" means elsewhere on
+    the same concert, and a batch that leaked one concert's wins into
+    another's fold would silence rounds the user still has to enter."""
+    if not concert_ids:
+        return {}
+    cids = sorted(concert_ids)
+
+    rounds_by_concert: dict[int, list[Round]] = {}
+    all_round_ids: list[int] = []
+    for r in (await session.execute(
+        select(Round).where(Round.concert_id.in_(cids))
+    )).scalars():
+        rounds_by_concert.setdefault(r.concert_id, []).append(r)
+        all_round_ids.append(r.id)
+    if not all_round_ids:
+        return {}
+
+    secured_round_ids = set((await session.execute(
+        select(RoundOutcome.round_id).where(
+            RoundOutcome.user_id == user_id,
+            RoundOutcome.round_id.in_(all_round_ids),
+            RoundOutcome.outcome.in_([LotteryOutcome.WON, LotteryOutcome.PAID]),
         )
-    )).all()
-    all_day_ids = {did for did, _cancelled in day_rows}
-    cancelled_day_ids = {did for did, cancelled in day_rows if cancelled}
+    )).scalars())
+    if not secured_round_ids:
+        return {}
+
+    # id, concert AND cancelled in one pass: the fold has to subtract the
+    # nights that are not happening, and a second query for them would be the
+    # same read twice.
+    day_ids_by_concert: dict[int, set[int]] = {}
+    cancelled_by_concert: dict[int, set[int]] = {}
+    all_day_ids: set[int] = set()
+    for did, cid, cancelled in (await session.execute(
+        select(ConcertDay.id, ConcertDay.concert_id, ConcertDay.cancelled)
+        .where(ConcertDay.concert_id.in_(cids))
+    )).all():
+        day_ids_by_concert.setdefault(cid, set()).add(did)
+        all_day_ids.add(did)
+        if cancelled:
+            cancelled_by_concert.setdefault(cid, set()).add(did)
+
+    # Both halves of the split are needed: the WON rows say what was secured,
+    # while the presence of ANY row is what switches off the
+    # no-rows-means-all fallback (see secured_day_ids_by_round).
+    won_days: dict[int, set[int]] = {}
+    resolved_rounds: set[int] = set()
+    for round_id, day_id, result in (await session.execute(
+        select(RoundOutcomeDay.round_id, RoundOutcomeDay.day_id, RoundOutcomeDay.result).where(
+            RoundOutcomeDay.user_id == user_id,
+            RoundOutcomeDay.round_id.in_(sorted(secured_round_ids)),
+        )
+    )).all():
+        resolved_rounds.add(round_id)
+        if result is LegResult.WON:
+            won_days.setdefault(round_id, set()).add(day_id)
+
+    # One opt-out set for the whole batch: day ids are globally unique and a
+    # round only ever subtracts against legs it covers, so a foreign concert's
+    # opted-out leg can never reach another concert's fold.
     opted_out_day_ids = set((await session.execute(
         select(LegOptOut.concert_day_id).where(
             LegOptOut.user_id == user_id,
@@ -322,9 +398,31 @@ async def covered_round_ids(
         )
     )).scalars()) if all_day_ids else set()
 
-    return _covered_from_secured(
-        rounds, secured_by, all_day_ids, opted_out_day_ids, cancelled_day_ids
-    )
+    covered: dict[int, set[int]] = {}
+    for cid, rounds in rounds_by_concert.items():
+        day_ids = day_ids_by_concert.get(cid, set())
+        secured_by = _secured_from_outcome_rows(
+            rounds, secured_round_ids, day_ids, resolved_rounds, won_days
+        )
+        if not secured_by:
+            continue
+        covered[cid] = _covered_from_secured(
+            rounds, secured_by, day_ids,
+            opted_out_day_ids, cancelled_by_concert.get(cid, set()),
+        )
+    return covered
+
+
+async def covered_round_ids(
+    session: AsyncSession, user_id: int, concert_id: int
+) -> set[int]:
+    """One concert's covered rounds -- a thin view of
+    `covered_round_ids_by_concert`, which holds the definition. Kept because
+    most callers genuinely have one concert in hand; there is still exactly
+    one derivation underneath."""
+    return (await covered_round_ids_by_concert(
+        session, user_id, {concert_id}
+    )).get(concert_id, set())
 
 
 def _covered_from_secured(
@@ -1677,12 +1775,19 @@ class Rung:
     worth showing next to the rung: the payment deadline once you have won,
     otherwise the close (falling back to the open). Templates render it with
     fmt_dual; the dataclass stays timezone-agnostic.
+
+    `is_upgrade` carries the round's kind through to `visible_rungs` for the
+    one placement rule that turns on it: a won-but-unpaid UPGRADE outranks a
+    PAID base ticket, exactly as in `column_for`. `state` alone cannot say so
+    -- "won" reads the same either way -- and without it the card can sit in
+    "Won -- pay" while showing the paid rung.
     """
 
     round_id: int
     label: str
     state: str
     detail: datetime | None = None
+    is_upgrade: bool = False
 
 
 @dataclass(frozen=True)
@@ -1814,6 +1919,7 @@ async def board_cards(
                 # -> get_locale()); the template only sees the string.
                 label=loc_field(r, "label", locale),
                 state=_rung_state(card_outcomes.get(r.id), _round_is_open(r, now)),
+                is_upgrade=r.kind is RoundKind.UPGRADE,
                 detail=(
                     r.payment_deadline_at_utc
                     if card_outcomes.get(r.id) is LotteryOutcome.WON
@@ -2189,8 +2295,10 @@ async def my_deadline_rows(
     # Only a concert where this user holds a ticket can produce one, and that
     # is ONE query for the whole row set -- Home is the hottest page in the
     # app, and the common reader (nothing secured anywhere) must not pay a
-    # per-concert derivation to be told "nothing is covered".
-    covered_ids: set[int] = set()
+    # per-concert derivation to be told "nothing is covered". The derivation
+    # itself is then batched over that whole set: it used to run once per
+    # secured concert, ~6 statements each, which is what made Home's query
+    # count scale with how much of the page the viewer had standing on.
     secured_concert_ids = set((await session.execute(
         select(Round.concert_id)
         .join(RoundOutcome, RoundOutcome.round_id == Round.id)
@@ -2200,8 +2308,11 @@ async def my_deadline_rows(
             RoundOutcome.outcome.in_([LotteryOutcome.WON, LotteryOutcome.PAID]),
         )
     )).scalars()) if concerts else set()
-    for cid in secured_concert_ids:
-        covered_ids |= await covered_round_ids(session, user_id, cid)
+    covered_ids: set[int] = set()
+    for ids in (await covered_round_ids_by_concert(
+        session, user_id, secured_concert_ids
+    )).values():
+        covered_ids |= ids
 
     # Which of these rounds this viewer is resolving LEG BY LEG. One batched
     # query for the whole row set, the same shape as `outcomes` above -- never
@@ -2588,8 +2699,8 @@ async def setup_application_rows(
         # Covered rounds ask nothing: every leg they sell is already secured
         # through another round, so "did you apply?" has no useful answer.
         # Only concerts where the user actually holds something can produce
-        # one, and covered_round_ids answers the empty case in one query --
-        # checking first keeps /setup from running the derivation over every
+        # one, and the derivation shorts out on the empty case after a query
+        # or two -- checking first keeps /setup from running it over every
         # tracked concert.
         covered: set[int] = set()
         if any(

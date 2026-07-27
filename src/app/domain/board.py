@@ -114,6 +114,19 @@ VISIBLE_RUNGS = 2
 # absent because they are timing, not standing.
 _RUNG_STANDING: dict[str, int] = {"applied": 1, "won": 2, "paid": 3}
 
+# The upgrade exception, mirroring _UPGRADE_WON_RANK above so the two rankings
+# cannot disagree: a won-but-unpaid UPGRADE rung outranks a PAID one. Without
+# it a [paid, todo, won-upgrade] ladder lands the card in "Won -- pay" (money
+# owed) while surfacing the paid rung, so the card names a column nothing on
+# it explains.
+_UPGRADE_WON_STANDING = 4
+
+
+def _rung_standing(rung: Any) -> int:
+    if rung.is_upgrade and rung.state == "won":
+        return _UPGRADE_WON_STANDING
+    return _RUNG_STANDING.get(rung.state, 0)
+
 
 def visible_rungs(
     rungs: Sequence[Any],
@@ -130,12 +143,14 @@ def visible_rungs(
     -- capture actions live on Coming up rows, never on a card.
 
     The state rung is picked by column_for's OWN precedence -- the highest
-    standing recorded anywhere on the ladder (paid > won > applied), latest
-    such rung wins a tie -- not by position. Taking the last non-"todo" rung
-    instead inverts the card on the ordinary mid-campaign shape: a ladder of
-    [lost, won, live] sits in "Won -- pay" because money owed outranks a round
-    you could still enter, but position alone would surface the open round and
-    hide the win, leaving the card naming a column nothing on it explains.
+    standing recorded anywhere on the ladder (won-upgrade > paid > won >
+    applied, the upgrade rung ranked exactly as _UPGRADE_WON_RANK ranks its
+    outcome), latest such rung wins a tie -- not by position. Taking the last
+    non-"todo" rung instead inverts the card on the ordinary mid-campaign
+    shape: a ladder of [lost, won, live] sits in "Won -- pay" because money
+    owed outranks a round you could still enter, but position alone would
+    surface the open round and hide the win, leaving the card naming a column
+    nothing on it explains.
     Only when NO standing is recorded does position decide: the last non-"todo"
     rung, which picks the "live" one for an Open-now card and a "lost" one
     otherwise, and failing even that (nothing has happened at all) the head of
@@ -148,7 +163,8 @@ def visible_rungs(
     "3" and "4", not "1" and "2".
 
     `rungs` is typed loosely on purpose: it is `db.service.Rung`, and importing
-    that here would drag the ORM into pure domain code. Only `.state` is read.
+    that here would drag the ORM into pure domain code. Only `.state` and
+    `.is_upgrade` are read.
     """
     if len(rungs) <= VISIBLE_RUNGS:
         return [(i, r) for i, r in enumerate(rungs, start=1)], 0
@@ -158,7 +174,7 @@ def visible_rungs(
     state_at = None
     best = 0
     for i, r in enumerate(rungs):
-        standing = _RUNG_STANDING.get(r.state, 0)
+        standing = _rung_standing(r)
         if standing and standing >= best:
             state_at, best = i, standing
     if state_at is None:
