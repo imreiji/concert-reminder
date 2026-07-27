@@ -1,7 +1,9 @@
 # Declutter the campaign ladder: board cards and the concert page
 
-Date: 2026-07-27. Status: designed with the owner (three decisions
-recorded below), pending implementation. Branch `ladder-declutter`, off
+Date: 2026-07-27. Status: **implemented (2026-07-27)** -- four tasks on
+branch `ladder-declutter`, deviations recorded at the foot of this file.
+Designed with the owner (three decisions
+recorded below). Branch `ladder-declutter`, off
 `main` (both #97/#98 merged). Covers WISHLIST #1 (board ladder) plus a
 new concert-page entry raised by the owner the same day, and carries one
 piece of recorded performance debt.
@@ -59,10 +61,25 @@ when any of these holds:
    Exactly one such round shows — the soonest unopened one; the rest
    fold. On a secured leg no upcoming base round shows at all (they are
    moot, which is what `covered_round_ids` already computes).
+   **Upgrades are excluded from this slot entirely** (ruling, task 3
+   review): a locked upgrade is not enterable, so handing it the single
+   slot would fold the base round you actually could enter and invert
+   clause 3; an eligible upgrade needs no slot, since clause 3 already
+   shows it unconditionally. So the candidates for clause 4 are base
+   rounds only.
 
-Everything else folds: lost rounds, skipped (NOT_APPLIED) rounds, rounds
-covered because you hold the leg elsewhere, locked upgrades, and every
-unopened round after the next one.
+Everything else folds: lost rounds, skipped (NOT_APPLIED) rounds, **covered
+rounds you did NOT enter**, locked upgrades, and every unopened round after
+the next one.
+
+**Decision (task 3 review):** a round that is covered *and* carries a
+recorded APPLIED stays VISIBLE, via clause 2. A pending application is an
+open obligation regardless of what else you hold — the result is still
+coming and it is still yours to act on. `_needs_you`'s covered veto is a
+RANKING rule for the one-moment strip ("what should the single lead row
+be?"), not a hiding rule, so it does not carry over here. This prose was
+corrected to match the shipped `_wants_you` behaviour, not the other way
+round, and the divergence is pinned by a test.
 
 **A cancelled leg folds entirely** (header plus fold, nothing visible):
 nothing on it can bear on anyone. The leg row itself stays — invariant 2
@@ -177,3 +194,48 @@ read-side semantics cannot drift.
 - i18n: both catalogues, plurals intact for every new msgid.
 - Mobile/tablet: rules inside the existing sections only; the
   breakpoint-count guard (6) stays green.
+
+## Implementation deviations (recorded)
+
+1. **§C's rung selection was wrong and is now standing-based.** The spec
+   said "the last non-`todo` rung — the state the column is named for",
+   which reads by POSITION. On `[lost, won, live]` — an ordinary
+   mid-campaign ladder whose card sits in "Won — pay" because money owed
+   outranks a round you could still enter — position surfaces the live
+   rung and hides the win, leaving the card naming a column nothing on it
+   explains. `visible_rungs` instead ranks by `column_for`'s own
+   precedence (won-upgrade > paid > won > applied, later rung wins a tie),
+   falling back to the last non-`todo` rung only when NO standing exists
+   and to the head of the ladder when nothing has happened at all. This
+   forced `Rung` to carry `is_upgrade`, mirroring `_UPGRADE_WON_RANK`, or
+   the same failure returns in the upgrade corner (`[paid, todo,
+   won-upgrade]`).
+2. **The hidden-count copy is "+N more round(s)", not "+N earlier
+   rounds".** The spec's wording is false: the state rung can sit
+   mid-ladder, so hidden rungs are not all earlier ones. It reuses the
+   existing msgid from the Coming-up fold rather than minting a pair
+   (the orphaned "earlier" pair was deleted from both catalogues).
+3. **§A clause 4 excludes upgrades; clause 2 keeps covered+APPLIED
+   visible.** Both are recorded inline in §A above.
+4. **`routes/outcomes.py` passes `open_round_id` into the concert-page
+   fragment** (not in the plan). Without it, answering a round from
+   inside a fold swapped the region, the fold came back closed, and the
+   row the reader had just acted on left the screen — the bug #98 fixed
+   for Home, reintroduced by this fold. Same server-side mechanic: the
+   round id is enough to find its fold, so no JS and no client-held
+   state.
+5. **`_fold_counts` is deliberately partial.** A round that opened,
+   closed and was never recorded matches no chip kind, so the chips can
+   sum to less than the summary's number. The number is `len(folded)`;
+   the chips explain what they can.
+
+Known, accepted, owner-glance items (not defects): a folded LOCKED upgrade
+is tallied under "upcoming", which reads as "you can enter this later"; a
+cancelled leg's summary can name rounds that will never happen; and
+`_rung_state` maps NOT_APPLIED to `todo` (pre-existing), so a skipped,
+already-closed round can win the "next actionable" rung ahead of a genuinely
+open one. Separately, `routes/subscriptions.py` renders `_round_rows.html`
+with no `open_round_id`, so a leg opt-out toggle collapses every expanded
+fold on the page — a different problem from deviation 4 (there is no written
+round to reopen around), needing general expanded-state preservation rather
+than another id.

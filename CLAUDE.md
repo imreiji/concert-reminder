@@ -656,6 +656,23 @@ deleting them.
   PAID stays offered only from WON. Never "fix" this by relaxing
   `record_round_outcome`'s sequence rule -- the gates belong on the read
   side.
+- **The board CAPS its ladder and never expands it.** `domain/board.py`'s
+  `visible_rungs` keeps at most `VISIBLE_RUNGS` (2) rungs -- the one whose
+  STANDING explains the card's column (ranked by `column_for`'s own
+  precedence, never by position) plus the next actionable one -- and the
+  remainder renders as a plain `.rmore` count line, deliberately NOT a
+  `<details>`: uniform card height is what makes four columns scan as a
+  board, and nothing on a card is interactive anyway (capture stays off
+  cards, per the rule above). Surviving rungs keep their ORIGINAL ladder
+  numbers; a rung's mark IS its place in the full ladder.
+- **The concert page folds settled rounds per LEG**, one
+  `<details class="moreround">` each (`service._split_leg_rounds` decides
+  what stays up; the summary carries `+N more round(s)` plus one `.fchip`
+  per state). Its rule is `_wants_you`, which now drives THREE surfaces --
+  Home's block lead, the concert page's "Next for you" strip, and this fold
+  -- so change it in one place and check all three. A secured leg keeps its
+  receipt visible; the fold is presentation only, so a folded round's
+  capture form stays in the DOM and works.
 - Discover carries **one** status pill per card, merging the event's round
   state with the viewer's standing (`service.discover_statuses`). The
   standing REPLACES the countdown rather than sitting beside it, and the tone
