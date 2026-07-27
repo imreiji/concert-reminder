@@ -1454,12 +1454,29 @@ async def clear_concert_subscription(
 
 
 async def set_leg_opt_out(
-    session: AsyncSession, user_id: int, day_id: int, opted_out: bool
+    session: AsyncSession, user_id: int, day_id: int, opted_out: bool,
+    now: datetime | None = None,
 ) -> None:
     """Toggle a per-leg opt-out by row presence: add a row when opting out,
-    delete it when opting back in. The suppression this drives is a
-    read-side planner pass added in Task 3 -- there is no concert-level
-    resync here."""
+    delete it when opting back in.
+
+    Then re-plan this user's rules for the leg's concert (invariant 8). The
+    suppression itself is a read-side pass folded into `sync_rule`, which is
+    why this used to write and stop -- but `reminder_queue` is a MATERIALIZED
+    outbox (invariant 2), so a read-side rule only governs what the NEXT sync
+    decides. Without this, opting out of every leg of a round left its
+    already-queued reminders in place and the scheduler duly delivered them:
+    the reader said "not going" and kept being reminded, which is precisely
+    what invariant 8 forbids.
+
+    It lives here rather than in the two routes that write (the day-result
+    capture and the leg opt-out toggle) so neither can forget it, and so a
+    third caller inherits it -- the same reason `record_round_outcome` owns
+    its own resync.
+
+    The concert lookup stays forgiving: a `day_id` naming no leg has no
+    concert to re-plan, and these ids arrive from form posts and Discord
+    custom_ids, so it returns quietly rather than raising."""
     existing = (await session.execute(
         select(LegOptOut).where(
             LegOptOut.user_id == user_id,
@@ -1471,6 +1488,13 @@ async def set_leg_opt_out(
     elif not opted_out and existing is not None:
         await session.delete(existing)
     await session.flush()
+
+    concert_id = (await session.execute(
+        select(ConcertDay.concert_id).where(ConcertDay.id == day_id)
+    )).scalar_one_or_none()
+    if concert_id is None:
+        return
+    await reinstate_user_rules(session, user_id, concert_id, now)
 
 
 @dataclass(frozen=True)

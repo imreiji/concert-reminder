@@ -274,8 +274,9 @@ async def record_day_result(
     elif result == "skip":
         # "Not going" is a per-leg opt-out, never a RoundOutcomeDay row: the
         # reader is declining the night, not reporting how the lottery went.
-        # It needs no rules resync of its own -- the suppression it drives is a
-        # read-side planner pass (see set_leg_opt_out).
+        # No resync call here: `set_leg_opt_out` re-plans this user's rules for
+        # the leg's concert itself (invariant 8), so both write surfaces get it
+        # and neither can forget it.
         await set_leg_opt_out(session, user.id, day_id, True)
     else:
         await record_round_day_result(

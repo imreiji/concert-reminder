@@ -155,6 +155,61 @@ async def test_all_legs_round_never_suppressed(session):
     assert await queue_rows(session, rule) != []
 
 
+async def test_opting_out_every_leg_clears_already_queued_reminders(session):
+    """Invariant 8: the WRITE re-syncs, it does not merely change what a later
+    sync would decide.
+
+    Suppression is a read-side pass folded into `sync_rule`, so before this the
+    queue kept whatever it had been armed with: opt out of every leg through
+    the dialog and the round's already-queued reminders still went out. The
+    resync lives in `set_leg_opt_out` rather than in its callers, so both write
+    surfaces (the day-result route and the leg opt-out route) get it.
+
+    The partial step in the middle is the other half of the contract: the
+    every-leg rule must not over-fire and clear a round the reader is still
+    going to."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    b = await make_day(session, concert, "Leg B")
+    round_ = await make_round(session, concert, [a.id, b.id])
+    rule = await make_rule(session, USER, round_)
+    await sync_rule(session, rule, NOW)
+    assert await queue_rows(session, rule) != []  # armed
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    assert await queue_rows(session, rule) != []  # one leg to go: still armed
+
+    await set_leg_opt_out(session, USER, b.id, True, now=NOW)
+    assert await queue_rows(session, rule) == []
+
+
+async def test_opting_back_in_re_arms_the_queue(session):
+    """The same resync in the other direction -- an opt-out is reversible, and
+    a reader who changes their mind is owed the reminder back without waiting
+    for some unrelated edit to re-plan the round."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    round_ = await make_round(session, concert, [a.id])
+    rule = await make_rule(session, USER, round_)
+    await sync_rule(session, rule, NOW)
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    assert await queue_rows(session, rule) == []
+
+    await set_leg_opt_out(session, USER, a.id, False, now=NOW)
+    assert await queue_rows(session, rule) != []
+
+
+async def test_opting_out_a_leg_that_does_not_exist_stays_a_silent_no_op(session):
+    """The resync needs the day's concert, and a day id that names nothing has
+    none. That stays forgiving rather than raising: ids reach these writers
+    from form posts and Discord custom_ids."""
+    await ensure_user(session, USER, "reiji")
+    await set_leg_opt_out(session, USER, 987654, False, now=NOW)
+
+
 async def test_all_legs_opted_out_suppresses(session):
     """Two legs, both opted out -> every leg the round covers is pruned, so
     it is suppressed."""

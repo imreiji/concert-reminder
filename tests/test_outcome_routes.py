@@ -19,12 +19,19 @@ from app.db.models import (
     Concert,
     ConcertDay,
     LegOptOut,
+    ReminderQueue,
+    ReminderRule,
     Round,
     RoundOutcome,
     RoundOutcomeDay,
     User,
 )
-from app.db.service import ensure_user, record_round_outcome, upcoming_deadlines
+from app.db.service import (
+    ensure_user,
+    record_round_outcome,
+    sync_rule,
+    upcoming_deadlines,
+)
 from app.db.session import get_session
 from app.domain.types import Anchor, LegResult, LotteryOutcome, RoundKind
 from app.web import auth
@@ -380,6 +387,57 @@ async def test_day_result_rejects_a_leg_of_another_concert(client):
     assert post_day_result(client, rid, result="won", day_id=stray_id).status_code == 200
     assert await opted_out_days(client.db, USER_A) == set()
     assert await day_results_for(client.db, USER_A, rid) == {}
+
+
+async def test_day_result_skip_of_every_leg_clears_the_queued_reminders(client):
+    """The route half of invariant 8. Recording "not going" on the last
+    unopted leg leaves a round nobody is going to -- and its reminders must go
+    with it, not wait for some unrelated edit to re-plan them. The resync lives
+    in `set_leg_opt_out`, so the route adds no call of its own."""
+    now = datetime.now(UTC)
+    async with client.db() as s:
+        await ensure_user(s, USER_A, "reiji")
+        concert = Concert(title="Two nights", event_id="two-nights", created_by=USER_A)
+        s.add(concert)
+        await s.flush()
+        d1 = ConcertDay(
+            concert_id=concert.id, label="Day 1", starts_at_utc=now + timedelta(days=60)
+        )
+        d2 = ConcertDay(
+            concert_id=concert.id, label="Day 2", starts_at_utc=now + timedelta(days=61)
+        )
+        s.add_all([d1, d2])
+        await s.flush()
+        round_ = Round(
+            concert_id=concert.id, label="Fan club lottery", kind=RoundKind.LOTTERY_ROUND,
+            applies_to=[d1.id, d2.id],
+            opens_at_utc=now - timedelta(days=1), closes_at_utc=now + timedelta(days=7),
+        )
+        s.add(round_)
+        await s.flush()
+        rule = ReminderRule(
+            user_id=USER_A, round_id=round_.id, anchor=Anchor.CLOSES, offset_days=1
+        )
+        s.add(rule)
+        await s.flush()
+        await sync_rule(s, rule)
+        await s.commit()
+        rid, d1_id, d2_id, rule_id = round_.id, d1.id, d2.id, rule.id
+
+    async def queued() -> int:
+        async with client.db() as s:
+            return len((await s.execute(
+                select(ReminderQueue).where(ReminderQueue.rule_id == rule_id)
+            )).scalars().all())
+
+    assert await queued() > 0
+    login_as(client, USER_A, "reiji")
+
+    post_day_result(client, rid, result="skip", day_id=d1_id)
+    assert await queued() > 0  # one leg still on
+
+    post_day_result(client, rid, result="skip", day_id=d2_id)
+    assert await queued() == 0
 
 
 async def test_day_result_unknown_round_404s(client):
