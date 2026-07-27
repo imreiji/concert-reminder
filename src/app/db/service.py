@@ -1955,12 +1955,25 @@ async def my_deadline_rows(
 
     # "Stop asking about this": rounds every one of whose legs this viewer
     # already secured through some OTHER round. The reminder planner has
-    # always dropped them (_apply_outcome_suppression's cross-round pass);
-    # resolved here per distinct concert -- at most ten rows, so a loop over
-    # concerts is cheaper than the machinery to avoid one -- so Coming up and
-    # the DM stream cannot disagree about what is still worth asking.
+    # always dropped them (_apply_outcome_suppression's cross-round pass), so
+    # resolving them here is what stops Coming up and the DM stream
+    # disagreeing about what is still worth asking.
+    #
+    # Only a concert where this user holds a ticket can produce one, and that
+    # is ONE query for the whole row set -- Home is the hottest page in the
+    # app, and the common reader (nothing secured anywhere) must not pay a
+    # per-concert derivation to be told "nothing is covered".
     covered_ids: set[int] = set()
-    for cid in {c.id for c in concerts.values()}:
+    secured_concert_ids = set((await session.execute(
+        select(Round.concert_id)
+        .join(RoundOutcome, RoundOutcome.round_id == Round.id)
+        .where(
+            RoundOutcome.user_id == user_id,
+            Round.concert_id.in_({c.id for c in concerts.values()}),
+            RoundOutcome.outcome.in_([LotteryOutcome.WON, LotteryOutcome.PAID]),
+        )
+    )).scalars()) if concerts else set()
+    for cid in secured_concert_ids:
         covered_ids |= await covered_round_ids(session, user_id, cid)
 
     locale = get_locale()
