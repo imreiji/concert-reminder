@@ -341,6 +341,16 @@ deleting them.
    per-user suppression pass onto the same `sync_rule` candidate-list
    filtering, orthogonal to cancellation — see
    `db/service.py`'s `_apply_outcome_suppression`.
+   `RoundOutcomeDay` layers per-day WON/LOST UNDER that: a real lottery
+   resolves per performance, so a round covering Sat+Sun can come back won on
+   one and lost on the other. NO rows means all — a round settled as a whole
+   settled every leg it covers, which is every row predating this and every
+   single-leg round — so the first explicit per-day write MATERIALIZES the
+   implicit rows before adding its own, and nothing downstream re-derives the
+   convention. Write only through `record_round_day_result` /
+   `record_remaining_days_lost` (a second writer desyncs the queue exactly as
+   a second `record_round_outcome` would), and read the legs a user actually
+   secured through `secured_day_ids_by_round`, never off the round outcome.
    An UPGRADE round (`RoundKind.UPGRADE`) is a nested second campaign whose
    availability is per-user DERIVED, never stored: a user is eligible only
    when they hold a secured (WON/PAID) ticket in one of the round's
@@ -454,7 +464,12 @@ deleting them.
    removed); Preferences surfaces the otherwise-invisible pruned count. Any
    write to a subscription or leg opt-out re-syncs that user's rules via
    `reinstate_user_rules`, the same resync `record_round_outcome` runs -- skip
-   it and a pruned concert keeps reminding. An opt-out suppresses informational
+   it and a pruned concert keeps reminding. `set_leg_opt_out` now runs that
+   resync ITSELF: the writer owns it, the way `record_round_outcome` owns its
+   own, so no call site can forget it and none should add a second (the
+   suppression is a read-side pass, but `reminder_queue` is materialized, so
+   without the resync the already-queued reminders were duly delivered to a
+   reader who had just said "not going"). An opt-out suppresses informational
    reminders only; it never deletes a `RoundOutcome`, so opting out of a won
    ticket forfeits the reminder, not the record (the UI gates that with a heavy
    confirmation naming the loss). Per-leg opt-out suppresses a round only when
