@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{#- Admin-only operational page: English-only and deliberately NOT wrapped in
+    _(), following /me/test-dm and admin_deliveries.html. Styling reuses the
+    existing `.tagtable`/`.dim` rules rather than inventing tokens for a page
+    only admins see. The one string here that IS translated lives in
+    service._framed_body -- it is the only text a recipient ever reads. -#}
+{% block title %}Broadcast — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Broadcast</h1>
+<p class="dim">
+  Sends a plain-text DM to the recipients you choose. Held for two minutes
+  after you send, so it can be cancelled.
+  {% if not bot_enabled %}<strong>The bot is not running here — messages would queue and never send.</strong>{% endif %}
+</p>
+
+{% if preview %}
+<h2>Preview</h2>
+{% if preview.duplicate %}
+<p><strong>This exact message was already sent within the last hour.</strong></p>
+{% endif %}
+<p><strong>{{ preview.count }} recipient{{ '' if preview.count == 1 else 's' }}</strong> — mode: {{ preview.mode }}</p>
+{% if preview.unmatched %}
+<p>Not matched to any user, and will NOT be messaged:
+  {% for u in preview.unmatched %}<code>{{ u }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+</p>
+{% endif %}
+<pre>{{ preview.body }}</pre>
+<form method="post" action="/admin/broadcast/send">
+  <input type="hidden" name="mode" value="{{ preview.mode }}">
+  <input type="hidden" name="mode_param" value="{{ preview.mode_param }}">
+  <input type="hidden" name="body" value="{{ preview.body }}">
+  {% if preview.needs_typed_confirm %}
+  <p>Type <strong>{{ preview.count }}</strong> to confirm sending to {{ preview.count }} people:</p>
+  <input type="text" name="confirm_count" required autocomplete="off">
+  {% endif %}
+  <button type="submit">Send</button>
+</form>
+{% endif %}
+
+<h2>New broadcast</h2>
+<form method="post" action="/admin/broadcast/preview">
+  <label>Mode
+    <select name="mode">
+      <option value="all">All users</option>
+      <option value="batch">Recipients of a delivery batch</option>
+      <option value="explicit">Explicit Discord ids</option>
+    </select>
+  </label>
+  <label>Batch timestamp or id list
+    <input type="text" name="mode_param" placeholder="leave blank for All users">
+  </label>
+  <label>Message
+    <textarea name="body" rows="6" maxlength="{{ body_max }}" required></textarea>
+  </label>
+  <button type="submit">Preview</button>
+</form>
+
+<h2>Past broadcasts</h2>
+{% if past %}
+<table class="tagtable">
+  <thead><tr><th>When</th><th>Mode</th><th class="r">Recipients</th><th>State</th></tr></thead>
+  <tbody>
+    {% for b in past %}
+    <tr>
+      <td><a href="/admin/broadcast/{{ b.id }}">{{ b.created_at_utc.strftime('%Y-%m-%d %H:%M') }}</a></td>
+      <td>{{ b.mode.value }}</td>
+      <td class="r">{{ b.recipient_count }}</td>
+      <td>{% if b.cancelled_at_utc %}cancelled{% else %}sent{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="dim">No broadcasts yet.</p>
+{% endif %}
+{% endblock %}

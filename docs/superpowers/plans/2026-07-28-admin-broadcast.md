@@ -860,7 +860,7 @@ The read-only half. These two routes write nothing at all.
 - Consumes: `resolve_recipients`, `recent_broadcasts`, `duplicate_body_recently`, `TYPED_CONFIRM_THRESHOLD`, `BROADCAST_BODY_MAX` (Task 4).
 - Produces: `GET /admin/broadcast`, `POST /admin/broadcast/preview`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_admin_broadcast.py`. Copy the `db`/`client` fixture pair and `login_as` from `tests/test_admin_deliveries.py` (which already has the right shape, including the FK pragma). Note that `login_as` creates the user row — do NOT also seed the admin, or you get an `IntegrityError`.
 
@@ -938,12 +938,12 @@ def test_preview_rejects_an_over_long_body(client, monkeypatch):
     assert r.status_code == 422
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_admin_broadcast.py -v`
 Expected: FAIL — 404, the routes do not exist.
 
-- [ ] **Step 3: Add the two routes**
+- [x] **Step 3: Add the two routes**
 
 Append to `src/app/web/routes/admin.py`:
 
@@ -1015,7 +1015,7 @@ async def broadcast_preview(
 
 Add the needed imports to the top block: `Form` from `fastapi`; `BROADCAST_BODY_MAX`, `TYPED_CONFIRM_THRESHOLD`, `duplicate_body_recently`, `recent_broadcasts`, `resolve_recipients` from `app.db.service`; `BroadcastMode` from `app.domain.types`; `settings` from `app.config`.
 
-- [ ] **Step 4: Add the template**
+- [x] **Step 4: Add the template**
 
 Create `src/app/web/templates/admin_broadcast.html`. English-only, no new CSS classes — reuse `.tagtable` and `.dim`:
 
@@ -1093,12 +1093,12 @@ Create `src/app/web/templates/admin_broadcast.html`. English-only, no new CSS cl
 {% endblock %}
 ```
 
-- [ ] **Step 5: Run to verify they pass**
+- [x] **Step 5: Run to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_admin_broadcast.py -v`
 Expected: PASS.
 
-- [ ] **Step 6: Full gates and commit**
+- [x] **Step 6: Full gates and commit**
 
 ```bash
 git add src/app/web/routes/admin.py src/app/web/templates/admin_broadcast.html tests/test_admin_broadcast.py
