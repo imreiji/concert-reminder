@@ -395,7 +395,7 @@ The write path, as a service function, plus the two `DueReminder` fields it need
   - `service.UNREPORTED_NOTE_KINDS: frozenset[str]`
   - `async def record_deliveries(session, batch_at_utc, reminder_results, notification_results) -> int` where `reminder_results: list[tuple[DueReminder, DeliveryOutcome]]` and `notification_results: list[tuple[Notification, DeliveryOutcome]]`. Returns rows written. Flushes; does not commit.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_delivery_log.py`:
 
@@ -497,12 +497,12 @@ def test_the_exclusion_set_covers_the_future_broadcast():
     assert UNREPORTED_NOTE_KINDS == frozenset({"delivery_digest", "admin_broadcast"})
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_delivery_log.py -v`
 Expected: FAIL — `ImportError: cannot import name 'UNREPORTED_NOTE_KINDS' from 'app.db.service'`
 
-- [ ] **Step 3: Add the two `DueReminder` fields**
+- [x] **Step 3: Add the two `DueReminder` fields**
 
 In `src/app/db/service.py`, inside the `DueReminder` dataclass, add to the defaulted block (after `user_language`):
 
@@ -515,11 +515,11 @@ In `src/app/db/service.py`, inside the `DueReminder` dataclass, add to the defau
     day_id: int | None = None
 ```
 
-- [ ] **Step 4: Populate them in `due_reminders`**
+- [x] **Step 4: Populate them in `due_reminders`**
 
 In `due_reminders`, find where each `DueReminder(...)` is constructed and add `concert_id=<the concert's id>` and `day_id=<the queue row's day_id>`. The queue row already carries `day_id`; the concert is already fetched for `concert_title`. Do not add new queries.
 
-- [ ] **Step 5: Add the writer**
+- [x] **Step 5: Add the writer**
 
 Insert into `src/app/db/service.py` after `mark_notification_sent`:
 
@@ -605,12 +605,12 @@ async def record_deliveries(
 
 Add `DeliveryLog` to the `from app.db.models import ...` block and `DeliveryOutcome`, `DeliverySource` to the `from app.domain.types import ...` block at the top of `service.py`.
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_delivery_log.py -v`
 Expected: PASS.
 
-- [ ] **Step 7: Full gates and commit**
+- [x] **Step 7: Full gates and commit**
 
 Run: `uv run --isolated ruff check .` then `uv run --isolated pytest -q`
 

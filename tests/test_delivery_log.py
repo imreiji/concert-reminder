@@ -8,7 +8,8 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.db.models import Base, Concert, DeliveryLog, User
+from app.db.models import Base, Concert, DeliveryLog, Notification, User
+from app.db.service import UNREPORTED_NOTE_KINDS, DueReminder, record_deliveries
 from app.domain.types import Anchor, DeliveryOutcome, DeliverySource
 
 
@@ -127,3 +128,97 @@ async def test_deleting_the_concert_keeps_the_row_and_the_title(db):
         row = (await s.execute(select(DeliveryLog))).scalar_one()
         assert row.concert_id is None
         assert row.concert_title == "Snow Miku 2027"
+
+
+BATCH = datetime(2026, 7, 28, 14, 23, tzinfo=UTC)
+
+
+def _reminder(concert_id, **kw):
+    base = dict(
+        queue_id=7,
+        discord_id=1,
+        user_timezone="America/Moncton",
+        concert_title="Snow Miku 2027",
+        anchor=Anchor.CLOSES,
+        fire_at_utc=BATCH,
+        concert_id=concert_id,
+        round_label="一次先行",
+        day_label="Day 1",
+    )
+    base.update(kw)
+    return DueReminder(**base)
+
+
+@pytest.mark.asyncio
+async def test_logs_a_reminder_delivery(db):
+    async with db() as s:
+        concert = await _seed(s)
+        n = await record_deliveries(
+            s, BATCH, [(_reminder(concert.id), DeliveryOutcome.SUCCESS)], []
+        )
+        await s.commit()
+        assert n == 1
+        row = (await s.execute(select(DeliveryLog))).scalar_one()
+        assert row.source is DeliverySource.REMINDER
+        assert row.round_label == "一次先行"
+        assert row.leg_label == "Day 1"
+        assert row.anchor is Anchor.CLOSES
+        assert row.note_kind is None
+
+
+@pytest.mark.asyncio
+async def test_logs_a_notification_delivery(db):
+    async with db() as s:
+        concert = await _seed(s)
+        note = Notification(user_id=1, body="x", concert_id=concert.id, kind="new_event")
+        s.add(note)
+        await s.flush()
+        await record_deliveries(s, BATCH, [], [(note, DeliveryOutcome.SUCCESS)])
+        await s.commit()
+        row = (await s.execute(select(DeliveryLog))).scalar_one()
+        assert row.source is DeliverySource.NOTIFICATION
+        assert row.note_kind == "new_event"
+        assert row.anchor is None
+        # Title resolved from the concert so the row survives its deletion.
+        assert row.concert_title == "Snow Miku 2027"
+
+
+@pytest.mark.asyncio
+async def test_logs_transient_and_forbidden_too(db):
+    """A digest of successes only would hide the incident it exists to show."""
+    async with db() as s:
+        concert = await _seed(s)
+        await record_deliveries(
+            s,
+            BATCH,
+            [
+                (_reminder(concert.id), DeliveryOutcome.FORBIDDEN),
+                (_reminder(concert.id, queue_id=8), DeliveryOutcome.TRANSIENT_FAILURE),
+            ],
+            [],
+        )
+        await s.commit()
+        outcomes = {r.outcome for r in (await s.execute(select(DeliveryLog))).scalars()}
+        assert outcomes == {DeliveryOutcome.FORBIDDEN, DeliveryOutcome.TRANSIENT_FAILURE}
+
+
+@pytest.mark.asyncio
+async def test_the_digest_notification_is_never_logged(db):
+    """THE feedback-loop guard. Log the digest's own delivery and the next
+    tick reports it, forever, once per minute. Asserted directly rather than
+    inferred from the exclusion set's contents."""
+    async with db() as s:
+        await _seed(s)
+        note = Notification(user_id=1, body="digest", kind="delivery_digest")
+        s.add(note)
+        await s.flush()
+        n = await record_deliveries(s, BATCH, [], [(note, DeliveryOutcome.SUCCESS)])
+        await s.commit()
+        assert n == 0
+        assert (await s.execute(select(DeliveryLog))).all() == []
+
+
+def test_the_exclusion_set_covers_the_future_broadcast():
+    """Sub-project C queues admin_broadcast notifications. Excluded up front,
+    because discovering this after C ships means a DM loop in production."""
+    assert UNREPORTED_NOTE_KINDS == frozenset({"delivery_digest", "admin_broadcast"})

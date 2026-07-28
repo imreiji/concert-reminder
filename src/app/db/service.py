@@ -34,6 +34,7 @@ from app.db.models import (
     ConcertDay,
     ConcertSubscription,
     ConcertTag,
+    DeliveryLog,
     LegOptOut,
     Notification,
     OpsCheckState,
@@ -57,6 +58,8 @@ from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import (
     Anchor,
+    DeliveryOutcome,
+    DeliverySource,
     LegResult,
     LotteryOutcome,
     RoundKind,
@@ -1329,6 +1332,12 @@ class DueReminder:
     # (a required field cannot follow a defaulted one) -- every caller passes
     # it by keyword anyway.
     user_language: str = "en"
+    # Denormalization sources for delivery_log. Carried on the dataclass rather
+    # than re-queried at log time: the scheduler already has this row in hand,
+    # and a second SELECT per delivered reminder would undo due_reminders'
+    # fixed-round-trip batching.
+    concert_id: int | None = None
+    day_id: int | None = None
     # round-anchored:
     round_id: int | None = None
     round_label: str | None = None
@@ -1444,6 +1453,10 @@ async def due_reminders(
                 concert_title=loc_field(concert, "title", user.language),
                 anchor=row.anchor,
                 fire_at_utc=row.fire_at_utc,
+                # Both already in hand: `concert` is the row the title came
+                # from, `row.day_id` is on the queue row itself. No new query.
+                concert_id=concert.id,
+                day_id=row.day_id,
                 round_id=round_.id if round_ else None,
                 # Per-RECIPIENT locale, not get_locale(): one due_reminders
                 # pass builds rows for many users outside any request, so the
@@ -4686,6 +4699,93 @@ async def mark_notification_sent(session: AsyncSession, notification_id: int) ->
     if row is not None:
         row.sent_at_utc = _now()
         await session.flush()
+
+
+# ── Delivery log ─────────────────────────────────────────────────────────
+
+# Notification kinds that are delivered but never logged. Without this, the
+# digest would log its own delivery, the next tick would report that, and the
+# bot would DM every admin once a minute forever. Excluded by KIND rather than
+# by recipient so it holds however many admins exist. "admin_broadcast" is
+# listed before sub-project C ships it, deliberately: finding this out
+# afterwards means discovering a DM loop in production.
+UNREPORTED_NOTE_KINDS = frozenset({"delivery_digest", "admin_broadcast"})
+
+
+async def record_deliveries(
+    session: AsyncSession,
+    batch_at_utc: datetime,
+    reminder_results: list[tuple[DueReminder, DeliveryOutcome]],
+    notification_results: list[tuple[Notification, DeliveryOutcome]],
+) -> int:
+    """Write one delivery_log row per attempted delivery. Returns rows written.
+
+    Flushes, never commits: the caller owns transaction boundaries, and in
+    tick() this runs in its own commit AFTER the delivery bookkeeping is
+    already durable.
+    """
+    rows: list[DeliveryLog] = []
+
+    for item, outcome in reminder_results:
+        rows.append(
+            DeliveryLog(
+                batch_at_utc=batch_at_utc,
+                user_id=item.discord_id,
+                source=DeliverySource.REMINDER,
+                outcome=outcome,
+                anchor=item.anchor,
+                concert_title=item.concert_title,
+                leg_label=item.day_label,
+                round_label=item.round_label,
+                concert_id=item.concert_id,
+                round_id=item.round_id,
+                day_id=item.day_id,
+                sent_at_utc=batch_at_utc,
+            )
+        )
+
+    # One batched lookup for the titles, not one per row: a new_event fan-out
+    # is exactly the case with many notifications sharing few concerts.
+    note_concert_ids = {
+        n.concert_id
+        for n, _ in notification_results
+        if n.concert_id is not None and n.kind not in UNREPORTED_NOTE_KINDS
+    }
+    titles: dict[int, str] = {}
+    if note_concert_ids:
+        res = await session.execute(
+            select(Concert.id, Concert.title, Concert.title_en).where(
+                Concert.id.in_(note_concert_ids)
+            )
+        )
+        # Resolved at the English locale, through loc_field rather than a
+        # hand-rolled coalesce, so "empty string counts as unfilled" stays one
+        # rule. English because the only readers of this column are the digest
+        # and /admin/deliveries, both English-only by design -- a notification
+        # embed is localized per recipient, so no single stored string could
+        # reproduce "what was sent" anyway.
+        titles = {r.id: loc_field(r, "title", "en") for r in res.all()}
+
+    for note, outcome in notification_results:
+        if note.kind in UNREPORTED_NOTE_KINDS:
+            continue
+        rows.append(
+            DeliveryLog(
+                batch_at_utc=batch_at_utc,
+                user_id=note.user_id,
+                source=DeliverySource.NOTIFICATION,
+                outcome=outcome,
+                note_kind=note.kind,
+                concert_title=titles.get(note.concert_id) if note.concert_id else None,
+                concert_id=note.concert_id,
+                sent_at_utc=batch_at_utc,
+            )
+        )
+
+    if rows:
+        session.add_all(rows)
+        await session.flush()
+    return len(rows)
 
 
 # ── Operational health alerts ────────────────────────────────────────────
