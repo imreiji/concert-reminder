@@ -239,6 +239,18 @@
     // spliced into a selector, so nothing off the page is ever parsed as code
     // (invariant 7).
     //
+    // A key must be UNIQUE PER PAGE. Restoring scans `foldsIn(document)`, not
+    // the swap target (see the afterSettle note below for why), so EVERY fold
+    // anywhere on the page carrying a collected key opens -- including one the
+    // request never touched. That holds today only because the two templates
+    // that mint keys, `_deadline_rows.html` (`block-<event_id>`,
+    // `more-concerts`) and `_round_rows.html` (`leg-<day_id>`), are each
+    // included at most once and never on the same page: home.html includes the
+    // first, concert_detail.html the second. A future page including either
+    // one twice -- two deadline lists side by side, say -- would make one key
+    // name two folds and open both. Give a repeated region a per-instance key
+    // prefix if that day comes.
+    //
     // The collected keys hang off the REQUEST, not off a module-level
     // variable. Two htmx requests can be in flight at once, and one shared
     // set interleaves as collect A -> collect B -> settle A -> settle B:
@@ -250,6 +262,16 @@
     // before settling is never read and is collected with the xhr. If a
     // detail ever arrives without one, nothing is stored and nothing is
     // restored: the fold shuts, which is the behaviour before any of this.
+    //
+    // That per-request identity is an htmx INTERNAL, not a documented API:
+    // nothing in htmx's contract promises the same detail object (hence the
+    // same `xhr`) reaches both `htmx:beforeRequest` and `htmx:afterSettle`. It
+    // was verified by reading htmx 2.0.4's source, which is the version the
+    // htmx tag at the top of this file pins EXACTLY -- keep that pin exact for
+    // this reason among others. An upgrade must re-verify it, because the
+    // failure is silent: no error, no test (this listener has none -- it is
+    // browser-only behaviour), just a WeakMap lookup that misses and folds
+    // that quietly stop reopening after every swap.
     (function () {
       var openFolds = new WeakMap();
       function foldsIn(root) {

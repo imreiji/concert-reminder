@@ -246,6 +246,17 @@ def parse_draft(text: str) -> ParsedConcert:
         # The same list object the _text calls below still append to -- kwargs
         # evaluate left to right, and ParsedConcert stores the reference rather
         # than a copy, so their warnings do land on the returned draft.
+        #
+        # BOTH halves are load-bearing, and the failure mode is silent. Swap
+        # ParsedConcert for anything that COPIES this list on assignment --
+        # pydantic, attrs with a converter, a plain dataclass that grows
+        # `field(default_factory=...)` plus a `__post_init__` that rebuilds it,
+        # even `warnings=list(warnings)` typed here for tidiness -- and the
+        # roughly a dozen field warnings raised by the kwargs below this line
+        # vanish from the returned draft. Nothing raises and no test fails on
+        # the mechanism: a draft with a bad `title_en` simply previews with one
+        # fewer warning than it earned. Keep the plain dataclass, or hoist
+        # every `_text` call above the constructor before changing it.
         warnings=warnings,
         title_en=_text(data.get("title_en"), "title_en", warnings),
         title_zh=_text(data.get("title_zh"), "title_zh", warnings),
