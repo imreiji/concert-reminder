@@ -4971,9 +4971,18 @@ async def resolve_recipients(
         return Recipients(ids=tuple((i, lang) for i, lang in res.all()), unmatched=())
 
     if mode is BroadcastMode.BATCH:
-        batch_at = datetime.fromisoformat(param) if param else None
-        if batch_at is None:
+        if not param:
             return Recipients(ids=(), unmatched=())
+        try:
+            batch_at = datetime.fromisoformat(param)
+        except ValueError:
+            # `mode_param` is a free-text field on the compose form, so a
+            # typo'd timestamp is ordinary user error, not a server fault.
+            # Reported rather than raised, for the same reason an unmatched
+            # EXPLICIT id is: this function stays total, the preview shows
+            # "0 recipients" plus the offending text, and neither route needs
+            # its own try/except to avoid a 500.
+            return Recipients(ids=(), unmatched=(param,))
         res = await session.execute(
             select(User.discord_id, User.language)
             .join(DeliveryLog, DeliveryLog.user_id == User.discord_id)

@@ -12,6 +12,7 @@ from app.db.models import Base, Broadcast, DeliveryLog, Notification, User
 from app.db.service import (
     BROADCAST_BODY_MAX,
     HOLD_SECONDS,
+    Recipients,
     cancel_broadcast,
     due_notifications,
     duplicate_body_recently,
@@ -283,3 +284,23 @@ async def test_duplicate_body_within_the_hour_is_reported(db):
         assert await duplicate_body_recently(s, "hello", now=NOW + timedelta(minutes=30))
         assert not await duplicate_body_recently(s, "hello", now=NOW + timedelta(hours=2))
         assert not await duplicate_body_recently(s, "different", now=NOW)
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_batch_timestamp_is_reported_not_raised(db):
+    """mode_param is a free-text field, so a typo'd timestamp is ordinary user
+    error. Raising here would surface as a 500 from the preview and send
+    routes, neither of which validates it; reporting keeps the function total
+    and shows the admin what it could not parse."""
+    async with db() as s:
+        await _users(s, (1, "en"))
+        r = await resolve_recipients(s, BroadcastMode.BATCH, "not-a-timestamp")
+        assert r.ids == ()
+        assert r.unmatched == ("not-a-timestamp",)
+
+
+@pytest.mark.asyncio
+async def test_an_empty_batch_param_resolves_to_nobody(db):
+    async with db() as s:
+        await _users(s, (1, "en"))
+        assert await resolve_recipients(s, BroadcastMode.BATCH, None) == Recipients((), ())
