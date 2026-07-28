@@ -218,6 +218,55 @@
         setTimeout(function () { bar.classList.remove("done"); }, 700);
       });
     })();
+    // Expanded folds survive an htmx swap. Every swap here replaces a whole
+    // region by outerHTML (#concert-rounds, #deadline-rows), so each <details>
+    // in it is a NEW element rendered from scratch -- a reader who expanded a
+    // leg's history and then toggled a different leg off watched every fold on
+    // the page snap shut. Before the request we note which keyed folds inside
+    // the target were open; once the new DOM has settled we reopen those.
+    //
+    // The server-side `open_round_id` stays and is not duplicated by this: it
+    // reopens the fold that OWNS a round a capture press just wrote, and works
+    // with JS off. This half generalises -- an opt-out writes no round, so
+    // there is nothing for the server to name, and any future swap of these
+    // regions is covered with no per-caller plumbing.
+    //
+    // It only ever OPENS. A fold the reader left closed stays closed, and one
+    // the server chose to render open is untouched.
+    //
+    // Keys are `data-fold` values -- server-rendered ids and event_ids, never
+    // user text -- and they are compared as strings inside a Set rather than
+    // spliced into a selector, so nothing off the page is ever parsed as code
+    // (invariant 7).
+    (function () {
+      var openFolds = new Set();
+      function foldsIn(root) {
+        if (!root || !root.querySelectorAll) return [];
+        var found = Array.prototype.slice.call(root.querySelectorAll("details[data-fold]"));
+        // A swap target can BE a fold as well as contain them.
+        if (root.matches && root.matches("details[data-fold]")) found.push(root);
+        return found;
+      }
+      document.body.addEventListener("htmx:beforeRequest", function (e) {
+        // Replaced, never merged: keys left over from a request that errored
+        // out before settling must not reopen a later, unrelated swap.
+        openFolds = new Set();
+        foldsIn((e.detail && e.detail.target) || document).forEach(function (d) {
+          if (d.open) openFolds.add(d.dataset.fold);
+        });
+      });
+      // afterSettle, not afterSwap: the swapped-in nodes are only guaranteed
+      // to be in the document once settling has run. Scanned from the document
+      // because an outerHTML swap discards the element the request targeted --
+      // the keys are unique per page, so a document-wide match is the same set.
+      document.body.addEventListener("htmx:afterSettle", function () {
+        if (!openFolds.size) return;
+        foldsIn(document).forEach(function (d) {
+          if (openFolds.has(d.dataset.fold)) d.open = true;
+        });
+        openFolds = new Set();
+      });
+    })();
     {% if user %}
     // Outcome toast: the outcome POST names what happened in an HX-Trigger
     // header, which htmx re-fires as a DOM event named "toast". Keys are

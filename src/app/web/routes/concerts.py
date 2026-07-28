@@ -1278,7 +1278,9 @@ async def edit_concert(
     newly: list[Tag] = []
     for tid in after_ids - before_ids:
         newly += await attach_tag(session, concert.id, desired_tags[tid], expand=False)
-    await handle_newly_tagged(session, concert, newly)
+    # The ATTACH happens here; the notify-and-apply pipeline for it runs at the
+    # foot of this function, once this submit's legs are in the DB -- see the
+    # comment there.
 
     # -- Days: update existing rows in place by id, insert blank-id rows,
     # delete rows that were dropped.
@@ -1464,6 +1466,21 @@ async def edit_concert(
 
     if newly_cancelled_day_ids:
         await notify_newly_cancelled_legs(session, concert.id, newly_cancelled_day_ids)
+    # The concert-level tag attach's notify-and-apply pipeline, run HERE rather
+    # than beside the attach itself: handle_newly_tagged asks all_legs_cancelled
+    # (a dead concert notifies nobody and applies nothing), and at the attach
+    # site this submit's legs are not written yet, so it would answer about the
+    # concert as it ARRIVED. Both directions are wrong and one is unrecoverable:
+    # un-cancelling a leg while adding a tag suppressed a notice that has no
+    # re-announce path, and cancelling the last leg while adding one announced
+    # a show that is not happening.
+    #
+    # After notify_newly_cancelled_legs on purpose, which is the same order the
+    # venue rollup below already used: that function probes each user's UNSENT
+    # queue rows to find who is about to lose everything, and rules a preset
+    # applies here would be fresh rows it must not read as a loss. Before
+    # sync_concert, which every rule created here still needs.
+    await handle_newly_tagged(session, concert, newly)
     # Re-derived from the legs as they stand after this submit -- this is the
     # staleness fix: a changed leg venue now moves the concert's VENUE tags
     # with it, and a dropped leg takes its venue off the concert. A venue that

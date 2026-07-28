@@ -1935,11 +1935,12 @@ async def test_answering_a_folded_round_swaps_that_fold_back_open(client):
     -- which would take the round the reader just answered off the screen at
     the moment they acted on it. Same server-side reopen Home's folds get."""
     cid = await seed_concert(client.db)
-    await settled_leg(client.db, cid)
+    d1 = await settled_leg(client.db, cid)
     login(client)
 
     body = client.get("/concerts/np").text
-    assert '<details class="moreround">' in body  # closed on a plain GET
+    # Closed on a plain GET.
+    assert f'<details class="moreround" data-fold="leg-{d1}">' in body
 
     missed = await _round_id(client.db, cid, "Missed sale")
     r = client.post(
@@ -1948,11 +1949,40 @@ async def test_answering_a_folded_round_swaps_that_fold_back_open(client):
     )
     # Still folded (nothing wants the reader on a round they declined), but the
     # fold it sits in comes back open.
-    assert '<details class="moreround" open>' in r.text
+    assert f'<details class="moreround" data-fold="leg-{d1}" open>' in r.text
     # The strip rides along after the rounds region in this fragment, so cut
     # there rather than at the marker `legs_of` looks for on a full page.
     rounds_fragment = r.text.split('id="concert-standing"', 1)[0]
     assert "Missed sale" in fold_of(leg_sections(rounds_fragment)["Day 1"])
+
+
+async def test_every_leg_fold_carries_a_stable_key(client):
+    """The MARKUP half of the client-side fold restore (spec §D): base.html
+    remembers which <details> inside a swapped region were open and reopens
+    them after the swap, keyed by `data-fold`. A headless test cannot fire the
+    browser event, so what it pins is the contract the script reads.
+
+    The key is the LEG id, and every leg on the page gets its own -- the
+    reason the mechanism exists is `POST .../legs/{day_id}/opt-out`, which
+    swaps the whole `#concert-rounds` region: toggling leg 2 must not collapse
+    the history the reader expanded on leg 1, and a key shared between them
+    would reopen the wrong one."""
+    cid = await seed_concert(client.db)
+    d1 = await settled_leg(client.db, cid)
+    d2 = await add_day(client.db, cid, "Day 2", days_ahead=61)
+    lost2 = await add_round(
+        client.db, cid, "Day 2 early lottery", applies_to=[d2],
+        opens=datetime.now(UTC) - timedelta(days=30),
+        closes=datetime.now(UTC) - timedelta(days=20),
+        results=datetime.now(UTC) - timedelta(days=15),
+    )
+    await set_outcome(client.db, lost2, LotteryOutcome.APPLIED)
+    await set_outcome(client.db, lost2, LotteryOutcome.LOST)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    assert f'<details class="moreround" data-fold="leg-{d1}">' in sections["Day 1"]
+    assert f'<details class="moreround" data-fold="leg-{d2}">' in sections["Day 2"]
 
 
 async def _round_id(db, concert_id, label):

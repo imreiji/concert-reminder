@@ -146,6 +146,23 @@ def client(db):
     return TestClient(app, follow_redirects=False)
 
 
+def test_base_restores_open_folds_across_an_htmx_swap(client):
+    """Spec §D's client half, beside the existing htmx listeners: an
+    outerHTML swap of a whole region replaces every <details> in it, so the
+    fold the reader expanded comes back closed. The listener collects the
+    open `data-fold` keys inside the request target on `htmx:beforeRequest`
+    and reopens the matching folds on `htmx:afterSettle`.
+
+    Asserted as script TEXT for the same reason the CSS parity guards above
+    read style.css: no headless client can fire a browser event, and the
+    listener silently ceasing to exist is exactly the regression that would
+    otherwise ship unnoticed."""
+    html = client.get("/").text
+    assert "htmx:beforeRequest" in html
+    assert "htmx:afterSettle" in html, "the reopen must run after the swap has settled"
+    assert "details[data-fold]" in html, "the restore keys off data-fold"
+
+
 def test_header_emits_theme_toggle_and_pill_nav(client):
     html = client.get("/").text
     assert "data-theme-toggle" in html, "theme toggle control must be in the header"
