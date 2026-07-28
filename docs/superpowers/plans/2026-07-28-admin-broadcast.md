@@ -1157,19 +1157,53 @@ def test_send_queues_held_notifications_and_redirects(client, monkeypatch):
 
 
 def test_send_above_the_threshold_requires_the_typed_count(client, monkeypatch):
+    """Seeds past the real threshold rather than monkeypatching it.
+
+    An earlier draft patched `service.TYPED_CONFIRM_THRESHOLD`, which would
+    have passed VACUOUSLY: `admin.py` does `from app.db.service import
+    TYPED_CONFIRM_THRESHOLD`, binding the value into its own namespace at
+    import time, so patching the service module's attribute never reaches the
+    route. Seeding real users tests the real constant and has no such trap.
+    """
     monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
-    monkeypatch.setattr(service, "TYPED_CONFIRM_THRESHOLD", 0)
     login_as(client, ADMIN_ID, "reiji")
+
+    async def seed_many():
+        async with client.db() as s:
+            for i in range(2000, 2015):  # 15 + the admin = 16, over the 10 threshold
+                s.add(User(discord_id=i, username=f"u{i}", language="en"))
+            await s.commit()
+
+    asyncio.get_event_loop().run_until_complete(seed_many())
+
     bad = client.post(
         "/admin/broadcast/send",
         data={"mode": "all", "mode_param": "", "body": "hi", "confirm_count": "99"},
     )
     assert bad.status_code == 422
+
+    missing = client.post(
+        "/admin/broadcast/send",
+        data={"mode": "all", "mode_param": "", "body": "hi"},
+    )
+    assert missing.status_code == 422  # absent is as wrong as incorrect
+
     ok = client.post(
         "/admin/broadcast/send",
-        data={"mode": "all", "mode_param": "", "body": "hi", "confirm_count": "1"},
+        data={"mode": "all", "mode_param": "", "body": "hi", "confirm_count": "16"},
     )
     assert ok.status_code == 303
+
+
+def test_send_below_the_threshold_needs_no_typed_count(client, monkeypatch):
+    """The gate is keyed on SIZE, so a small send must stay frictionless."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(
+        "/admin/broadcast/send",
+        data={"mode": "all", "mode_param": "", "body": "hi"},
+    )
+    assert r.status_code == 303
 
 
 def test_status_page_and_cancel(client, monkeypatch):
@@ -1466,4 +1500,4 @@ git commit -m "docs: record the broadcast invariant and update the wishlist"
 
 **Type consistency.** `Recipients(ids, unmatched)` has the same two fields in Task 4's definition, its tests, and both routes. `resolve_recipients(session, mode, param)` and `cancel_broadcast(...) -> (cancelled, delivered)` match everywhere. `BroadcastMode` values (`batch`/`all`/`explicit`) match the template's `<option value>`s and the tests' form data. `queue_broadcast` returns `Broadcast` and every caller uses `.id`.
 
-**One thing left to the implementer's judgement:** Task 6's typed-confirm test monkeypatches `service.TYPED_CONFIRM_THRESHOLD` to 0 because a test DB has one user. Confirm the route reads the module attribute at call time (`service.TYPED_CONFIRM_THRESHOLD`) rather than importing the value into its own namespace at import time — otherwise the monkeypatch will not take, and the test will pass vacuously against the real threshold of 10.
+**Resolved during Task 5, was left to judgement:** Task 6's typed-confirm test originally monkeypatched `service.TYPED_CONFIRM_THRESHOLD`. Task 5 confirmed that would pass vacuously — `admin.py` does `from app.db.service import TYPED_CONFIRM_THRESHOLD`, binding the value at import time, so patching the service module's attribute never reaches the route. The test now seeds 15 extra users and exercises the real constant instead, which removes the trap rather than working around it, and a companion test pins that a small send stays frictionless.
