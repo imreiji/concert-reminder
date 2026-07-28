@@ -158,9 +158,15 @@ def test_base_restores_open_folds_across_an_htmx_swap(client):
     listener silently ceasing to exist is exactly the regression that would
     otherwise ship unnoticed."""
     html = client.get("/").text
-    assert "htmx:beforeRequest" in html
+    # `htmx:beforeRequest` alone proves nothing -- #hxbar's progress bar has
+    # listened for it since long before this feature, so the bare `in` check
+    # passed before the listener existed. The collector is a SECOND one.
+    assert html.count("htmx:beforeRequest") >= 2, (
+        "the fold collector is its own beforeRequest listener, beside #hxbar's"
+    )
     assert "htmx:afterSettle" in html, "the reopen must run after the swap has settled"
     assert "details[data-fold]" in html, "the restore keys off data-fold"
+    assert "dataset.fold" in html, "the keys are the data-fold values themselves"
 
 
 def test_header_emits_theme_toggle_and_pill_nav(client):

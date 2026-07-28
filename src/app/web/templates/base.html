@@ -238,8 +238,20 @@
     // user text -- and they are compared as strings inside a Set rather than
     // spliced into a selector, so nothing off the page is ever parsed as code
     // (invariant 7).
+    //
+    // The collected keys hang off the REQUEST, not off a module-level
+    // variable. Two htmx requests can be in flight at once, and one shared
+    // set interleaves as collect A -> collect B -> settle A -> settle B:
+    // settle A restores B's keys and clears, then settle B finds nothing and
+    // B's folds snap shut. htmx hands the SAME detail object to
+    // `htmx:beforeRequest` and `htmx:afterSettle` for a given request, so its
+    // `xhr` is a per-request identity -- a WeakMap on it gives each request
+    // its own set, invisible to the other, and an entry whose request errored
+    // before settling is never read and is collected with the xhr. If a
+    // detail ever arrives without one, nothing is stored and nothing is
+    // restored: the fold shuts, which is the behaviour before any of this.
     (function () {
-      var openFolds = new Set();
+      var openFolds = new WeakMap();
       function foldsIn(root) {
         if (!root || !root.querySelectorAll) return [];
         var found = Array.prototype.slice.call(root.querySelectorAll("details[data-fold]"));
@@ -248,23 +260,26 @@
         return found;
       }
       document.body.addEventListener("htmx:beforeRequest", function (e) {
-        // Replaced, never merged: keys left over from a request that errored
-        // out before settling must not reopen a later, unrelated swap.
-        openFolds = new Set();
-        foldsIn((e.detail && e.detail.target) || document).forEach(function (d) {
-          if (d.open) openFolds.add(d.dataset.fold);
+        var xhr = e.detail && e.detail.xhr;
+        if (!xhr) return;
+        var keys = new Set();
+        foldsIn(e.detail.target || document).forEach(function (d) {
+          if (d.open) keys.add(d.dataset.fold);
         });
+        if (keys.size) openFolds.set(xhr, keys);
       });
       // afterSettle, not afterSwap: the swapped-in nodes are only guaranteed
       // to be in the document once settling has run. Scanned from the document
       // because an outerHTML swap discards the element the request targeted --
       // the keys are unique per page, so a document-wide match is the same set.
-      document.body.addEventListener("htmx:afterSettle", function () {
-        if (!openFolds.size) return;
+      document.body.addEventListener("htmx:afterSettle", function (e) {
+        var xhr = e.detail && e.detail.xhr;
+        var keys = xhr && openFolds.get(xhr);
+        if (!keys) return;
+        openFolds.delete(xhr);
         foldsIn(document).forEach(function (d) {
-          if (openFolds.has(d.dataset.fold)) d.open = true;
+          if (keys.has(d.dataset.fold)) d.open = true;
         });
-        openFolds = new Set();
       });
     })();
     {% if user %}

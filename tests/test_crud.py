@@ -1521,6 +1521,7 @@ async def test_resubmitting_edit_with_same_cancelled_state_does_not_renotify(cli
 # notice has no re-announce path, so a suppressed one is lost for good.
 
 FOLLOWER_ID = 9100
+PRESET_FOLLOWER_ID = 9101
 
 
 async def _follow(client, tag_id: int, user_id: int = FOLLOWER_ID):
@@ -1535,6 +1536,34 @@ async def _follow(client, tag_id: int, user_id: int = FOLLOWER_ID):
         await s.commit()
 
 
+async def _follow_with_preset(client, tag_id: int, user_id: int = PRESET_FOLLOWER_ID):
+    """The other half of the ruling: a follower whose subscription carries a
+    preset, so the auto-APPLY path runs and can be counted. notify is off --
+    the notice half is already pinned through `_follow`, and leaving it on
+    would put a second row in every `_notices` assertion for no gain."""
+    from app.db.models import (
+        Anchor,
+        PresetItem,
+        ReminderPreset,
+        TagSubscription,
+        User,
+    )
+
+    async with client.db() as s:
+        s.add(User(discord_id=user_id, username="presetfan"))
+        await s.flush()
+        preset = ReminderPreset(user_id=user_id, name="Standard")
+        s.add(preset)
+        await s.flush()
+        s.add(PresetItem(
+            preset_id=preset.id, anchor=Anchor.CLOSES, offset_days=-3, offset_hours=0
+        ))
+        s.add(TagSubscription(
+            user_id=user_id, tag_id=tag_id, notify=False, preset_id=preset.id
+        ))
+        await s.commit()
+
+
 async def _notices(client, user_id: int = FOLLOWER_ID):
     from app.db.models import Notification
 
@@ -1542,6 +1571,15 @@ async def _notices(client, user_id: int = FOLLOWER_ID):
         return (await s.execute(
             select(Notification).where(Notification.user_id == user_id)
         )).scalars().all()
+
+
+async def _rule_count(client, user_id: int = PRESET_FOLLOWER_ID) -> int:
+    from app.db.models import ReminderRule
+
+    async with client.db() as s:
+        return len((await s.execute(
+            select(ReminderRule).where(ReminderRule.user_id == user_id)
+        )).scalars().all())
 
 
 def _create_one_leg(client, *, cancelled: str):
@@ -1582,6 +1620,7 @@ async def test_uncancelling_a_leg_while_adding_a_tag_still_announces(client):
     })  # id 1
     _create_one_leg(client, cancelled="true")
     await _follow(client, 1)
+    await _follow_with_preset(client, 1)
     async with client.db() as s:
         day_id = (await s.execute(select(ConcertDay))).scalar_one().id
 
@@ -1591,6 +1630,9 @@ async def test_uncancelling_a_leg_while_adding_a_tag_still_announces(client):
 
     notes = await _notices(client)
     assert [n.kind for n in notes] == ["new_event"]
+    # And the preset applied -- which is also what makes the mirror test's
+    # `== 0` mean something rather than pass on an empty preset.
+    assert await _rule_count(client) == 1
 
 
 async def test_cancelling_the_last_leg_while_adding_a_tag_announces_nothing(client):
@@ -1604,6 +1646,7 @@ async def test_cancelling_the_last_leg_while_adding_a_tag_announces_nothing(clie
     })  # id 1
     _create_one_leg(client, cancelled="false")
     await _follow(client, 1)
+    await _follow_with_preset(client, 1)
     async with client.db() as s:
         day_id = (await s.execute(select(ConcertDay))).scalar_one().id
 
@@ -1612,6 +1655,10 @@ async def test_cancelling_the_last_leg_while_adding_a_tag_announces_nothing(clie
     ).status_code == 303
 
     assert await _notices(client) == []
+    # The ruling has two halves and the notice is only one of them: no preset
+    # applies either, so a dead concert does not quietly mint invisible rules
+    # on the strength of a revival that may never come.
+    assert await _rule_count(client) == 0
 
 
 async def test_detail_page_shows_cancelled_badge_on_cancelled_leg_only(client):

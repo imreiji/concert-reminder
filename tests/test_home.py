@@ -1557,13 +1557,31 @@ async def test_the_block_header_carries_the_venue_and_the_performance_date(clien
     assert "<small>📍 Zepp Haneda · 12 Oct</small>" in head
 
 
+_DETAILS_TAG = re.compile(r"<details\b([^>]*)>")
+# One attribute: a name, optionally followed by a quoted value. The value is
+# CONSUMED by the match, so a word inside one (class="a open") is never
+# rescanned as an attribute of its own.
+_ATTR = re.compile(r'([\w-]+)(?:="([^"]*)")?')
+
+
 def open_fold_keys(html: str) -> set[str]:
     """Every fold rendered OPEN, read by the same `data-fold` key the
     client-side restore listener (base.html) keys on. Asserting through the
     key rather than the literal tag keeps these tests honest: an attribute
     added between the class and the `open` would make a bare
-    `'morerounds" open' not in html` pass vacuously."""
-    return set(re.findall(r'data-fold="([^"]+)" open', html))
+    `'morerounds" open' not in html` pass vacuously.
+
+    Parsed attribute-by-attribute rather than as one `data-fold="..." open`
+    pattern, because that pattern has the very fault it exists to fix, one
+    level up: it is order-coupled, so an attribute inserted BETWEEN the two
+    returns an empty set -- and an empty set makes every NEGATIVE assertion
+    here pass without testing anything."""
+    keys = set()
+    for attrs in _DETAILS_TAG.findall(html):
+        parsed = dict(_ATTR.findall(attrs))
+        if "open" in parsed and parsed.get("data-fold"):
+            keys.add(parsed["data-fold"])
+    return keys
 
 
 async def test_a_folded_round_is_present_but_collapsed(client):
