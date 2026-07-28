@@ -23,7 +23,7 @@ from app.db.models import (
 )
 from app.db.service import (
     REHEARSAL_EVENT_ID,
-    cancel_rehearsal_leg,
+    cancel_rehearsal_show,
     get_rehearsal_concert,
     notify_newly_cancelled_legs,
     pull_rehearsal_forward,
@@ -376,7 +376,7 @@ async def test_cancelling_a_leg_queues_the_cancellation_notice(db):
         await s.flush()
         await seed_rehearsal(s, ADMIN_ID)
         await s.commit()
-        n = await cancel_rehearsal_leg(s)
+        n = await cancel_rehearsal_show(s)
         await s.commit()
         assert n >= 1
         notes = (await s.execute(select(Notification).where(
@@ -410,7 +410,7 @@ async def test_cancelling_takes_every_live_leg_because_the_notice_is_concert_sco
         day2.cancelled = False
         await s.flush()
 
-        assert await cancel_rehearsal_leg(s) == 1
+        assert await cancel_rehearsal_show(s) == 1
         await s.commit()
         legs = (await s.execute(select(ConcertDay).where(
             ConcertDay.concert_id == concert.id))).scalars().all()
@@ -424,12 +424,12 @@ async def test_cancelling_with_no_live_leg_left_is_a_no_op(db):
         await s.flush()
         await seed_rehearsal(s, ADMIN_ID)
         await s.commit()
-        assert await cancel_rehearsal_leg(s) == 1
+        assert await cancel_rehearsal_show(s) == 1
         await s.commit()
-        assert await cancel_rehearsal_leg(s) == 0
+        assert await cancel_rehearsal_show(s) == 0
 
 
 @pytest.mark.asyncio
 async def test_cancelling_with_nothing_seeded_is_a_no_op(db):
     async with db() as s:
-        assert await cancel_rehearsal_leg(s) == 0
+        assert await cancel_rehearsal_show(s) == 0

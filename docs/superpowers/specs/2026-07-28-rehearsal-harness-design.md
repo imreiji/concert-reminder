@@ -213,7 +213,7 @@ Button gating makes order load-bearing.
 | 5 | *(observe)* | R3 becomes eligible; R2 goes quiet | — |
 | 6 | Next | R1 PAYMENT → press **Paid** | paid |
 | 7 | Next | Day 1 EVENT_START | snooze |
-| 8 | Cancel Day 2 | `leg_cancelled` → press **Reinstate** | reinstate |
+| 8 | Cancel the show | `leg_cancelled` → press **Reinstate** | reinstate |
 | 9 | End | concert deleted, cascades take the rest | — |
 
 Step 3 must precede 4 and 4 must precede 6: PAYMENT only offers Paid from WON,
@@ -302,10 +302,22 @@ notice. Cancelling Day 1 instead fails the same way. Only when the concert has
 no live leg left (`all_legs_cancelled`) does every round count as lost and the
 notice fire.
 
-So `cancel_rehearsal_leg` cancels every remaining LIVE leg in one press. The
-alternative — a per-leg button the operator presses twice, the first press
-doing nothing visible — would demonstrate the `leg_cancelled` DM by not
-sending it. The name is kept because Task 4's `/admin/rehearsal/cancel-leg`
-route depends on it. `tests/test_rehearsal.py` pins the underlying rule
-directly (`test_cancelling_takes_every_live_leg_because_the_notice_is_concert_scoped`)
+So the action cancels every remaining LIVE leg in one press. The alternative —
+a per-leg button the operator presses twice, the first press doing nothing
+visible — would demonstrate the `leg_cancelled` DM by *not* sending it, which
+is worse than useless in a harness whose whole job is to show you the message.
+
+It is named **`cancel_rehearsal_show`**, route `/admin/rehearsal/cancel-show`.
+The original `cancel_rehearsal_leg` was kept briefly for interface stability
+and then renamed: a function called `cancel_rehearsal_leg` that cancels every
+leg is the same kind of untrue label this project has already had to correct
+twice in user-facing copy, and it costs nothing to fix before the route it
+names exists.
+
+`tests/test_rehearsal.py` pins the underlying rule directly
+(`test_cancelling_takes_every_live_leg_because_the_notice_is_concert_scoped`)
 so a later tidy-up cannot quietly restore the per-leg version.
+
+**Consequence for the walk:** step 8 is terminal. Cancelling the show kills
+R3's rows along with everything else, so it must be pressed at step 8 and not
+earlier. The harness page's rendered walk says so.

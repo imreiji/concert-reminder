@@ -5900,7 +5900,7 @@ async def pull_rehearsal_forward(
     return None
 
 
-async def cancel_rehearsal_leg(
+async def cancel_rehearsal_show(
     session: AsyncSession, now: datetime | None = None
 ) -> int:
     """Cancel the rehearsal concert's remaining live legs and queue the notices.

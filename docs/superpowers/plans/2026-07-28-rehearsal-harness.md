@@ -539,7 +539,7 @@ harness pulls forward is a genuine plan rather than a fabricated row."
 - Test: `tests/test_rehearsal.py`
 
 **Interfaces:**
-- Produces: `async def rehearsal_queue_rows(session) -> list[ReminderQueue]`; `async def pull_rehearsal_forward(session, now=None) -> ReminderQueue | None`; `async def cancel_rehearsal_leg(session, now=None) -> int`.
+- Produces: `async def rehearsal_queue_rows(session) -> list[ReminderQueue]`; `async def pull_rehearsal_forward(session, now=None) -> ReminderQueue | None`; `async def cancel_rehearsal_show(session, now=None) -> int`.
 
 - [x] **Step 1: Write the failing tests**
 
@@ -637,7 +637,7 @@ async def test_cancelling_a_leg_queues_the_cancellation_notice(db):
         await s.flush()
         await seed_rehearsal(s, ADMIN_ID)
         await s.commit()
-        n = await cancel_rehearsal_leg(s)
+        n = await cancel_rehearsal_show(s)
         await s.commit()
         assert n >= 1
         notes = (await s.execute(select(Notification).where(
@@ -709,7 +709,7 @@ async def pull_rehearsal_forward(
     return None
 
 
-async def cancel_rehearsal_leg(
+async def cancel_rehearsal_show(
     session: AsyncSession, now: datetime | None = None
 ) -> int:
     """Cancel the rehearsal concert's LAST leg and queue the notices.
@@ -773,7 +773,7 @@ that function inspects."
 
 **Interfaces:**
 - Consumes: Tasks 2 and 3.
-- Produces: `domain/rehearsal.py:expected_buttons(anchor, outcome) -> tuple[str, ...]`; routes `POST /admin/rehearsal/start|next|cancel-leg|end`.
+- Produces: `domain/rehearsal.py:expected_buttons(anchor, outcome) -> tuple[str, ...]`; routes `POST /admin/rehearsal/start|next|cancel-show|end`.
 
 - [ ] **Step 1: Write the failing tests for the oracle**
 
@@ -818,7 +818,7 @@ def test_next_reports_what_it_pulled_and_what_to_expect(client, monkeypatch):
 
 def test_the_actions_are_admin_only(client):
     login_as(client, PLAIN_ID, "someone")
-    for path in ("start", "next", "cancel-leg", "end"):
+    for path in ("start", "next", "cancel-show", "end"):
         assert client.post(f"/admin/rehearsal/{path}").status_code == 403
 ```
 
@@ -875,9 +875,9 @@ async def next_reminder(user=Depends(require_admin), session=Depends(get_session
     return RedirectResponse("/admin/rehearsal", status_code=303)
 
 
-@router.post("/admin/rehearsal/cancel-leg")
-async def cancel_leg(user=Depends(require_admin), session=Depends(get_session)):
-    await cancel_rehearsal_leg(session)
+@router.post("/admin/rehearsal/cancel-show")
+async def cancel_show(user=Depends(require_admin), session=Depends(get_session)):
+    await cancel_rehearsal_show(session)
     await session.commit()
     return RedirectResponse("/admin/rehearsal", status_code=303)
 
@@ -1023,6 +1023,6 @@ git commit -m "docs: the local dev-bot setup guide and the harness entry"
 
 **Placeholder scan.** Tasks 4 step 5 and 5 steps 2-3 describe the template and the dispatch rather than giving full code — deliberate: the template's exact markup depends on the state shape built in the same task, and eight builder call signatures are better read from `bot/messages.py` than transcribed here. Every other step has real code.
 
-**Type consistency.** `expected_buttons(anchor, outcome)` returns `tuple[str, ...]` in its definition, its tests and the template. `seed_rehearsal(session, user_id, now=None) -> Concert`, `pull_rehearsal_forward(session, now=None) -> ReminderQueue | None`, `teardown_rehearsal(session) -> bool` and `cancel_rehearsal_leg(session, now=None) -> int` match across definitions, tests and routes. `REHEARSAL_EVENT_ID` is the single identifier everywhere.
+**Type consistency.** `expected_buttons(anchor, outcome)` returns `tuple[str, ...]` in its definition, its tests and the template. `seed_rehearsal(session, user_id, now=None) -> Concert`, `pull_rehearsal_forward(session, now=None) -> ReminderQueue | None`, `teardown_rehearsal(session) -> bool` and `cancel_rehearsal_show(session, now=None) -> int` match across definitions, tests and routes. `REHEARSAL_EVENT_ID` is the single identifier everywhere.
 
 **One thing left to the implementer:** Task 2's seed calls `set_concert_subscription`, which per invariant 8 re-syncs that user's rules. Confirm the ordering is right — the subscription is written before the rules exist, so `sync_concert` at the end is what actually plans them. If the seeded queue comes back empty, that ordering is the first place to look.
