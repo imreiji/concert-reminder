@@ -33,6 +33,8 @@ from app.domain.types import (
     Anchor,
     Channel,
     ConcertKind,
+    DeliveryOutcome,
+    DeliverySource,
     LegResult,
     LotteryOutcome,
     RoundKind,
@@ -619,6 +621,61 @@ class Notification(Base):
     kind: Mapped[str | None] = mapped_column(String(30))  # "new_event"
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
     sent_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class DeliveryLog(Base):
+    """One row per attempted DM delivery, reminders and notifications alike.
+
+    Durable on purpose. reminder_queue can already answer "who was DMed about
+    this" by joining rule_id -> reminder_rules -> users, but those rows are
+    not evidence: sync_rule deletes rows it no longer plans and a deleted
+    round cascades them away, so the trail vanishes exactly when a bad
+    concert edit is the thing being investigated.
+
+    Hence the two shapes of column below. The labels are DENORMALIZED text so
+    a row survives its catalogue being edited or deleted; the *_id columns are
+    convenience pointers for linking through while the entity still exists,
+    and are SET NULL rather than CASCADE for the same reason
+    Concert.created_by is (keep the record, drop the pointer).
+
+    user_id is CASCADE, and that is not optional: this table records which
+    events a named person was reminded about, and delete_user is a single
+    session.delete relying on cascades (invariant 5).
+    """
+
+    __tablename__ = "delivery_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # The tick's `now`. Doubles as the batch identity -- there is deliberately
+    # no delivery_batches table, so aggregates compute on read and no stored
+    # count can drift from the rows it summarizes.
+    batch_at_utc: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
+    source: Mapped[DeliverySource] = mapped_column(
+        Enum(DeliverySource, values_callable=lambda e: [m.value for m in e])
+    )
+    outcome: Mapped[DeliveryOutcome] = mapped_column(
+        Enum(DeliveryOutcome, values_callable=lambda e: [m.value for m in e])
+    )
+    # Reminder rows only.
+    anchor: Mapped[Anchor | None] = mapped_column(
+        Enum(Anchor, values_callable=lambda e: [m.value for m in e])
+    )
+    # Notification rows only: the Notification.kind that was delivered.
+    note_kind: Mapped[str | None] = mapped_column(String(30))
+    concert_title: Mapped[str | None] = mapped_column(String(300))
+    leg_label: Mapped[str | None] = mapped_column(String(200))
+    round_label: Mapped[str | None] = mapped_column(String(200))
+    concert_id: Mapped[int | None] = mapped_column(
+        ForeignKey("concerts.id", ondelete="SET NULL")
+    )
+    round_id: Mapped[int | None] = mapped_column(ForeignKey("rounds.id", ondelete="SET NULL"))
+    day_id: Mapped[int | None] = mapped_column(
+        ForeignKey("concert_days.id", ondelete="SET NULL")
+    )
+    sent_at_utc: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
 class ReminderQueue(Base):

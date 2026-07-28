@@ -159,7 +159,7 @@ Schema only. No behaviour change, nothing writes to it yet.
 - Consumes: `DeliveryOutcome`, `DeliverySource` from Task 1.
 - Produces: `app.db.models.DeliveryLog` with columns `id`, `batch_at_utc`, `user_id`, `source`, `outcome`, `anchor`, `note_kind`, `concert_title`, `leg_label`, `round_label`, `concert_id`, `round_id`, `day_id`, `sent_at_utc`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_delivery_log.py`:
 
@@ -272,12 +272,12 @@ async def test_deleting_the_concert_keeps_the_row_and_the_title(db):
         assert row.concert_title == "Snow Miku 2027"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_delivery_log.py -v`
 Expected: FAIL — `ImportError: cannot import name 'DeliveryLog' from 'app.db.models'`
 
-- [ ] **Step 3: Add the model**
+- [x] **Step 3: Add the model**
 
 Insert into `src/app/db/models.py` immediately after the `Notification` class (before `class ReminderQueue`):
 
@@ -339,16 +339,16 @@ class DeliveryLog(Base):
 
 Add `DeliveryOutcome` and `DeliverySource` to the existing `from app.domain.types import ...` line at the top of `models.py`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_delivery_log.py -v`
 Expected: PASS (all five tests).
 
-- [ ] **Step 5: Generate the migration**
+- [x] **Step 5: Generate the migration**
 
 Run: `uv run --isolated alembic revision --autogenerate -m "add delivery_log"`
 
-- [ ] **Step 6: Hand-edit the migration**
+- [x] **Step 6: Hand-edit the migration**
 
 Open the generated file in `migrations/versions/` and make exactly these edits:
 1. Replace every `app.db.models.UTCDateTime()` with `sa.DateTime()`.
@@ -357,12 +357,12 @@ Open the generated file in `migrations/versions/` and make exactly these edits:
 
 No `batch_alter_table` and no `drop_constraint` here — this is a brand-new table, so the legacy-anonymous-constraint hazard (`tests/test_migration_legacy_anonymous_constraints.py`) does not apply.
 
-- [ ] **Step 7: Apply and verify the migration**
+- [x] **Step 7: Apply and verify the migration**
 
 Run: `uv run --isolated alembic upgrade head` then `uv run --isolated alembic downgrade -1` then `uv run --isolated alembic upgrade head`
 Expected: all three succeed. The down-then-up proves the downgrade is real rather than a stub.
 
-- [ ] **Step 8: Full gates and commit**
+- [x] **Step 8: Full gates and commit**
 
 Run: `uv run --isolated ruff check .` then `uv run --isolated pytest -q`
 
