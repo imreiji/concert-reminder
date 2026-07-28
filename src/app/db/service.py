@@ -5697,3 +5697,150 @@ def tag_variant_gaps(tag: Tag) -> list[VariantGap]:
             tag.city or "", tag.city_en or "", tag.city_zh or "",
         )))
     return _regroup_gaps(pairs)
+
+
+# ── Rehearsal harness (local only) ───────────────────────────────────────
+
+# The rehearsal concert is identified by a constant event_id rather than a
+# column. That is deliberate: it means the pull-forward action can only ever
+# reach THIS concert's queue rows, because there is no id for a caller to
+# pass. Not added to RESERVED_EVENT_IDS -- that set exists to stop collisions
+# with the /concerts/new and /concerts/import routes, and there is no
+# /concerts/rehearsal route.
+REHEARSAL_EVENT_ID = "rehearsal"
+
+
+async def get_rehearsal_concert(session: AsyncSession) -> Concert | None:
+    res = await session.execute(
+        select(Concert).where(Concert.event_id == REHEARSAL_EVENT_ID)
+    )
+    return res.scalar_one_or_none()
+
+
+async def teardown_rehearsal(session: AsyncSession) -> bool:
+    """Delete the rehearsal concert. Returns whether one existed.
+
+    Deletes the Concert row only and lets the existing cascades take days,
+    rounds, queue rows, outcomes and audits. It never touches users, presets
+    or subscriptions -- those are the operator's real local state.
+    """
+    concert = await get_rehearsal_concert(session)
+    if concert is None:
+        return False
+    await session.delete(concert)
+    await session.flush()
+    return True
+
+
+async def seed_rehearsal(
+    session: AsyncSession, user_id: int, now: datetime | None = None
+) -> Concert:
+    """Build the canonical scenario, replacing any previous one.
+
+    Two legs, three rounds, and one reminder rule per anchor. Anchors are set
+    at realistic future distances and the rules are real, so `sync_concert`
+    and the pure planner compute genuine fire times -- the harness later pulls
+    those rows forward rather than fabricating them.
+    """
+    now = now or _now()
+    await teardown_rehearsal(session)
+
+    concert = Concert(
+        event_id=REHEARSAL_EVENT_ID,
+        title="リハーサル公演",
+        title_en="Rehearsal Concert",
+        title_zh="彩排演出",
+        created_by=user_id,
+    )
+    session.add(concert)
+    await session.flush()
+
+    day1 = ConcertDay(
+        concert_id=concert.id,
+        label="Day 1",
+        label_en="Day 1",
+        label_zh="第一天",
+        starts_at_utc=now + timedelta(days=30),
+    )
+    day2 = ConcertDay(
+        concert_id=concert.id,
+        label="Day 2",
+        label_en="Day 2",
+        label_zh="第二天",
+        starts_at_utc=now + timedelta(days=31),
+    )
+    session.add_all([day1, day2])
+    await session.flush()
+
+    # R1 carries all four anchors and both legs: the whole ladder from one
+    # round, and a WON on it exercises the per-day RoundOutcomeDay
+    # materialization that a single-leg round never reaches.
+    lottery = Round(
+        concert_id=concert.id,
+        kind=RoundKind.LOTTERY_ROUND,
+        label="一次先行",
+        label_en="1st lottery",
+        label_zh="第一轮抽选",
+        applies_to=[day1.id, day2.id],
+        opens_at_utc=now + timedelta(days=1),
+        closes_at_utc=now + timedelta(days=7),
+        results_at_utc=now + timedelta(days=10),
+        payment_deadline_at_utc=now + timedelta(days=14),
+    )
+    # R2 exists to prove SUPPRESSION: once R1 is won on Day 1, the
+    # secured-elsewhere pass should silently delete this round's reminders.
+    # A round that stops arriving is the hardest thing to notice by hand.
+    fcfs = Round(
+        concert_id=concert.id,
+        kind=RoundKind.FCFS_SALE,
+        label="一般発売",
+        label_en="General sale",
+        label_zh="一般发售",
+        applies_to=[day1.id],
+        opens_at_utc=now + timedelta(days=3),
+        closes_at_utc=now + timedelta(days=8),
+    )
+    # R3 is invisible until the viewer holds a ticket -- the eligibility gate,
+    # proven end to end rather than by unit test.
+    upgrade = Round(
+        concert_id=concert.id,
+        kind=RoundKind.UPGRADE,
+        label="アップグレード先行",
+        label_en="Upgrade lottery",
+        label_zh="升级抽选",
+        applies_to=[day1.id, day2.id],
+        opens_at_utc=now + timedelta(days=11),
+        closes_at_utc=now + timedelta(days=13),
+    )
+    session.add_all([lottery, fcfs, upgrade])
+    await session.flush()
+
+    session.add(
+        RoundQualifier(upgrade_round_id=upgrade.id, qualifying_round_id=lottery.id)
+    )
+
+    # Track it explicitly rather than via a tag: tracked_concert_ids treats an
+    # explicit subscription as authoritative, so the harness does not depend
+    # on the operator following anything.
+    await set_concert_subscription(session, user_id, concert.id, SubscriptionState.SUBSCRIBED)
+
+    # One rule per anchor, at zero offset. The offset is irrelevant to what
+    # this proves -- pull-forward moves the fire time regardless -- and zero
+    # keeps the seeded plan legible in the harness's own state table.
+    for anchor in (Anchor.OPENS, Anchor.CLOSES, Anchor.RESULTS, Anchor.PAYMENT):
+        session.add(
+            ReminderRule(
+                user_id=user_id, concert_id=concert.id, anchor=anchor,
+                offset_days=0, offset_hours=0,
+            )
+        )
+    session.add(
+        ReminderRule(
+            user_id=user_id, concert_id=concert.id, anchor=Anchor.EVENT_START,
+            offset_days=0, offset_hours=0,
+        )
+    )
+    await session.flush()
+
+    await sync_concert(session, concert.id)
+    return concert

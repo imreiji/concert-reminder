@@ -3,13 +3,28 @@
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base
+from app.db.models import (
+    Base,
+    Concert,
+    ConcertDay,
+    ReminderQueue,
+    Round,
+    RoundQualifier,
+    User,
+)
+from app.db.service import (
+    REHEARSAL_EVENT_ID,
+    get_rehearsal_concert,
+    seed_rehearsal,
+    teardown_rehearsal,
+)
 from app.db.session import get_session
+from app.domain.types import Anchor, RoundKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -127,3 +142,119 @@ def test_a_signed_in_non_admin_gets_403(client):
     is ever misconfigured with the flag on."""
     login_as(client, PLAIN_ID, "someone")
     assert client.get("/admin/rehearsal").status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_seed_builds_the_canonical_scenario(db):
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        concert = await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+
+        assert concert.event_id == REHEARSAL_EVENT_ID
+        days = (await s.execute(
+            select(ConcertDay)
+            .where(ConcertDay.concert_id == concert.id)
+            .order_by(ConcertDay.starts_at_utc)
+        )).scalars().all()
+        assert len(days) == 2
+        rounds = (await s.execute(select(Round).where(
+            Round.concert_id == concert.id))).scalars().all()
+        assert len(rounds) == 3
+        kinds = {r.kind for r in rounds}
+        assert kinds == {RoundKind.LOTTERY_ROUND, RoundKind.FCFS_SALE, RoundKind.UPGRADE}
+
+
+@pytest.mark.asyncio
+async def test_the_lottery_round_carries_all_four_anchors_and_both_legs(db):
+    """One round yields the whole ladder, and spanning two legs is what
+    exercises the per-day RoundOutcomeDay materialization."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        concert = await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        r1 = (await s.execute(select(Round).where(
+            Round.concert_id == concert.id,
+            Round.kind == RoundKind.LOTTERY_ROUND))).scalar_one()
+        assert r1.opens_at_utc and r1.closes_at_utc
+        assert r1.results_at_utc and r1.payment_deadline_at_utc
+        assert len(r1.applies_to) == 2
+
+
+@pytest.mark.asyncio
+async def test_the_upgrade_round_qualifies_on_the_lottery_round(db):
+    """Before a WON on R1 the viewer is ineligible; after it, eligible. That
+    gate is what this round exists to prove end to end."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        concert = await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        upgrade = (await s.execute(select(Round).where(
+            Round.concert_id == concert.id,
+            Round.kind == RoundKind.UPGRADE))).scalar_one()
+        lottery = (await s.execute(select(Round).where(
+            Round.concert_id == concert.id,
+            Round.kind == RoundKind.LOTTERY_ROUND))).scalar_one()
+        pairs = (await s.execute(select(RoundQualifier).where(
+            RoundQualifier.upgrade_round_id == upgrade.id))).scalars().all()
+        assert [p.qualifying_round_id for p in pairs] == [lottery.id]
+
+
+@pytest.mark.asyncio
+async def test_seed_queues_reminders_through_the_real_planner(db):
+    """The point of seeding real rules: sync_rule and the pure planner compute
+    the fire times, so what the harness later pulls forward is a genuine
+    plan, not a fabricated row."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        queued = (await s.execute(select(ReminderQueue))).scalars().all()
+        anchors = {q.anchor for q in queued}
+        assert Anchor.OPENS in anchors
+        assert Anchor.CLOSES in anchors
+        assert Anchor.RESULTS in anchors
+        assert Anchor.PAYMENT in anchors
+        assert Anchor.EVENT_START in anchors
+
+
+@pytest.mark.asyncio
+async def test_seed_is_idempotent(db):
+    """Start twice leaves ONE rehearsal concert -- the harness reseeds from a
+    clean slate rather than accumulating."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        concerts = (await s.execute(select(Concert).where(
+            Concert.event_id == REHEARSAL_EVENT_ID))).scalars().all()
+        assert len(concerts) == 1
+
+
+@pytest.mark.asyncio
+async def test_teardown_removes_the_concert_but_not_the_user(db):
+    """Cascades take the days, rounds, queue rows and outcomes. Users,
+    presets and subscriptions are never touched."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        assert await teardown_rehearsal(s) is True
+        await s.commit()
+        assert await get_rehearsal_concert(s) is None
+        assert (await s.execute(select(ReminderQueue))).scalars().all() == []
+        assert await s.get(User, ADMIN_ID) is not None
+
+
+@pytest.mark.asyncio
+async def test_teardown_with_nothing_seeded_is_a_no_op(db):
+    async with db() as s:
+        assert await teardown_rehearsal(s) is False

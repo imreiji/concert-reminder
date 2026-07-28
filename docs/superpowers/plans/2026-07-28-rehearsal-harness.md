@@ -232,7 +232,7 @@ routes production needs."
 **Interfaces:**
 - Produces: `REHEARSAL_EVENT_ID = "rehearsal"`; `async def seed_rehearsal(session, user_id, now=None) -> Concert`; `async def teardown_rehearsal(session) -> bool`; `async def get_rehearsal_concert(session) -> Concert | None`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_rehearsal.py` (imports hoisted):
 
@@ -350,12 +350,12 @@ async def test_teardown_with_nothing_seeded_is_a_no_op(db):
         assert await teardown_rehearsal(s) is False
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_rehearsal.py -v`
 Expected: FAIL — `ImportError: cannot import name 'seed_rehearsal'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append a new section to `src/app/db/service.py`:
 
@@ -509,14 +509,14 @@ async def seed_rehearsal(
 
 Check what `service.py` already imports before adding: `RoundQualifier`, `SubscriptionState`, `timedelta` may or may not be present.
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_rehearsal.py -v`
 Expected: PASS.
 
 If `test_seed_queues_reminders_through_the_real_planner` fails on a missing anchor, do NOT relax the assertion — it means the seeded rounds or rules do not actually produce that anchor, which is the harness failing at its one job. Read `plan_for_rule` and fix the seed.
 
-- [ ] **Step 5: Full gates and commit**
+- [x] **Step 5: Full gates and commit**
 
 ```bash
 git add src/app/db/service.py tests/test_rehearsal.py
