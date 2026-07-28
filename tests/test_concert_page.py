@@ -1535,6 +1535,51 @@ async def test_unfollowed_toggle_carries_no_reminder_caption(client):
     assert "You will be reminded about every round below." not in toggle
 
 
+async def test_a_dead_concerts_follow_toggle_promises_nothing(client):
+    """The caption promises a reminder for every round below. On a concert
+    whose every leg is cancelled the scheduler plans none of them (task 1),
+    and the page carries a "this event is cancelled" banner a few lines above
+    -- so the promise is both false and visibly self-contradicting. The dead
+    concert's toggle states the fact instead. The button itself keeps working:
+    following is still a real preference (invariant 8)."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31, cancelled=True)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    body = client.get("/concerts/np").text
+    toggle = body.split('id="following-toggle"', 1)[1].split("</div>", 1)[0]
+    assert "btn follow on" in toggle  # still a working toggle
+    assert "You will be reminded about every round below." not in toggle
+    assert "This event is cancelled, so no reminders will be sent." in toggle
+
+    # The htmx swap re-renders this partial ALONE, off following_toggle_context
+    # -- so the fact has to live in that context, not in the page's. Pin it:
+    # the copy swapped back in after a toggle must not revert to the promise.
+    frag = client.post(
+        "/concerts/np/subscription", data={"state": "subscribed"},
+        headers={"HX-Request": "true"},
+    ).text
+    assert "This event is cancelled, so no reminders will be sent." in frag
+    assert "You will be reminded about every round below." not in frag
+
+
+async def test_a_live_concerts_follow_toggle_is_unchanged(client):
+    """One leg down is not the show being off: the reminders are still coming,
+    so the caption stays exactly as it was."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    body = client.get("/concerts/np").text
+    toggle = body.split('id="following-toggle"', 1)[1].split("</div>", 1)[0]
+    assert "You will be reminded about every round below." in toggle
+    assert "no reminders will be sent" not in toggle
+
+
 async def test_the_legacy_meta_grid_block_is_gone(client):
     """The demo's header is lineage -> h1 -> tags -> links only; the old
     title_en/organizer/categories/performers_text dl duplicated what the

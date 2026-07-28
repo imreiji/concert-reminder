@@ -2703,7 +2703,16 @@ async def _tracked_upcoming_concerts(
     excludes them by definition, yet screen 1 must render them unchecked so
     they can be brought back. Returns (concerts, opted_out_ids) so the tiles,
     the applications pass and the tallies all share one load and one
-    upcoming-filter instead of re-deriving it three ways."""
+    upcoming-filter instead of re-deriving it three ways.
+
+    A concert whose every leg is cancelled is not upcoming, whatever its
+    round anchors still say: `is_round_cancelled` deliberately exempts a
+    General round (it names no leg), so a dead concert kept a live round with
+    a future close and rode that into all three screens -- screen 2 offering
+    to record an APPLIED that `record_round_outcome` would never let the
+    reader take back. Asked once here, through the same `all_legs_cancelled`
+    the rest of the branch uses, so the flow keeps ONE definition of upcoming
+    rather than teaching the applications pass a rule the tiles do not know."""
     tracked = await tracked_concert_ids(session, user_id)
     overrides = await concert_subscription_states(session, user_id)
     opted_out = {cid for cid, st in overrides.items() if st is SubscriptionState.OPTED_OUT}
@@ -2723,6 +2732,8 @@ async def _tracked_upcoming_concerts(
 
     upcoming = []
     for c in concerts:
+        if all_legs_cancelled(c.days):
+            continue
         cancelled_day_ids = {d.id for d in c.days if d.cancelled}
         live_rounds = [r for r in c.rounds if not is_round_cancelled(r, cancelled_day_ids)]
         future_day = any(not d.cancelled and d.starts_at_utc > now for d in c.days)

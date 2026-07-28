@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-27 21:56-0300\n"
+"POT-Creation-Date: 2026-07-27 22:28-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -466,84 +466,84 @@ msgstr "其他"
 msgid "Multiple"
 msgstr "多个"
 
-#: src/app/db/service.py:3657
+#: src/app/db/service.py:3668
 #, python-brace-format
 msgid "{n}d"
 msgstr "{n}天"
 
-#: src/app/db/service.py:3659
+#: src/app/db/service.py:3670
 #, python-brace-format
 msgid "{n}h"
 msgstr "{n}小时"
 
-#: src/app/db/service.py:3660
+#: src/app/db/service.py:3671
 #, python-brace-format
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/service.py:3757
+#: src/app/db/service.py:3768
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "升级中签 — 最迟于 {day} 付款"
 
-#: src/app/db/service.py:3758
+#: src/app/db/service.py:3769
 msgid "Upgrade won — payment due"
 msgstr "升级中签 — 付款截止"
 
-#: src/app/db/service.py:3777
+#: src/app/db/service.py:3788
 msgid "Upgrade · Applied"
 msgstr "升级 · 已申请"
 
-#: src/app/db/service.py:3780
+#: src/app/db/service.py:3791
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "升级 · {n}后截止"
 
-#: src/app/db/service.py:3783
+#: src/app/db/service.py:3794
 msgid "Upgrade · Open now"
 msgstr "升级 · 申请开放中"
 
-#: src/app/db/service.py:3789 src/app/web/templates/_board.html:23
+#: src/app/db/service.py:3800 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:35
 #: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "已获票"
 
-#: src/app/db/service.py:3800
+#: src/app/db/service.py:3811
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "中签 — 最迟于 {day} 付款"
 
-#: src/app/db/service.py:3801
+#: src/app/db/service.py:3812
 msgid "Won — payment due"
 msgstr "中签 — 付款截止"
 
-#: src/app/db/service.py:3810
+#: src/app/db/service.py:3821
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind} · 已申请"
 
-#: src/app/db/service.py:3830
+#: src/app/db/service.py:3841
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind} · {n}后截止"
 
-#: src/app/db/service.py:3835
+#: src/app/db/service.py:3846
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind} · 开放中"
 
-#: src/app/db/service.py:3841
+#: src/app/db/service.py:3852
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind} · {n}后开放"
 
-#: src/app/db/service.py:3848
+#: src/app/db/service.py:3859
 msgid "All rounds closed"
 msgstr "所有轮次均已截止"
 
-#: src/app/db/service.py:5145 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:5156 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -553,7 +553,7 @@ msgstr "所有轮次均已截止"
 msgid "Title"
 msgstr "标题"
 
-#: src/app/db/service.py:5149 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:5160 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -566,17 +566,17 @@ msgstr "标题"
 msgid "Notes"
 msgstr "备注"
 
-#: src/app/db/service.py:5155
+#: src/app/db/service.py:5166
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "场次 {n} 名称"
 
-#: src/app/db/service.py:5160
+#: src/app/db/service.py:5171
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "轮次 {n} 名称"
 
-#: src/app/db/service.py:5169 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:5180 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -591,7 +591,7 @@ msgstr "轮次 {n} 名称"
 msgid "Name"
 msgstr "名称"
 
-#: src/app/db/service.py:5174
+#: src/app/db/service.py:5185
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -966,18 +966,26 @@ msgstr "申请链接（可选）"
 msgid "Notes (optional)"
 msgstr "备注（可选）"
 
-#: src/app/web/templates/_following_toggle.html:30
+#: src/app/web/templates/_following_toggle.html:37
+msgid "This event is cancelled, so no reminders will be sent."
+msgstr "本次活动已取消，不会发送任何提醒。"
+
+#: src/app/web/templates/_following_toggle.html:39
+msgid "You will be reminded about every round below."
+msgstr "你会收到以下每个轮次的提醒。"
+
+#: src/app/web/templates/_following_toggle.html:45
 msgid "via"
 msgstr "来自："
 
-#: src/app/web/templates/_following_toggle.html:32
+#: src/app/web/templates/_following_toggle.html:47
 #: src/app/web/templates/concert_edit.html:141
 #, python-format
 msgid "+%(n)s more"
 msgstr "+还有 %(n)s 项"
 
-#: src/app/web/templates/_following_toggle.html:39
-#: src/app/web/templates/_following_toggle.html:69
+#: src/app/web/templates/_following_toggle.html:54
+#: src/app/web/templates/_following_toggle.html:84
 #: src/app/web/templates/_tag_follow_bell.html:14
 #: src/app/web/templates/preferences.html:16
 #: src/app/web/templates/preferences.html:28
@@ -986,44 +994,39 @@ msgstr "+还有 %(n)s 项"
 msgid "Following"
 msgstr "关注中"
 
-#: src/app/web/templates/_following_toggle.html:40
-#: src/app/web/templates/_following_toggle.html:71
-msgid "You will be reminded about every round below."
-msgstr "你会收到以下每个轮次的提醒。"
-
-#: src/app/web/templates/_following_toggle.html:43
+#: src/app/web/templates/_following_toggle.html:58
 msgid "Stop following this event?"
 msgstr "不再关注此活动吗？"
 
-#: src/app/web/templates/_following_toggle.html:44
+#: src/app/web/templates/_following_toggle.html:59
 #: src/app/web/templates/_result_capture_dialog.html:25
 #: src/app/web/templates/home.html:285
 #: src/app/web/templates/preferences.html:398
 msgid "Close"
 msgstr "关闭"
 
-#: src/app/web/templates/_following_toggle.html:48
+#: src/app/web/templates/_following_toggle.html:63
 #, python-format
 msgid ""
 "This ticket is marked as won. Payment is due %(when)s. If you stop "
 "following this event, we'll remove that mark and the payment reminder."
 msgstr "此门票已标记为“中签”。付款截止时间为 %(when)s。不再关注此活动后，该标记和付款提醒会被删除。"
 
-#: src/app/web/templates/_following_toggle.html:50
+#: src/app/web/templates/_following_toggle.html:65
 msgid ""
 "You marked that you have a ticket for this event. If you stop following "
 "it, we'll remove that mark and its reminders."
 msgstr "此活动已标记为“有票”。不再关注后，该标记和相关提醒会被删除。"
 
-#: src/app/web/templates/_following_toggle.html:55
+#: src/app/web/templates/_following_toggle.html:70
 msgid "Keep following"
 msgstr "继续关注"
 
-#: src/app/web/templates/_following_toggle.html:60
+#: src/app/web/templates/_following_toggle.html:75
 msgid "Stop following"
 msgstr "不再关注"
 
-#: src/app/web/templates/_following_toggle.html:80
+#: src/app/web/templates/_following_toggle.html:95
 #: src/app/web/templates/_tag_follow_bell.html:21
 #: src/app/web/templates/setup.html:9 src/app/web/templates/welcome.html:8
 msgid "Follow"
@@ -1397,7 +1400,7 @@ msgid "Discover"
 msgstr "发现"
 
 #: src/app/web/templates/base.html:38 src/app/web/templates/base.html:99
-#: src/app/web/templates/concert_detail.html:45
+#: src/app/web/templates/concert_detail.html:49
 #: src/app/web/templates/concert_edit.html:140
 #: src/app/web/templates/concert_new.html:114
 #: src/app/web/templates/import_preview.html:176
@@ -1496,60 +1499,60 @@ msgstr "已记录 — 标记为未中签"
 msgid "Recorded — ticket secured"
 msgstr "已记录 — 已获票"
 
-#: src/app/web/templates/concert_detail.html:40
+#: src/app/web/templates/concert_detail.html:44
 msgid ""
 "This event is cancelled. Every performance has been called off, so there "
 "is nothing left to enter."
 msgstr "本次活动已取消。所有场次均已取消，没有可以报名的项目。"
 
-#: src/app/web/templates/concert_detail.html:60
+#: src/app/web/templates/concert_detail.html:64
 msgid "Links"
 msgstr "链接"
 
-#: src/app/web/templates/concert_detail.html:62
+#: src/app/web/templates/concert_detail.html:66
 msgid "official site"
 msgstr "官方网站"
 
-#: src/app/web/templates/concert_detail.html:77
+#: src/app/web/templates/concert_detail.html:81
 #: src/app/web/templates/concert_edit.html:22
 msgid "Edit event"
 msgstr "编辑活动"
 
-#: src/app/web/templates/concert_detail.html:78
+#: src/app/web/templates/concert_detail.html:82
 msgid "Export YAML"
 msgstr "导出 YAML"
 
-#: src/app/web/templates/concert_detail.html:115
+#: src/app/web/templates/concert_detail.html:119
 msgid "Performing"
 msgstr "出演"
 
-#: src/app/web/templates/concert_detail.html:117
+#: src/app/web/templates/concert_detail.html:121
 #: src/app/web/templates/tags.html:15
 #, python-format
 msgid "%(count)s performer"
 msgid_plural "%(count)s performers"
 msgstr[0] "%(count)s 位出演者"
 
-#: src/app/web/templates/concert_detail.html:125
-#: src/app/web/templates/concert_detail.html:136
+#: src/app/web/templates/concert_detail.html:129
+#: src/app/web/templates/concert_detail.html:140
 msgid "No eventernote link yet"
 msgstr "暂无 eventernote 链接"
 
-#: src/app/web/templates/concert_detail.html:148
+#: src/app/web/templates/concert_detail.html:152
 msgid "My reminders"
 msgstr "我的提醒"
 
-#: src/app/web/templates/concert_detail.html:154
+#: src/app/web/templates/concert_detail.html:158
 #, python-format
 msgid "Edit history (%(n)s)"
 msgstr "编辑记录（%(n)s）"
 
-#: src/app/web/templates/concert_detail.html:160
+#: src/app/web/templates/concert_detail.html:164
 #: src/app/web/templates/concert_edit.html:156
 msgid "Deleted user"
 msgstr "已删除的用户"
 
-#: src/app/web/templates/concert_detail.html:164
+#: src/app/web/templates/concert_detail.html:168
 #: src/app/web/templates/concert_edit.html:160
 msgid "(empty)"
 msgstr "（空）"
