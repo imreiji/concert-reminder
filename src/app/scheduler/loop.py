@@ -46,6 +46,7 @@ from app.db.service import (
     mark_notification_sent,
     mark_sent,
     notice_context,
+    prune_delivery_log,
     queue_delivery_digest,
     record_deliveries,
     record_dm_outcome,
@@ -226,6 +227,10 @@ async def tick(bot) -> int:
         if _tick_count % HEALTH_EVERY_N_TICKS == 0:
             try:
                 await evaluate_and_alert(session, await run_checks(session), now)
+                # Same 5-minute cadence, same try/except: a table that grows
+                # for another five minutes is not an incident, and a failed
+                # prune must not be able to take health alerting down with it.
+                await prune_delivery_log(session, now)
                 await session.commit()
             except Exception:
                 log.exception("health evaluation failed; reminder delivery was unaffected")

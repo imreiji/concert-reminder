@@ -1,6 +1,6 @@
 """The delivery log, its digest, and the retention prune."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.db.models import Base, Concert, DeliveryLog, Notification, User
-from app.db.service import UNREPORTED_NOTE_KINDS, DueReminder, record_deliveries
+from app.db.service import (
+    DELIVERY_LOG_RETENTION_DAYS,
+    UNREPORTED_NOTE_KINDS,
+    DueReminder,
+    prune_delivery_log,
+    record_deliveries,
+)
 from app.domain.types import Anchor, DeliveryOutcome, DeliverySource
 
 
@@ -222,3 +228,34 @@ def test_the_exclusion_set_covers_the_future_broadcast():
     """Sub-project C queues admin_broadcast notifications. Excluded up front,
     because discovering this after C ships means a DM loop in production."""
     assert UNREPORTED_NOTE_KINDS == frozenset({"delivery_digest", "admin_broadcast"})
+
+
+@pytest.mark.asyncio
+async def test_prune_deletes_past_the_window_and_spares_inside_it(db):
+    now = datetime(2026, 7, 28, tzinfo=UTC)
+    async with db() as s:
+        await _seed(s)
+        for days in (1, 29, 31, 400):
+            s.add(
+                DeliveryLog(
+                    batch_at_utc=now - timedelta(days=days),
+                    user_id=1,
+                    source=DeliverySource.REMINDER,
+                    outcome=DeliveryOutcome.SUCCESS,
+                    sent_at_utc=now - timedelta(days=days),
+                )
+            )
+        await s.commit()
+        assert await prune_delivery_log(s, now) == 2
+        await s.commit()
+        remaining = sorted(
+            (now - r.batch_at_utc).days
+            for r in (await s.execute(select(DeliveryLog))).scalars()
+        )
+        assert remaining == [1, 29]
+
+
+def test_retention_matches_the_backup_lifecycle():
+    """One retention number in the system, not two -- deploy/backup.sh's S3
+    lifecycle is 30 days."""
+    assert DELIVERY_LOG_RETENTION_DAYS == 30

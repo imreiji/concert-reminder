@@ -1399,7 +1399,7 @@ plain-text path so no send code changed."
 - Consumes: `DeliveryLog` (Task 2).
 - Produces: `service.DELIVERY_LOG_RETENTION_DAYS = 30`; `async def prune_delivery_log(session, now=None) -> int` returning rows deleted.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_delivery_log.py`:
 
@@ -1440,12 +1440,12 @@ def test_retention_matches_the_backup_lifecycle():
 
 Add `timedelta` to that file's datetime import.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run --isolated pytest tests/test_delivery_log.py -v`
 Expected: FAIL — `ImportError: cannot import name 'prune_delivery_log'`
 
-- [ ] **Step 3: Add the prune**
+- [x] **Step 3: Add the prune**
 
 Append to the delivery-log section of `src/app/db/service.py`:
 
@@ -1469,7 +1469,7 @@ async def prune_delivery_log(session: AsyncSession, now: datetime | None = None)
 
 Ensure `delete` is in `service.py`'s `from sqlalchemy import ...` and `timedelta` in its datetime import.
 
-- [ ] **Step 4: Call it from the health block**
+- [x] **Step 4: Call it from the health block**
 
 In `src/app/scheduler/loop.py`, inside the `if _tick_count % HEALTH_EVERY_N_TICKS == 0:` try block, add the prune before the commit:
 
@@ -1488,12 +1488,12 @@ In `src/app/scheduler/loop.py`, inside the `if _tick_count % HEALTH_EVERY_N_TICK
 
 Add `prune_delivery_log` to the `from app.db.service import (...)` block.
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Run: `uv run --isolated pytest tests/test_delivery_log.py -v`
 Expected: PASS.
 
-- [ ] **Step 6: Full gates and commit**
+- [x] **Step 6: Full gates and commit**
 
 Run: `uv run --isolated ruff check .` then `uv run --isolated pytest -q`
 

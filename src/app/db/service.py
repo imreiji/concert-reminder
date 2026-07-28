@@ -20,7 +20,7 @@ import hashlib
 import secrets
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -4841,6 +4841,21 @@ async def queue_delivery_digest(
         queued += 1
     await session.flush()
     return queued
+
+
+# Matches deploy/backup.sh's S3 lifecycle so the system has ONE retention
+# number rather than two that can drift apart.
+DELIVERY_LOG_RETENTION_DAYS = 30
+
+
+async def prune_delivery_log(session: AsyncSession, now: datetime | None = None) -> int:
+    """Delete delivery_log rows older than the retention window. Returns rows
+    deleted. Flushes, never commits -- the caller owns the transaction."""
+    now = now or _now()
+    cutoff = now - timedelta(days=DELIVERY_LOG_RETENTION_DAYS)
+    res = await session.execute(delete(DeliveryLog).where(DeliveryLog.batch_at_utc < cutoff))
+    await session.flush()
+    return res.rowcount or 0
 
 
 # ── Operational health alerts ────────────────────────────────────────────
