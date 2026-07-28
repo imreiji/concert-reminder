@@ -1613,9 +1613,10 @@ async def test_a_dead_concerts_unfollow_dialog_promises_nothing(client):
     assert "remove that mark and the payment reminder" not in frag
 
 
-async def test_a_live_concerts_unfollow_dialog_is_unchanged(client):
+async def test_a_live_concerts_unfollow_dialog_still_names_the_payment(client):
     """The payment reminder is real while any leg stands, so the dialog keeps
-    naming it -- and the moment it is due."""
+    naming it -- and the moment it is due. That is the whole reason this
+    confirmation is heavy, so it must survive the §B rewording."""
     cid = await seed_concert(client.db)
     await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
     await add_day(client.db, cid, "Tokyo", days_ahead=31)
@@ -1627,8 +1628,47 @@ async def test_a_live_concerts_unfollow_dialog_is_unchanged(client):
     client.post("/concerts/np/subscription", data={"state": "subscribed"})
 
     body = client.get("/concerts/np").text
-    assert "remove that mark and the payment reminder" in body
+    assert "Payment is due" in body
+    assert "the payment reminder stops" in body
     assert "this event is cancelled, so no reminders will be sent" not in body
+
+
+async def test_the_unfollow_dialog_says_the_record_survives(client):
+    """Both LIVE branches promised "we'll remove that mark and the payment
+    reminder" / "...and its reminders". The reminder half is true; the mark
+    half never was -- an opt-out NEVER deletes a RoundOutcome (invariant 8,
+    and routes/subscriptions.py says so in its own docstring: it forfeits the
+    reminder, not the record, deliberately, so unfollowing a won ticket is one
+    confirmed press rather than a two-step chore). A reader who believed the
+    sentence thought unfollowing erased the ticket they had recorded, which is
+    exactly the fear that stops them pressing it. The reminder loss is still
+    named -- that is why the confirmation is heavy -- and the record is now
+    stated as surviving."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    # Branch 1: a won ticket WITH a payment deadline.
+    rid = await add_round(
+        client.db, cid, "Lottery R1", payment=datetime.now(UTC) + timedelta(days=10)
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.WON)
+    body = client.get("/concerts/np").text
+    assert "remove that mark and the payment reminder" not in body
+    assert "the payment reminder stops" in body  # the loss, still named
+    assert "Stopping following does not remove that mark" in body
+
+    # Branch 2: a won ticket with NO payment deadline (the same round, its
+    # payment moment cleared) -- the other live sentence.
+    async with client.db() as s:
+        r = await s.get(Round, rid)
+        r.payment_deadline_at_utc = None
+        await s.commit()
+    body = client.get("/concerts/np").text
+    assert "remove that mark and its reminders" not in body
+    assert "its reminders stop" in body  # the loss, still named
+    assert "Stopping following does not remove that mark" in body
 
 
 async def test_the_legacy_meta_grid_block_is_gone(client):

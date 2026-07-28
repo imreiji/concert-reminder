@@ -4596,8 +4596,30 @@ async def handle_newly_tagged(
     A user matched by several tags at once (group + members) is handled once;
     if several matched subscriptions carry presets, the earliest-created wins.
     Returns the number of users processed.
+
+    A DEAD concert (`all_legs_cancelled`) does neither, for anybody: no notice
+    is queued and no preset applies. This pipeline fires on TAGGING, not on
+    cancelling, which is why it was not on the cancelled-concerts branch's list
+    -- and it is reached automatically, since `sync_concert_venue_tags` runs it
+    on every venue rollup, so a routine leg edit on a cancelled tour used to DM
+    every venue follower a "New event" with an "Apply here" button. Owner
+    ruling (2026-07-28): a notice nobody can act on is not worth sending, and
+    invisible rules on a dead event are justified only by a revival that may
+    never come. This only SKIPS -- no send path is added or rerouted
+    (invariant 4). The question is asked ONCE here rather than per subscriber:
+    it is a fact about the concert, not about any reader.
     """
     if not new_tags:
+        return 0
+    # Its own query rather than `concert.days`: callers reach this with the
+    # concert in every state (freshly flushed and legless, refreshed, or loaded
+    # by event_id with nothing eager), and a lazy load on an unloaded
+    # collection mid-request is a MissingGreenlet 500. Same shape
+    # `leg_cancelled_context` uses one screen over.
+    days = list((await session.execute(
+        select(ConcertDay).where(ConcertDay.concert_id == concert.id)
+    )).scalars())
+    if all_legs_cancelled(days):
         return 0
     res = await session.execute(
         select(TagSubscription)

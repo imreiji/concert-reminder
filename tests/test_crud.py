@@ -1175,6 +1175,46 @@ async def test_duplicate_clones_scalars_and_tags_but_not_days_rounds_or_venues(c
     assert clone.rounds == []
 
 
+async def test_duplicate_slugs_the_new_event_id_from_the_english_title(client):
+    """The §A slug change reaches the duplicate route too, and this is the one
+    place it is observable end to end: the source's Japanese title alone
+    slugifies to the "concert" fallback, so a clone of a JP-titled concert
+    used to land on /concerts/concert. It now lands on the English one."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={
+        "title": "蓮ノ空女学院スクールアイドルクラブ 6thライブ",
+        "title_en": "Hasunosora 6th Live",
+        "title_zh": "莲之空6th演唱会",
+        "event_id": "hasunosora-6th",
+    })
+    r = client.post("/concerts/hasunosora-6th/duplicate")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/concerts/hasunosora-6th-live-copy/edit"
+
+
+async def test_duplicate_ignores_a_whitespace_only_english_title(client):
+    """The route decided "has a title_en" by truthiness while
+    generate_event_id decides it by .strip(), so a whitespace title_en sent
+    "   copy" down -- which strips back to "copy" and minted /concerts/copy
+    instead of falling back to the Japanese title. The two now agree.
+
+    Written straight to the DB: require_variants makes the trio mandatory at
+    every create boundary, and the duplicate route exists precisely to clone
+    rows that predate that rule."""
+    login_as(client, EDITOR_ID, "reiji")
+    async with client.db() as s:
+        s.add(Concert(
+            title="Hasunosora 6th Live", title_en="   ",
+            event_id="legacy", created_by=EDITOR_ID,
+        ))
+        await s.commit()
+
+    r = client.post("/concerts/legacy/duplicate")
+    assert r.status_code == 303
+    # "   copy" strips to "copy" -- the whole slug the reader would have got.
+    assert r.headers["location"] == "/concerts/hasunosora-6th-live-copy/edit"
+
+
 def test_duplicate_requires_editor(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title_en": "C", "title_zh": "C", "title": "C", "event_id": "c"})

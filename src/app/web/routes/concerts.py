@@ -1584,10 +1584,16 @@ async def duplicate_concert(
     await session.refresh(source, ["tags"])
     await ensure_user(session, user.id, user.username)
 
+    # .strip(), not truthiness: generate_event_id decides "has an English
+    # title" that way, and a whitespace-only title_en handed over as
+    # "   copy" strips back to "copy" inside it -- minting /concerts/copy
+    # instead of falling back to `title`. Both halves must ask the same
+    # question of the same value.
+    source_title_en = (source.title_en or "").strip()
     new_event_id = await generate_event_id(
         session,
         f"{source.title} copy",
-        f"{source.title_en} copy" if source.title_en else None,
+        f"{source_title_en} copy" if source_title_en else None,
     )
     f_names = [t.name for t in source.tags if t.kind is TagKind.FRANCHISE]
     clone = Concert(

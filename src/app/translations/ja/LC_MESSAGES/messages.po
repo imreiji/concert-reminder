@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-27 23:18-0300\n"
+"POT-Creation-Date: 2026-07-28 00:36-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -556,7 +556,7 @@ msgstr "{kind}・{n}後に受付開始"
 msgid "All rounds closed"
 msgstr "すべての受付が終了"
 
-#: src/app/db/service.py:5172 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:5210 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -566,7 +566,7 @@ msgstr "すべての受付が終了"
 msgid "Title"
 msgstr "タイトル"
 
-#: src/app/db/service.py:5176 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:5214 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -579,17 +579,17 @@ msgstr "タイトル"
 msgid "Notes"
 msgstr "メモ"
 
-#: src/app/db/service.py:5182
+#: src/app/db/service.py:5220
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "公演{n}の名称"
 
-#: src/app/db/service.py:5187
+#: src/app/db/service.py:5225
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "受付{n}の名称"
 
-#: src/app/db/service.py:5196 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:5234 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -604,7 +604,7 @@ msgstr "受付{n}の名称"
 msgid "Name"
 msgstr "名前"
 
-#: src/app/db/service.py:5201
+#: src/app/db/service.py:5239
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -998,7 +998,7 @@ msgid "+%(n)s more"
 msgstr "ほか%(n)s件"
 
 #: src/app/web/templates/_following_toggle.html:54
-#: src/app/web/templates/_following_toggle.html:97
+#: src/app/web/templates/_following_toggle.html:103
 #: src/app/web/templates/_tag_follow_bell.html:14
 #: src/app/web/templates/preferences.html:16
 #: src/app/web/templates/preferences.html:28
@@ -1018,34 +1018,35 @@ msgstr "このイベントのフォローをやめますか？"
 msgid "Close"
 msgstr "閉じる"
 
-#: src/app/web/templates/_following_toggle.html:74
+#: src/app/web/templates/_following_toggle.html:80
 msgid ""
 "This ticket is marked as won, but this event is cancelled, so no "
 "reminders will be sent. Stopping following does not remove that mark."
 msgstr "このチケットは「当選」に設定されていますが、この公演は中止のため、通知は送信されません。フォローをやめても、この設定は削除されません。"
 
-#: src/app/web/templates/_following_toggle.html:76
+#: src/app/web/templates/_following_toggle.html:82
 #, python-format
 msgid ""
 "This ticket is marked as won. Payment is due %(when)s. If you stop "
-"following this event, we'll remove that mark and the payment reminder."
-msgstr "このチケットは「当選」に設定されています。入金締切は%(when)sです。このイベントのフォローをやめると、この設定と入金リマインダーが削除されます。"
+"following this event, the payment reminder stops. Stopping following does"
+" not remove that mark."
+msgstr "このチケットは「当選」に設定されています。入金締切は%(when)sです。このイベントのフォローをやめると、入金リマインダーは送信されなくなりますが、この設定は削除されません。"
 
-#: src/app/web/templates/_following_toggle.html:78
+#: src/app/web/templates/_following_toggle.html:84
 msgid ""
 "You marked that you have a ticket for this event. If you stop following "
-"it, we'll remove that mark and its reminders."
-msgstr "このイベントは「チケットあり」に設定されています。フォローをやめると、この設定とリマインダーが削除されます。"
+"it, its reminders stop. Stopping following does not remove that mark."
+msgstr "このイベントは「チケットあり」に設定されています。フォローをやめると、リマインダーは送信されなくなりますが、この設定は削除されません。"
 
-#: src/app/web/templates/_following_toggle.html:83
+#: src/app/web/templates/_following_toggle.html:89
 msgid "Keep following"
 msgstr "フォローを続ける"
 
-#: src/app/web/templates/_following_toggle.html:88
+#: src/app/web/templates/_following_toggle.html:94
 msgid "Stop following"
 msgstr "フォローをやめる"
 
-#: src/app/web/templates/_following_toggle.html:108
+#: src/app/web/templates/_following_toggle.html:114
 #: src/app/web/templates/_tag_follow_bell.html:21
 #: src/app/web/templates/setup.html:9 src/app/web/templates/welcome.html:8
 msgid "Follow"

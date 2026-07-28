@@ -310,6 +310,11 @@ async def test_event_id_falls_back_to_the_japanese_title(db):
         # the shape that made imports mint concert-2, concert-3.
         assert await generate_event_id(s, "蓮ノ空女学院スクールアイドルクラブ", None) == "concert"
         assert await generate_event_id(s, "Hasunosora 6th Live", "") == "hasunosora-6th-live"
+        # The branch the .strip() exists for: a title_en that is whitespace is
+        # unfilled, not English, so it falls through to `title` exactly as ""
+        # and None do. The duplicate route must agree -- see
+        # test_duplicate_ignores_a_whitespace_only_english_title in test_crud.
+        assert await generate_event_id(s, "Hasunosora 6th Live", "   ") == "hasunosora-6th-live"
 
 
 async def test_commit_binds_a_round_to_multiple_legs(client):
