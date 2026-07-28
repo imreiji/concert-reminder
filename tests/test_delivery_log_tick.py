@@ -17,6 +17,7 @@ from app.db.models import (
     ConcertDay,
     DeliveryLog,
     Notification,
+    OpsCheckState,
     ReminderQueue,
     ReminderRule,
     Round,
@@ -167,3 +168,28 @@ async def test_the_digests_own_delivery_is_not_logged(maker, monkeypatch):
 
     async with maker() as s:
         assert len((await s.execute(select(DeliveryLog))).scalars().all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_failing_prune_cannot_suppress_health_alerting(maker, monkeypatch):
+    """The prune gets its own commit, not a share of the health block's.
+
+    It first shipped inside health's try/commit, which made the comment there
+    a lie: because they shared one commit, a prune that raised rolled the
+    OpsCheckState writes back with it. The cheapest, least important operation
+    in the tick could therefore silently suppress the pass that decides whether
+    to page an admin -- and it would do so exactly when the DB is under enough
+    stress to make a DELETE fail, which is when you most want the alert.
+    """
+    async def boom(*_a, **_kw):
+        raise RuntimeError("prune exploded")
+
+    monkeypatch.setattr(loop_mod, "prune_delivery_log", boom)
+    monkeypatch.setattr(loop_mod, "_tick_count", loop_mod.HEALTH_EVERY_N_TICKS - 1)
+
+    await loop_mod.tick(FakeBot())  # must not raise
+
+    async with maker() as s:
+        # evaluate_and_alert persists one row per registered check; if the
+        # prune's rollback had reached them there would be none.
+        assert (await s.execute(select(OpsCheckState))).scalars().all() != []

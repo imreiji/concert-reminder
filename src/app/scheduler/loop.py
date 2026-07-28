@@ -227,13 +227,26 @@ async def tick(bot) -> int:
         if _tick_count % HEALTH_EVERY_N_TICKS == 0:
             try:
                 await evaluate_and_alert(session, await run_checks(session), now)
-                # Same 5-minute cadence, same try/except: a table that grows
-                # for another five minutes is not an incident, and a failed
-                # prune must not be able to take health alerting down with it.
-                await prune_delivery_log(session, now)
                 await session.commit()
             except Exception:
                 log.exception("health evaluation failed; reminder delivery was unaffected")
+                await session.rollback()
+
+            # Same 5-minute cadence, but its OWN try/except and its OWN commit
+            # -- and that separation is the whole point. Sharing the health
+            # block's commit (how this first shipped) meant a prune that raised
+            # rolled the OpsCheckState writes back with it, so the least
+            # important operation in the tick could silently suppress the most
+            # important one: the pass that decides whether to page an admin.
+            # A delivery_log table that grows for another five minutes is not
+            # an incident; a swallowed health transition is. Same
+            # least-important-last, commit-between-stages shape the rest of
+            # this function already uses.
+            try:
+                await prune_delivery_log(session, now)
+                await session.commit()
+            except Exception:
+                log.exception("delivery log prune failed; nothing else was affected")
                 await session.rollback()
     return delivered
 
