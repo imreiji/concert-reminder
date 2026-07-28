@@ -212,6 +212,21 @@ def test_deeply_nested_flow_raises_draft_error_not_recursion_error():
         parse_draft("title: " + "[" * 500 + "]" * 500)
 
 
+def test_the_too_deep_message_says_what_the_author_can_do():
+    """The type alone is not the contract -- what the author reads in the
+    import banner is. Such a draft is often perfectly well-formed YAML that
+    merely out-nests PyYAML's recursive-descent parser, so the old
+    "that doesn't parse as YAML" was false, and CPython's own "maximum
+    recursion depth exceeded" named nothing anyone could act on."""
+    with pytest.raises(DraftError) as exc:
+        parse_draft("title: " + "[" * 500 + "]" * 500)
+    msg = str(exc.value)
+    assert "doesn't parse as YAML" not in msg
+    assert "recursion" not in msg.lower()
+    assert "nests too deeply" in msg
+    assert "flatten" in msg
+
+
 def test_anchor_fanout_completes_and_rejects_container_title():
     """A tiny alias-DAG payload must neither hang (str() on shared sub-lists
     is exponential) nor crash: the container title reads as no-title."""
@@ -222,6 +237,18 @@ def test_anchor_fanout_completes_and_rejects_container_title():
     lines.append("title: *a11")
     with pytest.raises(DraftError):
         parse_draft("\n".join(lines))
+
+
+def test_a_container_value_warns_instead_of_blanking_silently():
+    """_dt warns when it gets a container; _text used to blank silently, so a
+    list organizer/notes/label/url left no drift alarm at all. The warning
+    names the FIELD and the type -- never the value: str()'ing a container is
+    the exponential alias-fan-out cost the DoS fix removed, and re-introducing
+    it inside the warning would reopen exactly that hole."""
+    p = parse_draft("title: T\norganizer: [bandai, sunrise]\n")
+    assert p.organizer is None
+    assert any("organizer" in w for w in p.warnings)
+    assert not any("bandai" in w for w in p.warnings)
 
 
 def test_container_value_for_scalar_field_blanks():

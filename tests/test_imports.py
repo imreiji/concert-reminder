@@ -267,6 +267,56 @@ async def test_commit_creates_concert_days_and_rounds(client):
     assert len(rounds) == 2
 
 
+async def test_event_id_prefers_the_english_title(client):
+    """Invariant 6: a URL carries the editor-chosen event_id precisely so it
+    reads as the concert. slugify() strips everything outside [a-z0-9], so a
+    Japanese-only title collapsed to the "concert" fallback and imports minted
+    concert-2, concert-3 -- unique but meaningless. title_en is mandatory at
+    every create boundary now, so prefer it."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "蓮ノ空女学院スクールアイドルクラブ 6thライブ",
+            "title_en": "Hasunosora 6th Live",
+            "title_zh": "莲之空6th演唱会",
+            "day_label": ["Day 1"],
+            "day_starts_at": ["2027-01-23T17:00"],
+            "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
+            "round_label": ["一次先行"],
+            "round_label_en": ["First lottery"], "round_label_zh": ["一轮抽选"],
+            "round_kind": ["lottery_round"],
+            "round_opens_at": ["2026-10-14T12:00"],
+            "round_closes_at": ["2026-11-08T23:59"],
+            "round_results_at": [""],
+            "round_payment_at": [""],
+            "round_url": [""],
+        },
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/concerts/hasunosora-6th-live"
+
+
+async def test_event_id_falls_back_to_the_japanese_title(db):
+    """No title_en -> today's behaviour, unchanged. Tested at the function
+    rather than the route because no create boundary can still produce a blank
+    title_en (require_variants makes the trio mandatory), while
+    generate_event_id is also reached from the duplicate route, which clones
+    legacy rows that predate that rule."""
+    from app.web.routes.concerts import generate_event_id
+
+    async with db() as s:
+        # No ASCII anywhere, so slugify() empties out and hits its fallback --
+        # the shape that made imports mint concert-2, concert-3.
+        assert await generate_event_id(s, "蓮ノ空女学院スクールアイドルクラブ", None) == "concert"
+        assert await generate_event_id(s, "Hasunosora 6th Live", "") == "hasunosora-6th-live"
+        # The branch the .strip() exists for: a title_en that is whitespace is
+        # unfilled, not English, so it falls through to `title` exactly as ""
+        # and None do. The duplicate route must agree -- see
+        # test_duplicate_ignores_a_whitespace_only_english_title in test_crud.
+        assert await generate_event_id(s, "Hasunosora 6th Live", "   ") == "hasunosora-6th-live"
+
+
 async def test_commit_binds_a_round_to_multiple_legs(client):
     """The preview's leg chips let one round apply to SEVERAL legs -- an
     expression the old flat form had no field for. Each day carries a

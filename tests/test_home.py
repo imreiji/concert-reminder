@@ -10,6 +10,7 @@ Signed out the page is the hero and nothing else -- the same gate the old
 index already had, plus a door out to /discover.
 """
 
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -1556,6 +1557,33 @@ async def test_the_block_header_carries_the_venue_and_the_performance_date(clien
     assert "<small>📍 Zepp Haneda · 12 Oct</small>" in head
 
 
+_DETAILS_TAG = re.compile(r"<details\b([^>]*)>")
+# One attribute: a name, optionally followed by a quoted value. The value is
+# CONSUMED by the match, so a word inside one (class="a open") is never
+# rescanned as an attribute of its own.
+_ATTR = re.compile(r'([\w-]+)(?:="([^"]*)")?')
+
+
+def open_fold_keys(html: str) -> set[str]:
+    """Every fold rendered OPEN, read by the same `data-fold` key the
+    client-side restore listener (base.html) keys on. Asserting through the
+    key rather than the literal tag keeps these tests honest: an attribute
+    added between the class and the `open` would make a bare
+    `'morerounds" open' not in html` pass vacuously.
+
+    Parsed attribute-by-attribute rather than as one `data-fold="..." open`
+    pattern, because that pattern has the very fault it exists to fix, one
+    level up: it is order-coupled, so an attribute inserted BETWEEN the two
+    returns an empty set -- and an empty set makes every NEGATIVE assertion
+    here pass without testing anything."""
+    keys = set()
+    for attrs in _DETAILS_TAG.findall(html):
+        parsed = dict(_ATTR.findall(attrs))
+        if "open" in parsed and parsed.get("data-fold"):
+            keys.add(parsed["data-fold"])
+    return keys
+
+
 async def test_a_folded_round_is_present_but_collapsed(client):
     """A fold is presentation, not filtering: the second round's capture form
     is IN the DOM and posts to the same target, it is merely behind a closed
@@ -1570,12 +1598,12 @@ async def test_a_folded_round_is_present_but_collapsed(client):
     login(client)
 
     rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
-    assert '<details class="morerounds">' in rows
+    assert '<details class="morerounds" data-fold="block-aqours-live">' in rows
     # Closed: no `open` attribute anywhere on that element.
-    assert '<details class="morerounds" open' not in rows
+    assert open_fold_keys(rows) == set()
     assert "+1 more round" in rows
 
-    fold = rows.split('<details class="morerounds">', 1)[1]
+    fold = rows.split('<details class="morerounds" data-fold="block-aqours-live">', 1)[1]
     assert "Also open" in fold
     assert f'/rounds/{folded_id}/outcome' in fold
     assert 'hx-target="#deadline-rows"' in fold
@@ -1671,9 +1699,37 @@ async def test_the_page_level_fold_appears_only_past_six_blocks(client):
         await s.commit()
 
     rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
-    assert '<details class="moreconcerts">' in rows
+    assert '<details class="moreconcerts" data-fold="more-concerts">' in rows
     assert "+2 more events" in rows
     assert rows.count('class="cblock"') == VISIBLE_BLOCKS + 2
+
+
+async def test_home_block_folds_carry_stable_keys(client):
+    """The MARKUP half of the client-side fold restore (spec §D): every
+    <details> in this swappable region carries a `data-fold` key, so
+    base.html's listener can remember which were open across an outerHTML
+    swap without any per-caller plumbing. A headless test cannot fire the
+    browser event, so what it pins is the contract the script reads: a
+    per-block key (`block-{event_id}`, distinct per block, and stable across
+    the swap because the event_id is) and the page-level `more-concerts`.
+
+    Stable is the whole point -- a key derived from position would name a
+    different block after a re-sort and reopen the wrong fold."""
+    async def build(seed):
+        for i in range(VISIBLE_BLOCKS + 2):
+            c = await seed.concert(f"c-{i:02d}", title=f"Concert {i:02d}", day_offset=None)
+            await seed.open_round(c, "R1", days=1 + i)
+            await seed.open_round(c, "R2", days=20 + i)
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    # One key per block, visible slice and overflow alike -- the overflow
+    # blocks are the ones a page-level collapse takes off the screen.
+    for i in range(VISIBLE_BLOCKS + 2):
+        assert f'<details class="morerounds" data-fold="block-c-{i:02d}">' in rows
+    assert '<details class="moreconcerts" data-fold="more-concerts">' in rows
 
 
 # ── the swap reopens the fold the reader was acting in ───────────────────
@@ -1694,7 +1750,7 @@ async def test_capturing_a_folded_round_reopens_its_per_round_fold(client):
 
     r = client.post(f"/rounds/{folded_id}/outcome", data={"outcome": "applied"}, headers=HX)
     rows = r.text.split('id="deadline-rows"', 1)[1]
-    assert '<details class="morerounds" open>' in rows
+    assert open_fold_keys(rows) == {"block-aqours-live"}
     # The round it wrote really is the one behind that fold.
     fold = rows.split('class="morerounds"', 1)[1]
     assert "Also open" in fold.split("</details>", 1)[0]
@@ -1719,7 +1775,7 @@ async def test_capturing_a_round_in_an_overflow_block_reopens_the_page_fold(clie
 
     r = client.post(f"/rounds/{overflow_id}/outcome", data={"outcome": "applied"}, headers=HX)
     rows = r.text.split('id="deadline-rows"', 1)[1]
-    assert '<details class="moreconcerts" open>' in rows
+    assert "more-concerts" in open_fold_keys(rows)
 
 
 async def test_get_home_renders_neither_fold_open(client):
@@ -1735,10 +1791,9 @@ async def test_get_home_renders_neither_fold_open(client):
     login(client)
 
     rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
-    assert '<details class="morerounds">' in rows
-    assert '<details class="moreconcerts">' in rows
-    assert "morerounds\" open" not in rows
-    assert "moreconcerts\" open" not in rows
+    assert '<details class="morerounds" data-fold="block-c-00">' in rows
+    assert '<details class="moreconcerts" data-fold="more-concerts">' in rows
+    assert open_fold_keys(rows) == set()
 
 
 async def test_capturing_a_visible_blocks_lead_opens_no_per_round_fold(client):
@@ -1755,5 +1810,6 @@ async def test_capturing_a_visible_blocks_lead_opens_no_per_round_fold(client):
 
     r = client.post(f"/rounds/{lead_id}/outcome", data={"outcome": "applied"}, headers=HX)
     rows = r.text.split('id="deadline-rows"', 1)[1]
-    assert '<details class="morerounds">' in rows      # the show row is folded
-    assert "morerounds\" open" not in rows
+    # The show row is folded, and nothing reopens it.
+    assert '<details class="morerounds" data-fold="block-aqours-live">' in rows
+    assert open_fold_keys(rows) == set()

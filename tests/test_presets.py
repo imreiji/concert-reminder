@@ -880,6 +880,101 @@ async def test_notifications_carry_structured_payload(client):
     assert note.body  # fallback text still present
 
 
+# ── A dead concert announces nothing (cleanup batch §C) ──────────────────
+
+
+async def _run_tag_attach(db, *, cancelled: bool):
+    """One follower with a notify+preset subscription, one concert whose only
+    leg is (or is not) cancelled, run through the REAL attach + notify-and-
+    apply path the edit route uses. The caller then reads the DB."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.db.models import (
+        Concert,
+        ConcertDay,
+        PresetItem,
+        ReminderPreset,
+        Round,
+        Tag,
+        TagSubscription,
+    )
+    from app.db.service import attach_tag, ensure_user, handle_newly_tagged
+    from app.domain.types import Anchor, RoundKind, TagKind
+
+    async with db() as s:
+        await ensure_user(s, FAN_ID, "fan")
+        tag = Tag(name="Hasunosora", kind=TagKind.FRANCHISE)
+        preset = ReminderPreset(user_id=FAN_ID, name="standard")
+        s.add_all([tag, preset])
+        await s.flush()
+        s.add(PresetItem(preset_id=preset.id, anchor=Anchor.CLOSES, offset_days=-3))
+        s.add(TagSubscription(
+            user_id=FAN_ID, tag_id=tag.id, preset_id=preset.id, notify=True
+        ))
+        concert = Concert(title="6th", event_id="6th", created_by=FAN_ID)
+        s.add(concert)
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=concert.id, label="Day 1", cancelled=cancelled,
+            starts_at_utc=datetime.now(UTC) + timedelta(days=30),
+        ))
+        s.add(Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="R1",
+            closes_at_utc=datetime.now(UTC) + timedelta(days=10),
+        ))
+        await s.flush()
+        added = await attach_tag(s, concert.id, tag)
+        processed = await handle_newly_tagged(s, concert, added)
+        await s.commit()
+        return processed
+
+
+async def test_attaching_a_tag_to_a_dead_concert_notifies_nobody(db):
+    """handle_newly_tagged never asked whether the show was still happening,
+    so tagging a concert whose every leg is cancelled DM'd every follower a
+    🆕 notice with an "Apply here" button and quietly applied their preset.
+    Owner ruling (2026-07-28): a dead concert queues no notification and
+    applies no preset. This only SKIPS -- no send path is added or rerouted
+    (invariant 4)."""
+    assert await _run_tag_attach(db, cancelled=True) == 0
+    assert await _all(db, Notification) == []
+    assert await _all(db, ReminderRule) == []
+
+
+async def test_attaching_a_tag_to_a_live_concert_is_unchanged(db):
+    """The regression half, and it matters more than the fix half: the
+    ordinary attach still notifies and still auto-applies."""
+    assert await _run_tag_attach(db, cancelled=False) == 1
+    (note,) = await _all(db, Notification)
+    assert note.kind == "new_event"
+    assert len(await _all(db, ReminderRule)) == 1
+
+
+async def test_a_dateless_draft_is_not_dead_when_tagged(db):
+    """all_legs_cancelled exempts a concert with no legs at all -- a draft is
+    not a cancellation -- and the suppression must inherit that exemption
+    rather than restate it. Every create path attaches its tags BEFORE the
+    legs exist, so getting this wrong would silence the pipeline outright."""
+    from app.db.models import Concert, Tag, TagSubscription
+    from app.db.service import attach_tag, ensure_user, handle_newly_tagged
+    from app.domain.types import TagKind
+
+    async with db() as s:
+        await ensure_user(s, FAN_ID, "fan")
+        tag = Tag(name="Hasunosora", kind=TagKind.FRANCHISE)
+        s.add(tag)
+        await s.flush()
+        s.add(TagSubscription(user_id=FAN_ID, tag_id=tag.id, notify=True))
+        concert = Concert(title="6th", event_id="6th", created_by=FAN_ID)
+        s.add(concert)
+        await s.flush()
+        added = await attach_tag(s, concert.id, tag)
+        assert await handle_newly_tagged(s, concert, added) == 1
+        await s.commit()
+
+    assert len(await _all(db, Notification)) == 1
+
+
 async def test_notice_context_state_awareness(client):
     from app.db.service import notice_context
 

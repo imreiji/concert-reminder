@@ -1613,9 +1613,10 @@ async def test_a_dead_concerts_unfollow_dialog_promises_nothing(client):
     assert "remove that mark and the payment reminder" not in frag
 
 
-async def test_a_live_concerts_unfollow_dialog_is_unchanged(client):
+async def test_a_live_concerts_unfollow_dialog_still_names_the_payment(client):
     """The payment reminder is real while any leg stands, so the dialog keeps
-    naming it -- and the moment it is due."""
+    naming it -- and the moment it is due. That is the whole reason this
+    confirmation is heavy, so it must survive the §B rewording."""
     cid = await seed_concert(client.db)
     await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
     await add_day(client.db, cid, "Tokyo", days_ahead=31)
@@ -1627,8 +1628,47 @@ async def test_a_live_concerts_unfollow_dialog_is_unchanged(client):
     client.post("/concerts/np/subscription", data={"state": "subscribed"})
 
     body = client.get("/concerts/np").text
-    assert "remove that mark and the payment reminder" in body
+    assert "Payment is due" in body
+    assert "the payment reminder stops" in body
     assert "this event is cancelled, so no reminders will be sent" not in body
+
+
+async def test_the_unfollow_dialog_says_the_record_survives(client):
+    """Both LIVE branches promised "we'll remove that mark and the payment
+    reminder" / "...and its reminders". The reminder half is true; the mark
+    half never was -- an opt-out NEVER deletes a RoundOutcome (invariant 8,
+    and routes/subscriptions.py says so in its own docstring: it forfeits the
+    reminder, not the record, deliberately, so unfollowing a won ticket is one
+    confirmed press rather than a two-step chore). A reader who believed the
+    sentence thought unfollowing erased the ticket they had recorded, which is
+    exactly the fear that stops them pressing it. The reminder loss is still
+    named -- that is why the confirmation is heavy -- and the record is now
+    stated as surviving."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    # Branch 1: a won ticket WITH a payment deadline.
+    rid = await add_round(
+        client.db, cid, "Lottery R1", payment=datetime.now(UTC) + timedelta(days=10)
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.WON)
+    body = client.get("/concerts/np").text
+    assert "remove that mark and the payment reminder" not in body
+    assert "the payment reminder stops" in body  # the loss, still named
+    assert "Stopping following does not remove that mark" in body
+
+    # Branch 2: a won ticket with NO payment deadline (the same round, its
+    # payment moment cleared) -- the other live sentence.
+    async with client.db() as s:
+        r = await s.get(Round, rid)
+        r.payment_deadline_at_utc = None
+        await s.commit()
+    body = client.get("/concerts/np").text
+    assert "remove that mark and its reminders" not in body
+    assert "its reminders stop" in body  # the loss, still named
+    assert "Stopping following does not remove that mark" in body
 
 
 async def test_the_legacy_meta_grid_block_is_gone(client):
@@ -1895,11 +1935,12 @@ async def test_answering_a_folded_round_swaps_that_fold_back_open(client):
     -- which would take the round the reader just answered off the screen at
     the moment they acted on it. Same server-side reopen Home's folds get."""
     cid = await seed_concert(client.db)
-    await settled_leg(client.db, cid)
+    d1 = await settled_leg(client.db, cid)
     login(client)
 
     body = client.get("/concerts/np").text
-    assert '<details class="moreround">' in body  # closed on a plain GET
+    # Closed on a plain GET.
+    assert f'<details class="moreround" data-fold="leg-{d1}">' in body
 
     missed = await _round_id(client.db, cid, "Missed sale")
     r = client.post(
@@ -1908,11 +1949,40 @@ async def test_answering_a_folded_round_swaps_that_fold_back_open(client):
     )
     # Still folded (nothing wants the reader on a round they declined), but the
     # fold it sits in comes back open.
-    assert '<details class="moreround" open>' in r.text
+    assert f'<details class="moreround" data-fold="leg-{d1}" open>' in r.text
     # The strip rides along after the rounds region in this fragment, so cut
     # there rather than at the marker `legs_of` looks for on a full page.
     rounds_fragment = r.text.split('id="concert-standing"', 1)[0]
     assert "Missed sale" in fold_of(leg_sections(rounds_fragment)["Day 1"])
+
+
+async def test_every_leg_fold_carries_a_stable_key(client):
+    """The MARKUP half of the client-side fold restore (spec §D): base.html
+    remembers which <details> inside a swapped region were open and reopens
+    them after the swap, keyed by `data-fold`. A headless test cannot fire the
+    browser event, so what it pins is the contract the script reads.
+
+    The key is the LEG id, and every leg on the page gets its own -- the
+    reason the mechanism exists is `POST .../legs/{day_id}/opt-out`, which
+    swaps the whole `#concert-rounds` region: toggling leg 2 must not collapse
+    the history the reader expanded on leg 1, and a key shared between them
+    would reopen the wrong one."""
+    cid = await seed_concert(client.db)
+    d1 = await settled_leg(client.db, cid)
+    d2 = await add_day(client.db, cid, "Day 2", days_ahead=61)
+    lost2 = await add_round(
+        client.db, cid, "Day 2 early lottery", applies_to=[d2],
+        opens=datetime.now(UTC) - timedelta(days=30),
+        closes=datetime.now(UTC) - timedelta(days=20),
+        results=datetime.now(UTC) - timedelta(days=15),
+    )
+    await set_outcome(client.db, lost2, LotteryOutcome.APPLIED)
+    await set_outcome(client.db, lost2, LotteryOutcome.LOST)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    assert f'<details class="moreround" data-fold="leg-{d1}">' in sections["Day 1"]
+    assert f'<details class="moreround" data-fold="leg-{d2}">' in sections["Day 2"]
 
 
 async def _round_id(db, concert_id, label):

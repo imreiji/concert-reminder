@@ -145,13 +145,29 @@ async def validate_event_id(
     return event_id
 
 
-async def generate_event_id(session: AsyncSession, title: str) -> str:
+async def generate_event_id(
+    session: AsyncSession, title: str, title_en: str | None = None
+) -> str:
     """Auto-suggest an event_id for flows with no dedicated input for one
     (the URL-import commit route) -- slugified title, de-duplicated with a
-    numeric suffix. Editable afterward via the edit page."""
+    numeric suffix. Editable afterward via the edit page.
+
+    Slugs from `title_en` when it has one. slugify() strips everything outside
+    [a-z0-9], so a Japanese-only title collapses to its "concert" fallback and
+    successive imports mint concert-2, concert-3 -- unique, but empty in a URL
+    whose whole job (invariant 6: URLs carry the editor-chosen event_id, never
+    the PK) is to be the human-readable identity. The trilingual rule made
+    title_en mandatory at every create boundary, so it is there to use; `title`
+    remains the fallback for the duplicate route, which clones rows predating
+    that rule.
+
+    NO backfill of existing rows, deliberately: event_id is editor-owned once
+    the concert exists, and rewriting a live one would break every link people
+    already hold.
+    """
     from app.domain.yaml_export import slugify
 
-    base = slugify(title)
+    base = slugify((title_en or "").strip() or title)
     candidate = base
     suffix = 2
     while (await session.execute(
@@ -1262,7 +1278,9 @@ async def edit_concert(
     newly: list[Tag] = []
     for tid in after_ids - before_ids:
         newly += await attach_tag(session, concert.id, desired_tags[tid], expand=False)
-    await handle_newly_tagged(session, concert, newly)
+    # The ATTACH happens here; the notify-and-apply pipeline for it runs at the
+    # foot of this function, once this submit's legs are in the DB -- see the
+    # comment there.
 
     # -- Days: update existing rows in place by id, insert blank-id rows,
     # delete rows that were dropped.
@@ -1448,6 +1466,21 @@ async def edit_concert(
 
     if newly_cancelled_day_ids:
         await notify_newly_cancelled_legs(session, concert.id, newly_cancelled_day_ids)
+    # The concert-level tag attach's notify-and-apply pipeline, run HERE rather
+    # than beside the attach itself: handle_newly_tagged asks all_legs_cancelled
+    # (a dead concert notifies nobody and applies nothing), and at the attach
+    # site this submit's legs are not written yet, so it would answer about the
+    # concert as it ARRIVED. Both directions are wrong and one is unrecoverable:
+    # un-cancelling a leg while adding a tag suppressed a notice that has no
+    # re-announce path, and cancelling the last leg while adding one announced
+    # a show that is not happening.
+    #
+    # After notify_newly_cancelled_legs on purpose, which is the same order the
+    # venue rollup below already used: that function probes each user's UNSENT
+    # queue rows to find who is about to lose everything, and rules a preset
+    # applies here would be fresh rows it must not read as a loss. Before
+    # sync_concert, which every rule created here still needs.
+    await handle_newly_tagged(session, concert, newly)
     # Re-derived from the legs as they stand after this submit -- this is the
     # staleness fix: a changed leg venue now moves the concert's VENUE tags
     # with it, and a dropped leg takes its venue off the concert. A venue that
@@ -1568,7 +1601,17 @@ async def duplicate_concert(
     await session.refresh(source, ["tags"])
     await ensure_user(session, user.id, user.username)
 
-    new_event_id = await generate_event_id(session, f"{source.title} copy")
+    # .strip(), not truthiness: generate_event_id decides "has an English
+    # title" that way, and a whitespace-only title_en handed over as
+    # "   copy" strips back to "copy" inside it -- minting /concerts/copy
+    # instead of falling back to `title`. Both halves must ask the same
+    # question of the same value.
+    source_title_en = (source.title_en or "").strip()
+    new_event_id = await generate_event_id(
+        session,
+        f"{source.title} copy",
+        f"{source_title_en} copy" if source_title_en else None,
+    )
     f_names = [t.name for t in source.tags if t.kind is TagKind.FRANCHISE]
     clone = Concert(
         title=f"{source.title} (copy)",

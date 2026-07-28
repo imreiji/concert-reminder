@@ -107,7 +107,11 @@
   {# Only when the written round is behind THIS fold. It may equally have
      stayed (or become) the block's lead -- the lead rule re-sorts on the new
      standing -- and a lead is already visible, so there is nothing to reopen. #}
-  <details class="morerounds"{% if open_round_id is not none and open_round_id in block.others|map(attribute="deadline.round_id")|list %} open{% endif %}>
+  {# `data-fold` is the client-side complement to open_round_id (spec §D):
+     base.html reopens whichever keyed folds were open before a swap of this
+     region, which covers the swaps no written round can name. The key is the
+     block's event_id -- stable across a re-sort, unlike its position. #}
+  <details class="morerounds" data-fold="block-{{ block.event_id }}"{% if open_round_id is not none and open_round_id in block.others|map(attribute="deadline.round_id")|list %} open{% endif %}>
     <summary>{% trans count=block.others|length %}+{{ count }} more round{% pluralize %}+{{ count }} more rounds{% endtrans %}</summary>
     {% for row in block.others %}{{ member_row(row, tz) }}{% endfor %}
   </details>
@@ -143,7 +147,7 @@
       {% endif %}
     {% endfor %}
   {% endif %}
-  <details class="moreconcerts"{% if page_fold.open %} open{% endif %}>
+  <details class="moreconcerts" data-fold="more-concerts"{% if page_fold.open %} open{% endif %}>
     <summary>{% trans count=overflow|length %}+{{ count }} more event{% pluralize %}+{{ count }} more events{% endtrans %}</summary>
     {% for block in overflow %}{{ concert_block(block, tz, open_round_id) }}{% endfor %}
   </details>

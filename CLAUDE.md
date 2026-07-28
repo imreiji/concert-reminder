@@ -435,6 +435,13 @@ deleting them.
    URLs use the editor-chosen, unique `event_id` string instead. `"new"` and
    `"import"` are reserved and rejected as `event_id` values so they can
    never collide with the `/concerts/new` and `/concerts/import` routes.
+   Where no form supplies one (the import commit, the duplicate route),
+   `generate_event_id` slugs from `title_en` and falls back to `title`:
+   `slugify` strips everything outside `[a-z0-9]`, so slugging the Japanese
+   title collapsed every Japanese-only concert to the `"concert"` fallback
+   and minted `concert-2`, `concert-3` -- unique, but empty in a URL whose
+   whole job is to be the human-readable identity. Never backfill existing
+   ids; `event_id` is editor-owned once the concert exists.
 7. **Injection boundaries** -- three rules, each cheap to follow and silent
    when broken:
    - **URLs**: every editor-supplied URL goes through `form_url`
@@ -591,6 +598,21 @@ deleting them.
   of `style.css`). Type ramp is 400/600/700 only. Motion budget: one 150ms
   card-lift hover plus the functional `#hxbar` progress bar -- nothing
   decorative (owner ruling, 2026-07-24).
+- **A `<details>` inside a swappable region carries a `data-fold` key.**
+  These regions (`#concert-rounds`, `#deadline-rows`) are swapped whole by
+  `outerHTML`, so every fold in one is a NEW element rendered from scratch
+  and comes back closed -- a reader who expanded a leg's round history and
+  then toggled a different leg off watched every fold on the page snap shut.
+  `base.html` collects the open keys inside the request target on
+  `htmx:beforeRequest` and reopens the matching folds on `htmx:afterSettle`
+  (per-request, keyed off the detail object's `xhr`, since two requests can
+  overlap). It only ever OPENS. Keys are server-rendered ids/event_ids --
+  `leg-{day_id}`, `block-{event_id}`, `more-concerts` -- never user text.
+  `open_round_id` is the OTHER half, not a duplicate: it is server-rendered,
+  so it survives with JS off, and it reopens the fold that OWNS a round a
+  capture press just wrote. The client half generalises to swaps that write
+  no round (a leg opt-out) with no per-caller plumbing. Keep both; reaching
+  for `open_round_id` to solve a general fold reset is the trap.
 - The sentence-style reminder builders (welcome, Preferences) render
   through locale-ordered slot patterns: ONE translatable pattern msgid per
   builder (e.g. ja 「{anchor}の{offset}{direction}に通知。」), split by

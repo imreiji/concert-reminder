@@ -65,17 +65,23 @@
           gets its own sentence, off the `concert_cancelled` this partial has
           already resolved -- no second predicate call, and it is deliberately
           silent about the payment date rather than dating a cancelled event.
-          It also does not repeat the live branches' claim that unfollowing
-          removes the won mark: an opt-out NEVER deletes a RoundOutcome (see
-          routes/subscriptions.py and invariant 8), and with no reminder left
-          to forfeit here that claim would be the only thing the sentence
-          said -- and it would be false. #}
+
+          All THREE branches now end on the same clause, and none of them
+          claims the won mark goes away: an opt-out NEVER deletes a
+          RoundOutcome (see routes/subscriptions.py and invariant 8 -- it
+          forfeits the reminder, not the record, deliberately, so unfollowing
+          a won ticket is one confirmed press rather than a two-step chore).
+          The two live branches used to promise otherwise, and a reader who
+          believed them thought unfollowing erased the ticket they had
+          recorded -- exactly the fear that stops the press. The reminder loss
+          is still named in both: that, and only that, is why this
+          confirmation is heavy. #}
       {% if concert_cancelled %}
       {{ _("This ticket is marked as won, but this event is cancelled, so no reminders will be sent. Stopping following does not remove that mark.") }}
       {% elif won_payment_at_utc %}
-      {% trans when=dual(won_payment_at_utc, tz) %}This ticket is marked as won. Payment is due {{ when }}. If you stop following this event, we'll remove that mark and the payment reminder.{% endtrans %}
+      {% trans when=dual(won_payment_at_utc, tz) %}This ticket is marked as won. Payment is due {{ when }}. If you stop following this event, the payment reminder stops. Stopping following does not remove that mark.{% endtrans %}
       {% else %}
-      {{ _("You marked that you have a ticket for this event. If you stop following it, we'll remove that mark and its reminders.") }}
+      {{ _("You marked that you have a ticket for this event. If you stop following it, its reminders stop. Stopping following does not remove that mark.") }}
       {% endif %}
     </p>
     <div class="da">

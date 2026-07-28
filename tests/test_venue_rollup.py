@@ -538,3 +538,59 @@ async def test_create_rejects_a_negative_leg_venue_tag(editor_client):
         "day_doors_at": [""], "day_venue_tag_id": ["-1"],
     })
     assert r.status_code == 422
+
+
+# A dead concert announces nothing -- through the AUTOMATIC path (§C).
+#
+# handle_newly_tagged is reached without anybody attaching a tag by hand:
+# sync_concert_venue_tags runs it on every venue rollup, so re-pointing one
+# leg of a cancelled tour used to DM every follower of the new venue a "New
+# event" notice with an "Apply here" button. This is the motivating bug, and
+# the route is the only place it shows -- the rollup is what supplies the
+# tags, so no service-level test of handle_newly_tagged reaches it.
+
+
+async def test_changing_a_dead_concerts_leg_venue_notifies_nobody(editor_client):
+    for name in ("Old Hall", "New Hall"):  # ids 1, 2
+        editor_client.post("/tags", data={
+            "name_en": name, "name_zh": name, "name": name, "kind": "venue",
+        })
+    async with editor_client.db() as session:
+        await _subscribe(session, 9002, 2)  # follows the venue it MOVES to
+        await session.commit()
+
+    r = editor_client.post("/concerts", data={"title_en": "Dead", "title_zh": "Dead",
+        "title": "Dead", "event_id": "dead",
+        "day_label": ["Day 1"],
+        "day_label_en": ["Day 1"],
+        "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_venue_tag_id": ["1"],
+        "day_cancelled": ["true"],
+    })
+    assert r.status_code == 303
+    async with editor_client.db() as session:
+        day = (await session.execute(select(ConcertDay))).scalar_one()
+        assert day.cancelled is True
+
+    # The routine edit: the tour is off, and the editor re-points its only leg.
+    r = editor_client.post("/concerts/dead/edit", data={
+        "title": "Dead", "event_id": "dead",
+        "day_id": [str(day.id)], "day_key": [""],
+        "day_label": ["Day 1"],
+        "day_label_en": [""],
+        "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""], "day_cancelled": ["true"],
+        "day_venue_tag_id": ["2"],
+    })
+    assert r.status_code == 303
+
+    async with editor_client.db() as session:
+        assert (await session.execute(
+            select(Notification).where(Notification.user_id == 9002)
+        )).scalars().all() == []
+        concert = (await session.execute(
+            select(Concert).where(Concert.event_id == "dead")
+        )).scalar_one()
+        # The rollup itself still ran -- suppressing the NOTICE must not
+        # suppress the derivation.
+        assert await _venue_tag_ids(session, concert.id) == {2}

@@ -231,6 +231,44 @@ sentence at a decision point, and a DM about a show that is not happening) but
 below #2, which affects every Japanese-titled import rather than a narrow
 state.
 
+The 2026-07-28 cleanup batch is the biggest single clearing of this list so
+far and the first pass whose whole purpose was to clear it: FIVE Proposed
+entries (#2 slugs, #3 the unfollow dialog, #4 the dead-concert tag DM, #5
+the fold reset, #7 the importer-debt batch) shipped on one branch in four
+tasks, and a sixth (#6, per-rung marking on a dead board card) was CLOSED
+BY DECISION rather than built -- it was filed as an owner eyeball and the
+eyeball said leave it, so it moves to Rejected with the reason. None of the
+five was ranked highly enough to lead the list on its own; they were batched
+precisely because each is small and none was ever going to win a
+prioritisation on merit, which is the argument for doing that kind of work
+in one pass or not at all. They are logged as ONE Shipped entry for the
+reason given there.
+
+The re-rank that follows moves nothing on merit. #1, the admin catalogue
+export -- still the only entry the owner personally asked for -- is
+untouched and stays #1; everything below it rises by pure removal and is
+renumbered 1-13. Nothing got cheaper either: this batch lived in slug
+generation, one dialog's copy, the tag pipeline and a client-side fold
+listener, and no remaining entry goes near any of them. Two were re-read
+against what shipped and both stand: #2 (minute-level offsets) is unchanged,
+and #6 (the cosmetic `RoundKind` members) is if anything slightly better
+supported, since §C's work threaded another consumer through
+`all_legs_cancelled` without a single kind-specific branch. The batch also
+ADDED two entries, both found by its own reviews and both inserted on impact
+rather than appended: #5, the create and import paths still announcing a
+born-dead concert (the structural twin of the `edit_concert` defect §C
+fixed, found by the final review and RECORDED rather than fixed -- see the
+entry, and deviation 6 of the spec, for why a signature change on the two
+main write paths did not belong at the end of a cleanup branch), and #7,
+`generate_event_id` never checking the reserved ids (found by Task 1's
+review while shipping the slug preference directly above it). Between them
+they push the former #5-#11 down by position only, never on merit. One
+correction of the record belongs here rather
+than in the Shipped entry: item (d) of the old #7, the `preferences.html`
+backslash action, did not exist. It was struck, not fixed -- see below. The
+sign-in-bounce entry's demo-parity/Discover-head pointer was bumped in place
+once more.
+
 ## Proposed (highest impact first)
 
 
@@ -252,130 +290,7 @@ region/city/address, urls), zipped under `GET /admin/export.zip` behind
 re-importability matters or a read-only JSON dump is enough -- the YAML
 shape costs a little more and pays only if it does.
 
-### 2. event_id slugs should prefer title_en
-
-Impact: low-medium - effort: small. Raised: 2026-07-23 (assistant, while
-verifying the import path).
-
-`generate_event_id` slugifies the Japanese title, and `slugify` strips
-everything outside `[a-z0-9]` -- so a Japanese-only title collapses to the
-`"concert"` fallback and imports mint ids like `concert-2`, `concert-3`:
-unique, but meaningless in URLs that are supposed to be the human-readable
-identity (invariant 6). Since the trilingual rule made `title_en` mandatory
-at every create boundary, the fix is one line of preference -- slug from
-`title_en` when present, fall back to `title` -- plus tests. Existing
-concerts keep their ids (event_id is editor-owned after creation; no
-backfill).
-
-### 3. The unfollow dialog overstates what an opt-out does
-
-Impact: low-medium - effort: small. Raised: 2026-07-27 (final review of the
-dead-concerts branch, which fixed the third branch of the same dialog).
-
-`_following_toggle.html`'s heavy unfollow confirmation has three branches, and
-the two LIVE ones both promise something the write never performs: "we'll
-remove that mark and the payment reminder" / "we'll remove that mark and its
-reminders". The reminder half is true. The mark half is not: an opt-out NEVER
-deletes a `RoundOutcome` (invariant 8, and `routes/subscriptions.py` says so in
-its module docstring -- it forfeits the reminder, not the record, deliberately,
-so that unfollowing a won ticket is one confirmed press instead of a two-step
-chore). A reader who takes the sentence at face value believes stopping
-following erases the ticket they recorded, which is exactly the fear that would
-stop them pressing it.
-
-The dead-concert branch of the same dialog was fixed on the cancelled-concerts
-branch (it had no reminder left to name, so the false half was the whole
-sentence). These two were deliberately left alone there as out of scope. The
-fix is two msgids in three languages plus the existing dialog tests, and the
-wording has to keep naming the reminder loss -- that part is the reason the
-confirmation is heavy in the first place.
-
-### 4. A tag attached to a dead concert still DMs it as a new event
-
-Impact: low-medium - effort: small. Raised: 2026-07-27 (final review of the
-dead-concerts branch).
-
-`handle_newly_tagged` (`db/service.py`) is the notify-and-apply pipeline behind
-every tag attach: it auto-applies the subscriber's linked preset and queues a
-"new event" notice. Nothing in it asks whether the concert is happening. Attach
-an artist tag to a concert whose every leg is cancelled -- an editor tidying
-taxonomy, or `sync_concert_venue_tags` rolling up a leg's venue -- and every
-follower of that tag gets a 🆕 DM for a show that is off, with an "Apply here"
-button and a preset quietly applied behind it. That is the exact lie the
-dead-concerts branch removed from nine other surfaces; this one was not on its
-list because it fires on tagging, not on cancelling.
-
-Two decisions to make, and they are why this is not a one-liner: whether the
-notice is SUPPRESSED or merely reworded (the concert page's cancellation banner
-argues for suppression -- there is nothing to act on), and whether the preset
-auto-apply is also skipped (it should be: the planner drops every round of a
-dead concert anyway, so the rules it creates are dead on arrival and would
-re-arm silently if the show were ever revived, which is arguably a feature).
-`all_legs_cancelled` is already the predicate; the work is the ruling.
-
-### 5. Opting a leg out snaps the concert page's round folds shut
-
-Impact: low - effort: small-medium. Raised: 2026-07-27 (final review of the
-ladder-declutter branch).
-
-`POST /concerts/{event_id}/legs/{day_id}/opt-out` (`routes/subscriptions.py`)
-re-renders `_round_rows.html` as a whole-region outerHTML swap, and passes no
-fold state -- so a reader who had expanded a leg's "+N more rounds" history to
-check what they missed, then toggled a leg off, watches every fold on the page
-snap shut and loses their place.
-
-`open_round_id` is the WRONG instrument here, and reaching for it is the trap
-this entry exists to flag: it reopens the fold that OWNS a specific round, and
-an opt-out writes no round -- there is nothing to reopen around. The honest fix
-is general expanded-state preservation across an htmx swap of this region (the
-open `<details>` collected client-side before the request and restored after,
-or the fold state hoisted somewhere a re-render can read), which would also
-cover the outcome routes' folds without their per-round special case. Sized
-small-medium for that reason: the mechanism is the work, not the caller.
-
-### 6. Per-rung cancelled marking on a dead board card (owner eyeball)
-
-Impact: low - effort: small. Raised: 2026-07-27 (final review of the
-dead-concerts branch).
-
-A dead concert keeps its board card when the reader has standing on it (the
-owner's ruling), badged Cancelled, with its countdown suppressed and its rungs
-built from the concert's FULL round set -- otherwise a 先行 lottery, which names
-its legs, would vanish and only general-round standing would keep a card. The
-consequence is that every rung on a dead card is a round that is not happening,
-while the only thing saying so is one badge in the card header. On a card with
-several rungs the badge is easy to read as "one leg was cancelled", which is
-what it means everywhere else in the app.
-
-Wants an owner eyeball before any code: the alternatives are a per-rung marker
-(closest to the concert page and `ShowDeadlinesButton`, which both label every
-round), dimming the ladder as a whole, or leaving it exactly as shipped on the
-grounds that a board card is a scanning surface and one badge per card is the
-point of a badge. Cheap either way; the question is which reading the owner
-wants, not how to build it.
-
-### 7. Agent-import review-debt batch (deferred minors)
-
-Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
-whole-branch review of the agent-import build; the first three triaged
-defer-with-reason there).
-
-One tidy pass over the review leftovers: (a) `yaml_import.py`'s DraftError
-message uses `{exc or 'nesting too deep'}` -- exceptions are always truthy,
-the fallback is dead code; (b) `_text`'s container guard blanks silently
-where `_dt`'s warns, so a container value for organizer/notes/labels/urls
-leaves no drift warning -- warn WITHOUT stringifying the value (the
-stringify is what the DoS fix removed); (c) `match_tag_ids_by_name`'s
-docstring doesn't state first-tag-wins collision order or that blank names
-drop from both output lists; (d) `preferences.html`'s preset-item edit form
-writes its action with BACKSLASHES (`action="\presets\{{ p.id }}\items\...`)
-where the sibling forms use `/` -- browsers fold `\` to `/` in URL paths so
-it works today, but it's a typo waiting to confuse someone (spotted
-2026-07-23 while scoping the sentence-builder i18n problem). All
-behavior-safe today; batched so they stop being rediscovered by every
-future reviewer.
-
-### 8. Minute-level reminder offsets
+### 2. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -415,7 +330,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 9. Eventernote actor-page discovery
+### 3. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -435,7 +350,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 10. Franchise-aware round-label suggestions
+### 4. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -456,7 +371,48 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 11. Nine of ten `RoundKind` members are purely cosmetic
+### 5. The create and import paths still announce a born-dead concert
+
+Impact: low-medium - effort: small-medium, but on the two riskiest routes
+in the app. Raised: 2026-07-28 (final review of the cleanup batch, which
+shipped the same rule on `edit_concert`).
+
+The 2026-07-28 batch shipped the owner ruling that a tag attached to a
+dead concert -- one whose every leg is cancelled -- notifies nobody and
+applies no preset. It holds on `edit_concert` and on both venue rollups.
+It does NOT hold on the concert-tag half of create and import, and the
+reason is pure ordering: `create_concert_row` (`web/routes/concerts.py`)
+calls `handle_newly_tagged` immediately after flushing the `Concert`,
+before a single `ConcertDay` exists. The predicate correctly reads that
+as a dateless draft and exempts it -- it has to, or every create would
+silence itself -- and notifies. The legs flush a hundred lines later, and
+the venue rollup that runs there suppresses correctly.
+
+So a concert created or imported with its only leg submitted cancelled
+(both routes accept `day_cancelled`) DMs every franchise, group and
+artist follower a 🆕 "Apply here" for a show that is off, while every
+VENUE follower on the SAME request is correctly skipped. There is no
+un-send and no re-announce path: the wrong DM is permanent, and the
+correct one, if the leg is later un-cancelled, never arrives.
+
+Fix is small and mechanical: `create_concert_row` returns its `newly`
+list instead of consuming it, and `create_concert` and `import_commit`
+each call `handle_newly_tagged` after their legs flush -- next to the
+venue rollup that already gets this right, which is also where the
+dateless-draft exemption stops being needed. Deferred rather than folded
+into the batch that found it, on risk: it changes a signature on the
+app's two most important write paths, both of which own atomicity for a
+whole concert, to close a shape that needs an editor to deliberately
+create an already-cancelled concert. Pre-existing rather than new -- every
+path announced dead concerts before that batch -- and recorded as
+deviation 6 of `docs/superpowers/specs/2026-07-28-cleanup-batch-design.md`.
+
+Ranked here: above the code-health entries below because a wrong,
+permanent DM to every follower is user-visible harm rather than tidiness,
+and below #4 because that one pays off on every round label an editor
+types while this needs a rare, deliberate starting state.
+
+### 6. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -479,7 +435,40 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 12. Pin the Python version across dev, CI and the server
+### 7. `generate_event_id` never checks the reserved ids
+
+Impact: low - effort: small. Raised: 2026-07-28 (Task 1 review of the
+cleanup batch, while the slug preference above it was being shipped).
+
+Invariant 6 reserves `"new"` and `"import"` so a concert can never collide
+with `/concerts/new` and `/concerts/import`. `validate_event_id` enforces
+that -- but it guards the value an editor TYPES, and the app's other
+producer of ids does not go through it. `generate_event_id`
+(`web/routes/concerts.py`), used by `import_commit` and by
+`POST /concerts/{event_id}/duplicate`, de-duplicates its slug against ids
+already in the DB and stops there; it never consults `RESERVED_EVENT_IDS`,
+and neither caller validates what comes back. A concert titled exactly
+"Import" or "New" therefore takes that id and is written with it.
+
+What follows is quiet and permanent. Both routes that own those paths are
+registered ahead of `/concerts/{event_id}` -- `routes/imports.py` before
+`routes/concerts.py` in `web/app.py`, and `/concerts/new` above the dynamic
+route inside it, in both cases deliberately -- so the concert's own page is
+unreachable for good while every list on the site keeps linking to it. The
+edit page is no way back either at first glance: it pre-fills the offending
+id, so saving anything at all 422s "event id 'import' is reserved" until
+the editor works out that the field they never filled in is the problem.
+
+Fix is one line in the uniqueness loop -- treat a reserved id as taken, the
+same way a colliding one is, so the suffix pass mints `import-2` -- plus a
+test per reserved word. Pre-existing rather than new: `title` could always
+be "Import", and the `title_en` preference that shipped in this batch only
+widens the door (a Japanese-titled concert previously slugged to
+`"concert"` and could not reach either word). Ranked here, low, because it
+needs an exactly-wrong English title to fire; it is filed because when it
+does fire nothing anywhere says so.
+
+### 8. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -503,7 +492,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 13. PWA / installability
+### 9. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -523,7 +512,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 14. In-app LLM extraction behind the same draft seam
+### 10. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -541,7 +530,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 15. Minor demo-parity cosmetics
+### 11. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -569,7 +558,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 16. Discover sort in the content head, plus the catalogue-count note
+### 12. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -595,7 +584,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 17. Name the destination on the sign-in bounce
+### 13. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -611,7 +600,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#15) and the Discover head (#16) because
+Ranked below the demo-parity batch (#11) and the Discover head (#12) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -629,6 +618,103 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Cleanup batch: five debts, two owner rulings (2026-07-28)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-28-cleanup-batch-design.md`
++ impl plan `docs/superpowers/plans/2026-07-28-cleanup-batch.md`, four tasks
+on branch `cleanup-batch`. Clears Proposed #2, #3, #4, #5 and #7; #6 is
+disposed of in Rejected below.
+
+**One entry, not five, deliberately.** These five have nothing to do with
+each other -- a slug rule, one dialog's copy, a notification suppression, a
+client-side fold listener, a docstring -- so five headings would be the
+easier lookup. They are logged together anyway because the BATCH is the unit
+of decision here, not any item in it: the two owner rulings cut across the
+list (ruling 1 governs the tag pipeline; ruling 2 disposes of an entry that
+was never built), the spec, plan, branch and review waves are shared, and
+the honest account of why five low-ranked entries shipped at once is an
+account of the batch. The five are named in bold below so the lookup still
+works.
+
+**Owner ruling 1: a tag attached to a dead concert notifies nobody and
+applies nothing.** The old #4 left two decisions open and this closes both.
+Rejected: rewording the notice (one nobody can act on still costs a msgid in
+three languages) and keeping the preset (invisible rules on a dead event,
+justified only by a revival that may never come).
+
+**Owner ruling 2: a dead board card keeps one badge, not per-rung marking.**
+Left exactly as shipped -- see Rejected.
+
+- **`event_id` slugs prefer `title_en`** (old #2). `slugify` strips
+  everything outside `[a-z0-9]`, so a Japanese-only title collapsed to the
+  `"concert"` fallback and imports minted `concert-2`, `concert-3` --
+  unique, meaningless in a URL whose job is to BE the identity (invariant
+  6). One line of preference at the function, which turned out to matter:
+  the spec framed the defect at `generate_event_id` but named only the
+  importer, and `POST /concerts/{event_id}/duplicate` calls it too, so both
+  callers inherit the preference and a duplicate now mints
+  `<english>-copy`. No backfill -- existing ids are editor-owned.
+- **The unfollow dialog stops overstating** (old #3). Its two LIVE branches
+  promised "we'll remove that mark and the payment reminder" / "...and its
+  reminders". The reminder half was true; the mark half never was -- an
+  opt-out does not delete a `RoundOutcome` (invariant 8), and a reader who
+  believed the sentence thought unfollowing erased the ticket they recorded,
+  which is exactly the fear that stops the press. Both now name the reminder
+  loss and state the record survives, in three languages.
+- **Nothing is announced about a dead concert** (old #4, ruling 1). The
+  tenth surface of the dead-concert rule, and the one the cancelled-concerts
+  branch could not have listed, because it fires on TAGGING rather than on
+  cancelling: `sync_concert_venue_tags` runs `handle_newly_tagged` on every
+  venue rollup, so a routine leg edit on a dead tour DMed every venue
+  follower a 🆕 "Apply here" and applied their preset behind it. Two things
+  the entry did not foresee are recorded in the spec's deviations. The
+  predicate could NOT read `concert.days`: two call sites reach the pipeline
+  with that relationship silently empty, so the question would have answered
+  "alive" unconditionally on exactly the automatic path the ruling targets
+  -- it runs its own indexed SELECT. And `edit_concert` was asking the
+  question at the wrong point in BOTH directions -- it attached tags at the
+  top and reconciled legs 100 lines below, so un-cancelling a leg while
+  adding a tag suppressed a notice that was owed (permanently: there is no
+  re-announce path) while cancelling the last leg while adding one announced
+  a show that is off. The call moved to the foot of the route, which also
+  fixed something nobody had filed: presets now cover rounds created in the
+  same submit and no longer mint rules on rounds it is about to delete.
+- **Expanded folds survive an htmx swap** (old #5). The entry's own warning
+  was the valuable half -- `open_round_id` is the WRONG instrument, because
+  it reopens the fold that OWNS a written round and an opt-out writes none
+  -- and the fix is general: every `<details>` in a swappable region carries
+  a stable `data-fold` key, open keys are collected on `htmx:beforeRequest`
+  and reopened on `htmx:afterSettle`. It only ever OPENS. `open_round_id`
+  stays and is not duplicated by it: that half is server-rendered, so it is
+  the half that works with JS off. The listener keys its collected set per
+  REQUEST rather than in one module variable -- two overlapping requests
+  interleave into a set that settles empty otherwise.
+- **Importer review debt** (old #7), minus one item. The `DraftError`
+  fallback that could never fire, `_text`'s container guard now warning
+  where it used to blank silently (WITHOUT stringifying the value -- that
+  stringify is what the alias-fan-out DoS fix removed), and
+  `match_tag_ids_by_name`'s docstring stating its first-tag-wins order and
+  its blank-name drop. **Item (d) was a phantom**: the `preferences.html`
+  preset-item form was said to write its action with backslashes, and it
+  does not -- not at HEAD, and not at any commit checked back through
+  `6855538~1`; a tree-wide scan found no backslash in any URL in any
+  template. It is struck rather than recorded fixed. Worth the sentence
+  because the entry existed to stop these being rediscovered, and a fake
+  one is the most rediscoverable kind.
+
+The batch's own reviews found four things worth naming beyond the items.
+Three became the polish pass that closed it: the fold listener's overlapping-
+request hole above, and two assertions that were passing without testing
+anything -- a script guard asserting `htmx:beforeRequest` appears in the
+page, which the `#hxbar` progress bar had satisfied since long before the
+feature, and a fold-state helper whose regex was attribute-order-coupled,
+the exact fault it existed to fix, so an attribute inserted in the wrong
+place would have returned an empty set and made every NEGATIVE assertion
+vacuous. The fourth is filed as Proposed #7.
+
+Revision pass: recorded in the narrative above -- nothing re-ranked on
+merit, #1 untouched, entries renumbered 1-13 with two insertions.
 
 ### A concert whose every leg is cancelled stops asking you to act (2026-07-27)
 
@@ -681,7 +767,8 @@ off entirely, understating the one notice that carries the news that every
 reminder here is gone, a won ticket's payment reminder included. The same
 review found the new dead-concert unfollow copy claiming an opt-out removes
 the won mark, which it never does -- fixed on the branch; the two pre-existing
-live branches making a version of the same claim are filed at #3 above.
+live branches making a version of the same claim were filed as their own entry
+and shipped in the 2026-07-28 cleanup batch (see its Shipped entry above).
 
 One real design defect surfaced mid-build and is recorded in the spec's
 deviations section: passing `has_open_round=False` into `column_for`, as the
@@ -700,15 +787,15 @@ the board and the capture surfaces, none of which the remaining entries go
 near. Entries renumbered 1-14, and again to 1-17 by the final review's three
 filings (which is where the numbers in this paragraph point); the sign-in-bounce
 entry's demo-parity/Discover-head pointer was bumped in place again. Two of the
-remaining entries were re-read against what shipped and both stand: #5
-(opt-out snapping the concert page's folds shut) is a sibling defect on the
-same page but an
-htmx-fold-state problem with nothing to do with cancellation, and #8
-(minute-level offsets) is untouched, since a dead concert now plans no
+remaining entries were re-read against what shipped and both stand: the opt-out
+fold reset (since shipped in the 2026-07-28 cleanup batch) is a sibling defect
+on the same page but an
+htmx-fold-state problem with nothing to do with cancellation, and minute-level
+offsets is untouched, since a dead concert now plans no
 reminders at any offset. Worth recording for whoever takes the list next: with
 this gone, every remaining entry is assistant-raised or review-raised except
 the admin export, and the two defects the ladder-declutter review filed
-together are now one shipped and one still open at #5.
+together are one shipped here and one shipped in the cleanup batch since.
 
 ### Group the performer chips by group on the concert page (2026-07-27)
 
@@ -833,8 +920,9 @@ word so the two declutter surfaces agree. `visible_rungs` needed no change:
 "skipped" is settled, so it already qualified for the state-rung fallback and
 was already excluded from the live/todo lookahead, and it takes no
 `_RUNG_STANDING` entry because `column_for`'s `_RANK` places nothing for
-NOT_APPLIED. The review's other two findings were pre-existing and are filed
-in Proposed (#2, #4).
+NOT_APPLIED. The review's other two findings were pre-existing and were filed
+in Proposed (the cancelled-leg-only concert and the opt-out fold reset, both
+shipped since -- the second in the 2026-07-28 cleanup batch).
 
 ### Fold settled rounds per leg on the concert page (2026-07-27)
 
@@ -1754,6 +1842,28 @@ tracking) plus a synchronous `POST /me/test-dm` diagnostic route and
 "Send test DM" button on the preferences page.
 
 ## Rejected
+
+### Per-rung cancelled marking on a dead board card (rejected 2026-07-28)
+
+Was: Proposed #6, filed 2026-07-27 by the dead-concerts branch's final
+review as an owner eyeball rather than as work. A dead concert keeps its
+board card when the reader has standing on it (that branch's own ruling),
+badged Cancelled, with its rungs built from the concert's FULL round set --
+so every rung on such a card is a round that is not happening, while the
+only thing saying so is one badge in the header. On a multi-rung card that
+badge reads like "one leg was cancelled", which is what it means everywhere
+else in the app. The alternatives were a per-rung marker (closest to the
+concert page and `ShowDeadlinesButton`, which both label every round),
+dimming the ladder as a whole, or leaving it.
+
+Rejected by the owner (2026-07-28) in favour of leaving it exactly as
+shipped: **a board card is a scanning surface, one badge per card is what a
+badge is for, and the concert page one click away labels every round.** The
+entry was explicitly a question of which reading he wanted rather than of
+how to build it -- cheap either way -- so the answer closes it rather than
+deferring it. Filed here rather than deleted because the ambiguity it
+describes is real and someone will notice it again; the record is that it
+was noticed, put to the owner, and accepted.
 
 ### Daily digest mode (rejected 2026-07-18)
 

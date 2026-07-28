@@ -151,7 +151,17 @@
    server-side for the same reason: the round id is enough to find the fold, so
    no JS and no client-held state. Passed in as a macro argument rather than
    read from the template namespace -- an undefined is not none, and every fold
-   on the page would spring open. #}
+   on the page would spring open.
+
+   `data-fold` is its COMPLEMENT, not a replacement (spec §D). open_round_id
+   reopens the fold that OWNS a written round; the leg opt-out writes no round,
+   so it has nothing to name -- yet it swaps this same region by outerHTML and
+   would snap every fold on the page shut. base.html remembers which keyed
+   folds inside a swap target were open and reopens exactly those, which covers
+   any swap of this region whatever caused it. Keyed by the LEG so one leg's
+   history is never restored onto another's fold; server-rendered ids only,
+   never user text (invariant 7). open_round_id STAYS because it is the half
+   that works with JS disabled. #}
 {% macro leg_rounds(group, tz, note, open_round_id=none) %}
 <div class="rnds">
   {% for row in group.visible %}{{ round_row(row, tz, group.day.id) }}
@@ -161,7 +171,7 @@
   {%- if not group.folded %}<p class="dim tiny">{{ note }}</p>{% endif -%}
   {% endfor %}
   {% if group.folded %}
-  <details class="moreround"{% if open_round_id is not none and open_round_id in group.folded|map(attribute="round_.id")|list %} open{% endif %}>
+  <details class="moreround" data-fold="leg-{{ group.day.id }}"{% if open_round_id is not none and open_round_id in group.folded|map(attribute="round_.id")|list %} open{% endif %}>
     <summary>{% trans count=group.folded|length %}+{{ count }} more round{% pluralize %}+{{ count }} more rounds{% endtrans %}{% for kind, n in group.fold_counts %}<span class="fchip">{{ fold_count_label(kind, n) }}</span>{% endfor %}</summary>
     {% for row in group.folded %}{{ round_row(row, tz, group.day.id) }}{% endfor %}
   </details>

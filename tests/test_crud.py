@@ -1175,6 +1175,46 @@ async def test_duplicate_clones_scalars_and_tags_but_not_days_rounds_or_venues(c
     assert clone.rounds == []
 
 
+async def test_duplicate_slugs_the_new_event_id_from_the_english_title(client):
+    """The §A slug change reaches the duplicate route too, and this is the one
+    place it is observable end to end: the source's Japanese title alone
+    slugifies to the "concert" fallback, so a clone of a JP-titled concert
+    used to land on /concerts/concert. It now lands on the English one."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/concerts", data={
+        "title": "蓮ノ空女学院スクールアイドルクラブ 6thライブ",
+        "title_en": "Hasunosora 6th Live",
+        "title_zh": "莲之空6th演唱会",
+        "event_id": "hasunosora-6th",
+    })
+    r = client.post("/concerts/hasunosora-6th/duplicate")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/concerts/hasunosora-6th-live-copy/edit"
+
+
+async def test_duplicate_ignores_a_whitespace_only_english_title(client):
+    """The route decided "has a title_en" by truthiness while
+    generate_event_id decides it by .strip(), so a whitespace title_en sent
+    "   copy" down -- which strips back to "copy" and minted /concerts/copy
+    instead of falling back to the Japanese title. The two now agree.
+
+    Written straight to the DB: require_variants makes the trio mandatory at
+    every create boundary, and the duplicate route exists precisely to clone
+    rows that predate that rule."""
+    login_as(client, EDITOR_ID, "reiji")
+    async with client.db() as s:
+        s.add(Concert(
+            title="Hasunosora 6th Live", title_en="   ",
+            event_id="legacy", created_by=EDITOR_ID,
+        ))
+        await s.commit()
+
+    r = client.post("/concerts/legacy/duplicate")
+    assert r.status_code == 303
+    # "   copy" strips to "copy" -- the whole slug the reader would have got.
+    assert r.headers["location"] == "/concerts/hasunosora-6th-live-copy/edit"
+
+
 def test_duplicate_requires_editor(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/concerts", data={"title_en": "C", "title_zh": "C", "title": "C", "event_id": "c"})
@@ -1469,6 +1509,156 @@ async def test_resubmitting_edit_with_same_cancelled_state_does_not_renotify(cli
     )
     async with client.db() as s:
         assert (await s.execute(select(Notification))).scalars().all() == []
+
+
+# ── the tag pipeline sees the legs THIS submit writes ────────────────────
+#
+# `handle_newly_tagged` asks all_legs_cancelled (cleanup batch §C, owner
+# ruling 1): a dead concert notifies nobody and applies nothing. The edit
+# route attaches its tags near the top and reconciles its LEGS further down,
+# so asking the question at the attach site answers it about the concert as
+# it arrived, not as it is being saved -- wrong in both directions, and the
+# notice has no re-announce path, so a suppressed one is lost for good.
+
+FOLLOWER_ID = 9100
+PRESET_FOLLOWER_ID = 9101
+
+
+async def _follow(client, tag_id: int, user_id: int = FOLLOWER_ID):
+    """A notify-only follower: NO preset, so handle_newly_tagged's "already
+    has rules on this concert" guard can never mask a missing notice."""
+    from app.db.models import TagSubscription, User
+
+    async with client.db() as s:
+        s.add(User(discord_id=user_id, username="fan"))
+        await s.flush()
+        s.add(TagSubscription(user_id=user_id, tag_id=tag_id, notify=True))
+        await s.commit()
+
+
+async def _follow_with_preset(client, tag_id: int, user_id: int = PRESET_FOLLOWER_ID):
+    """The other half of the ruling: a follower whose subscription carries a
+    preset, so the auto-APPLY path runs and can be counted. notify is off --
+    the notice half is already pinned through `_follow`, and leaving it on
+    would put a second row in every `_notices` assertion for no gain."""
+    from app.db.models import (
+        Anchor,
+        PresetItem,
+        ReminderPreset,
+        TagSubscription,
+        User,
+    )
+
+    async with client.db() as s:
+        s.add(User(discord_id=user_id, username="presetfan"))
+        await s.flush()
+        preset = ReminderPreset(user_id=user_id, name="Standard")
+        s.add(preset)
+        await s.flush()
+        s.add(PresetItem(
+            preset_id=preset.id, anchor=Anchor.CLOSES, offset_days=-3, offset_hours=0
+        ))
+        s.add(TagSubscription(
+            user_id=user_id, tag_id=tag_id, notify=False, preset_id=preset.id
+        ))
+        await s.commit()
+
+
+async def _notices(client, user_id: int = FOLLOWER_ID):
+    from app.db.models import Notification
+
+    async with client.db() as s:
+        return (await s.execute(
+            select(Notification).where(Notification.user_id == user_id)
+        )).scalars().all()
+
+
+async def _rule_count(client, user_id: int = PRESET_FOLLOWER_ID) -> int:
+    from app.db.models import ReminderRule
+
+    async with client.db() as s:
+        return len((await s.execute(
+            select(ReminderRule).where(ReminderRule.user_id == user_id)
+        )).scalars().all())
+
+
+def _create_one_leg(client, *, cancelled: str):
+    return client.post(
+        "/concerts",
+        data={"title_en": "C", "title_zh": "C",
+            "title": "C", "event_id": "c",
+            "day_label": ["Day 1"],
+            "day_label_en": ["Day 1"],
+            "day_label_zh": ["Day 1"], "day_starts_at": ["2099-08-01T18:00"],
+            "day_doors_at": [""], "day_cancelled": [cancelled],
+        },
+    )
+
+
+def _edit_one_leg(client, day_id: int, *, cancelled: str, artist_tags: list[str]):
+    return client.post(
+        "/concerts/c/edit",
+        data={
+            "title": "C", "event_id": "c",
+            "day_id": [str(day_id)], "day_label": ["Day 1"],
+            "day_label_en": [""],
+            "day_label_zh": [""], "day_starts_at": ["2099-08-01T18:00"],
+            "day_doors_at": [""], "day_cancelled": [cancelled],
+            "artist_tags": artist_tags,
+        },
+    )
+
+
+async def test_uncancelling_a_leg_while_adding_a_tag_still_announces(client):
+    """The revival case. The concert arrives dead and leaves alive, so the
+    notice is owed -- and there is no re-announce path, so asking before the
+    legs are written loses it permanently."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hasunosora", "name_en": "Hasunosora", "name_zh": "Hasunosora",
+        "kind": "artist",
+    })  # id 1
+    _create_one_leg(client, cancelled="true")
+    await _follow(client, 1)
+    await _follow_with_preset(client, 1)
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+
+    assert _edit_one_leg(
+        client, day_id, cancelled="false", artist_tags=["1"]
+    ).status_code == 303
+
+    notes = await _notices(client)
+    assert [n.kind for n in notes] == ["new_event"]
+    # And the preset applied -- which is also what makes the mirror test's
+    # `== 0` mean something rather than pass on an empty preset.
+    assert await _rule_count(client) == 1
+
+
+async def test_cancelling_the_last_leg_while_adding_a_tag_announces_nothing(client):
+    """The mirror, and the half the ruling is about: the concert arrives alive
+    and leaves dead, so nobody is owed a 🆕 notice with an "Apply here" button
+    on a show that is not happening."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hasunosora", "name_en": "Hasunosora", "name_zh": "Hasunosora",
+        "kind": "artist",
+    })  # id 1
+    _create_one_leg(client, cancelled="false")
+    await _follow(client, 1)
+    await _follow_with_preset(client, 1)
+    async with client.db() as s:
+        day_id = (await s.execute(select(ConcertDay))).scalar_one().id
+
+    assert _edit_one_leg(
+        client, day_id, cancelled="true", artist_tags=["1"]
+    ).status_code == 303
+
+    assert await _notices(client) == []
+    # The ruling has two halves and the notice is only one of them: no preset
+    # applies either, so a dead concert does not quietly mint invisible rules
+    # on the strength of a revival that may never come.
+    assert await _rule_count(client) == 0
 
 
 async def test_detail_page_shows_cancelled_badge_on_cancelled_leg_only(client):
