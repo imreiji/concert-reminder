@@ -145,13 +145,29 @@ async def validate_event_id(
     return event_id
 
 
-async def generate_event_id(session: AsyncSession, title: str) -> str:
+async def generate_event_id(
+    session: AsyncSession, title: str, title_en: str | None = None
+) -> str:
     """Auto-suggest an event_id for flows with no dedicated input for one
     (the URL-import commit route) -- slugified title, de-duplicated with a
-    numeric suffix. Editable afterward via the edit page."""
+    numeric suffix. Editable afterward via the edit page.
+
+    Slugs from `title_en` when it has one. slugify() strips everything outside
+    [a-z0-9], so a Japanese-only title collapses to its "concert" fallback and
+    successive imports mint concert-2, concert-3 -- unique, but empty in a URL
+    whose whole job (invariant 6: URLs carry the editor-chosen event_id, never
+    the PK) is to be the human-readable identity. The trilingual rule made
+    title_en mandatory at every create boundary, so it is there to use; `title`
+    remains the fallback for the duplicate route, which clones rows predating
+    that rule.
+
+    NO backfill of existing rows, deliberately: event_id is editor-owned once
+    the concert exists, and rewriting a live one would break every link people
+    already hold.
+    """
     from app.domain.yaml_export import slugify
 
-    base = slugify(title)
+    base = slugify((title_en or "").strip() or title)
     candidate = base
     suffix = 2
     while (await session.execute(
@@ -1568,7 +1584,11 @@ async def duplicate_concert(
     await session.refresh(source, ["tags"])
     await ensure_user(session, user.id, user.username)
 
-    new_event_id = await generate_event_id(session, f"{source.title} copy")
+    new_event_id = await generate_event_id(
+        session,
+        f"{source.title} copy",
+        f"{source.title_en} copy" if source.title_en else None,
+    )
     f_names = [t.name for t in source.tags if t.kind is TagKind.FRANCHISE]
     clone = Concert(
         title=f"{source.title} (copy)",

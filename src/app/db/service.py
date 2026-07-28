@@ -4434,6 +4434,22 @@ def match_tag_ids_by_name(
 
     Ids come back deduplicated in first-mention order; unmatched names keep
     their input order so the preview can list them verbatim.
+
+    Two more rules the callers depend on:
+
+    - COLLISIONS ARE FIRST-TAG-WINS. A name can legitimately match several
+      tags at once (one tag's `name`, another's `name_en`), and the scan
+      breaks at the first hit in `tags` order -- so the winner is whichever
+      the caller's query listed first, not a "best" match. That is
+      deliberate rather than arbitrary: the result is a pre-selected picker
+      chip the editor sees and can un-click, so a stable, cheap rule beats
+      a scoring one nobody can predict.
+    - BLANK NAMES DROP FROM BOTH LISTS. A name that is empty or whitespace
+      once trimmed contributes neither an id nor an unmatched entry -- it
+      simply vanishes. Drafts routinely carry blank list entries from a
+      trailing YAML dash, and surfacing those as "couldn't find ''" in the
+      preview would be noise, not information. Callers must therefore not
+      assume len(matched) + len(unmatched) == len(names).
     """
     matched: list[int] = []
     unmatched: list[str] = []

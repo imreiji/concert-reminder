@@ -224,6 +224,18 @@ def test_anchor_fanout_completes_and_rejects_container_title():
         parse_draft("\n".join(lines))
 
 
+def test_a_container_value_warns_instead_of_blanking_silently():
+    """_dt warns when it gets a container; _text used to blank silently, so a
+    list organizer/notes/label/url left no drift alarm at all. The warning
+    names the FIELD and the type -- never the value: str()'ing a container is
+    the exponential alias-fan-out cost the DoS fix removed, and re-introducing
+    it inside the warning would reopen exactly that hole."""
+    p = parse_draft("title: T\norganizer: [bandai, sunrise]\n")
+    assert p.organizer is None
+    assert any("organizer" in w for w in p.warnings)
+    assert not any("bandai" in w for w in p.warnings)
+
+
 def test_container_value_for_scalar_field_blanks():
     p = parse_draft(
         "title: T\norganizer: {corp: bandai}\nperformances:\n  - label: D\n"

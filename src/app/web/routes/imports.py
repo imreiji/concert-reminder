@@ -433,7 +433,7 @@ async def import_commit(
     # no field to fill.
     require_variants("Notes", notes, notes_en, notes_zh)
 
-    event_id = await generate_event_id(session, title)
+    event_id = await generate_event_id(session, title, title_en)
     concert = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
         kind=ConcertKind(kind) if kind else None,
