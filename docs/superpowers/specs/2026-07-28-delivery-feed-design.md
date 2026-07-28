@@ -15,9 +15,12 @@ page shell and the notifications outbox, so they get three specs. The owner
 sequenced **B and C before A**, on the reasoning that an undetected bad
 delivery on production costs more than a missing test harness.
 
-A's approved design is recorded separately in
-`2026-07-28-rehearsal-harness-design.md` so it is not lost while parked.
-C depends on this spec's log and will be designed on top of it.
+A's design is in `2026-07-28-rehearsal-harness-design.md`, revised after this
+spec was written: it now targets a **local** dev-bot environment rather than
+production, which dropped its entire prod-safety apparatus. That revision does
+not touch anything here — this feature is about production observability and is
+unaffected by where the harness runs. C depends on this spec's log and will be
+designed on top of it.
 
 ## Why
 
