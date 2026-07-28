@@ -835,6 +835,44 @@ async def test_a_cancelled_leg_is_dimmed_but_keeps_its_own_date_and_rounds(clien
     assert "Osaka presale" in body  # its rounds are not hidden with it
 
 
+async def test_the_concert_page_says_the_event_is_cancelled(client):
+    """Every leg cancelled: the show is off, and the page says so ONCE, in the
+    "needs attention" callout shape (.banner.dgr), before the round list. The
+    legs each carry their own Cancelled badge already, but a reader scanning
+    three badged legs is being asked to add them up -- the concert-level fact
+    is not the sum of the leg-level ones."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31, cancelled=True)
+    await add_round(client.db, cid, "Osaka presale", applies_to=[d1])
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert "banner dgr" in body
+    assert "This event is cancelled." in body
+    # Before the round list, where the reader meets it first.
+    assert body.index("This event is cancelled.") < body.index('id="concert-rounds"')
+    # And the page asks for nothing: both capture gates are shut on every
+    # round, so no button offers an answer `record_round_outcome` would then
+    # refuse to take back -- and the catch-up dialog has nothing to ask about.
+    assert "I have applied" not in body
+    assert 'id="resultDlg"' not in body
+
+
+async def test_a_live_concert_page_has_no_cancelled_banner(client):
+    """One leg down is not the show being off. The cancelled leg keeps its own
+    badge; the concert-level banner stays away."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert "This event is cancelled." not in body
+    assert "banner dgr" not in body
+    assert "Cancelled" in body  # the leg badge is untouched
+
+
 async def test_a_round_naming_only_cancelled_legs_sits_under_those_legs(client):
     """The all-legs group is not "everything not leg-specific". A round that
     names one cancelled leg is a fact about THAT leg, and belongs under it."""
@@ -1495,6 +1533,102 @@ async def test_unfollowed_toggle_carries_no_reminder_caption(client):
     toggle = body.split('id="following-toggle"', 1)[1].split("</div>", 1)[0]
     assert "btn quiet follow" in toggle
     assert "You will be reminded about every round below." not in toggle
+
+
+async def test_a_dead_concerts_follow_toggle_promises_nothing(client):
+    """The caption promises a reminder for every round below. On a concert
+    whose every leg is cancelled the scheduler plans none of them (task 1),
+    and the page carries a "this event is cancelled" banner a few lines above
+    -- so the promise is both false and visibly self-contradicting. The dead
+    concert's toggle states the fact instead. The button itself keeps working:
+    following is still a real preference (invariant 8)."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31, cancelled=True)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    body = client.get("/concerts/np").text
+    toggle = body.split('id="following-toggle"', 1)[1].split("</div>", 1)[0]
+    assert "btn follow on" in toggle  # still a working toggle
+    assert "You will be reminded about every round below." not in toggle
+    assert "This event is cancelled, so no reminders will be sent." in toggle
+
+    # The htmx swap re-renders this partial ALONE, off following_toggle_context
+    # -- so the fact has to live in that context, not in the page's. Pin it:
+    # the copy swapped back in after a toggle must not revert to the promise.
+    frag = client.post(
+        "/concerts/np/subscription", data={"state": "subscribed"},
+        headers={"HX-Request": "true"},
+    ).text
+    assert "This event is cancelled, so no reminders will be sent." in frag
+    assert "You will be reminded about every round below." not in frag
+
+
+async def test_a_live_concerts_follow_toggle_is_unchanged(client):
+    """One leg down is not the show being off: the reminders are still coming,
+    so the caption stays exactly as it was."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    body = client.get("/concerts/np").text
+    toggle = body.split('id="following-toggle"', 1)[1].split("</div>", 1)[0]
+    assert "You will be reminded about every round below." in toggle
+    assert "no reminders will be sent" not in toggle
+
+
+async def test_a_dead_concerts_unfollow_dialog_promises_nothing(client):
+    """The caption's staleness ran one dialog deeper. Holding a won ticket
+    turns the toggle into a heavy confirmation, and its copy named a payment
+    reminder the planner stopped planning at task 1 -- plus a payment moment
+    that will not arrive. A dead concert gets its own sentence, and it does not
+    inherit the live branches' claim that unfollowing removes the won mark: the
+    opt-out never deletes a RoundOutcome (invariant 8)."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31, cancelled=True)
+    rid = await add_round(
+        client.db, cid, "Lottery R1", payment=datetime.now(UTC) + timedelta(days=10)
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.WON)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    body = client.get("/concerts/np").text
+    assert "unfollowConfirm" in body  # still the heavy confirmation
+    assert "remove that mark and the payment reminder" not in body
+    assert "this event is cancelled, so no reminders will be sent" in body
+    assert "Stopping following does not remove that mark" in body
+
+    # Same reason as the caption: the POST swaps this partial in ALONE, so the
+    # fact has to come from following_toggle_context, not the page's.
+    frag = client.post(
+        "/concerts/np/subscription", data={"state": "subscribed"},
+        headers={"HX-Request": "true"},
+    ).text
+    assert "this event is cancelled, so no reminders will be sent" in frag
+    assert "remove that mark and the payment reminder" not in frag
+
+
+async def test_a_live_concerts_unfollow_dialog_is_unchanged(client):
+    """The payment reminder is real while any leg stands, so the dialog keeps
+    naming it -- and the moment it is due."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31)
+    rid = await add_round(
+        client.db, cid, "Lottery R1", payment=datetime.now(UTC) + timedelta(days=10)
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.WON)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    body = client.get("/concerts/np").text
+    assert "remove that mark and the payment reminder" in body
+    assert "this event is cancelled, so no reminders will be sent" not in body
 
 
 async def test_the_legacy_meta_grid_block_is_gone(client):

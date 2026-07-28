@@ -137,9 +137,20 @@ def build_leg_cancelled_message(ctx) -> tuple:
     from app.bot.views import ReinstateRemindersButton
     from app.config import settings
 
+    # One leg of a tour going down and the whole show being called off are not
+    # the same news, and this DM is the ONLY channel that carries either. On a
+    # dead concert every reminder here is gone -- the payment reminder on a won
+    # ticket included, which is the one a reader owed a refund most needs to
+    # know about -- so say that, and say what survives it.
     embed = discord.Embed(
         title=f"🚫 {ctx.title}",
-        description=_("A performance you had a reminder for was cancelled, and it's been cleared."),
+        description=(
+            _("This event is cancelled — every performance is off, and all your reminders "
+              "for it have been cleared. Anything you already recorded, like a won ticket, "
+              "stays on your record.")
+            if getattr(ctx, "concert_cancelled", False)
+            else _("A performance you had a reminder for was cancelled, and it's been cleared.")
+        ),
         color=0xB3261E,
     )
     view = discord.ui.View(timeout=None)

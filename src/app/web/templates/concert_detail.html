@@ -20,6 +20,30 @@
     <p class="lineage">{% if cf %}{{ cf | map("loc_name") | join(", ") }}{% endif %}{% if cf and cg %} · {% endif %}{% if cg %}<b>{{ cg | map("loc_name") | join(", ") }}</b>{% endif %}</p>
     {% endif %}
     <h1>{{ display_title }}{% if concert.kind %} <span class="dim kind-tag">{{ concert.kind.value.replace("_", " ") }}</span>{% endif %}</h1>
+    {#- Every leg cancelled: the show is off. Said ONCE, at the top, under the
+        title the reader came for and well before the round list -- the legs
+        below each carry their own Cancelled badge, but a concert-level fact
+        is not something a reader should have to assemble by adding badges up.
+
+        `.banner.dgr` per the callout grammar (G2): banner is the
+        needs-attention shape, dgr its danger tone. NOT `.edgecard`, which is
+        the ongoing-state shape "Next for you" uses -- and on this page that
+        strip is absent anyway, because a dead concert leads with nothing
+        (`concert_next_moment` returns None for every one of its rows).
+
+        Nothing here offers an action, deliberately: every round's capture
+        gates are shut for the same reason (`capture_gates(cancelled=...)`),
+        so this states the fact and stops. -#}
+    {% if concert_cancelled %}
+    {#- No anatomy class: `.chead` is a grid with a .55rem gap, so the banner
+        needs no layout of its own (measured at 375/730/1200 -- 8.8px above the
+        title, no horizontal overflow at any of them). An empty class would be
+        cruft in a file whose grammar says anatomy classes carry layout. -#}
+    <div class="banner dgr">
+      <span aria-hidden="true">⚠</span>
+      <span>{% trans %}This event is cancelled. Every performance has been called off, so there is nothing left to enter.{% endtrans %}</span>
+    </div>
+    {% endif %}
     {% if cf or cv %}
     <p class="othertags">
       <span class="lbl">{{ _("Tags") }}</span>

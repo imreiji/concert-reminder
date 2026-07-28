@@ -49,6 +49,7 @@ from app.db.models import (
 from app.db.service import (
     RoundRow,
     _qualifiers_by_upgrade_round,
+    all_legs_cancelled,
     attach_tag,
     concert_audit_log,
     concert_next_moment,
@@ -851,6 +852,13 @@ async def concert_rounds_context(
     return {
         "concert": concert,
         "now": now,
+        # The show is off entirely -- what the page's cancelled banner renders
+        # on. Asked of the legs already loaded above, through the one predicate
+        # (`all_legs_cancelled`), never re-stated as its own rule here. It is a
+        # PAGE-level fact rather than a row-level one on purpose: a concert
+        # whose legs are all cancelled and which has no rounds at all still has
+        # to say so, and there would be no row to carry it.
+        "concert_cancelled": all_legs_cancelled([g.day for g in leg_groups]),
         "leg_groups": leg_groups,
         "all_legs_rows": all_legs_rows,
         "day_venue_tags": {
@@ -924,7 +932,12 @@ async def following_toggle_context(
     it would forfeit (a client-side gate; the write still goes through).
     `via_tags` names WHY the reader tracks this concert (C3): the viewer's
     followed tags attached to it -- the derivation `tracked_concert_ids`
-    performs, surfaced. Empty for a manually subscribed concert."""
+    performs, surfaced. Empty for a manually subscribed concert.
+    `concert_cancelled` is what the caption says instead of promising a
+    reminder for every round below: a dead concert plans none of them, so the
+    toggle states the fact. It is resolved HERE, not read off the page's
+    context, precisely because the POST re-render swaps this partial in ALONE
+    -- the drift this single context builder exists to prevent."""
     tracked = await tracked_concert_ids(session, user_id)
     states = await concert_subscription_states(session, user_id)
     followed_tag_ids = set((await session.execute(
@@ -938,6 +951,13 @@ async def following_toggle_context(
             .where(ConcertTag.concert_id == concert.id, Tag.id.in_(followed_tag_ids))
             .order_by(Tag.kind, Tag.name)
         )).scalars())
+    # Its own query rather than `concert.days`: the POST re-render's concert
+    # comes straight from get_concert_by_event_id with nothing refreshed, and
+    # a lazy load mid-render would be a MissingGreenlet 500. Answered through
+    # the one predicate the page's banner uses, never re-stated as a rule here.
+    days = list((await session.execute(
+        select(ConcertDay).where(ConcertDay.concert_id == concert.id)
+    )).scalars())
     round_ids = list((await session.execute(
         select(Round.id).where(Round.concert_id == concert.id)
     )).scalars())
@@ -968,6 +988,7 @@ async def following_toggle_context(
         "holds_ticket": holds_ticket,
         "won_payment_at_utc": won_payment_at_utc,
         "via_tags": via_tags,
+        "concert_cancelled": all_legs_cancelled(days),
     }
 
 
@@ -1022,6 +1043,10 @@ async def concert_detail(
          # answers with the rounds region alone, so the dialog does not
          # re-open over the answer the reader just gave.
          "pending_capture": pending_capture_row(rounds_ctx),
+         # Both of these carry `concert_cancelled` -- the same `all_legs_cancelled`
+         # answer over the same legs, one for the banner and one for the toggle
+         # partial that re-renders on its own. rounds_ctx wins the merge; there is
+         # nothing to choose between them.
          **await following_toggle_context(session, user.id, concert),
          **rounds_ctx},
     )

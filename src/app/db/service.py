@@ -1071,18 +1071,30 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
     # user's own RoundOutcome state is filtered the same way (see
     # _apply_outcome_suppression) -- the planner stays equally ignorant
     # of lottery outcomes.
+    # ...and a concert whose every leg is cancelled contributes NO live rounds
+    # at all, whatever any individual round's applies_to says. is_round_cancelled
+    # deliberately exempts a General round (empty applies_to) because it is tied
+    # to no leg, which is right while one leg still stands and wrong once the
+    # whole show is off -- that is a concert-level fact the per-round predicate
+    # cannot see, so it is asked here (all_legs_cancelled) instead of widening it.
+    # Same mechanism as everything else in this block: fewer candidates, and the
+    # "no longer planned -> delete" pass below clears the queue. No second
+    # deletion path -- invariant 2's re-planning safety depends on that one pass.
     if rule.round_id is not None:
         round_ = await session.get(Round, rule.round_id)
         if round_ is None:
             live_rounds: list[Round] = []
         else:
-            cancelled_day_ids = set((await session.execute(
-                select(ConcertDay.id).where(
-                    ConcertDay.concert_id == round_.concert_id,
-                    ConcertDay.cancelled.is_(True),
-                )
+            concert_days = list((await session.execute(
+                select(ConcertDay).where(ConcertDay.concert_id == round_.concert_id)
             )).scalars())
-            live_rounds = [] if is_round_cancelled(round_, cancelled_day_ids) else [round_]
+            cancelled_day_ids = {d.id for d in concert_days if d.cancelled}
+            live_rounds = (
+                []
+                if is_round_cancelled(round_, cancelled_day_ids)
+                or all_legs_cancelled(concert_days)
+                else [round_]
+            )
         days: list[DayInfo] = []
     else:
         rres = await session.execute(select(Round).where(Round.concert_id == rule.concert_id))
@@ -1092,7 +1104,11 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
         all_rounds = list(rres.scalars())
         all_days = list(dres.scalars())
         cancelled_day_ids = {d.id for d in all_days if d.cancelled}
-        live_rounds = [r for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)]
+        live_rounds = (
+            []
+            if all_legs_cancelled(all_days)
+            else [r for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)]
+        )
         days = [_day_info(d) for d in all_days if not d.cancelled]
 
     # A concert-level OPTED_OUT override prunes the whole concert for this
@@ -1187,28 +1203,43 @@ async def notify_newly_cancelled_legs(
     newly_cancelled_day_ids: set[int],
     now: datetime | None = None,
 ) -> int:
-    """Call BEFORE sync_concert (which will delete the now-unplanned queue
-    rows for these legs). Queues one Notification per user who is about to
-    lose EVERY one of their unsent reminders on this concert as a direct
-    result of these legs being newly cancelled -- a user with other live
-    legs/rounds to fall back on gets nothing. Returns how many notifications
-    were queued."""
+    """Call BEFORE sync_concert (which will delete the queue rows this
+    inspects -- once sync has run, the loss it warns about is invisible).
+    Queues one Notification per user who is about to lose EVERY one of their
+    unsent reminders on this concert as a direct result of these legs being
+    newly cancelled -- a user with other live legs/rounds to fall back on
+    gets nothing. Returns how many notifications were queued.
+
+    WHICH rounds count as lost is a concert-level question, not a per-round
+    one. Normally it is the rounds naming a newly-cancelled leg that
+    is_round_cancelled now retires; but if these cancellations leave the
+    concert with no live leg at all (all_legs_cancelled), EVERY round on it
+    is lost, General rounds included -- they name no leg, so the per-round
+    test never reaches them, yet sync_rule's concert-level rule deletes their
+    queue rows moments later. Miss that and the "does this user still have a
+    live reminder here?" probe below finds a row that is already doomed and
+    stays silent: the reader loses everything and is never told."""
     if not newly_cancelled_day_ids:
         return 0
     now = now or _now()
 
-    all_cancelled_day_ids = set((await session.execute(
-        select(ConcertDay.id).where(
-            ConcertDay.concert_id == concert_id, ConcertDay.cancelled.is_(True)
-        )
+    # Post-cancellation leg state -- the caller has already flagged the legs,
+    # so this sees the concert as it will be once sync runs.
+    all_days = list((await session.execute(
+        select(ConcertDay).where(ConcertDay.concert_id == concert_id)
     )).scalars())
+    all_cancelled_day_ids = {d.id for d in all_days if d.cancelled}
     rounds = list(
         (await session.execute(select(Round).where(Round.concert_id == concert_id))).scalars()
     )
+    concert_is_dead = all_legs_cancelled(all_days)
     affected_round_ids = {
         r.id for r in rounds
-        if set(r.applies_to or []) & newly_cancelled_day_ids
-        and is_round_cancelled(r, all_cancelled_day_ids)
+        if concert_is_dead
+        or (
+            set(r.applies_to or []) & newly_cancelled_day_ids
+            and is_round_cancelled(r, all_cancelled_day_ids)
+        )
     }
 
     res = await session.execute(
@@ -1449,9 +1480,18 @@ async def mark_sent(session: AsyncSession, queue_id: int, now: datetime | None =
 async def upcoming_rounds(
     session: AsyncSession, now: datetime | None = None, horizon_days: int = 14
 ) -> list[tuple[Concert, Round]]:
-    """Rounds opening or closing within the horizon — powers /upcoming.
-    Implicitly-cancelled rounds (every leg they apply to is cancelled) are
-    excluded, same rule sync_rule/upcoming_deadlines already use."""
+    """Rounds opening or closing within the horizon — powers the bot's
+    /upcoming, its only caller. Two exclusions, the same pair
+    sync_rule/upcoming_deadlines apply: implicitly-cancelled rounds (every leg
+    they apply to is cancelled, is_round_cancelled) and every round on a
+    concert with no live leg left (all_legs_cancelled). The second is not
+    redundant -- a General round names no leg, so it survives the first
+    predicate however dead the show is.
+
+    Not to be confused with ShowDeadlinesButton (bot/views.py), which answers
+    a different question -- "everything about THIS concert", asked about one
+    concert on purpose -- and so labels cancelled rounds rather than hiding
+    them, exactly as the concert page stays reachable for a dead show."""
     from datetime import timedelta
 
     now = now or _now()
@@ -1468,10 +1508,22 @@ async def upcoming_rounds(
     pairs = [(c, r) for c, r in res.all()]
     if not pairs:
         return pairs
-    cancelled_day_ids = set((await session.execute(
-        select(ConcertDay.id).where(ConcertDay.cancelled.is_(True))
+    # Scoped to the concerts actually in play: a round's applies_to only ever
+    # names legs of its own concert, so a global day scan buys nothing here.
+    days = list((await session.execute(
+        select(ConcertDay).where(ConcertDay.concert_id.in_({c.id for c, _ in pairs}))
     )).scalars())
-    return [(c, r) for c, r in pairs if not is_round_cancelled(r, cancelled_day_ids)]
+    cancelled_day_ids = {d.id for d in days if d.cancelled}
+    days_by_concert: dict[int, list[ConcertDay]] = {}
+    for d in days:
+        days_by_concert.setdefault(d.concert_id, []).append(d)
+    dead_concert_ids = {
+        cid for cid, ds in days_by_concert.items() if all_legs_cancelled(ds)
+    }
+    return [
+        (c, r) for c, r in pairs
+        if c.id not in dead_concert_ids and not is_round_cancelled(r, cancelled_day_ids)
+    ]
 
 
 LABEL_BY_ANCHOR: dict[Anchor, str] = {
@@ -1523,7 +1575,13 @@ async def upcoming_deadlines(
 ) -> list[UpcomingDeadline]:
     """Global (not reminder-rule-scoped, not per-user) chronological
     deadline list for the index page. Reuses is_round_cancelled the same
-    way sync_rule/notify_newly_cancelled_legs already do.
+    way sync_rule/notify_newly_cancelled_legs already do, plus the
+    concert-level all_legs_cancelled rule sync_rule now carries.
+
+    TWO callers share this: Home's "Coming up" (via my_upcoming_deadlines)
+    and /discover's public "Coming up soon" list -- so the dead-concert
+    filtering here is also what keeps that list agreeing with the tile grid
+    above it, which discoverable_concert_criterion has always hidden them from.
 
     `concert_ids` narrows the source rows to those concerts (None = every
     concert). The narrowing happens BEFORE the sort and the limit, which is
@@ -1541,6 +1599,17 @@ async def upcoming_deadlines(
     days = list((await session.execute(day_q)).scalars())
     rounds = list((await session.execute(round_q)).scalars())
     cancelled_day_ids = {d.id for d in days if d.cancelled}
+    # A concert whose every leg is cancelled is off, so nothing on it is still
+    # a question the reader can answer -- drop it wholesale, beside the
+    # per-round is_round_cancelled filtering below. A General round survives
+    # that predicate (it is tied to no leg), which is exactly why this
+    # concert-level pass is needed and why it does not belong inside it.
+    days_by_concert: dict[int, list[ConcertDay]] = {}
+    for d in days:
+        days_by_concert.setdefault(d.concert_id, []).append(d)
+    dead_concert_ids = {
+        cid for cid, ds in days_by_concert.items() if all_legs_cancelled(ds)
+    }
     concert_ids = {d.concert_id for d in days} | {r.concert_id for r in rounds}
     concerts = {
         c.id: c for c in
@@ -1565,7 +1634,7 @@ async def upcoming_deadlines(
         ))
 
     for r in rounds:
-        if is_round_cancelled(r, cancelled_day_ids):
+        if r.concert_id in dead_concert_ids or is_round_cancelled(r, cancelled_day_ids):
             continue
         concert = concerts.get(r.concert_id)
         if concert is None:
@@ -1808,6 +1877,11 @@ class BoardCard:
     # pure domain.board.pill_tone, not in the template, so the urgency rule
     # lives in exactly one place.
     pill_tone: str
+    # Every leg cancelled: the show is off. Only the BADGE lives here -- what
+    # keeps such a card off "Open now" (and off the board entirely without
+    # standing) is the has_open_round=False fed to column_for in board_cards,
+    # not this flag. The template must never gate placement on it.
+    cancelled: bool = False
 
 
 def _round_is_open(round_: Round, now: datetime) -> bool:
@@ -1908,14 +1982,26 @@ async def board_cards(
     } if all_round_ids else {}
 
     for concert in concerts:
+        # Every leg cancelled: the show is off. Three things follow, all of
+        # them concert-level facts `is_round_cancelled` cannot see, and all
+        # driven by this one flag.
+        dead = all_legs_cancelled(concert.days)
         cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
-        live_rounds = [
+        # (1) A dead concert's card is built from EVERY round, not the
+        # is_round_cancelled survivors. On a dead concert every leg-bound
+        # round is implicitly cancelled -- and a 先行 lottery normally names
+        # its legs -- so filtering here would throw away the very standing the
+        # card exists to record, leaving the reader who won a ticket with no
+        # card at all. Outcomes and rungs come from the same list on purpose:
+        # place a card by an outcome whose round is not on its ladder and the
+        # card names a column nothing on it explains (see visible_rungs).
+        card_rounds = list(concert.rounds) if dead else [
             r for r in concert.rounds if not is_round_cancelled(r, cancelled_day_ids)
         ]
         # Ladder order: when a round opens, falling back to when it closes.
         # Rounds with neither timestamp sort last, in id order, rather than
         # blowing up the comparison.
-        live_rounds.sort(
+        card_rounds.sort(
             key=lambda r: (
                 r.opens_at_utc is None and r.closes_at_utc is None,
                 r.opens_at_utc or r.closes_at_utc or now,
@@ -1923,14 +2009,28 @@ async def board_cards(
             )
         )
 
-        card_outcomes = {r.id: outcomes[r.id] for r in live_rounds if r.id in outcomes}
+        # (2) A dead concert has no OPEN round, whatever its rounds' own
+        # timestamps say -- a General round survives is_round_cancelled (it is
+        # tied to no leg) and would otherwise keep the card in "Open now",
+        # inviting an application to a show that is not happening. Fed to
+        # column_for, that single substitution carries the whole rule: with no
+        # standing column_for returns None and the `column is None` exit below
+        # drops the card, matching what Discover already does; with standing
+        # the outcome ranks place it in Applied / Won / Secured, because a
+        # cancelled show you hold a ticket for is news, not noise. A second
+        # skip branch here would be a second rule to keep in sync. The rungs
+        # read the same set, so no rung on a dead card can read "open" either.
+        open_round_ids = (
+            set() if dead else {r.id for r in card_rounds if _round_is_open(r, now)}
+        )
+        card_outcomes = {r.id: outcomes[r.id] for r in card_rounds if r.id in outcomes}
         column = column_for(
             [
                 (outcomes[r.id], r.kind is RoundKind.UPGRADE)
-                for r in live_rounds
+                for r in card_rounds
                 if r.id in outcomes
             ],
-            has_open_round=any(_round_is_open(r, now) for r in live_rounds),
+            has_open_round=bool(open_round_ids),
         )
         if column is None:
             continue
@@ -1941,7 +2041,7 @@ async def board_cards(
                 # Copied out of the ORM object, so resolve here (web request
                 # -> get_locale()); the template only sees the string.
                 label=loc_field(r, "label", locale),
-                state=_rung_state(card_outcomes.get(r.id), _round_is_open(r, now)),
+                state=_rung_state(card_outcomes.get(r.id), r.id in open_round_ids),
                 is_upgrade=r.kind is RoundKind.UPGRADE,
                 detail=(
                     r.payment_deadline_at_utc
@@ -1950,9 +2050,14 @@ async def board_cards(
                     else r.closes_at_utc or r.opens_at_utc
                 ),
             )
-            for r in live_rounds
+            for r in card_rounds
         ]
-        next_deadline = _next_deadline(live_rounds, now)
+        # (3) No countdown on a dead card: a badged card that also read
+        # "closes in 3 days" would make the same invitation this rule removes
+        # everywhere else. Dropped at the source, so nothing downstream -- the
+        # pill, its tone (pill_tone reads None as quiet), the card ordering --
+        # can resurrect it.
+        next_deadline = None if dead else _next_deadline(card_rounds, now)
         columns[column].append(BoardCard(
             concert=concert,
             column=column,
@@ -1960,6 +2065,7 @@ async def board_cards(
             next_deadline=next_deadline,
             outcome_by_round=card_outcomes,
             pill_tone=pill_tone(column, next_deadline, now),
+            cancelled=dead,
         ))
 
     # Soonest first everywhere; a card with no future deadline sorts last.
@@ -2123,7 +2229,7 @@ def _eligible_upgrade_ids(
 
 def capture_gates(
     round_: Round | None, outcome: LotteryOutcome | None, now: datetime,
-    qualifies: bool = True, covered: bool = False,
+    qualifies: bool = True, covered: bool = False, cancelled: bool = False,
 ) -> tuple[bool, bool]:
     """The two gates on WHICH capture buttons a row may offer, as ONE
     definition shared by every surface that offers them (Home's "Coming up"
@@ -2147,8 +2253,18 @@ def capture_gates(
     secured through some OTHER round (`covered_round_ids`). Both gates shut:
     they are going to every leg it sells, so "I have applied" and "I won" have
     no answer left worth recording. The row itself still renders -- the
-    concert page shows the whole campaign, quietly."""
-    if covered:
+    concert page shows the whole campaign, quietly.
+
+    `cancelled` is True when the CONCERT is off entirely (`all_legs_cancelled`
+    -- every leg it has is cancelled). It shuts both gates for the same reason
+    `covered` does and takes the same shape deliberately: one input, resolved
+    once by the caller, rather than a second rule each surface has to remember.
+    It is a concert-level fact and cannot be re-derived from `round_`: a
+    General round names no leg, so `is_round_cancelled` rightly still calls it
+    live, and it is exactly the round that would otherwise keep offering "I
+    have applied" on a show that is not happening -- an answer
+    `record_round_outcome` would never let the reader take back."""
+    if covered or cancelled:
         return False, False
     can_capture = round_ is not None and _round_has_opened(round_, now) and qualifies
     moment = _result_moment(round_) if round_ is not None else None
@@ -2587,7 +2703,16 @@ async def _tracked_upcoming_concerts(
     excludes them by definition, yet screen 1 must render them unchecked so
     they can be brought back. Returns (concerts, opted_out_ids) so the tiles,
     the applications pass and the tallies all share one load and one
-    upcoming-filter instead of re-deriving it three ways."""
+    upcoming-filter instead of re-deriving it three ways.
+
+    A concert whose every leg is cancelled is not upcoming, whatever its
+    round anchors still say: `is_round_cancelled` deliberately exempts a
+    General round (it names no leg), so a dead concert kept a live round with
+    a future close and rode that into all three screens -- screen 2 offering
+    to record an APPLIED that `record_round_outcome` would never let the
+    reader take back. Asked once here, through the same `all_legs_cancelled`
+    the rest of the branch uses, so the flow keeps ONE definition of upcoming
+    rather than teaching the applications pass a rule the tiles do not know."""
     tracked = await tracked_concert_ids(session, user_id)
     overrides = await concert_subscription_states(session, user_id)
     opted_out = {cid for cid, st in overrides.items() if st is SubscriptionState.OPTED_OUT}
@@ -2607,6 +2732,8 @@ async def _tracked_upcoming_concerts(
 
     upcoming = []
     for c in concerts:
+        if all_legs_cancelled(c.days):
+            continue
         cancelled_day_ids = {d.id for d in c.days if d.cancelled}
         live_rounds = [r for r in c.rounds if not is_round_cancelled(r, cancelled_day_ids)]
         future_day = any(not d.cancelled and d.starts_at_utc > now for d in c.days)
@@ -2680,6 +2807,11 @@ def _round_asks_application(
     round has opened, it carries at least one apply-window / result timestamp,
     and its result moment is unset or still in the future -- the "middle path"
     rule that a round already decided is never asked about.
+
+    Deliberately concert-blind: whether the concert itself is off (every leg
+    cancelled) is filtered UPSTREAM, in `_tracked_upcoming_concerts`, so any
+    caller reaching this predicate must come through there -- call it over a
+    raw round set and a dead concert's General round starts asking again.
 
     Branch-5 hook: an open UPGRADE round will widen this to also ask about
     its qualifying CLOSED round ("Do you hold this ticket?"), the one
@@ -2881,6 +3013,13 @@ class RoundRow:
     # Every leg this round covers is already secured through another round:
     # it renders quietly, with both capture gates shut (see capture_gates).
     covered: bool = False
+    # The whole CONCERT is off -- every leg cancelled (`all_legs_cancelled`).
+    # Carried on the row, resolved once per concert, so the two consumers that
+    # need it (the gates above and `_needs_you`'s veto below) read one input
+    # rather than each asking the predicate again. Deliberately not folded into
+    # `covered`: that word is a fact about this reader's other tickets and the
+    # fold chips say so out loud, while this is a fact about the world.
+    concert_cancelled: bool = False
     # This LEG's resolution for this viewer, or None when they have no
     # standing on it yet.
     leg_result: LegResult | None = None
@@ -3041,6 +3180,10 @@ async def concert_round_rows(
 
     day_ids = {d.id for d in days}
     live_leg_ids = {d.id for d in days if not d.cancelled}
+    # Asked ONCE for the whole concert, then carried on every row: the show
+    # being off shuts each round's capture gates and vetoes the page's "Next
+    # for you" pick, and both must read the same answer.
+    concert_cancelled = all_legs_cancelled(days)
     # Which rounds are being resolved leg by leg -- the switch that turns off
     # the no-rows-means-all fallback (see _leg_result_for).
     rounds_with_day_rows = {rid for rid, _did in day_results}
@@ -3057,7 +3200,8 @@ async def concert_round_rows(
         # round renders like any other.
         upgrade_locked = is_upgrade and user_id is not None and not eligible
         can_capture, can_report_result = capture_gates(
-            r, outcome, now, qualifies=(not is_upgrade) or eligible, covered=covered
+            r, outcome, now, qualifies=(not is_upgrade) or eligible, covered=covered,
+            cancelled=concert_cancelled,
         )
         capture_days, any_day_won = await _day_capture_context(
             session, user_id, r, outcome, now, days, locale
@@ -3067,7 +3211,7 @@ async def concert_round_rows(
             round_=r, outcome=outcome,
             can_capture=can_capture, can_report_result=can_report_result,
             primary_anchor=anchor, primary_at_utc=at_utc,
-            covered=covered,
+            covered=covered, concert_cancelled=concert_cancelled,
             capture_days=capture_days, any_day_won=any_day_won,
             has_day_results=r.id in rounds_with_day_rows,
             upgrade_locked=upgrade_locked,
@@ -3270,15 +3414,21 @@ def _wants_you(
 
 
 def _needs_you(row: RoundRow, now: datetime) -> bool:
-    """`_wants_you` for a concert-page row, plus that page's own veto.
+    """`_wants_you` for a concert-page row, plus that page's own two vetoes.
 
     A covered round wants nothing whatever its outcome says: every leg it
     sells is already secured elsewhere, and leading the urgency panel with a
     round that offers no buttons is a panel you cannot act on. It is not part
     of the shared rule because Home never meets the case -- `my_deadline_rows`
     drops covered rows outright, so no DeadlineRow can carry one.
+
+    A round on a CANCELLED concert wants nothing either, and for the stronger
+    reason: the show is not happening. The gates being shut is not enough on
+    its own -- a reader left APPLIED or WON satisfies `_wants_you` on standing
+    alone -- and Home never meets this case either, since `upcoming_deadlines`
+    drops a dead concert at the source (task 1).
     """
-    return not row.covered and _wants_you(
+    return not row.covered and not row.concert_cancelled and _wants_you(
         row.outcome, row.can_capture, row.round_.closes_at_utc, now
     )
 
@@ -3305,6 +3455,9 @@ def concert_next_moment(
     None is a real answer, not a failure: with no standing anywhere and
     nothing open, an empty urgency panel is worse than no panel, so the page
     omits the block entirely rather than rendering a heading over a blank.
+    A concert whose every leg is cancelled always answers None for the same
+    reason -- `_needs_you` vetoes each of its rows -- so this is the existing
+    contract meeting a new case, not a new one.
 
     Rounds are de-duplicated by id, because a round covering some-but-not-all
     legs appears under each of those legs and must not compete with itself.
@@ -3350,6 +3503,27 @@ def discoverable_concert_criterion():
         .correlate(Concert)
     )
     return ~has_any_day | has_live_day
+
+
+def all_legs_cancelled(days: Sequence[ConcertDay]) -> bool:
+    """True when the concert HAS legs and every one is cancelled.
+
+    The Python twin of `discoverable_concert_criterion` above -- the same
+    question ("is this show still happening at all?") asked of days the
+    caller already holds, so the personal surfaces can ask it without a
+    query. `~has_any_day | has_live_day` inverted: a concert is dead when it
+    has days AND none of them is live. A dateless draft has no legs to
+    cancel, so it is not dead -- the same exemption the SQL half makes.
+
+    The two forms are pinned to each other by
+    `tests/test_discover.py::test_the_predicate_agrees_with_the_discover_criterion`;
+    change either and that test is what tells you the halves have drifted.
+
+    This is NOT `is_round_cancelled`'s job and must never be folded into it:
+    that predicate answers a per-round question (are all of THIS round's legs
+    gone?) and a General round, tied to no leg, is rightly exempt. Whether the
+    concert as a whole is off is a concert-level fact it cannot see."""
+    return bool(days) and all(d.cancelled for d in days)
 
 
 async def discoverable_concert_count(session: AsyncSession) -> int:
@@ -4765,6 +4939,13 @@ class LegCancelledContext:
     # getattr(ctx, "user_language", "en") and sets the locale before composing
     # the embed, so the leg-cancel prose localizes (mirrors NoticeContext).
     user_language: str = "en"
+    # Whether the WHOLE show is off (all_legs_cancelled), not just the leg that
+    # triggered the notice. The embed's prose differs: one leg of a tour going
+    # down is "a performance was cancelled", but a dead concert is the only
+    # channel telling this reader that EVERY reminder here is gone -- a payment
+    # reminder on a won ticket included. A concert-level fact, so it is resolved
+    # here rather than re-derived in the bot layer.
+    concert_cancelled: bool = False
 
 
 async def leg_cancelled_context(
@@ -4775,11 +4956,15 @@ async def leg_cancelled_context(
         return None
     user = await session.get(User, user_id) if user_id else None
     locale = user.language if user else "en"
+    days = list((await session.execute(
+        select(ConcertDay).where(ConcertDay.concert_id == concert_id)
+    )).scalars())
     return LegCancelledContext(
         concert_id=concert.id,
         event_id=concert.event_id,
         title=loc_field(concert, "title", locale),
         user_language=locale,
+        concert_cancelled=all_legs_cancelled(days),
     )
 
 

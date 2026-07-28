@@ -37,6 +37,7 @@ import discord
 
 from app.db.models import ConcertDay, Round, User
 from app.db.service import (
+    all_legs_cancelled,
     apply_default_preset,
     has_day_results,
     is_round_cancelled,
@@ -140,20 +141,37 @@ class ReinstateRemindersButton(
         return cls(int(match["cid"]))
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        from app.db.models import Concert
+
         async with SessionMaker() as session:
             n = await reinstate_user_rules(session, interaction.user.id, self.concert_id)
             await _apply_locale(session, interaction.user.id)
+            # `n` counts RULES re-synced, not reminders re-armed -- the rules
+            # were never deleted, only their queue rows. On a concert whose
+            # every leg is cancelled the planner drops every round, so n > 0
+            # while the number of reminders that can ever fire is zero, and the
+            # count reply would promise notifications that cannot come. Same
+            # concert-level fact ShowDeadlinesButton asks below, asked for the
+            # same reason: is_round_cancelled cannot see it.
+            concert = await session.get(Concert, self.concert_id)
+            dead = False
+            if concert is not None:
+                await session.refresh(concert, ["days"])
+                dead = all_legs_cancelled(concert.days)
             await session.commit()
-        msg = (
-            ngettext(
+        if dead:
+            msg = _("This event is cancelled, so there are no reminders to turn back on. "
+                    "Your settings are still saved — if it comes back, they'll work again.")
+        elif n:
+            msg = ngettext(
                 "Turned {n} reminder back on. You'll be notified again for any "
                 "active ones using your existing settings.",
                 "Turned {n} reminders back on. You'll be notified again for any "
                 "active ones using your existing settings.",
                 n,
             ).format(n=n)
-            if n else _("You had no reminders set up on this event.")
-        )
+        else:
+            msg = _("You had no reminders set up on this event.")
         await interaction.response.send_message(msg)
 
 
@@ -187,6 +205,14 @@ class ShowDeadlinesButton(
             loc = get_locale()
 
             cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
+            # This list LABELS cancelled rounds rather than hiding them -- the
+            # reader asked about this one concert, and the DM twin of the
+            # concert page stays reachable the same way. But the label has to
+            # be true: on a concert whose every leg is cancelled,
+            # `is_round_cancelled` still calls a General round live (it names
+            # no leg), so it would print unmarked beside day lines that all
+            # read (cancelled). The concert-level fact marks every round.
+            concert_cancelled = all_legs_cancelled(concert.days)
             cancelled_suffix = f" ({_('cancelled')})"
             lines = []
             for r in concert.rounds:
@@ -201,7 +227,9 @@ class ShowDeadlinesButton(
                     bits.append(
                         f"{_('payment due')} {fmt_dual(r.payment_deadline_at_utc, tz, loc)}"
                     )
-                suffix = cancelled_suffix if is_round_cancelled(r, cancelled_day_ids) else ""
+                suffix = cancelled_suffix if (
+                    concert_cancelled or is_round_cancelled(r, cancelled_day_ids)
+                ) else ""
                 lines.append(f"**{loc_field(r, 'label', loc)}**{suffix} — {' / '.join(bits)}")
             for d in concert.days:
                 suffix = cancelled_suffix if d.cancelled else ""

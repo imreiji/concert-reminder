@@ -251,6 +251,43 @@ async def test_does_not_ask_cancelled_round(session):
     assert await setup_application_rows(session, USER, now=NOW) == []
 
 
+async def test_setup_never_asks_about_a_dead_concerts_round(session):
+    """A concert whose every leg is cancelled is off, and `/setup` must not
+    offer to record an application against it -- recording APPLIED is
+    irreversible (`record_round_outcome` refuses to overwrite a starting
+    state), so the question costs the reader something to answer wrongly.
+
+    `is_round_cancelled` does not cover this: a General round names no leg, so
+    it rightly survives that per-round predicate and is exactly the round that
+    would keep asking. The concert-level fact comes from `all_legs_cancelled`,
+    fed into `_tracked_upcoming_concerts` -- the flow's ONE upcoming filter, so
+    all three screens agree, rather than screen 2 alone learning the rule."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", user=USER)
+    concert = await make_concert(session, "aqours-9th", tag)
+    await add_day(session, concert, dt(8, 1), cancelled=True)
+    await add_day(session, concert, dt(8, 2), cancelled=True)
+    # No applies_to: a General round, tied to no leg and therefore live by
+    # is_round_cancelled's reckoning, with a future close to keep it "upcoming".
+    await add_round(
+        session, concert, "General sale", opens_at_utc=dt(5, 20), closes_at_utc=dt(6, 20)
+    )
+
+    assert await setup_application_rows(session, USER, now=NOW) == []
+    # And the same filter takes it out of screen 1: a tile inviting a prune of
+    # something already inert, captioned with a moment that will not happen.
+    assert await setup_prune_tiles(session, USER, now=NOW) == []
+    # Screen 3 too. The fix landed in the shared filter, so all THREE screens
+    # move together -- pinned here so that width is deliberate rather than
+    # incidental, and so narrowing it later fails loudly. `tracking` counting
+    # the concert while the other two screens had dropped it would end the
+    # flow by announcing a number the reader cannot see behind them, and
+    # `next_deadline_utc` would name the dead General round's close.
+    tallies = await setup_tallies(session, USER, now=NOW)
+    assert tallies.tracking == 0
+    assert tallies.next_deadline_utc is None
+
+
 async def test_setup_skips_covered_round(session):
     """A round every one of whose legs the user already secured through
     another round asks nothing: they are going, and "did you apply?" has no

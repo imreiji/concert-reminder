@@ -442,6 +442,47 @@ async def test_board_card_marks_a_declined_round_as_skipped(client):
     assert ">General presale<" in card
 
 
+async def test_the_board_marks_a_cancelled_card(client):
+    """The card that survives a cancellation is a record of what the reader
+    holds, so it must say the show is off -- in the same badge vocabulary the
+    concert page's cancelled legs already use, and on that card only."""
+    async def build(seed):
+        alive = await seed.concert("alive", title="Alive concert")
+        await seed.open_round(alive, "Live round")
+        dead = await seed.concert("dead", title="Dead concert", day_offset=None)
+        day = ConcertDay(
+            concert_id=dead.id, label="Day 1", cancelled=True,
+            starts_at_utc=datetime.now(UTC) + timedelta(days=40),
+        )
+        seed.s.add(day)
+        await seed.s.flush()
+        # Leg-bound, the ordinary shape: the round is implicitly cancelled
+        # with its leg, and the card must still carry it.
+        won = await seed.open_round(dead, "1次先行")
+        won.applies_to = [day.id]
+        await seed.s.flush()
+        await record_round_outcome(seed.s, USER, won.id, LotteryOutcome.WON)
+
+    await seeded(client.db, build)
+    login(client)
+
+    board = client.get("/").text.split('id="board"', 1)[1]
+    dead_card = board.split('data-event-id="dead"', 1)[1].split("</a>", 1)[0]
+    alive_card = board.split('data-event-id="alive"', 1)[1].split("</a>", 1)[0]
+
+    assert '<span class="badge cancelled">Cancelled</span>' in dead_card
+    assert "Cancelled" not in alive_card
+    # Exactly one badge on the whole board -- the live card gets none.
+    assert board.count('class="badge cancelled"') == 1
+    # The rung that explains the column is on the card even though its leg --
+    # and so the round itself -- is cancelled.
+    assert ">1次先行<" in dead_card
+    # ... and the card makes no claim about time: no countdown pill, while the
+    # live card still has one.
+    assert "data-countdown" not in dead_card
+    assert "data-countdown" in alive_card
+
+
 # ── Coming up: the capture surface ───────────────────────────────────────
 
 
@@ -552,6 +593,34 @@ async def test_coming_up_drops_a_round_the_viewer_already_holds_a_ticket_for(cli
         await s.commit()
 
     rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "General sale" not in rows
+
+
+async def test_a_dead_concert_has_no_coming_up_rows(client):
+    """Every leg cancelled means the show is not happening, so nothing about
+    it is a question the reader can still answer. A General round survives
+    `is_round_cancelled` (it is tied to no leg), which is exactly why Coming
+    up needs the concert-level rule as well -- otherwise the row sits there
+    offering an APPLIED press `record_round_outcome` will never let the
+    reader take back."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        alive = await seed.concert("alive", title="Alive concert")
+        await seed.round(alive, "Live round", closes=now + timedelta(days=3))
+        dead = await seed.concert("dead", title="Dead concert")
+        await seed.round(dead, "General sale", closes=now + timedelta(days=2))
+        for d in (await seed.s.execute(
+            select(ConcertDay).where(ConcertDay.concert_id == dead.id)
+        )).scalars():
+            d.cancelled = True
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "Live round" in rows       # the control
+    assert "Dead concert" not in rows
     assert "General sale" not in rows
 
 

@@ -18,12 +18,16 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.db.models import Base, Concert, ConcertDay, ConcertTag, Round, Tag, User
-from app.db.service import record_round_outcome
+from app.db.service import (
+    all_legs_cancelled,
+    discoverable_concert_criterion,
+    record_round_outcome,
+)
 from app.db.session import get_session
 from app.domain.types import LotteryOutcome, RoundKind, TagKind
 from app.web import auth
@@ -560,6 +564,77 @@ async def test_tile_date_uses_day_month_format(client):
     when_match = re.search(r'class="when dim">([^<]+)</span>', tile)
     assert when_match, tile
     assert re.fullmatch(r"\d{1,2} [A-Z][a-z]{2} JST", when_match.group(1))
+
+
+# ── the dead-concert rule: one question, two forms ───────────────────────
+
+
+async def test_the_predicate_agrees_with_the_discover_criterion(db):
+    """One rule, two forms: the SQL criterion /discover filters on and the
+    Python predicate the personal surfaces use must classify every concert
+    the same way, or the two halves of the app disagree about which events
+    are dead.
+
+    This is the anti-drift pin -- the same discipline `_wants_you` and
+    `capture_gates` already carry. Widen or narrow either form on its own
+    and this fails."""
+    async with db() as s:
+        s.add(User(discord_id=USER, username="reiji"))
+        await s.flush()
+        seed = Seed(s)
+        live = await seed.concert("live-one")               # one live leg
+        partly = await seed.concert("partly-cancelled")     # one live + one cancelled
+        dead = await seed.concert("all-cancelled")          # every leg cancelled
+        draft = await seed.concert("dateless-draft", day_offset=None)  # no days at all
+        now = datetime.now(UTC)
+        s.add(ConcertDay(
+            concert_id=partly.id, label="Day 2",
+            starts_at_utc=now + timedelta(days=61), cancelled=True,
+        ))
+        for d in (await s.execute(
+            select(ConcertDay).where(ConcertDay.concert_id == dead.id)
+        )).scalars():
+            d.cancelled = True
+        await s.commit()
+
+        visible_ids = set((await s.execute(
+            select(Concert.id).where(discoverable_concert_criterion())
+        )).scalars())
+        assert visible_ids == {live.id, partly.id, draft.id}  # sanity: the SQL half
+
+        for concert in (live, partly, dead, draft):
+            await s.refresh(concert, ["days"])
+            assert all_legs_cancelled(concert.days) == (concert.id not in visible_ids), (
+                concert.event_id
+            )
+
+
+async def test_discovers_public_deadline_list_drops_dead_concerts(client):
+    """`upcoming_deadlines` is shared with Home's Coming up, so filtering
+    dead concerts there also makes /discover's "Coming up soon" list agree
+    with the tile grid above it -- which has always hidden them. Pin it: the
+    two halves of one page must not disagree."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        alive = await seed.concert("alive-one", title="Alive Concert")
+        await seed.round(alive, "Live round", closes=now + timedelta(days=3))
+        dead = await seed.concert("dead-one", title="Dead Concert")
+        # A GENERAL round: tied to no leg, so is_round_cancelled leaves it
+        # live however many legs die. The concert being dead is what drops it.
+        await seed.round(dead, "General sale", closes=now + timedelta(days=2))
+        for d in (await seed.s.execute(
+            select(ConcertDay).where(ConcertDay.concert_id == dead.id)
+        )).scalars():
+            d.cancelled = True
+
+    await seeded(client.db, build)
+
+    html = client.get("/discover").text
+    assert "Dead Concert" not in html  # the grid already hid it
+    deadlines = html.split('id="deadline-list"', 1)[1]
+    assert "Live round" in deadlines
+    assert "General sale" not in deadlines
 
 
 def test_style_gives_the_status_pill_a_dotted_divider():
