@@ -1,14 +1,21 @@
 """Web application: sessions, auth, concert CRUD."""
 
+import logging
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.routing import Match
 
@@ -43,6 +50,8 @@ from app.web.routes import welcome as welcome_routes
 from app.web.static_assets import static_url
 
 _here = Path(__file__).parent
+log = logging.getLogger(__name__)
+
 templates = Jinja2Templates(directory=_here / "templates")
 templates.env.add_extension("jinja2.ext.i18n")
 # newstyle=True gives {% trans %} and {{ _("...") }} that read the request's
@@ -198,6 +207,98 @@ def create_app() -> FastAPI:
             query = request.url.query
             target = safe_next(request.url.path + (f"?{query}" if query else ""))
         return RedirectResponse(home_with_next(target), status_code=303)
+
+    def _wants_html(request: Request) -> bool:
+        """Is this a full-page navigation, as opposed to an XHR?
+
+        The split that matters, and it is NOT the status code. `fetch()` sends
+        `Accept: */*` and htmx sets `HX-Request`; a browser navigation always
+        asks for `text/html`. Getting this backwards breaks the tag and venue
+        quick-create dialogs, which read `(await resp.json()).detail` off a 409
+        to offer "that already exists, select it instead" -- they would fall
+        back to a generic failure with no message and nothing would say why.
+        """
+        if request.headers.get("hx-request"):
+            return False
+        return "text/html" in request.headers.get("accept", "")
+
+    def _error_page(request: Request, status: int, messages: list[str] | None = None) -> Response:
+        """Render the friendly page. Copy is per-code because each code has a
+        different amount to usefully say."""
+        # The signed-cookie display dict, not a DB read: an exception handler
+        # has no dependency injection and must not be able to fail again while
+        # rendering the failure.
+        session_user = request.session.get("user") if "session" in request.scope else None
+        name = (session_user or {}).get("username")
+        if status == 404:
+            heading = i18n.gettext("Page not found")
+            body = i18n.gettext("That page doesn't exist. The link may be out of date.")
+        elif status == 403:
+            heading = i18n.gettext("No access")
+            # Naming the account is the whole point: the commonest cause is
+            # being signed in on the wrong Discord account, and nothing else
+            # here would tell you which one you are.
+            body = (
+                i18n.gettext(
+                    "You're signed in as %(name)s, which doesn't have access to that page."
+                )
+                % {"name": name}
+                if name
+                else i18n.gettext("That page needs an account with more access than yours.")
+            )
+        elif status == 422:
+            heading = i18n.gettext("That didn't go through")
+            body = i18n.gettext("Nothing was saved. Here's what needs fixing:")
+        else:
+            heading = i18n.gettext("Something broke")
+            body = i18n.gettext(
+                "Something broke on our end, and it's been logged. Nothing you did caused it."
+            )
+        return templates.TemplateResponse(
+            request,
+            "error.html",
+            {"user": None, "heading": heading, "body": body, "messages": messages or []},
+            status_code=status,
+        )
+
+    # Keyed on STARLETTE's HTTPException, not FastAPI's. FastAPI's subclasses
+    # it, and Starlette resolves handlers by walking the RAISED class's MRO --
+    # so a handler registered on the subclass never sees the parent, and an
+    # unmatched route (which raises the parent) would keep returning JSON.
+    # Registering the parent catches both.
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
+        if not _wants_html(request):
+            return await http_exception_handler(request, exc)
+        detail = exc.detail
+        messages = [str(detail)] if exc.status_code == 422 and detail else None
+        return _error_page(request, exc.status_code, messages)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError) -> Response:
+        if not _wants_html(request):
+            return await request_validation_exception_handler(request, exc)
+        # Pydantic's per-field errors, flattened to something a person can act
+        # on: "body: field required" rather than the nested JSON shape.
+        messages = [
+            f"{'.'.join(str(p) for p in e.get('loc', ())[1:]) or 'form'}: {e.get('msg', '')}"
+            for e in exc.errors()
+        ]
+        return _error_page(request, 422, messages)
+
+    @app.exception_handler(Exception)
+    async def unhandled_error(request: Request, exc: Exception) -> Response:
+        """Starlette's default 500 is unstyled plain text with no way back.
+
+        Logs FIRST and with the traceback: a prettier 500 that costs you the
+        stack trace is a bad trade. Re-raises for a non-navigation so the
+        default machinery (and TestClient's raise_server_exceptions) behaves
+        exactly as before.
+        """
+        log.exception("unhandled error on %s %s", request.method, request.url.path)
+        if not _wants_html(request):
+            raise exc
+        return _error_page(request, 500)
 
     app.mount("/static", StaticFiles(directory=_here / "static"), name="static")
     app.include_router(auth.router)

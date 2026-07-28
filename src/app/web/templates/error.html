@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} — dekimasen.app{% endblock %}
+{% block content %}
+{#
+  One shape, four sets of copy. Each code says the one useful thing it can and
+  nothing else: a 404 has nothing to explain, a 422 is useless without its
+  messages, and a 403 is almost always the wrong Discord account -- which
+  nothing else on the page would tell you.
+
+  Only ever rendered for a full-page NAVIGATION. An XHR keeps the JSON body it
+  was already parsing (see web/app.py's handlers), because the tag and venue
+  quick-create dialogs read `.detail` off a 409 to offer select-existing.
+#}
+<div class="lede">
+  <h1>{{ heading }}</h1>
+  <p class="dim">{{ body }}</p>
+</div>
+
+{% if messages %}
+{# 422 only. Without these the page is strictly worse than the JSON blob it
+   replaces -- the blob at least said what was wrong. #}
+<div class="banner warn">
+  <ul>
+    {% for m in messages %}<li>{{ m }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<p>
+  {% if messages %}
+  {# A 422 is almost always a form POST, so this page threw away what was
+     typed. Browsers restore form values on a history back, so this is the
+     difference between "your work is gone" and "your work is one click
+     away". A real button, not a link: there is nothing to bookmark. #}
+  <button type="button" class="btn" onclick="history.back()">{{ _("Go back and fix it") }}</button>
+  {% endif %}
+  <a class="btn" href="/">{{ _("Back to home") }}</a>
+</p>
+{% endblock %}
