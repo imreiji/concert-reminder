@@ -5022,8 +5022,16 @@ def _framed_body(body: str, language: str) -> str:
 
     The brand itself is never translated, exactly as the language names
     EN/中文/日本語 are not. Only the frame around it is.
+
+    The N_() is load-bearing despite being the identity function: `pybabel
+    extract` matches on the CALLED NAME, and `gettext_in` is not one of the
+    keywords in babel.cfg, so without the marker this msgid is invisible to the
+    ritual -- the next `pybabel update` would file the hand-added entry as
+    obsolete and the frame would silently fall back to English for everyone.
+    (`gettext_in(locale, "Multiple")` gets away with a bare literal only
+    because "Multiple" is independently extracted from three templates.)
     """
-    return f"**{gettext_in(language, 'From dekimasen.app')}**\n\n{body}"
+    return f"**{gettext_in(language, N_('From dekimasen.app'))}**\n\n{body}"
 
 
 async def queue_broadcast(

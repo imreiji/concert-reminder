@@ -1127,7 +1127,7 @@ The write path.
 - Consumes: `queue_broadcast`, `cancel_broadcast` (Task 4).
 - Produces: `POST /admin/broadcast/send`, `GET /admin/broadcast/{broadcast_id}`, `POST /admin/broadcast/{broadcast_id}/cancel`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_admin_broadcast.py`:
 
@@ -1256,12 +1256,12 @@ def test_the_body_is_framed_per_recipient_language(client, monkeypatch):
     assert "From dekimasen.app" not in text  # translated, not the English msgid
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_admin_broadcast.py -v`
 Expected: FAIL — 404 on `/admin/broadcast/send`.
 
-- [ ] **Step 3: Add the three routes**
+- [x] **Step 3: Add the three routes**
 
 Append to `src/app/web/routes/admin.py`:
 
@@ -1350,7 +1350,7 @@ Add to the imports: `RedirectResponse` from `fastapi.responses`, `func` from `sq
 
 Every other template context in this module passes `"status": None` — add that key to the two Task 5 routes so the template can rely on it.
 
-- [ ] **Step 4: Add the status block to the template**
+- [x] **Step 4: Add the status block to the template**
 
 Insert into `admin_broadcast.html`, before the `{% if preview %}` block:
 
@@ -1377,7 +1377,7 @@ Insert into `admin_broadcast.html`, before the `{% if preview %}` block:
 {% endif %}
 ```
 
-- [ ] **Step 5: Add the handoff from `/admin/deliveries`**
+- [x] **Step 5: Add the handoff from `/admin/deliveries`**
 
 In `admin_deliveries.html`'s batch-detail section, add above the table:
 
@@ -1387,7 +1387,7 @@ In `admin_deliveries.html`'s batch-detail section, add above the table:
 
 Then in `broadcast_compose`, read the optional `mode` and `mode_param` query parameters and pass them into the context as `prefill`, and have the compose form use `prefill` for its `<select>` and `mode_param` values when present. Keep the parameters optional — a bare `GET /admin/broadcast` must still render.
 
-- [ ] **Step 6: Add the two frame msgids**
+- [x] **Step 6: Add the two frame msgids**
 
 The frame string is `From dekimasen.app`, wrapped by `gettext_in` in `service._framed_body` (Task 4). Run the catalogue ritual:
 
@@ -1403,12 +1403,12 @@ Fill in by hand — the brand is never translated, exactly as EN/中文/日本�
 
 Remove any `#, fuzzy` markers (fuzzy counts as untranslated). Delete `messages.pot` afterwards.
 
-- [ ] **Step 7: Verify the catalogues and run the tests**
+- [x] **Step 7: Verify the catalogues and run the tests**
 
 Run: `uv run --isolated pytest tests/test_i18n_catalogues.py tests/test_admin_broadcast.py -v`
 Expected: PASS.
 
-- [ ] **Step 8: Full gates and commit**
+- [x] **Step 8: Full gates and commit**
 
 ```bash
 git add src/app/web/routes/admin.py src/app/web/templates/ src/app/translations/ tests/test_admin_broadcast.py

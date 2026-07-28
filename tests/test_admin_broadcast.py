@@ -1,4 +1,7 @@
-"""/admin/broadcast: compose and preview. The preview writes nothing."""
+"""/admin/broadcast: compose, preview, send, status and cancel.
+
+The preview writes nothing; send queues HELD notifications through the outbox.
+"""
 
 import asyncio
 
@@ -10,7 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Broadcast, Notification
+from app.db.models import Base, Broadcast, Notification, User
 from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
@@ -136,3 +139,127 @@ def test_preview_rejects_an_over_long_body(client, monkeypatch):
         data={"mode": "all", "mode_param": "", "body": "x" * 5000},
     )
     assert r.status_code == 422
+
+
+def test_send_queues_held_notifications_and_redirects(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(
+        "/admin/broadcast/send",
+        data={"mode": "all", "mode_param": "", "body": "sorry about that"},
+    )
+    assert r.status_code == 303
+    assert r.headers["location"].startswith("/admin/broadcast/")
+
+    async def rows():
+        async with client.db() as s:
+            notes = (await s.execute(select(Notification))).scalars().all()
+            b = (await s.execute(select(Broadcast))).scalar_one()
+            return notes, b
+
+    notes, b = asyncio.get_event_loop().run_until_complete(rows())
+    assert len(notes) == 1
+    assert notes[0].kind == "admin_broadcast"
+    assert notes[0].send_after_utc is not None
+    assert notes[0].broadcast_id == b.id
+    assert b.recipient_count == 1
+
+
+def test_send_above_the_threshold_requires_the_typed_count(client, monkeypatch):
+    """Seeds past the real threshold rather than monkeypatching it.
+
+    An earlier draft patched `service.TYPED_CONFIRM_THRESHOLD`, which would
+    have passed VACUOUSLY: `admin.py` does `from app.db.service import
+    TYPED_CONFIRM_THRESHOLD`, binding the value into its own namespace at
+    import time, so patching the service module's attribute never reaches the
+    route. Seeding real users tests the real constant and has no such trap.
+    """
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    login_as(client, ADMIN_ID, "reiji")
+
+    async def seed_many():
+        async with client.db() as s:
+            for i in range(2000, 2015):  # 15 + the admin = 16, over the 10 threshold
+                s.add(User(discord_id=i, username=f"u{i}", language="en"))
+            await s.commit()
+
+    asyncio.get_event_loop().run_until_complete(seed_many())
+
+    bad = client.post(
+        "/admin/broadcast/send",
+        data={"mode": "all", "mode_param": "", "body": "hi", "confirm_count": "99"},
+    )
+    assert bad.status_code == 422
+
+    missing = client.post(
+        "/admin/broadcast/send",
+        data={"mode": "all", "mode_param": "", "body": "hi"},
+    )
+    assert missing.status_code == 422  # absent is as wrong as incorrect
+
+    ok = client.post(
+        "/admin/broadcast/send",
+        data={"mode": "all", "mode_param": "", "body": "hi", "confirm_count": "16"},
+    )
+    assert ok.status_code == 303
+
+
+def test_send_below_the_threshold_needs_no_typed_count(client, monkeypatch):
+    """The gate is keyed on SIZE, so a small send must stay frictionless."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(
+        "/admin/broadcast/send",
+        data={"mode": "all", "mode_param": "", "body": "hi"},
+    )
+    assert r.status_code == 303
+
+
+def test_status_page_and_cancel(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    login_as(client, ADMIN_ID, "reiji")
+    sent = client.post(
+        "/admin/broadcast/send",
+        data={"mode": "all", "mode_param": "", "body": "oops"},
+    )
+    bid = sent.headers["location"].rsplit("/", 1)[1]
+
+    page = client.get(f"/admin/broadcast/{bid}")
+    assert page.status_code == 200
+    assert "Cancel" in page.text
+
+    cancelled = client.post(f"/admin/broadcast/{bid}/cancel")
+    assert cancelled.status_code == 303
+
+    async def remaining():
+        async with client.db() as s:
+            return len((await s.execute(select(Notification))).scalars().all())
+
+    assert asyncio.get_event_loop().run_until_complete(remaining()) == 0
+
+
+def test_the_body_is_framed_per_recipient_language(client, monkeypatch):
+    """The frame is applied at QUEUE time, in each recipient's language, which
+    is what keeps the scheduler's plain-text send path unchanged."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    login_as(client, ADMIN_ID, "reiji")
+
+    async def make_ja():
+        async with client.db() as s:
+            s.add(User(discord_id=1234, username="jp", language="ja"))
+            await s.commit()
+
+    asyncio.get_event_loop().run_until_complete(make_ja())
+    client.post(
+        "/admin/broadcast/send",
+        data={"mode": "explicit", "mode_param": "1234", "body": "test"},
+    )
+
+    async def body():
+        async with client.db() as s:
+            return (await s.execute(select(Notification))).scalar_one().body
+
+    text = asyncio.get_event_loop().run_until_complete(body())
+    assert "test" in text
+    assert "dekimasen.app" in text
+    assert "From dekimasen.app" not in text  # translated, not the English msgid

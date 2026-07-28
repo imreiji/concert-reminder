@@ -4,6 +4,9 @@
   GET  /admin/deliveries/{batch_iso}   one batch expanded to its recipients
   GET  /admin/broadcast                compose a broadcast
   POST /admin/broadcast/preview        resolve and render it -- writes NOTHING
+  POST /admin/broadcast/send           queue it HELD, then redirect to status
+  GET  /admin/broadcast/{id}           status: what is still held, what went
+  POST /admin/broadcast/{id}/cancel    delete the rows that have not gone yet
 
 This is the ONLY surface that names delivery recipients. The digest DM
 deliberately reports counts, because a name in Discord history is a permanent
@@ -19,18 +22,22 @@ operational page only admins see should not cost msgids in three languages
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.db.models import Broadcast, Notification
 from app.db.service import (
     BROADCAST_BODY_MAX,
     DELIVERY_LOG_RETENTION_DAYS,
     TYPED_CONFIRM_THRESHOLD,
+    cancel_broadcast,
     delivery_batch_rows,
     delivery_batches,
     delivery_failures,
     duplicate_body_recently,
+    queue_broadcast,
     recent_broadcasts,
     resolve_recipients,
 )
@@ -88,9 +95,20 @@ async def delivery_batch(
 @router.get("/admin/broadcast", response_class=HTMLResponse)
 async def broadcast_compose(
     request: Request,
+    mode: str | None = None,
+    mode_param: str | None = None,
     user: SessionUser = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
+    """`mode`/`mode_param` are an optional PREFILL, nothing more -- they are how
+    /admin/deliveries hands a batch over ("message these recipients") without
+    the admin retyping an ISO timestamp. Both stay optional: a bare
+    GET /admin/broadcast is the normal entry point and must still render. An
+    unrecognised mode is simply not prefilled rather than a 422 -- this is a
+    form default, and the preview re-validates it anyway.
+    """
+    if mode not in {m.value for m in BroadcastMode}:
+        mode = None
     return templates.TemplateResponse(
         request,
         "admin_broadcast.html",
@@ -101,6 +119,7 @@ async def broadcast_compose(
             "status": None,
             "body_max": BROADCAST_BODY_MAX,
             "bot_enabled": settings.bot_enabled,
+            "prefill": {"mode": mode, "mode_param": mode_param or ""},
         },
     )
 
@@ -142,6 +161,7 @@ async def broadcast_preview(
             "user": user,
             "past": await recent_broadcasts(session),
             "status": None,
+            "prefill": None,
             "body_max": BROADCAST_BODY_MAX,
             "bot_enabled": settings.bot_enabled,
             "preview": {
@@ -155,3 +175,85 @@ async def broadcast_preview(
             },
         },
     )
+
+
+@router.post("/admin/broadcast/send")
+async def broadcast_send(
+    mode: str = Form(...),
+    mode_param: str = Form(""),
+    body: str = Form(...),
+    confirm_count: str = Form(""),
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Re-resolves rather than trusting a snapshot from the preview form:
+    tampering is not the threat (EXPLICIT already accepts arbitrary ids), drift
+    is, and recipient_count must record what was actually queued.
+    """
+    try:
+        chosen = BroadcastMode(mode)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="unknown broadcast mode") from None
+
+    recipients = await resolve_recipients(session, chosen, mode_param or None)
+    count = len(recipients.ids)
+    if count > TYPED_CONFIRM_THRESHOLD and confirm_count.strip() != str(count):
+        # An absent confirm_count is as wrong as an incorrect one -- "" never
+        # equals a count, so the empty default falls through this same branch.
+        raise HTTPException(
+            status_code=422,
+            detail=f"type {count} to confirm sending to {count} people",
+        )
+
+    try:
+        broadcast = await queue_broadcast(session, user.id, chosen, mode_param or None, body)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None
+    await session.commit()
+    return RedirectResponse(f"/admin/broadcast/{broadcast.id}", status_code=303)
+
+
+@router.get("/admin/broadcast/{broadcast_id}", response_class=HTMLResponse)
+async def broadcast_status(
+    request: Request,
+    broadcast_id: int,
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    broadcast = await session.get(Broadcast, broadcast_id)
+    if broadcast is None:
+        raise HTTPException(status_code=404, detail="no such broadcast")
+    pending = (
+        await session.execute(
+            select(func.count(Notification.id)).where(
+                Notification.broadcast_id == broadcast_id,
+                Notification.sent_at_utc.is_(None),
+            )
+        )
+    ).scalar_one()
+    return templates.TemplateResponse(
+        request,
+        "admin_broadcast.html",
+        {
+            "user": user,
+            "past": await recent_broadcasts(session),
+            "preview": None,
+            "prefill": None,
+            "body_max": BROADCAST_BODY_MAX,
+            "bot_enabled": settings.bot_enabled,
+            "status": {"broadcast": broadcast, "pending": pending},
+        },
+    )
+
+
+@router.post("/admin/broadcast/{broadcast_id}/cancel")
+async def broadcast_cancel(
+    broadcast_id: int,
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    if await session.get(Broadcast, broadcast_id) is None:
+        raise HTTPException(status_code=404, detail="no such broadcast")
+    await cancel_broadcast(session, broadcast_id)
+    await session.commit()
+    return RedirectResponse(f"/admin/broadcast/{broadcast_id}", status_code=303)
