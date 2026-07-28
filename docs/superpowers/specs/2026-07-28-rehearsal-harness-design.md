@@ -209,15 +209,27 @@ Button gating makes order load-bearing.
 | 1 | Start | `new_event` + preset auto-applied | apply / remove / deadlines |
 | 2 | Next | R1 OPENS | snooze |
 | 3 | Next | R1 CLOSES → press **Applied** | applied / notapplied / remindlater |
-| 4 | Next | R1 RESULTS → press **Won** | won / lost, then per-leg split |
+| 4 | Next | R1 RESULTS → press **Won on Day 1** | wonall / wonday ×2 / lostall / snooze |
 | 5 | *(observe)* | R3 becomes eligible; R2 goes quiet | — |
-| 6 | Next | R1 PAYMENT → press **Paid** | paid |
+| 6 | Next | R1 PAYMENT → press **Paid** | paid / snooze |
 | 7 | Next | Day 1 EVENT_START | snooze |
 | 8 | Cancel the show | `leg_cancelled` → press **Reinstate** | reinstate |
 | 9 | End | concert deleted, cascades take the rest | — |
 
 Step 3 must precede 4 and 4 must precede 6: PAYMENT only offers Paid from WON,
-so pressing Lost at step 4 ends the ladder.
+so pressing Lost at step 4 ends the ladder. **Step 8 is terminal** — cancelling
+the show kills R3's rows with everything else, so it cannot be pressed early.
+
+**Row 4 corrected during implementation, and it matters.** An earlier draft of
+this table said "won / lost". That is what a SINGLE-leg round renders; R1
+deliberately covers both legs, so `build_reminder_message` renders the per-leg
+split instead — `wonall`, one `wonday` per covered leg (capped at 4), and
+`lostall`. Getting this wrong in a walk whose purpose is to tell you what a
+correct DM looks like would have taught the operator to expect the wrong
+buttons and to "fix" working code. Every row's button set was re-derived
+empirically against real `custom_id`s rather than read off this table; the
+trailing `snooze`/`remindlater` that every reminder DM carries was missing from
+four rows for the same reason.
 
 Step 8 must call `notify_newly_cancelled_legs` **before** `sync_concert`, which
 deletes the queue rows that function inspects.
