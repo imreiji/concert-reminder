@@ -23,6 +23,7 @@
 - Gates before every commit: `uv run --isolated ruff check .` clean AND `uv run --isolated pytest -q` passing. Use `--isolated` (an external `serve.py` can lock `.venv`). Run tests in the FOREGROUND.
 - Never send DMs directly from web routes (invariant 4). The digest goes through the `notifications` outbox.
 - `RETENTION_DAYS = 30`, matching `deploy/backup.sh`'s S3 lifecycle so the system has one retention number, not two.
+- **Known asymmetry in `concert_title`, deliberate and documented rather than fixed.** Reminder rows store the title in the *recipient's* language, because `due_reminders` already resolved it with `loc_field(..., user.language)` and re-resolving would cost a query on the hot path. Notification rows store English (`loc_field(row, "title", "en")`), decided in Task 3. So an admin surface can show the same concert two ways. This is cosmetic ONLY because the digest groups on ids, not labels (Task 5) — if anything ever groups or joins on `concert_title`, this becomes a correctness bug. Do not make that change without reading Task 5's `_group_key` note first.
 
 ---
 
@@ -867,7 +868,7 @@ Pure formatter in `domain/`, gathering and queueing in `service.py`, called from
 **Interfaces:**
 - Consumes: `record_deliveries` (Task 3), `DeliveryLog` (Task 2).
 - Produces:
-  - `domain/digest.py`: frozen dataclass `DeliveryFact(source, outcome, user_id, concert_title, leg_label, round_label, anchor, note_kind)`; constants `MAX_FAILURE_LINES = 10`, `MAX_SENT_GROUPS = 10`; `build_digest(facts: list[DeliveryFact], batch_at_utc: datetime) -> str`.
+  - `domain/digest.py`: frozen dataclass `DeliveryFact(source, outcome, user_id, concert_title, leg_label, round_label, anchor, note_kind, concert_id=None, round_id=None, day_id=None)`; constants `MAX_FAILURE_LINES = 10`, `MAX_SENT_GROUPS = 10`; `_group_key(fact) -> tuple`; `build_digest(facts: list[DeliveryFact], batch_at_utc: datetime) -> str`. **Grouping keys on the ids, never the labels** — the labels are per-recipient (`loc_field(..., user.language)`), so label-keyed grouping splits one fan-out across languages and halves the count that is the anomaly signal.
   - `service.queue_delivery_digest(session, batch_at_utc, rows: list[DeliveryLog]) -> int` — returns admins queued.
 
 - [ ] **Step 1: Write the failing tests**
@@ -895,6 +896,9 @@ def _fact(user_id, outcome=DeliveryOutcome.SUCCESS, anchor=Anchor.CLOSES, **kw):
         round_label="一次先行",
         anchor=anchor,
         note_kind=None,
+        concert_id=1,
+        round_id=1,
+        day_id=1,
     )
     base.update(kw)
     return DeliveryFact(**base)
@@ -955,11 +959,34 @@ def test_notification_rows_group_by_kind_not_anchor():
 
 
 def test_sent_groups_are_capped_with_a_remainder_line():
+    """Distinct groups need distinct round_IDs, not distinct labels -- grouping
+    keys on ids, so varying only the label would collapse to a single group."""
     facts = [
-        _fact(i, round_label=f"round {i}") for i in range(MAX_SENT_GROUPS + 3)
+        _fact(i, round_id=i, round_label=f"round {i}")
+        for i in range(MAX_SENT_GROUPS + 3)
     ]
     body = build_digest(facts, BATCH)
     assert "+3 more groups" in body
+
+
+def test_two_languages_of_one_concert_stay_one_group():
+    """The reason grouping keys on ids. due_reminders resolves titles and
+    labels with loc_field(..., user.language), so the SAME reminder reaching a
+    Japanese reader and an English reader arrives with different label text.
+    Grouping on that text would report x1 and x1 instead of x2 -- halving the
+    recipient count that is the entire anomaly signal. A 40-recipient
+    mis-fire split across three languages is the case that matters."""
+    facts = [
+        _fact(1, concert_title="Snow Miku 2027", round_label="1st lottery"),
+        _fact(2, concert_title="スノーミク2027", round_label="一次先行"),
+        _fact(3, concert_title="初音未来演唱会2027", round_label="第一轮抽选"),
+    ]
+    body = build_digest(facts, BATCH)
+    assert "×3" in body
+    assert "more groups" not in body
+    # Exactly one SENT line, whichever language it happens to render in.
+    sent_lines = [ln for ln in body.splitlines() if ln.strip().startswith("×")]
+    assert len(sent_lines) == 1
 
 
 def test_never_contains_a_user_id():
@@ -1025,11 +1052,31 @@ class DeliveryFact:
     round_label: str | None
     anchor: Anchor | None
     note_kind: str | None
+    # Grouping keys. Present because the LABELS above are per-recipient: the
+    # titles and labels on a reminder row come from due_reminders, which
+    # resolves them with loc_field(..., user.language). Grouping on the label
+    # text would therefore split one concert's fan-out across languages --
+    # x25 "Snow Miku 2027" plus x15 "スノーミク2027" instead of x40 -- and the
+    # recipient count is the whole anomaly signal this digest exists to carry.
+    # Ids are language-independent, so they group correctly; the label is only
+    # ever used for DISPLAY, taken from the first fact in the group.
+    concert_id: int | None = None
+    round_id: int | None = None
+    day_id: int | None = None
+
+
+def _group_key(fact: DeliveryFact) -> tuple:
+    """What makes two deliveries "the same thing". Ids only, never labels --
+    see the note on DeliveryFact's id fields."""
+    if fact.source is DeliverySource.NOTIFICATION:
+        return (DeliverySource.NOTIFICATION, fact.concert_id, fact.note_kind)
+    return (DeliverySource.REMINDER, fact.concert_id, fact.round_id, fact.day_id, fact.anchor)
 
 
 def _describe(fact: DeliveryFact) -> str:
-    """The grouping label. A reminder is identified by its anchor and the
-    round/leg it names; a notification has neither, only its kind."""
+    """Human label for one group, rendered from any member of it. A reminder
+    is identified by its anchor and the round/leg it names; a notification has
+    neither, only its kind."""
     if fact.source is DeliverySource.NOTIFICATION:
         head = fact.note_kind or "notice"
         return f"{head} · {fact.concert_title or '(no concert)'}"
@@ -1065,12 +1112,18 @@ def build_digest(facts: list[DeliveryFact], batch_at_utc: datetime) -> str:
             lines.append(f"  +{len(failures) - MAX_FAILURE_LINES} more failures")
 
     if sent:
-        groups = Counter(_describe(f) for f in sent)
+        # Count by id-tuple, label from the first member. Counter alone cannot
+        # do this -- it would key on the label and re-split what the key just
+        # unified -- so keep a parallel first-seen map for display.
+        counts: Counter = Counter(_group_key(f) for f in sent)
+        labels: dict[tuple, str] = {}
+        for fact in sent:
+            labels.setdefault(_group_key(fact), _describe(fact))
         lines += ["", "SENT"]
-        for label, count in groups.most_common(MAX_SENT_GROUPS):
-            lines.append(f"  ×{count}  {label}")
-        if len(groups) > MAX_SENT_GROUPS:
-            lines.append(f"  +{len(groups) - MAX_SENT_GROUPS} more groups")
+        for key, count in counts.most_common(MAX_SENT_GROUPS):
+            lines.append(f"  ×{count}  {labels[key]}")
+        if len(counts) > MAX_SENT_GROUPS:
+            lines.append(f"  +{len(counts) - MAX_SENT_GROUPS} more groups")
 
     return "\n".join(lines)
 ```
@@ -1200,6 +1253,9 @@ async def queue_delivery_digest(
                 round_label=r.round_label,
                 anchor=r.anchor,
                 note_kind=r.note_kind,
+                concert_id=r.concert_id,
+                round_id=r.round_id,
+                day_id=r.day_id,
             )
             for r in rows
         ],
