@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.db.models import Base, Broadcast, Notification, User
+from app.db.service import due_notifications
 from app.domain.types import BroadcastMode
 
 NOW = datetime(2026, 7, 28, 14, 23, tzinfo=UTC)
@@ -116,3 +117,48 @@ async def test_deleting_a_broadcast_orphans_its_notifications(db):
         await s.commit()
         note = (await s.execute(select(Notification))).scalar_one()
         assert note.broadcast_id is None
+
+
+@pytest.mark.asyncio
+async def test_a_notification_with_no_hold_still_drains_immediately(db):
+    """THE regression test for this task. Every existing notice -- new_event,
+    leg_cancelled, ops_alert, delivery_digest -- has send_after_utc NULL, and
+    a NULL must never be read as 'not yet due'. In SQL, `NULL <= now` is NULL,
+    not true, so a naive comparison would silently stop the entire outbox."""
+    async with db() as s:
+        await _admin(s)
+        s.add(Notification(user_id=1, body="x", kind="new_event"))
+        await s.commit()
+        assert len(await due_notifications(s, now=NOW)) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_held_notification_is_not_drained_before_its_moment(db):
+    async with db() as s:
+        await _admin(s)
+        s.add(
+            Notification(
+                user_id=1,
+                body="x",
+                kind="admin_broadcast",
+                send_after_utc=NOW + timedelta(seconds=120),
+            )
+        )
+        await s.commit()
+        assert await due_notifications(s, now=NOW) == []
+
+
+@pytest.mark.asyncio
+async def test_a_held_notification_drains_once_its_moment_passes(db):
+    async with db() as s:
+        await _admin(s)
+        s.add(
+            Notification(
+                user_id=1,
+                body="x",
+                kind="admin_broadcast",
+                send_after_utc=NOW,
+            )
+        )
+        await s.commit()
+        assert len(await due_notifications(s, now=NOW + timedelta(seconds=1))) == 1

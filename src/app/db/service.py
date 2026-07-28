@@ -4684,11 +4684,25 @@ async def handle_newly_tagged(
 
 
 async def due_notifications(
-    session: AsyncSession, limit: int = 100
+    session: AsyncSession, limit: int = 100, now: datetime | None = None
 ) -> list[Notification]:
+    """Unsent notices whose hold, if any, has expired.
+
+    `send_after_utc IS NULL` is the common case and means "send now" -- every
+    notice in the app except a broadcast leaves it NULL. The IS NULL branch is
+    load-bearing rather than defensive: in SQL `NULL <= now` evaluates to NULL,
+    not true, so comparing without it would silently stop the entire outbox.
+    """
+    now = now or _now()
     res = await session.execute(
         select(Notification)
-        .where(Notification.sent_at_utc.is_(None))
+        .where(
+            Notification.sent_at_utc.is_(None),
+            or_(
+                Notification.send_after_utc.is_(None),
+                Notification.send_after_utc <= now,
+            ),
+        )
         .order_by(Notification.created_at)
         .limit(limit)
     )
