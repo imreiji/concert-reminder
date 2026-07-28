@@ -1,5 +1,7 @@
 """The local rehearsal harness. Gated off in production by config."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -12,14 +14,20 @@ from app.db.models import (
     Base,
     Concert,
     ConcertDay,
+    Notification,
     ReminderQueue,
+    ReminderRule,
     Round,
     RoundQualifier,
     User,
 )
 from app.db.service import (
     REHEARSAL_EVENT_ID,
+    cancel_rehearsal_leg,
     get_rehearsal_concert,
+    notify_newly_cancelled_legs,
+    pull_rehearsal_forward,
+    rehearsal_queue_rows,
     seed_rehearsal,
     teardown_rehearsal,
 )
@@ -258,3 +266,170 @@ async def test_teardown_removes_the_concert_but_not_the_user(db):
 async def test_teardown_with_nothing_seeded_is_a_no_op(db):
     async with db() as s:
         assert await teardown_rehearsal(s) is False
+
+
+@pytest.mark.asyncio
+async def test_pull_forward_moves_the_soonest_unsent_row_into_the_past(db):
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        before = sorted(
+            (await s.execute(select(ReminderQueue))).scalars().all(),
+            key=lambda q: q.fire_at_utc,
+        )
+        pulled = await pull_rehearsal_forward(s)
+        await s.commit()
+        assert pulled is not None
+        assert pulled.id == before[0].id
+        assert pulled.fire_at_utc < datetime.now(UTC)
+
+
+@pytest.mark.asyncio
+async def test_pull_forward_never_touches_another_concert_s_rows(db):
+    """The spec's hard rule. There is no queue id parameter, so the only rows
+    reachable are the rehearsal concert's -- a harness that could fire an
+    arbitrary reminder early is the version of this feature worth designing
+    out."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        other = Concert(event_id="real", title="Real", title_en="Real")
+        s.add(other)
+        await s.flush()
+        day = ConcertDay(concert_id=other.id, label="D",
+                         starts_at_utc=datetime.now(UTC) + timedelta(days=5))
+        s.add(day)
+        await s.flush()
+        rule = ReminderRule(user_id=ADMIN_ID, concert_id=other.id,
+                            anchor=Anchor.EVENT_START, offset_days=0, offset_hours=0)
+        s.add(rule)
+        await s.flush()
+        far = datetime.now(UTC) + timedelta(days=5)
+        s.add(ReminderQueue(rule_id=rule.id, day_id=day.id,
+                            anchor=Anchor.EVENT_START, fire_at_utc=far))
+        await s.commit()
+
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+
+        # Directly: the scoped view cannot see the other concert's row.
+        assert day.id not in {r.day_id for r in await rehearsal_queue_rows(s)}
+
+        # And by exhaustion: drain every rehearsal row, then check the guarded
+        # row survived. Each pulled row MUST be marked sent here, exactly as
+        # the real tick does on delivery -- pull-forward rewrites fire_at to
+        # now-1s, which sorts the row straight back to the front, so without
+        # that the loop re-pulls row one forever, never reaches the guarded
+        # row, and passes for a reason that has nothing to do with scoping.
+        for _ in range(20):
+            pulled = await pull_rehearsal_forward(s)
+            if pulled is None:
+                break
+            pulled.sent_at_utc = datetime.now(UTC)
+            await s.commit()
+        else:
+            raise AssertionError("the drain never exhausted -- it is not draining")
+
+        untouched = (await s.execute(select(ReminderQueue).where(
+            ReminderQueue.day_id == day.id))).scalar_one()
+        assert untouched.fire_at_utc == far
+        assert untouched.sent_at_utc is None
+
+
+@pytest.mark.asyncio
+async def test_pull_forward_skips_rows_already_sent(db):
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        rows = sorted((await s.execute(select(ReminderQueue))).scalars().all(),
+                      key=lambda q: q.fire_at_utc)
+        rows[0].sent_at_utc = datetime.now(UTC)
+        await s.commit()
+        pulled = await pull_rehearsal_forward(s)
+        await s.commit()
+        assert pulled.id == rows[1].id
+
+
+@pytest.mark.asyncio
+async def test_pull_forward_returns_none_when_everything_is_sent(db):
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        for row in (await s.execute(select(ReminderQueue))).scalars():
+            row.sent_at_utc = datetime.now(UTC)
+        await s.commit()
+        assert await pull_rehearsal_forward(s) is None
+
+
+@pytest.mark.asyncio
+async def test_cancelling_a_leg_queues_the_cancellation_notice(db):
+    """notify_newly_cancelled_legs must run BEFORE sync_concert, which deletes
+    the queue rows it inspects. Get that order wrong and the notice is silent."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        n = await cancel_rehearsal_leg(s)
+        await s.commit()
+        assert n >= 1
+        notes = (await s.execute(select(Notification).where(
+            Notification.kind == "leg_cancelled"))).scalars().all()
+        assert len(notes) == 1
+
+
+@pytest.mark.asyncio
+async def test_cancelling_takes_every_live_leg_because_the_notice_is_concert_scoped(db):
+    """WHY the button calls the whole show off rather than dropping one leg.
+    notify_newly_cancelled_legs is silent for a user who still has a live
+    reminder anywhere on the concert, so cancelling Day 2 of two queues
+    nothing -- Day 1's EVENT_START and R1's four anchors are still standing.
+    A per-leg button would demonstrate the leg_cancelled DM by never sending
+    it. Pinning the real rule here stops a later 'tidy-up' reinstating it."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        concert = await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+
+        # The rule itself: one leg down, other reminders alive -> no notice.
+        day2 = (await s.execute(
+            select(ConcertDay)
+            .where(ConcertDay.concert_id == concert.id)
+            .order_by(ConcertDay.starts_at_utc.desc())
+        )).scalars().first()
+        day2.cancelled = True
+        await s.flush()
+        assert await notify_newly_cancelled_legs(s, concert.id, {day2.id}) == 0
+        day2.cancelled = False
+        await s.flush()
+
+        assert await cancel_rehearsal_leg(s) == 1
+        await s.commit()
+        legs = (await s.execute(select(ConcertDay).where(
+            ConcertDay.concert_id == concert.id))).scalars().all()
+        assert all(leg.cancelled for leg in legs)
+
+
+@pytest.mark.asyncio
+async def test_cancelling_with_no_live_leg_left_is_a_no_op(db):
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        assert await cancel_rehearsal_leg(s) == 1
+        await s.commit()
+        assert await cancel_rehearsal_leg(s) == 0
+
+
+@pytest.mark.asyncio
+async def test_cancelling_with_nothing_seeded_is_a_no_op(db):
+    async with db() as s:
+        assert await cancel_rehearsal_leg(s) == 0

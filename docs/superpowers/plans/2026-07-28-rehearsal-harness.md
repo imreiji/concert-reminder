@@ -541,7 +541,7 @@ harness pulls forward is a genuine plan rather than a fabricated row."
 **Interfaces:**
 - Produces: `async def rehearsal_queue_rows(session) -> list[ReminderQueue]`; `async def pull_rehearsal_forward(session, now=None) -> ReminderQueue | None`; `async def cancel_rehearsal_leg(session, now=None) -> int`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 @pytest.mark.asyncio
@@ -645,12 +645,12 @@ async def test_cancelling_a_leg_queues_the_cancellation_notice(db):
         assert len(notes) == 1
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_rehearsal.py -v`
 Expected: FAIL — `ImportError: cannot import name 'pull_rehearsal_forward'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to the rehearsal section of `src/app/db/service.py`:
 
@@ -738,16 +738,16 @@ async def cancel_rehearsal_leg(
 
 Ensure `or_` and `false` are imported from `sqlalchemy`.
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_rehearsal.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Prove the scoping is real**
+- [x] **Step 5: Prove the scoping is real**
 
 `test_pull_forward_never_touches_another_concert_s_rows` is the safety test. Prove it bites: temporarily change `pull_rehearsal_forward` to select the soonest unsent row in the WHOLE table (ignoring `rehearsal_queue_rows`), confirm that test FAILS, then restore. Report what you saw.
 
-- [ ] **Step 6: Full gates and commit**
+- [x] **Step 6: Full gates and commit**
 
 ```bash
 git add src/app/db/service.py tests/test_rehearsal.py

@@ -292,4 +292,20 @@ is worth something given how much recent work was i18n. Leaning yes, since
 
 ## Deviations from this spec
 
-(To be filled during implementation.)
+**Step 8 cancels the whole show, not just Day 2** (Task 3, 2026-07-28). The
+walk above says "Cancel Day 2 → `leg_cancelled`". Measured against the real
+code, that queues nothing: `notify_newly_cancelled_legs` is CONCERT-scoped by
+design — it stays silent for any user who still holds a live reminder anywhere
+on the concert — and after Day 2 goes down, Day 1's EVENT_START plus R1's four
+anchors are all still standing, so the operator has fallback rows and gets no
+notice. Cancelling Day 1 instead fails the same way. Only when the concert has
+no live leg left (`all_legs_cancelled`) does every round count as lost and the
+notice fire.
+
+So `cancel_rehearsal_leg` cancels every remaining LIVE leg in one press. The
+alternative — a per-leg button the operator presses twice, the first press
+doing nothing visible — would demonstrate the `leg_cancelled` DM by not
+sending it. The name is kept because Task 4's `/admin/rehearsal/cancel-leg`
+route depends on it. `tests/test_rehearsal.py` pins the underlying rule
+directly (`test_cancelling_takes_every_live_leg_because_the_notice_is_concert_scoped`)
+so a later tidy-up cannot quietly restore the per-leg version.

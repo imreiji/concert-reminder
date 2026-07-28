@@ -22,7 +22,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import case, delete, exists, func, or_, select
+from sqlalchemy import case, delete, exists, false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -5844,3 +5844,99 @@ async def seed_rehearsal(
 
     await sync_concert(session, concert.id)
     return concert
+
+
+async def rehearsal_queue_rows(session: AsyncSession) -> list[ReminderQueue]:
+    """Every queue row belonging to the rehearsal concert, soonest first.
+
+    Scoped by joining through the concert's rounds and days rather than by an
+    id the caller supplies -- see REHEARSAL_EVENT_ID's note.
+    """
+    concert = await get_rehearsal_concert(session)
+    if concert is None:
+        return []
+    round_ids = set(
+        (await session.execute(
+            select(Round.id).where(Round.concert_id == concert.id)
+        )).scalars()
+    )
+    day_ids = set(
+        (await session.execute(
+            select(ConcertDay.id).where(ConcertDay.concert_id == concert.id)
+        )).scalars()
+    )
+    if not round_ids and not day_ids:
+        return []
+    res = await session.execute(
+        select(ReminderQueue)
+        .where(
+            or_(
+                ReminderQueue.round_id.in_(round_ids) if round_ids else false(),
+                ReminderQueue.day_id.in_(day_ids) if day_ids else false(),
+            )
+        )
+        .order_by(ReminderQueue.fire_at_utc)
+    )
+    return list(res.scalars())
+
+
+async def pull_rehearsal_forward(
+    session: AsyncSession, now: datetime | None = None
+) -> ReminderQueue | None:
+    """Rewrite the soonest UNSENT rehearsal queue row's fire time into the
+    past, so the next real tick delivers it. Returns the row, or None.
+
+    This is the only thing the harness fakes, and it fakes the wait, not the
+    work: sync_rule and the pure planner already computed this row and its
+    anchor. Everything downstream -- suppression, gating, the send path, the
+    buttons -- runs exactly as in production.
+    """
+    now = now or _now()
+    for row in await rehearsal_queue_rows(session):
+        if row.sent_at_utc is None:
+            row.fire_at_utc = now - timedelta(seconds=1)
+            await session.flush()
+            return row
+    return None
+
+
+async def cancel_rehearsal_leg(
+    session: AsyncSession, now: datetime | None = None
+) -> int:
+    """Cancel the rehearsal concert's remaining live legs and queue the notices.
+
+    Order is load-bearing: notify_newly_cancelled_legs must run BEFORE
+    sync_concert, which deletes the very queue rows it inspects to decide who
+    is losing a reminder. Get it backwards and the notice is silently never
+    queued -- see that function's own docstring.
+
+    It cancels EVERY live leg rather than only the last one, and that is not
+    over-reach: it is the only way this harness can show a real leg_cancelled
+    DM. That notice is CONCERT-scoped by design -- notify_newly_cancelled_legs
+    stays deliberately silent for anyone who still holds a live reminder
+    anywhere on the concert. Cancelling Day 2 alone therefore queues nothing,
+    because Day 1's EVENT_START and R1's four anchors are all still standing
+    (measured: it returns 0). Emitting the notice for a half-cancelled concert
+    would mean faking the one thing this button exists to demonstrate, so the
+    button calls the whole show off instead. The plan's per-leg version is the
+    deviation recorded in the spec.
+    """
+    concert = await get_rehearsal_concert(session)
+    if concert is None:
+        return 0
+    res = await session.execute(
+        select(ConcertDay)
+        .where(ConcertDay.concert_id == concert.id, ConcertDay.cancelled.is_(False))
+        .order_by(ConcertDay.starts_at_utc.desc())
+    )
+    legs = list(res.scalars())
+    if not legs:
+        return 0
+    for leg in legs:
+        leg.cancelled = True
+    await session.flush()
+    queued = await notify_newly_cancelled_legs(
+        session, concert.id, {leg.id for leg in legs}, now
+    )
+    await sync_concert(session, concert.id)
+    return queued
