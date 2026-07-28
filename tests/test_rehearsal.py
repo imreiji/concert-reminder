@@ -15,6 +15,7 @@ from app.db.models import (
     Base,
     Concert,
     ConcertDay,
+    ConcertTag,
     Notification,
     ReminderQueue,
     ReminderRule,
@@ -24,7 +25,9 @@ from app.db.models import (
 )
 from app.db.service import (
     REHEARSAL_EVENT_ID,
+    REHEARSAL_TAG_NAME,
     cancel_rehearsal_show,
+    find_tag_by_name_and_kind,
     get_rehearsal_concert,
     notify_newly_cancelled_legs,
     pull_rehearsal_forward,
@@ -35,7 +38,7 @@ from app.db.service import (
 )
 from app.db.session import get_session
 from app.domain.rehearsal import expected_buttons
-from app.domain.types import Anchor, LotteryOutcome, RoundKind
+from app.domain.types import Anchor, LotteryOutcome, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 from app.web.routes.rehearsal import LOCALES, SHAPES
@@ -694,3 +697,58 @@ def test_the_shape_catalogue_is_admin_only(client):
     login_as(client, PLAIN_ID, "someone")
     r = client.post("/admin/rehearsal/shape", data={"shape": "new_event", "locale": "en"})
     assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_seed_fires_the_new_event_notification(db):
+    """Step 1 of the walk, through the REAL fan-out rather than the shape
+    catalogue. handle_newly_tagged is the path that DMs every follower of a
+    tag -- the likeliest way this app ever messages the wrong people -- so a
+    harness that could not exercise it would leave its riskiest notification
+    untested and quietly claim otherwise."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        notes = (await s.execute(select(Notification).where(
+            Notification.kind == "new_event"))).scalars().all()
+        assert len(notes) == 1
+        assert notes[0].user_id == ADMIN_ID
+
+
+@pytest.mark.asyncio
+async def test_the_tag_is_attached_before_the_rules_exist(db):
+    """The ordering that makes the above work at all. handle_newly_tagged
+    skips any user who ALREADY has rules on the concert, so attaching the tag
+    after the seed's five rules would queue nothing -- and would do so
+    silently, which is the failure this test exists to catch."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        concert = await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        tag = await find_tag_by_name_and_kind(s, REHEARSAL_TAG_NAME, TagKind.ARTIST)
+        assert tag is not None
+        attached = (await s.execute(select(ConcertTag).where(
+            ConcertTag.concert_id == concert.id))).scalars().all()
+        assert [a.tag_id for a in attached] == [tag.id]
+
+
+@pytest.mark.asyncio
+async def test_reseeding_re_fires_the_notice(db):
+    """The tag survives teardown on purpose -- it is shared taxonomy -- and
+    the operator has no rules on the NEW concert, so Start is repeatable."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        for n in (await s.execute(select(Notification))).scalars():
+            await s.delete(n)
+        await s.commit()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        notes = (await s.execute(select(Notification).where(
+            Notification.kind == "new_event"))).scalars().all()
+        assert len(notes) == 1

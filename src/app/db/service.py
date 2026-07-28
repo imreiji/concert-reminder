@@ -5709,6 +5709,10 @@ def tag_variant_gaps(tag: Tag) -> list[VariantGap]:
 # with the /concerts/new and /concerts/import routes, and there is no
 # /concerts/rehearsal route.
 REHEARSAL_EVENT_ID = "rehearsal"
+# The ARTIST tag the seed attaches so `handle_newly_tagged` actually fires.
+# Survives teardown deliberately: it is shared taxonomy, and reusing it means a
+# reseed re-fires the notice (the operator has no rules on the NEW concert yet).
+REHEARSAL_TAG_NAME = "リハーサル・アーティスト"
 
 
 async def get_rehearsal_concert(session: AsyncSession) -> Concert | None:
@@ -5820,9 +5824,53 @@ async def seed_rehearsal(
         RoundQualifier(upgrade_round_id=upgrade.id, qualifying_round_id=lottery.id)
     )
 
-    # Track it explicitly rather than via a tag: tracked_concert_ids treats an
-    # explicit subscription as authoritative, so the harness does not depend
-    # on the operator following anything.
+    # A followed tag, attached HERE -- before any rule exists on this concert.
+    # handle_newly_tagged skips a user who already has rules on the concert, so
+    # seeding the rules first would make Start queue nothing at all and step 1
+    # of the walk would demonstrate the new-event DM by not sending it.
+    #
+    # This is the only way the pipeline half reaches `handle_newly_tagged`, and
+    # that is the fan-out worth rehearsing: it is the path that DMs every
+    # follower of a tag, and the likeliest way this app ever messages the wrong
+    # people. The shape catalogue can render the embed, but only this exercises
+    # the delivery.
+    tag = await find_tag_by_name_and_kind(session, REHEARSAL_TAG_NAME, TagKind.ARTIST)
+    if tag is None:
+        tag = Tag(
+            name=REHEARSAL_TAG_NAME,
+            name_en="Rehearsal Artist",
+            name_zh="彩排歌手",
+            kind=TagKind.ARTIST,
+            created_by=user_id,
+        )
+        session.add(tag)
+        await session.flush()
+
+    following = (
+        await session.execute(
+            select(TagSubscription).where(
+                TagSubscription.user_id == user_id, TagSubscription.tag_id == tag.id
+            )
+        )
+    ).scalar_one_or_none()
+    if following is None:
+        default = await get_default_preset(session, user_id)
+        session.add(
+            TagSubscription(
+                user_id=user_id,
+                tag_id=tag.id,
+                notify=True,
+                preset_id=default.id if default else None,
+            )
+        )
+        await session.flush()
+
+    newly = await attach_tag(session, concert.id, tag, expand=False)
+    await handle_newly_tagged(session, concert, newly)
+
+    # Track it explicitly TOO. The tag above already makes it tracked, but an
+    # explicit subscription keeps the harness working if the operator later
+    # unfollows the tag by hand mid-walk.
     await set_concert_subscription(session, user_id, concert.id, SubscriptionState.SUBSCRIBED)
 
     # One rule per anchor, at zero offset. The offset is irrelevant to what
