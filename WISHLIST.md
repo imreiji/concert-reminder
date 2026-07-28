@@ -711,10 +711,10 @@ page, which the `#hxbar` progress bar had satisfied since long before the
 feature, and a fold-state helper whose regex was attribute-order-coupled,
 the exact fault it existed to fix, so an attribute inserted in the wrong
 place would have returned an empty set and made every NEGATIVE assertion
-vacuous. The fourth is filed as Proposed #6.
+vacuous. The fourth is filed as Proposed #7.
 
 Revision pass: recorded in the narrative above -- nothing re-ranked on
-merit, #1 untouched, entries renumbered 1-12 with one insertion.
+merit, #1 untouched, entries renumbered 1-13 with two insertions.
 
 ### A concert whose every leg is cancelled stops asking you to act (2026-07-27)
 
