@@ -50,7 +50,7 @@ The safety model, before anything with write power exists.
 **Interfaces:**
 - Produces: `settings.rehearsal_enabled: bool = False`; `GET /admin/rehearsal`; `rehearsal.templates` assigned by `create_app`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_rehearsal.py`. Copy the `db`/`client` fixture pair and `login_as` from `tests/test_admin_broadcast.py` — note `login_as` CREATES the user row, so do not also seed the admin.
 
@@ -107,12 +107,12 @@ The `client` fixture must build its app with the flag ON. Add
 `monkeypatch.setattr(settings, "rehearsal_enabled", True)` **before**
 `create_app()` inside the copied fixture.
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_rehearsal.py -v`
 Expected: FAIL — `rehearsal_enabled` is not a settings field.
 
-- [ ] **Step 3: Add the setting**
+- [x] **Step 3: Add the setting**
 
 In `src/app/config.py`, next to `dev_guild_id`:
 
@@ -124,7 +124,7 @@ In `src/app/config.py`, next to `dev_guild_id`:
     rehearsal_enabled: bool = False
 ```
 
-- [ ] **Step 4: Add the router module**
+- [x] **Step 4: Add the router module**
 
 Create `src/app/web/routes/rehearsal.py`:
 
@@ -166,7 +166,7 @@ async def rehearsal(
     )
 ```
 
-- [ ] **Step 5: Add the template**
+- [x] **Step 5: Add the template**
 
 Create `src/app/web/templates/rehearsal.html`:
 
@@ -182,7 +182,7 @@ Create `src/app/web/templates/rehearsal.html`:
 {% endblock %}
 ```
 
-- [ ] **Step 6: Register it conditionally**
+- [x] **Step 6: Register it conditionally**
 
 In `src/app/web/app.py`, alongside the other route imports:
 
@@ -202,12 +202,12 @@ and after the admin router is registered:
 
 Confirm `settings` is already imported in `app.py`; add it if not.
 
-- [ ] **Step 7: Run to verify they pass**
+- [x] **Step 7: Run to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_rehearsal.py -v`
 Expected: PASS (all five).
 
-- [ ] **Step 8: Full gates and commit**
+- [x] **Step 8: Full gates and commit**
 
 ```bash
 git add src/app/config.py src/app/web/routes/rehearsal.py src/app/web/templates/rehearsal.html src/app/web/app.py tests/test_rehearsal.py

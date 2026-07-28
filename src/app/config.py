@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     # the bot is added to.
     dev_guild_id: int = 0
 
+    # Local-only harness switch. When true, web/app.py registers the rehearsal
+    # router; production never sets it, so those routes do not exist there at
+    # all -- no auth surface, no accidental "fire every reminder now" button.
+    # Same shape as bot_enabled: one config value switching a subsystem off.
+    rehearsal_enabled: bool = False
+
     # Access control: comma-separated Discord user IDs with edit rights
     editor_whitelist: str = ""
     # Access control: comma-separated Discord user IDs who can manage editors

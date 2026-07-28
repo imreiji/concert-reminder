@@ -33,6 +33,7 @@ from app.web.routes import imports as import_routes
 from app.web.routes import outcomes as outcome_routes
 from app.web.routes import preferences as pref_routes
 from app.web.routes import privacy as privacy_routes
+from app.web.routes import rehearsal as rehearsal_routes
 from app.web.routes import reminders as reminder_routes
 from app.web.routes import setup as setup_routes
 from app.web.routes import subscriptions as subscription_routes
@@ -245,6 +246,11 @@ def create_app() -> FastAPI:
     # registration order does not matter here (unlike imports/concerts).
     admin_routes.templates = templates
     app.include_router(admin_routes.router)
+    # Gated, not guarded: production leaves rehearsal_enabled false, so these
+    # routes are absent from the app entirely rather than merely protected.
+    if settings.rehearsal_enabled:
+        rehearsal_routes.templates = templates
+        app.include_router(rehearsal_routes.router)
 
     @app.post("/language")
     async def set_language(
