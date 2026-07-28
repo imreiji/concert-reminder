@@ -8,9 +8,17 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.db.models import Base, Broadcast, Notification, User
-from app.db.service import due_notifications
-from app.domain.types import BroadcastMode
+from app.db.models import Base, Broadcast, DeliveryLog, Notification, User
+from app.db.service import (
+    BROADCAST_BODY_MAX,
+    HOLD_SECONDS,
+    cancel_broadcast,
+    due_notifications,
+    duplicate_body_recently,
+    queue_broadcast,
+    resolve_recipients,
+)
+from app.domain.types import BroadcastMode, DeliveryOutcome, DeliverySource
 
 NOW = datetime(2026, 7, 28, 14, 23, tzinfo=UTC)
 
@@ -162,3 +170,116 @@ async def test_a_held_notification_drains_once_its_moment_passes(db):
         )
         await s.commit()
         assert len(await due_notifications(s, now=NOW + timedelta(seconds=1))) == 1
+
+
+async def _users(session, *ids_and_langs):
+    for discord_id, lang in ids_and_langs:
+        session.add(User(discord_id=discord_id, username=str(discord_id), language=lang))
+    await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_resolve_all_returns_every_user_with_language(db):
+    async with db() as s:
+        await _users(s, (1, "en"), (2, "ja"))
+        r = await resolve_recipients(s, BroadcastMode.ALL, None)
+        assert dict(r.ids) == {1: "en", 2: "ja"}
+        assert r.unmatched == ()
+
+
+@pytest.mark.asyncio
+async def test_resolve_batch_returns_that_batch_s_recipients_only(db):
+    async with db() as s:
+        await _users(s, (1, "en"), (2, "ja"), (3, "zh"))
+        for uid, at in ((1, NOW), (2, NOW), (3, NOW + timedelta(minutes=5))):
+            s.add(
+                DeliveryLog(
+                    batch_at_utc=at,
+                    user_id=uid,
+                    source=DeliverySource.REMINDER,
+                    outcome=DeliveryOutcome.SUCCESS,
+                    sent_at_utc=at,
+                )
+            )
+        await s.commit()
+        r = await resolve_recipients(s, BroadcastMode.BATCH, NOW.isoformat())
+        assert {uid for uid, _ in r.ids} == {1, 2}
+
+
+@pytest.mark.asyncio
+async def test_resolve_explicit_reports_unknown_ids_rather_than_dropping_them(db):
+    """Silently discarding a mistyped id is how you conclude you messaged
+    someone you did not."""
+    async with db() as s:
+        await _users(s, (1, "en"))
+        r = await resolve_recipients(s, BroadcastMode.EXPLICIT, "1, 999, notanumber")
+        assert {uid for uid, _ in r.ids} == {1}
+        assert set(r.unmatched) == {"999", "notanumber"}
+
+
+@pytest.mark.asyncio
+async def test_queue_writes_one_held_notification_per_recipient(db):
+    async with db() as s:
+        await _users(s, (1, "en"), (2, "ja"))
+        b = await queue_broadcast(s, 1, BroadcastMode.ALL, None, "hello", now=NOW)
+        await s.commit()
+        assert b.recipient_count == 2
+        assert b.send_after_utc == NOW + timedelta(seconds=HOLD_SECONDS)
+        notes = (await s.execute(select(Notification))).scalars().all()
+        assert len(notes) == 2
+        assert all(n.kind == "admin_broadcast" for n in notes)
+        assert all(n.send_after_utc == b.send_after_utc for n in notes)
+        assert all(n.broadcast_id == b.id for n in notes)
+
+
+@pytest.mark.asyncio
+async def test_queue_rejects_an_over_long_body(db):
+    """Discord's hard limit is 2000 characters and the frame costs some of
+    them. A body that silently truncates on send is a broadcast that says
+    something other than what was approved."""
+    async with db() as s:
+        await _users(s, (1, "en"))
+        with pytest.raises(ValueError):
+            await queue_broadcast(s, 1, BroadcastMode.ALL, None, "x" * (BROADCAST_BODY_MAX + 1))
+
+
+@pytest.mark.asyncio
+async def test_cancel_deletes_unsent_rows_and_counts_the_delivered(db):
+    async with db() as s:
+        await _users(s, (1, "en"), (2, "ja"))
+        b = await queue_broadcast(s, 1, BroadcastMode.ALL, None, "hello", now=NOW)
+        await s.commit()
+        # Simulate the race: one row drained before the cancel landed.
+        notes = (await s.execute(select(Notification))).scalars().all()
+        notes[0].sent_at_utc = NOW
+        await s.commit()
+        cancelled, delivered = await cancel_broadcast(s, b.id, now=NOW)
+        await s.commit()
+        assert (cancelled, delivered) == (1, 1)
+        assert (await s.get(Broadcast, b.id)).cancelled_at_utc is not None
+        remaining = (await s.execute(select(Notification))).scalars().all()
+        assert len(remaining) == 1 and remaining[0].sent_at_utc is not None
+
+
+@pytest.mark.asyncio
+async def test_cancel_after_full_delivery_reports_nothing_cancelled(db):
+    """Honest rather than erroring: the page says what it could not undo."""
+    async with db() as s:
+        await _users(s, (1, "en"))
+        b = await queue_broadcast(s, 1, BroadcastMode.ALL, None, "hello", now=NOW)
+        await s.commit()
+        for n in (await s.execute(select(Notification))).scalars():
+            n.sent_at_utc = NOW
+        await s.commit()
+        assert await cancel_broadcast(s, b.id, now=NOW) == (0, 1)
+
+
+@pytest.mark.asyncio
+async def test_duplicate_body_within_the_hour_is_reported(db):
+    async with db() as s:
+        await _users(s, (1, "en"))
+        await queue_broadcast(s, 1, BroadcastMode.ALL, None, "hello", now=NOW)
+        await s.commit()
+        assert await duplicate_body_recently(s, "hello", now=NOW + timedelta(minutes=30))
+        assert not await duplicate_body_recently(s, "hello", now=NOW + timedelta(hours=2))
+        assert not await duplicate_body_recently(s, "different", now=NOW)

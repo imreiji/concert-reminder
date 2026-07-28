@@ -499,7 +499,7 @@ The service layer. No routes yet.
   - `async def recent_broadcasts(session, limit=50) -> list[Broadcast]`
   - `async def duplicate_body_recently(session, body, now=None) -> bool`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_broadcast.py` (imports hoisted):
 
@@ -629,12 +629,12 @@ async def test_duplicate_body_within_the_hour_is_reported(db):
         assert not await duplicate_body_recently(s, "different", now=NOW)
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_broadcast.py -v`
 Expected: FAIL — `ImportError: cannot import name 'resolve_recipients'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append a new section to `src/app/db/service.py`, after the delivery-log section:
 
@@ -828,12 +828,12 @@ async def duplicate_body_recently(
 
 Add `Broadcast` and `BroadcastMode` to `service.py`'s model/type imports, and `gettext_in` from `app.i18n`.
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_broadcast.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Full gates and commit**
+- [x] **Step 5: Full gates and commit**
 
 ```bash
 git add src/app/db/service.py tests/test_broadcast.py
