@@ -852,6 +852,11 @@ async def test_the_concert_page_says_the_event_is_cancelled(client):
     assert "This event is cancelled." in body
     # Before the round list, where the reader meets it first.
     assert body.index("This event is cancelled.") < body.index('id="concert-rounds"')
+    # And the page asks for nothing: both capture gates are shut on every
+    # round, so no button offers an answer `record_round_outcome` would then
+    # refuse to take back -- and the catch-up dialog has nothing to ask about.
+    assert "I have applied" not in body
+    assert 'id="resultDlg"' not in body
 
 
 async def test_a_live_concert_page_has_no_cancelled_banner(client):
