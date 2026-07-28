@@ -122,7 +122,7 @@ Schema only. Nothing writes or reads these yet.
 **Interfaces:**
 - Produces: `app.domain.types.BroadcastMode` (`BATCH = "batch"`, `ALL = "all"`, `EXPLICIT = "explicit"`); `app.db.models.Broadcast`; `Notification.send_after_utc`, `Notification.broadcast_id`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_broadcast.py`:
 
@@ -247,12 +247,12 @@ async def test_deleting_a_broadcast_orphans_its_notifications(db):
         assert note.broadcast_id is None
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run --isolated pytest tests/test_broadcast.py -v`
 Expected: FAIL — `ImportError: cannot import name 'Broadcast' from 'app.db.models'`
 
-- [ ] **Step 3: Add the enum**
+- [x] **Step 3: Add the enum**
 
 Append to `src/app/domain/types.py`:
 
@@ -269,7 +269,7 @@ class BroadcastMode(enum.StrEnum):
     EXPLICIT = "explicit"  # a hand-entered list of discord ids
 ```
 
-- [ ] **Step 4: Add the model and the two columns**
+- [x] **Step 4: Add the model and the two columns**
 
 In `src/app/db/models.py`, add `BroadcastMode` to the `app.domain.types` import, then insert before `class Notification`:
 
@@ -320,12 +320,12 @@ Then add to `Notification`, after `kind`:
     )
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Run: `uv run --isolated pytest tests/test_broadcast.py -v`
 Expected: PASS (all four).
 
-- [ ] **Step 6: Generate and hand-edit the migration**
+- [x] **Step 6: Generate and hand-edit the migration**
 
 Run: `uv run --isolated alembic revision --autogenerate -m "add broadcasts"`
 
@@ -333,12 +333,12 @@ Open the file in `alembic/versions/` and replace every `app.db.models.UTCDateTim
 
 Note: `notifications` is an older table and may carry anonymous constraints on the live server. This migration only ADDs columns and does not call `drop_constraint`, so the legacy-constraint hazard in `tests/test_migration_legacy_anonymous_constraints.py` does not apply. Do not add `batch_alter_table` for an add-column.
 
-- [ ] **Step 7: Apply, prove the downgrade, re-apply**
+- [x] **Step 7: Apply, prove the downgrade, re-apply**
 
 Run: `uv run --isolated alembic upgrade head`, then `uv run --isolated alembic downgrade -1`, then `uv run --isolated alembic upgrade head`
 Expected: all three succeed. The second upgrade succeeding proves the downgrade really dropped/removed rather than stubbing.
 
-- [ ] **Step 8: Full gates and commit**
+- [x] **Step 8: Full gates and commit**
 
 ```bash
 git add src/app/domain/types.py src/app/db/models.py alembic/versions/ tests/test_broadcast.py
