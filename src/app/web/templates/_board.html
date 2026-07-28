@@ -80,7 +80,13 @@
         {%- else %}<span class="artists">{% for a in ca %}<span class="chip kind-artist">{{ loc(a, "name") }}</span>{% endfor %}</span>{% endif -%}
       </span>
       {% endif %}
-      <span class="title">{{ loc(card.concert, "title") }}</span>
+      {#- Every leg cancelled: the show is off. The card is here at all only
+          because the reader has standing on it (service.board_cards feeds
+          column_for has_open_round=False, so a dead concert with no standing
+          never reaches this loop), and a record of a ticket you hold must say
+          the event died. Same badge element the concert page's cancelled legs
+          use, so one cancellation reads the same everywhere. -#}
+      <span class="title">{{ loc(card.concert, "title") }}{% if card.cancelled %} <span class="badge cancelled">{{ _("Cancelled") }}</span>{% endif %}</span>
       {% set live_days = card.concert.days | rejectattr("cancelled") | sort(attribute="starts_at_utc") | list %}
       <span class="venue">
         {%- if venue_text %}📍 {{ venue_text }}{% endif -%}

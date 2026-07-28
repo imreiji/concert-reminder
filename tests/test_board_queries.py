@@ -369,6 +369,109 @@ async def test_board_card_pill_tone_follows_urgency_not_just_column(session):
     assert tones["distant-one"] == "p-quiet"
 
 
+# ── a fully cancelled concert on the board ───────────────────────────────
+#
+# One rule does all of this: a dead concert passes has_open_round=False into
+# column_for. With no standing that returns None and the existing
+# "column is None -> continue" drops the card; with standing the outcome
+# ranks place it, so it can never land in Open now.
+
+
+async def make_dead_leg(s, concert: Concert, label: str = "Day 1") -> ConcertDay:
+    """A cancelled leg. A concert whose every leg is one of these is dead."""
+    day = ConcertDay(
+        concert_id=concert.id, label=label, starts_at_utc=dt(8, 1), cancelled=True
+    )
+    s.add(day)
+    await s.flush()
+    return day
+
+
+async def test_a_dead_concert_with_no_standing_leaves_the_board(session):
+    """No stake in it, no reason to see it: the card goes, exactly as Discover
+    already hides the concert. The round here is a GENERAL one (no
+    applies_to), which survives is_round_cancelled and is precisely why the
+    concert-level rule is needed -- without it this card sits in Open now,
+    inviting an application to a show that is not happening."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+
+    dead = await make_concert(session, "dead-one", tag)
+    await make_dead_leg(session, dead)
+    await open_round(session, dead, "General sale")
+
+    alive = await make_concert(session, "alive-one", tag)
+    await open_round(session, alive)
+
+    columns, open_total = await board_cards(session, USER, now=NOW)
+
+    assert [c.concert.event_id for c in columns[Column.OPEN]] == ["alive-one"]
+    assert open_total == 1
+    placed = {c.concert.event_id for cards in columns.values() for c in cards}
+    assert placed == {"alive-one"}
+
+
+async def test_a_dead_concert_you_won_stays_badged(session):
+    """A cancelled show you hold a ticket for is news, not noise -- so the card
+    stays, marked, and in the column its standing earned."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+
+    dead = await make_concert(session, "dead-won", tag)
+    await make_dead_leg(session, dead)
+    won = await open_round(session, dead, "General sale")
+    await record_round_outcome(session, USER, won.id, LotteryOutcome.WON, now=NOW)
+
+    columns, _ = await board_cards(session, USER, now=NOW)
+
+    assert [c.concert.event_id for c in columns[Column.WON]] == ["dead-won"]
+    card = columns[Column.WON][0]
+    assert card.cancelled is True
+    assert card.column is Column.WON
+    # The round is open right now; standing is what places the card, and a
+    # dead concert must never be offered as somewhere to apply.
+    assert columns[Column.OPEN] == []
+
+
+async def test_a_dead_concert_you_applied_to_stays_in_applied(session):
+    """The same rule one rung lower: an application already lodged is standing
+    too, so the card survives -- in Applied, not in Open now."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+
+    dead = await make_concert(session, "dead-applied", tag)
+    await make_dead_leg(session, dead)
+    applied = await open_round(session, dead, "General sale")
+    await record_round_outcome(session, USER, applied.id, LotteryOutcome.APPLIED, now=NOW)
+
+    columns, open_total = await board_cards(session, USER, now=NOW)
+
+    assert [c.concert.event_id for c in columns[Column.APPLIED]] == ["dead-applied"]
+    assert columns[Column.APPLIED][0].cancelled is True
+    assert columns[Column.OPEN] == []
+    assert open_total == 0
+
+
+async def test_a_concert_with_one_live_leg_is_untouched(session):
+    """The every-leg rule must not over-fire: one surviving leg means the show
+    is still happening, so the card keeps its Open now place and no badge."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+
+    concert = await make_concert(session, "tour", tag)
+    await make_dead_leg(session, concert, "Leg A")
+    live_leg = ConcertDay(concert_id=concert.id, label="Leg B", starts_at_utc=dt(8, 2))
+    session.add(live_leg)
+    await session.flush()
+    await open_round(session, concert, "General sale")
+
+    columns, open_total = await board_cards(session, USER, now=NOW)
+
+    assert [c.concert.event_id for c in columns[Column.OPEN]] == ["tour"]
+    assert columns[Column.OPEN][0].cancelled is False
+    assert open_total == 1
+
+
 # ── my_upcoming_deadlines ────────────────────────────────────────────────
 
 

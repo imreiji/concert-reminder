@@ -1877,6 +1877,11 @@ class BoardCard:
     # pure domain.board.pill_tone, not in the template, so the urgency rule
     # lives in exactly one place.
     pill_tone: str
+    # Every leg cancelled: the show is off. Only the BADGE lives here -- what
+    # keeps such a card off "Open now" (and off the board entirely without
+    # standing) is the has_open_round=False fed to column_for in board_cards,
+    # not this flag. The template must never gate placement on it.
+    cancelled: bool = False
 
 
 def _round_is_open(round_: Round, now: datetime) -> bool:
@@ -1993,13 +1998,24 @@ async def board_cards(
         )
 
         card_outcomes = {r.id: outcomes[r.id] for r in live_rounds if r.id in outcomes}
+        # A concert whose every leg is cancelled has no open round, whatever
+        # its rounds' own timestamps say -- a General round survives
+        # is_round_cancelled (it is tied to no leg) and would otherwise keep
+        # the card in "Open now", inviting an application to a show that is
+        # not happening. This ONE substitution carries the whole rule: with no
+        # standing column_for returns None and the `column is None` exit below
+        # drops the card, matching what Discover already does; with standing
+        # the outcome ranks place it in Applied / Won / Secured, because a
+        # cancelled show you hold a ticket for is news, not noise. A second
+        # skip branch here would be a second rule to keep in sync.
+        dead = all_legs_cancelled(concert.days)
         column = column_for(
             [
                 (outcomes[r.id], r.kind is RoundKind.UPGRADE)
                 for r in live_rounds
                 if r.id in outcomes
             ],
-            has_open_round=any(_round_is_open(r, now) for r in live_rounds),
+            has_open_round=not dead and any(_round_is_open(r, now) for r in live_rounds),
         )
         if column is None:
             continue
@@ -2029,6 +2045,7 @@ async def board_cards(
             next_deadline=next_deadline,
             outcome_by_round=card_outcomes,
             pill_tone=pill_tone(column, next_deadline, now),
+            cancelled=dead,
         ))
 
     # Soonest first everywhere; a card with no future deadline sorts last.

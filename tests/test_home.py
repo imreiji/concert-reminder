@@ -442,6 +442,35 @@ async def test_board_card_marks_a_declined_round_as_skipped(client):
     assert ">General presale<" in card
 
 
+async def test_the_board_marks_a_cancelled_card(client):
+    """The card that survives a cancellation is a record of what the reader
+    holds, so it must say the show is off -- in the same badge vocabulary the
+    concert page's cancelled legs already use, and on that card only."""
+    async def build(seed):
+        alive = await seed.concert("alive", title="Alive concert")
+        await seed.open_round(alive, "Live round")
+        dead = await seed.concert("dead", title="Dead concert", day_offset=None)
+        seed.s.add(ConcertDay(
+            concert_id=dead.id, label="Day 1", cancelled=True,
+            starts_at_utc=datetime.now(UTC) + timedelta(days=40),
+        ))
+        await seed.s.flush()
+        won = await seed.open_round(dead, "General sale")
+        await record_round_outcome(seed.s, USER, won.id, LotteryOutcome.WON)
+
+    await seeded(client.db, build)
+    login(client)
+
+    board = client.get("/").text.split('id="board"', 1)[1]
+    dead_card = board.split('data-event-id="dead"', 1)[1].split("</a>", 1)[0]
+    alive_card = board.split('data-event-id="alive"', 1)[1].split("</a>", 1)[0]
+
+    assert '<span class="badge cancelled">Cancelled</span>' in dead_card
+    assert "Cancelled" not in alive_card
+    # Exactly one badge on the whole board -- the live card gets none.
+    assert board.count('class="badge cancelled"') == 1
+
+
 # ── Coming up: the capture surface ───────────────────────────────────────
 
 
