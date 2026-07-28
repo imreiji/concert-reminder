@@ -9,6 +9,7 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.bot import client as bot_client
 from app.config import settings
 from app.db.models import (
     Base,
@@ -37,6 +38,7 @@ from app.domain.rehearsal import expected_buttons
 from app.domain.types import Anchor, LotteryOutcome, RoundKind
 from app.web import auth
 from app.web.app import create_app
+from app.web.routes.rehearsal import LOCALES, SHAPES
 
 ADMIN_ID, PLAIN_ID = 42, 777
 
@@ -546,3 +548,149 @@ def test_the_actions_are_admin_only(client):
     login_as(client, PLAIN_ID, "someone")
     for path in ("start", "next", "cancel-show", "end"):
         assert client.post(f"/admin/rehearsal/{path}").status_code == 403
+
+
+def capture_dms(monkeypatch) -> list[tuple[tuple, dict]]:
+    """Point the route's lazy `from app.bot.client import bot` at a fake.
+
+    The import happens INSIDE the handler, exactly as /me/test-dm does it, so
+    patching the module attribute is enough and no Discord gateway is ever
+    involved -- the same shape tests/test_crud.py uses for the test DM."""
+    sent: list[tuple[tuple, dict]] = []
+
+    class FakeUser:
+        async def send(self, *args, **kwargs):
+            sent.append((args, kwargs))
+
+    class FakeBot:
+        def get_user(self, _discord_id):
+            return FakeUser()
+
+    monkeypatch.setattr(bot_client, "bot", FakeBot())
+    return sent
+
+
+def test_the_shape_catalogue_sends_the_chosen_shape(client, monkeypatch):
+    """Independent of the pipeline half: renders a builder directly under a
+    chosen locale, so a copy or translation change can be re-checked in
+    seconds without constructing the state a real DM needs."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr(settings, "discord_token", "x")
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/rehearsal/start")
+    sent = capture_dms(monkeypatch)
+
+    r = client.post("/admin/rehearsal/shape", data={"shape": "reminder_closes", "locale": "ja"})
+    assert r.status_code == 303
+    assert len(sent) == 1
+
+
+def test_the_shape_catalogue_needs_the_bot(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr(settings, "discord_token", "")
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post("/admin/rehearsal/shape", data={"shape": "reminder_closes", "locale": "en"})
+    assert r.status_code == 303  # reports, does not crash
+
+
+def test_every_catalogued_shape_actually_builds(client, monkeypatch):
+    """All eight, in one pass. A shape whose builder cannot be fed from the
+    seeded scenario is a catalogue entry that 500s the first time the operator
+    picks it, and the picker offers all eight unconditionally."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr(settings, "discord_token", "x")
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/rehearsal/start")
+    sent = capture_dms(monkeypatch)
+
+    for shape, _label in SHAPES:
+        r = client.post("/admin/rehearsal/shape", data={"shape": shape, "locale": "en"})
+        assert r.status_code == 303, shape
+    assert len(sent) == len(SHAPES) == 8
+
+
+def test_the_locale_picker_reaches_the_reminder_builder(client, monkeypatch):
+    """The catalogue's whole point is fast ja/zh copy review, and getting the
+    locale wrong is SILENT -- nothing raises, the embed just comes out in the
+    operator's language. Two sends of the SAME shape must differ."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr(settings, "discord_token", "x")
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/rehearsal/start")
+    sent = capture_dms(monkeypatch)
+
+    client.post("/admin/rehearsal/shape", data={"shape": "reminder_closes", "locale": "en"})
+    client.post("/admin/rehearsal/shape", data={"shape": "reminder_closes", "locale": "ja"})
+    en, ja = sent[0][1]["embed"], sent[1][1]["embed"]
+    assert "closes" in en.description
+    assert "closes" not in ja.description
+    assert en.description != ja.description
+    # The concert title is UGC, not a msgid: it proves loc_field got the
+    # locale too, which set_locale alone would never have supplied.
+    assert en.title.endswith("Rehearsal Concert")
+    assert ja.title.endswith("リハーサル公演")
+
+
+def test_the_locale_picker_reaches_the_notice_builders(client, monkeypatch):
+    """NoticeContext and LegCancelledContext resolve their UGC from the
+    RECIPIENT's users.language, not get_locale() -- a different one of the
+    three locale sources. Pin both, since set_locale alone reaches neither."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr(settings, "discord_token", "x")
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/rehearsal/start")
+    sent = capture_dms(monkeypatch)
+
+    for shape in ("new_event", "leg_cancelled"):
+        sent.clear()
+        client.post("/admin/rehearsal/shape", data={"shape": shape, "locale": "en"})
+        client.post("/admin/rehearsal/shape", data={"shape": shape, "locale": "zh"})
+        en, zh = sent[0][1]["embed"], sent[1][1]["embed"]
+        assert en.title.endswith("Rehearsal Concert"), shape
+        assert zh.title.endswith("彩排演出"), shape
+
+
+@pytest.mark.asyncio
+async def test_the_catalogue_leaves_the_operator_s_language_alone(client, monkeypatch):
+    """Sending a ja shape must not silently switch the operator's account to
+    Japanese -- the catalogue writes nothing, it only pretends for one build."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr(settings, "discord_token", "x")
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/rehearsal/start")
+    capture_dms(monkeypatch)
+    client.post("/admin/rehearsal/shape", data={"shape": "new_event", "locale": "ja"})
+
+    async with client.db() as s:
+        assert (await s.get(User, ADMIN_ID)).language == "en"
+
+
+def test_the_shape_catalogue_reports_when_nothing_is_seeded(client, monkeypatch):
+    """The operator simply has not pressed Start yet; every builder needs the
+    seeded concert, so say so rather than raising."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr(settings, "discord_token", "x")
+    login_as(client, ADMIN_ID, "reiji")
+    sent = capture_dms(monkeypatch)
+    r = client.post("/admin/rehearsal/shape", data={"shape": "new_event", "locale": "en"})
+    assert r.status_code == 303
+    assert sent == []
+    assert "Start" in client.get(r.headers["location"]).text
+
+
+def test_the_picker_offers_every_shape_and_locale(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    login_as(client, ADMIN_ID, "reiji")
+    page = client.get("/admin/rehearsal").text
+    for shape, label in SHAPES:
+        assert f'value="{shape}"' in page
+        assert label in page
+    for code, label in LOCALES:
+        assert f'value="{code}"' in page
+        assert label in page
+
+
+def test_the_shape_catalogue_is_admin_only(client):
+    login_as(client, PLAIN_ID, "someone")
+    r = client.post("/admin/rehearsal/shape", data={"shape": "new_event", "locale": "en"})
+    assert r.status_code == 403

@@ -923,7 +923,7 @@ would agree with it however wrong it became."
 **Interfaces:**
 - Produces: `POST /admin/rehearsal/shape` taking `shape` and `locale` form fields.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_the_shape_catalogue_sends_the_chosen_shape(client, monkeypatch):
@@ -961,7 +961,7 @@ def test_the_shape_catalogue_needs_the_bot(client, monkeypatch):
     assert r.status_code == 303  # reports, does not crash
 ```
 
-- [ ] **Step 2: Run to verify it fails, then implement**
+- [x] **Step 2: Run to verify it fails, then implement**
 
 Add a `POST /admin/rehearsal/shape` route that:
 - refuses politely when `not settings.bot_enabled` (redirect with a note, like `/me/test-dm` does),
@@ -971,11 +971,11 @@ Add a `POST /admin/rehearsal/shape` route that:
 
 **This direct send is a second deliberate exception to invariant 4**, alongside `POST /me/test-dm`, and for the same reason: it is a manual, user-initiated, local-only diagnostic, not a system-initiated notice. Say so in the route docstring, and note that the route does not exist in production at all, which `/me/test-dm` cannot claim.
 
-- [ ] **Step 3: Add the picker to the template**
+- [x] **Step 3: Add the picker to the template**
 
 A `<select>` of the eight shapes plus a `<select>` of en / 中文 / 日本語, and a Send button.
 
-- [ ] **Step 4: Full gates and commit**
+- [x] **Step 4: Full gates and commit**
 
 ```bash
 git add src/app/web/routes/rehearsal.py src/app/web/templates/rehearsal.html tests/test_rehearsal.py

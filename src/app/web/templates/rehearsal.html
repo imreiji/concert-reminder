@@ -10,6 +10,7 @@
   Local harness. Seeds one concert, pulls its reminders forward so the real
   60-second tick delivers them now, and sends every DM shape on demand.
 </p>
+{% if note %}<p class="dim">{{ note }}</p>{% endif %}
 
 <h2>Actions</h2>
 <p class="dim">
@@ -48,6 +49,26 @@
   <li><strong>End</strong> — the concert is deleted and the cascades take the rest.
     Your user, presets and subscriptions are untouched.</li>
 </ol>
+
+<h2>Shape catalogue</h2>
+<p class="dim">
+  The other half, and it needs none of the walk: one shape, one language,
+  rendered through the real builders and sent now. Eight embeds in three
+  languages is a minute's work, which is what makes this the fastest way to
+  re-read the copy after a translation change. It still needs the concert —
+  press Start first. The payment shape is composed as if you had won, so it
+  shows its Paid button whatever the walk has reached; the ops alert is
+  English by construction and ignores the language picker.
+</p>
+<form method="post" action="/admin/rehearsal/shape">
+  <select name="shape" aria-label="Shape">
+    {% for value, label in shapes %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+  </select>
+  <select name="locale" aria-label="Language">
+    {% for code, label in locales %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+  </select>
+  <button type="submit">Send</button>
+</form>
 
 <h2>State</h2>
 {% if concert %}
