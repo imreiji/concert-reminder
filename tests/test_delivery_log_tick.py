@@ -10,11 +10,13 @@ from sqlalchemy.pool import StaticPool
 
 import app.db.session as session_mod
 import app.scheduler.loop as loop_mod
+from app.config import settings
 from app.db.models import (
     Base,
     Concert,
     ConcertDay,
     DeliveryLog,
+    Notification,
     ReminderQueue,
     ReminderRule,
     Round,
@@ -130,3 +132,38 @@ async def test_a_logging_failure_leaves_the_reminder_marked_sent(maker, monkeypa
         queued = (await s.execute(select(ReminderQueue))).scalar_one()
         assert queued.sent_at_utc is not None  # bookkeeping survived
         assert (await s.execute(select(DeliveryLog))).all() == []
+
+
+@pytest.mark.asyncio
+async def test_tick_queues_a_digest_for_the_admin(maker, monkeypatch):
+    monkeypatch.setattr(settings, "discord_token", "x")
+    monkeypatch.setattr(settings, "admin_whitelist", "1")
+    async with maker() as s:
+        await _due_reminder(s)
+
+    await loop_mod.tick(FakeBot())
+
+    async with maker() as s:
+        note = (
+            await s.execute(select(Notification).where(Notification.kind == "delivery_digest"))
+        ).scalar_one()
+        assert "1 sent" in note.body
+        assert note.concert_id is None
+
+
+@pytest.mark.asyncio
+async def test_the_digests_own_delivery_is_not_logged(maker, monkeypatch):
+    """End-to-end feedback-loop guard: tick 1 delivers the reminder and
+    queues the digest; tick 2 delivers the digest. After tick 2 there must
+    still be exactly one log row, or the bot DMs admins once a minute
+    forever."""
+    monkeypatch.setattr(settings, "discord_token", "x")
+    monkeypatch.setattr(settings, "admin_whitelist", "1")
+    async with maker() as s:
+        await _due_reminder(s)
+
+    await loop_mod.tick(FakeBot())  # delivers reminder, queues digest
+    await loop_mod.tick(FakeBot())  # delivers digest
+
+    async with maker() as s:
+        assert len((await s.execute(select(DeliveryLog))).scalars().all()) == 1

@@ -184,7 +184,13 @@ async def test_a_broken_health_check_cannot_lose_delivered_reminders(maker, monk
     assert delivered == 1
     assert bot.sent == ["hello"]  # plain-text path: no concert_id, no embed
     async with maker() as s:
-        note = (await s.execute(select(Notification))).scalar_one()
+        # Scoped to the seeded kind: delivering it also logs it, and the log
+        # write queues a delivery_digest for the admin, so an unscoped
+        # scalar_one() now sees two rows. The claim under test is about THIS
+        # notification's bookkeeping.
+        note = (
+            await s.execute(select(Notification).where(Notification.kind == "ops_alert"))
+        ).scalar_one()
         assert note.sent_at_utc is not None  # committed before health ran
 
 

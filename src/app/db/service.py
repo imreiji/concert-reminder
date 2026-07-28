@@ -53,6 +53,7 @@ from app.db.models import (
     User,
 )
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
+from app.domain.digest import DeliveryFact, build_digest
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
@@ -4717,8 +4718,12 @@ async def record_deliveries(
     batch_at_utc: datetime,
     reminder_results: list[tuple[DueReminder, DeliveryOutcome]],
     notification_results: list[tuple[Notification, DeliveryOutcome]],
-) -> int:
-    """Write one delivery_log row per attempted delivery. Returns rows written.
+) -> list[DeliveryLog]:
+    """Write one delivery_log row per attempted delivery. Returns the rows.
+
+    The rows themselves rather than a count, so tick() can hand them straight
+    to queue_delivery_digest without a second SELECT for the batch it just
+    wrote.
 
     Flushes, never commits: the caller owns transaction boundaries, and in
     tick() this runs in its own commit AFTER the delivery bookkeeping is
@@ -4785,7 +4790,57 @@ async def record_deliveries(
     if rows:
         session.add_all(rows)
         await session.flush()
-    return len(rows)
+    return rows
+
+
+async def queue_delivery_digest(
+    session: AsyncSession, batch_at_utc: datetime, rows: list[DeliveryLog]
+) -> int:
+    """Queue the admin digest for this batch. Returns admins queued.
+
+    Goes through the notifications outbox rather than a direct DM -- that is
+    invariant 4, and it buys retry, ordering and Forbidden handling for free.
+    kind="delivery_digest" with concert_id=None falls through
+    scheduler.loop._notification_context to the plain-text path, so the send
+    code needs no changes. That kind is also in UNREPORTED_NOTE_KINDS, which
+    is what stops this digest reporting its own delivery next tick.
+    """
+    if not rows or not settings.bot_enabled:
+        return 0
+
+    body = build_digest(
+        [
+            DeliveryFact(
+                source=r.source,
+                outcome=r.outcome,
+                user_id=r.user_id,
+                concert_title=r.concert_title,
+                leg_label=r.leg_label,
+                round_label=r.round_label,
+                anchor=r.anchor,
+                note_kind=r.note_kind,
+                concert_id=r.concert_id,
+                round_id=r.round_id,
+                day_id=r.day_id,
+            )
+            for r in rows
+        ],
+        batch_at_utc,
+    )
+    if not body:
+        return 0
+
+    queued = 0
+    for admin_id in settings.admin_ids:
+        # An admin who has never logged in has no users row, and
+        # Notification.user_id is a FK to it -- the same guard
+        # evaluate_and_alert needs, and for the same reason.
+        if await session.get(User, admin_id) is None:
+            await ensure_user(session, admin_id, str(admin_id))
+        session.add(Notification(user_id=admin_id, body=body, kind="delivery_digest"))
+        queued += 1
+    await session.flush()
+    return queued
 
 
 # ── Operational health alerts ────────────────────────────────────────────

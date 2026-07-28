@@ -157,7 +157,7 @@ async def test_logs_a_reminder_delivery(db):
             s, BATCH, [(_reminder(concert.id), DeliveryOutcome.SUCCESS)], []
         )
         await s.commit()
-        assert n == 1
+        assert len(n) == 1
         row = (await s.execute(select(DeliveryLog))).scalar_one()
         assert row.source is DeliverySource.REMINDER
         assert row.round_label == "一次先行"
@@ -214,7 +214,7 @@ async def test_the_digest_notification_is_never_logged(db):
         await s.flush()
         n = await record_deliveries(s, BATCH, [], [(note, DeliveryOutcome.SUCCESS)])
         await s.commit()
-        assert n == 0
+        assert n == []
         assert (await s.execute(select(DeliveryLog))).all() == []
 
 

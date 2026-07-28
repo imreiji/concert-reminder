@@ -878,7 +878,7 @@ Pure formatter in `domain/`, gathering and queueing in `service.py`, called from
   - `domain/digest.py`: frozen dataclass `DeliveryFact(source, outcome, user_id, concert_title, leg_label, round_label, anchor, note_kind, concert_id=None, round_id=None, day_id=None)`; constants `MAX_FAILURE_LINES = 10`, `MAX_SENT_GROUPS = 10`; `_group_key(fact) -> tuple`; `build_digest(facts: list[DeliveryFact], batch_at_utc: datetime) -> str`. **Grouping keys on the ids, never the labels** — the labels are per-recipient (`loc_field(..., user.language)`), so label-keyed grouping splits one fan-out across languages and halves the count that is the anomaly signal.
   - `service.queue_delivery_digest(session, batch_at_utc, rows: list[DeliveryLog]) -> int` — returns admins queued.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_delivery_digest.py`:
 
@@ -1008,12 +1008,12 @@ def test_empty_facts_produce_no_digest():
     assert build_digest([], BATCH) == ""
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_delivery_digest.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'app.domain.digest'`
 
-- [ ] **Step 3: Write the pure formatter**
+- [x] **Step 3: Write the pure formatter**
 
 Create `src/app/domain/digest.py`:
 
@@ -1135,12 +1135,12 @@ def build_digest(facts: list[DeliveryFact], batch_at_utc: datetime) -> str:
     return "\n".join(lines)
 ```
 
-- [ ] **Step 4: Run the formatter tests**
+- [x] **Step 4: Run the formatter tests**
 
 Run: `uv run --isolated pytest tests/test_delivery_digest.py -v`
 Expected: PASS (all nine).
 
-- [ ] **Step 5: Write the failing queueing test**
+- [x] **Step 5: Write the failing queueing test**
 
 Append to `tests/test_delivery_digest.py`:
 
@@ -1224,12 +1224,12 @@ async def _one_success_row(session):
     return [row]
 ```
 
-- [ ] **Step 6: Run to verify it fails**
+- [x] **Step 6: Run to verify it fails**
 
 Run: `uv run --isolated pytest tests/test_delivery_digest.py -v`
 Expected: FAIL — `ImportError: cannot import name 'queue_delivery_digest'`
 
-- [ ] **Step 7: Add the queueing function**
+- [x] **Step 7: Add the queueing function**
 
 Append to the delivery-log section of `src/app/db/service.py`:
 
@@ -1288,12 +1288,12 @@ async def queue_delivery_digest(
 
 Add `from app.domain.digest import DeliveryFact, build_digest` to `service.py`'s imports.
 
-- [ ] **Step 8: Run to verify it passes**
+- [x] **Step 8: Run to verify it passes**
 
 Run: `uv run --isolated pytest tests/test_delivery_digest.py -v`
 Expected: PASS.
 
-- [ ] **Step 9: Call it from `tick()`**
+- [x] **Step 9: Call it from `tick()`**
 
 In `src/app/scheduler/loop.py`, change the log-write block added in Task 4 so the digest is queued in the same try/commit. Replace `await record_deliveries(...)` with:
 
@@ -1321,7 +1321,7 @@ Have `record_deliveries` return the rows it wrote instead of a count, so no seco
 
 Use this second form — no `batch_rows` helper is needed. Add `queue_delivery_digest` to the `from app.db.service import (...)` block.
 
-- [ ] **Step 10: Add the end-to-end tick test**
+- [x] **Step 10: Add the end-to-end tick test**
 
 Append to `tests/test_delivery_log_tick.py`:
 
@@ -1365,12 +1365,12 @@ async def test_the_digests_own_delivery_is_not_logged(maker, monkeypatch):
         assert len((await s.execute(select(DeliveryLog))).scalars().all()) == 1
 ```
 
-- [ ] **Step 11: Run to verify it passes**
+- [x] **Step 11: Run to verify it passes**
 
 Run: `uv run --isolated pytest tests/test_delivery_log_tick.py tests/test_delivery_digest.py tests/test_delivery_log.py -v`
 Expected: PASS.
 
-- [ ] **Step 12: Full gates and commit**
+- [x] **Step 12: Full gates and commit**
 
 Run: `uv run --isolated ruff check .` then `uv run --isolated pytest -q`
 

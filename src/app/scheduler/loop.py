@@ -46,6 +46,7 @@ from app.db.service import (
     mark_notification_sent,
     mark_sent,
     notice_context,
+    queue_delivery_digest,
     record_deliveries,
     record_dm_outcome,
 )
@@ -196,9 +197,16 @@ async def tick(bot) -> int:
         # feature must never be able to cause a duplicate reminder.
         if reminder_results or notification_results:
             try:
-                await record_deliveries(
+                rows = await record_deliveries(
                     session, now, list(reminder_results), list(notification_results)
                 )
+                # The rows just written, not a re-SELECT of the batch: the
+                # digest describes exactly what was logged, and an empty list
+                # (a tick that delivered nothing but unreported kinds -- the
+                # digest's own delivery, for one) queues no digest at all,
+                # which is what keeps this from feeding itself.
+                if rows:
+                    await queue_delivery_digest(session, now, rows)
                 await session.commit()
             except Exception:
                 log.exception("delivery logging failed; delivery itself was unaffected")
