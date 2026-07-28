@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-28 13:24-0300\n"
+"POT-Creation-Date: 2026-07-28 19:31-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -15,21 +15,21 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:32
-#: src/app/bot/views.py:221 src/app/db/service.py:1546
+#: src/app/bot/views.py:221 src/app/db/service.py:1547
 msgid "opens"
 msgstr "申请开始"
 
 #: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:33
-#: src/app/bot/views.py:223 src/app/db/service.py:1547
+#: src/app/bot/views.py:223 src/app/db/service.py:1548
 msgid "closes"
 msgstr "截止"
 
-#: src/app/bot/messages.py:34 src/app/db/service.py:1548
+#: src/app/bot/messages.py:34 src/app/db/service.py:1549
 msgid "results announced"
 msgstr "结果公布"
 
 #: src/app/bot/messages.py:35 src/app/bot/views.py:228
-#: src/app/db/service.py:1549 src/app/web/templates/setup.html:155
+#: src/app/db/service.py:1550 src/app/web/templates/setup.html:155
 msgid "payment due"
 msgstr "付款截止"
 
@@ -64,7 +64,7 @@ msgid "{unit} ago"
 msgstr "{unit}前"
 
 #: src/app/bot/messages.py:76 src/app/bot/messages.py:184
-#: src/app/db/service.py:1550 src/app/web/templates/tags.html:370
+#: src/app/db/service.py:1551 src/app/web/templates/tags.html:370
 msgid "event"
 msgstr "活动"
 
@@ -433,134 +433,134 @@ msgstr "延后"
 msgid "same-day"
 msgstr "当天"
 
-#: src/app/db/service.py:1554
+#: src/app/db/service.py:1555
 msgid "Lottery round"
 msgstr "抽选轮次"
 
-#: src/app/db/service.py:1555
+#: src/app/db/service.py:1556
 msgid "Eligibility item sale"
 msgstr "抽选资格商品发售"
 
-#: src/app/db/service.py:1556
+#: src/app/db/service.py:1557
 msgid "Stream ticket sale"
 msgstr "直播票发售"
 
-#: src/app/db/service.py:1557
+#: src/app/db/service.py:1558
 msgid "General sale"
 msgstr "一般发售"
 
-#: src/app/db/service.py:1558
+#: src/app/db/service.py:1559
 msgid "Result announcement"
 msgstr "结果公布"
 
-#: src/app/db/service.py:1559
+#: src/app/db/service.py:1560
 msgid "Payment deadline"
 msgstr "付款截止"
 
-#: src/app/db/service.py:1560
+#: src/app/db/service.py:1561
 msgid "First come, first served"
 msgstr "先到先得"
 
-#: src/app/db/service.py:1561
+#: src/app/db/service.py:1562
 msgid "Overseas tour package"
 msgstr "海外观演旅行套餐"
 
-#: src/app/db/service.py:1562
+#: src/app/db/service.py:1563
 msgid "Upgrade round"
 msgstr "升级抽选"
 
-#: src/app/db/service.py:1563
+#: src/app/db/service.py:1564
 msgid "Other"
 msgstr "其他"
 
-#: src/app/db/service.py:2530 src/app/db/service.py:2676
-#: src/app/db/service.py:5415 src/app/web/templates/_board.html:73
+#: src/app/db/service.py:2531 src/app/db/service.py:2677
+#: src/app/db/service.py:5416 src/app/web/templates/_board.html:73
 #: src/app/web/templates/discover.html:79 src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "多个"
 
-#: src/app/db/service.py:3689
+#: src/app/db/service.py:3690
 #, python-brace-format
 msgid "{n}d"
 msgstr "{n}天"
 
-#: src/app/db/service.py:3691
+#: src/app/db/service.py:3692
 #, python-brace-format
 msgid "{n}h"
 msgstr "{n}小时"
 
-#: src/app/db/service.py:3692
+#: src/app/db/service.py:3693
 #, python-brace-format
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/service.py:3789
+#: src/app/db/service.py:3790
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "升级中签 — 最迟于 {day} 付款"
 
-#: src/app/db/service.py:3790
+#: src/app/db/service.py:3791
 msgid "Upgrade won — payment due"
 msgstr "升级中签 — 付款截止"
 
-#: src/app/db/service.py:3809
+#: src/app/db/service.py:3810
 msgid "Upgrade · Applied"
 msgstr "升级 · 已申请"
 
-#: src/app/db/service.py:3812
+#: src/app/db/service.py:3813
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "升级 · {n}后截止"
 
-#: src/app/db/service.py:3815
+#: src/app/db/service.py:3816
 msgid "Upgrade · Open now"
 msgstr "升级 · 申请开放中"
 
-#: src/app/db/service.py:3821 src/app/web/templates/_board.html:23
+#: src/app/db/service.py:3822 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:35
 #: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "已获票"
 
-#: src/app/db/service.py:3832
+#: src/app/db/service.py:3833
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "中签 — 最迟于 {day} 付款"
 
-#: src/app/db/service.py:3833
+#: src/app/db/service.py:3834
 msgid "Won — payment due"
 msgstr "中签 — 付款截止"
 
-#: src/app/db/service.py:3842
+#: src/app/db/service.py:3843
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind} · 已申请"
 
-#: src/app/db/service.py:3862
+#: src/app/db/service.py:3863
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind} · {n}后截止"
 
-#: src/app/db/service.py:3867
+#: src/app/db/service.py:3868
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind} · 开放中"
 
-#: src/app/db/service.py:3873
+#: src/app/db/service.py:3874
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind} · {n}后开放"
 
-#: src/app/db/service.py:3880
+#: src/app/db/service.py:3881
 msgid "All rounds closed"
 msgstr "所有轮次均已截止"
 
-#: src/app/db/service.py:5034
+#: src/app/db/service.py:5035
 msgid "From dekimasen.app"
 msgstr "来自 dekimasen.app"
 
-#: src/app/db/service.py:5667 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:5668 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -570,7 +570,7 @@ msgstr "来自 dekimasen.app"
 msgid "Title"
 msgstr "标题"
 
-#: src/app/db/service.py:5671 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:5672 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -583,17 +583,17 @@ msgstr "标题"
 msgid "Notes"
 msgstr "备注"
 
-#: src/app/db/service.py:5677
+#: src/app/db/service.py:5678
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "场次 {n} 名称"
 
-#: src/app/db/service.py:5682
+#: src/app/db/service.py:5683
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "轮次 {n} 名称"
 
-#: src/app/db/service.py:5691 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:5692 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -608,7 +608,7 @@ msgstr "轮次 {n} 名称"
 msgid "Name"
 msgstr "名称"
 
-#: src/app/db/service.py:5696
+#: src/app/db/service.py:5697
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -616,29 +616,68 @@ msgstr "名称"
 msgid "City"
 msgstr "城市"
 
-#: src/app/web/app.py:107
+#: src/app/web/app.py:117
 #, python-format
 msgid "%(count)s lost"
 msgid_plural "%(count)s lost"
 msgstr[0] "落选 %(count)s 个"
 
-#: src/app/web/app.py:109
+#: src/app/web/app.py:119
 #, python-format
 msgid "%(count)s skipped"
 msgid_plural "%(count)s skipped"
 msgstr[0] "跳过 %(count)s 个"
 
-#: src/app/web/app.py:111
+#: src/app/web/app.py:121
 #, python-format
 msgid "%(count)s covered"
 msgid_plural "%(count)s covered"
 msgstr[0] "已获票 %(count)s 个"
 
-#: src/app/web/app.py:113
+#: src/app/web/app.py:123
 #, python-format
 msgid "%(count)s upcoming"
 msgid_plural "%(count)s upcoming"
 msgstr[0] "尚未开放 %(count)s 个"
+
+#: src/app/web/app.py:234
+msgid "Page not found"
+msgstr "找不到页面"
+
+#: src/app/web/app.py:235
+msgid "That page doesn't exist. The link may be out of date."
+msgstr "该页面不存在，链接可能已过期。"
+
+#: src/app/web/app.py:237
+msgid "No access"
+msgstr "没有访问权限"
+
+#: src/app/web/app.py:243
+#, python-format
+msgid "You're signed in as %(name)s, which doesn't have access to that page."
+msgstr "你当前以 %(name)s 登录，该账户没有访问那个页面的权限。"
+
+#: src/app/web/app.py:247
+msgid "That page needs an account with more access than yours."
+msgstr "该页面需要权限更高的账户。"
+
+#: src/app/web/app.py:250
+msgid "That didn't go through"
+msgstr "提交未成功"
+
+#: src/app/web/app.py:251
+msgid "Nothing was saved. Here's what needs fixing:"
+msgstr "没有保存任何内容。需要修正以下问题："
+
+#: src/app/web/app.py:253
+msgid "Something broke"
+msgstr "出问题了"
+
+#: src/app/web/app.py:255
+msgid ""
+"Something broke on our end, and it's been logged. Nothing you did caused "
+"it."
+msgstr "我们这边出了问题，已经记录下来。这不是你的操作造成的。"
 
 #: src/app/web/routes/discover.py:55 src/app/web/templates/_board.html:20
 #: src/app/web/templates/home.html:123
@@ -1961,6 +2000,14 @@ msgstr "清除筛选"
 msgid "Manage tags"
 msgstr "管理标签"
 
+#: src/app/web/templates/error.html:35
+msgid "Go back and fix it"
+msgstr "返回修改"
+
+#: src/app/web/templates/error.html:37
+msgid "Back to home"
+msgstr "返回首页"
+
 #: src/app/web/templates/home.html:71
 msgid "Sign in to continue to the page you asked for."
 msgstr "登录后即可继续前往你要访问的页面。"
@@ -2764,6 +2811,7 @@ msgid "Keep my account"
 msgstr "保留我的账户"
 
 #: src/app/web/templates/preferences.html:414
+#: src/app/web/templates/preferences.html:441
 msgid "admin only"
 msgstr "仅限管理员"
 
@@ -2799,6 +2847,42 @@ msgstr "Discord 用户 ID"
 #: src/app/web/templates/preferences.html:434
 msgid "Add an editor"
 msgstr "添加编辑者"
+
+#: src/app/web/templates/preferences.html:441
+msgid "Admin tools"
+msgstr "管理工具"
+
+#: src/app/web/templates/preferences.html:442
+msgid ""
+"Operational pages. They are not linked from the site navigation, so this "
+"is where to find them."
+msgstr "运维页面。站点导航中没有它们的链接，所以从这里进入。"
+
+#: src/app/web/templates/preferences.html:444
+msgid "Deliveries"
+msgstr "发送记录"
+
+#: src/app/web/templates/preferences.html:445
+msgid "Every DM the scheduler attempted, and recent failures."
+msgstr "调度器尝试发送的每一条 DM，以及最近的失败。"
+
+#: src/app/web/templates/preferences.html:448
+msgid "Broadcast"
+msgstr "群发"
+
+#: src/app/web/templates/preferences.html:449
+msgid "Message a chosen set of users. Held two minutes so it can be cancelled."
+msgstr "向选定的用户发送消息。会保留两分钟，以便取消。"
+
+#: src/app/web/templates/preferences.html:456
+msgid "Rehearsal"
+msgstr "彩排"
+
+#: src/app/web/templates/preferences.html:457
+msgid ""
+"Local harness: seed a concert, pull its reminders forward, send any DM "
+"shape."
+msgstr "本地工具：生成一场演出，把提醒提前，并发送任意形态的 DM。"
 
 #: src/app/web/templates/privacy.html:5 src/app/web/templates/terms.html:5
 msgid ""

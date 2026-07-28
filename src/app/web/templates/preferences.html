@@ -435,6 +435,29 @@
       </form>
     </div>
   </section>
+
+  {# ── Admin tools (admin only) ──────────────────────────────────────── #}
+  <section class="psec" id="p-tools">
+    <h3>{{ _("Admin tools") }} <span class="pill p-quiet">{{ _("admin only") }}</span></h3>
+    <p class="blurb">{% trans %}Operational pages. They are not linked from the site navigation, so this is where to find them.{% endtrans %}</p>
+    <div class="subrow two">
+      <span class="nm3"><a href="/admin/deliveries">{{ _("Deliveries") }}</a></span>
+      <span class="sw"><span class="clock">{{ _("Every DM the scheduler attempted, and recent failures.") }}</span></span>
+    </div>
+    <div class="subrow two">
+      <span class="nm3"><a href="/admin/broadcast">{{ _("Broadcast") }}</a></span>
+      <span class="sw"><span class="clock">{{ _("Message a chosen set of users. Held two minutes so it can be cancelled.") }}</span></span>
+    </div>
+    {# Only when the harness is actually registered -- offering a link that
+       404s is worse than offering none, and the flag is what decides whether
+       the route exists at all. #}
+    {% if rehearsal_enabled %}
+    <div class="subrow two">
+      <span class="nm3"><a href="/admin/rehearsal">{{ _("Rehearsal") }}</a></span>
+      <span class="sw"><span class="clock">{{ _("Local harness: seed a concert, pull its reminders forward, send any DM shape.") }}</span></span>
+    </div>
+    {% endif %}
+  </section>
   {% endif %}
 
   </div>

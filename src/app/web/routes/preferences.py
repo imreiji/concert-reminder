@@ -164,6 +164,7 @@ async def preferences(
          "tz": tz, "tz_auto": tz_auto, "tz_preview": tz_preview,
          "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
          "anchors": list(Anchor), "editors": editors,
+         "rehearsal_enabled": settings.rehearsal_enabled,
          "has_calendar_feed": has_calendar_feed, "tag_counts": tag_counts,
          "tracked_count": tracked_count, "upcoming_count": upcoming_count,
          "pruned_concerts": pruned_concerts,
