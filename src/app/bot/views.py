@@ -37,6 +37,7 @@ import discord
 
 from app.db.models import ConcertDay, Round, User
 from app.db.service import (
+    all_legs_cancelled,
     apply_default_preset,
     has_day_results,
     is_round_cancelled,
@@ -187,6 +188,14 @@ class ShowDeadlinesButton(
             loc = get_locale()
 
             cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
+            # This list LABELS cancelled rounds rather than hiding them -- the
+            # reader asked about this one concert, and the DM twin of the
+            # concert page stays reachable the same way. But the label has to
+            # be true: on a concert whose every leg is cancelled,
+            # `is_round_cancelled` still calls a General round live (it names
+            # no leg), so it would print unmarked beside day lines that all
+            # read (cancelled). The concert-level fact marks every round.
+            concert_cancelled = all_legs_cancelled(concert.days)
             cancelled_suffix = f" ({_('cancelled')})"
             lines = []
             for r in concert.rounds:
@@ -201,7 +210,9 @@ class ShowDeadlinesButton(
                     bits.append(
                         f"{_('payment due')} {fmt_dual(r.payment_deadline_at_utc, tz, loc)}"
                     )
-                suffix = cancelled_suffix if is_round_cancelled(r, cancelled_day_ids) else ""
+                suffix = cancelled_suffix if (
+                    concert_cancelled or is_round_cancelled(r, cancelled_day_ids)
+                ) else ""
                 lines.append(f"**{loc_field(r, 'label', loc)}**{suffix} — {' / '.join(bits)}")
             for d in concert.days:
                 suffix = cancelled_suffix if d.cancelled else ""

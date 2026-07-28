@@ -116,6 +116,44 @@ async def test_show_deadlines_localizes_round_and_leg_labels(db):
     )
 
 
+async def test_show_deadlines_marks_every_round_on_a_dead_concert(db):
+    """The DM twin of the concert page: the list SHOWS cancelled rounds rather
+    than hiding them (the reader asked about this one concert), but on a
+    concert whose every leg is cancelled the suffix has to reach all of them.
+    `is_round_cancelled` alone leaves a General round -- tied to no leg --
+    unmarked while every day line beside it reads (cancelled), which is the
+    same lie at DM scale."""
+    async with db() as s:
+        s.add(User(discord_id=42, username="reiji", language="en"))
+        concert = Concert(title="T", event_id="t-dead", created_by=42)
+        s.add(concert)
+        await s.flush()
+        day = ConcertDay(
+            concert_id=concert.id, label="Day 1",
+            starts_at_utc=dt(6, 20), cancelled=True,
+        )
+        s.add(day)
+        await s.flush()
+        s.add(Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="Day 1 presale",
+            closes_at_utc=dt(6, 10), applies_to=[day.id],
+        ))
+        s.add(Round(
+            concert_id=concert.id, kind=RoundKind.GENERAL_SALE, label="General sale",
+            closes_at_utc=dt(6, 15),
+        ))
+        await s.commit()
+        cid = concert.id
+
+    button = views_module.ShowDeadlinesButton(cid)
+    interaction = FakeInteraction(42)
+    await button.callback(interaction)
+    lines = interaction.response.sent["args"][0].splitlines()
+
+    assert len(lines) == 3, "nothing is hidden -- both rounds and the leg still list"
+    assert all("(cancelled)" in line for line in lines), lines
+
+
 # ── Progressive per-day result capture (task 8) ──────────────────────────
 #
 # Every one of these presses a button against a REAL round in the DB and then

@@ -58,15 +58,22 @@ async def session():
     await engine.dispose()
 
 
-async def seed(s, *, cancel_leg_b: bool = False):
+async def seed(s, *, cancel_leg_a: bool = False, cancel_leg_b: bool = False):
     """Two legs and three rounds, one per applies_to shape: leg A only, both
-    legs, and neither leg (the all-legs convention)."""
+    legs, and neither leg (the all-legs convention).
+
+    Cancelling BOTH legs is the dead-concert case: the show is off entirely,
+    which `all_legs_cancelled` answers and `is_round_cancelled` cannot (the
+    General round names no leg, so it survives the per-round predicate)."""
     await ensure_user(s, 42, "reiji")
     await ensure_user(s, 99, "someone-else")
     concert = Concert(title="Two-Leg Tour", event_id="two-leg-tour", created_by=42)
     s.add(concert)
     await s.flush()
-    leg_a = ConcertDay(concert_id=concert.id, label="Leg A", starts_at_utc=dt(8, 1, 9))
+    leg_a = ConcertDay(
+        concert_id=concert.id, label="Leg A", starts_at_utc=dt(8, 1, 9),
+        cancelled=cancel_leg_a,
+    )
     leg_b = ConcertDay(
         concert_id=concert.id, label="Leg B", starts_at_utc=dt(8, 2, 9),
         cancelled=cancel_leg_b,
@@ -309,6 +316,50 @@ async def test_a_covered_round_is_quiet_for_that_viewer_only(session):
 
     legs, _fallback = await concert_round_rows(session, 99, concert, now=NOW)
     assert row_for(legs, leg_a.id, "A-only").covered is False
+
+
+# ── a dead concert (every leg cancelled) ─────────────────────────────────
+
+
+async def test_a_dead_concert_leads_with_nothing(session):
+    """Every leg is cancelled, so the show is off -- and the reader is left
+    APPLIED on a round, which is exactly the standing that makes `_wants_you`
+    say yes. The page must still lead with nothing: naming a "next moment" on
+    an event that is not happening is the lie this branch removes."""
+    concert, _leg_a, _leg_b, _r_a, r_both, _r_none = await seed(
+        session, cancel_leg_a=True, cancel_leg_b=True
+    )
+    await record_round_outcome(session, 42, r_both.id, LotteryOutcome.APPLIED)
+    await session.commit()
+
+    legs, fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    rows = [row for leg in legs for row in leg.rounds] + fallback
+    assert rows, "the rows themselves must survive -- only the lead goes"
+    assert concert_next_moment(rows, now=NOW) is None
+
+
+async def test_no_round_offers_capture_on_a_dead_concert(session):
+    """Both gates shut on every round, the General round included. It is tied
+    to no leg, so `is_round_cancelled` still calls it live; whether the concert
+    as a whole is off is the concert-level fact that closes it here."""
+    concert, *_ = await seed(session, cancel_leg_a=True, cancel_leg_b=True)
+
+    legs, fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    rows = [row for leg in legs for row in leg.rounds] + fallback
+    assert {row.round_.label for row in rows} == {"A-only", "Both-legs", "General"}
+    assert all(not r.can_capture and not r.can_report_result for r in rows)
+
+
+async def test_a_partly_cancelled_concert_still_leads_and_captures(session):
+    """One leg down is not the show being off. The surviving leg's rounds keep
+    their buttons and the page still leads with the nearest moment -- the same
+    line `all_legs_cancelled` draws everywhere else."""
+    concert, leg_a, _leg_b, *_ = await seed(session, cancel_leg_b=True)
+
+    legs, fallback = await concert_round_rows(session, 42, concert, now=NOW)
+    rows = [row for leg in legs for row in leg.rounds] + fallback
+    assert concert_next_moment(rows, now=NOW) is not None
+    assert row_for(legs, leg_a.id, "General").can_capture is True
 
 
 # ── per-leg standing ─────────────────────────────────────────────────────

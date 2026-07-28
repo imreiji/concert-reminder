@@ -835,6 +835,39 @@ async def test_a_cancelled_leg_is_dimmed_but_keeps_its_own_date_and_rounds(clien
     assert "Osaka presale" in body  # its rounds are not hidden with it
 
 
+async def test_the_concert_page_says_the_event_is_cancelled(client):
+    """Every leg cancelled: the show is off, and the page says so ONCE, in the
+    "needs attention" callout shape (.banner.dgr), before the round list. The
+    legs each carry their own Cancelled badge already, but a reader scanning
+    three badged legs is being asked to add them up -- the concert-level fact
+    is not the sum of the leg-level ones."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31, cancelled=True)
+    await add_round(client.db, cid, "Osaka presale", applies_to=[d1])
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert "banner dgr" in body
+    assert "This event is cancelled." in body
+    # Before the round list, where the reader meets it first.
+    assert body.index("This event is cancelled.") < body.index('id="concert-rounds"')
+
+
+async def test_a_live_concert_page_has_no_cancelled_banner(client):
+    """One leg down is not the show being off. The cancelled leg keeps its own
+    badge; the concert-level banner stays away."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert "This event is cancelled." not in body
+    assert "banner dgr" not in body
+    assert "Cancelled" in body  # the leg badge is untouched
+
+
 async def test_a_round_naming_only_cancelled_legs_sits_under_those_legs(client):
     """The all-legs group is not "everything not leg-specific". A round that
     names one cancelled leg is a fact about THAT leg, and belongs under it."""

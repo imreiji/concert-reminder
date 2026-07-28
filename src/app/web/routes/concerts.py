@@ -49,6 +49,7 @@ from app.db.models import (
 from app.db.service import (
     RoundRow,
     _qualifiers_by_upgrade_round,
+    all_legs_cancelled,
     attach_tag,
     concert_audit_log,
     concert_next_moment,
@@ -851,6 +852,13 @@ async def concert_rounds_context(
     return {
         "concert": concert,
         "now": now,
+        # The show is off entirely -- what the page's cancelled banner renders
+        # on. Asked of the legs already loaded above, through the one predicate
+        # (`all_legs_cancelled`), never re-stated as its own rule here. It is a
+        # PAGE-level fact rather than a row-level one on purpose: a concert
+        # whose legs are all cancelled and which has no rounds at all still has
+        # to say so, and there would be no row to carry it.
+        "concert_cancelled": all_legs_cancelled([g.day for g in leg_groups]),
         "leg_groups": leg_groups,
         "all_legs_rows": all_legs_rows,
         "day_venue_tags": {

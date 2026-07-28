@@ -2229,7 +2229,7 @@ def _eligible_upgrade_ids(
 
 def capture_gates(
     round_: Round | None, outcome: LotteryOutcome | None, now: datetime,
-    qualifies: bool = True, covered: bool = False,
+    qualifies: bool = True, covered: bool = False, cancelled: bool = False,
 ) -> tuple[bool, bool]:
     """The two gates on WHICH capture buttons a row may offer, as ONE
     definition shared by every surface that offers them (Home's "Coming up"
@@ -2253,8 +2253,18 @@ def capture_gates(
     secured through some OTHER round (`covered_round_ids`). Both gates shut:
     they are going to every leg it sells, so "I have applied" and "I won" have
     no answer left worth recording. The row itself still renders -- the
-    concert page shows the whole campaign, quietly."""
-    if covered:
+    concert page shows the whole campaign, quietly.
+
+    `cancelled` is True when the CONCERT is off entirely (`all_legs_cancelled`
+    -- every leg it has is cancelled). It shuts both gates for the same reason
+    `covered` does and takes the same shape deliberately: one input, resolved
+    once by the caller, rather than a second rule each surface has to remember.
+    It is a concert-level fact and cannot be re-derived from `round_`: a
+    General round names no leg, so `is_round_cancelled` rightly still calls it
+    live, and it is exactly the round that would otherwise keep offering "I
+    have applied" on a show that is not happening -- an answer
+    `record_round_outcome` would never let the reader take back."""
+    if covered or cancelled:
         return False, False
     can_capture = round_ is not None and _round_has_opened(round_, now) and qualifies
     moment = _result_moment(round_) if round_ is not None else None
@@ -2987,6 +2997,13 @@ class RoundRow:
     # Every leg this round covers is already secured through another round:
     # it renders quietly, with both capture gates shut (see capture_gates).
     covered: bool = False
+    # The whole CONCERT is off -- every leg cancelled (`all_legs_cancelled`).
+    # Carried on the row, resolved once per concert, so the two consumers that
+    # need it (the gates above and `_needs_you`'s veto below) read one input
+    # rather than each asking the predicate again. Deliberately not folded into
+    # `covered`: that word is a fact about this reader's other tickets and the
+    # fold chips say so out loud, while this is a fact about the world.
+    concert_cancelled: bool = False
     # This LEG's resolution for this viewer, or None when they have no
     # standing on it yet.
     leg_result: LegResult | None = None
@@ -3147,6 +3164,10 @@ async def concert_round_rows(
 
     day_ids = {d.id for d in days}
     live_leg_ids = {d.id for d in days if not d.cancelled}
+    # Asked ONCE for the whole concert, then carried on every row: the show
+    # being off shuts each round's capture gates and vetoes the page's "Next
+    # for you" pick, and both must read the same answer.
+    concert_cancelled = all_legs_cancelled(days)
     # Which rounds are being resolved leg by leg -- the switch that turns off
     # the no-rows-means-all fallback (see _leg_result_for).
     rounds_with_day_rows = {rid for rid, _did in day_results}
@@ -3163,7 +3184,8 @@ async def concert_round_rows(
         # round renders like any other.
         upgrade_locked = is_upgrade and user_id is not None and not eligible
         can_capture, can_report_result = capture_gates(
-            r, outcome, now, qualifies=(not is_upgrade) or eligible, covered=covered
+            r, outcome, now, qualifies=(not is_upgrade) or eligible, covered=covered,
+            cancelled=concert_cancelled,
         )
         capture_days, any_day_won = await _day_capture_context(
             session, user_id, r, outcome, now, days, locale
@@ -3173,7 +3195,7 @@ async def concert_round_rows(
             round_=r, outcome=outcome,
             can_capture=can_capture, can_report_result=can_report_result,
             primary_anchor=anchor, primary_at_utc=at_utc,
-            covered=covered,
+            covered=covered, concert_cancelled=concert_cancelled,
             capture_days=capture_days, any_day_won=any_day_won,
             has_day_results=r.id in rounds_with_day_rows,
             upgrade_locked=upgrade_locked,
@@ -3376,15 +3398,21 @@ def _wants_you(
 
 
 def _needs_you(row: RoundRow, now: datetime) -> bool:
-    """`_wants_you` for a concert-page row, plus that page's own veto.
+    """`_wants_you` for a concert-page row, plus that page's own two vetoes.
 
     A covered round wants nothing whatever its outcome says: every leg it
     sells is already secured elsewhere, and leading the urgency panel with a
     round that offers no buttons is a panel you cannot act on. It is not part
     of the shared rule because Home never meets the case -- `my_deadline_rows`
     drops covered rows outright, so no DeadlineRow can carry one.
+
+    A round on a CANCELLED concert wants nothing either, and for the stronger
+    reason: the show is not happening. The gates being shut is not enough on
+    its own -- a reader left APPLIED or WON satisfies `_wants_you` on standing
+    alone -- and Home never meets this case either, since `upcoming_deadlines`
+    drops a dead concert at the source (task 1).
     """
-    return not row.covered and _wants_you(
+    return not row.covered and not row.concert_cancelled and _wants_you(
         row.outcome, row.can_capture, row.round_.closes_at_utc, now
     )
 
@@ -3411,6 +3439,9 @@ def concert_next_moment(
     None is a real answer, not a failure: with no standing anywhere and
     nothing open, an empty urgency panel is worse than no panel, so the page
     omits the block entirely rather than rendering a heading over a blank.
+    A concert whose every leg is cancelled always answers None for the same
+    reason -- `_needs_you` vetoes each of its rows -- so this is the existing
+    contract meeting a new case, not a new one.
 
     Rounds are de-duplicated by id, because a round covering some-but-not-all
     legs appears under each of those legs and must not compete with itself.
