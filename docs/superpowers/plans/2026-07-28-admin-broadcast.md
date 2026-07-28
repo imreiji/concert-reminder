@@ -364,7 +364,7 @@ The single riskiest change in this feature: it modifies the query every notifica
 - Consumes: `Notification.send_after_utc` (Task 2).
 - Produces: `due_notifications(session, limit=100, now=None)` — gains an optional `now`, defaulting to `_now()`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_broadcast.py` (imports hoisted to the top block):
 
@@ -417,12 +417,12 @@ async def test_a_held_notification_drains_once_its_moment_passes(db):
         assert len(await due_notifications(s, now=NOW + timedelta(seconds=1))) == 1
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_broadcast.py -v`
 Expected: the two hold tests FAIL (held rows drain immediately); the NULL test passes already.
 
-- [ ] **Step 3: Make the change**
+- [x] **Step 3: Make the change**
 
 Replace `due_notifications` in `src/app/db/service.py`:
 
@@ -455,16 +455,16 @@ async def due_notifications(
 
 Ensure `or_` is imported from `sqlalchemy` in `service.py`.
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_broadcast.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Prove the NULL branch is load-bearing**
+- [x] **Step 5: Prove the NULL branch is load-bearing**
 
 Temporarily change the `where` to use only `Notification.send_after_utc <= now` (dropping the `or_` and the `is_(None)` branch). Run `uv run --isolated pytest tests/test_broadcast.py -v` and confirm `test_a_notification_with_no_hold_still_drains_immediately` FAILS. Restore, re-run, confirm green. Report what you saw — this is the mutation that proves the whole app's outbox is protected.
 
-- [ ] **Step 6: Full gates and commit**
+- [x] **Step 6: Full gates and commit**
 
 The full suite matters here more than anywhere: every notification test in the suite exercises this query.
 
