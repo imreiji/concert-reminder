@@ -247,17 +247,23 @@ reason given there.
 The re-rank that follows moves nothing on merit. #1, the admin catalogue
 export -- still the only entry the owner personally asked for -- is
 untouched and stays #1; everything below it rises by pure removal and is
-renumbered 1-12. Nothing got cheaper either: this batch lived in slug
+renumbered 1-13. Nothing got cheaper either: this batch lived in slug
 generation, one dialog's copy, the tag pipeline and a client-side fold
 listener, and no remaining entry goes near any of them. Two were re-read
 against what shipped and both stand: #2 (minute-level offsets) is unchanged,
-and #5 (the cosmetic `RoundKind` members) is if anything slightly better
+and #6 (the cosmetic `RoundKind` members) is if anything slightly better
 supported, since §C's work threaded another consumer through
 `all_legs_cancelled` without a single kind-specific branch. The batch also
-ADDED one entry -- #6, `generate_event_id` never checking the reserved ids,
-found by Task 1's review while shipping the slug preference directly above
-it -- inserted on impact rather than appended, which pushes the former #6-#11
-down one by position only. One correction of the record belongs here rather
+ADDED two entries, both found by its own reviews and both inserted on impact
+rather than appended: #5, the create and import paths still announcing a
+born-dead concert (the structural twin of the `edit_concert` defect §C
+fixed, found by the final review and RECORDED rather than fixed -- see the
+entry, and deviation 6 of the spec, for why a signature change on the two
+main write paths did not belong at the end of a cleanup branch), and #7,
+`generate_event_id` never checking the reserved ids (found by Task 1's
+review while shipping the slug preference directly above it). Between them
+they push the former #5-#11 down by position only, never on merit. One
+correction of the record belongs here rather
 than in the Shipped entry: item (d) of the old #7, the `preferences.html`
 backslash action, did not exist. It was struck, not fixed -- see below. The
 sign-in-bounce entry's demo-parity/Discover-head pointer was bumped in place
@@ -365,7 +371,48 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 5. Nine of ten `RoundKind` members are purely cosmetic
+### 5. The create and import paths still announce a born-dead concert
+
+Impact: low-medium - effort: small-medium, but on the two riskiest routes
+in the app. Raised: 2026-07-28 (final review of the cleanup batch, which
+shipped the same rule on `edit_concert`).
+
+The 2026-07-28 batch shipped the owner ruling that a tag attached to a
+dead concert -- one whose every leg is cancelled -- notifies nobody and
+applies no preset. It holds on `edit_concert` and on both venue rollups.
+It does NOT hold on the concert-tag half of create and import, and the
+reason is pure ordering: `create_concert_row` (`web/routes/concerts.py`)
+calls `handle_newly_tagged` immediately after flushing the `Concert`,
+before a single `ConcertDay` exists. The predicate correctly reads that
+as a dateless draft and exempts it -- it has to, or every create would
+silence itself -- and notifies. The legs flush a hundred lines later, and
+the venue rollup that runs there suppresses correctly.
+
+So a concert created or imported with its only leg submitted cancelled
+(both routes accept `day_cancelled`) DMs every franchise, group and
+artist follower a 🆕 "Apply here" for a show that is off, while every
+VENUE follower on the SAME request is correctly skipped. There is no
+un-send and no re-announce path: the wrong DM is permanent, and the
+correct one, if the leg is later un-cancelled, never arrives.
+
+Fix is small and mechanical: `create_concert_row` returns its `newly`
+list instead of consuming it, and `create_concert` and `import_commit`
+each call `handle_newly_tagged` after their legs flush -- next to the
+venue rollup that already gets this right, which is also where the
+dateless-draft exemption stops being needed. Deferred rather than folded
+into the batch that found it, on risk: it changes a signature on the
+app's two most important write paths, both of which own atomicity for a
+whole concert, to close a shape that needs an editor to deliberately
+create an already-cancelled concert. Pre-existing rather than new -- every
+path announced dead concerts before that batch -- and recorded as
+deviation 6 of `docs/superpowers/specs/2026-07-28-cleanup-batch-design.md`.
+
+Ranked here: above the code-health entries below because a wrong,
+permanent DM to every follower is user-visible harm rather than tidiness,
+and below #4 because that one pays off on every round label an editor
+types while this needs a rare, deliberate starting state.
+
+### 6. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -388,7 +435,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 6. `generate_event_id` never checks the reserved ids
+### 7. `generate_event_id` never checks the reserved ids
 
 Impact: low - effort: small. Raised: 2026-07-28 (Task 1 review of the
 cleanup batch, while the slug preference above it was being shipped).
@@ -421,7 +468,7 @@ widens the door (a Japanese-titled concert previously slugged to
 needs an exactly-wrong English title to fire; it is filed because when it
 does fire nothing anywhere says so.
 
-### 7. Pin the Python version across dev, CI and the server
+### 8. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -445,7 +492,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 8. PWA / installability
+### 9. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -465,7 +512,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 9. In-app LLM extraction behind the same draft seam
+### 10. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -483,7 +530,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 10. Minor demo-parity cosmetics
+### 11. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -511,7 +558,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 11. Discover sort in the content head, plus the catalogue-count note
+### 12. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -537,7 +584,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 12. Name the destination on the sign-in bounce
+### 13. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -553,7 +600,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#10) and the Discover head (#11) because
+Ranked below the demo-parity batch (#11) and the Discover head (#12) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 

@@ -140,9 +140,10 @@ Four leftovers batched so they stop being rediscovered:
 
 ## Implementation deviations (recorded)
 
-Four places where the build did not do what the text above says, and one
-where it did more. None changes a ruling; all are here so the spec reads
-as what shipped rather than as what was intended.
+Four places where the build did not do what the text above says, one
+where it did more, and one where §C's rule turned out NOT to be universal
+and was recorded rather than finished. None changes a ruling; all are
+here so the spec reads as what shipped rather than as what was intended.
 
 1. **§E item 4 was a PHANTOM and is struck, not fixed.** The WISHLIST
    entry quoted `action="\presets\{{ p.id }}\items\..."` in
@@ -200,3 +201,38 @@ as what shipped rather than as what was intended.
    B (finds nothing, B's folds shut). htmx hands the same detail object
    to both events, so the keys hang off a `WeakMap` on its `xhr` instead.
    Same mechanism, per-request scope.
+
+6. **§C's rule is NOT universal: it holds on edit and on both venue
+   rollups, and does NOT hold on the create/import concert-tag path.**
+   Found by the final review of this branch, after the four tasks were
+   done. §C reads as though "a tag attached to a dead concert notifies
+   nobody" now holds everywhere; it does not. `create_concert_row`
+   (`web/routes/concerts.py`) calls `handle_newly_tagged` immediately
+   after flushing the `Concert`, which is BEFORE any `ConcertDay` exists,
+   so the predicate sees `days == []` and correctly takes the
+   dateless-draft exemption deviation 3 describes — the exemption that
+   keeps every create path from silencing itself. The ordering is the
+   whole cause: on this path the franchise/group/artist tags attach
+   before the legs the deadness test needs. Both callers then flush their
+   legs and run the venue rollup, where the same predicate DOES suppress.
+   Net effect on a concert created or imported with its only leg
+   submitted `day_cancelled=true` (both routes accept the field):
+   franchise/group/artist followers get a 🆕 "Apply here" DM for a show
+   that is off, while VENUE followers on the SAME request are correctly
+   skipped.
+
+   This is the structural twin of the `edit_concert` defect deviation 4
+   fixed, on the two paths that deviation did not look at. It is
+   PRE-EXISTING — before this branch every path announced dead concerts —
+   so the branch is still a strict improvement, which is why it did not
+   block the merge.
+
+   Recorded, not fixed, by controller ruling: the fix requires
+   `create_concert_row` to return its `newly` list so `create_concert`
+   and `import_commit` can each run `handle_newly_tagged` after their
+   legs flush (next to the venue rollup that already gets this right).
+   That is a signature change on the app's two most important write
+   paths, landing at the end of a cleanup branch, to close a shape that
+   needs an editor to deliberately create an already-cancelled concert.
+   Filed as a WISHLIST Proposed entry with that fix shape, so the next
+   reader does not rediscover it.
