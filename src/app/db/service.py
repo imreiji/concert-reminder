@@ -1071,18 +1071,30 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
     # user's own RoundOutcome state is filtered the same way (see
     # _apply_outcome_suppression) -- the planner stays equally ignorant
     # of lottery outcomes.
+    # ...and a concert whose every leg is cancelled contributes NO live rounds
+    # at all, whatever any individual round's applies_to says. is_round_cancelled
+    # deliberately exempts a General round (empty applies_to) because it is tied
+    # to no leg, which is right while one leg still stands and wrong once the
+    # whole show is off -- that is a concert-level fact the per-round predicate
+    # cannot see, so it is asked here (all_legs_cancelled) instead of widening it.
+    # Same mechanism as everything else in this block: fewer candidates, and the
+    # "no longer planned -> delete" pass below clears the queue. No second
+    # deletion path -- invariant 2's re-planning safety depends on that one pass.
     if rule.round_id is not None:
         round_ = await session.get(Round, rule.round_id)
         if round_ is None:
             live_rounds: list[Round] = []
         else:
-            cancelled_day_ids = set((await session.execute(
-                select(ConcertDay.id).where(
-                    ConcertDay.concert_id == round_.concert_id,
-                    ConcertDay.cancelled.is_(True),
-                )
+            concert_days = list((await session.execute(
+                select(ConcertDay).where(ConcertDay.concert_id == round_.concert_id)
             )).scalars())
-            live_rounds = [] if is_round_cancelled(round_, cancelled_day_ids) else [round_]
+            cancelled_day_ids = {d.id for d in concert_days if d.cancelled}
+            live_rounds = (
+                []
+                if is_round_cancelled(round_, cancelled_day_ids)
+                or all_legs_cancelled(concert_days)
+                else [round_]
+            )
         days: list[DayInfo] = []
     else:
         rres = await session.execute(select(Round).where(Round.concert_id == rule.concert_id))
@@ -1092,7 +1104,11 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
         all_rounds = list(rres.scalars())
         all_days = list(dres.scalars())
         cancelled_day_ids = {d.id for d in all_days if d.cancelled}
-        live_rounds = [r for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)]
+        live_rounds = (
+            []
+            if all_legs_cancelled(all_days)
+            else [r for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)]
+        )
         days = [_day_info(d) for d in all_days if not d.cancelled]
 
     # A concert-level OPTED_OUT override prunes the whole concert for this
@@ -1523,7 +1539,13 @@ async def upcoming_deadlines(
 ) -> list[UpcomingDeadline]:
     """Global (not reminder-rule-scoped, not per-user) chronological
     deadline list for the index page. Reuses is_round_cancelled the same
-    way sync_rule/notify_newly_cancelled_legs already do.
+    way sync_rule/notify_newly_cancelled_legs already do, plus the
+    concert-level all_legs_cancelled rule sync_rule now carries.
+
+    TWO callers share this: Home's "Coming up" (via my_upcoming_deadlines)
+    and /discover's public "Coming up soon" list -- so the dead-concert
+    filtering here is also what keeps that list agreeing with the tile grid
+    above it, which discoverable_concert_criterion has always hidden them from.
 
     `concert_ids` narrows the source rows to those concerts (None = every
     concert). The narrowing happens BEFORE the sort and the limit, which is
@@ -1541,6 +1563,17 @@ async def upcoming_deadlines(
     days = list((await session.execute(day_q)).scalars())
     rounds = list((await session.execute(round_q)).scalars())
     cancelled_day_ids = {d.id for d in days if d.cancelled}
+    # A concert whose every leg is cancelled is off, so nothing on it is still
+    # a question the reader can answer -- drop it wholesale, beside the
+    # per-round is_round_cancelled filtering below. A General round survives
+    # that predicate (it is tied to no leg), which is exactly why this
+    # concert-level pass is needed and why it does not belong inside it.
+    days_by_concert: dict[int, list[ConcertDay]] = {}
+    for d in days:
+        days_by_concert.setdefault(d.concert_id, []).append(d)
+    dead_concert_ids = {
+        cid for cid, ds in days_by_concert.items() if all_legs_cancelled(ds)
+    }
     concert_ids = {d.concert_id for d in days} | {r.concert_id for r in rounds}
     concerts = {
         c.id: c for c in
@@ -1565,7 +1598,7 @@ async def upcoming_deadlines(
         ))
 
     for r in rounds:
-        if is_round_cancelled(r, cancelled_day_ids):
+        if r.concert_id in dead_concert_ids or is_round_cancelled(r, cancelled_day_ids):
             continue
         concert = concerts.get(r.concert_id)
         if concert is None:
@@ -3350,6 +3383,27 @@ def discoverable_concert_criterion():
         .correlate(Concert)
     )
     return ~has_any_day | has_live_day
+
+
+def all_legs_cancelled(days: Sequence[ConcertDay]) -> bool:
+    """True when the concert HAS legs and every one is cancelled.
+
+    The Python twin of `discoverable_concert_criterion` above -- the same
+    question ("is this show still happening at all?") asked of days the
+    caller already holds, so the personal surfaces can ask it without a
+    query. `~has_any_day | has_live_day` inverted: a concert is dead when it
+    has days AND none of them is live. A dateless draft has no legs to
+    cancel, so it is not dead -- the same exemption the SQL half makes.
+
+    The two forms are pinned to each other by
+    `tests/test_discover.py::test_the_predicate_agrees_with_the_discover_criterion`;
+    change either and that test is what tells you the halves have drifted.
+
+    This is NOT `is_round_cancelled`'s job and must never be folded into it:
+    that predicate answers a per-round question (are all of THIS round's legs
+    gone?) and a General round, tied to no leg, is rightly exempt. Whether the
+    concert as a whole is off is a concert-level fact it cannot see."""
+    return bool(days) and all(d.cancelled for d in days)
 
 
 async def discoverable_concert_count(session: AsyncSession) -> int:

@@ -555,6 +555,34 @@ async def test_coming_up_drops_a_round_the_viewer_already_holds_a_ticket_for(cli
     assert "General sale" not in rows
 
 
+async def test_a_dead_concert_has_no_coming_up_rows(client):
+    """Every leg cancelled means the show is not happening, so nothing about
+    it is a question the reader can still answer. A General round survives
+    `is_round_cancelled` (it is tied to no leg), which is exactly why Coming
+    up needs the concert-level rule as well -- otherwise the row sits there
+    offering an APPLIED press `record_round_outcome` will never let the
+    reader take back."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        alive = await seed.concert("alive", title="Alive concert")
+        await seed.round(alive, "Live round", closes=now + timedelta(days=3))
+        dead = await seed.concert("dead", title="Dead concert")
+        await seed.round(dead, "General sale", closes=now + timedelta(days=2))
+        for d in (await seed.s.execute(
+            select(ConcertDay).where(ConcertDay.concert_id == dead.id)
+        )).scalars():
+            d.cancelled = True
+
+    await seeded(client.db, build)
+    login(client)
+
+    rows = client.get("/").text.split('id="deadline-rows"', 1)[1]
+    assert "Live round" in rows       # the control
+    assert "Dead concert" not in rows
+    assert "General sale" not in rows
+
+
 # ── "Up next": the header must not claim a moment the body contradicts ────
 
 

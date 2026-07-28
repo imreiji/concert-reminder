@@ -400,6 +400,78 @@ async def test_sync_round_specific_rule_on_cancelled_round_clears_it(session):
     assert await queue_rows(session) == []
 
 
+# ── A fully cancelled concert plans nothing ──────────────────────────────
+
+
+async def test_cancelling_the_last_live_leg_clears_a_general_rounds_reminders(session):
+    """A General round is tied to no leg, so `is_round_cancelled` can never
+    retire it -- correctly, since one dead leg out of several says nothing
+    about it. But once EVERY leg is cancelled the concert itself is off, and
+    a queued "apply now" DM about a show that is not happening is the worst
+    version of this bug. The concert-level rule contributes no live rounds,
+    and the existing "no longer planned -> delete" pass clears the queue."""
+    concert, leg_a, leg_b, _, _, round_general = await seed_two_legs(session)
+    rule = ReminderRule(user_id=42, concert_id=concert.id, anchor=Anchor.CLOSES, offset_days=0)
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert (round_general.id, None) in {(r.round_id, r.day_id) for r in await queue_rows(session)}
+
+    leg_a.cancelled = True
+    leg_b.cancelled = True
+    await session.flush()
+    await sync_concert(session, concert.id, NOW)
+    assert await queue_rows(session) == []
+
+
+async def test_cancelling_the_last_live_leg_clears_a_round_scoped_rule(session):
+    """The same rule through sync_rule's OTHER scope: a rule pinned to the
+    General round itself, where the concert is reachable only through
+    round_.concert_id."""
+    concert, leg_a, leg_b, _, _, round_general = await seed_two_legs(session)
+    rule = ReminderRule(
+        user_id=42, round_id=round_general.id, anchor=Anchor.CLOSES, offset_days=0
+    )
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert len(await queue_rows(session)) == 1
+
+    leg_a.cancelled = True
+    leg_b.cancelled = True
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert await queue_rows(session) == []
+
+
+async def test_a_concert_with_one_live_leg_left_keeps_its_reminders(session):
+    """The every-leg rule must not over-fire: one cancelled leg out of two
+    leaves the concert alive, so the General round keeps reminding."""
+    concert, leg_a, _, _, round_both, round_general = await seed_two_legs(session)
+    rule = ReminderRule(user_id=42, concert_id=concert.id, anchor=Anchor.CLOSES, offset_days=0)
+    session.add(rule)
+    await session.flush()
+
+    leg_a.cancelled = True
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    after = {(r.round_id, r.day_id) for r in await queue_rows(session)}
+    assert (round_general.id, None) in after
+    assert (round_both.id, None) in after
+
+
+async def test_a_dateless_draft_still_plans(session):
+    """"No legs at all" is not "every leg cancelled" -- a fresh draft with
+    rounds but no dates yet keeps planning, exactly as
+    discoverable_concert_criterion keeps showing it."""
+    _, _, rule = await seed(session)  # one round, one day
+    day = (await session.execute(select(ConcertDay))).scalars().one()
+    await session.delete(day)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert len(await queue_rows(session)) == 1
+
+
 # ── Notification on cancel + reinstate ───────────────────────────────────
 
 
