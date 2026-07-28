@@ -141,20 +141,37 @@ class ReinstateRemindersButton(
         return cls(int(match["cid"]))
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        from app.db.models import Concert
+
         async with SessionMaker() as session:
             n = await reinstate_user_rules(session, interaction.user.id, self.concert_id)
             await _apply_locale(session, interaction.user.id)
+            # `n` counts RULES re-synced, not reminders re-armed -- the rules
+            # were never deleted, only their queue rows. On a concert whose
+            # every leg is cancelled the planner drops every round, so n > 0
+            # while the number of reminders that can ever fire is zero, and the
+            # count reply would promise notifications that cannot come. Same
+            # concert-level fact ShowDeadlinesButton asks below, asked for the
+            # same reason: is_round_cancelled cannot see it.
+            concert = await session.get(Concert, self.concert_id)
+            dead = False
+            if concert is not None:
+                await session.refresh(concert, ["days"])
+                dead = all_legs_cancelled(concert.days)
             await session.commit()
-        msg = (
-            ngettext(
+        if dead:
+            msg = _("This event is cancelled, so there are no reminders to turn back on. "
+                    "Your settings are still saved — if it comes back, they'll work again.")
+        elif n:
+            msg = ngettext(
                 "Turned {n} reminder back on. You'll be notified again for any "
                 "active ones using your existing settings.",
                 "Turned {n} reminders back on. You'll be notified again for any "
                 "active ones using your existing settings.",
                 n,
             ).format(n=n)
-            if n else _("You had no reminders set up on this event.")
-        )
+        else:
+            msg = _("You had no reminders set up on this event.")
         await interaction.response.send_message(msg)
 
 

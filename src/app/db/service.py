@@ -4939,6 +4939,13 @@ class LegCancelledContext:
     # getattr(ctx, "user_language", "en") and sets the locale before composing
     # the embed, so the leg-cancel prose localizes (mirrors NoticeContext).
     user_language: str = "en"
+    # Whether the WHOLE show is off (all_legs_cancelled), not just the leg that
+    # triggered the notice. The embed's prose differs: one leg of a tour going
+    # down is "a performance was cancelled", but a dead concert is the only
+    # channel telling this reader that EVERY reminder here is gone -- a payment
+    # reminder on a won ticket included. A concert-level fact, so it is resolved
+    # here rather than re-derived in the bot layer.
+    concert_cancelled: bool = False
 
 
 async def leg_cancelled_context(
@@ -4949,11 +4956,15 @@ async def leg_cancelled_context(
         return None
     user = await session.get(User, user_id) if user_id else None
     locale = user.language if user else "en"
+    days = list((await session.execute(
+        select(ConcertDay).where(ConcertDay.concert_id == concert_id)
+    )).scalars())
     return LegCancelledContext(
         concert_id=concert.id,
         event_id=concert.event_id,
         title=loc_field(concert, "title", locale),
         user_language=locale,
+        concert_cancelled=all_legs_cancelled(days),
     )
 
 

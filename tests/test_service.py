@@ -619,6 +619,35 @@ async def test_reinstate_user_rules_resyncs_when_uncancelled(session):
     assert len(await queue_rows(session)) == 1  # re-armed
 
 
+async def test_reinstate_user_rules_rearms_a_general_round_when_the_show_returns(session):
+    """The other half of the planner's concert-level rule. A General round
+    names no leg, so `is_round_cancelled` never retires it -- it goes silent
+    only because `all_legs_cancelled` makes sync_rule contribute no live rounds
+    at all. That direction is pinned; this is the way back: un-cancel the LAST
+    dead leg and the General round's queue rows must return, or a revived show
+    reminds nobody about the one round that was never leg-tied in the first
+    place."""
+    concert, leg_a, leg_b, _, _, round_general = await seed_two_legs(session)
+    rule = ReminderRule(user_id=42, round_id=round_general.id, anchor=Anchor.CLOSES, offset_days=0)
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert len(await queue_rows(session)) == 1
+
+    leg_a.cancelled = True
+    leg_b.cancelled = True  # the whole show is off
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert await queue_rows(session) == []  # the General round went with it
+
+    leg_b.cancelled = False  # the editor puts one night back
+    await session.flush()
+    n = await reinstate_user_rules(session, 42, concert.id, NOW)
+    assert n == 1
+    (row,) = await queue_rows(session)
+    assert row.round_id == round_general.id
+
+
 async def test_reinstate_user_rules_is_a_noop_while_still_cancelled(session):
     concert, leg_a, leg_b, round_a_only, _, _ = await seed_two_legs(session)
     rule = ReminderRule(user_id=42, round_id=round_a_only.id, anchor=Anchor.CLOSES, offset_days=0)
@@ -656,6 +685,20 @@ async def test_leg_cancelled_context_carries_recipient_language(session):
     assert ctx.user_language == "ja"
     ctx_default = await leg_cancelled_context(session, concert.id)
     assert ctx_default.user_language == "en"
+
+
+async def test_leg_cancelled_context_reports_whole_event_death(session):
+    """The embed says something different when the whole show is off, and that
+    is a concert-level fact (all_legs_cancelled), so the context resolves it
+    rather than making the bot layer re-derive it. One leg down is not it."""
+    concert, leg_a, leg_b, *_ = await seed_two_legs(session)
+    leg_a.cancelled = True
+    await session.flush()
+    assert (await leg_cancelled_context(session, concert.id)).concert_cancelled is False
+
+    leg_b.cancelled = True
+    await session.flush()
+    assert (await leg_cancelled_context(session, concert.id)).concert_cancelled is True
 
 
 # ── Concert edit history ─────────────────────────────────────────────────

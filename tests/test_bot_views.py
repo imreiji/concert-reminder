@@ -16,13 +16,14 @@ from app.db.models import (
     Concert,
     ConcertDay,
     LegOptOut,
+    ReminderRule,
     Round,
     RoundOutcome,
     RoundOutcomeDay,
     User,
 )
 from app.db.service import record_round_day_result, record_round_outcome
-from app.domain.types import LegResult, LotteryOutcome, RoundKind
+from app.domain.types import Anchor, LegResult, LotteryOutcome, RoundKind
 
 
 def dt(month: int, day: int, hour: int = 12) -> datetime:
@@ -152,6 +153,64 @@ async def test_show_deadlines_marks_every_round_on_a_dead_concert(db):
 
     assert len(lines) == 3, "nothing is hidden -- both rounds and the leg still list"
     assert all("(cancelled)" in line for line in lines), lines
+
+
+async def dead_concert_with_a_rule(db, *, dead: bool = True):
+    """A concert with one leg and one General round, a user holding a
+    concert-scoped rule on it, and the leg cancelled (or not). Returns the
+    concert id."""
+    async with db() as s:
+        s.add(User(discord_id=42, username="reiji", language="en"))
+        concert = Concert(title="T", event_id="t-reinstate", created_by=42)
+        s.add(concert)
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=concert.id, label="Day 1", starts_at_utc=dt(6, 20), cancelled=dead,
+        ))
+        s.add(Round(
+            concert_id=concert.id, kind=RoundKind.GENERAL_SALE, label="General sale",
+            closes_at_utc=dt(6, 15),
+        ))
+        s.add(ReminderRule(
+            user_id=42, concert_id=concert.id, anchor=Anchor.CLOSES, offset_days=-3,
+        ))
+        await s.commit()
+        return concert.id
+
+
+async def test_reinstate_on_a_dead_concert_promises_no_reminders(db):
+    """`reinstate_user_rules` returns how many RULES it re-synced -- the rules
+    survive a cancellation untouched, only their queue rows go. So on a concert
+    whose every leg is cancelled it returns n > 0 while the planner arms
+    nothing, and the count reply ("you'll be notified again for any active
+    ones") names notifications that can never arrive. The DM carrying this
+    button now fires for whole-event death, so this is the reply that case
+    gets."""
+    cid = await dead_concert_with_a_rule(db)
+
+    button = views_module.ReinstateRemindersButton(cid)
+    interaction = FakeInteraction(42)
+    await button.callback(interaction)
+    text = interaction.response.sent["args"][0]
+
+    assert "This event is cancelled" in text
+    assert "Turned" not in text, "no reminder was re-armed -- the planner drops every round"
+    assert "You'll be notified again" not in text, (
+        "the notification it promised can never arrive while every leg is off"
+    )
+
+
+async def test_reinstate_on_a_live_concert_still_counts_the_rules(db):
+    """One live leg is the case the count reply was written for -- unchanged."""
+    cid = await dead_concert_with_a_rule(db, dead=False)
+
+    button = views_module.ReinstateRemindersButton(cid)
+    interaction = FakeInteraction(42)
+    await button.callback(interaction)
+    text = interaction.response.sent["args"][0]
+
+    assert "Turned 1 reminder back on" in text
+    assert "This event is cancelled" not in text
 
 
 # ── Progressive per-day result capture (task 8) ──────────────────────────

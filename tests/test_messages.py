@@ -4,12 +4,13 @@ from datetime import UTC, datetime
 
 from app import i18n
 from app.bot.messages import (
+    build_leg_cancelled_message,
     build_new_event_message,
     build_reminder_message,
     format_reminder,
     relative_phrase,
 )
-from app.db.service import DueReminder, NoticeContext
+from app.db.service import DueReminder, LegCancelledContext, NoticeContext
 from app.domain.types import Anchor, LotteryOutcome
 
 
@@ -199,6 +200,31 @@ def test_new_event_message_links_to_event_id_not_internal_pk():
     )
     assert open_button.url.endswith("/concerts/hasunosora-6th")
     assert "/concerts/999" not in open_button.url
+
+
+def test_leg_cancelled_message_names_the_whole_event_when_it_is_dead():
+    """This DM is the only channel telling a reader the show is off entirely.
+    "A performance was cancelled" is true of one leg of a tour and an
+    understatement of a dead concert, where every reminder is gone -- the
+    payment reminder on a won ticket included. It also has to say what
+    survives: the outcome record is never deleted (invariant 8)."""
+    ctx = LegCancelledContext(
+        concert_id=1, event_id="dead-tour", title="Dead Tour", concert_cancelled=True,
+    )
+    embed, _view = build_leg_cancelled_message(ctx)
+    assert "This event is cancelled" in embed.description
+    assert "all your reminders" in embed.description
+    assert "stays on your record" in embed.description
+
+
+def test_leg_cancelled_message_is_unchanged_for_one_leg_of_a_tour():
+    """One leg down while others stand: the original sentence is exactly
+    right, and the reader still has live reminders here."""
+    ctx = LegCancelledContext(concert_id=1, event_id="tour", title="Tour")
+    embed, _view = build_leg_cancelled_message(ctx)
+    assert embed.description == (
+        "A performance you had a reminder for was cancelled, and it's been cleared."
+    )
 
 
 def test_build_reminder_message_shows_apply_buttons_on_closes_with_no_outcome():
