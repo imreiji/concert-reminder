@@ -232,6 +232,22 @@ shipped since).
   the feed itself). The `.ics` route deliberately has NO `require_user` —
   calendar apps poll it directly with no cookies, so the token in the URL
   *is* the credential.
+- `routes/rehearsal.py` — the local rehearsal harness (`/admin/rehearsal`):
+  seed one canonical concert, pull its reminders forward so the real 60s tick
+  delivers them now, and send any DM shape in any language on demand. **Gated,
+  not guarded**: `web/app.py` registers this router only when
+  `settings.rehearsal_enabled` is true, which production never sets, so there
+  the routes do not exist at all — `require_admin` on each one is a second
+  layer for a misconfigured deploy, not the primary guard. Its own module
+  because a router registers whole and `admin.py` serves routes production
+  needs. English-only and NOT wrapped in `_()`, like `/admin/deliveries`. Its
+  shape catalogue (`POST /admin/rehearsal/shape`) sends a DM straight from a
+  web route: the SECOND sanctioned exception to invariant 4, alongside
+  `POST /me/test-dm` and for the same reason (a manual, one-at-a-time
+  diagnostic, not a system-initiated notice) — with the extra claim that this
+  route is absent from production entirely. Don't read either as licence for a
+  third. Operator setup (second Discord app, test server, the redirect URI
+  that bites) is `docs/local-dev-bot.md`.
 - Concert edit history: `db/service.py`'s `snapshot_concert`/
   `record_concert_edit`/`concert_audit_log`, backing the `ConcertAudit`
   table (`db/models.py`). Deliberately lightweight — only the concert's own

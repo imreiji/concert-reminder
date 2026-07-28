@@ -996,19 +996,19 @@ without constructing the state a real delivery needs."
 - Modify: `CLAUDE.md`, `WISHLIST.md`, `.env.example` if one exists
 - Test: none (docs)
 
-- [ ] **Step 1: Write the setup guide**
+- [x] **Step 1: Write the setup guide**
 
 Create `docs/local-dev-bot.md` from the spec's "Environment setup" section: the second Discord application, the private test server, `DEV_GUILD_ID`, **the `http://localhost:8000/auth/callback` redirect URI** (the step that fails Discord-side in a way the app never sees), its own `DISCORD_CLIENT_ID`/`SECRET`, and the second Discord account for the new-user flow. Include the full local `.env` block, `REHEARSAL_ENABLED=true` included, and the prescribed nine-step walk from the spec.
 
-- [ ] **Step 2: CLAUDE.md**
+- [x] **Step 2: CLAUDE.md**
 
 Add a short entry under Layout for `src/app/web/routes/rehearsal.py`: local-only, gated by `rehearsal_enabled`, absent in production, and that its shape catalogue is the second sanctioned exception to invariant 4. Cross-reference `docs/local-dev-bot.md`.
 
-- [ ] **Step 3: WISHLIST**
+- [x] **Step 3: WISHLIST**
 
 Move the rehearsal-harness entry to Shipped, dated 2026-07-28, recording that it closes the three-part arc and that it was retargeted from production to local mid-design — which removed a schema column, three query filters and a tag convention. Then the full revision pass and its narrative paragraph, in the house voice.
 
-- [ ] **Step 4: Full gates and commit**
+- [x] **Step 4: Full gates and commit**
 
 ```bash
 git add docs/local-dev-bot.md CLAUDE.md WISHLIST.md

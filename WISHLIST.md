@@ -342,6 +342,49 @@ than bumped: B's account of `UNREPORTED_NOTE_KINDS` listing `admin_broadcast`
 up front described a decision C then reversed, and leaving it would have made
 this file contradict the code.
 
+The fourth 2026-07-28 pass ships the last of the three sub-projects the owner
+asked for in one session: **A**, the local rehearsal harness, filed at #2 and
+built the day after C. It is the only one of the three with no user-facing case
+at all, and the arc it closes began as "let me test the whole flow on prod" --
+B answered detection, C answered remedy, and A is the piece that means neither
+of them has to be rehearsed on live users. Its own spec had already talked
+itself out of the original premise: the first draft designed a
+`Concert.rehearsal` column, three global query filters and a rehearsal-only tag
+convention, an apparatus whose whole purpose was to make a fake concert
+harmless inside a shared production catalogue, and the rewrite deleted every
+one of them for a single config flag once it noticed a second Discord
+application closes the gap for free.
+
+The re-rank moves nothing on merit, and entries are renumbered 1-12 by TWO
+removals rather than one. The second is a bookkeeping debt this pass found
+rather than a feature that shipped: the Python-pinning entry has been done
+since 2026-07-22. `.python-version` is in the repo at 3.14, `uv sync` honours
+it in dev, in CI and on the server, and a Shipped entry two days younger than
+the commit even annotates the pinning entry with a reproduction -- so it sat in
+Proposed for six days describing a gap that was already closed. It is in
+Shipped now, dated to the commit rather than to today. The cache-bust entry set
+the precedent by being a day late; this one is worse, and it is worth saying
+plainly, because an entry describing a solved problem is the one kind of wrong
+this file can be that costs somebody real work.
+
+One entry gained without moving. The admin catalogue export -- #1, still the
+only entry the owner personally asked for -- now has a live cross-reference
+from `docs/local-dev-bot.md`, whose "do not copy the production database"
+section points at it as the clean alternative. That is the second use the
+delivery-feed pass recorded for it, now written where the operator will
+actually meet it. Its rank is unchanged for the reason given last time: this
+list orders by user impact, and a dev-seeding path is developer value. Nothing
+else got cheaper -- this build lived in a gated router, one service section and
+a docs file, and no remaining entry goes near any of them. Two were re-read
+against what shipped and both stand: minute-level offsets (#2) is untouched,
+and the born-dead-concert announcement (#5) is unchanged in substance, though
+the harness is now where someone would reproduce it before fixing it (seed,
+cancel the only leg, watch the DM go out anyway). Two cross-references were
+bumped in place -- the sign-in-bounce entry's demo-parity/Discover-head
+pointer, for the umpteenth time -- and the export entry's "(#2)" pointer at the
+harness spec was made name-based, since what it pointed at is no longer a
+number.
+
 ## Proposed (highest impact first)
 
 
@@ -364,62 +407,24 @@ re-importability matters or a read-only JSON dump is enough -- the YAML
 shape costs a little more and pays only if it does.
 
 A SECOND use for it turned up on 2026-07-28, in the rehearsal harness spec
-(#2): a catalogue-only copy is the clean way to seed a local dev DB with
-realistic data, because it contains no personal data by construction --
-`users`, `web_sessions`, `round_outcomes`, `concert_subscriptions`,
-`reminder_rules` and now `delivery_log` are all personal, and a wholesale
-copy of production on a laptop sits outside every deletion path this app
-promises. That raises the entry's value beyond the backup/rebuild case it
-was filed for, and it argues for the re-importable YAML shape over a
-read-only dump, since a seed you cannot load back is not a seed. It does
-NOT raise the entry's RANK: this list orders by user impact, and a
-dev-seeding path is developer value. Unchanged in size -- it touches the
-catalogue tables and a zip route, and nothing the delivery feed went near.
+(shipped since -- see Shipped): a catalogue-only copy is the clean way to
+seed a local dev DB with realistic data, because it contains no personal
+data by construction -- `users`, `web_sessions`, `round_outcomes`,
+`concert_subscriptions`, `reminder_rules` and now `delivery_log` are all
+personal, and a wholesale copy of production on a laptop sits outside every
+deletion path this app promises. That raises the entry's value beyond the
+backup/rebuild case it was filed for, and it argues for the re-importable
+YAML shape over a read-only dump, since a seed you cannot load back is not a
+seed. It does NOT raise the entry's RANK: this list orders by user impact,
+and a dev-seeding path is developer value. Unchanged in size -- it touches
+the catalogue tables and a zip route, and nothing the delivery feed or the
+harness went near. As of 2026-07-28 the pointer runs the other way too:
+`docs/local-dev-bot.md`, the setup guide an operator actually follows, talks
+them out of copying production wholesale and names this export as the clean
+alternative -- so the entry now has a live cross-reference from a document,
+not just from a spec.
 
-### 2. Local rehearsal harness with a second Discord bot (sub-project A)
-
-Impact: medium (developer-facing) - effort: medium. Raised: 2026-07-28
-(owner, as one of three). Spec written and revised the same day:
-`docs/superpowers/specs/2026-07-28-rehearsal-harness-design.md`.
-
-The owner asked for a way to walk the entire user flow including every kind
-of Discord DM. The spec's own first draft targeted production and was
-rewritten: there is no rule that production is the only environment, only a
-gap in the three tiers that already exist -- the suite proves logic,
-web-only dev mode proves the real app in a real browser, and NOTHING proves
-embeds, buttons, the 60s tick and delivery. A second Discord application
-closes that gap for free and drops the whole prod-safety apparatus the
-first draft needed (a `rehearsal` column, three query filters, a tag
-convention) down to one config flag, `rehearsal_enabled`, in the shape
-`bot_enabled` already uses.
-
-Shape: a fresh `dev.db`, one canonical seeded concert with realistic
-anchors and real rules so the planner genuinely computes the fire times,
-then the unsent queue rows pulled backwards in time so the real tick picks
-them up within a minute. Rejected in the spec: an injectable clock (the
-tick calls with the real clock, so the component most worth proving would
-be the one not honouring the fake). Plus a shape catalogue that sends each
-DM builder's output directly, which is the half that stays useful after
-every copy change. Control surface `/admin/rehearsal`, admin-only, English
-only and unwrapped, registered ONLY under the flag -- that flag is the
-entire safety model, so it is asserted directly.
-
-Ranked here rather than on its own user impact, which is nil: it is the
-rehearsal path for the broadcast, and the broadcast is a mass-DM route. That
-was an anticipatory argument when this was filed and it is a description now
--- C shipped on 2026-07-28, so the sequencing disagreement recorded on both
-entries (this spec wanting the harness first so C's first real exercise is
-not on live users; the owner putting B and C ahead of it, on the reasoning
-that an undetected bad delivery costs more than a missing harness) is
-settled in fact rather than by decision. The mass-DM route exists, is
-deployed, and has never been exercised outside the test suite. That is the
-strongest case on this list for promoting a developer-facing entry over #1,
-and it is deliberately left unacted-on: this list orders by user impact, and
-this entry's is still nil. Put it to the owner rather than assume either
-way. Its open question (should the shape catalogue let you pick a locale?)
-is additive and can land second.
-
-### 3. Minute-level reminder offsets
+### 2. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -459,7 +464,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 4. Eventernote actor-page discovery
+### 3. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -479,7 +484,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 5. Franchise-aware round-label suggestions
+### 4. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -500,7 +505,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 6. The create and import paths still announce a born-dead concert
+### 5. The create and import paths still announce a born-dead concert
 
 Impact: low-medium - effort: small-medium, but on the two riskiest routes
 in the app. Raised: 2026-07-28 (final review of the cleanup batch, which
@@ -538,10 +543,10 @@ deviation 6 of `docs/superpowers/specs/2026-07-28-cleanup-batch-design.md`.
 
 Ranked here: above the code-health entries below because a wrong,
 permanent DM to every follower is user-visible harm rather than tidiness,
-and below #5 because that one pays off on every round label an editor
+and below #4 because that one pays off on every round label an editor
 types while this needs a rare, deliberate starting state.
 
-### 7. Nine of ten `RoundKind` members are purely cosmetic
+### 6. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -564,7 +569,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 8. `generate_event_id` never checks the reserved ids
+### 7. `generate_event_id` never checks the reserved ids
 
 Impact: low - effort: small. Raised: 2026-07-28 (Task 1 review of the
 cleanup batch, while the slug preference above it was being shipped).
@@ -597,31 +602,7 @@ widens the door (a Japanese-titled concert previously slugged to
 needs an exactly-wrong English title to fire; it is filed because when it
 does fire nothing anywhere says so.
 
-### 9. Pin the Python version across dev, CI and the server
-
-Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
-2026-07-21 (PR #57 CI failure post-mortem).
-
-CI went red on the i18n branch with an `UnboundLocalError` that no local
-run could reproduce: Ubuntu 24.04's system Python is CPython 3.12.3, whose
-PEP 709 inlined comprehensions leak the iteration variable into the
-enclosing scope's symbol table (fixed in later 3.12.x), while the dev
-machine runs 3.13.1 where the same code is legal. Nothing pins a version
-anywhere - no `.python-version`, no `python-version:` in `ci.yml` - so dev,
-CI and the production server (also Ubuntu 24.04, so also 3.12.3-eligible)
-can all resolve different interpreters, and `requires-python = ">=3.11"`
-makes every one of them fair game. The immediate bug was fixed in code
-(`f41b847` renames the throwaway `_` bindings), but the drift remains.
-
-Fix is one file: a `.python-version` (e.g. `3.13`) at the repo root, which
-`uv sync` honors everywhere. Deliberately NOT done as part of the CI fix
-because it changes the production interpreter on the next deploy (uv would
-download 3.13 to Lightsail and rebuild the venv) - that is an operational
-call the owner should make consciously, ideally timed with a deploy he can
-watch. Until then, any new code that behaves differently across 3.11-3.13
-will only be caught if CI's particular interpreter happens to object.
-
-### 10. PWA / installability
+### 8. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -641,7 +622,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 11. In-app LLM extraction behind the same draft seam
+### 9. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -659,7 +640,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 12. Minor demo-parity cosmetics
+### 10. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -687,7 +668,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 13. Discover sort in the content head, plus the catalogue-count note
+### 11. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -713,7 +694,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 14. Name the destination on the sign-in bounce
+### 12. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -729,7 +710,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#12) and the Discover head (#13) because
+Ranked below the demo-parity batch (#10) and the Discover head (#11) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -747,6 +728,143 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Local rehearsal harness with a second Discord bot (2026-07-28)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-28-rehearsal-harness-design.md`
++ impl plan `docs/superpowers/plans/2026-07-28-rehearsal-harness.md`, six tasks
+on branch `rehearsal-harness`, plus the operator guide `docs/local-dev-bot.md`.
+Proposed #2. Sub-project **A** of three and the last to ship, closing the arc
+that began as "let me test the whole flow on prod": B made a bad delivery
+visible, C made it answerable, and A is the piece that means neither of them
+has to be rehearsed on live users. No migration -- it adds no column and no
+table, which is the whole point of what happened to the design.
+
+**The retargeting is the most valuable thing in this entry.** The first draft
+of the spec took "on prod" literally and designed the apparatus that premise
+requires: a `Concert.rehearsal` column, an `include_rehearsal` parameter, three
+global query filters and a rehearsal-only tag convention, every one of them
+existing only to make a fake concert harmless inside a shared production
+catalogue. The rewrite deleted all of it, because the premise was wrong. There
+is no rule that production is the only environment -- only a gap in the three
+tiers that already existed (the suite proves logic, web-only dev mode proves
+the real app in a real browser, and nothing at all proved embeds, buttons, the
+60s tick and delivery), and that gap existed solely because there was one
+Discord bot. A second Discord application closes it for free, and one boolean
+replaces the column, the filters and the convention. A feature spec that ships
+a schema change is ordinary; one that talks itself out of a schema change by
+questioning where it runs is worth keeping on the record.
+
+**Gated, not guarded.** `rehearsal_enabled: bool = False` decides whether
+`web/app.py` registers the router at all, so on production `/admin/rehearsal`
+is absent from the route table rather than protected -- a "pull every reminder
+forward" button behind only a permission check is one misconfiguration away
+from firing real reminders early. That flag IS the safety model, so it is
+asserted directly, against the built app's routes. `require_admin` stays on
+every route as a second layer for a misconfigured deploy. The harness got its
+own router module because a router registers whole and `admin.py` now serves
+`/admin/deliveries` and `/admin/broadcast`, which production needs.
+
+**Two rules survived the rewrite, and one of them replaced the dropped
+column.** The rehearsal concert is identified by a constant `event_id`, so the
+pull-forward action cannot reach another concert's rows *by construction*:
+there is no id for a caller to pass, and the rows are resolved by joining
+through the concert. The safety test for that was proved to bite by mutation
+(widen the query to the whole table, watch it fail, restore) rather than
+trusted. And teardown deletes the `Concert` row only, letting existing cascades
+take days, rounds, queue rows and outcomes, never touching users, presets or
+subscriptions -- the operator's real local state.
+
+**Pull-forward fakes the WAIT, not the work.** The seed writes realistic
+anchors and real rules and lets `sync_concert` and the pure planner compute the
+fire times; the action then rewrites the soonest unsent row's `fire_at_utc`
+into the past and the real 60s tick delivers it. Suppression, the eligibility
+gate, the send path and the buttons all run exactly as in production. The spec
+had already rejected the two alternatives: an injectable clock (the tick calls
+with the real clock, so the component most worth proving would be the one not
+honouring the fake) and compressed anchors with real waiting (which cannot
+exercise a "3 days before" offset without the anchor genuinely being three days
+out).
+
+**The page is an oracle, not a trigger.** For the row about to fire it names
+the buttons a correct DM should carry, restated in `domain/rehearsal.py` rather
+than derived from `bot/messages.py` -- an oracle that read the code under test
+would agree with it however wrong that code became. That is the difference
+between watching DMs arrive and testing them: "no button rendered" and "wrong
+button rendered" stop looking alike.
+
+**The prescribed walk was wrong in three places, and every correction was made
+at the source.** (a) Step 4's buttons were "won / lost", which is what a
+*single*-leg round renders; R1 deliberately covers both legs, so the DM is the
+per-leg split -- `wonall`, one `wonday` per covered leg, `lostall`. (b) Four
+rows omitted the trailing `snooze`/`remindlater` that every reminder DM
+carries. Both were re-derived empirically against real `custom_id`s. (c) Step 8
+"cancel Day 2" queues *nothing*: `notify_newly_cancelled_legs` is
+concert-scoped by design and stays silent while the reader still holds a live
+reminder anywhere on the concert, so the action cancels every live leg at once
+and was renamed `cancel_rehearsal_show` -- a function called
+`cancel_rehearsal_leg` that cancels every leg is the same untrue label this
+project has had to correct twice in user-facing copy. It also makes step 8
+terminal, which the page now says. A fourth correction came out of writing the
+guide: **step 1 sends no DM at all.** `handle_newly_tagged` is the only
+producer of `new_event`, it fans out to the followers of a newly attached tag,
+and the seed attaches no tags -- it tracks the concert with an explicit
+subscription. The page and the guide now say so, and the `new_event` embed is
+reached through the catalogue instead. A walk whose job is to tell you what a
+correct DM looks like is worse than useless when it teaches you to expect the
+wrong thing and "fix" working code.
+
+**The shape catalogue answered the spec's open question yes.** It renders any
+of the eight shapes through the real builders in any of the three languages and
+sends it now, needing none of the walk's state -- eight embeds in three
+languages in about a minute, which makes it the fastest ja/zh copy review the
+project has. It is the **second sanctioned exception to invariant 4**, next to
+`POST /me/test-dm` and for the same reason (a manual, user-initiated,
+one-at-a-time diagnostic is not a system-initiated notice), with one claim
+`/me/test-dm` cannot make: the route does not exist in production at all. Two
+traps showed up inside it. `NoticeContext` and `LegCancelledContext` resolve
+their UGC fields from the RECIPIENT's `users.language`, not `get_locale()`, so
+`set_locale` alone would have rendered the prose in the picked language and the
+concert title in the operator's, silently -- the catalogue borrows the
+operator's row for the length of the build and rolls back, which is free
+because it writes nothing. And the ops alert ignores the locale picker on
+purpose: `evaluate_and_alert` composes it as a bare f-string with no gettext
+anywhere, so it is in the catalogue for its LAYOUT (plain text, no embed, no
+buttons), the one thing the other seven cannot show.
+
+**`/privacy` needed nothing, and that was checked rather than assumed** -- the
+broadcast's entry above is a reminder that "no new user data" is not the same
+question as "no new disclosure". Here both answers hold: no new category of
+data is stored, and the routes do not exist in production, so there is nothing
+about the live service to disclose.
+
+Revision pass: recorded in the narrative above -- entries renumbered 1-12 by
+two removals, the second being the six-day-old bookkeeping debt below; nothing
+re-ranked on merit; the admin catalogue export gained a live pointer from
+`docs/local-dev-bot.md` without moving.
+
+### Pin the Python version across dev, CI and the server (2026-07-22)
+
+Shipped as: commit `63f0f78`, one file -- `.python-version` at the repo root,
+pinned to 3.14. `uv sync` honours it in dev, in CI (via `astral-sh/setup-uv`)
+and on the Lightsail server, so a version-dependent bug now fails in all three
+places or in none. That closes exactly the failure the entry was filed for: CI
+once went red with an `UnboundLocalError` no local run could reproduce, a
+3.12-vs-3.13 comprehension-scope difference, because nothing pinned the
+interpreter and `requires-python = ">=3.11"` made every one of them fair game.
+The deploy consequence the entry flagged was carried in the commit message
+rather than deferred: it changes the PRODUCTION interpreter, so uv downloads
+3.14 to Lightsail and rebuilds the venv on the next `uv sync`.
+
+**Moved to Shipped on 2026-07-28, six days late**, by the rehearsal harness's
+revision pass -- it had sat in Proposed the whole time describing a gap that
+was already closed, and a Shipped entry two days younger than the commit even
+annotated it with a `.venv` drift reproduction, which should have been the
+tell. Logged here dated to the commit, not to the move. The cache-bust entry
+below set the precedent for a late move by being one day late; this is the
+larger version of the same lapse, and the lesson is the cheap one: a build
+commit that closes a Proposed entry is still a shipped entry, even when no
+spec, plan or PR announced it.
 
 ### Targeted admin broadcast: a DM you can take back (2026-07-28)
 
