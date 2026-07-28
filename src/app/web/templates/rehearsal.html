@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{#- Local-only harness page: English-only and deliberately NOT wrapped in _(),
+    following admin_deliveries.html and admin_broadcast.html. It reuses the
+    existing `.tagtable`/`.dim` rules rather than inventing tokens -- this page
+    renders on a developer machine and nowhere else. -#}
+{% block title %}Rehearsal — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Rehearsal</h1>
+<p class="dim">
+  Local harness. Seeds one concert, pulls its reminders forward so the real
+  60-second tick delivers them now, and sends every DM shape on demand.
+</p>
+{% if note %}<p class="dim">{{ note }}</p>{% endif %}
+
+<h2>Actions</h2>
+<p class="dim">
+  Each press redirects back here, so the table below always shows what is true
+  now. Nothing is faked but the wait: the planner computed these rows and the
+  real send path delivers them.
+</p>
+<form method="post" action="/admin/rehearsal/start"><button type="submit">Start</button></form>
+<form method="post" action="/admin/rehearsal/next"><button type="submit">Next reminder</button></form>
+<form method="post" action="/admin/rehearsal/cancel-show"><button type="submit">Cancel the show</button></form>
+<form method="post" action="/admin/rehearsal/end"><button type="submit">End</button></form>
+
+<h2>The prescribed walk</h2>
+<p class="dim">
+  Order is load-bearing. Payment only offers Paid from Won, so step 3 must come
+  before 4 and 4 before 6 — press Lost at step 4 and the ladder ends there.
+</p>
+<ol>
+  <li><strong>Start</strong> — a <code>new_event</code> DM arrives within a tick.
+    The seed attaches a followed ARTIST tag <em>before</em> writing any rules, so
+    <code>handle_newly_tagged</code> genuinely fans out to you. Buttons: apply /
+    remove / deadlines. This is the app's widest notification path, so it is worth
+    watching rather than skipping.</li>
+  <li><strong>Next reminder</strong> — the 1st lottery opens. Button: snooze.</li>
+  <li><strong>Next reminder</strong> — the 1st lottery closes; press <em>I applied</em>.
+    Buttons: applied / notapplied / remindlater.</li>
+  <li><strong>Next reminder</strong> — its results; press <em>Won</em>. That round covers
+    both legs, so the DM asks leg by leg: wonall / one wonday per leg / lostall.</li>
+  <li><em>Observe the table</em> — the upgrade round's rows appear, and the general
+    sale's remaining rows are deleted. A round that stops arriving is the hardest thing
+    to notice by hand, so watch for it here: the general sale has its own opens and
+    closes rows earlier in the queue, and if you have already pulled them there is
+    nothing left to vanish.</li>
+  <li><strong>Next reminder</strong> — payment is due; press <em>Paid</em>. Button: paid.</li>
+  <li><strong>Next reminder</strong> — Day 1 starts. Button: snooze.</li>
+  <li><strong>Cancel the show</strong> — a leg-cancelled notice; press
+    <em>Turn my reminders back on</em>. Button: reinstate.
+    <strong>This step is terminal.</strong> It cancels every live leg at once — the
+    notice is concert-scoped and stays silent while any live reminder remains — so
+    it clears every queue row left, the upgrade round's included. Press it early and
+    the walk is over.</li>
+  <li><strong>End</strong> — the concert is deleted and the cascades take the rest.
+    Your user, presets and subscriptions are untouched.</li>
+</ol>
+
+<h2>Shape catalogue</h2>
+<p class="dim">
+  The other half, and it needs none of the walk: one shape, one language,
+  rendered through the real builders and sent now. Eight embeds in three
+  languages is a minute's work, which is what makes this the fastest way to
+  re-read the copy after a translation change. It still needs the concert —
+  press Start first. The payment shape is composed as if you had won, so it
+  shows its Paid button whatever the walk has reached; the ops alert is
+  English by construction and ignores the language picker.
+</p>
+<form method="post" action="/admin/rehearsal/shape">
+  <select name="shape" aria-label="Shape">
+    {% for value, label in shapes %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+  </select>
+  <select name="locale" aria-label="Language">
+    {% for code, label in locales %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+  </select>
+  <button type="submit">Send</button>
+</form>
+
+<h2>State</h2>
+{% if concert %}
+<p>
+  <strong>{{ concert.title_en }}</strong> —
+  <a href="/concerts/{{ concert.event_id }}">open it</a>
+  <span class="dim">(event id <code>{{ concert.event_id }}</code>)</span>
+</p>
+{% if rows %}
+<table class="tagtable">
+  <thead>
+    <tr>
+      <th>Anchor</th>
+      <th>Round or leg</th>
+      <th>Fires (UTC)</th>
+      <th>Sent</th>
+      <th>Expected buttons</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{% if r.is_next %}<strong>{{ r.anchor.value }}</strong>{% else %}{{ r.anchor.value }}{% endif %}</td>
+      <td>{{ r.subject }}</td>
+      <td>{{ r.fire_at_utc.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>{% if r.sent %}yes{% else %}<span class="dim">no</span>{% endif %}</td>
+      <td>
+        {%- if r.is_next -%}
+          {{ r.expected | join(' / ') }}
+        {%- else -%}
+          <span class="dim">—</span>
+        {%- endif -%}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="dim">
+  Expected buttons are named for the next row to fire only — every row below it
+  will be composed under an outcome the walk has not reached yet. If the DM that
+  arrives carries a different set, the harness has caught something: that column
+  is restated from the message builder, not read from it.
+</p>
+{% else %}
+<p class="dim">Seeded, but no reminders are queued — every round is cancelled or already sent.</p>
+{% endif %}
+{% else %}
+<p class="dim">Nothing seeded yet. Press Start.</p>
+{% endif %}
+{% endblock %}

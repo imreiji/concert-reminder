@@ -209,15 +209,27 @@ Button gating makes order load-bearing.
 | 1 | Start | `new_event` + preset auto-applied | apply / remove / deadlines |
 | 2 | Next | R1 OPENS | snooze |
 | 3 | Next | R1 CLOSES → press **Applied** | applied / notapplied / remindlater |
-| 4 | Next | R1 RESULTS → press **Won** | won / lost, then per-leg split |
+| 4 | Next | R1 RESULTS → press **Won on Day 1** | wonall / wonday ×2 / lostall / snooze |
 | 5 | *(observe)* | R3 becomes eligible; R2 goes quiet | — |
-| 6 | Next | R1 PAYMENT → press **Paid** | paid |
+| 6 | Next | R1 PAYMENT → press **Paid** | paid / snooze |
 | 7 | Next | Day 1 EVENT_START | snooze |
-| 8 | Cancel Day 2 | `leg_cancelled` → press **Reinstate** | reinstate |
+| 8 | Cancel the show | `leg_cancelled` → press **Reinstate** | reinstate |
 | 9 | End | concert deleted, cascades take the rest | — |
 
 Step 3 must precede 4 and 4 must precede 6: PAYMENT only offers Paid from WON,
-so pressing Lost at step 4 ends the ladder.
+so pressing Lost at step 4 ends the ladder. **Step 8 is terminal** — cancelling
+the show kills R3's rows with everything else, so it cannot be pressed early.
+
+**Row 4 corrected during implementation, and it matters.** An earlier draft of
+this table said "won / lost". That is what a SINGLE-leg round renders; R1
+deliberately covers both legs, so `build_reminder_message` renders the per-leg
+split instead — `wonall`, one `wonday` per covered leg (capped at 4), and
+`lostall`. Getting this wrong in a walk whose purpose is to tell you what a
+correct DM looks like would have taught the operator to expect the wrong
+buttons and to "fix" working code. Every row's button set was re-derived
+empirically against real `custom_id`s rather than read off this table; the
+trailing `snooze`/`remindlater` that every reminder DM carries was missing from
+four rows for the same reason.
 
 Step 8 must call `notify_newly_cancelled_legs` **before** `sync_concert`, which
 deletes the queue rows that function inspects.
@@ -292,4 +304,32 @@ is worth something given how much recent work was i18n. Leaning yes, since
 
 ## Deviations from this spec
 
-(To be filled during implementation.)
+**Step 8 cancels the whole show, not just Day 2** (Task 3, 2026-07-28). The
+walk above says "Cancel Day 2 → `leg_cancelled`". Measured against the real
+code, that queues nothing: `notify_newly_cancelled_legs` is CONCERT-scoped by
+design — it stays silent for any user who still holds a live reminder anywhere
+on the concert — and after Day 2 goes down, Day 1's EVENT_START plus R1's four
+anchors are all still standing, so the operator has fallback rows and gets no
+notice. Cancelling Day 1 instead fails the same way. Only when the concert has
+no live leg left (`all_legs_cancelled`) does every round count as lost and the
+notice fire.
+
+So the action cancels every remaining LIVE leg in one press. The alternative —
+a per-leg button the operator presses twice, the first press doing nothing
+visible — would demonstrate the `leg_cancelled` DM by *not* sending it, which
+is worse than useless in a harness whose whole job is to show you the message.
+
+It is named **`cancel_rehearsal_show`**, route `/admin/rehearsal/cancel-show`.
+The original `cancel_rehearsal_leg` was kept briefly for interface stability
+and then renamed: a function called `cancel_rehearsal_leg` that cancels every
+leg is the same kind of untrue label this project has already had to correct
+twice in user-facing copy, and it costs nothing to fix before the route it
+names exists.
+
+`tests/test_rehearsal.py` pins the underlying rule directly
+(`test_cancelling_takes_every_live_leg_because_the_notice_is_concert_scoped`)
+so a later tidy-up cannot quietly restore the per-leg version.
+
+**Consequence for the walk:** step 8 is terminal. Cancelling the show kills
+R3's rows along with everything else, so it must be pressed at step 8 and not
+earlier. The harness page's rendered walk says so.
