@@ -55,6 +55,7 @@ from app.db.models import (
 )
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.digest import DeliveryFact, build_digest
+from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
@@ -5940,3 +5941,84 @@ async def cancel_rehearsal_show(
     )
     await sync_concert(session, concert.id)
     return queued
+
+
+@dataclass(frozen=True)
+class RehearsalRow:
+    """One rehearsal queue row, as the harness page shows it."""
+
+    queue_id: int
+    anchor: Anchor
+    # The round's label, or the leg's on an EVENT_START row. English: this page
+    # renders on a developer machine only.
+    subject: str
+    fire_at_utc: datetime
+    sent: bool
+    # The soonest UNSENT row -- the one "Next" will pull forward.
+    is_next: bool
+    # What a correct DM for that row should carry, per domain/rehearsal.py.
+    # Empty on every other row: an expectation is only meaningful for the row
+    # about to fire, since the ones below it will be composed under an outcome
+    # the walk has not reached yet.
+    expected: tuple[str, ...] = ()
+
+
+async def rehearsal_rows(session: AsyncSession, user_id: int) -> list[RehearsalRow]:
+    """The harness's state table: every rehearsal queue row, soonest first,
+    with the button expectation attached to the next one to fire.
+
+    A read-side decoration of `rehearsal_queue_rows` -- it writes nothing, and
+    the expectation is computed, never stored.
+    """
+    rows = await rehearsal_queue_rows(session)
+    concert = await get_rehearsal_concert(session)
+    if not rows or concert is None:
+        return []
+
+    rounds = {
+        r.id: r for r in (await session.execute(
+            select(Round).where(Round.concert_id == concert.id)
+        )).scalars()
+    }
+    days = list((await session.execute(
+        select(ConcertDay)
+        .where(ConcertDay.concert_id == concert.id)
+        .order_by(ConcertDay.starts_at_utc, ConcertDay.id)
+    )).scalars())
+    day_labels = {d.id: loc_field(d, "label", "en") for d in days}
+    live_day_ids = {d.id for d in days if not d.cancelled}
+    outcomes = {
+        o.round_id: o.outcome for o in (await session.execute(
+            select(RoundOutcome).where(
+                RoundOutcome.user_id == user_id,
+                RoundOutcome.round_id.in_(rounds),
+            )
+        )).scalars()
+    } if rounds else {}
+
+    next_id = next((r.id for r in rows if r.sent_at_utc is None), None)
+    out: list[RehearsalRow] = []
+    for row in rows:
+        round_ = rounds.get(row.round_id) if row.round_id is not None else None
+        expected: tuple[str, ...] = ()
+        if row.id == next_id:
+            # Cancelled legs are excluded before the count, exactly as
+            # due_reminders does it: a two-leg round with one leg cancelled is
+            # a one-leg question.
+            legs = len(_covered_day_ids(round_, live_day_ids)) if round_ else 0
+            expected = expected_buttons(
+                row.anchor, outcomes.get(row.round_id) if round_ else None, legs
+            )
+        out.append(RehearsalRow(
+            queue_id=row.id,
+            anchor=row.anchor,
+            subject=(
+                loc_field(round_, "label", "en") if round_
+                else day_labels.get(row.day_id, "—")
+            ),
+            fire_at_utc=row.fire_at_utc,
+            sent=row.sent_at_utc is not None,
+            is_next=row.id == next_id,
+            expected=expected,
+        ))
+    return out

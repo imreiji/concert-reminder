@@ -28,11 +28,13 @@ from app.db.service import (
     notify_newly_cancelled_legs,
     pull_rehearsal_forward,
     rehearsal_queue_rows,
+    rehearsal_rows,
     seed_rehearsal,
     teardown_rehearsal,
 )
 from app.db.session import get_session
-from app.domain.types import Anchor, RoundKind
+from app.domain.rehearsal import expected_buttons
+from app.domain.types import Anchor, LotteryOutcome, RoundKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -433,3 +435,114 @@ async def test_cancelling_with_no_live_leg_left_is_a_no_op(db):
 async def test_cancelling_with_nothing_seeded_is_a_no_op(db):
     async with db() as s:
         assert await cancel_rehearsal_show(s) == 0
+
+
+def test_expected_buttons_match_the_anchor_and_outcome_gating():
+    """The page names what SHOULD appear on the row it just pulled. Without
+    this the harness is a trigger; with it, an oracle -- it distinguishes
+    'no button rendered' from 'wrong button rendered', which is the whole
+    difference between watching DMs arrive and testing them.
+
+    Every tuple here was read off build_reminder_message, including its
+    TRAILING button: every reminder ends with remind-later on a CLOSES row and
+    snooze on any other, so an expectation that stopped at the capture buttons
+    would call a correct DM wrong on five of these seven rows."""
+    assert expected_buttons(Anchor.CLOSES, None) == ("applied", "notapplied", "remindlater")
+    # Past the starting state the capture pair is gone and only the trailing
+    # button is left -- and on a CLOSES row that is remind-later, not snooze.
+    assert expected_buttons(Anchor.CLOSES, LotteryOutcome.APPLIED) == ("remindlater",)
+    assert expected_buttons(Anchor.RESULTS, None) == ("won", "lost", "snooze")
+    assert expected_buttons(Anchor.RESULTS, LotteryOutcome.APPLIED) == ("won", "lost", "snooze")
+    assert expected_buttons(Anchor.RESULTS, LotteryOutcome.WON) == ("snooze",)
+    assert expected_buttons(Anchor.PAYMENT, LotteryOutcome.WON) == ("paid", "snooze")
+    assert expected_buttons(Anchor.PAYMENT, LotteryOutcome.LOST) == ("snooze",)
+    assert expected_buttons(Anchor.OPENS, None) == ("snooze",)
+    assert expected_buttons(Anchor.EVENT_START, None) == ("snooze",)
+
+
+def test_expected_buttons_ask_leg_by_leg_when_a_round_covers_two_legs():
+    """The canonical scenario's R1 covers BOTH legs, so its results DM is the
+    per-leg view, not the flat Won/Lost pair -- and step 4 of the walk is
+    exactly where an oracle claiming won/lost would send the operator hunting
+    for a button that is correctly absent."""
+    assert expected_buttons(Anchor.RESULTS, None, 2) == (
+        "wonall", "wonday", "wonday", "lostall", "snooze",
+    )
+    # The DM asks a long tour a batch of legs at a time; the shortcuts do not
+    # multiply with them.
+    assert expected_buttons(Anchor.RESULTS, None, 9) == (
+        "wonall", "wonday", "wonday", "wonday", "wonday", "lostall", "snooze",
+    )
+    # One leg is not a per-leg question, whatever the round's applies_to says.
+    assert expected_buttons(Anchor.RESULTS, None, 1) == ("won", "lost", "snooze")
+
+
+@pytest.mark.asyncio
+async def test_the_state_rows_expect_buttons_for_the_next_row_only(db):
+    """An expectation is only meaningful for the row about to fire: every row
+    below it will be read under an outcome the walk has not reached yet."""
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        rows = await rehearsal_rows(s, ADMIN_ID)
+        assert rows
+        assert rows[0].anchor is Anchor.OPENS
+        assert rows[0].is_next
+        assert rows[0].expected == ("snooze",)
+        assert not any(r.is_next for r in rows[1:])
+        assert all(r.expected == () for r in rows[1:])
+        assert all(r.subject for r in rows)
+
+
+@pytest.mark.asyncio
+async def test_a_sent_row_is_never_the_next_one(db):
+    async with db() as s:
+        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        await s.flush()
+        await seed_rehearsal(s, ADMIN_ID)
+        await s.commit()
+        pulled = await pull_rehearsal_forward(s)
+        pulled.sent_at_utc = datetime.now(UTC)
+        await s.commit()
+        rows = await rehearsal_rows(s, ADMIN_ID)
+        sent = [r for r in rows if r.queue_id == pulled.id]
+        assert sent and sent[0].sent and not sent[0].is_next
+        assert sum(1 for r in rows if r.is_next) == 1
+
+
+def test_start_seeds_and_end_tears_down(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    login_as(client, ADMIN_ID, "reiji")
+    assert client.post("/admin/rehearsal/start").status_code == 303
+    page = client.get("/admin/rehearsal")
+    assert "Rehearsal Concert" in page.text
+    assert client.post("/admin/rehearsal/end").status_code == 303
+    assert "Rehearsal Concert" not in client.get("/admin/rehearsal").text
+
+
+def test_next_reports_what_it_pulled_and_what_to_expect(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/rehearsal/start")
+    client.post("/admin/rehearsal/next")
+    page = client.get("/admin/rehearsal")
+    assert "opens" in page.text.lower()
+    # The oracle reaches the page, not just the service layer: the first row
+    # of the walk is an OPENS reminder, whose only button is snooze.
+    assert "snooze" in page.text.lower()
+
+
+def test_the_page_says_cancelling_the_show_is_terminal(client, monkeypatch):
+    """Step 8 kills the upgrade round's rows with everything else, so an
+    operator who presses it at step 5 has ended the walk without being told."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    login_as(client, ADMIN_ID, "reiji")
+    assert "terminal" in client.get("/admin/rehearsal").text.lower()
+
+
+def test_the_actions_are_admin_only(client):
+    login_as(client, PLAIN_ID, "someone")
+    for path in ("start", "next", "cancel-show", "end"):
+        assert client.post(f"/admin/rehearsal/{path}").status_code == 403

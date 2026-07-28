@@ -775,7 +775,7 @@ that function inspects."
 - Consumes: Tasks 2 and 3.
 - Produces: `domain/rehearsal.py:expected_buttons(anchor, outcome) -> tuple[str, ...]`; routes `POST /admin/rehearsal/start|next|cancel-show|end`.
 
-- [ ] **Step 1: Write the failing tests for the oracle**
+- [x] **Step 1: Write the failing tests for the oracle**
 
 `expected_buttons` is pure, so test it directly:
 
@@ -822,12 +822,12 @@ def test_the_actions_are_admin_only(client):
         assert client.post(f"/admin/rehearsal/{path}").status_code == 403
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_rehearsal.py -v`
 Expected: FAIL — no `app.domain.rehearsal`, 404 on the action routes.
 
-- [ ] **Step 3: Write the pure oracle**
+- [x] **Step 3: Write the pure oracle**
 
 Create `src/app/domain/rehearsal.py`:
 
@@ -856,7 +856,7 @@ def expected_buttons(
     return ("snooze",)
 ```
 
-- [ ] **Step 4: Add the four actions and the state context**
+- [x] **Step 4: Add the four actions and the state context**
 
 In `rehearsal.py`, extend the GET to build state from `rehearsal_queue_rows` (each row with its anchor, its round or leg label, its fire time, whether it is sent, and — for the soonest unsent — `expected_buttons`), and add:
 
@@ -889,16 +889,16 @@ async def end(user=Depends(require_admin), session=Depends(get_session)):
     return RedirectResponse("/admin/rehearsal", status_code=303)
 ```
 
-- [ ] **Step 5: Extend the template**
+- [x] **Step 5: Extend the template**
 
 Add the prescribed walk as a static ordered list (steps 1-9 from the spec), the four action buttons, and a `.tagtable` of queue rows: anchor, round/leg, fire time, sent, and for the next-to-fire row the expected buttons. Reuse `.dim` for secondary text. No new CSS.
 
-- [ ] **Step 6: Run to verify they pass**
+- [x] **Step 6: Run to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_rehearsal.py -v`
 Expected: PASS.
 
-- [ ] **Step 7: Full gates and commit**
+- [x] **Step 7: Full gates and commit**
 
 ```bash
 git add src/app/domain/rehearsal.py src/app/web/routes/rehearsal.py src/app/web/templates/rehearsal.html tests/test_rehearsal.py
