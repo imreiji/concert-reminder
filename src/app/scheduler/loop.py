@@ -46,6 +46,7 @@ from app.db.service import (
     mark_notification_sent,
     mark_sent,
     notice_context,
+    record_deliveries,
     record_dm_outcome,
 )
 from app.db.session import SessionMaker
@@ -160,7 +161,8 @@ async def tick(bot) -> int:
 
     async with SessionMaker() as session:
         items = await due_reminders(session, now)
-        for item, outcome in await asyncio.gather(*(bounded_deliver(i) for i in items)):
+        reminder_results = await asyncio.gather(*(bounded_deliver(i) for i in items))
+        for item, outcome in reminder_results:
             if outcome in (DeliveryOutcome.SUCCESS, DeliveryOutcome.FORBIDDEN):
                 await mark_sent(session, item.queue_id, now)
                 delivered += 1
@@ -173,9 +175,10 @@ async def tick(bot) -> int:
         # DB-bound prep stays sequential on the one shared session...
         prepared = [(note, await _notification_context(session, note)) for note in notes]
         # ...then the actual Discord sends run concurrently.
-        for note, outcome in await asyncio.gather(
+        notification_results = await asyncio.gather(
             *(bounded_send_notification(note, ctx) for note, ctx in prepared)
-        ):
+        )
+        for note, outcome in notification_results:
             if outcome in (DeliveryOutcome.SUCCESS, DeliveryOutcome.FORBIDDEN):
                 await mark_notification_sent(session, note.id)
                 delivered += 1
@@ -185,6 +188,21 @@ async def tick(bot) -> int:
                 )
 
         await session.commit()
+
+        # Delivery log: its own try/except and its own commit, for the same
+        # reason the health block below has them. By this point the DMs are on
+        # the wire and recorded as sent; an exception that rolled that back
+        # would make the next tick re-send every one of them. An observability
+        # feature must never be able to cause a duplicate reminder.
+        if reminder_results or notification_results:
+            try:
+                await record_deliveries(
+                    session, now, list(reminder_results), list(notification_results)
+                )
+                await session.commit()
+            except Exception:
+                log.exception("delivery logging failed; delivery itself was unaffected")
+                await session.rollback()
 
         # Health evaluation runs AFTER the delivery commit and swallows its own
         # errors. Both halves matter. By this point the tick has already put

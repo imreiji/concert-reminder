@@ -639,9 +639,16 @@ admin_broadcast up front."
 - Consumes: `record_deliveries` (Task 3).
 - Produces: `tick()` writes `delivery_log` rows for the batch. `tick`'s return value (delivered count) is unchanged.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_delivery_log_tick.py`. Mirror the fixture shape of the existing scheduler tests (in-memory engine, `PRAGMA foreign_keys=ON`, module `SessionMaker` monkeypatched, a fake bot):
+
+**Corrected during Task 4:** the `Round(...)` below omits `kind`, which has no
+column default, so the seed dies on `NOT NULL constraint failed: rounds.kind`
+before any assertion runs. Pass `kind=RoundKind.LOTTERY_ROUND`. Also, only
+`monkeypatch.setattr(loop_mod, "SessionMaker", m)` is load-bearing --
+`loop.py` imports the name directly, so patching `app.db.session` too is
+belt-and-braces (verified by dropping it: the three tests still pass).
 
 ```python
 """tick() writes the delivery log without endangering delivery bookkeeping."""
@@ -771,12 +778,12 @@ async def test_a_logging_failure_leaves_the_reminder_marked_sent(maker, monkeypa
         assert (await s.execute(select(DeliveryLog))).all() == []
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_delivery_log_tick.py -v`
 Expected: FAIL — no `DeliveryLog` rows written; `AttributeError` on the monkeypatched `record_deliveries`.
 
-- [ ] **Step 3: Collect the outcomes in `tick()`**
+- [x] **Step 3: Collect the outcomes in `tick()`**
 
 In `src/app/scheduler/loop.py`, inside `tick`, change the two drain loops to keep their results. Replace the reminder loop:
 
@@ -811,7 +818,7 @@ and the notification loop:
                 )
 ```
 
-- [ ] **Step 4: Add the log write after the delivery commit**
+- [x] **Step 4: Add the log write after the delivery commit**
 
 Immediately after `await session.commit()` (the delivery-bookkeeping commit, ~line 198) and BEFORE the health block, insert:
 
@@ -834,12 +841,12 @@ Immediately after `await session.commit()` (the delivery-bookkeeping commit, ~li
 
 Add `record_deliveries` to the `from app.db.service import (...)` block at the top of the file.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_delivery_log_tick.py -v`
 Expected: PASS (all three).
 
-- [ ] **Step 6: Full gates and commit**
+- [x] **Step 6: Full gates and commit**
 
 Run: `uv run --isolated ruff check .` then `uv run --isolated pytest -q`
 
