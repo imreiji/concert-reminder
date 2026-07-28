@@ -239,7 +239,63 @@ async def test_a_live_concert_page_has_no_cancelled_banner(client, db): ...
 
 ---
 
-### Task 5: Closing sweep
+### Task 5: The sixth surface, and verify the seventh
+
+Added 2026-07-27 after Task 4's review, which correctly escalated this as a
+branch-level decision rather than a defect in that task's code.
+
+**Files:**
+- Modify: `src/app/web/templates/_following_toggle.html` (and whatever
+  supplies its context — find it), both `messages.po`
+- Verify (change only if it is genuinely broken): `src/app/db/service.py`'s
+  `_round_asks_application` / `setup_application_rows`
+- Test: `tests/test_concert_page.py` or wherever the follow-toggle render
+  tests live; `tests/test_setup_service.py` for the verification
+
+**Item 1 — the follow toggle promises reminders a dead concert will never
+send.** `_following_toggle.html` renders "You will be reminded about every
+round below." That became false at Task 1 (the scheduler plans nothing for
+a dead concert), and Task 4 placed a "this event is cancelled" banner about
+40px above it, so a quiet staleness is now a visible self-contradiction on
+one screen.
+
+Fix: on a dead concert the toggle states the truth instead — that the event
+is cancelled and no reminders will be sent. Keep the toggle itself working
+(following is still a real preference, and invariant 8 keeps the override
+rows meaningful); only the explanatory line changes. One new msgid, ja+zh
+hand-filled, no fuzzy. Reuse the dead-concert fact the page already
+resolves — do NOT call the predicate a third time in the template.
+
+**Item 2 — verify `/setup`, do not assume.** `_round_asks_application`
+(`service.py`) carries its OWN eligibility rule and does not go through
+`capture_gates`, so the applications screen may still offer to record an
+application against a dead concert. Determine whether Task 1's filtering
+already reaches it via `_tracked_upcoming_concerts`. If it does, add a test
+pinning that (so the coverage is deliberate rather than accidental) and
+report it. If it does not, fix it the same way — one input from the shared
+predicate, no fresh rule.
+
+- [ ] **Step 1: Write the failing tests.**
+
+```python
+async def test_a_dead_concerts_follow_toggle_promises_nothing(client, db):
+    # the old sentence is absent; the cancelled explanation is present
+    ...
+async def test_a_live_concerts_follow_toggle_is_unchanged(client, db): ...
+async def test_setup_never_asks_about_a_dead_concerts_round(session):
+    # whichever way item 2 resolves, this test exists afterwards
+    ...
+```
+
+- [ ] **Step 2: Run** — FAIL (item 1 at least; item 2 may already pass, which is itself the finding — say so).
+- [ ] **Step 3: Implement** item 1; resolve item 2 per your verification.
+- [ ] **Step 4: Catalogue** for the new string; delete `messages.pot`.
+- [ ] **Step 5:** Run the touched files + `tests/test_i18n_catalogues.py`, then the FULL suite + ruff.
+- [ ] **Step 6: Commit** — `fix: a dead concert stops promising reminders it will never send (task 5)`
+
+---
+
+### Task 6: Closing sweep
 
 - [ ] **Step 1:** `uv run pytest -q` (foreground, full) + `uv run ruff check .`; record tallies.
 - [ ] **Step 2:** Smoke against a seeded temp DB: cancel every leg of a concert you have standing on and one you do not; confirm the first keeps a badged card and the second leaves the board; confirm neither appears in Coming up; confirm the concert page shows the banner and no capture; confirm a partly-cancelled concert is untouched throughout.
@@ -247,4 +303,4 @@ async def test_a_live_concert_page_has_no_cancelled_banner(client, db): ...
 - [ ] **Step 4:** WISHLIST: move #2 to Shipped dated, house style, naming the owner ruling and the fact that the planner was brought into scope beyond the entry's three surfaces; renumber; revision-pass paragraph; fix `#N` cross-references.
 - [ ] **Step 5:** CLAUDE.md: invariant 2's paragraph gains a sentence — a concert whose every leg is cancelled contributes no live rounds anywhere, and that concert-level question is `all_legs_cancelled`, the Python twin of `discoverable_concert_criterion`, NOT a widening of `is_round_cancelled`.
 - [ ] **Step 6:** Reconcile `docs/superpowers/demo/dekimasen-demo.html` if the badge or banner belongs in it (judge; say either way).
-- [ ] **Step 7: Commit** — `chore: dead concerts closing sweep (task 5)`
+- [ ] **Step 7: Commit** — `chore: dead concerts closing sweep (task 6)`
