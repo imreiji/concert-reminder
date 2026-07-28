@@ -39,7 +39,7 @@
 - Consumes: nothing.
 - Produces: `app.domain.types.DeliveryOutcome`, a `StrEnum` with members `SUCCESS = "success"`, `FORBIDDEN = "forbidden"`, `TRANSIENT_FAILURE = "transient_failure"`. `app.scheduler.loop.DeliveryOutcome` remains a working alias by virtue of the import, so no existing caller changes.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_delivery_log.py`:
 
@@ -70,12 +70,12 @@ def test_scheduler_reexports_the_same_object():
     assert FromScheduler is DeliveryOutcome
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run --isolated pytest tests/test_delivery_log.py -v`
 Expected: FAIL — `ImportError: cannot import name 'DeliveryOutcome' from 'app.domain.types'`
 
-- [ ] **Step 3: Add the enum to `domain/types.py`**
+- [x] **Step 3: Add the enum to `domain/types.py`**
 
 Append to `src/app/domain/types.py`:
 
@@ -105,7 +105,7 @@ class DeliverySource(enum.StrEnum):
     NOTIFICATION = "notification"
 ```
 
-- [ ] **Step 4: Replace the definition in `scheduler/loop.py` with an import**
+- [x] **Step 4: Replace the definition in `scheduler/loop.py` with an import**
 
 In `src/app/scheduler/loop.py`, delete the `class DeliveryOutcome(Enum):` block (lines 65-73) and the now-unused `from enum import Enum` on line 31. Add `DeliveryOutcome` to the existing domain import; if there is no `app.domain.types` import yet, add one after the `from app.db.session import SessionMaker` line:
 
@@ -113,12 +113,12 @@ In `src/app/scheduler/loop.py`, delete the `class DeliveryOutcome(Enum):` block 
 from app.domain.types import DeliveryOutcome
 ```
 
-- [ ] **Step 5: Run the new test and the scheduler suites**
+- [x] **Step 5: Run the new test and the scheduler suites**
 
 Run: `uv run --isolated pytest tests/test_delivery_log.py tests/test_scheduler.py tests/test_ops_alerts.py -v`
 Expected: PASS. If `tests/test_scheduler.py` does not exist under that name, run `uv run --isolated pytest -q -k "scheduler or tick or deliver"` instead.
 
-- [ ] **Step 6: Record the table-name deviation in the spec**
+- [x] **Step 6: Record the table-name deviation in the spec**
 
 Append to the `## Deviations from this spec` section of `docs/superpowers/specs/2026-07-28-delivery-feed-design.md`:
 
@@ -129,7 +129,7 @@ Append to the `## Deviations from this spec` section of `docs/superpowers/specs/
    `DeliveryLog`.
 ```
 
-- [ ] **Step 7: Full gates and commit**
+- [x] **Step 7: Full gates and commit**
 
 Run: `uv run --isolated ruff check .` then `uv run --isolated pytest -q`
 Expected: ruff clean, full suite passing.

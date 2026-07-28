@@ -126,3 +126,28 @@ class SubscriptionState(enum.StrEnum):
 
     SUBSCRIBED = "subscribed"
     OPTED_OUT = "opted_out"
+
+
+class DeliveryOutcome(enum.StrEnum):
+    """A DM send's result. Distinct from "should this row be marked sent"
+    (SUCCESS and FORBIDDEN both do; TRANSIENT_FAILURE doesn't) and from
+    "should the per-user dm_blocked_since flag change" (SUCCESS clears it,
+    FORBIDDEN sets it, TRANSIENT_FAILURE touches neither).
+
+    Lives here rather than in scheduler/loop.py, where it was defined
+    originally, because db/models.py types a column on it and db/ must never
+    import from scheduler/.
+    """
+
+    SUCCESS = "success"
+    FORBIDDEN = "forbidden"
+    TRANSIENT_FAILURE = "transient_failure"
+
+
+class DeliverySource(enum.StrEnum):
+    """Which outbox a delivery came from. Both are logged: the likeliest way
+    this app messages the wrong people is handle_newly_tagged fanning a
+    new_event NOTIFICATION across a tag's followers, not a reminder."""
+
+    REMINDER = "reminder"
+    NOTIFICATION = "notification"

@@ -28,7 +28,6 @@ concurrently.
 import asyncio
 import logging
 from datetime import UTC, datetime
-from enum import Enum
 
 import discord
 
@@ -50,6 +49,7 @@ from app.db.service import (
     record_dm_outcome,
 )
 from app.db.session import SessionMaker
+from app.domain.types import DeliveryOutcome
 from app.ops import run_checks
 from app.scheduler import heartbeat
 
@@ -60,17 +60,6 @@ SEND_CONCURRENCY = 5  # bounded in-flight Discord calls; discord.py's own
                       # rate limiter is the real backstop beyond this.
 HEALTH_EVERY_N_TICKS = 5
 _tick_count = 0
-
-
-class DeliveryOutcome(Enum):
-    """A DM send's result. Distinct from "should this row be marked sent"
-    (SUCCESS and FORBIDDEN both do; TRANSIENT_FAILURE doesn't) and from
-    "should the per-user dm_blocked_since flag change" (SUCCESS clears it,
-    FORBIDDEN sets it, TRANSIENT_FAILURE touches neither)."""
-
-    SUCCESS = "success"
-    FORBIDDEN = "forbidden"
-    TRANSIENT_FAILURE = "transient_failure"
 
 
 async def deliver(bot, item: DueReminder) -> DeliveryOutcome:
