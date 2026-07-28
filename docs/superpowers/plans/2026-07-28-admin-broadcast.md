@@ -1415,14 +1415,44 @@ Append to invariant 4 (**Notifications**):
    entire outbox.
 ```
 
-- [ ] **Step 3: Update WISHLIST.md**
+- [ ] **Step 3: Record the stop-the-service deploy note**
+
+Task 2's migration rebuilds `notifications` (batch mode is unavoidable for an
+FK on SQLite — see the spec's Deviations section for the full reasoning and the
+two rejected alternatives). `notifications` is the DM outbox and has live
+writers, so this one deploy must stop the service first rather than following
+the standard ritual.
+
+Add to `docs/deploy.md`, next to the existing note about the column-drop
+migration's reversed order — that entry is the precedent for "this migration
+needs a non-standard ritual":
+
+```markdown
+The `aebefef6ca70` (broadcasts) migration rebuilds `notifications` by
+copy-and-move, because SQLite cannot add a foreign key outside Alembic's batch
+mode. `notifications` has live writers (the scheduler every 60s, and
+`handle_newly_tagged` from web routes), so STOP the service for that deploy
+rather than upgrading underneath it:
+
+    sudo systemctl stop concert-reminder
+    cd ~/app && git pull && uv sync && uv run alembic upgrade head
+    sudo systemctl start concert-reminder
+
+Queued reminders are unaffected by the pause: `reminder_queue` is materialized,
+so a tick missed during the stop delivers on the next one.
+```
+
+If `docs/deploy.md` has no such section, add one headed "Migrations needing a
+non-standard ritual" and put both entries in it.
+
+- [ ] **Step 4: Update WISHLIST.md**
 
 Move the admin-broadcast entry from Proposed to Shipped, dated 2026-07-28, describing what shipped and the two decisions worth recording (all modes resolved rather than derived; the undo window as the answer to an unrecallable action). Then do the full revision pass the CLAUDE.md wishlist rule requires — re-rank the remaining entries, and write the narrative paragraph in the house voice explaining what moved and why. Note that this closes the arc the delivery feed opened, and that the rehearsal harness (A) is now the only unbuilt piece of the three.
 
-- [ ] **Step 4: Full gates and commit**
+- [ ] **Step 5: Full gates and commit**
 
 ```bash
-git add CLAUDE.md WISHLIST.md
+git add CLAUDE.md WISHLIST.md docs/deploy.md
 git commit -m "docs: record the broadcast invariant and update the wishlist"
 ```
 

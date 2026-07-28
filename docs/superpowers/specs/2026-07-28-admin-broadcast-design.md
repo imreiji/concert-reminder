@@ -250,4 +250,46 @@ owner's opinion before it is built.
 
 ## Deviations from this spec
 
-(To be filled during implementation.)
+1. **The migration rebuilds `notifications`, and this deploy needs the service
+   stopped first.** `broadcast_id` carries a foreign key, and Alembic *cannot*
+   add an FK constraint on SQLite outside `batch_alter_table` — a plain
+   `op.add_column` with an inline `ForeignKey` raises `NotImplementedError: No
+   support for ALTER of constraints in SQLite dialect`. Batch mode is therefore
+   not a choice here, and batch mode means a copy-and-move table rebuild.
+
+   Two alternatives were built and rejected during implementation. A raw
+   `ALTER TABLE ... ADD COLUMN ... REFERENCES` works and avoids the rebuild, but
+   SQLite reflection cannot recover a constraint *name* from the column-level
+   form, so `alembic check` reports a permanent phantom `remove_fk`/`add_fk`
+   pair on `notifications` — every future autogenerate would hand the next
+   author a spurious FK diff whose unedited application triggers a batch rebuild
+   anyway *plus* a `drop_constraint` on a name reflection cannot see, which is
+   the `ValueError: No such constraint` failure CLAUDE.md records as already
+   having shipped once. Omitting the FK was rejected outright: test DBs are
+   built from `Base.metadata`, so both SET NULL tests would keep passing while
+   the server silently lost the constraint.
+
+   Precedent for the chosen approach: `c680f2fbb288` performed the identical
+   operation on this identical table — two `add_column`s plus a
+   `create_foreign_key`, in batch mode — and has shipped. The legacy-anonymous-
+   constraint hazard is specifically a `drop_constraint` failure mode, which
+   this does not use; `naming_convention=NAMING_CONVENTION` is passed anyway so
+   any anonymous constraint on the live server is named during reflection.
+
+   **The consequence for deploying:** `notifications` is the DM outbox, written
+   by the scheduler every 60 seconds and by `handle_newly_tagged` from web
+   routes. The standard ritual runs `alembic upgrade head` while the service is
+   still running, so the rebuild would race live writers — worst case a
+   `SQLITE_BUSY` past the 5s `busy_timeout`, which a tick survives (it catches
+   and retries) but a web route would surface as a 500. Stop the service for
+   this one deploy:
+
+   ```
+   sudo systemctl stop concert-reminder
+   cd ~/app && git pull && uv sync && uv run alembic upgrade head
+   sudo systemctl start concert-reminder
+   ```
+
+   Queued reminders are unaffected by the pause — `reminder_queue` is a
+   materialized outbox and a tick missed during the stop simply delivers on the
+   next one.
