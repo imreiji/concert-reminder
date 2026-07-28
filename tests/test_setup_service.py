@@ -277,6 +277,15 @@ async def test_setup_never_asks_about_a_dead_concerts_round(session):
     # And the same filter takes it out of screen 1: a tile inviting a prune of
     # something already inert, captioned with a moment that will not happen.
     assert await setup_prune_tiles(session, USER, now=NOW) == []
+    # Screen 3 too. The fix landed in the shared filter, so all THREE screens
+    # move together -- pinned here so that width is deliberate rather than
+    # incidental, and so narrowing it later fails loudly. `tracking` counting
+    # the concert while the other two screens had dropped it would end the
+    # flow by announcing a number the reader cannot see behind them, and
+    # `next_deadline_utc` would name the dead General round's close.
+    tallies = await setup_tallies(session, USER, now=NOW)
+    assert tallies.tracking == 0
+    assert tallies.next_deadline_utc is None
 
 
 async def test_setup_skips_covered_round(session):

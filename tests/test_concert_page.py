@@ -1580,6 +1580,55 @@ async def test_a_live_concerts_follow_toggle_is_unchanged(client):
     assert "no reminders will be sent" not in toggle
 
 
+async def test_a_dead_concerts_unfollow_dialog_promises_nothing(client):
+    """The caption's staleness ran one dialog deeper. Holding a won ticket
+    turns the toggle into a heavy confirmation, and its copy named a payment
+    reminder the planner stopped planning at task 1 -- plus a payment moment
+    that will not arrive. A dead concert gets its own sentence; the mark it
+    names is unchanged, only the reminder promise goes."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31, cancelled=True)
+    rid = await add_round(
+        client.db, cid, "Lottery R1", payment=datetime.now(UTC) + timedelta(days=10)
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.WON)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    body = client.get("/concerts/np").text
+    assert "unfollowConfirm" in body  # still the heavy confirmation
+    assert "remove that mark and the payment reminder" not in body
+    assert "this event is cancelled, so no reminders will be sent" in body
+
+    # Same reason as the caption: the POST swaps this partial in ALONE, so the
+    # fact has to come from following_toggle_context, not the page's.
+    frag = client.post(
+        "/concerts/np/subscription", data={"state": "subscribed"},
+        headers={"HX-Request": "true"},
+    ).text
+    assert "this event is cancelled, so no reminders will be sent" in frag
+    assert "remove that mark and the payment reminder" not in frag
+
+
+async def test_a_live_concerts_unfollow_dialog_is_unchanged(client):
+    """The payment reminder is real while any leg stands, so the dialog keeps
+    naming it -- and the moment it is due."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
+    await add_day(client.db, cid, "Tokyo", days_ahead=31)
+    rid = await add_round(
+        client.db, cid, "Lottery R1", payment=datetime.now(UTC) + timedelta(days=10)
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.WON)
+    login(client)
+    client.post("/concerts/np/subscription", data={"state": "subscribed"})
+
+    body = client.get("/concerts/np").text
+    assert "remove that mark and the payment reminder" in body
+    assert "this event is cancelled, so no reminders will be sent" not in body
+
+
 async def test_the_legacy_meta_grid_block_is_gone(client):
     """The demo's header is lineage -> h1 -> tags -> links only; the old
     title_en/organizer/categories/performers_text dl duplicated what the

@@ -2808,6 +2808,11 @@ def _round_asks_application(
     and its result moment is unset or still in the future -- the "middle path"
     rule that a round already decided is never asked about.
 
+    Deliberately concert-blind: whether the concert itself is off (every leg
+    cancelled) is filtered UPSTREAM, in `_tracked_upcoming_concerts`, so any
+    caller reaching this predicate must come through there -- call it over a
+    raw round set and a dead concert's General round starts asking again.
+
     Branch-5 hook: an open UPGRADE round will widen this to also ask about
     its qualifying CLOSED round ("Do you hold this ticket?"), the one
     exception to the middle-path rule. The widening lands here; nothing else

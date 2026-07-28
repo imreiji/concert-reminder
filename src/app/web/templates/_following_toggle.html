@@ -59,7 +59,15 @@
       <button type="button" class="x" aria-label="{{ _('Close') }}"
               onclick="document.getElementById('unfollowConfirm').close()">×</button></div>
     <p>
-      {% if won_payment_at_utc %}
+      {#- Same staleness as the caption, one dialog lower: both live branches
+          below name a reminder the planner stopped planning at task 1, and the
+          payment moment they quote is one that will not arrive. A dead concert
+          gets its own sentence, off the `concert_cancelled` this partial has
+          already resolved -- no second predicate call, and it is deliberately
+          silent about the payment date rather than dating a cancelled event. #}
+      {% if concert_cancelled %}
+      {{ _("This ticket is marked as won, but this event is cancelled, so no reminders will be sent. If you stop following it, we'll remove that mark.") }}
+      {% elif won_payment_at_utc %}
       {% trans when=dual(won_payment_at_utc, tz) %}This ticket is marked as won. Payment is due {{ when }}. If you stop following this event, we'll remove that mark and the payment reminder.{% endtrans %}
       {% else %}
       {{ _("You marked that you have a ticket for this event. If you stop following it, we'll remove that mark and its reminders.") }}
