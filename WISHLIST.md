@@ -269,10 +269,78 @@ backslash action, did not exist. It was struck, not fixed -- see below. The
 sign-in-bounce entry's demo-parity/Discover-head pointer was bumped in place
 once more.
 
+The second 2026-07-28 pass ships the delivery feed, and it is the first build
+in a while that came from a direct owner ask rather than from this list: the
+owner asked for three things in one session -- a rehearsal harness (A), an
+admin feed of what the scheduler actually delivered (B), and a targeted
+broadcast so an incident can be remedied (C) -- and sequenced B and C ahead of
+A, on the reasoning that an undetected bad delivery on production costs more
+than a missing test harness. B is what shipped, so nothing moved up FROM
+Proposed; it is logged in Shipped like the mobile retrofit and the signed-out
+redirect before it. Its revision pass ADDED the other two as entries, which is
+the more important half: **C enters at #1** and **A at #3**. C leads because an
+incident you can see but cannot fix is half an answer, and B just built the
+thing that makes C addressable (`delivery_log` knows who received what). A sits
+at #3 on a borrowed argument rather than its own user impact, which is nil: it
+is the rehearsal path for #1, and #1 is a mass-DM route. A's spec and the
+owner's sequencing genuinely disagree about which of the two comes first, and
+that disagreement is RECORDED on both entries rather than settled by
+renumbering -- it is an owner call.
+
+The rest of the re-rank moves nothing on merit. The admin catalogue export --
+still the only pre-existing entry the owner personally asked for -- is pushed
+from #1 to #2 by insertion alone, and everything below it slides by two;
+entries renumbered 1-15. One entry did get MORE valuable without moving: A's
+spec found a second use for that export, since a catalogue-only copy is the
+clean way to seed a local dev DB (it contains no personal data by
+construction, unlike the wholesale production copy the spec talks whoever
+comes next out of). That is developer value, and this list ranks by user
+impact, so the note is recorded on the entry and the rank is left alone --
+though it does settle the entry's one open question in favour of the
+re-importable YAML shape, because a seed you cannot load back is not a seed.
+Nothing else got cheaper: this build lived in the scheduler tick, a new table
+and an admin page, and no remaining entry goes near any of them. Two were
+re-read against what shipped and both stand -- minute-level offsets (#4) is
+untouched, and the born-dead-concert announcement (#7) is unaffected, though
+worth noting that `delivery_log` is now the thing that would let someone SEE
+that defect fire in production rather than infer it. Two cross-references were
+bumped in place: the born-dead entry's "below #4" pointer at the round-label
+suggestions, and the sign-in-bounce entry's demo-parity/Discover-head pointer,
+for the umpteenth time.
+
 ## Proposed (highest impact first)
 
 
-### 1. Admin-only catalogue export (never any user data)
+### 1. Targeted admin broadcast (sub-project C)
+
+Impact: high - effort: medium. Raised: 2026-07-28 (owner, as one of three).
+
+The remedy half of the delivery feed that just shipped. B tells an admin
+that a batch went to the wrong people; C is how those people are told,
+without opening a Discord DM to each of them by hand. Its dependency now
+exists: `delivery_log` already knows exactly who received what and when,
+so a broadcast can be addressed to "everyone in batch X" or "everyone who
+was DMed about concert Y" rather than to a list typed from memory.
+
+Not designed yet -- the owner sequenced B first and C next, and only B has
+a spec. Two things are already fixed by B and should not be re-litigated:
+the notice goes through the `notifications` outbox like every other
+system-initiated DM (invariant 4), and its kind is ALREADY in
+`UNREPORTED_NOTE_KINDS` as `admin_broadcast`, listed before the feature
+exists precisely so discovering the feedback loop is not a production
+event. The real design questions are the addressing vocabulary, whether a
+broadcast is previewable before it sends, and what an admin can NOT
+address (a mass-DM route with a free-text recipient set is the version of
+this feature that gets the bot rate-limited or reported).
+
+Ranked #1 on the same reasoning that put B ahead of A: an incident you can
+see but not fix is half an answer, and this is the other half. See #3 --
+its spec argues, credibly, that the harness should come first so C's first
+real exercise is not on live users. That is an owner call, not one this
+list can make; it is recorded on both entries rather than resolved by
+renumbering.
+
+### 2. Admin-only catalogue export (never any user data)
 
 Impact: medium - effort: small-medium. Raised: 2026-07-26 (owner).
 
@@ -290,7 +358,57 @@ region/city/address, urls), zipped under `GET /admin/export.zip` behind
 re-importability matters or a read-only JSON dump is enough -- the YAML
 shape costs a little more and pays only if it does.
 
-### 2. Minute-level reminder offsets
+A SECOND use for it turned up on 2026-07-28, in the rehearsal harness spec
+(#3): a catalogue-only copy is the clean way to seed a local dev DB with
+realistic data, because it contains no personal data by construction --
+`users`, `web_sessions`, `round_outcomes`, `concert_subscriptions`,
+`reminder_rules` and now `delivery_log` are all personal, and a wholesale
+copy of production on a laptop sits outside every deletion path this app
+promises. That raises the entry's value beyond the backup/rebuild case it
+was filed for, and it argues for the re-importable YAML shape over a
+read-only dump, since a seed you cannot load back is not a seed. It does
+NOT raise the entry's RANK: this list orders by user impact, and a
+dev-seeding path is developer value. Unchanged in size -- it touches the
+catalogue tables and a zip route, and nothing the delivery feed went near.
+
+### 3. Local rehearsal harness with a second Discord bot (sub-project A)
+
+Impact: medium (developer-facing) - effort: medium. Raised: 2026-07-28
+(owner, as one of three). Spec written and revised the same day:
+`docs/superpowers/specs/2026-07-28-rehearsal-harness-design.md`.
+
+The owner asked for a way to walk the entire user flow including every kind
+of Discord DM. The spec's own first draft targeted production and was
+rewritten: there is no rule that production is the only environment, only a
+gap in the three tiers that already exist -- the suite proves logic,
+web-only dev mode proves the real app in a real browser, and NOTHING proves
+embeds, buttons, the 60s tick and delivery. A second Discord application
+closes that gap for free and drops the whole prod-safety apparatus the
+first draft needed (a `rehearsal` column, three query filters, a tag
+convention) down to one config flag, `rehearsal_enabled`, in the shape
+`bot_enabled` already uses.
+
+Shape: a fresh `dev.db`, one canonical seeded concert with realistic
+anchors and real rules so the planner genuinely computes the fire times,
+then the unsent queue rows pulled backwards in time so the real tick picks
+them up within a minute. Rejected in the spec: an injectable clock (the
+tick calls with the real clock, so the component most worth proving would
+be the one not honouring the fake). Plus a shape catalogue that sends each
+DM builder's output directly, which is the half that stays useful after
+every copy change. Control surface `/admin/rehearsal`, admin-only, English
+only and unwrapped, registered ONLY under the flag -- that flag is the
+entire safety model, so it is asserted directly.
+
+Ranked here rather than on its own user impact, which is nil: it is the
+rehearsal path for #1, and #1 is a mass-DM route. Its spec says so plainly
+-- building C before this means C's first real exercise is on live users --
+while the owner sequenced B and C ahead of it on the reasoning that an
+undetected bad delivery costs more than a missing harness. Both readings
+are recorded; whoever picks up #1 should put the ordering to the owner
+first rather than assume either. Its open question (should the shape
+catalogue let you pick a locale?) is additive and can land second.
+
+### 4. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -330,7 +448,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 3. Eventernote actor-page discovery
+### 5. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -350,7 +468,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 4. Franchise-aware round-label suggestions
+### 6. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -371,7 +489,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 5. The create and import paths still announce a born-dead concert
+### 7. The create and import paths still announce a born-dead concert
 
 Impact: low-medium - effort: small-medium, but on the two riskiest routes
 in the app. Raised: 2026-07-28 (final review of the cleanup batch, which
@@ -409,10 +527,10 @@ deviation 6 of `docs/superpowers/specs/2026-07-28-cleanup-batch-design.md`.
 
 Ranked here: above the code-health entries below because a wrong,
 permanent DM to every follower is user-visible harm rather than tidiness,
-and below #4 because that one pays off on every round label an editor
+and below #6 because that one pays off on every round label an editor
 types while this needs a rare, deliberate starting state.
 
-### 6. Nine of ten `RoundKind` members are purely cosmetic
+### 8. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -435,7 +553,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 7. `generate_event_id` never checks the reserved ids
+### 9. `generate_event_id` never checks the reserved ids
 
 Impact: low - effort: small. Raised: 2026-07-28 (Task 1 review of the
 cleanup batch, while the slug preference above it was being shipped).
@@ -468,7 +586,7 @@ widens the door (a Japanese-titled concert previously slugged to
 needs an exactly-wrong English title to fire; it is filed because when it
 does fire nothing anywhere says so.
 
-### 8. Pin the Python version across dev, CI and the server
+### 10. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -492,7 +610,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 9. PWA / installability
+### 11. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -512,7 +630,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 10. In-app LLM extraction behind the same draft seam
+### 12. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -530,7 +648,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 11. Minor demo-parity cosmetics
+### 13. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -558,7 +676,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 12. Discover sort in the content head, plus the catalogue-count note
+### 14. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -584,7 +702,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 13. Name the destination on the sign-in bounce
+### 15. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -600,7 +718,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#11) and the Discover head (#12) because
+Ranked below the demo-parity batch (#13) and the Discover head (#14) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -618,6 +736,73 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Delivery feed: a durable record of every DM, plus a per-tick digest (2026-07-28)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-28-delivery-feed-design.md`
++ impl plan `docs/superpowers/plans/2026-07-28-delivery-feed.md`, seven tasks
+on branch `delivery-feed-impl`. Sub-project **B** of three; not a Proposed
+entry, so nothing moved up from Proposed -- the owner asked for it directly.
+Its revision pass filed the other two as Proposed #1 (C) and #3 (A).
+
+**The problem it closes.** A production incident in which the bot DMed the
+wrong people was, until now, invisible: `reminder_queue` can answer "who was
+DMed about this" by joining back through the rules, but those rows are not
+evidence. `sync_rule` deletes rows it no longer plans and a deleted round
+cascades them away, so the trail vanishes exactly when a bad concert edit is
+the thing being investigated. Hence a separate `delivery_log` with
+DENORMALIZED labels and SET NULL id pointers: a row outlives the catalogue it
+describes. `user_id` is CASCADE, which is not optional -- the table records
+which events a named person was reminded about, and `POST /me/delete` is one
+`session.delete` relying on cascades (invariant 5).
+
+**Both drains, not reminders alone.** The incident class this exists for is
+"messages sent to the wrong users", and the likeliest cause in this codebase
+is `handle_newly_tagged` fanning a `new_event` NOTIFICATION across a tag's
+followers -- the cleanup batch's ruling 1 shipped one instance of exactly
+that a day earlier. A reminders-only log would have been blind to it.
+
+**The digest is impersonal on purpose.** One DM per admin per tick,
+failure-first, grouping what was sent and COUNTING the recipients rather than
+naming them. Three reasons, and the third is the load-bearing one: identity in
+a DM builds a permanent record of who follows which artists in a place
+`/me/delete` cannot reach; a 100-reminder tick would blow Discord's
+2000-character ceiling; and the recipient count IS the anomaly detector -- a
+group reading x40 on a three-user app is the tell, which a per-recipient list
+would bury. Grouping therefore keys on IDS, never labels: `due_reminders`
+resolves titles per recipient with `loc_field(..., user.language)`, so
+label-keyed grouping would split one fan-out across languages and halve the
+number that carries the whole signal.
+
+**Three hazards the build had to design around, all named in the plan.** The
+digest reporting its own delivery -- closed by `UNREPORTED_NOTE_KINDS`, which
+lists C's future `admin_broadcast` UP FRONT, because discovering that
+afterwards means finding a DM loop in production; it is now a CLAUDE.md rule
+next to invariant 4. Logging endangering delivery -- the log write gets its
+own try/except and its own commit AFTER the bookkeeping commit, the same
+isolation the health block uses, because by then the DMs are on the wire and a
+rollback of `sent_at_utc` would re-send every one of them next tick; there is a
+test that breaks the writer and asserts the reminder stays marked sent. And
+unbounded growth -- a 30-day prune on the existing every-5th-tick health
+cadence rather than a new cron, 30 to match `deploy/backup.sh`'s S3 lifecycle
+so the system has ONE retention number.
+
+`/admin/deliveries` is the reader: recent failures (the incident view), the
+batch list, and one batch expanded to its actual recipients. That last screen
+is the deliberate other half of counts-in-the-DM -- identity lives behind
+`require_admin`, inside `/me/delete`'s reach, on the 30-day window, rather
+than permanently in Discord history. English-only and unwrapped, following the
+`/me/test-dm` precedent; the page ships in the same commit as the `/privacy`
+disclosure it makes necessary, in all three languages, because shipping the
+table without the disclosure is the state to avoid.
+
+One deviation from the spec, applied throughout: the table is `delivery_log`,
+not `reminder_deliveries`. The spec named it for reminders and then specified
+logging both drains, so the original name described half its contents.
+
+Revision pass: recorded in the narrative above -- two entries ADDED (C at #1,
+A at #3), nothing re-ranked on merit, the admin catalogue export pushed to #2
+by insertion while gaining a second use, entries renumbered 1-15.
 
 ### Cleanup batch: five debts, two owner rulings (2026-07-28)
 

@@ -278,4 +278,7 @@ the bad DM.
 
 ## Deviations from this spec
 
-(To be filled during implementation.)
+1. **The table is `delivery_log`, not `reminder_deliveries`.** The spec named
+   it for reminders and then specified logging both drains, so the original
+   name described half its contents. Renamed during planning; the class is
+   `DeliveryLog`.

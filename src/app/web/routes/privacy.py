@@ -28,7 +28,7 @@ templates = None  # set by web.app at startup
 
 # The date this policy text last changed. Bump it whenever the wording below
 # or in privacy.html changes in a way that affects what users are told.
-LAST_UPDATED = "2026-07-19"
+LAST_UPDATED = "2026-07-28"
 
 
 @router.get("/privacy", response_class=HTMLResponse)

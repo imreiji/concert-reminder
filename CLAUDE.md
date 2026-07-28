@@ -388,6 +388,15 @@ deleting them.
    must still go through the outbox for its retry/ordering/audit
    properties. Don't extend this carve-out to anything else without
    discussing it first.
+   Any new notification kind that REPORTS ON deliveries must be added to
+   `UNREPORTED_NOTE_KINDS` (`db/service.py`), or it will log its own delivery,
+   report that next tick, and DM every admin once a minute forever. The
+   delivery log (`delivery_log`) covers both drains deliberately -- the
+   likeliest way this app messages the wrong people is `handle_newly_tagged`
+   fanning a `new_event` notice across a tag's followers, which is a
+   notification, not a reminder. `/admin/deliveries` is its reader and the
+   ONLY surface that names recipients; the digest DM reports counts, because
+   a name in Discord history is a record `POST /me/delete` cannot reach.
 5. **Auth**: three tiers — admin, editor, user. Admins = `ADMIN_WHITELIST`
    env (Discord IDs), env-only by design (no runtime UI; edit `.env` +
    restart). Editors = `EDITOR_WHITELIST` env (permanent bootstrap/

@@ -191,4 +191,4 @@ def test_policy_covers_the_required_sections(client):
         "Changes to this policy",
     ):
         assert heading in body, heading
-    assert "2026-07-19" in body  # last updated
+    assert "2026-07-28" in body  # last updated
