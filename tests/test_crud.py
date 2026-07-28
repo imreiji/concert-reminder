@@ -391,7 +391,7 @@ async def test_test_dm_succeeds_and_clears_dm_blocked(client, monkeypatch):
         def get_user(self, uid):
             return FakeUser()
 
-    # bot_enabled defaults to False in tests (discord_token defaults to "");
+    # conftest's _pin_discord_token forces bot_enabled off for every test;
     # this route short-circuits on that flag, so it must be turned on here.
     monkeypatch.setattr(app_settings, "discord_token", "fake-token")
     login_as(client, EDITOR_ID, "reiji")
@@ -446,9 +446,10 @@ async def test_test_dm_forbidden_sets_dm_blocked(client, monkeypatch):
 
 
 def test_test_dm_when_bot_disabled(client):
-    """discord_token defaults to "" (bot_enabled False) in every test
-    environment, so no monkeypatch is needed for this one -- it's the
-    default state."""
+    """bot_enabled is off because conftest's _pin_discord_token pins it off,
+    NOT because it "defaults to ''" -- that was this docstring's original
+    claim and it was false: Settings reads `.env`, so on a machine with a real
+    token this route fell through its guard into a live discord.py call."""
     login_as(client, EDITOR_ID, "reiji")
     r = client.post("/me/test-dm")
     assert r.status_code == 200
