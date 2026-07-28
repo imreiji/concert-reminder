@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-27 22:42-0300\n"
+"POT-Creation-Date: 2026-07-27 23:18-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -15,12 +15,12 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:32
-#: src/app/bot/views.py:204 src/app/db/service.py:1530
+#: src/app/bot/views.py:221 src/app/db/service.py:1530
 msgid "opens"
 msgstr "受付開始"
 
 #: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:33
-#: src/app/bot/views.py:206 src/app/db/service.py:1531
+#: src/app/bot/views.py:223 src/app/db/service.py:1531
 msgid "closes"
 msgstr "締切"
 
@@ -28,7 +28,7 @@ msgstr "締切"
 msgid "results announced"
 msgstr "当落発表"
 
-#: src/app/bot/messages.py:35 src/app/bot/views.py:211
+#: src/app/bot/messages.py:35 src/app/bot/views.py:228
 #: src/app/db/service.py:1533 src/app/web/templates/setup.html:155
 msgid "payment due"
 msgstr "入金締切"
@@ -63,7 +63,7 @@ msgstr "{unit}後"
 msgid "{unit} ago"
 msgstr "{unit}前"
 
-#: src/app/bot/messages.py:76 src/app/bot/messages.py:173
+#: src/app/bot/messages.py:76 src/app/bot/messages.py:184
 #: src/app/db/service.py:1534 src/app/web/templates/tags.html:370
 msgid "event"
 msgstr "イベント"
@@ -76,20 +76,27 @@ msgstr "会場"
 msgid "First deadline"
 msgstr "最初の締切"
 
-#: src/app/bot/messages.py:121 src/app/bot/messages.py:147
-#: src/app/bot/messages.py:193
+#: src/app/bot/messages.py:121 src/app/bot/messages.py:158
+#: src/app/bot/messages.py:204
 msgid "Open on dekimasen.app"
 msgstr "dekimasen.appで開く"
 
-#: src/app/bot/messages.py:142
+#: src/app/bot/messages.py:148
+msgid ""
+"This event is cancelled — every performance is off, and all your "
+"reminders for it have been cleared. Anything you already recorded, like a"
+" won ticket, stays on your record."
+msgstr "この公演は中止になりました。すべての公演が行われないため、関連するリマインダーはすべて解除されました。当選チケットなど、これまでに記録した内容はそのまま残ります。"
+
+#: src/app/bot/messages.py:152
 msgid "A performance you had a reminder for was cancelled, and it's been cleared."
 msgstr "リマインダーを設定していた公演が中止になったため、関連するリマインダーを解除しました。"
 
-#: src/app/bot/messages.py:190
+#: src/app/bot/messages.py:201
 msgid "Apply here"
 msgstr "こちらから申し込む"
 
-#: src/app/bot/messages.py:190
+#: src/app/bot/messages.py:201
 msgid "Ticket page"
 msgstr "チケットページ"
 
@@ -127,7 +134,13 @@ msgstr "このイベントにはリマインダーがありませんでした。
 msgid "Turn my reminders back on"
 msgstr "リマインダーを再開"
 
-#: src/app/bot/views.py:150
+#: src/app/bot/views.py:163
+msgid ""
+"This event is cancelled, so there are no reminders to turn back on. Your "
+"settings are still saved — if it comes back, they'll work again."
+msgstr "この公演は中止のため、再開できるリマインダーはありません。設定はそのまま保存されているので、公演が復活すれば再び有効になります。"
+
+#: src/app/bot/views.py:167
 #, python-brace-format
 msgid ""
 "Turned {n} reminder back on. You'll be notified again for any active ones"
@@ -137,179 +150,179 @@ msgid_plural ""
 "ones using your existing settings."
 msgstr[0] "{n}件のリマインダーを再開しました。有効なものは、現在の設定に従って再び通知されます。"
 
-#: src/app/bot/views.py:156
+#: src/app/bot/views.py:174
 msgid "You had no reminders set up on this event."
 msgstr "このイベントにはリマインダーが設定されていませんでした。"
 
-#: src/app/bot/views.py:166
+#: src/app/bot/views.py:183
 msgid "Show all deadlines"
 msgstr "すべての締切を表示"
 
-#: src/app/bot/views.py:184
+#: src/app/bot/views.py:201
 msgid "That event no longer exists."
 msgstr "そのイベントはもう存在しません。"
 
-#: src/app/bot/views.py:199
+#: src/app/bot/views.py:216
 msgid "cancelled"
 msgstr "中止"
 
-#: src/app/bot/views.py:208
+#: src/app/bot/views.py:225
 msgid "results"
 msgstr "結果"
 
-#: src/app/bot/views.py:224
+#: src/app/bot/views.py:241
 msgid "No deadlines entered yet."
 msgstr "締切はまだ登録されていません。"
 
-#: src/app/bot/views.py:233
+#: src/app/bot/views.py:250
 msgid "Snooze 1 day"
 msgstr "1日後に再通知"
 
-#: src/app/bot/views.py:249
+#: src/app/bot/views.py:266
 msgid "Snoozed — I'll remind you again in 24 hours."
 msgstr "スヌーズしました。24時間後に再度通知します。"
 
-#: src/app/bot/views.py:250
+#: src/app/bot/views.py:267
 msgid "Can't snooze — the deadline is less than a day away. ⏳"
 msgstr "締切まで1日未満のため、スヌーズできません。⏳"
 
-#: src/app/bot/views.py:251 src/app/bot/views.py:402
+#: src/app/bot/views.py:268 src/app/bot/views.py:419
 msgid "That reminder isn't yours."
 msgstr "そのリマインダーはあなたのものではありません。"
 
-#: src/app/bot/views.py:252 src/app/bot/views.py:403
+#: src/app/bot/views.py:269 src/app/bot/views.py:420
 msgid "That reminder no longer exists."
 msgstr "そのリマインダーはもう存在しません。"
 
-#: src/app/bot/views.py:274
+#: src/app/bot/views.py:291
 msgid "I applied"
 msgstr "申込済み"
 
-#: src/app/bot/views.py:285
+#: src/app/bot/views.py:302
 msgid "Got it — marked as applied!"
 msgstr "申込済みにしました！"
 
-#: src/app/bot/views.py:294
+#: src/app/bot/views.py:311
 msgid "Didn't apply"
 msgstr "申込なし"
 
-#: src/app/bot/views.py:306
+#: src/app/bot/views.py:323
 msgid "No worries — you won't get results/payment reminders for this one."
 msgstr "わかりました。この公演の当落・入金リマインダーは届きません。"
 
-#: src/app/bot/views.py:315 src/app/bot/views.py:699
+#: src/app/bot/views.py:332 src/app/bot/views.py:716
 #: src/app/web/templates/_deadline_rows.html:34
 #: src/app/web/templates/_round_rows.html:28
 msgid "Won"
 msgstr "当選"
 
-#: src/app/bot/views.py:327
+#: src/app/bot/views.py:344
 msgid "Congrats! I'll remind you when payment is due."
 msgstr "おめでとうございます！入金締切が近づいたら通知します。"
 
-#: src/app/bot/views.py:336 src/app/bot/views.py:710
+#: src/app/bot/views.py:353 src/app/bot/views.py:727
 #: src/app/web/templates/_deadline_rows.html:36
 #: src/app/web/templates/_round_rows.html:30
 msgid "Lost"
 msgstr "落選"
 
-#: src/app/bot/views.py:348 src/app/bot/views.py:557
+#: src/app/bot/views.py:365 src/app/bot/views.py:574
 msgid ""
 "Sorry to hear it — no payment reminder needed, and I'll let you know when"
 " the next round opens if there is one."
 msgstr "承知しました。入金リマインダーは送信しません。次の受付がある場合は、受付開始時にお知らせします。"
 
-#: src/app/bot/views.py:358 src/app/web/templates/_capture_actions.html:170
+#: src/app/bot/views.py:375 src/app/web/templates/_capture_actions.html:170
 #: src/app/web/templates/home.html:161 src/app/web/templates/home.html:167
 msgid "Paid"
 msgstr "入金済み"
 
-#: src/app/bot/views.py:369 src/app/bot/views.py:555
+#: src/app/bot/views.py:386 src/app/bot/views.py:572
 msgid "Marked as paid — all set!"
 msgstr "入金済みにしました。これで手続き完了です！"
 
-#: src/app/bot/views.py:378 src/app/bot/views.py:413
+#: src/app/bot/views.py:395 src/app/bot/views.py:430
 msgid "Remind me later"
 msgstr "後で通知"
 
-#: src/app/bot/views.py:380
+#: src/app/bot/views.py:397
 msgid "How many days?"
 msgstr "何日後にしますか？"
 
-#: src/app/bot/views.py:394
+#: src/app/bot/views.py:411
 msgid "Enter a whole number of days greater than 0."
 msgstr "1以上の整数で日数を入力してください。"
 
-#: src/app/bot/views.py:400
+#: src/app/bot/views.py:417
 #, python-brace-format
 msgid "Got it — I'll remind you again in {n} day(s)."
 msgstr "わかりました。{n}日後にもう一度お知らせします。"
 
-#: src/app/bot/views.py:401
+#: src/app/bot/views.py:418
 msgid "Can't snooze that far — the deadline is too close. ⏳"
 msgstr "締切が近いため、その日時まではスヌーズできません。⏳"
 
-#: src/app/bot/views.py:548
+#: src/app/bot/views.py:565
 #, python-brace-format
 msgid "{day} recorded — and the other days?"
 msgstr "{day}を記録しました。他の日程はいかがでしたか？"
 
-#: src/app/bot/views.py:549
+#: src/app/bot/views.py:566
 msgid "Got it — and the other days?"
 msgstr "記録しました。他の日程はいかがでしたか？"
 
-#: src/app/bot/views.py:553
+#: src/app/bot/views.py:570
 msgid "All recorded — have you paid for it yet?"
 msgstr "すべて記録しました。入金はお済みですか？"
 
-#: src/app/bot/views.py:562
+#: src/app/bot/views.py:579
 msgid "Nothing left to record for this one."
 msgstr "この受付について記録することはもうありません。"
 
-#: src/app/bot/views.py:576
+#: src/app/bot/views.py:593
 msgid "That round no longer exists."
 msgstr "その受付はもう存在しません。"
 
-#: src/app/bot/views.py:598 src/app/web/templates/_capture_actions.html:110
+#: src/app/bot/views.py:615 src/app/web/templates/_capture_actions.html:110
 msgid "Won (all)"
 msgstr "全日程で当選"
 
-#: src/app/bot/views.py:616 src/app/web/templates/_capture_actions.html:144
+#: src/app/bot/views.py:633 src/app/web/templates/_capture_actions.html:144
 msgid "Lost (all)"
 msgstr "全日程で落選"
 
-#: src/app/bot/views.py:637 src/app/web/templates/_capture_actions.html:138
+#: src/app/bot/views.py:654 src/app/web/templates/_capture_actions.html:138
 msgid "Lost the rest"
 msgstr "残りは落選"
 
-#: src/app/bot/views.py:699 src/app/web/templates/_capture_actions.html:118
+#: src/app/bot/views.py:716 src/app/web/templates/_capture_actions.html:118
 #, python-brace-format
 msgid "Won — {day}"
 msgstr "当選 — {day}"
 
-#: src/app/bot/views.py:710 src/app/web/templates/_capture_actions.html:124
+#: src/app/bot/views.py:727 src/app/web/templates/_capture_actions.html:124
 #, python-brace-format
 msgid "Lost — {day}"
 msgstr "落選 — {day}"
 
-#: src/app/bot/views.py:721 src/app/web/templates/_capture_actions.html:130
+#: src/app/bot/views.py:738 src/app/web/templates/_capture_actions.html:130
 #, python-brace-format
 msgid "Not going — {day}"
 msgstr "不参加 — {day}"
 
-#: src/app/bot/views.py:721 src/app/web/templates/_round_rows.html:200
+#: src/app/bot/views.py:738 src/app/web/templates/_round_rows.html:200
 msgid "Not going"
 msgstr "不参加"
 
-#: src/app/bot/views.py:729
+#: src/app/bot/views.py:746
 msgid "Paid already"
 msgstr "入金済み"
 
-#: src/app/bot/views.py:750
+#: src/app/bot/views.py:767
 msgid "Not yet"
 msgstr "まだです"
 
-#: src/app/bot/views.py:763
+#: src/app/bot/views.py:780
 msgid "No rush — mark it paid whenever you're done."
 msgstr "お急ぎでなくて大丈夫です。入金が済んだら記録してください。"
 
@@ -543,7 +556,7 @@ msgstr "{kind}・{n}後に受付開始"
 msgid "All rounds closed"
 msgstr "すべての受付が終了"
 
-#: src/app/db/service.py:5161 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:5172 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -553,7 +566,7 @@ msgstr "すべての受付が終了"
 msgid "Title"
 msgstr "タイトル"
 
-#: src/app/db/service.py:5165 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:5176 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -566,17 +579,17 @@ msgstr "タイトル"
 msgid "Notes"
 msgstr "メモ"
 
-#: src/app/db/service.py:5171
+#: src/app/db/service.py:5182
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "公演{n}の名称"
 
-#: src/app/db/service.py:5176
+#: src/app/db/service.py:5187
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "受付{n}の名称"
 
-#: src/app/db/service.py:5185 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:5196 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -591,7 +604,7 @@ msgstr "受付{n}の名称"
 msgid "Name"
 msgstr "名前"
 
-#: src/app/db/service.py:5190
+#: src/app/db/service.py:5201
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -985,7 +998,7 @@ msgid "+%(n)s more"
 msgstr "ほか%(n)s件"
 
 #: src/app/web/templates/_following_toggle.html:54
-#: src/app/web/templates/_following_toggle.html:92
+#: src/app/web/templates/_following_toggle.html:97
 #: src/app/web/templates/_tag_follow_bell.html:14
 #: src/app/web/templates/preferences.html:16
 #: src/app/web/templates/preferences.html:28
@@ -1005,34 +1018,34 @@ msgstr "このイベントのフォローをやめますか？"
 msgid "Close"
 msgstr "閉じる"
 
-#: src/app/web/templates/_following_toggle.html:69
+#: src/app/web/templates/_following_toggle.html:74
 msgid ""
 "This ticket is marked as won, but this event is cancelled, so no "
-"reminders will be sent. If you stop following it, we'll remove that mark."
-msgstr "このチケットは「当選」に設定されていますが、この公演は中止のため、通知は送信されません。フォローをやめると、この設定が削除されます。"
+"reminders will be sent. Stopping following does not remove that mark."
+msgstr "このチケットは「当選」に設定されていますが、この公演は中止のため、通知は送信されません。フォローをやめても、この設定は削除されません。"
 
-#: src/app/web/templates/_following_toggle.html:71
+#: src/app/web/templates/_following_toggle.html:76
 #, python-format
 msgid ""
 "This ticket is marked as won. Payment is due %(when)s. If you stop "
 "following this event, we'll remove that mark and the payment reminder."
 msgstr "このチケットは「当選」に設定されています。入金締切は%(when)sです。このイベントのフォローをやめると、この設定と入金リマインダーが削除されます。"
 
-#: src/app/web/templates/_following_toggle.html:73
+#: src/app/web/templates/_following_toggle.html:78
 msgid ""
 "You marked that you have a ticket for this event. If you stop following "
 "it, we'll remove that mark and its reminders."
 msgstr "このイベントは「チケットあり」に設定されています。フォローをやめると、この設定とリマインダーが削除されます。"
 
-#: src/app/web/templates/_following_toggle.html:78
+#: src/app/web/templates/_following_toggle.html:83
 msgid "Keep following"
 msgstr "フォローを続ける"
 
-#: src/app/web/templates/_following_toggle.html:83
+#: src/app/web/templates/_following_toggle.html:88
 msgid "Stop following"
 msgstr "フォローをやめる"
 
-#: src/app/web/templates/_following_toggle.html:103
+#: src/app/web/templates/_following_toggle.html:108
 #: src/app/web/templates/_tag_follow_bell.html:21
 #: src/app/web/templates/setup.html:9 src/app/web/templates/welcome.html:8
 msgid "Follow"

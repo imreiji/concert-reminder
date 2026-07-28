@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-27 22:42-0300\n"
+"POT-Creation-Date: 2026-07-27 23:18-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -15,12 +15,12 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:32
-#: src/app/bot/views.py:204 src/app/db/service.py:1530
+#: src/app/bot/views.py:221 src/app/db/service.py:1530
 msgid "opens"
 msgstr "申请开始"
 
 #: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:33
-#: src/app/bot/views.py:206 src/app/db/service.py:1531
+#: src/app/bot/views.py:223 src/app/db/service.py:1531
 msgid "closes"
 msgstr "截止"
 
@@ -28,7 +28,7 @@ msgstr "截止"
 msgid "results announced"
 msgstr "结果公布"
 
-#: src/app/bot/messages.py:35 src/app/bot/views.py:211
+#: src/app/bot/messages.py:35 src/app/bot/views.py:228
 #: src/app/db/service.py:1533 src/app/web/templates/setup.html:155
 msgid "payment due"
 msgstr "付款截止"
@@ -63,7 +63,7 @@ msgstr "{unit}后"
 msgid "{unit} ago"
 msgstr "{unit}前"
 
-#: src/app/bot/messages.py:76 src/app/bot/messages.py:173
+#: src/app/bot/messages.py:76 src/app/bot/messages.py:184
 #: src/app/db/service.py:1534 src/app/web/templates/tags.html:370
 msgid "event"
 msgstr "活动"
@@ -76,20 +76,27 @@ msgstr "场馆"
 msgid "First deadline"
 msgstr "首个截止时间"
 
-#: src/app/bot/messages.py:121 src/app/bot/messages.py:147
-#: src/app/bot/messages.py:193
+#: src/app/bot/messages.py:121 src/app/bot/messages.py:158
+#: src/app/bot/messages.py:204
 msgid "Open on dekimasen.app"
 msgstr "在 dekimasen.app 中打开"
 
-#: src/app/bot/messages.py:142
+#: src/app/bot/messages.py:148
+msgid ""
+"This event is cancelled — every performance is off, and all your "
+"reminders for it have been cleared. Anything you already recorded, like a"
+" won ticket, stays on your record."
+msgstr "本次活动已取消，所有场次都不再举行，相关提醒已全部清除。你此前记录的内容（例如中签的门票）仍会保留。"
+
+#: src/app/bot/messages.py:152
 msgid "A performance you had a reminder for was cancelled, and it's been cleared."
 msgstr "你设置了提醒的场次已取消，相关提醒已清除。"
 
-#: src/app/bot/messages.py:190
+#: src/app/bot/messages.py:201
 msgid "Apply here"
 msgstr "在此申请"
 
-#: src/app/bot/messages.py:190
+#: src/app/bot/messages.py:201
 msgid "Ticket page"
 msgstr "购票页面"
 
@@ -127,7 +134,13 @@ msgstr "你没有为这场活动设置提醒。"
 msgid "Turn my reminders back on"
 msgstr "重新开启提醒"
 
-#: src/app/bot/views.py:150
+#: src/app/bot/views.py:163
+msgid ""
+"This event is cancelled, so there are no reminders to turn back on. Your "
+"settings are still saved — if it comes back, they'll work again."
+msgstr "本次活动已取消，没有可以重新开启的提醒。你的设置仍会保留，活动如果恢复，它们会再次生效。"
+
+#: src/app/bot/views.py:167
 #, python-brace-format
 msgid ""
 "Turned {n} reminder back on. You'll be notified again for any active ones"
@@ -137,179 +150,179 @@ msgid_plural ""
 "ones using your existing settings."
 msgstr[0] "已重新开启 {n} 条提醒。仍有效的提醒会按照你当前的设置再次通知你。"
 
-#: src/app/bot/views.py:156
+#: src/app/bot/views.py:174
 msgid "You had no reminders set up on this event."
 msgstr "你没有为这场活动设置过提醒。"
 
-#: src/app/bot/views.py:166
+#: src/app/bot/views.py:183
 msgid "Show all deadlines"
 msgstr "显示所有截止时间"
 
-#: src/app/bot/views.py:184
+#: src/app/bot/views.py:201
 msgid "That event no longer exists."
 msgstr "这场活动已不存在。"
 
-#: src/app/bot/views.py:199
+#: src/app/bot/views.py:216
 msgid "cancelled"
 msgstr "已取消"
 
-#: src/app/bot/views.py:208
+#: src/app/bot/views.py:225
 msgid "results"
 msgstr "结果"
 
-#: src/app/bot/views.py:224
+#: src/app/bot/views.py:241
 msgid "No deadlines entered yet."
 msgstr "尚未录入任何截止时间。"
 
-#: src/app/bot/views.py:233
+#: src/app/bot/views.py:250
 msgid "Snooze 1 day"
 msgstr "1 天后再提醒"
 
-#: src/app/bot/views.py:249
+#: src/app/bot/views.py:266
 msgid "Snoozed — I'll remind you again in 24 hours."
 msgstr "已延后 — 我会在 24 小时后再次提醒你。"
 
-#: src/app/bot/views.py:250
+#: src/app/bot/views.py:267
 msgid "Can't snooze — the deadline is less than a day away. ⏳"
 msgstr "无法延后 — 距离截止不到一天。⏳"
 
-#: src/app/bot/views.py:251 src/app/bot/views.py:402
+#: src/app/bot/views.py:268 src/app/bot/views.py:419
 msgid "That reminder isn't yours."
 msgstr "那条提醒不是你的。"
 
-#: src/app/bot/views.py:252 src/app/bot/views.py:403
+#: src/app/bot/views.py:269 src/app/bot/views.py:420
 msgid "That reminder no longer exists."
 msgstr "那条提醒已不存在。"
 
-#: src/app/bot/views.py:274
+#: src/app/bot/views.py:291
 msgid "I applied"
 msgstr "我已申请"
 
-#: src/app/bot/views.py:285
+#: src/app/bot/views.py:302
 msgid "Got it — marked as applied!"
 msgstr "收到 — 已标记为已申请！"
 
-#: src/app/bot/views.py:294
+#: src/app/bot/views.py:311
 msgid "Didn't apply"
 msgstr "我没申请"
 
-#: src/app/bot/views.py:306
+#: src/app/bot/views.py:323
 msgid "No worries — you won't get results/payment reminders for this one."
 msgstr "没问题 — 你不会收到这个活动的结果或付款提醒。"
 
-#: src/app/bot/views.py:315 src/app/bot/views.py:699
+#: src/app/bot/views.py:332 src/app/bot/views.py:716
 #: src/app/web/templates/_deadline_rows.html:34
 #: src/app/web/templates/_round_rows.html:28
 msgid "Won"
 msgstr "中签"
 
-#: src/app/bot/views.py:327
+#: src/app/bot/views.py:344
 msgid "Congrats! I'll remind you when payment is due."
 msgstr "恭喜！我会在付款截止临近时提醒你。"
 
-#: src/app/bot/views.py:336 src/app/bot/views.py:710
+#: src/app/bot/views.py:353 src/app/bot/views.py:727
 #: src/app/web/templates/_deadline_rows.html:36
 #: src/app/web/templates/_round_rows.html:30
 msgid "Lost"
 msgstr "落选"
 
-#: src/app/bot/views.py:348 src/app/bot/views.py:557
+#: src/app/bot/views.py:365 src/app/bot/views.py:574
 msgid ""
 "Sorry to hear it — no payment reminder needed, and I'll let you know when"
 " the next round opens if there is one."
 msgstr "很遗憾 — 无需付款提醒；如果还有下一轮，我会在开放申请时通知你。"
 
-#: src/app/bot/views.py:358 src/app/web/templates/_capture_actions.html:170
+#: src/app/bot/views.py:375 src/app/web/templates/_capture_actions.html:170
 #: src/app/web/templates/home.html:161 src/app/web/templates/home.html:167
 msgid "Paid"
 msgstr "已付款"
 
-#: src/app/bot/views.py:369 src/app/bot/views.py:555
+#: src/app/bot/views.py:386 src/app/bot/views.py:572
 msgid "Marked as paid — all set!"
 msgstr "已标记为已付款 — 全部搞定！"
 
-#: src/app/bot/views.py:378 src/app/bot/views.py:413
+#: src/app/bot/views.py:395 src/app/bot/views.py:430
 msgid "Remind me later"
 msgstr "稍后提醒我"
 
-#: src/app/bot/views.py:380
+#: src/app/bot/views.py:397
 msgid "How many days?"
 msgstr "几天后？"
 
-#: src/app/bot/views.py:394
+#: src/app/bot/views.py:411
 msgid "Enter a whole number of days greater than 0."
 msgstr "请输入大于 0 的整数天数。"
 
-#: src/app/bot/views.py:400
+#: src/app/bot/views.py:417
 #, python-brace-format
 msgid "Got it — I'll remind you again in {n} day(s)."
 msgstr "收到 — 我会在 {n} 天后再次提醒你。"
 
-#: src/app/bot/views.py:401
+#: src/app/bot/views.py:418
 msgid "Can't snooze that far — the deadline is too close. ⏳"
 msgstr "无法延后那么久 — 距离截止太近了。⏳"
 
-#: src/app/bot/views.py:548
+#: src/app/bot/views.py:565
 #, python-brace-format
 msgid "{day} recorded — and the other days?"
 msgstr "已记录{day}。其他日期呢？"
 
-#: src/app/bot/views.py:549
+#: src/app/bot/views.py:566
 msgid "Got it — and the other days?"
 msgstr "收到 — 其他日期呢？"
 
-#: src/app/bot/views.py:553
+#: src/app/bot/views.py:570
 msgid "All recorded — have you paid for it yet?"
 msgstr "全部记录完成 — 已经付款了吗？"
 
-#: src/app/bot/views.py:562
+#: src/app/bot/views.py:579
 msgid "Nothing left to record for this one."
 msgstr "这一轮没有需要记录的了。"
 
-#: src/app/bot/views.py:576
+#: src/app/bot/views.py:593
 msgid "That round no longer exists."
 msgstr "该轮次已不存在。"
 
-#: src/app/bot/views.py:598 src/app/web/templates/_capture_actions.html:110
+#: src/app/bot/views.py:615 src/app/web/templates/_capture_actions.html:110
 msgid "Won (all)"
 msgstr "全场中签"
 
-#: src/app/bot/views.py:616 src/app/web/templates/_capture_actions.html:144
+#: src/app/bot/views.py:633 src/app/web/templates/_capture_actions.html:144
 msgid "Lost (all)"
 msgstr "全场落选"
 
-#: src/app/bot/views.py:637 src/app/web/templates/_capture_actions.html:138
+#: src/app/bot/views.py:654 src/app/web/templates/_capture_actions.html:138
 msgid "Lost the rest"
 msgstr "其余落选"
 
-#: src/app/bot/views.py:699 src/app/web/templates/_capture_actions.html:118
+#: src/app/bot/views.py:716 src/app/web/templates/_capture_actions.html:118
 #, python-brace-format
 msgid "Won — {day}"
 msgstr "中签 — {day}"
 
-#: src/app/bot/views.py:710 src/app/web/templates/_capture_actions.html:124
+#: src/app/bot/views.py:727 src/app/web/templates/_capture_actions.html:124
 #, python-brace-format
 msgid "Lost — {day}"
 msgstr "落选 — {day}"
 
-#: src/app/bot/views.py:721 src/app/web/templates/_capture_actions.html:130
+#: src/app/bot/views.py:738 src/app/web/templates/_capture_actions.html:130
 #, python-brace-format
 msgid "Not going — {day}"
 msgstr "不参加 — {day}"
 
-#: src/app/bot/views.py:721 src/app/web/templates/_round_rows.html:200
+#: src/app/bot/views.py:738 src/app/web/templates/_round_rows.html:200
 msgid "Not going"
 msgstr "不参加"
 
-#: src/app/bot/views.py:729
+#: src/app/bot/views.py:746
 msgid "Paid already"
 msgstr "已付款"
 
-#: src/app/bot/views.py:750
+#: src/app/bot/views.py:767
 msgid "Not yet"
 msgstr "还没有"
 
-#: src/app/bot/views.py:763
+#: src/app/bot/views.py:780
 msgid "No rush — mark it paid whenever you're done."
 msgstr "不着急 — 付款后再来标记就好。"
 
@@ -543,7 +556,7 @@ msgstr "{kind} · {n}后开放"
 msgid "All rounds closed"
 msgstr "所有轮次均已截止"
 
-#: src/app/db/service.py:5161 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:5172 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -553,7 +566,7 @@ msgstr "所有轮次均已截止"
 msgid "Title"
 msgstr "标题"
 
-#: src/app/db/service.py:5165 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:5176 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -566,17 +579,17 @@ msgstr "标题"
 msgid "Notes"
 msgstr "备注"
 
-#: src/app/db/service.py:5171
+#: src/app/db/service.py:5182
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "场次 {n} 名称"
 
-#: src/app/db/service.py:5176
+#: src/app/db/service.py:5187
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "轮次 {n} 名称"
 
-#: src/app/db/service.py:5185 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:5196 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -591,7 +604,7 @@ msgstr "轮次 {n} 名称"
 msgid "Name"
 msgstr "名称"
 
-#: src/app/db/service.py:5190
+#: src/app/db/service.py:5201
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -985,7 +998,7 @@ msgid "+%(n)s more"
 msgstr "+还有 %(n)s 项"
 
 #: src/app/web/templates/_following_toggle.html:54
-#: src/app/web/templates/_following_toggle.html:92
+#: src/app/web/templates/_following_toggle.html:97
 #: src/app/web/templates/_tag_follow_bell.html:14
 #: src/app/web/templates/preferences.html:16
 #: src/app/web/templates/preferences.html:28
@@ -1005,34 +1018,34 @@ msgstr "不再关注此活动吗？"
 msgid "Close"
 msgstr "关闭"
 
-#: src/app/web/templates/_following_toggle.html:69
+#: src/app/web/templates/_following_toggle.html:74
 msgid ""
 "This ticket is marked as won, but this event is cancelled, so no "
-"reminders will be sent. If you stop following it, we'll remove that mark."
-msgstr "此门票已标记为“中签”，但本次活动已取消，不会发送任何提醒。不再关注后，该标记会被删除。"
+"reminders will be sent. Stopping following does not remove that mark."
+msgstr "此门票已标记为“中签”，但本次活动已取消，不会发送任何提醒。即使不再关注，该标记也不会被删除。"
 
-#: src/app/web/templates/_following_toggle.html:71
+#: src/app/web/templates/_following_toggle.html:76
 #, python-format
 msgid ""
 "This ticket is marked as won. Payment is due %(when)s. If you stop "
 "following this event, we'll remove that mark and the payment reminder."
 msgstr "此门票已标记为“中签”。付款截止时间为 %(when)s。不再关注此活动后，该标记和付款提醒会被删除。"
 
-#: src/app/web/templates/_following_toggle.html:73
+#: src/app/web/templates/_following_toggle.html:78
 msgid ""
 "You marked that you have a ticket for this event. If you stop following "
 "it, we'll remove that mark and its reminders."
 msgstr "此活动已标记为“有票”。不再关注后，该标记和相关提醒会被删除。"
 
-#: src/app/web/templates/_following_toggle.html:78
+#: src/app/web/templates/_following_toggle.html:83
 msgid "Keep following"
 msgstr "继续关注"
 
-#: src/app/web/templates/_following_toggle.html:83
+#: src/app/web/templates/_following_toggle.html:88
 msgid "Stop following"
 msgstr "不再关注"
 
-#: src/app/web/templates/_following_toggle.html:103
+#: src/app/web/templates/_following_toggle.html:108
 #: src/app/web/templates/_tag_follow_bell.html:21
 #: src/app/web/templates/setup.html:9 src/app/web/templates/welcome.html:8
 msgid "Follow"

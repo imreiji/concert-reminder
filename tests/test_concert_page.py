@@ -1584,8 +1584,9 @@ async def test_a_dead_concerts_unfollow_dialog_promises_nothing(client):
     """The caption's staleness ran one dialog deeper. Holding a won ticket
     turns the toggle into a heavy confirmation, and its copy named a payment
     reminder the planner stopped planning at task 1 -- plus a payment moment
-    that will not arrive. A dead concert gets its own sentence; the mark it
-    names is unchanged, only the reminder promise goes."""
+    that will not arrive. A dead concert gets its own sentence, and it does not
+    inherit the live branches' claim that unfollowing removes the won mark: the
+    opt-out never deletes a RoundOutcome (invariant 8)."""
     cid = await seed_concert(client.db)
     await add_day(client.db, cid, "Osaka", days_ahead=30, cancelled=True)
     await add_day(client.db, cid, "Tokyo", days_ahead=31, cancelled=True)
@@ -1600,6 +1601,7 @@ async def test_a_dead_concerts_unfollow_dialog_promises_nothing(client):
     assert "unfollowConfirm" in body  # still the heavy confirmation
     assert "remove that mark and the payment reminder" not in body
     assert "this event is cancelled, so no reminders will be sent" in body
+    assert "Stopping following does not remove that mark" in body
 
     # Same reason as the caption: the POST swaps this partial in ALONE, so the
     # fact has to come from following_toggle_context, not the page's.
