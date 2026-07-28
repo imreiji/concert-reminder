@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-28 13:12-0300\n"
+"POT-Creation-Date: 2026-07-28 13:24-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -1017,7 +1017,7 @@ msgstr "このイベントのフォローをやめますか？"
 
 #: src/app/web/templates/_following_toggle.html:59
 #: src/app/web/templates/_result_capture_dialog.html:25
-#: src/app/web/templates/home.html:285
+#: src/app/web/templates/home.html:289
 #: src/app/web/templates/preferences.html:398
 msgid "Close"
 msgstr "閉じる"
@@ -1456,7 +1456,7 @@ msgid "Log out"
 msgstr "サインアウト"
 
 #: src/app/web/templates/base.html:77 src/app/web/templates/home.html:80
-#: src/app/web/templates/home.html:191
+#: src/app/web/templates/home.html:195
 msgid "Sign in with Discord"
 msgstr "Discordでサインイン"
 
@@ -2087,71 +2087,72 @@ msgid ""
 "deadlines."
 msgstr "1分で4組をフォローできます。新しいイベントや締切が表示されます。"
 
-#: src/app/web/templates/home.html:189
+#: src/app/web/templates/home.html:193
 msgid ""
-"Sign in with the Discord account you already have. We only ever DM you "
-"about deadlines\n"
-"      for artists you chose to follow."
-msgstr "お持ちのDiscordアカウントでサインインできます。フォローしたアーティストの締切だけをDMでお知らせします。"
+"Sign in with the Discord account you already have. We DM you about "
+"deadlines for\n"
+"      artists you chose to follow, and occasionally about the service "
+"itself."
+msgstr "お持ちのDiscordアカウントでサインインできます。フォローしたアーティストの締切と、ときどきサービスに関するお知らせをDMでお送りします。"
 
-#: src/app/web/templates/home.html:195
+#: src/app/web/templates/home.html:199
 msgid ""
 "<b>When you're signed out, this page shows an example.</b> Sign in to see"
 " your own board with your rounds, results, and deadlines. Follow someone "
 "to add their events."
 msgstr "<b>サインアウト中は、サンプルが表示されます。</b>サインインすると、自分の受付、当落、締切をボードで確認できます。出演者などをフォローすると、そのイベントが追加されます。"
 
-#: src/app/web/templates/home.html:216
+#: src/app/web/templates/home.html:220
 msgid "Up next"
 msgstr "次はこれ"
 
-#: src/app/web/templates/home.html:235
+#: src/app/web/templates/home.html:239
 msgid "Your campaigns"
 msgstr "フォロー中の公演"
 
-#: src/app/web/templates/home.html:248
+#: src/app/web/templates/home.html:252
 msgid "Coming up"
 msgstr "今後の予定"
 
-#: src/app/web/templates/home.html:249
+#: src/app/web/templates/home.html:253
 msgid "All times JST and yours, always both"
 msgstr "時刻は常にJSTと現地時刻の両方で表示"
 
-#: src/app/web/templates/home.html:260
+#: src/app/web/templates/home.html:264
 msgid "Not tracking these yet"
 msgstr "まだフォローしていません"
 
-#: src/app/web/templates/home.html:263
+#: src/app/web/templates/home.html:267
 msgid "Open discover →"
 msgstr "公演を探す →"
 
-#: src/app/web/templates/home.html:266
+#: src/app/web/templates/home.html:270
 #, python-format
 msgid "%(count)s event in the catalogue,"
 msgid_plural "%(count)s events in the catalogue,"
 msgstr[0] "カタログには%(count)s件のイベント、"
 
-#: src/app/web/templates/home.html:267
+#: src/app/web/templates/home.html:271
 #, python-format
 msgid "%(n)s with a round still open."
 msgstr "うち%(n)s件は受付中。"
 
-#: src/app/web/templates/home.html:268
+#: src/app/web/templates/home.html:272
 msgid "Browse by franchise, group, artist or region — or search everything."
 msgstr "フランチャイズ、グループ、アーティスト、地域から探すか、キーワードで検索できます。"
 
-#: src/app/web/templates/home.html:278
+#: src/app/web/templates/home.html:282
 msgid ""
 "<b>Home shows your current status.</b> Everything above is yours — your "
 "rounds, results, and deadlines. Use the section at the bottom to find "
 "more events."
 msgstr "<b>ホームでは現在の状況を確認できます。</b>上に表示されるのは、自分の受付、当落、締切です。その他のイベントは、ページ下部から探せます。"
 
-#: src/app/web/templates/home.html:284
+#: src/app/web/templates/home.html:288
 msgid "Not applying to this round"
 msgstr "この受付には申し込まない"
 
-#: src/app/web/templates/home.html:287
+#: src/app/web/templates/home.html:291
 msgid ""
 "Done — you won't get reminders for this round. You'll still get reminders"
 " for later rounds of\n"
@@ -2160,15 +2161,15 @@ msgstr ""
 "完了しました。この受付のリマインダーは停止しました。<b "
 "id=\"pruneName\">このイベント</b>の今後の受付については引き続き通知します。"
 
-#: src/app/web/templates/home.html:291
+#: src/app/web/templates/home.html:295
 msgid "That's right"
 msgstr "そのとおり"
 
-#: src/app/web/templates/home.html:299
+#: src/app/web/templates/home.html:303
 msgid "Skip this event entirely"
 msgstr "このイベントをフォロー対象から外す"
 
-#: src/app/web/templates/home.html:301
+#: src/app/web/templates/home.html:305
 msgid "Manage this event →"
 msgstr "このイベントを管理 →"
 
