@@ -29,10 +29,11 @@
   before 4 and 4 before 6 — press Lost at step 4 and the ladder ends there.
 </p>
 <ol>
-  <li><strong>Start</strong> — no DM arrives. The seed attaches no tags and writes its
-    own rules, so there is no follower fan-out for <code>handle_newly_tagged</code> to
-    announce; the new-event embed and its apply / remove / deadlines buttons are in the
-    shape catalogue below.</li>
+  <li><strong>Start</strong> — a <code>new_event</code> DM arrives within a tick.
+    The seed attaches a followed ARTIST tag <em>before</em> writing any rules, so
+    <code>handle_newly_tagged</code> genuinely fans out to you. Buttons: apply /
+    remove / deadlines. This is the app's widest notification path, so it is worth
+    watching rather than skipping.</li>
   <li><strong>Next reminder</strong> — the 1st lottery opens. Button: snooze.</li>
   <li><strong>Next reminder</strong> — the 1st lottery closes; press <em>I applied</em>.
     Buttons: applied / notapplied / remindlater.</li>

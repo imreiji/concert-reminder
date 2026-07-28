@@ -161,9 +161,12 @@ go to `/admin/rehearsal`.
 ## 9. The rehearsal harness
 
 **Start** seeds one canonical concert -- `event_id` `rehearsal`, two legs, three
-rounds -- subscribes you to it, writes one reminder rule per anchor at zero
-offset, and lets the real `sync_concert` plan them. Eight queue rows come out,
-and the page's state table lists them in the order they will fire:
+rounds -- attaches an ARTIST tag you follow (which fires the `new_event` fan-out,
+step 1 below), subscribes you to the concert, writes one reminder rule per anchor
+at zero offset, and lets the real `sync_concert` plan them. That order matters:
+the tag is attached before any rule exists, because `handle_newly_tagged` skips a
+user who already has rules on the concert. Eight queue rows come out, and the
+page's state table lists them in the order they will fire:
 
 | # | Anchor | Round or leg |
 | --- | --- | --- |
@@ -202,7 +205,7 @@ before 4 and 4 before 6 -- press Lost at step 4 and the ladder ends there.
 
 | # | Action | What arrives | Buttons |
 | --- | --- | --- | --- |
-| 1 | Start | *nothing* -- see below | -- |
+| 1 | Start | `new_event` embed, fanned out by the tag attach | apply / remove / deadlines |
 | 2 | Next | R1 opens | snooze |
 | 3 | Next | R1 closes -> press **I applied** | applied / notapplied / remindlater |
 | 4 | Next | R1 results -> press **Won -- Day 1** | wonall / wonday x2 / lostall / snooze |
@@ -216,12 +219,18 @@ Three things about that table are worth spelling out, because each of them was
 wrong in an earlier draft of it and a walk that lies about what a correct DM
 looks like teaches you to "fix" working code.
 
-**Step 1 sends no DM.** The `new_event` notice is fanned out by
-`handle_newly_tagged` to the followers of a newly attached tag, and the seed
-attaches no tags -- it tracks the concert with an explicit subscription and
-writes its own rules, so there is no tag fan-out and no preset application to
-announce. To see that embed and its three buttons (Set my reminders / Remove
-these reminders / Show all deadlines), use the shape catalogue below.
+**Step 1 really does DM you, and the ordering is why.** The `new_event` notice
+is fanned out by `handle_newly_tagged` to the followers of a newly attached
+tag, and `handle_newly_tagged` skips any user who ALREADY has rules on the
+concert. So the seed attaches its ARTIST tag (リハーサル・アーティスト, which you
+are subscribed to with notify on) *before* writing its five rules. Attach it
+afterwards and Start queues nothing at all — silently.
+
+That is worth watching rather than clicking past: this is the widest
+notification path in the app, the one that DMs every follower of a tag, and
+the likeliest way it could ever message the wrong people. It is also the only
+step here that exercises delivery rather than rendering — the shape catalogue
+can draw the same embed, but only this proves it reaches anyone.
 
 **Step 4 is the per-leg split, not Won/Lost.** R1 deliberately covers both
 legs, so `build_reminder_message` renders `wonall`, one `wonday` per covered
