@@ -289,6 +289,41 @@ sqlite3 ~/app/app.db "DROP TABLE _alembic_tmp_<whatever_it_named>;"
 Then fix the migration and re-run. If `alembic_version` has ADVANCED but the
 schema looks wrong, do not improvise - restore `pre-migration.db` instead.
 
+### Migrations needing a non-standard ritual
+
+Named individually because in both cases the diff does not look like what it
+is, and the section above cannot be followed correctly by reading the revision
+file alone. Both are already written; this list is for whoever deploys them and
+for whoever writes the next one.
+
+**`ce43bfcfcae3` (drop the legacy free-text venue columns) reverses the
+order**: restart on the NEW code BEFORE `alembic upgrade head`, so the old
+process cannot SELECT columns that no longer exist mid-deploy. The rule and
+the reasoning live in CLAUDE.md's `src/app/db/` section (the "legacy free-text
+venue columns are GONE" entry) and are deliberately not repeated here - it
+binds every future column-DROP migration, so it is a codebase rule that
+happens to have a deploy consequence, not a one-off. Already deployed; listed
+so the precedent is findable from this file.
+
+**`aebefef6ca70` (broadcasts) rebuilds `notifications`** by copy-and-move,
+because SQLite cannot add a foreign key outside Alembic's batch mode.
+`notifications` has live writers (the scheduler every 60s, and
+`handle_newly_tagged` from web routes), so STOP the service for that deploy
+rather than upgrading underneath it - the full stop-and-back-up block above,
+not the one-liner:
+
+    sudo systemctl stop concert-reminder
+    sqlite3 ~/app/app.db ".backup /home/ubuntu/pre-migration.db"
+    cd ~/app && git pull && uv sync && uv run alembic upgrade head
+    sudo systemctl start concert-reminder
+
+Queued reminders are unaffected by the pause: `reminder_queue` is materialized,
+so a tick missed during the stop delivers on the next one. Worth spelling out
+because `git log -p --stat -1 -- alembic/versions/` shows two `add_column`
+calls and a `create_foreign_key` on an existing table, which reads like the
+add-a-column case the one-liner is fine for; the FK is what forces batch mode,
+and batch mode on SQLite IS a table rebuild.
+
 ## Disaster recovery
 
 New box -> steps 1-2 -> restore latest `app-*.db.gz` from S3 to `~/app/app.db`

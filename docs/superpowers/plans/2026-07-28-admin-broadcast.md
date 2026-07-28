@@ -1429,11 +1429,11 @@ recipient's language, so the scheduler's plain-text path is unchanged."
 - Modify: `CLAUDE.md`, `WISHLIST.md`
 - Verify: `src/app/web/templates/privacy.html`
 
-- [ ] **Step 1: Confirm the privacy page needs no change**
+- [x] **Step 1: Confirm the privacy page needs no change**
 
 The broadcast stores admin-authored text and a recipient count — no new category of *user* data. Read `privacy.html` and confirm this rather than assuming. If the existing wording implies DMs are only ever automated reminders, it needs a sentence; if it is already general about DMs, it does not. Report which.
 
-- [ ] **Step 2: Document the invariant in CLAUDE.md**
+- [x] **Step 2: Document the invariant in CLAUDE.md**
 
 Append to invariant 4 (**Notifications**):
 
@@ -1449,7 +1449,7 @@ Append to invariant 4 (**Notifications**):
    entire outbox.
 ```
 
-- [ ] **Step 3: Record the stop-the-service deploy note**
+- [x] **Step 3: Record the stop-the-service deploy note**
 
 Task 2's migration rebuilds `notifications` (batch mode is unavoidable for an
 FK on SQLite — see the spec's Deviations section for the full reasoning and the
@@ -1479,11 +1479,11 @@ so a tick missed during the stop delivers on the next one.
 If `docs/deploy.md` has no such section, add one headed "Migrations needing a
 non-standard ritual" and put both entries in it.
 
-- [ ] **Step 4: Update WISHLIST.md**
+- [x] **Step 4: Update WISHLIST.md**
 
 Move the admin-broadcast entry from Proposed to Shipped, dated 2026-07-28, describing what shipped and the two decisions worth recording (all modes resolved rather than derived; the undo window as the answer to an unrecallable action). Then do the full revision pass the CLAUDE.md wishlist rule requires — re-rank the remaining entries, and write the narrative paragraph in the house voice explaining what moved and why. Note that this closes the arc the delivery feed opened, and that the rehearsal harness (A) is now the only unbuilt piece of the three.
 
-- [ ] **Step 5: Full gates and commit**
+- [x] **Step 5: Full gates and commit**
 
 ```bash
 git add CLAUDE.md WISHLIST.md docs/deploy.md

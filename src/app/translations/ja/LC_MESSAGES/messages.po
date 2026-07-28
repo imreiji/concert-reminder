@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-28 13:05-0300\n"
+"POT-Creation-Date: 2026-07-28 13:12-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -2927,21 +2927,29 @@ msgid ""
 msgstr "この情報は、設定したイベントの締切リマインダーを送信し、自分の設定を表示するためだけに使います。それ以外の目的には使いません。この情報を使って利用者のプロフィールを作成したり、評価したり、自動的な判断を行ったりすることもありません。"
 
 #: src/app/web/templates/privacy.html:75
+msgid ""
+"There is one exception, and it is rare: the person who runs the site can "
+"send you a Discord DM about the service itself — to tell you a reminder "
+"went out wrong, for example. It is written by a person, it is never "
+"advertising, and it uses nothing about you beyond your Discord user ID."
+msgstr "例外が一つだけあり、それはめったにありません。サイトの運営者が、サービス自体についてDiscordのDMをお送りすることがあります。たとえば、リマインダーが誤って送信されたことをお知らせする場合です。これは人が書いたもので、広告ではなく、あなたのDiscordユーザーID以外の情報は一切使いません。"
+
+#: src/app/web/templates/privacy.html:78
 msgid "Sharing"
 msgstr "共有について"
 
-#: src/app/web/templates/privacy.html:77
+#: src/app/web/templates/privacy.html:80
 msgid ""
 "We do not share your data. We do not sell, rent, or give it to other "
 "companies. We only send the information needed to Discord to deliver your"
 " DM."
 msgstr "データを共有、販売、貸与、第三者提供することはありません。DMを送るために必要な情報だけをDiscordに送信します。"
 
-#: src/app/web/templates/privacy.html:80
+#: src/app/web/templates/privacy.html:83
 msgid "How long we keep it"
 msgstr "保存期間"
 
-#: src/app/web/templates/privacy.html:82
+#: src/app/web/templates/privacy.html:85
 msgid ""
 "We keep your data while your account is active. We back up the database "
 "every night in private, encrypted storage. Backups are deleted "
@@ -2950,42 +2958,42 @@ msgid ""
 "up to 30 days."
 msgstr "アカウントが有効な間、データを保存します。データベースは毎晩、非公開の暗号化されたストレージにバックアップされます。バックアップは30日後に自動で削除されます。アカウントを削除すると、稼働中のサイトからはすぐにデータが削除されますが、バックアップには最大30日間残る場合があります。"
 
-#: src/app/web/templates/privacy.html:85
+#: src/app/web/templates/privacy.html:88
 msgid "Cookies"
 msgstr "クッキー"
 
-#: src/app/web/templates/privacy.html:87
+#: src/app/web/templates/privacy.html:90
 msgid ""
 "We use one cookie to keep you signed in. We do not use analytics or "
 "tracking cookies, so there is no cookie consent banner."
 msgstr "サインイン状態を保つために、Cookieを1つ使用します。アクセス解析用や追跡用のCookieは使用しないため、Cookie同意バナーは表示しません。"
 
-#: src/app/web/templates/privacy.html:90
+#: src/app/web/templates/privacy.html:93
 msgid "Your rights"
 msgstr "あなたの権利"
 
-#: src/app/web/templates/privacy.html:92
+#: src/app/web/templates/privacy.html:95
 msgid ""
 "You can ask for a copy of your data, ask for it to be corrected, or ask\n"
 "    for it to be deleted. Just get in touch:"
 msgstr "データのコピーの請求、訂正の請求、削除の請求ができます。お気軽にご連絡ください："
 
-#: src/app/web/templates/privacy.html:97 src/app/web/templates/terms.html:89
+#: src/app/web/templates/privacy.html:100 src/app/web/templates/terms.html:89
 #, python-format
 msgid "Discord: %(contact_discord)s"
 msgstr "Discord：%(contact_discord)s"
 
-#: src/app/web/templates/privacy.html:100 src/app/web/templates/terms.html:92
+#: src/app/web/templates/privacy.html:103 src/app/web/templates/terms.html:92
 msgid "Email:"
 msgstr "メール："
 
-#: src/app/web/templates/privacy.html:111 src/app/web/templates/terms.html:103
+#: src/app/web/templates/privacy.html:114 src/app/web/templates/terms.html:103
 msgid ""
 "This deployment has not published contact details yet. If you reached\n"
 "    this page from a running site, contact whoever operates it."
 msgstr "この環境ではまだ連絡先が公開されていません。稼働中のサイトからこのページを開いた場合は、運営者にお問い合わせください。"
 
-#: src/app/web/templates/privacy.html:116
+#: src/app/web/templates/privacy.html:119
 msgid ""
 "Deleting your account removes your personal data, including your login "
 "sessions, reminders, presets, tag subscriptions, and lottery results. "
@@ -2994,11 +3002,11 @@ msgid ""
 "who follow them."
 msgstr "アカウントを削除すると、ログインセッション、リマインダー、プリセット、タグのフォロー、抽選結果などの個人データが削除されます。追加したイベント、タグ、編集履歴は共有カタログに残りますが、名前は削除されます。これにより、ほかの利用者がフォロー中のイベントは引き続き利用できます。"
 
-#: src/app/web/templates/privacy.html:119
+#: src/app/web/templates/privacy.html:122
 msgid "Changes to this policy"
 msgstr "このポリシーの変更"
 
-#: src/app/web/templates/privacy.html:121
+#: src/app/web/templates/privacy.html:124
 msgid ""
 "If this policy changes, the date at the top of this page changes with\n"
 "    it. There is no mailing list to notify, since we do not have your "
