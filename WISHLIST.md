@@ -209,11 +209,27 @@ a dead show is the worst instance of the lie the entry describes. Entries
 renumbered 1-14. Nothing re-ranked on merit and nothing got cheaper: this build
 lived in the planner, the board and the capture surfaces, and the remaining
 entries go nowhere near them. Two were re-read against what shipped and both
-stand unchanged -- #3 (opt-out snapping the folds shut) is a sibling defect on
-the same page but purely an htmx fold-state problem, and #5 (minute-level
-offsets) is if anything slightly less pressing, since a dead concert now plans
-no reminders at any offset at all. The sign-in-bounce entry's demo-parity/
-Discover-head pointer was bumped in place once more.
+stand unchanged -- #5 (opt-out snapping the folds shut, #3 at the time) is a
+sibling defect on the same page but purely an htmx fold-state problem, and #8
+(minute-level offsets) is if anything slightly less pressing, since a dead
+concert now plans no reminders at any offset at all. The sign-in-bounce
+entry's demo-parity/Discover-head pointer was bumped in place once more.
+
+The dead-concerts branch's own final review then FILED three entries rather
+than shipping a sixth pass: two of them (#3, the unfollow dialog's two live
+branches claiming an opt-out deletes a won mark, and #4, `handle_newly_tagged`
+still DMing a fully-cancelled concert as a new event) are the same
+"stop-claiming-what-is-not-true" family the branch just shipped, found while
+fixing its own new copy; #6 is an owner-eyeball question about how a dead board
+card marks its rungs. The three Important findings from that review were fixed
+on the branch itself and are recorded in its Shipped entry. Nothing already on
+the list re-ranked on merit -- the insertions push the former #3-#14 down to
+#5-#17 by position only -- and the sign-in-bounce entry's demo-parity/
+Discover-head pointer was bumped again. Worth noting for the ordering: #3 and
+#4 both sit above the entries they displace on truthfulness grounds (a false
+sentence at a decision point, and a DM about a show that is not happening) but
+below #2, which affects every Japanese-titled import rather than a narrow
+state.
 
 ## Proposed (highest impact first)
 
@@ -251,7 +267,53 @@ at every create boundary, the fix is one line of preference -- slug from
 concerts keep their ids (event_id is editor-owned after creation; no
 backfill).
 
-### 3. Opting a leg out snaps the concert page's round folds shut
+### 3. The unfollow dialog overstates what an opt-out does
+
+Impact: low-medium - effort: small. Raised: 2026-07-27 (final review of the
+dead-concerts branch, which fixed the third branch of the same dialog).
+
+`_following_toggle.html`'s heavy unfollow confirmation has three branches, and
+the two LIVE ones both promise something the write never performs: "we'll
+remove that mark and the payment reminder" / "we'll remove that mark and its
+reminders". The reminder half is true. The mark half is not: an opt-out NEVER
+deletes a `RoundOutcome` (invariant 8, and `routes/subscriptions.py` says so in
+its module docstring -- it forfeits the reminder, not the record, deliberately,
+so that unfollowing a won ticket is one confirmed press instead of a two-step
+chore). A reader who takes the sentence at face value believes stopping
+following erases the ticket they recorded, which is exactly the fear that would
+stop them pressing it.
+
+The dead-concert branch of the same dialog was fixed on the cancelled-concerts
+branch (it had no reminder left to name, so the false half was the whole
+sentence). These two were deliberately left alone there as out of scope. The
+fix is two msgids in three languages plus the existing dialog tests, and the
+wording has to keep naming the reminder loss -- that part is the reason the
+confirmation is heavy in the first place.
+
+### 4. A tag attached to a dead concert still DMs it as a new event
+
+Impact: low-medium - effort: small. Raised: 2026-07-27 (final review of the
+dead-concerts branch).
+
+`handle_newly_tagged` (`db/service.py`) is the notify-and-apply pipeline behind
+every tag attach: it auto-applies the subscriber's linked preset and queues a
+"new event" notice. Nothing in it asks whether the concert is happening. Attach
+an artist tag to a concert whose every leg is cancelled -- an editor tidying
+taxonomy, or `sync_concert_venue_tags` rolling up a leg's venue -- and every
+follower of that tag gets a 🆕 DM for a show that is off, with an "Apply here"
+button and a preset quietly applied behind it. That is the exact lie the
+dead-concerts branch removed from nine other surfaces; this one was not on its
+list because it fires on tagging, not on cancelling.
+
+Two decisions to make, and they are why this is not a one-liner: whether the
+notice is SUPPRESSED or merely reworded (the concert page's cancellation banner
+argues for suppression -- there is nothing to act on), and whether the preset
+auto-apply is also skipped (it should be: the planner drops every round of a
+dead concert anyway, so the rules it creates are dead on arrival and would
+re-arm silently if the show were ever revived, which is arguably a feature).
+`all_legs_cancelled` is already the predicate; the work is the ruling.
+
+### 5. Opting a leg out snaps the concert page's round folds shut
 
 Impact: low - effort: small-medium. Raised: 2026-07-27 (final review of the
 ladder-declutter branch).
@@ -271,7 +333,28 @@ or the fold state hoisted somewhere a re-render can read), which would also
 cover the outcome routes' folds without their per-round special case. Sized
 small-medium for that reason: the mechanism is the work, not the caller.
 
-### 4. Agent-import review-debt batch (deferred minors)
+### 6. Per-rung cancelled marking on a dead board card (owner eyeball)
+
+Impact: low - effort: small. Raised: 2026-07-27 (final review of the
+dead-concerts branch).
+
+A dead concert keeps its board card when the reader has standing on it (the
+owner's ruling), badged Cancelled, with its countdown suppressed and its rungs
+built from the concert's FULL round set -- otherwise a 先行 lottery, which names
+its legs, would vanish and only general-round standing would keep a card. The
+consequence is that every rung on a dead card is a round that is not happening,
+while the only thing saying so is one badge in the card header. On a card with
+several rungs the badge is easy to read as "one leg was cancelled", which is
+what it means everywhere else in the app.
+
+Wants an owner eyeball before any code: the alternatives are a per-rung marker
+(closest to the concert page and `ShowDeadlinesButton`, which both label every
+round), dimming the ladder as a whole, or leaving it exactly as shipped on the
+grounds that a board card is a scanning surface and one badge per card is the
+point of a badge. Cheap either way; the question is which reading the owner
+wants, not how to build it.
+
+### 7. Agent-import review-debt batch (deferred minors)
 
 Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
 whole-branch review of the agent-import build; the first three triaged
@@ -292,7 +375,7 @@ it works today, but it's a typo waiting to confuse someone (spotted
 behavior-safe today; batched so they stop being rediscovered by every
 future reviewer.
 
-### 5. Minute-level reminder offsets
+### 8. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -332,7 +415,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 6. Eventernote actor-page discovery
+### 9. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -352,7 +435,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 7. Franchise-aware round-label suggestions
+### 10. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -373,7 +456,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 8. Nine of ten `RoundKind` members are purely cosmetic
+### 11. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -396,7 +479,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 9. Pin the Python version across dev, CI and the server
+### 12. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -420,7 +503,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 10. PWA / installability
+### 13. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -440,7 +523,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 11. In-app LLM extraction behind the same draft seam
+### 14. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -458,7 +541,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 12. Minor demo-parity cosmetics
+### 15. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -486,7 +569,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 13. Discover sort in the content head, plus the catalogue-count note
+### 16. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -512,7 +595,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 14. Name the destination on the sign-in bounce
+### 17. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -528,7 +611,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#12) and the Discover head (#13) because
+Ranked below the demo-parity batch (#15) and the Discover head (#16) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -567,11 +650,13 @@ concert leaves the board, matching Discover. Always-stay was rejected outright:
 the board would fill with dead events the reader never had a stake in, the
 opposite of the de-crowding shipped two entries earlier.
 
-The entry named three surfaces. The branch touched nine, and two of the six
-were beyond it in ways worth recording. **The planner was pulled in
-deliberately at spec time** -- a general round on a dead concert still planned
-DMs saying "apply now", which is the worst instance of the lie the entry
-describes, and leaving it out would have fixed the screens while the scheduler
+The entry named three surfaces. The branch touched nine: those three, the
+planner (added deliberately at spec time), and five more found by review. Two
+of those six additions were beyond the entry in ways worth recording. **The
+planner was pulled in deliberately at spec time** -- a general round on a dead
+concert still planned DMs saying "apply now", which is the worst instance of
+the lie the entry describes, and leaving it out would have fixed the screens
+while the scheduler
 kept contradicting them. **`/setup` was found genuinely broken**, not merely
 stale: `_round_asks_application` carries its own eligibility rule, never goes
 through `capture_gates`, and nothing upstream filtered dead concerts, so a dead
@@ -583,6 +668,20 @@ were the cancellation notice (the planner's deletions would otherwise have
 taken reminders away silently), the bot's `/upcoming`, `ShowDeadlinesButton`,
 and the follow toggle, whose caption promised "you will be reminded about every
 round below" some 40px under the new cancelled banner.
+
+The branch's final review found the Discord half had stopped one button short
+and added two more surfaces (eleven now, thirteen call sites):
+`ReinstateRemindersButton` reported `reinstate_user_rules`'s return value as
+reminders re-armed, but that counts RULES re-synced -- they survive a
+cancellation untouched, only their queue rows go -- so on a dead concert it
+promised notifications the planner can never send, on a DM this very branch
+had just widened to fire for whole-event death. And the cancellation DM itself
+said "a performance you had a reminder for was cancelled" for a show that is
+off entirely, understating the one notice that carries the news that every
+reminder here is gone, a won ticket's payment reminder included. The same
+review found the new dead-concert unfollow copy claiming an opt-out removes
+the won mark, which it never does -- fixed on the branch; the two pre-existing
+live branches making a version of the same claim are filed at #3 above.
 
 One real design defect surfaced mid-build and is recorded in the spec's
 deviations section: passing `has_open_round=False` into `column_for`, as the
@@ -598,16 +697,18 @@ of the list -- the admin catalogue export was #1 and stays #1, untouched, and
 event_id slugs rises to #2 by pure removal. Nothing
 re-ranked on merit and nothing got cheaper: this build lived in the planner,
 the board and the capture surfaces, none of which the remaining entries go
-near. Entries renumbered 1-14; the sign-in-bounce entry's demo-parity/
-Discover-head pointer was bumped in place again. Two of the remaining entries
-were re-read against what shipped and both stand: #3 (opt-out snapping the
-concert page's folds shut) is a sibling defect on the same page but an
-htmx-fold-state problem with nothing to do with cancellation, and #5
+near. Entries renumbered 1-14, and again to 1-17 by the final review's three
+filings (which is where the numbers in this paragraph point); the sign-in-bounce
+entry's demo-parity/Discover-head pointer was bumped in place again. Two of the
+remaining entries were re-read against what shipped and both stand: #5
+(opt-out snapping the concert page's folds shut) is a sibling defect on the
+same page but an
+htmx-fold-state problem with nothing to do with cancellation, and #8
 (minute-level offsets) is untouched, since a dead concert now plans no
 reminders at any offset. Worth recording for whoever takes the list next: with
 this gone, every remaining entry is assistant-raised or review-raised except
 the admin export, and the two defects the ladder-declutter review filed
-together are now one shipped and one still open at #3.
+together are now one shipped and one still open at #5.
 
 ### Group the performer chips by group on the concert page (2026-07-27)
 

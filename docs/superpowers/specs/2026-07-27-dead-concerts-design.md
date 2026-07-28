@@ -165,8 +165,9 @@ remove. Not in §B3, which only specified the badge.
 ### 3. The branch grew well past four surfaces
 
 The WISHLIST entry named three, §B named four; the shipped predicate is asked
-in ten places across nine surfaces, every addition found by review rather than
-by design:
+in eleven places across nine surfaces (the planner asks it twice, once per rule
+scope, and so does the concert page), all but the planner's found by review
+rather than by design:
 
 | Surface | Seam | In §B? |
 | --- | --- | --- |
@@ -182,6 +183,14 @@ by design:
 
 (The branch's running ledger counted "seven" — it folded `ShowDeadlinesButton`
 into the concert page and took the notice and `/upcoming` as one arrival.)
+
+The final-review wave then added two more, both Discord and both the same
+shape as `ShowDeadlinesButton`: `ReinstateRemindersButton` (the button ON the
+cancellation DM, which reported `reinstate_user_rules`'s rule count as
+reminders re-armed and so promised notifications a dead concert can never
+send) and the cancellation DM's own prose (`LegCancelledContext` now carries
+the concert-level fact, so whole-event death reads as more than "a performance
+was cancelled"). Thirteen places across eleven surfaces as shipped.
 
 Two of those were more than tidying. The **cancellation notice** was a
 silent-loss hole: the planner's new branch deletes a dead concert's queued
