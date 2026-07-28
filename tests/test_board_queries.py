@@ -371,10 +371,13 @@ async def test_board_card_pill_tone_follows_urgency_not_just_column(session):
 
 # ── a fully cancelled concert on the board ───────────────────────────────
 #
-# One rule does all of this: a dead concert passes has_open_round=False into
-# column_for. With no standing that returns None and the existing
-# "column is None -> continue" drops the card; with standing the outcome
-# ranks place it, so it can never land in Open now.
+# Two rules, both concert-level. A dead concert passes has_open_round=False
+# into column_for -- with no standing that returns None and the existing
+# "column is None -> continue" drops the card, and with standing the outcome
+# ranks place it, so it can never land in Open now. And the card's rounds are
+# ALL its rounds, not the is_round_cancelled survivors: on a dead concert
+# every leg-bound round is implicitly cancelled, so filtering them out would
+# throw away the very standing the card exists to record.
 
 
 async def make_dead_leg(s, concert: Concert, label: str = "Day 1") -> ConcertDay:
@@ -470,6 +473,111 @@ async def test_a_concert_with_one_live_leg_is_untouched(session):
     assert [c.concert.event_id for c in columns[Column.OPEN]] == ["tour"]
     assert columns[Column.OPEN][0].cancelled is False
     assert open_total == 1
+
+
+async def test_leg_bound_standing_on_a_dead_concert_keeps_a_badged_card(session):
+    """The motivating case, and the COMMON one: a 先行 lottery names the leg it
+    is for, so when that leg is cancelled the round is implicitly cancelled
+    too. Filtering the card's rounds by is_round_cancelled would drop the
+    winning round -- and with it the standing -- leaving the reader who holds
+    a ticket with no card at all. On a dead concert the card is built from
+    every round, so the win survives and brings its rung with it."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+
+    dead = await make_concert(session, "dead-legbound", tag)
+    leg = await make_dead_leg(session, dead)
+    won = await add_round(
+        session, dead, "1次先行", opens=dt(4, 1), closes=dt(4, 20), applies_to=[leg.id]
+    )
+    await record_round_outcome(session, USER, won.id, LotteryOutcome.WON, now=NOW)
+
+    columns, _ = await board_cards(session, USER, now=NOW)
+
+    assert [c.concert.event_id for c in columns[Column.WON]] == ["dead-legbound"]
+    card = columns[Column.WON][0]
+    assert card.cancelled is True
+    # The rung that EXPLAINS the column must be on the card: a card in "Won --
+    # pay" whose ladder does not contain the win names a column nothing on it
+    # explains (see domain.board.visible_rungs).
+    assert [(r.round_id, r.state) for r in card.rungs] == [(won.id, "won")]
+    assert card.outcome_by_round == {won.id: LotteryOutcome.WON}
+
+
+async def test_leg_bound_standing_survives_an_open_general_round(session):
+    """The shape that must not regress: leg-bound standing PLUS a General
+    round still open. The General round is the only one is_round_cancelled
+    spares, so a live-rounds-only card would be placed by nothing but that
+    round -- landing in Open now while the application already lodged went
+    unmentioned. The card keeps both rungs and the standing decides."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+
+    dead = await make_concert(session, "dead-mixed", tag)
+    leg = await make_dead_leg(session, dead)
+    applied = await add_round(
+        session, dead, "1次先行", opens=dt(4, 1), closes=dt(4, 20), applies_to=[leg.id]
+    )
+    general = await open_round(session, dead, "General sale")
+    await record_round_outcome(session, USER, applied.id, LotteryOutcome.APPLIED, now=NOW)
+
+    columns, open_total = await board_cards(session, USER, now=NOW)
+
+    assert [c.concert.event_id for c in columns[Column.APPLIED]] == ["dead-mixed"]
+    assert columns[Column.OPEN] == []
+    assert open_total == 0
+    card = columns[Column.APPLIED][0]
+    assert card.cancelled is True
+    # Both rungs, in ladder order. The General round reads "todo", not "live":
+    # a dead concert has no open round, whatever its rounds' timestamps say --
+    # the same claim the suppressed countdown stops the card making.
+    assert [(r.round_id, r.state) for r in card.rungs] == [
+        (applied.id, "applied"),
+        (general.id, "todo"),
+    ]
+
+
+async def test_a_dead_concert_you_paid_for_stays_in_secured(session):
+    """The top rung of the ladder, and the one the reader has most at stake
+    in: a paid ticket to a show that is not happening."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+
+    dead = await make_concert(session, "dead-paid", tag)
+    leg = await make_dead_leg(session, dead)
+    paid = await add_round(
+        session, dead, "1次先行", opens=dt(4, 1), closes=dt(4, 20), applies_to=[leg.id]
+    )
+    await record_round_outcome(session, USER, paid.id, LotteryOutcome.WON, now=NOW)
+    await record_round_outcome(session, USER, paid.id, LotteryOutcome.PAID, now=NOW)
+
+    columns, _ = await board_cards(session, USER, now=NOW)
+
+    assert [c.concert.event_id for c in columns[Column.SECURED]] == ["dead-paid"]
+    card = columns[Column.SECURED][0]
+    assert card.cancelled is True
+    assert [(r.round_id, r.state) for r in card.rungs] == [(paid.id, "paid")]
+
+
+async def test_a_dead_card_counts_down_to_nothing(session):
+    """A badged card must not also read "closes in 3 days". The deadline is
+    dropped at the source rather than hidden in the template, so nothing
+    downstream -- the pill, its tone, the card ordering -- can resurrect it."""
+    await ensure_user(session, USER, "reiji")
+    tag = await make_tag(session, "Aqours", subscribed=True)
+
+    dead = await make_concert(session, "dead-soon", tag)
+    await make_dead_leg(session, dead)
+    soon = await add_round(session, dead, "General sale", closes=NOW + timedelta(hours=6))
+    await record_round_outcome(session, USER, soon.id, LotteryOutcome.APPLIED, now=NOW)
+
+    columns, _ = await board_cards(session, USER, now=NOW)
+    card = columns[Column.APPLIED][0]
+
+    assert card.next_deadline is None
+    # No deadline, no urgency: pill_tone must not read the missing moment as
+    # imminent.
+    assert card.pill_tone == "p-quiet"
 
 
 # ── my_upcoming_deadlines ────────────────────────────────────────────────

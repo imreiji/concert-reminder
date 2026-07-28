@@ -450,12 +450,17 @@ async def test_the_board_marks_a_cancelled_card(client):
         alive = await seed.concert("alive", title="Alive concert")
         await seed.open_round(alive, "Live round")
         dead = await seed.concert("dead", title="Dead concert", day_offset=None)
-        seed.s.add(ConcertDay(
+        day = ConcertDay(
             concert_id=dead.id, label="Day 1", cancelled=True,
             starts_at_utc=datetime.now(UTC) + timedelta(days=40),
-        ))
+        )
+        seed.s.add(day)
         await seed.s.flush()
-        won = await seed.open_round(dead, "General sale")
+        # Leg-bound, the ordinary shape: the round is implicitly cancelled
+        # with its leg, and the card must still carry it.
+        won = await seed.open_round(dead, "1次先行")
+        won.applies_to = [day.id]
+        await seed.s.flush()
         await record_round_outcome(seed.s, USER, won.id, LotteryOutcome.WON)
 
     await seeded(client.db, build)
@@ -469,6 +474,13 @@ async def test_the_board_marks_a_cancelled_card(client):
     assert "Cancelled" not in alive_card
     # Exactly one badge on the whole board -- the live card gets none.
     assert board.count('class="badge cancelled"') == 1
+    # The rung that explains the column is on the card even though its leg --
+    # and so the round itself -- is cancelled.
+    assert ">1次先行<" in dead_card
+    # ... and the card makes no claim about time: no countdown pill, while the
+    # live card still has one.
+    assert "data-countdown" not in dead_card
+    assert "data-countdown" in alive_card
 
 
 # ── Coming up: the capture surface ───────────────────────────────────────

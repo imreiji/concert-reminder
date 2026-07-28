@@ -1982,14 +1982,26 @@ async def board_cards(
     } if all_round_ids else {}
 
     for concert in concerts:
+        # Every leg cancelled: the show is off. Three things follow, all of
+        # them concert-level facts `is_round_cancelled` cannot see, and all
+        # driven by this one flag.
+        dead = all_legs_cancelled(concert.days)
         cancelled_day_ids = {d.id for d in concert.days if d.cancelled}
-        live_rounds = [
+        # (1) A dead concert's card is built from EVERY round, not the
+        # is_round_cancelled survivors. On a dead concert every leg-bound
+        # round is implicitly cancelled -- and a 先行 lottery normally names
+        # its legs -- so filtering here would throw away the very standing the
+        # card exists to record, leaving the reader who won a ticket with no
+        # card at all. Outcomes and rungs come from the same list on purpose:
+        # place a card by an outcome whose round is not on its ladder and the
+        # card names a column nothing on it explains (see visible_rungs).
+        card_rounds = list(concert.rounds) if dead else [
             r for r in concert.rounds if not is_round_cancelled(r, cancelled_day_ids)
         ]
         # Ladder order: when a round opens, falling back to when it closes.
         # Rounds with neither timestamp sort last, in id order, rather than
         # blowing up the comparison.
-        live_rounds.sort(
+        card_rounds.sort(
             key=lambda r: (
                 r.opens_at_utc is None and r.closes_at_utc is None,
                 r.opens_at_utc or r.closes_at_utc or now,
@@ -1997,25 +2009,28 @@ async def board_cards(
             )
         )
 
-        card_outcomes = {r.id: outcomes[r.id] for r in live_rounds if r.id in outcomes}
-        # A concert whose every leg is cancelled has no open round, whatever
-        # its rounds' own timestamps say -- a General round survives
-        # is_round_cancelled (it is tied to no leg) and would otherwise keep
-        # the card in "Open now", inviting an application to a show that is
-        # not happening. This ONE substitution carries the whole rule: with no
+        # (2) A dead concert has no OPEN round, whatever its rounds' own
+        # timestamps say -- a General round survives is_round_cancelled (it is
+        # tied to no leg) and would otherwise keep the card in "Open now",
+        # inviting an application to a show that is not happening. Fed to
+        # column_for, that single substitution carries the whole rule: with no
         # standing column_for returns None and the `column is None` exit below
         # drops the card, matching what Discover already does; with standing
         # the outcome ranks place it in Applied / Won / Secured, because a
         # cancelled show you hold a ticket for is news, not noise. A second
-        # skip branch here would be a second rule to keep in sync.
-        dead = all_legs_cancelled(concert.days)
+        # skip branch here would be a second rule to keep in sync. The rungs
+        # read the same set, so no rung on a dead card can read "open" either.
+        open_round_ids = (
+            set() if dead else {r.id for r in card_rounds if _round_is_open(r, now)}
+        )
+        card_outcomes = {r.id: outcomes[r.id] for r in card_rounds if r.id in outcomes}
         column = column_for(
             [
                 (outcomes[r.id], r.kind is RoundKind.UPGRADE)
-                for r in live_rounds
+                for r in card_rounds
                 if r.id in outcomes
             ],
-            has_open_round=not dead and any(_round_is_open(r, now) for r in live_rounds),
+            has_open_round=bool(open_round_ids),
         )
         if column is None:
             continue
@@ -2026,7 +2041,7 @@ async def board_cards(
                 # Copied out of the ORM object, so resolve here (web request
                 # -> get_locale()); the template only sees the string.
                 label=loc_field(r, "label", locale),
-                state=_rung_state(card_outcomes.get(r.id), _round_is_open(r, now)),
+                state=_rung_state(card_outcomes.get(r.id), r.id in open_round_ids),
                 is_upgrade=r.kind is RoundKind.UPGRADE,
                 detail=(
                     r.payment_deadline_at_utc
@@ -2035,9 +2050,14 @@ async def board_cards(
                     else r.closes_at_utc or r.opens_at_utc
                 ),
             )
-            for r in live_rounds
+            for r in card_rounds
         ]
-        next_deadline = _next_deadline(live_rounds, now)
+        # (3) No countdown on a dead card: a badged card that also read
+        # "closes in 3 days" would make the same invitation this rule removes
+        # everywhere else. Dropped at the source, so nothing downstream -- the
+        # pill, its tone (pill_tone reads None as quiet), the card ordering --
+        # can resurrect it.
+        next_deadline = None if dead else _next_deadline(card_rounds, now)
         columns[column].append(BoardCard(
             concert=concert,
             column=column,
