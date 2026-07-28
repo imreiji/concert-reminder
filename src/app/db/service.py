@@ -22,7 +22,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, exists, func, or_, select
+from sqlalchemy import case, delete, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -4856,6 +4856,59 @@ async def prune_delivery_log(session: AsyncSession, now: datetime | None = None)
     res = await session.execute(delete(DeliveryLog).where(DeliveryLog.batch_at_utc < cutoff))
     await session.flush()
     return res.rowcount or 0
+
+
+@dataclass(frozen=True)
+class BatchSummary:
+    """One tick's deliveries, aggregated on read. There is no stored count
+    anywhere, so these can never disagree with the rows they describe."""
+
+    batch_at_utc: datetime
+    sent: int
+    users: int
+    failed: int
+
+
+async def delivery_batches(session: AsyncSession, limit: int = 50) -> list[BatchSummary]:
+    """Newest first. Capped rather than paginated: the retention window is 30
+    days and a batch only exists if it delivered something."""
+    res = await session.execute(
+        select(
+            DeliveryLog.batch_at_utc,
+            func.count(DeliveryLog.id),
+            func.count(func.distinct(DeliveryLog.user_id)),
+            func.sum(case((DeliveryLog.outcome != DeliveryOutcome.SUCCESS.value, 1), else_=0)),
+        )
+        .group_by(DeliveryLog.batch_at_utc)
+        .order_by(DeliveryLog.batch_at_utc.desc())
+        .limit(limit)
+    )
+    return [
+        BatchSummary(batch_at_utc=at, sent=total - (failed or 0), users=users, failed=failed or 0)
+        for at, total, users, failed in res.all()
+    ]
+
+
+async def delivery_failures(session: AsyncSession, limit: int = 100) -> list[DeliveryLog]:
+    """Every non-SUCCESS row in the window, newest first, independent of
+    batch. The digest says something broke in the last minute; this says
+    whether it has been breaking all week."""
+    res = await session.execute(
+        select(DeliveryLog)
+        .where(DeliveryLog.outcome != DeliveryOutcome.SUCCESS.value)
+        .order_by(DeliveryLog.batch_at_utc.desc())
+        .limit(limit)
+    )
+    return list(res.scalars())
+
+
+async def delivery_batch_rows(
+    session: AsyncSession, batch_at_utc: datetime
+) -> list[DeliveryLog]:
+    res = await session.execute(
+        select(DeliveryLog).where(DeliveryLog.batch_at_utc == batch_at_utc).order_by(DeliveryLog.id)
+    )
+    return list(res.scalars())
 
 
 # ── Operational health alerts ────────────────────────────────────────────

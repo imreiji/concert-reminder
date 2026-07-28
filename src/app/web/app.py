@@ -25,6 +25,7 @@ from app.domain.urls import safe_next
 from app.ops import run_checks
 from app.scheduler import heartbeat
 from app.web import auth
+from app.web.routes import admin as admin_routes
 from app.web.routes import calendar as calendar_routes
 from app.web.routes import concerts as concert_routes
 from app.web.routes import discover as discover_routes
@@ -240,6 +241,10 @@ def create_app() -> FastAPI:
     app.include_router(privacy_routes.router)
     terms_routes.templates = templates
     app.include_router(terms_routes.router)
+    # /admin/deliveries shares no prefix with a path-template route, so
+    # registration order does not matter here (unlike imports/concerts).
+    admin_routes.templates = templates
+    app.include_router(admin_routes.router)
 
     @app.post("/language")
     async def set_language(

@@ -1525,7 +1525,7 @@ The reader, and the three documentation obligations the spec names. Folded into 
 - Consumes: `DeliveryLog` (Task 2), `DELIVERY_LOG_RETENTION_DAYS` (Task 6).
 - Produces: `service.delivery_batches(session, limit=50) -> list[BatchSummary]` where `BatchSummary` is a frozen dataclass `(batch_at_utc, sent, users, failed)`; `service.delivery_failures(session, limit=100) -> list[DeliveryLog]`; `service.delivery_batch_rows(session, batch_at_utc) -> list[DeliveryLog]`; route `GET /admin/deliveries` and `GET /admin/deliveries/{batch_iso}`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_admin_deliveries.py`. Copy the `db`/`client` fixture pair from `tests/test_crud.py:37-70` (in-memory engine with the FK pragma, `create_app()`, `dependency_overrides[get_session]`, the `login_as` helper) and add:
 
@@ -1609,12 +1609,12 @@ async def test_batch_detail_names_recipients(client, monkeypatch):
     assert str(ADMIN_ID) in r.text
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `uv run --isolated pytest tests/test_admin_deliveries.py -v`
 Expected: FAIL — 404 on `/admin/deliveries` (router not registered).
 
-- [ ] **Step 3: Add the three read helpers**
+- [x] **Step 3: Add the three read helpers**
 
 Append to the delivery-log section of `src/app/db/service.py`:
 
@@ -1680,7 +1680,7 @@ async def delivery_batch_rows(
 
 Ensure `func`, `case` are imported from `sqlalchemy` and `dataclass` from `dataclasses` in `service.py`.
 
-- [ ] **Step 4: Add the route module**
+- [x] **Step 4: Add the route module**
 
 Create `src/app/web/routes/admin.py`:
 
@@ -1768,7 +1768,7 @@ async def delivery_batch(
 
 If `app.web.templating` does not exist, import `templates` from wherever the other route modules get it (check the top of `src/app/web/routes/preferences.py`) and match that exactly.
 
-- [ ] **Step 5: Add the template**
+- [x] **Step 5: Add the template**
 
 Create `src/app/web/templates/admin_deliveries.html`:
 
@@ -1845,7 +1845,7 @@ Create `src/app/web/templates/admin_deliveries.html`:
 
 Wrap wide tables in `overflow-x: auto` if `.tablewrap` does not already exist in `style.css`; if it does not, use a plain `<div>` and add nothing — do not invent new design tokens for an admin page.
 
-- [ ] **Step 6: Register the router**
+- [x] **Step 6: Register the router**
 
 In `src/app/web/app.py`, add to the route imports (alphabetically, before `calendar`):
 
@@ -1861,12 +1861,12 @@ and register it alongside the others (after `terms_routes`, ~line 242):
 
 Order does not matter here — `/admin/deliveries` shares no prefix with a path-template route, unlike the `imports`-before-`concerts` constraint.
 
-- [ ] **Step 7: Run to verify they pass**
+- [x] **Step 7: Run to verify they pass**
 
 Run: `uv run --isolated pytest tests/test_admin_deliveries.py -v`
 Expected: PASS. (Six tests in the file by now: three from Task 1, three new.)
 
-- [ ] **Step 8: Add the `/privacy` disclosure**
+- [x] **Step 8: Add the `/privacy` disclosure**
 
 In `src/app/web/templates/privacy.html`, add to the list of what is stored. Match the surrounding markup and wrap the copy in `_()` exactly as the neighbouring entries do — this page is user-facing, unlike the admin page:
 
@@ -1876,12 +1876,12 @@ In `src/app/web/templates/privacy.html`, add to the list of what is stored. Matc
 
 Then update both catalogues: run `uv run --isolated pybabel extract -F babel.cfg -k N_ -o messages.pot .`, then `pybabel update -i messages.pot -d src/app/translations -l ja` and again `-l zh`, fill in both msgstrs by hand, and delete `messages.pot`.
 
-- [ ] **Step 9: Verify the catalogues**
+- [x] **Step 9: Verify the catalogues**
 
 Run: `uv run --isolated pytest tests/test_i18n_catalogues.py -v`
 Expected: PASS. A fuzzy entry counts as untranslated and will fail — remove the `#, fuzzy` markers after filling each msgstr.
 
-- [ ] **Step 10: Document the feedback-loop rule in CLAUDE.md**
+- [x] **Step 10: Document the feedback-loop rule in CLAUDE.md**
 
 In `CLAUDE.md`, append to invariant 4 (**Notifications**):
 
@@ -1895,11 +1895,11 @@ In `CLAUDE.md`, append to invariant 4 (**Notifications**):
    notification, not a reminder.
 ```
 
-- [ ] **Step 11: Update WISHLIST.md**
+- [x] **Step 11: Update WISHLIST.md**
 
 Move nothing (no Proposed entry covered this feature — it came from a direct owner request). Add a Shipped entry dated 2026-07-28 describing the delivery feed, then append two Proposed entries: **C, the targeted admin broadcast** (designed next, depends on this log) and **A, the local rehearsal harness** (spec written, `2026-07-28-rehearsal-harness-design.md`). Note on the existing **#1 admin catalogue export** that A's spec found a second use for it — a catalogue-only copy is the clean way to seed a local dev DB without putting personal data on a laptop — which raises its value beyond backup/rebuild. Then do the full revision pass the CLAUDE.md wishlist rule requires: re-rank the remaining entries and record what moved and why.
 
-- [ ] **Step 12: Full gates and commit**
+- [x] **Step 12: Full gates and commit**
 
 Run: `uv run --isolated ruff check .` then `uv run --isolated pytest -q`
 

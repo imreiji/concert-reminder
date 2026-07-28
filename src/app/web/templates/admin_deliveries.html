@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{#- Admin-only operational page: English-only and deliberately NOT wrapped in
+    _(), following /me/test-dm. Styling reuses the existing `.tagtable` rules
+    rather than inventing tokens or a wrapper class for a page only admins
+    see -- an operational surface should look plain, not novel. -#}
+{% block title %}Deliveries — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Deliveries</h1>
+<p class="dim">
+  Every DM the scheduler attempted, kept {{ retention_days }} days.
+  Recipients are named here and only here — the digest DM reports counts.
+</p>
+
+<h2>Recent failures</h2>
+{% if failures %}
+<div>
+  <table class="tagtable">
+    <thead><tr><th>Batch</th><th>Outcome</th><th>What</th><th>User</th></tr></thead>
+    <tbody>
+      {% for f in failures %}
+      <tr>
+        <td><a href="/admin/deliveries/{{ f.batch_at_utc.isoformat() }}">{{ f.batch_at_utc.strftime('%Y-%m-%d %H:%M') }}</a></td>
+        <td>{{ f.outcome.value }}</td>
+        <td>{{ f.concert_title or '—' }}{% if f.round_label %} / {{ f.round_label }}{% endif %}{% if f.anchor %} · {{ f.anchor.value }}{% elif f.note_kind %} · {{ f.note_kind }}{% endif %}</td>
+        <td>{{ f.user_id }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="dim">No failed deliveries in the window.</p>
+{% endif %}
+
+<h2>Batches</h2>
+{% if batches %}
+<div>
+  <table class="tagtable">
+    <thead><tr><th>Batch</th><th class="r">Sent</th><th class="r">Users</th><th class="r">Failed</th></tr></thead>
+    <tbody>
+      {% for b in batches %}
+      <tr>
+        <td><a href="/admin/deliveries/{{ b.batch_at_utc.isoformat() }}">{{ b.batch_at_utc.strftime('%Y-%m-%d %H:%M') }}</a></td>
+        <td class="r">{{ b.sent }}</td><td class="r">{{ b.users }}</td><td class="r">{{ b.failed }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="dim">Nothing delivered yet.</p>
+{% endif %}
+
+{% if batch %}
+<h2>Batch {{ batch.strftime('%Y-%m-%d %H:%M') }} UTC</h2>
+<div>
+  <table class="tagtable">
+    <thead><tr><th>User</th><th>Source</th><th>Outcome</th><th>What</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.user_id }}</td>
+        <td>{{ r.source.value }}</td>
+        <td>{{ r.outcome.value }}</td>
+        <td>{{ r.concert_title or '—' }}{% if r.leg_label %} / {{ r.leg_label }}{% endif %}{% if r.round_label %} / {{ r.round_label }}{% endif %}{% if r.anchor %} · {{ r.anchor.value }}{% elif r.note_kind %} · {{ r.note_kind }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
