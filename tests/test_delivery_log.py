@@ -224,10 +224,26 @@ async def test_the_digest_notification_is_never_logged(db):
         assert (await s.execute(select(DeliveryLog))).all() == []
 
 
-def test_the_exclusion_set_covers_the_future_broadcast():
-    """Sub-project C queues admin_broadcast notifications. Excluded up front,
-    because discovering this after C ships means a DM loop in production."""
-    assert UNREPORTED_NOTE_KINDS == frozenset({"delivery_digest", "admin_broadcast"})
+def test_only_the_digest_is_excluded_from_logging():
+    """A broadcast is NOT excluded, deliberately -- see the next test. Only
+    the digest can report on itself, and only self-reporting loops."""
+    assert UNREPORTED_NOTE_KINDS == frozenset({"delivery_digest"})
+
+
+@pytest.mark.asyncio
+async def test_a_broadcast_delivery_is_logged(db):
+    """The reason the exclusion was removed: 'did my remedy actually reach
+    them?' is the question a broadcast is sent asking, and it is only
+    answerable if the deliveries are recorded."""
+    async with db() as s:
+        await _seed(s)
+        note = Notification(user_id=1, body="sorry about that", kind="admin_broadcast")
+        s.add(note)
+        await s.flush()
+        rows = await record_deliveries(s, BATCH, [], [(note, DeliveryOutcome.SUCCESS)])
+        await s.commit()
+        assert len(rows) == 1
+        assert rows[0].note_kind == "admin_broadcast"
 
 
 @pytest.mark.asyncio

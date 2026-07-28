@@ -42,7 +42,7 @@ A correction to sub-project B. `"admin_broadcast"` was added to `UNREPORTED_NOTE
 **Interfaces:**
 - Produces: `UNREPORTED_NOTE_KINDS == frozenset({"delivery_digest"})`.
 
-- [ ] **Step 1: Update the existing assertion and add the new one**
+- [x] **Step 1: Update the existing assertion and add the new one**
 
 In `tests/test_delivery_log.py`, replace `test_the_exclusion_set_covers_the_future_broadcast` entirely with:
 
@@ -69,12 +69,12 @@ async def test_a_broadcast_delivery_is_logged(db):
         assert rows[0].note_kind == "admin_broadcast"
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run --isolated pytest tests/test_delivery_log.py -v`
 Expected: FAIL — the frozenset still contains two entries, and the broadcast row is not written.
 
-- [ ] **Step 3: Make the change**
+- [x] **Step 3: Make the change**
 
 In `src/app/db/service.py`, replace the constant and its comment:
 
@@ -88,12 +88,12 @@ In `src/app/db/service.py`, replace the constant and its comment:
 UNREPORTED_NOTE_KINDS = frozenset({"delivery_digest"})
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `uv run --isolated pytest tests/test_delivery_log.py tests/test_delivery_digest.py tests/test_delivery_log_tick.py -v`
 Expected: PASS. The digest's own two-tick guard must still pass — if it does not, the wrong entry was removed.
 
-- [ ] **Step 5: Full gates and commit**
+- [x] **Step 5: Full gates and commit**
 
 ```bash
 git add src/app/db/service.py tests/test_delivery_log.py

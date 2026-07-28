@@ -4704,13 +4704,13 @@ async def mark_notification_sent(session: AsyncSession, notification_id: int) ->
 
 # ── Delivery log ─────────────────────────────────────────────────────────
 
-# Notification kinds that are delivered but never logged. Without this, the
-# digest would log its own delivery, the next tick would report that, and the
-# bot would DM every admin once a minute forever. Excluded by KIND rather than
-# by recipient so it holds however many admins exist. "admin_broadcast" is
-# listed before sub-project C ships it, deliberately: finding this out
-# afterwards means discovering a DM loop in production.
-UNREPORTED_NOTE_KINDS = frozenset({"delivery_digest", "admin_broadcast"})
+# The digest reports on deliveries, so logging its own delivery would make the
+# next tick report that, forever, once a minute. Only self-reporting kinds
+# belong here. A broadcast does NOT: it terminates after one hop (broadcast ->
+# logged -> one digest line -> digest delivered -> not logged -> stop), and
+# recording it is the point -- whether a remedy reached its recipients,
+# FORBIDDEN ones included, is the question the broadcast was sent asking.
+UNREPORTED_NOTE_KINDS = frozenset({"delivery_digest"})
 
 
 async def record_deliveries(
