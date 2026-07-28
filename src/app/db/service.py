@@ -5406,7 +5406,13 @@ async def notice_context(
         event_id=concert.event_id,
         title=loc_field(concert, "title", locale),
         tags_line=" · ".join(non_venue),
-        venue=(gettext_in(locale, "Multiple") if len(venues) > 1
+        # N_() for the same reason _framed_body needs it: `gettext_in` is not
+        # one of babel.cfg's extraction keywords, so a bare literal here is
+        # invisible to `pybabel extract`. This msgid only survived because
+        # three TEMPLATES independently produce it -- reword those and this
+        # DM text silently reverts to English, with nothing failing, since a
+        # msgid that stops being extracted also stops being checked.
+        venue=(gettext_in(locale, N_("Multiple")) if len(venues) > 1
                else (venues[0] if venues else None)),
         first_deadline_label=loc_field(first[0], "label", locale) if first else None,
         first_deadline_at=first[1] if first else None,

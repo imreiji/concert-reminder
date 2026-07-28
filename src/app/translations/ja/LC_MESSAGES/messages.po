@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-28 12:57-0300\n"
+"POT-Creation-Date: 2026-07-28 13:05-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -474,8 +474,8 @@ msgid "Other"
 msgstr "その他"
 
 #: src/app/db/service.py:2530 src/app/db/service.py:2676
-#: src/app/web/templates/_board.html:73 src/app/web/templates/discover.html:79
-#: src/app/web/templates/home.html:23
+#: src/app/db/service.py:5415 src/app/web/templates/_board.html:73
+#: src/app/web/templates/discover.html:79 src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "複数"
 
@@ -560,7 +560,7 @@ msgstr "すべての受付が終了"
 msgid "From dekimasen.app"
 msgstr "dekimasen.app より"
 
-#: src/app/db/service.py:5661 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:5667 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -570,7 +570,7 @@ msgstr "dekimasen.app より"
 msgid "Title"
 msgstr "タイトル"
 
-#: src/app/db/service.py:5665 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:5671 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -583,17 +583,17 @@ msgstr "タイトル"
 msgid "Notes"
 msgstr "メモ"
 
-#: src/app/db/service.py:5671
+#: src/app/db/service.py:5677
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "公演{n}の名称"
 
-#: src/app/db/service.py:5676
+#: src/app/db/service.py:5682
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "受付{n}の名称"
 
-#: src/app/db/service.py:5685 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:5691 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -608,7 +608,7 @@ msgstr "受付{n}の名称"
 msgid "Name"
 msgstr "名前"
 
-#: src/app/db/service.py:5690
+#: src/app/db/service.py:5696
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
