@@ -1,9 +1,10 @@
 # Cleanup batch: five debts, two owner rulings
 
-Date: 2026-07-28. Status: designed with the owner (two rulings recorded
-below), pending implementation. Branch `cleanup-batch`, off `main`.
-Clears WISHLIST Proposed #2, #3, #4, #5 and #7, and closes #6 as a
-decision rather than work.
+Date: 2026-07-28. Status: **implemented (2026-07-28)**, four tasks on
+branch `cleanup-batch`, off `main`. Designed with the owner (two rulings
+recorded below). Clears WISHLIST Proposed #2, #3, #4, #5 and #7, and
+closes #6 as a decision rather than work. Deviations from this spec are
+recorded at the foot.
 
 Three of these are debts the 2026-07-27 arc created or surfaced. They are
 cheapest now, while the context that produced them is still fresh, and
@@ -136,3 +137,66 @@ Four leftovers batched so they stop being rediscovered:
   preserves it; a fold that was closed stays closed.
 - Importer: the container guard warns; the docstring items are prose.
 - i18n: the two reworded msgids filled in both catalogues, no fuzzy.
+
+## Implementation deviations (recorded)
+
+Four places where the build did not do what the text above says, and one
+where it did more. None changes a ruling; all are here so the spec reads
+as what shipped rather than as what was intended.
+
+1. **§E item 4 was a PHANTOM and is struck, not fixed.** The WISHLIST
+   entry quoted `action="\presets\{{ p.id }}\items\..."` in
+   `preferences.html`, spotted 2026-07-23. No such string exists: the
+   form uses forward slashes at `HEAD` and at every commit checked back
+   through `6855538~1`, and a tree-wide scan of the templates found no
+   backslash in any URL at all (only regex escapes). Task 1's reviewer
+   confirmed this independently. No change was made and no test was
+   invented for a no-op; the WISHLIST entry records the misread.
+
+2. **`generate_event_id` had a second caller the spec did not name.**
+   §A frames the defect at the FUNCTION, but `POST /concerts/{event_id}/
+   duplicate` (`web/routes/concerts.py`) calls it too, with the same
+   defect. Fixing only the import path would have left §A's own sentence
+   half-true, so the preference was applied at the function and both
+   callers inherit it. Consequence worth knowing: a duplicate of a
+   concert that has a `title_en` now mints `<english>-copy` rather than
+   `<japanese-slugified>-copy`. Invariant 6 keeps existing ids untouched
+   either way.
+
+3. **`handle_newly_tagged` queries its own legs.** §C says "the
+   predicate already exists; this is one more consumer" — which reads as
+   `all_legs_cancelled(concert.days)`. It cannot be: two call sites
+   (`create_concert`'s and `import_commit`'s venue rollups) reach the
+   pipeline with a concert whose `days` relationship is silently EMPTY,
+   because their legs are `session.add`ed into a local list and never
+   appended to the relationship. A caller-passes-days design would
+   therefore have read "alive" unconditionally on exactly the automatic
+   path ruling 1 targets. The function runs its own indexed SELECT — the
+   same shape `leg_cancelled_context` uses — which is also immune to the
+   lazy-load MissingGreenlet hazard. The inverted failure is pinned by
+   `test_a_dateless_draft_is_not_dead_when_tagged`: every create path
+   attaches tags BEFORE legs exist, so a predicate reading a legless
+   concert as dead would have silenced the whole pipeline.
+
+4. **`edit_concert` was calling the pipeline at the wrong point, in both
+   directions.** Not anticipated by §C at all. The route attached tags
+   near the top and reconciled its LEGS 100-odd lines below, so the
+   dead-concert question was answered about the concert as it ARRIVED:
+   un-cancelling a leg while adding a tag suppressed a notice that was
+   owed (and there is no re-announce path, so it was lost for good),
+   while cancelling the last leg while adding a tag announced a show that
+   is off. The call moved to the foot of the route — after
+   `notify_newly_cancelled_legs`, whose probe reads unsent queue rows and
+   must not see freshly applied preset rules, and before `sync_concert`.
+   An unremarked improvement falls out of the move: presets now cover
+   rounds created in the same submit, and no longer mint rules on rounds
+   the same submit is about to delete.
+
+5. **§D's client mechanism keys its collected folds per REQUEST.** The
+   text says "on `htmx:beforeRequest` the open keys within the target are
+   collected, and on `htmx:afterSettle` the matching folds are reopened",
+   which one module-level set satisfies until two requests overlap —
+   collect A, collect B, settle A (restores B's keys and clears), settle
+   B (finds nothing, B's folds shut). htmx hands the same detail object
+   to both events, so the keys hang off a `WeakMap` on its `xhr` instead.
+   Same mechanism, per-request scope.
