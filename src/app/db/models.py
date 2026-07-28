@@ -31,6 +31,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.domain.types import (
     Anchor,
+    BroadcastMode,
     Channel,
     ConcertKind,
     DeliveryOutcome,
@@ -601,6 +602,35 @@ class TagSubscription(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
 
+class Broadcast(Base):
+    """The permanent audit record of one admin broadcast.
+
+    NEVER pruned, unlike delivery_log's 30-day window: this records an admin
+    action against other people's DMs, not a delivery. "Did we already tell
+    them?" must stay answerable indefinitely.
+    """
+
+    __tablename__ = "broadcasts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # SET NULL, matching Concert.created_by: erasing the admin's account keeps
+    # the record of what they did and anonymizes who did it.
+    created_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="SET NULL")
+    )
+    created_at_utc: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    mode: Mapped[BroadcastMode] = mapped_column(
+        Enum(BroadcastMode, values_callable=lambda e: [m.value for m in e])
+    )
+    # The batch timestamp, the raw id list as typed, or NULL for ALL.
+    mode_param: Mapped[str | None] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text)
+    # What was actually queued, not what the preview showed.
+    recipient_count: Mapped[int] = mapped_column()
+    send_after_utc: Mapped[datetime] = mapped_column(UTCDateTime)
+    cancelled_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
 class Notification(Base):
     """One-off DM outbox (new-event notices). Drained by the scheduler like
     reminder_queue: only successful delivery marks sent, so notices survive
@@ -619,6 +649,18 @@ class Notification(Base):
         ForeignKey("concerts.id", ondelete="CASCADE")
     )
     kind: Mapped[str | None] = mapped_column(String(30))  # "new_event"
+    # Both nullable, and NULL means exactly the pre-broadcast behaviour --
+    # which is what keeps new_event, leg_cancelled, ops_alert and
+    # delivery_digest untouched by a change to the drain query they all use.
+    #
+    # send_after_utc holds a row back until its moment: it is what turns an
+    # unrecallable mass DM into one that can be cancelled for two minutes.
+    send_after_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # SET NULL, not CASCADE: a queued notice is something that happened to a
+    # user, and deleting the audit row should not erase it.
+    broadcast_id: Mapped[int | None] = mapped_column(
+        ForeignKey("broadcasts.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
     sent_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
 

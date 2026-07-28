@@ -151,3 +151,15 @@ class DeliverySource(enum.StrEnum):
 
     REMINDER = "reminder"
     NOTIFICATION = "notification"
+
+
+class BroadcastMode(enum.StrEnum):
+    """How an admin broadcast chose its recipients. All three are RESOLVED
+    sets -- a known list of user ids at send time. Derived modes (everyone
+    tracking a concert, followers of a tag) were considered and rejected: the
+    set can change between the preview an admin approved and the send that
+    executes, so the count they confirmed would be a lie."""
+
+    BATCH = "batch"        # the recipients of one delivery_log batch
+    ALL = "all"            # every user
+    EXPLICIT = "explicit"  # a hand-entered list of discord ids

@@ -308,39 +308,44 @@ bumped in place: the born-dead entry's "below #4" pointer at the round-label
 suggestions, and the sign-in-bounce entry's demo-parity/Discover-head pointer,
 for the umpteenth time.
 
+The third 2026-07-28 pass ships #1 the same day the pass above filed it, which
+is the shortest gap on this list: the targeted admin broadcast, sub-project C,
+went from a Proposed entry with no spec to seven shipped tasks between one
+revision pass and the next. It closes the arc B opened -- an incident an admin
+can SEE is now an incident an admin can ANSWER -- and it leaves the rehearsal
+harness (A) as the only unbuilt piece of the three the owner asked for in one
+session.
+
+The re-rank moves nothing on merit; entries are renumbered 1-14 by pure
+removal. One entry changed without moving, and it is the note worth carrying
+forward: **A's argument stopped being anticipatory.** It sat at #3 on a
+borrowed claim -- it is the rehearsal path for #1, and #1 is a mass-DM route --
+and #1 has now shipped, so the disagreement recorded on both entries (A's spec
+wanting the harness first; the owner sequencing B and C ahead of it) is settled
+in fact rather than by decision. The mass-DM route is live and has never been
+exercised outside the test suite, which is the strongest case this list has
+ever carried for promoting a developer-facing entry over a user-facing one. It
+is deliberately not acted on: the list orders by user impact and A's is still
+nil, and the owner already made this call once. A rises to #2 by removal, with
+its closing paragraph rewritten to describe the state instead of the plan.
+Nothing else got cheaper -- this build lived in the notifications outbox, a new
+audit table and an admin page, and no remaining entry goes near any of them.
+The admin catalogue export keeps #1 and is unchanged in size, still the only
+entry the owner personally asked for. Two were re-read against what shipped and
+both stand: the born-dead-concert announcement (#6) is untouched, since a
+broadcast is a way to apologise for a wrong DM and not a way to prevent one,
+and minute-level offsets (#3) goes nowhere near any of this. Two
+cross-references were bumped in place -- the born-dead entry's round-label
+pointer and the sign-in-bounce entry's demo-parity/Discover-head pointer, for
+the umpteenth time -- and, unusually, one line in Shipped was CORRECTED rather
+than bumped: B's account of `UNREPORTED_NOTE_KINDS` listing `admin_broadcast`
+up front described a decision C then reversed, and leaving it would have made
+this file contradict the code.
+
 ## Proposed (highest impact first)
 
 
-### 1. Targeted admin broadcast (sub-project C)
-
-Impact: high - effort: medium. Raised: 2026-07-28 (owner, as one of three).
-
-The remedy half of the delivery feed that just shipped. B tells an admin
-that a batch went to the wrong people; C is how those people are told,
-without opening a Discord DM to each of them by hand. Its dependency now
-exists: `delivery_log` already knows exactly who received what and when,
-so a broadcast can be addressed to "everyone in batch X" or "everyone who
-was DMed about concert Y" rather than to a list typed from memory.
-
-Not designed yet -- the owner sequenced B first and C next, and only B has
-a spec. Two things are already fixed by B and should not be re-litigated:
-the notice goes through the `notifications` outbox like every other
-system-initiated DM (invariant 4), and its kind is ALREADY in
-`UNREPORTED_NOTE_KINDS` as `admin_broadcast`, listed before the feature
-exists precisely so discovering the feedback loop is not a production
-event. The real design questions are the addressing vocabulary, whether a
-broadcast is previewable before it sends, and what an admin can NOT
-address (a mass-DM route with a free-text recipient set is the version of
-this feature that gets the bot rate-limited or reported).
-
-Ranked #1 on the same reasoning that put B ahead of A: an incident you can
-see but not fix is half an answer, and this is the other half. See #3 --
-its spec argues, credibly, that the harness should come first so C's first
-real exercise is not on live users. That is an owner call, not one this
-list can make; it is recorded on both entries rather than resolved by
-renumbering.
-
-### 2. Admin-only catalogue export (never any user data)
+### 1. Admin-only catalogue export (never any user data)
 
 Impact: medium - effort: small-medium. Raised: 2026-07-26 (owner).
 
@@ -359,7 +364,7 @@ re-importability matters or a read-only JSON dump is enough -- the YAML
 shape costs a little more and pays only if it does.
 
 A SECOND use for it turned up on 2026-07-28, in the rehearsal harness spec
-(#3): a catalogue-only copy is the clean way to seed a local dev DB with
+(#2): a catalogue-only copy is the clean way to seed a local dev DB with
 realistic data, because it contains no personal data by construction --
 `users`, `web_sessions`, `round_outcomes`, `concert_subscriptions`,
 `reminder_rules` and now `delivery_log` are all personal, and a wholesale
@@ -371,7 +376,7 @@ NOT raise the entry's RANK: this list orders by user impact, and a
 dev-seeding path is developer value. Unchanged in size -- it touches the
 catalogue tables and a zip route, and nothing the delivery feed went near.
 
-### 3. Local rehearsal harness with a second Discord bot (sub-project A)
+### 2. Local rehearsal harness with a second Discord bot (sub-project A)
 
 Impact: medium (developer-facing) - effort: medium. Raised: 2026-07-28
 (owner, as one of three). Spec written and revised the same day:
@@ -400,15 +405,21 @@ only and unwrapped, registered ONLY under the flag -- that flag is the
 entire safety model, so it is asserted directly.
 
 Ranked here rather than on its own user impact, which is nil: it is the
-rehearsal path for #1, and #1 is a mass-DM route. Its spec says so plainly
--- building C before this means C's first real exercise is on live users --
-while the owner sequenced B and C ahead of it on the reasoning that an
-undetected bad delivery costs more than a missing harness. Both readings
-are recorded; whoever picks up #1 should put the ordering to the owner
-first rather than assume either. Its open question (should the shape
-catalogue let you pick a locale?) is additive and can land second.
+rehearsal path for the broadcast, and the broadcast is a mass-DM route. That
+was an anticipatory argument when this was filed and it is a description now
+-- C shipped on 2026-07-28, so the sequencing disagreement recorded on both
+entries (this spec wanting the harness first so C's first real exercise is
+not on live users; the owner putting B and C ahead of it, on the reasoning
+that an undetected bad delivery costs more than a missing harness) is
+settled in fact rather than by decision. The mass-DM route exists, is
+deployed, and has never been exercised outside the test suite. That is the
+strongest case on this list for promoting a developer-facing entry over #1,
+and it is deliberately left unacted-on: this list orders by user impact, and
+this entry's is still nil. Put it to the owner rather than assume either
+way. Its open question (should the shape catalogue let you pick a locale?)
+is additive and can land second.
 
-### 4. Minute-level reminder offsets
+### 3. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -448,7 +459,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 5. Eventernote actor-page discovery
+### 4. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -468,7 +479,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 6. Franchise-aware round-label suggestions
+### 5. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -489,7 +500,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 7. The create and import paths still announce a born-dead concert
+### 6. The create and import paths still announce a born-dead concert
 
 Impact: low-medium - effort: small-medium, but on the two riskiest routes
 in the app. Raised: 2026-07-28 (final review of the cleanup batch, which
@@ -527,10 +538,10 @@ deviation 6 of `docs/superpowers/specs/2026-07-28-cleanup-batch-design.md`.
 
 Ranked here: above the code-health entries below because a wrong,
 permanent DM to every follower is user-visible harm rather than tidiness,
-and below #6 because that one pays off on every round label an editor
+and below #5 because that one pays off on every round label an editor
 types while this needs a rare, deliberate starting state.
 
-### 8. Nine of ten `RoundKind` members are purely cosmetic
+### 7. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -553,7 +564,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 9. `generate_event_id` never checks the reserved ids
+### 8. `generate_event_id` never checks the reserved ids
 
 Impact: low - effort: small. Raised: 2026-07-28 (Task 1 review of the
 cleanup batch, while the slug preference above it was being shipped).
@@ -586,7 +597,7 @@ widens the door (a Japanese-titled concert previously slugged to
 needs an exactly-wrong English title to fire; it is filed because when it
 does fire nothing anywhere says so.
 
-### 10. Pin the Python version across dev, CI and the server
+### 9. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -610,7 +621,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 11. PWA / installability
+### 10. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -630,7 +641,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 12. In-app LLM extraction behind the same draft seam
+### 11. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -648,7 +659,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 13. Minor demo-parity cosmetics
+### 12. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -676,7 +687,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 14. Discover sort in the content head, plus the catalogue-count note
+### 13. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -702,7 +713,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 15. Name the destination on the sign-in bounce
+### 14. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -718,7 +729,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#13) and the Discover head (#14) because
+Ranked below the demo-parity batch (#12) and the Discover head (#13) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -736,6 +747,112 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Targeted admin broadcast: a DM you can take back (2026-07-28)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-28-admin-broadcast-design.md`
++ impl plan `docs/superpowers/plans/2026-07-28-admin-broadcast.md`, seven tasks
+on branch `admin-broadcast`. Proposed #1, filed that morning by the delivery
+feed's own revision pass. Sub-project **C** of three and the last to ship; **A**
+(the rehearsal harness) is now the only one left.
+
+**Why it exists, in the owner's framing rather than the feature's: detection
+without remedy is half a tool.** B can tell you forty people received a wrong
+DM; before this, the only thing you could do about it was nothing. It is also
+the most dangerous route in the application -- everything else here reads, or
+writes rows only the owner sees, while this one puts text into other people's
+Discord DMs at a scale the sender picks, with no recall once it is on the wire.
+So the design question was never whether it exists but what makes it
+survivable, and the answer is four rails the owner asked for by name: a preview
+that writes nothing, a typed confirmation above ten recipients, a guaranteed
+undo window, and a permanent audit record. A fifth came nearly free from the
+audit table -- the compose page warns when an identical body went out inside
+the last hour, which is both the stale-tab resubmit and the "did I already send
+this?" question during an incident.
+
+**Decision one: all three recipient modes are RESOLVED, never derived.** BATCH
+(the recipients of one `delivery_log` batch), ALL, and EXPLICIT (typed Discord
+ids) each reduce to a known list of user ids before anything is queued. Two
+obvious modes were considered and REJECTED for the same reason -- everyone
+tracking a concert, and followers of a tag -- because both are derived: the set
+can change between the preview an admin approved and the send that executes, so
+the count they confirmed would be a lie. Every surviving mode is resolved, so
+that class of bug does not exist here at all. (The tag-followers mode is also
+the one most likely to be a mass-send while FEELING targeted, since a popular
+franchise tag may be most of the userbase.) The same reasoning made send
+re-resolve from mode + param rather than trust a snapshot posted back in the
+form: tampering was never the threat -- only admins reach the route, and
+EXPLICIT already accepts arbitrary ids -- drift was, and `recipient_count` has
+to record what was queued. In the same spirit, an EXPLICIT id matching no user
+is REPORTED in the preview and never silently dropped: quietly discarding a
+mistyped id is how you conclude you messaged someone you did not.
+
+**Decision two: the undo window is the answer to an otherwise unrecallable
+action.** It is the only rail that helps AFTER the press, which is when
+mistakes are actually noticed, and it is what turns "you cannot take this back"
+into "you have two minutes". Mechanically it is one nullable column --
+`Notification.send_after_utc`, `HOLD_SECONDS = 120`, a constant rather than a
+setting because that is one fewer thing to get wrong at 3am (owner ruling) --
+plus `broadcast_id` as the handle Cancel deletes by. Both nullable, and NULL
+means exactly the pre-broadcast behaviour, which is the single most important
+property of the change, since it modifies the drain query every notice in the
+app passes through: `due_notifications`' `send_after_utc IS NULL` branch is
+load-bearing rather than defensive, because SQL evaluates `NULL <= now` as NULL
+and dropping it stops the entire outbox. That is a CLAUDE.md rule now, and the
+plan had the implementer PROVE it by mutation -- drop the branch, watch the
+no-hold regression test fail, restore. **And the cancel race is reported rather
+than hidden**: a tick can drain rows between the click and the delete, so
+Cancel removes only unsent rows and the status page reads "cancelled -- 12 of
+40 had already been delivered". A rail that lies about what it undid is worse
+than no rail.
+
+The message is plain text, no embed, so it rides `_notification_context`'s
+existing `concert_id=None` path exactly as `ops_alert` does and the scheduler's
+send code did not change at all. The admin types ONE body in one language;
+each recipient gets it under a frame resolved in THEIR language
+(`From dekimasen.app` / `dekimasen.app より` / `来自 dekimasen.app`, the brand
+never translated), applied at QUEUE time via `gettext_in` because a row is
+written per recipient anyway and their language is already in hand. Requiring
+three bodies under the all-three-or-none rule was rejected: an incident remedy
+is written under time pressure, and a rule that blocks sending until three
+translations exist is a rule that will be fought.
+
+**One entry-level claim turned out to be wrong, and correcting it was Task 1.**
+The Proposed entry said the kind was "ALREADY in `UNREPORTED_NOTE_KINDS` ...
+and should not be re-litigated". It was listed there, and it was wrong to be:
+the feedback loop that set guards is specific to the digest reporting on
+ITSELF, and a broadcast terminates after one hop (broadcast -> logged -> one
+digest line -> digest delivered -> not logged -> stop). Logging broadcasts is
+not merely harmless, it is the point -- whether the remedy reached its
+recipients, `FORBIDDEN` ones included, is the question you send it asking, and
+the exclusion suppressed exactly that. B's Shipped entry above is annotated
+rather than rewritten, so the reasoning stays findable.
+
+**Two obligations came out differently than the spec predicted.** The
+`/privacy` page needed a sentence after all: no new category of USER data is
+stored, which is what the spec checked, but "Why we collect it" said the data
+is used "only to send the event deadline reminders you asked for" and "not for
+anything else", and an operator DM about the service is another use. One
+sentence added in all three languages rather than an edit to the existing
+msgid, which would have silently dropped its translations. And the migration
+needed a deploy note: `broadcast_id` carries a foreign key, Alembic cannot add
+one on SQLite outside batch mode, and batch mode is a copy-and-move rebuild of
+`notifications` -- the DM outbox, written by the scheduler every 60s and by
+`handle_newly_tagged` from web routes. A raw column-level `REFERENCES` and an
+FK-less column were both built and rejected during implementation (see the
+spec's Deviations); the rebuild deploys with the service STOPPED, which is now
+its own section in `docs/deploy.md` alongside the column-drop migration's
+reversed order.
+
+One trap the build caught and is worth repeating: the typed-confirm test
+originally monkeypatched `service.TYPED_CONFIRM_THRESHOLD` and would have
+passed VACUOUSLY, because `admin.py` does `from app.db.service import
+TYPED_CONFIRM_THRESHOLD` and binds the value into its own namespace at import
+time. It seeds fifteen real users instead and exercises the real constant.
+
+Revision pass: recorded in the narrative above -- nothing re-ranked on merit,
+entries renumbered 1-14 by pure removal, A's argument restated as fact rather
+than promoted, and one line of B's Shipped entry corrected.
 
 ### Delivery feed: a durable record of every DM, plus a per-tick digest (2026-07-28)
 
@@ -778,7 +895,10 @@ number that carries the whole signal.
 digest reporting its own delivery -- closed by `UNREPORTED_NOTE_KINDS`, which
 lists C's future `admin_broadcast` UP FRONT, because discovering that
 afterwards means finding a DM loop in production; it is now a CLAUDE.md rule
-next to invariant 4. Logging endangering delivery -- the log write gets its
+next to invariant 4. (Corrected the same day, when C shipped: the broadcast was
+REMOVED from that set. Listing it up front was the right instinct applied to
+the wrong kind -- see C's entry for why a broadcast terminates after one hop.
+The rule itself stands, for kinds that report ON deliveries.) Logging endangering delivery -- the log write gets its
 own try/except and its own commit AFTER the bookkeeping commit, the same
 isolation the health block uses, because by then the DMs are on the wire and a
 rollback of `sent_at_utc` would re-send every one of them next tick; there is a

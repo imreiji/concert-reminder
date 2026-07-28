@@ -397,6 +397,17 @@ deleting them.
    notification, not a reminder. `/admin/deliveries` is its reader and the
    ONLY surface that names recipients; the digest DM reports counts, because
    a name in Discord history is a record `POST /me/delete` cannot reach.
+   An admin broadcast (`/admin/broadcast`) is the one path that puts
+   admin-authored text into other users' DMs, and it still goes through the
+   outbox -- it is queued HELD via `Notification.send_after_utc` (120s) so it
+   can be cancelled, and cancelling deletes only the UNSENT rows. Both new
+   `Notification` columns are nullable and NULL means the pre-broadcast
+   behaviour, which is what keeps every other notice unaffected by the drain
+   query's hold clause. `due_notifications`' `send_after_utc IS NULL` branch is
+   load-bearing: SQL evaluates `NULL <= now` as NULL, so dropping it stops the
+   entire outbox. The broadcast is NOT in `UNREPORTED_NOTE_KINDS` and must not
+   be added -- it terminates after one hop, and whether the remedy reached its
+   recipients (`FORBIDDEN` ones included) is the question it was sent asking.
 5. **Auth**: three tiers — admin, editor, user. Admins = `ADMIN_WHITELIST`
    env (Discord IDs), env-only by design (no runtime UI; edit `.env` +
    restart). Editors = `EDITOR_WHITELIST` env (permanent bootstrap/

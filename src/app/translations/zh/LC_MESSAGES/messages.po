@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-28 05:36-0300\n"
+"POT-Creation-Date: 2026-07-28 13:24-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -15,21 +15,21 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:32
-#: src/app/bot/views.py:221 src/app/db/service.py:1544
+#: src/app/bot/views.py:221 src/app/db/service.py:1546
 msgid "opens"
 msgstr "申请开始"
 
 #: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:33
-#: src/app/bot/views.py:223 src/app/db/service.py:1545
+#: src/app/bot/views.py:223 src/app/db/service.py:1547
 msgid "closes"
 msgstr "截止"
 
-#: src/app/bot/messages.py:34 src/app/db/service.py:1546
+#: src/app/bot/messages.py:34 src/app/db/service.py:1548
 msgid "results announced"
 msgstr "结果公布"
 
 #: src/app/bot/messages.py:35 src/app/bot/views.py:228
-#: src/app/db/service.py:1547 src/app/web/templates/setup.html:155
+#: src/app/db/service.py:1549 src/app/web/templates/setup.html:155
 msgid "payment due"
 msgstr "付款截止"
 
@@ -64,7 +64,7 @@ msgid "{unit} ago"
 msgstr "{unit}前"
 
 #: src/app/bot/messages.py:76 src/app/bot/messages.py:184
-#: src/app/db/service.py:1548 src/app/web/templates/tags.html:370
+#: src/app/db/service.py:1550 src/app/web/templates/tags.html:370
 msgid "event"
 msgstr "活动"
 
@@ -433,130 +433,134 @@ msgstr "延后"
 msgid "same-day"
 msgstr "当天"
 
-#: src/app/db/service.py:1552
+#: src/app/db/service.py:1554
 msgid "Lottery round"
 msgstr "抽选轮次"
 
-#: src/app/db/service.py:1553
+#: src/app/db/service.py:1555
 msgid "Eligibility item sale"
 msgstr "抽选资格商品发售"
 
-#: src/app/db/service.py:1554
+#: src/app/db/service.py:1556
 msgid "Stream ticket sale"
 msgstr "直播票发售"
 
-#: src/app/db/service.py:1555
+#: src/app/db/service.py:1557
 msgid "General sale"
 msgstr "一般发售"
 
-#: src/app/db/service.py:1556
+#: src/app/db/service.py:1558
 msgid "Result announcement"
 msgstr "结果公布"
 
-#: src/app/db/service.py:1557
+#: src/app/db/service.py:1559
 msgid "Payment deadline"
 msgstr "付款截止"
 
-#: src/app/db/service.py:1558
+#: src/app/db/service.py:1560
 msgid "First come, first served"
 msgstr "先到先得"
 
-#: src/app/db/service.py:1559
+#: src/app/db/service.py:1561
 msgid "Overseas tour package"
 msgstr "海外观演旅行套餐"
 
-#: src/app/db/service.py:1560
+#: src/app/db/service.py:1562
 msgid "Upgrade round"
 msgstr "升级抽选"
 
-#: src/app/db/service.py:1561
+#: src/app/db/service.py:1563
 msgid "Other"
 msgstr "其他"
 
-#: src/app/db/service.py:2528 src/app/db/service.py:2674
-#: src/app/web/templates/_board.html:73 src/app/web/templates/discover.html:79
-#: src/app/web/templates/home.html:23
+#: src/app/db/service.py:2530 src/app/db/service.py:2676
+#: src/app/db/service.py:5415 src/app/web/templates/_board.html:73
+#: src/app/web/templates/discover.html:79 src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "多个"
 
-#: src/app/db/service.py:3687
+#: src/app/db/service.py:3689
 #, python-brace-format
 msgid "{n}d"
 msgstr "{n}天"
 
-#: src/app/db/service.py:3689
+#: src/app/db/service.py:3691
 #, python-brace-format
 msgid "{n}h"
 msgstr "{n}小时"
 
-#: src/app/db/service.py:3690
+#: src/app/db/service.py:3692
 #, python-brace-format
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/service.py:3787
+#: src/app/db/service.py:3789
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "升级中签 — 最迟于 {day} 付款"
 
-#: src/app/db/service.py:3788
+#: src/app/db/service.py:3790
 msgid "Upgrade won — payment due"
 msgstr "升级中签 — 付款截止"
 
-#: src/app/db/service.py:3807
+#: src/app/db/service.py:3809
 msgid "Upgrade · Applied"
 msgstr "升级 · 已申请"
 
-#: src/app/db/service.py:3810
+#: src/app/db/service.py:3812
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "升级 · {n}后截止"
 
-#: src/app/db/service.py:3813
+#: src/app/db/service.py:3815
 msgid "Upgrade · Open now"
 msgstr "升级 · 申请开放中"
 
-#: src/app/db/service.py:3819 src/app/web/templates/_board.html:23
+#: src/app/db/service.py:3821 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:35
 #: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "已获票"
 
-#: src/app/db/service.py:3830
+#: src/app/db/service.py:3832
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "中签 — 最迟于 {day} 付款"
 
-#: src/app/db/service.py:3831
+#: src/app/db/service.py:3833
 msgid "Won — payment due"
 msgstr "中签 — 付款截止"
 
-#: src/app/db/service.py:3840
+#: src/app/db/service.py:3842
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind} · 已申请"
 
-#: src/app/db/service.py:3860
+#: src/app/db/service.py:3862
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind} · {n}后截止"
 
-#: src/app/db/service.py:3865
+#: src/app/db/service.py:3867
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind} · 开放中"
 
-#: src/app/db/service.py:3871
+#: src/app/db/service.py:3873
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind} · {n}后开放"
 
-#: src/app/db/service.py:3878
+#: src/app/db/service.py:3880
 msgid "All rounds closed"
 msgstr "所有轮次均已截止"
 
-#: src/app/db/service.py:5433 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:5034
+msgid "From dekimasen.app"
+msgstr "来自 dekimasen.app"
+
+#: src/app/db/service.py:5667 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -566,7 +570,7 @@ msgstr "所有轮次均已截止"
 msgid "Title"
 msgstr "标题"
 
-#: src/app/db/service.py:5437 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:5671 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -579,17 +583,17 @@ msgstr "标题"
 msgid "Notes"
 msgstr "备注"
 
-#: src/app/db/service.py:5443
+#: src/app/db/service.py:5677
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "场次 {n} 名称"
 
-#: src/app/db/service.py:5448
+#: src/app/db/service.py:5682
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "轮次 {n} 名称"
 
-#: src/app/db/service.py:5457 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:5691 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -604,7 +608,7 @@ msgstr "轮次 {n} 名称"
 msgid "Name"
 msgstr "名称"
 
-#: src/app/db/service.py:5462
+#: src/app/db/service.py:5696
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -1013,7 +1017,7 @@ msgstr "不再关注此活动吗？"
 
 #: src/app/web/templates/_following_toggle.html:59
 #: src/app/web/templates/_result_capture_dialog.html:25
-#: src/app/web/templates/home.html:285
+#: src/app/web/templates/home.html:289
 #: src/app/web/templates/preferences.html:398
 msgid "Close"
 msgstr "关闭"
@@ -1452,7 +1456,7 @@ msgid "Log out"
 msgstr "退出登录"
 
 #: src/app/web/templates/base.html:77 src/app/web/templates/home.html:80
-#: src/app/web/templates/home.html:191
+#: src/app/web/templates/home.html:195
 msgid "Sign in with Discord"
 msgstr "使用 Discord 登录"
 
@@ -2085,86 +2089,87 @@ msgid ""
 "deadlines."
 msgstr "一分钟即可关注四个组合。之后会显示它们的新活动和截止时间。"
 
-#: src/app/web/templates/home.html:189
+#: src/app/web/templates/home.html:193
 msgid ""
-"Sign in with the Discord account you already have. We only ever DM you "
-"about deadlines\n"
-"      for artists you chose to follow."
-msgstr "使用你已有的 Discord 账号登录。我们只会针对你选择关注的艺人，在相关事项截止前给你发 DM。"
+"Sign in with the Discord account you already have. We DM you about "
+"deadlines for\n"
+"      artists you chose to follow, and occasionally about the service "
+"itself."
+msgstr "使用你已有的 Discord 账号登录。我们会针对你选择关注的艺人，在相关事项截止前给你发 DM，偶尔也会发送与服务本身有关的通知。"
 
-#: src/app/web/templates/home.html:195
+#: src/app/web/templates/home.html:199
 msgid ""
 "<b>When you're signed out, this page shows an example.</b> Sign in to see"
 " your own board with your rounds, results, and deadlines. Follow someone "
 "to add their events."
 msgstr "<b>未登录时，此页面会显示示例内容。</b>登录后，你可以在自己的看板上查看轮次、结果和截止时间。关注艺人后，相关活动会添加到看板。"
 
-#: src/app/web/templates/home.html:216
+#: src/app/web/templates/home.html:220
 msgid "Up next"
 msgstr "接下来"
 
-#: src/app/web/templates/home.html:235
+#: src/app/web/templates/home.html:239
 msgid "Your campaigns"
 msgstr "你的购票流程"
 
-#: src/app/web/templates/home.html:248
+#: src/app/web/templates/home.html:252
 msgid "Coming up"
 msgstr "即将到来"
 
-#: src/app/web/templates/home.html:249
+#: src/app/web/templates/home.html:253
 msgid "All times JST and yours, always both"
 msgstr "始终同时显示 JST 和你的当地时间"
 
-#: src/app/web/templates/home.html:260
+#: src/app/web/templates/home.html:264
 msgid "Not tracking these yet"
 msgstr "尚未追踪这些活动"
 
-#: src/app/web/templates/home.html:263
+#: src/app/web/templates/home.html:267
 msgid "Open discover →"
 msgstr "前往发现页 →"
 
-#: src/app/web/templates/home.html:266
+#: src/app/web/templates/home.html:270
 #, python-format
 msgid "%(count)s event in the catalogue,"
 msgid_plural "%(count)s events in the catalogue,"
 msgstr[0] "目录中有 %(count)s 场活动，"
 
-#: src/app/web/templates/home.html:267
+#: src/app/web/templates/home.html:271
 #, python-format
 msgid "%(n)s with a round still open."
 msgstr "其中 %(n)s 场仍有开放中的轮次。"
 
-#: src/app/web/templates/home.html:268
+#: src/app/web/templates/home.html:272
 msgid "Browse by franchise, group, artist or region — or search everything."
 msgstr "按系列、组合、艺人或地区浏览 — 或搜索全部。"
 
-#: src/app/web/templates/home.html:278
+#: src/app/web/templates/home.html:282
 msgid ""
 "<b>Home shows your current status.</b> Everything above is yours — your "
 "rounds, results, and deadlines. Use the section at the bottom to find "
 "more events."
 msgstr "<b>主页会显示你的当前状态。</b>上方显示的是你的轮次、结果和截止时间。你可以在页面底部查找更多活动。"
 
-#: src/app/web/templates/home.html:284
+#: src/app/web/templates/home.html:288
 msgid "Not applying to this round"
 msgstr "不申请这一轮"
 
-#: src/app/web/templates/home.html:287
+#: src/app/web/templates/home.html:291
 msgid ""
 "Done — you won't get reminders for this round. You'll still get reminders"
 " for later rounds of\n"
 "    <b id=\"pruneName\">this event</b>."
 msgstr "完成 — 此轮次的提醒已停止。你仍会收到<b id=\"pruneName\">此活动</b>后续轮次的提醒。"
 
-#: src/app/web/templates/home.html:291
+#: src/app/web/templates/home.html:295
 msgid "That's right"
 msgstr "没错"
 
-#: src/app/web/templates/home.html:299
+#: src/app/web/templates/home.html:303
 msgid "Skip this event entirely"
 msgstr "完全跳过这场活动"
 
-#: src/app/web/templates/home.html:301
+#: src/app/web/templates/home.html:305
 msgid "Manage this event →"
 msgstr "管理这场活动 →"
 
@@ -2865,7 +2870,9 @@ msgid ""
 "<strong>A 30-day record of the reminder DMs we sent you</strong> — which "
 "event, leg and round each one was about — so we can diagnose delivery "
 "problems. Deleting your account deletes these immediately."
-msgstr "<strong>我们发给你的提醒 DM 的 30 天记录</strong> — 每条提醒对应哪个活动、场次和轮次，用于排查发送故障。删除账户后，这些记录会立即删除。"
+msgstr ""
+"<strong>我们发给你的提醒 DM 的 30 天记录</strong> — "
+"每条提醒对应哪个活动、场次和轮次，用于排查发送故障。删除账户后，这些记录会立即删除。"
 
 #: src/app/web/templates/privacy.html:44
 msgid ""
@@ -2931,21 +2938,31 @@ msgid ""
 msgstr "我们只会用这些信息发送你设置的活动截止提醒，并显示你的设置，不会用于其他用途。我们不会用这些信息建立用户画像、给你评分或对你作出自动决定。"
 
 #: src/app/web/templates/privacy.html:75
+msgid ""
+"There is one exception, and it is rare: the person who runs the site can "
+"send you a Discord DM about the service itself — to tell you a reminder "
+"went out wrong, for example. It is written by a person, it is never "
+"advertising, and it uses nothing about you beyond your Discord user ID."
+msgstr ""
+"有一个例外，而且很少发生：网站的运营者可以就服务本身给你发 Discord DM，例如告诉你某条提醒发错了。这类消息由人撰写，绝不是广告，除了你的"
+" Discord 用户 ID 之外不会用到你的任何信息。"
+
+#: src/app/web/templates/privacy.html:78
 msgid "Sharing"
 msgstr "信息共享"
 
-#: src/app/web/templates/privacy.html:77
+#: src/app/web/templates/privacy.html:80
 msgid ""
 "We do not share your data. We do not sell, rent, or give it to other "
 "companies. We only send the information needed to Discord to deliver your"
 " DM."
 msgstr "我们不会共享你的数据，也不会出售、出租或提供给其他公司。只会向 Discord 发送投递 DM 所需的信息。"
 
-#: src/app/web/templates/privacy.html:80
+#: src/app/web/templates/privacy.html:83
 msgid "How long we keep it"
 msgstr "我们保留多久"
 
-#: src/app/web/templates/privacy.html:82
+#: src/app/web/templates/privacy.html:85
 msgid ""
 "We keep your data while your account is active. We back up the database "
 "every night in private, encrypted storage. Backups are deleted "
@@ -2956,42 +2973,42 @@ msgstr ""
 "账户有效期间，我们会保存你的数据。数据库每晚都会备份到私有且加密的存储空间。备份会在 30 "
 "天后自动删除。删除账户后，你的数据会立即从网站中删除，但最多还会在备份中保留 30 天。"
 
-#: src/app/web/templates/privacy.html:85
+#: src/app/web/templates/privacy.html:88
 msgid "Cookies"
 msgstr "Cookie"
 
-#: src/app/web/templates/privacy.html:87
+#: src/app/web/templates/privacy.html:90
 msgid ""
 "We use one cookie to keep you signed in. We do not use analytics or "
 "tracking cookies, so there is no cookie consent banner."
 msgstr "我们只使用一个 Cookie 来保持登录状态，不使用分析或跟踪 Cookie，因此不会显示 Cookie 同意横幅。"
 
-#: src/app/web/templates/privacy.html:90
+#: src/app/web/templates/privacy.html:93
 msgid "Your rights"
 msgstr "你的权利"
 
-#: src/app/web/templates/privacy.html:92
+#: src/app/web/templates/privacy.html:95
 msgid ""
 "You can ask for a copy of your data, ask for it to be corrected, or ask\n"
 "    for it to be deleted. Just get in touch:"
 msgstr "你可以申请获取数据副本、更正数据或删除数据。请通过以下方式联系我们："
 
-#: src/app/web/templates/privacy.html:97 src/app/web/templates/terms.html:89
+#: src/app/web/templates/privacy.html:100 src/app/web/templates/terms.html:89
 #, python-format
 msgid "Discord: %(contact_discord)s"
 msgstr "Discord：%(contact_discord)s"
 
-#: src/app/web/templates/privacy.html:100 src/app/web/templates/terms.html:92
+#: src/app/web/templates/privacy.html:103 src/app/web/templates/terms.html:92
 msgid "Email:"
 msgstr "电子邮箱："
 
-#: src/app/web/templates/privacy.html:111 src/app/web/templates/terms.html:103
+#: src/app/web/templates/privacy.html:114 src/app/web/templates/terms.html:103
 msgid ""
 "This deployment has not published contact details yet. If you reached\n"
 "    this page from a running site, contact whoever operates it."
 msgstr "此部署尚未公布联系方式。如果你是在实际运行的网站上看到本页，请联系网站运营者。"
 
-#: src/app/web/templates/privacy.html:116
+#: src/app/web/templates/privacy.html:119
 msgid ""
 "Deleting your account removes your personal data, including your login "
 "sessions, reminders, presets, tag subscriptions, and lottery results. "
@@ -3000,11 +3017,11 @@ msgid ""
 "who follow them."
 msgstr "删除账户后，你的登录会话、提醒、预设、标签关注和抽选结果等个人数据都会被删除。你添加的活动、标签和编辑记录会保留在共享目录中，但你的名字会被移除，以便其他人继续查看其关注的活动。"
 
-#: src/app/web/templates/privacy.html:119
+#: src/app/web/templates/privacy.html:122
 msgid "Changes to this policy"
 msgstr "本政策的变更"
 
-#: src/app/web/templates/privacy.html:121
+#: src/app/web/templates/privacy.html:124
 msgid ""
 "If this policy changes, the date at the top of this page changes with\n"
 "    it. There is no mailing list to notify, since we do not have your "

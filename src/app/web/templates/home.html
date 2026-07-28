@@ -186,8 +186,12 @@
   <div class="ctafoot">
     <span class="eyebrow">{{ _("Ready when you are") }}</span>
     <h2>{{ _("Follow four groups in a minute. We'll show you their new events and deadlines.") }}</h2>
-    <p>{% trans %}Sign in with the Discord account you already have. We only ever DM you about deadlines
-      for artists you chose to follow.{% endtrans %}</p>
+    {# "only ever ... deadlines" was true until the admin broadcast shipped.
+       An operator can now DM about the service itself, so the absolute claim
+       had to go -- the reassurance it carries (we will not spam you) is kept,
+       the falsehood is not. Same rule as the unfollow dialog's copy fix. #}
+    <p>{% trans %}Sign in with the Discord account you already have. We DM you about deadlines for
+      artists you chose to follow, and occasionally about the service itself.{% endtrans %}</p>
     <a class="btn btn-discord" href="{{ login_url(request) }}"><span class="di">✦</span> {{ _("Sign in with Discord") }}</a>
   </div>
 

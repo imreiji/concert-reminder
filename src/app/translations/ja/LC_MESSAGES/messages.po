@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-28 05:36-0300\n"
+"POT-Creation-Date: 2026-07-28 13:24-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -15,21 +15,21 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:32
-#: src/app/bot/views.py:221 src/app/db/service.py:1544
+#: src/app/bot/views.py:221 src/app/db/service.py:1546
 msgid "opens"
 msgstr "受付開始"
 
 #: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:33
-#: src/app/bot/views.py:223 src/app/db/service.py:1545
+#: src/app/bot/views.py:223 src/app/db/service.py:1547
 msgid "closes"
 msgstr "締切"
 
-#: src/app/bot/messages.py:34 src/app/db/service.py:1546
+#: src/app/bot/messages.py:34 src/app/db/service.py:1548
 msgid "results announced"
 msgstr "当落発表"
 
 #: src/app/bot/messages.py:35 src/app/bot/views.py:228
-#: src/app/db/service.py:1547 src/app/web/templates/setup.html:155
+#: src/app/db/service.py:1549 src/app/web/templates/setup.html:155
 msgid "payment due"
 msgstr "入金締切"
 
@@ -64,7 +64,7 @@ msgid "{unit} ago"
 msgstr "{unit}前"
 
 #: src/app/bot/messages.py:76 src/app/bot/messages.py:184
-#: src/app/db/service.py:1548 src/app/web/templates/tags.html:370
+#: src/app/db/service.py:1550 src/app/web/templates/tags.html:370
 msgid "event"
 msgstr "イベント"
 
@@ -433,130 +433,134 @@ msgstr "後"
 msgid "same-day"
 msgstr "当日"
 
-#: src/app/db/service.py:1552
+#: src/app/db/service.py:1554
 msgid "Lottery round"
 msgstr "抽選受付"
 
-#: src/app/db/service.py:1553
+#: src/app/db/service.py:1555
 msgid "Eligibility item sale"
 msgstr "対象商品販売"
 
-#: src/app/db/service.py:1554
+#: src/app/db/service.py:1556
 msgid "Stream ticket sale"
 msgstr "配信チケット販売"
 
-#: src/app/db/service.py:1555
+#: src/app/db/service.py:1557
 msgid "General sale"
 msgstr "一般販売"
 
-#: src/app/db/service.py:1556
+#: src/app/db/service.py:1558
 msgid "Result announcement"
 msgstr "当落発表"
 
-#: src/app/db/service.py:1557
+#: src/app/db/service.py:1559
 msgid "Payment deadline"
 msgstr "入金締切"
 
-#: src/app/db/service.py:1558
+#: src/app/db/service.py:1560
 msgid "First come, first served"
 msgstr "先着"
 
-#: src/app/db/service.py:1559
+#: src/app/db/service.py:1561
 msgid "Overseas tour package"
 msgstr "海外向けツアーパッケージ"
 
-#: src/app/db/service.py:1560
+#: src/app/db/service.py:1562
 msgid "Upgrade round"
 msgstr "アップグレード抽選"
 
-#: src/app/db/service.py:1561
+#: src/app/db/service.py:1563
 msgid "Other"
 msgstr "その他"
 
-#: src/app/db/service.py:2528 src/app/db/service.py:2674
-#: src/app/web/templates/_board.html:73 src/app/web/templates/discover.html:79
-#: src/app/web/templates/home.html:23
+#: src/app/db/service.py:2530 src/app/db/service.py:2676
+#: src/app/db/service.py:5415 src/app/web/templates/_board.html:73
+#: src/app/web/templates/discover.html:79 src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "複数"
 
-#: src/app/db/service.py:3687
+#: src/app/db/service.py:3689
 #, python-brace-format
 msgid "{n}d"
 msgstr "{n}日"
 
-#: src/app/db/service.py:3689
+#: src/app/db/service.py:3691
 #, python-brace-format
 msgid "{n}h"
 msgstr "{n}時間"
 
-#: src/app/db/service.py:3690
+#: src/app/db/service.py:3692
 #, python-brace-format
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/service.py:3787
+#: src/app/db/service.py:3789
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "アップグレード当選 — {day}までに入金"
 
-#: src/app/db/service.py:3788
+#: src/app/db/service.py:3790
 msgid "Upgrade won — payment due"
 msgstr "アップグレード当選 — 入金締切"
 
-#: src/app/db/service.py:3807
+#: src/app/db/service.py:3809
 msgid "Upgrade · Applied"
 msgstr "アップグレード・申込済み"
 
-#: src/app/db/service.py:3810
+#: src/app/db/service.py:3812
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "アップグレード・{n}後に締切"
 
-#: src/app/db/service.py:3813
+#: src/app/db/service.py:3815
 msgid "Upgrade · Open now"
 msgstr "アップグレード・受付中"
 
-#: src/app/db/service.py:3819 src/app/web/templates/_board.html:23
+#: src/app/db/service.py:3821 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:35
 #: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "確保済み"
 
-#: src/app/db/service.py:3830
+#: src/app/db/service.py:3832
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "当選 — {day}までに入金"
 
-#: src/app/db/service.py:3831
+#: src/app/db/service.py:3833
 msgid "Won — payment due"
 msgstr "当選 — 入金締切"
 
-#: src/app/db/service.py:3840
+#: src/app/db/service.py:3842
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind}・申込済み"
 
-#: src/app/db/service.py:3860
+#: src/app/db/service.py:3862
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind}・{n}後に締切"
 
-#: src/app/db/service.py:3865
+#: src/app/db/service.py:3867
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind}・受付中"
 
-#: src/app/db/service.py:3871
+#: src/app/db/service.py:3873
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind}・{n}後に受付開始"
 
-#: src/app/db/service.py:3878
+#: src/app/db/service.py:3880
 msgid "All rounds closed"
 msgstr "すべての受付が終了"
 
-#: src/app/db/service.py:5433 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:5034
+msgid "From dekimasen.app"
+msgstr "dekimasen.app より"
+
+#: src/app/db/service.py:5667 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -566,7 +570,7 @@ msgstr "すべての受付が終了"
 msgid "Title"
 msgstr "タイトル"
 
-#: src/app/db/service.py:5437 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:5671 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -579,17 +583,17 @@ msgstr "タイトル"
 msgid "Notes"
 msgstr "メモ"
 
-#: src/app/db/service.py:5443
+#: src/app/db/service.py:5677
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "公演{n}の名称"
 
-#: src/app/db/service.py:5448
+#: src/app/db/service.py:5682
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "受付{n}の名称"
 
-#: src/app/db/service.py:5457 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:5691 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -604,7 +608,7 @@ msgstr "受付{n}の名称"
 msgid "Name"
 msgstr "名前"
 
-#: src/app/db/service.py:5462
+#: src/app/db/service.py:5696
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -1013,7 +1017,7 @@ msgstr "このイベントのフォローをやめますか？"
 
 #: src/app/web/templates/_following_toggle.html:59
 #: src/app/web/templates/_result_capture_dialog.html:25
-#: src/app/web/templates/home.html:285
+#: src/app/web/templates/home.html:289
 #: src/app/web/templates/preferences.html:398
 msgid "Close"
 msgstr "閉じる"
@@ -1452,7 +1456,7 @@ msgid "Log out"
 msgstr "サインアウト"
 
 #: src/app/web/templates/base.html:77 src/app/web/templates/home.html:80
-#: src/app/web/templates/home.html:191
+#: src/app/web/templates/home.html:195
 msgid "Sign in with Discord"
 msgstr "Discordでサインイン"
 
@@ -2083,71 +2087,72 @@ msgid ""
 "deadlines."
 msgstr "1分で4組をフォローできます。新しいイベントや締切が表示されます。"
 
-#: src/app/web/templates/home.html:189
+#: src/app/web/templates/home.html:193
 msgid ""
-"Sign in with the Discord account you already have. We only ever DM you "
-"about deadlines\n"
-"      for artists you chose to follow."
-msgstr "お持ちのDiscordアカウントでサインインできます。フォローしたアーティストの締切だけをDMでお知らせします。"
+"Sign in with the Discord account you already have. We DM you about "
+"deadlines for\n"
+"      artists you chose to follow, and occasionally about the service "
+"itself."
+msgstr "お持ちのDiscordアカウントでサインインできます。フォローしたアーティストの締切と、ときどきサービスに関するお知らせをDMでお送りします。"
 
-#: src/app/web/templates/home.html:195
+#: src/app/web/templates/home.html:199
 msgid ""
 "<b>When you're signed out, this page shows an example.</b> Sign in to see"
 " your own board with your rounds, results, and deadlines. Follow someone "
 "to add their events."
 msgstr "<b>サインアウト中は、サンプルが表示されます。</b>サインインすると、自分の受付、当落、締切をボードで確認できます。出演者などをフォローすると、そのイベントが追加されます。"
 
-#: src/app/web/templates/home.html:216
+#: src/app/web/templates/home.html:220
 msgid "Up next"
 msgstr "次はこれ"
 
-#: src/app/web/templates/home.html:235
+#: src/app/web/templates/home.html:239
 msgid "Your campaigns"
 msgstr "フォロー中の公演"
 
-#: src/app/web/templates/home.html:248
+#: src/app/web/templates/home.html:252
 msgid "Coming up"
 msgstr "今後の予定"
 
-#: src/app/web/templates/home.html:249
+#: src/app/web/templates/home.html:253
 msgid "All times JST and yours, always both"
 msgstr "時刻は常にJSTと現地時刻の両方で表示"
 
-#: src/app/web/templates/home.html:260
+#: src/app/web/templates/home.html:264
 msgid "Not tracking these yet"
 msgstr "まだフォローしていません"
 
-#: src/app/web/templates/home.html:263
+#: src/app/web/templates/home.html:267
 msgid "Open discover →"
 msgstr "公演を探す →"
 
-#: src/app/web/templates/home.html:266
+#: src/app/web/templates/home.html:270
 #, python-format
 msgid "%(count)s event in the catalogue,"
 msgid_plural "%(count)s events in the catalogue,"
 msgstr[0] "カタログには%(count)s件のイベント、"
 
-#: src/app/web/templates/home.html:267
+#: src/app/web/templates/home.html:271
 #, python-format
 msgid "%(n)s with a round still open."
 msgstr "うち%(n)s件は受付中。"
 
-#: src/app/web/templates/home.html:268
+#: src/app/web/templates/home.html:272
 msgid "Browse by franchise, group, artist or region — or search everything."
 msgstr "フランチャイズ、グループ、アーティスト、地域から探すか、キーワードで検索できます。"
 
-#: src/app/web/templates/home.html:278
+#: src/app/web/templates/home.html:282
 msgid ""
 "<b>Home shows your current status.</b> Everything above is yours — your "
 "rounds, results, and deadlines. Use the section at the bottom to find "
 "more events."
 msgstr "<b>ホームでは現在の状況を確認できます。</b>上に表示されるのは、自分の受付、当落、締切です。その他のイベントは、ページ下部から探せます。"
 
-#: src/app/web/templates/home.html:284
+#: src/app/web/templates/home.html:288
 msgid "Not applying to this round"
 msgstr "この受付には申し込まない"
 
-#: src/app/web/templates/home.html:287
+#: src/app/web/templates/home.html:291
 msgid ""
 "Done — you won't get reminders for this round. You'll still get reminders"
 " for later rounds of\n"
@@ -2156,15 +2161,15 @@ msgstr ""
 "完了しました。この受付のリマインダーは停止しました。<b "
 "id=\"pruneName\">このイベント</b>の今後の受付については引き続き通知します。"
 
-#: src/app/web/templates/home.html:291
+#: src/app/web/templates/home.html:295
 msgid "That's right"
 msgstr "そのとおり"
 
-#: src/app/web/templates/home.html:299
+#: src/app/web/templates/home.html:303
 msgid "Skip this event entirely"
 msgstr "このイベントをフォロー対象から外す"
 
-#: src/app/web/templates/home.html:301
+#: src/app/web/templates/home.html:305
 msgid "Manage this event →"
 msgstr "このイベントを管理 →"
 
@@ -2923,21 +2928,29 @@ msgid ""
 msgstr "この情報は、設定したイベントの締切リマインダーを送信し、自分の設定を表示するためだけに使います。それ以外の目的には使いません。この情報を使って利用者のプロフィールを作成したり、評価したり、自動的な判断を行ったりすることもありません。"
 
 #: src/app/web/templates/privacy.html:75
+msgid ""
+"There is one exception, and it is rare: the person who runs the site can "
+"send you a Discord DM about the service itself — to tell you a reminder "
+"went out wrong, for example. It is written by a person, it is never "
+"advertising, and it uses nothing about you beyond your Discord user ID."
+msgstr "例外が一つだけあり、それはめったにありません。サイトの運営者が、サービス自体についてDiscordのDMをお送りすることがあります。たとえば、リマインダーが誤って送信されたことをお知らせする場合です。これは人が書いたもので、広告ではなく、あなたのDiscordユーザーID以外の情報は一切使いません。"
+
+#: src/app/web/templates/privacy.html:78
 msgid "Sharing"
 msgstr "共有について"
 
-#: src/app/web/templates/privacy.html:77
+#: src/app/web/templates/privacy.html:80
 msgid ""
 "We do not share your data. We do not sell, rent, or give it to other "
 "companies. We only send the information needed to Discord to deliver your"
 " DM."
 msgstr "データを共有、販売、貸与、第三者提供することはありません。DMを送るために必要な情報だけをDiscordに送信します。"
 
-#: src/app/web/templates/privacy.html:80
+#: src/app/web/templates/privacy.html:83
 msgid "How long we keep it"
 msgstr "保存期間"
 
-#: src/app/web/templates/privacy.html:82
+#: src/app/web/templates/privacy.html:85
 msgid ""
 "We keep your data while your account is active. We back up the database "
 "every night in private, encrypted storage. Backups are deleted "
@@ -2946,42 +2959,42 @@ msgid ""
 "up to 30 days."
 msgstr "アカウントが有効な間、データを保存します。データベースは毎晩、非公開の暗号化されたストレージにバックアップされます。バックアップは30日後に自動で削除されます。アカウントを削除すると、稼働中のサイトからはすぐにデータが削除されますが、バックアップには最大30日間残る場合があります。"
 
-#: src/app/web/templates/privacy.html:85
+#: src/app/web/templates/privacy.html:88
 msgid "Cookies"
 msgstr "クッキー"
 
-#: src/app/web/templates/privacy.html:87
+#: src/app/web/templates/privacy.html:90
 msgid ""
 "We use one cookie to keep you signed in. We do not use analytics or "
 "tracking cookies, so there is no cookie consent banner."
 msgstr "サインイン状態を保つために、Cookieを1つ使用します。アクセス解析用や追跡用のCookieは使用しないため、Cookie同意バナーは表示しません。"
 
-#: src/app/web/templates/privacy.html:90
+#: src/app/web/templates/privacy.html:93
 msgid "Your rights"
 msgstr "あなたの権利"
 
-#: src/app/web/templates/privacy.html:92
+#: src/app/web/templates/privacy.html:95
 msgid ""
 "You can ask for a copy of your data, ask for it to be corrected, or ask\n"
 "    for it to be deleted. Just get in touch:"
 msgstr "データのコピーの請求、訂正の請求、削除の請求ができます。お気軽にご連絡ください："
 
-#: src/app/web/templates/privacy.html:97 src/app/web/templates/terms.html:89
+#: src/app/web/templates/privacy.html:100 src/app/web/templates/terms.html:89
 #, python-format
 msgid "Discord: %(contact_discord)s"
 msgstr "Discord：%(contact_discord)s"
 
-#: src/app/web/templates/privacy.html:100 src/app/web/templates/terms.html:92
+#: src/app/web/templates/privacy.html:103 src/app/web/templates/terms.html:92
 msgid "Email:"
 msgstr "メール："
 
-#: src/app/web/templates/privacy.html:111 src/app/web/templates/terms.html:103
+#: src/app/web/templates/privacy.html:114 src/app/web/templates/terms.html:103
 msgid ""
 "This deployment has not published contact details yet. If you reached\n"
 "    this page from a running site, contact whoever operates it."
 msgstr "この環境ではまだ連絡先が公開されていません。稼働中のサイトからこのページを開いた場合は、運営者にお問い合わせください。"
 
-#: src/app/web/templates/privacy.html:116
+#: src/app/web/templates/privacy.html:119
 msgid ""
 "Deleting your account removes your personal data, including your login "
 "sessions, reminders, presets, tag subscriptions, and lottery results. "
@@ -2990,11 +3003,11 @@ msgid ""
 "who follow them."
 msgstr "アカウントを削除すると、ログインセッション、リマインダー、プリセット、タグのフォロー、抽選結果などの個人データが削除されます。追加したイベント、タグ、編集履歴は共有カタログに残りますが、名前は削除されます。これにより、ほかの利用者がフォロー中のイベントは引き続き利用できます。"
 
-#: src/app/web/templates/privacy.html:119
+#: src/app/web/templates/privacy.html:122
 msgid "Changes to this policy"
 msgstr "このポリシーの変更"
 
-#: src/app/web/templates/privacy.html:121
+#: src/app/web/templates/privacy.html:124
 msgid ""
 "If this policy changes, the date at the top of this page changes with\n"
 "    it. There is no mailing list to notify, since we do not have your "

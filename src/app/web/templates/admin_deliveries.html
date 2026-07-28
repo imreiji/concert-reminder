@@ -53,6 +53,7 @@
 
 {% if batch %}
 <h2>Batch {{ batch.strftime('%Y-%m-%d %H:%M') }} UTC</h2>
+<p><a href="/admin/broadcast?mode=batch&amp;mode_param={{ batch.isoformat() }}">Message these recipients</a></p>
 <div>
   <table class="tagtable">
     <thead><tr><th>User</th><th>Source</th><th>Outcome</th><th>What</th></tr></thead>
