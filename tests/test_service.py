@@ -511,6 +511,96 @@ async def test_notify_newly_cancelled_legs_noop_when_no_new_cancellations(sessio
     assert list((await session.execute(select(Notification))).scalars()) == []
 
 
+async def test_a_reader_losing_only_a_general_rounds_reminder_is_told(session):
+    """The hole the every-leg planning rule opened: before it, a General
+    round's queue row SURVIVED cancellation (wrongly, but visibly); now it is
+    deleted, so the notice has to count it. A General round names no leg, so
+    the per-round affectedness test never reaches it -- once the concert has
+    no live leg left, every round on it is affected."""
+    concert, leg_a, leg_b, _, _, round_general = await seed_two_legs(session)
+    rule = ReminderRule(
+        user_id=42, round_id=round_general.id, anchor=Anchor.CLOSES, offset_days=0
+    )
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+    assert len(await queue_rows(session)) == 1
+
+    leg_a.cancelled = True
+    leg_b.cancelled = True
+    await session.flush()
+    n = await notify_newly_cancelled_legs(session, concert.id, {leg_a.id, leg_b.id}, NOW)
+
+    assert n == 1
+    notes = list((await session.execute(select(Notification))).scalars())
+    assert [(x.user_id, x.kind, x.concert_id) for x in notes] == [
+        (42, "leg_cancelled", concert.id)
+    ]
+
+
+async def test_a_reader_losing_a_leg_round_and_a_general_round_is_told(session):
+    """The reviewer's exact scenario: a reader holds a rule on a leg-specific
+    round AND one on the General round. The "does this user still have a live
+    reminder?" probe used to find the surviving General row and stay silent --
+    and sync_concert then deleted that row too, so the reader lost 100% of
+    their reminders on this concert with no DM."""
+    concert, leg_a, leg_b, round_a_only, _, round_general = await seed_two_legs(session)
+    rule_leg = ReminderRule(
+        user_id=42, round_id=round_a_only.id, anchor=Anchor.CLOSES, offset_days=0
+    )
+    rule_general = ReminderRule(
+        user_id=42, round_id=round_general.id, anchor=Anchor.CLOSES, offset_days=0
+    )
+    session.add_all([rule_leg, rule_general])
+    await session.flush()
+    await sync_rule(session, rule_leg, NOW)
+    await sync_rule(session, rule_general, NOW)
+    assert len(await queue_rows(session)) == 2
+
+    leg_a.cancelled = True
+    leg_b.cancelled = True
+    await session.flush()
+    n = await notify_newly_cancelled_legs(session, concert.id, {leg_a.id, leg_b.id}, NOW)
+
+    assert n == 1
+    notes = list((await session.execute(select(Notification))).scalars())
+    assert [x.user_id for x in notes] == [42]
+
+    # ...and the rows it warned about really are the ones sync then deletes.
+    await sync_concert(session, concert.id, NOW)
+    assert await queue_rows(session) == []
+
+
+async def test_a_concert_with_a_live_leg_left_still_notifies_only_the_bereft(session):
+    """The every-leg rule must not widen the notice while one leg still
+    stands: user 43's General-round reminder survives leg A's cancellation,
+    so user 43 gets nothing, while user 42 -- whose only rule was on the
+    A-only round -- is still told."""
+    concert, leg_a, _, round_a_only, _, round_general = await seed_two_legs(session)
+    rule_42 = ReminderRule(
+        user_id=42, round_id=round_a_only.id, anchor=Anchor.CLOSES, offset_days=0
+    )
+    await ensure_user(session, 43, "other-fan")
+    rule_43_leg = ReminderRule(
+        user_id=43, round_id=round_a_only.id, anchor=Anchor.CLOSES, offset_days=0
+    )
+    rule_43_general = ReminderRule(
+        user_id=43, round_id=round_general.id, anchor=Anchor.CLOSES, offset_days=0
+    )
+    session.add_all([rule_42, rule_43_leg, rule_43_general])
+    await session.flush()
+    for rule in (rule_42, rule_43_leg, rule_43_general):
+        await sync_rule(session, rule, NOW)
+
+    leg_a.cancelled = True
+    await session.flush()
+    n = await notify_newly_cancelled_legs(session, concert.id, {leg_a.id}, NOW)
+
+    assert n == 1
+    notes = list((await session.execute(select(Notification))).scalars())
+    assert [x.user_id for x in notes] == [42]
+
+
 async def test_reinstate_user_rules_resyncs_when_uncancelled(session):
     concert, leg_a, leg_b, round_a_only, _, _ = await seed_two_legs(session)
     rule = ReminderRule(user_id=42, round_id=round_a_only.id, anchor=Anchor.CLOSES, offset_days=0)
@@ -779,6 +869,39 @@ async def test_upcoming_rounds_excludes_implicitly_cancelled_round(session):
     assert round_a_only.id not in round_ids  # fully cancelled (its only leg is now cancelled)
     assert round_both.id in round_ids  # leg B still live
     assert round_general.id in round_ids  # never tied to a leg, unaffected
+
+
+async def test_upcoming_rounds_drops_a_dead_concerts_general_round(session):
+    """The fourth surface: the bot's /upcoming. is_round_cancelled alone
+    leaves a General round on a concert with no live leg still advertising
+    itself there."""
+    concert, leg_a, leg_b, _, _, _ = await seed_two_legs(session)
+    leg_a.cancelled = True
+    leg_b.cancelled = True
+    await session.flush()
+    result = await upcoming_rounds(session, NOW, horizon_days=60)
+    assert [r.id for c, r in result if c.id == concert.id] == []
+
+
+async def test_upcoming_rounds_keeps_a_partly_cancelled_concerts_rounds(session):
+    """...and it must not over-fire: one live leg left keeps the concert's
+    General round, and a dateless draft has no leg to cancel at all."""
+    concert, leg_a, _, _, round_both, round_general = await seed_two_legs(session)
+    draft = Concert(title="Dateless Draft", event_id="dateless-draft", created_by=42)
+    session.add(draft)
+    await session.flush()
+    draft_round = Round(
+        concert_id=draft.id, kind=RoundKind.GENERAL_SALE, label="Draft general",
+        closes_at_utc=dt(6, 28),
+    )
+    session.add(draft_round)
+    leg_a.cancelled = True
+    await session.flush()
+
+    round_ids = {r.id for _, r in await upcoming_rounds(session, NOW, horizon_days=60)}
+    assert round_general.id in round_ids
+    assert round_both.id in round_ids  # leg B still live
+    assert draft_round.id in round_ids  # no legs at all is not "every leg cancelled"
 
 
 # ── set_editor / list_editors ───────────────────────────────────────────

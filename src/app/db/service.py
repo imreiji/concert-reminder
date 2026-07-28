@@ -1203,28 +1203,43 @@ async def notify_newly_cancelled_legs(
     newly_cancelled_day_ids: set[int],
     now: datetime | None = None,
 ) -> int:
-    """Call BEFORE sync_concert (which will delete the now-unplanned queue
-    rows for these legs). Queues one Notification per user who is about to
-    lose EVERY one of their unsent reminders on this concert as a direct
-    result of these legs being newly cancelled -- a user with other live
-    legs/rounds to fall back on gets nothing. Returns how many notifications
-    were queued."""
+    """Call BEFORE sync_concert (which will delete the queue rows this
+    inspects -- once sync has run, the loss it warns about is invisible).
+    Queues one Notification per user who is about to lose EVERY one of their
+    unsent reminders on this concert as a direct result of these legs being
+    newly cancelled -- a user with other live legs/rounds to fall back on
+    gets nothing. Returns how many notifications were queued.
+
+    WHICH rounds count as lost is a concert-level question, not a per-round
+    one. Normally it is the rounds naming a newly-cancelled leg that
+    is_round_cancelled now retires; but if these cancellations leave the
+    concert with no live leg at all (all_legs_cancelled), EVERY round on it
+    is lost, General rounds included -- they name no leg, so the per-round
+    test never reaches them, yet sync_rule's concert-level rule deletes their
+    queue rows moments later. Miss that and the "does this user still have a
+    live reminder here?" probe below finds a row that is already doomed and
+    stays silent: the reader loses everything and is never told."""
     if not newly_cancelled_day_ids:
         return 0
     now = now or _now()
 
-    all_cancelled_day_ids = set((await session.execute(
-        select(ConcertDay.id).where(
-            ConcertDay.concert_id == concert_id, ConcertDay.cancelled.is_(True)
-        )
+    # Post-cancellation leg state -- the caller has already flagged the legs,
+    # so this sees the concert as it will be once sync runs.
+    all_days = list((await session.execute(
+        select(ConcertDay).where(ConcertDay.concert_id == concert_id)
     )).scalars())
+    all_cancelled_day_ids = {d.id for d in all_days if d.cancelled}
     rounds = list(
         (await session.execute(select(Round).where(Round.concert_id == concert_id))).scalars()
     )
+    concert_is_dead = all_legs_cancelled(all_days)
     affected_round_ids = {
         r.id for r in rounds
-        if set(r.applies_to or []) & newly_cancelled_day_ids
-        and is_round_cancelled(r, all_cancelled_day_ids)
+        if concert_is_dead
+        or (
+            set(r.applies_to or []) & newly_cancelled_day_ids
+            and is_round_cancelled(r, all_cancelled_day_ids)
+        )
     }
 
     res = await session.execute(
@@ -1465,9 +1480,18 @@ async def mark_sent(session: AsyncSession, queue_id: int, now: datetime | None =
 async def upcoming_rounds(
     session: AsyncSession, now: datetime | None = None, horizon_days: int = 14
 ) -> list[tuple[Concert, Round]]:
-    """Rounds opening or closing within the horizon — powers /upcoming.
-    Implicitly-cancelled rounds (every leg they apply to is cancelled) are
-    excluded, same rule sync_rule/upcoming_deadlines already use."""
+    """Rounds opening or closing within the horizon — powers the bot's
+    /upcoming, its only caller. Two exclusions, the same pair
+    sync_rule/upcoming_deadlines apply: implicitly-cancelled rounds (every leg
+    they apply to is cancelled, is_round_cancelled) and every round on a
+    concert with no live leg left (all_legs_cancelled). The second is not
+    redundant -- a General round names no leg, so it survives the first
+    predicate however dead the show is.
+
+    Not to be confused with ShowDeadlinesButton (bot/views.py), which answers
+    a different question -- "everything about THIS concert", asked about one
+    concert on purpose -- and so labels cancelled rounds rather than hiding
+    them, exactly as the concert page stays reachable for a dead show."""
     from datetime import timedelta
 
     now = now or _now()
@@ -1484,10 +1508,22 @@ async def upcoming_rounds(
     pairs = [(c, r) for c, r in res.all()]
     if not pairs:
         return pairs
-    cancelled_day_ids = set((await session.execute(
-        select(ConcertDay.id).where(ConcertDay.cancelled.is_(True))
+    # Scoped to the concerts actually in play: a round's applies_to only ever
+    # names legs of its own concert, so a global day scan buys nothing here.
+    days = list((await session.execute(
+        select(ConcertDay).where(ConcertDay.concert_id.in_({c.id for c, _ in pairs}))
     )).scalars())
-    return [(c, r) for c, r in pairs if not is_round_cancelled(r, cancelled_day_ids)]
+    cancelled_day_ids = {d.id for d in days if d.cancelled}
+    days_by_concert: dict[int, list[ConcertDay]] = {}
+    for d in days:
+        days_by_concert.setdefault(d.concert_id, []).append(d)
+    dead_concert_ids = {
+        cid for cid, ds in days_by_concert.items() if all_legs_cancelled(ds)
+    }
+    return [
+        (c, r) for c, r in pairs
+        if c.id not in dead_concert_ids and not is_round_cancelled(r, cancelled_day_ids)
+    ]
 
 
 LABEL_BY_ANCHOR: dict[Anchor, str] = {
