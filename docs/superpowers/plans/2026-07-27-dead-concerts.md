@@ -96,7 +96,79 @@ async def test_discovers_public_deadline_list_drops_dead_concerts(session):
 
 ---
 
-### Task 2: The board
+### Task 2: Close the silent-loss hole, and the fourth surface
+
+Added 2026-07-27 after Task 1's review. Task 1 CREATED the first of these: a
+queue row that used to survive (wrongly, but visibly) is now deleted, and
+the notice that exists to warn about exactly that loss does not count it.
+
+**Files:**
+- Modify: `src/app/db/service.py` (`notify_newly_cancelled_legs`, `upcoming_rounds`)
+- Test: `tests/test_service.py` (or wherever the existing `notify_newly_cancelled_legs` tests live — find them and join them)
+
+**Item 1 — the notice must count a dead concert's General rounds.**
+`notify_newly_cancelled_legs` builds `affected_round_ids` from
+`set(r.applies_to or []) & newly_cancelled_day_ids`. A General round's
+`applies_to` is empty, so it is never "affected", so its queue row is never
+in `doomed_ids`, so the "did this user lose everything?" probe finds that row
+and skips the notice. Failure scenario the reviewer verified: a reader holds
+a rule on a leg-specific round AND one on the General round; an editor
+cancels both legs; the notice sees the surviving General row and stays
+silent; `sync_concert` then deletes it too. The reader loses 100% of their
+reminders on that concert with no DM.
+
+Fix: when the newly-cancelled legs leave the concert with NO live leg
+(`all_legs_cancelled`), every round on the concert is affected, not just
+those naming the cancelled legs. Move the function's docstring with it — it
+currently promises "the now-unplanned queue rows *for these legs*", which
+becomes under-stated.
+
+This widens what an existing outbox notice covers; it does NOT add a new DM
+path or a second writer, so invariant 4 is intact — the notice still goes
+through the `notifications` table and the scheduler drains it as before.
+
+**Item 2 — `upcoming_rounds` is a fourth surface, and its docstring now lies.**
+It filters on `is_round_cancelled` alone, so a General round on a dead
+concert still shows in the bot's `/upcoming` and in `ShowDeadlinesButton` —
+and its docstring claims it uses "the same rule `sync_rule`/
+`upcoming_deadlines` already use", which stopped being true in Task 1. In a
+codebase that leans this hard on comments as the design record, a
+cross-reference that says "same rule as X" after X moved is exactly the
+drift the agreement test exists to prevent. Thread the predicate and correct
+the docstring.
+
+- [ ] **Step 1: Write the failing tests.**
+
+```python
+async def test_a_reader_losing_only_a_general_rounds_reminder_is_told(session):
+    """The hole Task 1 opened: before it, that row survived; now it is
+    deleted, so the notice has to count it."""
+    # rule on the General round only; cancel every leg; assert one
+    # Notification row for that user
+    ...
+
+async def test_a_reader_losing_a_leg_round_and_a_general_round_is_told(session):
+    # the reviewer's exact scenario -- the probe used to find the General row
+    # and stay silent
+    ...
+
+async def test_a_concert_with_a_live_leg_left_still_notifies_only_the_bereft(session):
+    # the every-leg rule must not over-fire: a reader with a surviving
+    # reminder on the live leg gets NO notice
+    ...
+
+async def test_upcoming_rounds_drops_a_dead_concerts_general_round(session): ...
+async def test_upcoming_rounds_keeps_a_partly_cancelled_concerts_rounds(session): ...
+```
+
+- [ ] **Step 2: Run** — FAIL.
+- [ ] **Step 3: Implement** both items.
+- [ ] **Step 4:** Run the touched files plus the existing `notify_newly_cancelled_legs` and cancellation suites UNMODIFIED, then the FULL suite + ruff.
+- [ ] **Step 5: Commit** — `fix: tell a reader when a dead concert takes their last reminder (task 2)`
+
+---
+
+### Task 3: The board
 
 **Files:**
 - Modify: `src/app/db/service.py` (`BoardCard`, `board_cards`), `src/app/web/templates/_board.html`, `src/app/web/static/style.css`
@@ -128,11 +200,11 @@ async def test_the_board_marks_a_cancelled_card(client, db):
 
 - [ ] **Step 5: Catalogue** for the badge string; delete `messages.pot`.
 
-- [ ] **Step 6: Run** the two files, then the FULL suite + ruff. **Commit** — `feat: the board badges a cancelled concert and drops it without standing (task 2)`
+- [ ] **Step 6: Run** the two files, then the FULL suite + ruff. **Commit** — `feat: the board badges a cancelled concert and drops it without standing (task 3)`
 
 ---
 
-### Task 3: The concert page
+### Task 4: The concert page
 
 **Files:**
 - Modify: `src/app/db/service.py` (`concert_next_moment` and the capture-gate threading), `src/app/web/routes/concerts.py` (context), `src/app/web/templates/concert_detail.html`, `src/app/web/static/style.css`
@@ -163,11 +235,11 @@ async def test_a_live_concert_page_has_no_cancelled_banner(client, db): ...
 
 - [ ] **Step 6: Measure.** Seed a temp dev DB (never the repo's `app.db`), run web-only (empty `DISCORD_TOKEN`), and check the banner and a badged board card at 375/730/1200 in both themes. Record what you observed.
 
-- [ ] **Step 7: Run** the two files + `tests/test_i18n_catalogues.py` + `tests/test_theme_and_tokens.py`, then the FULL suite + ruff. **Commit** — `feat: a dead concert page stops asking for action (task 3)`
+- [ ] **Step 7: Run** the two files + `tests/test_i18n_catalogues.py` + `tests/test_theme_and_tokens.py`, then the FULL suite + ruff. **Commit** — `feat: a dead concert page stops asking for action (task 4)`
 
 ---
 
-### Task 4: Closing sweep
+### Task 5: Closing sweep
 
 - [ ] **Step 1:** `uv run pytest -q` (foreground, full) + `uv run ruff check .`; record tallies.
 - [ ] **Step 2:** Smoke against a seeded temp DB: cancel every leg of a concert you have standing on and one you do not; confirm the first keeps a badged card and the second leaves the board; confirm neither appears in Coming up; confirm the concert page shows the banner and no capture; confirm a partly-cancelled concert is untouched throughout.
@@ -175,4 +247,4 @@ async def test_a_live_concert_page_has_no_cancelled_banner(client, db): ...
 - [ ] **Step 4:** WISHLIST: move #2 to Shipped dated, house style, naming the owner ruling and the fact that the planner was brought into scope beyond the entry's three surfaces; renumber; revision-pass paragraph; fix `#N` cross-references.
 - [ ] **Step 5:** CLAUDE.md: invariant 2's paragraph gains a sentence — a concert whose every leg is cancelled contributes no live rounds anywhere, and that concert-level question is `all_legs_cancelled`, the Python twin of `discoverable_concert_criterion`, NOT a widening of `is_round_cancelled`.
 - [ ] **Step 6:** Reconcile `docs/superpowers/demo/dekimasen-demo.html` if the badge or banner belongs in it (judge; say either way).
-- [ ] **Step 7: Commit** — `chore: dead concerts closing sweep (task 4)`
+- [ ] **Step 7: Commit** — `chore: dead concerts closing sweep (task 5)`
