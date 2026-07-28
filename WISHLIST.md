@@ -192,6 +192,29 @@ that the owner personally asked for, so the list is back to
 assistant-raised and review-raised items behind it. The sign-in-bounce
 entry's demo-parity/Discover-head pointer was bumped in place once more.
 
+The fifth 2026-07-27 pass ships #2 rather than #1 -- the only entry the owner
+personally asked for sits at the top and is not what came next, which is worth
+saying out loud so the ordering does not read as broken. #2 (a fully cancelled
+concert still asking you to act) was picked because it is a correctness bug
+with an irreversible press behind it and the admin export is a new feature; the
+export keeps #1 and is unchanged in size. The entry's one open question was put
+to the owner and answered: a dead concert keeps its board card ONLY when the
+reader has standing on it, badged and never in *Open now*, and leaves the board
+entirely otherwise. It named three surfaces; the build touched nine, six of
+them found by review, and one of those (`/setup`) turned out to be genuinely
+broken rather than merely stale -- offering an APPLIED, which cannot be taken
+back, on a concert that is not happening. The planner was the one addition made
+deliberately at spec time, on the reasoning that a DM saying "apply now" about
+a dead show is the worst instance of the lie the entry describes. Entries
+renumbered 1-14. Nothing re-ranked on merit and nothing got cheaper: this build
+lived in the planner, the board and the capture surfaces, and the remaining
+entries go nowhere near them. Two were re-read against what shipped and both
+stand unchanged -- #3 (opt-out snapping the folds shut) is a sibling defect on
+the same page but purely an htmx fold-state problem, and #5 (minute-level
+offsets) is if anything slightly less pressing, since a dead concert now plans
+no reminders at any offset at all. The sign-in-bounce entry's demo-parity/
+Discover-head pointer was bumped in place once more.
+
 ## Proposed (highest impact first)
 
 
@@ -213,33 +236,7 @@ region/city/address, urls), zipped under `GET /admin/export.zip` behind
 re-importability matters or a read-only JSON dump is enough -- the YAML
 shape costs a little more and pays only if it does.
 
-### 2. A concert whose every leg is cancelled still asks you to act
-
-Impact: low-medium - effort: small. Raised: 2026-07-27 (final review of the
-ladder-declutter branch; pre-existing, and starker since that build).
-
-`is_round_cancelled` implicitly cancels a round only when every leg in its
-`applies_to` is cancelled, and a GENERAL round -- empty/None `applies_to` --
-is deliberately exempt, because it is not tied to any leg. That exemption is
-right for a live concert and wrong for a dead one: on a concert whose only
-leg is cancelled, a general round is still "live" everywhere, so the concert
-keeps its "Next for you" strip, sits in the board's *Open now* column, and
-offers capture buttons on its Coming up row -- inviting an APPLIED press
-that `record_round_outcome` will never let the user take back (invariant 2:
-starting states apply once). The per-leg fold shipped on 2026-07-27 made it
-starker rather than causing it: the leg's own body now folds to nothing, so
-the page shows an urgency strip above a leg with visibly no rounds on it.
-
-The fix is not to widen `is_round_cancelled` -- a general round on a
-multi-leg concert with one cancelled leg must stay live -- but to add the
-concert-level question it cannot answer: every leg cancelled (and at least
-one leg existing, so a legitimately dateless concert is untouched) means
-nothing on this concert can be acted on. One derivation, consumed by the
-three surfaces, exactly as `_wants_you` is. Decide with the owner whether
-such a concert leaves the board entirely or shows as a cancelled card:
-invariant 2 keeps the rows themselves, so this is a display question.
-
-### 3. event_id slugs should prefer title_en
+### 2. event_id slugs should prefer title_en
 
 Impact: low-medium - effort: small. Raised: 2026-07-23 (assistant, while
 verifying the import path).
@@ -254,7 +251,7 @@ at every create boundary, the fix is one line of preference -- slug from
 concerts keep their ids (event_id is editor-owned after creation; no
 backfill).
 
-### 4. Opting a leg out snaps the concert page's round folds shut
+### 3. Opting a leg out snaps the concert page's round folds shut
 
 Impact: low - effort: small-medium. Raised: 2026-07-27 (final review of the
 ladder-declutter branch).
@@ -274,7 +271,7 @@ or the fold state hoisted somewhere a re-render can read), which would also
 cover the outcome routes' folds without their per-round special case. Sized
 small-medium for that reason: the mechanism is the work, not the caller.
 
-### 5. Agent-import review-debt batch (deferred minors)
+### 4. Agent-import review-debt batch (deferred minors)
 
 Impact: low (code health) - effort: small. Raised: 2026-07-23 (final
 whole-branch review of the agent-import build; the first three triaged
@@ -295,7 +292,7 @@ it works today, but it's a typo waiting to confuse someone (spotted
 behavior-safe today; batched so they stop being rediscovered by every
 future reviewer.
 
-### 6. Minute-level reminder offsets
+### 5. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -335,7 +332,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 7. Eventernote actor-page discovery
+### 6. Eventernote actor-page discovery
 
 Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
 (during the agent-import design discussion). Buildable as of 2026-07-23, when
@@ -355,7 +352,7 @@ highest-impact NET-NEW capability the import build unlocked, but it sits below
 that one because that need is proven while this is unbuilt and unproven -- the
 actor-id mapping is manual today and a scraped page's structure can drift.
 
-### 8. Franchise-aware round-label suggestions
+### 7. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -376,7 +373,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 9. Nine of ten `RoundKind` members are purely cosmetic
+### 8. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -399,7 +396,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 10. Pin the Python version across dev, CI and the server
+### 9. Pin the Python version across dev, CI and the server
 
 Impact: low (risk mitigation, not user-visible) - effort: small. Raised:
 2026-07-21 (PR #57 CI failure post-mortem).
@@ -423,7 +420,7 @@ call the owner should make consciously, ideally timed with a deploy he can
 watch. Until then, any new code that behaves differently across 3.11-3.13
 will only be caught if CI's particular interpreter happens to object.
 
-### 11. PWA / installability
+### 10. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -443,7 +440,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 12. In-app LLM extraction behind the same draft seam
+### 11. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -461,7 +458,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 13. Minor demo-parity cosmetics
+### 12. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -489,7 +486,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 14. Discover sort in the content head, plus the catalogue-count note
+### 13. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -515,7 +512,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 15. Name the destination on the sign-in bounce
+### 14. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -531,7 +528,7 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#13) and the Discover head (#14) because
+Ranked below the demo-parity batch (#12) and the Discover head (#13) because
 those close several visible gaps each; this refines one sentence that is
 already correct.
 
@@ -549,6 +546,68 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### A concert whose every leg is cancelled stops asking you to act (2026-07-27)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-27-dead-concerts-design.md`
++ impl plan `docs/superpowers/plans/2026-07-27-dead-concerts.md`, six tasks on
+branch `cancelled-concerts`. Proposed #2, filed the same day from the
+ladder-declutter branch's final review as a pre-existing defect that build had
+made starker. The entry asked for a concert-level question `is_round_cancelled`
+cannot answer, and that is exactly what shipped: `all_legs_cancelled(days)`,
+the Python twin of `discoverable_concert_criterion` (the same rule, already in
+SQL, already hiding these concerts from Discover), pinned to it by an agreement
+test so the two cannot drift.
+
+**Owner ruling on the entry's one open question -- "leaves the board entirely
+or shows as a cancelled card?": both, decided by the reader's standing.**
+Applied, won or paid keeps the card, badged Cancelled and never in *Open now*,
+because a cancelled show you hold a ticket for is news. No standing and the
+concert leaves the board, matching Discover. Always-stay was rejected outright:
+the board would fill with dead events the reader never had a stake in, the
+opposite of the de-crowding shipped two entries earlier.
+
+The entry named three surfaces. The branch touched nine, and two of the six
+were beyond it in ways worth recording. **The planner was pulled in
+deliberately at spec time** -- a general round on a dead concert still planned
+DMs saying "apply now", which is the worst instance of the lie the entry
+describes, and leaving it out would have fixed the screens while the scheduler
+kept contradicting them. **`/setup` was found genuinely broken**, not merely
+stale: `_round_asks_application` carries its own eligibility rule, never goes
+through `capture_gates`, and nothing upstream filtered dead concerts, so a dead
+concert with a general round closing next week reached the applications screen
+and offered to record an APPLIED that `record_round_outcome` would never let
+the reader take back -- precisely the harm the entry opens with, on a screen
+neither the entry nor the spec looked at. The other four review-found surfaces
+were the cancellation notice (the planner's deletions would otherwise have
+taken reminders away silently), the bot's `/upcoming`, `ShowDeadlinesButton`,
+and the follow toggle, whose caption promised "you will be reminded about every
+round below" some 40px under the new cancelled banner.
+
+One real design defect surfaced mid-build and is recorded in the spec's
+deviations section: passing `has_open_round=False` into `column_for`, as the
+spec specified, could not deliver the owner's ruling, because a dead concert's
+leg-bound rounds are dropped before outcomes are gathered -- so only
+general-round standing kept a card, while a 先行 lottery, which names its legs,
+is the common real shape. A dead card's outcomes AND rungs now come from the
+concert's full round set; the countdown is suppressed, since a badged card
+reading "closes in 3 days" is the same lie in a smaller font.
+
+Revision pass: this is the first ship in a while that does NOT change the top
+of the list -- the admin catalogue export was #1 and stays #1, untouched, and
+event_id slugs rises to #2 by pure removal. Nothing
+re-ranked on merit and nothing got cheaper: this build lived in the planner,
+the board and the capture surfaces, none of which the remaining entries go
+near. Entries renumbered 1-14; the sign-in-bounce entry's demo-parity/
+Discover-head pointer was bumped in place again. Two of the remaining entries
+were re-read against what shipped and both stand: #3 (opt-out snapping the
+concert page's folds shut) is a sibling defect on the same page but an
+htmx-fold-state problem with nothing to do with cancellation, and #5
+(minute-level offsets) is untouched, since a dead concert now plans no
+reminders at any offset. Worth recording for whoever takes the list next: with
+this gone, every remaining entry is assistant-raised or review-raised except
+the admin export, and the two defects the ladder-declutter review filed
+together are now one shipped and one still open at #3.
 
 ### Group the performer chips by group on the concert page (2026-07-27)
 

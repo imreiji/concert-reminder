@@ -337,6 +337,14 @@ deleting them.
    `db/service.py`'s `concert_round_rows()` and every `applies_to` consumer
    rely on the day row still existing. Rounds have no status of their own; a round counts
    as cancelled when every day in its `applies_to` is cancelled.
+   A concert whose EVERY leg is cancelled contributes no live rounds
+   anywhere — including the General rounds `is_round_cancelled` rightly
+   exempts, since they name no leg — and that concert-level question is
+   `all_legs_cancelled(days)` (`db/service.py`), the Python twin of
+   `discoverable_concert_criterion`, pinned to it by an agreement test.
+   NEVER answer it by widening `is_round_cancelled`: a General round on a
+   multi-leg concert with one dead leg must stay live, so the per-round
+   predicate cannot see this and must not learn to.
    `RoundOutcome` (per-user, per-round lottery progress) layers a second,
    per-user suppression pass onto the same `sync_rule` candidate-list
    filtering, orthogonal to cancellation — see

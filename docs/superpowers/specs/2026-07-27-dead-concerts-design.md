@@ -1,8 +1,9 @@
 # A concert whose every leg is cancelled stops asking you to act
 
-Date: 2026-07-27. Status: designed with the owner (one decision recorded
-below), pending implementation. Branch `cancelled-concerts`, off `main`.
-WISHLIST Proposed #2.
+Date: 2026-07-27. Status: **implemented (2026-07-27)**, branch
+`cancelled-concerts` off `main`. Designed with the owner (one decision
+recorded below); the deviations the build forced are recorded at the
+bottom. WISHLIST Proposed #2, now Shipped.
 
 ## Problem
 
@@ -128,3 +129,92 @@ Takes the days the callers have already loaded; issues no query.
   the cancelled banner renders; a partially-cancelled concert still shows
   all three.
 - i18n: the badge and banner strings in both catalogues, no fuzzy.
+
+## Implementation deviations (recorded)
+
+Four things the build changed about this document. Everything else shipped
+as written above.
+
+### 1. §B3's method was insufficient (the one real design defect)
+
+"A fully-cancelled concert passes `has_open_round=False` into `column_for`"
+does **not** deliver the owner decision, and the reason is the ruling's own
+motivating case. `board_cards` gathers a card's outcomes from its *live*
+rounds, and on a dead concert `is_round_cancelled` has already dropped every
+round that names a leg. So only standing on a GENERAL round survived to reach
+`column_for` — while a 先行 lottery, which names its legs, is the common real
+shape and exactly the ticket the owner wanted kept on the board. One case even
+regressed: leg-bound standing beside an open general round used to render a
+mis-columned card and now rendered none at all.
+
+**Ruling (controller, executing the owner's stated intent rather than
+re-asking):** on a dead concert the card's rounds are ALL of the concert's
+rounds — feeding outcomes AND ladder rungs from one local — so the card is
+placed by the reader's real standing and its ladder contains the winning rung.
+`has_open_round` stays False and the single `column_for` exit stays; the wider
+set narrows the open question, never widens it, so it cannot leak a card to
+someone with no standing.
+
+### 2. The countdown is suppressed on a dead card
+
+Falling out of the same fix: `next_deadline` is None for a dead card, and
+`open_round_ids` is empty, so no rung reads "open" beside the Cancelled badge.
+A badged card reading "closes in 3 days" is the same lie the branch exists to
+remove. Not in §B3, which only specified the badge.
+
+### 3. The branch grew well past four surfaces
+
+The WISHLIST entry named three, §B named four; the shipped predicate is asked
+in ten places across nine surfaces, every addition found by review rather than
+by design:
+
+| Surface | Seam | In §B? |
+| --- | --- | --- |
+| The planner | `sync_rule` (both scopes) | yes |
+| Coming up | `upcoming_deadlines` | yes |
+| The board | `board_cards` | yes |
+| The concert page | `concert_round_rows`, `concert_rounds_context` | yes |
+| The cancellation notice | `notify_newly_cancelled_legs` | no |
+| The bot's `/upcoming` | `upcoming_rounds` | no |
+| `ShowDeadlinesButton` (the page's DM twin) | `bot/views.py` | no |
+| The follow toggle | `following_toggle_context` | no |
+| `/setup`, all three screens | `_tracked_upcoming_concerts` | no |
+
+(The branch's running ledger counted "seven" — it folded `ShowDeadlinesButton`
+into the concert page and took the notice and `/upcoming` as one arrival.)
+
+Two of those were more than tidying. The **cancellation notice** was a
+silent-loss hole: the planner's new branch deletes a dead concert's queued
+reminders, and without widening the notice the reader lost reminders with no
+word said. And **`/setup` was genuinely broken**, not accidentally safe:
+`_round_asks_application` carries its own eligibility rule, never goes through
+`capture_gates`, and nothing upstream filtered dead concerts — so a dead
+concert with a general round closing next week reached the applications screen
+and offered to record an APPLIED that `record_round_outcome` would never let
+the reader take back. That is §B4's stated harm, on a screen this spec never
+looked at.
+
+### 4. The follow toggle resolves the fact independently
+
+`following_toggle_context` calls `all_legs_cancelled` itself rather than
+reading the page's answer, because `POST /concerts/{event_id}/subscription`
+re-renders `_following_toggle.html` **standalone**: reading the page's copy
+would have looked right on the GET and reverted to the stale promise on the
+first toggle. Two calls over the same legs, no rule restated, pinned by an
+`HX-Request` fragment test. The same context also carries the unfollow
+dialog's dead-concert copy, for the same reason.
+
+### 5. `dekimasen-demo.html` is deliberately NOT reconciled
+
+Judged and declined. The rule is that the demo is updated when the shipped
+design *moves*; this build added a state, not a component, and nothing in the
+demo is now wrong. The Cancelled badge is the same `span.badge.cancelled` the
+concert page's leg headings have carried since the cancelled-leg build, reused
+verbatim on the board card's title — not a new element, and the demo already
+carries that silhouette (`.who .tag`). The banner is `.banner.dgr`, the danger
+tone of the callout grammar the demo already shows in its warn tone
+(`.banner-warn`). Adding a permanently dead card to the demo board would also
+cost more than it pays: that board exists to show the four columns healthily
+populated and the ladder vocabulary readable, and a static card with no
+countdown and a blank rung status would read as a rendering bug with no
+explanation attached.
