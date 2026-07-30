@@ -385,6 +385,41 @@ pointer, for the umpteenth time -- and the export entry's "(#2)" pointer at the
 harness spec was made name-based, since what it pointed at is no longer a
 number.
 
+The 2026-07-29 pass ships the two entries the 2026-07-28 batch's reviews
+filed and then deferred: the born-dead-concert announcement (#5) and the
+reserved-id slug (#7). They were built as one sweep because they share the
+property that ranked both of them above tidier work -- each fails silently
+and PERMANENTLY. One sends a 🆕 "Apply here" DM for a show that is off, with
+no un-send and no re-announce; the other mints a URL that no route can ever
+serve while every list on the site keeps linking to it. Neither leaves a
+trace anywhere for anybody to notice. Root causes were re-verified against
+the tree before a line was written, and both entries described it accurately
+-- worth recording, given this file's Python-pinning embarrassment five
+entries up.
+
+The re-rank moves nothing on merit and nothing got cheaper: the sweep lived
+in two route functions and touched no model, no template and no catalogue.
+Entries renumbered 1-10 by the two removals; the admin catalogue export keeps
+#1 for the third pass running, still the only entry the owner personally
+asked for. Two were re-read against what shipped and both stand. The
+`RoundKind` observation (now #5) rises two places by pure removal and is
+newly the top code-health entry, which is worth watching rather than acting
+on: its whole argument for staying logged is that churning a persisted enum
+buys nothing visible, and rising by removal is not new evidence. Minute-level
+offsets (#2) is untouched. One cross-reference was made name-based instead of
+bumped -- the sign-in-bounce entry's demo-parity/Discover-head pointer, which
+five consecutive passes have now renumbered, each a chance to get it wrong
+for no gain; the same treatment the export entry's harness pointer got last
+pass, for the same reason.
+
+A second bookkeeping debt is cleared in the same pass, and it is the same
+kind the Python-pinning entry was: the 2026-07-28 error-pages build (PR #109)
+shipped real 403/404/422/500 pages and an admin index in Preferences, and was
+logged NOWHERE -- no Shipped entry here, no spec, no plan, the only build of
+that week to skip all three. It is in Shipped now, dated to its commit rather
+than to today. It was never a Proposed entry, so nothing moved up from
+Proposed on its account.
+
 ## Proposed (highest impact first)
 
 
@@ -505,48 +540,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 5. The create and import paths still announce a born-dead concert
-
-Impact: low-medium - effort: small-medium, but on the two riskiest routes
-in the app. Raised: 2026-07-28 (final review of the cleanup batch, which
-shipped the same rule on `edit_concert`).
-
-The 2026-07-28 batch shipped the owner ruling that a tag attached to a
-dead concert -- one whose every leg is cancelled -- notifies nobody and
-applies no preset. It holds on `edit_concert` and on both venue rollups.
-It does NOT hold on the concert-tag half of create and import, and the
-reason is pure ordering: `create_concert_row` (`web/routes/concerts.py`)
-calls `handle_newly_tagged` immediately after flushing the `Concert`,
-before a single `ConcertDay` exists. The predicate correctly reads that
-as a dateless draft and exempts it -- it has to, or every create would
-silence itself -- and notifies. The legs flush a hundred lines later, and
-the venue rollup that runs there suppresses correctly.
-
-So a concert created or imported with its only leg submitted cancelled
-(both routes accept `day_cancelled`) DMs every franchise, group and
-artist follower a 🆕 "Apply here" for a show that is off, while every
-VENUE follower on the SAME request is correctly skipped. There is no
-un-send and no re-announce path: the wrong DM is permanent, and the
-correct one, if the leg is later un-cancelled, never arrives.
-
-Fix is small and mechanical: `create_concert_row` returns its `newly`
-list instead of consuming it, and `create_concert` and `import_commit`
-each call `handle_newly_tagged` after their legs flush -- next to the
-venue rollup that already gets this right, which is also where the
-dateless-draft exemption stops being needed. Deferred rather than folded
-into the batch that found it, on risk: it changes a signature on the
-app's two most important write paths, both of which own atomicity for a
-whole concert, to close a shape that needs an editor to deliberately
-create an already-cancelled concert. Pre-existing rather than new -- every
-path announced dead concerts before that batch -- and recorded as
-deviation 6 of `docs/superpowers/specs/2026-07-28-cleanup-batch-design.md`.
-
-Ranked here: above the code-health entries below because a wrong,
-permanent DM to every follower is user-visible harm rather than tidiness,
-and below #4 because that one pays off on every round label an editor
-types while this needs a rare, deliberate starting state.
-
-### 6. Nine of ten `RoundKind` members are purely cosmetic
+### 5. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -561,7 +555,7 @@ kind expecting it to mean something, and it is an argument for collapsing the
 cosmetic nine into data (a label/emoji table) with `UPGRADE` kept as the one
 real branch.
 
-Ranked here -- below the three user-facing entries above, above the pure-plumbing
+Ranked here -- below the user-facing entries above, above the pure-plumbing
 ones -- because it is the highest-impact item still standing once the trilingual
 arc shipped its user-facing work, but acting on it changes a persisted enum for
 zero user-visible benefit, and the taxonomy was corrected as recently as
@@ -569,40 +563,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 7. `generate_event_id` never checks the reserved ids
-
-Impact: low - effort: small. Raised: 2026-07-28 (Task 1 review of the
-cleanup batch, while the slug preference above it was being shipped).
-
-Invariant 6 reserves `"new"` and `"import"` so a concert can never collide
-with `/concerts/new` and `/concerts/import`. `validate_event_id` enforces
-that -- but it guards the value an editor TYPES, and the app's other
-producer of ids does not go through it. `generate_event_id`
-(`web/routes/concerts.py`), used by `import_commit` and by
-`POST /concerts/{event_id}/duplicate`, de-duplicates its slug against ids
-already in the DB and stops there; it never consults `RESERVED_EVENT_IDS`,
-and neither caller validates what comes back. A concert titled exactly
-"Import" or "New" therefore takes that id and is written with it.
-
-What follows is quiet and permanent. Both routes that own those paths are
-registered ahead of `/concerts/{event_id}` -- `routes/imports.py` before
-`routes/concerts.py` in `web/app.py`, and `/concerts/new` above the dynamic
-route inside it, in both cases deliberately -- so the concert's own page is
-unreachable for good while every list on the site keeps linking to it. The
-edit page is no way back either at first glance: it pre-fills the offending
-id, so saving anything at all 422s "event id 'import' is reserved" until
-the editor works out that the field they never filled in is the problem.
-
-Fix is one line in the uniqueness loop -- treat a reserved id as taken, the
-same way a colliding one is, so the suffix pass mints `import-2` -- plus a
-test per reserved word. Pre-existing rather than new: `title` could always
-be "Import", and the `title_en` preference that shipped in this batch only
-widens the door (a Japanese-titled concert previously slugged to
-`"concert"` and could not reach either word). Ranked here, low, because it
-needs an exactly-wrong English title to fire; it is filed because when it
-does fire nothing anywhere says so.
-
-### 8. PWA / installability
+### 6. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -622,7 +583,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 9. In-app LLM extraction behind the same draft seam
+### 7. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -640,7 +601,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 10. Minor demo-parity cosmetics
+### 8. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -668,7 +629,7 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
-### 11. Discover sort in the content head, plus the catalogue-count note
+### 9. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -694,7 +655,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 12. Name the destination on the sign-in bounce
+### 10. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -710,9 +671,11 @@ gracefully for paths it doesn't know, plus both catalogues for every label.
 Worth doing only if the vague sentence actually reads as confusing in use --
 it is the kind of thing to leave until someone says "continue to *what*".
 
-Ranked below the demo-parity batch (#10) and the Discover head (#11) because
-those close several visible gaps each; this refines one sentence that is
-already correct.
+Ranked below the demo-parity cosmetics batch and the Discover-head entry
+because those close several visible gaps each; this refines one sentence that
+is already correct. (Named rather than numbered as of 2026-07-29: this
+pointer has been bumped by renumbering in five separate passes, which is
+five chances to get it wrong for no gain.)
 
 (The former "Editor page parity with the demo" entry (2026-07-20) was
 absorbed on 2026-07-23 into the editor-pages coherence pass --
@@ -728,6 +691,96 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Correctness sweep: a permanent wrong DM and an unreachable URL (2026-07-29)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-29-correctness-sweep-design.md`,
+two fixes on branch `correctness-sweep`. Proposed #5 and #7, both filed by
+reviews of the 2026-07-28 cleanup batch and deferred out of it -- #5 on risk,
+#7 on rarity. No migration; no model, template or catalogue was touched.
+
+**A. Create and import no longer announce a born-dead concert.** The cleanup
+batch shipped the rule that a tag attached to a dead concert -- every leg
+cancelled -- notifies nobody and applies no preset. It held on `edit_concert`
+and on both venue rollups, and not on create or import, for a reason that was
+pure ordering: `create_concert_row` called `handle_newly_tagged` straight after
+flushing the `Concert`, before a single leg existed. `all_legs_cancelled` reads
+that as a dateless draft and exempts it -- correctly, and it must, or every
+create would silence itself -- so it notified. A concert created or imported
+with its only leg submitted cancelled therefore DM'd every franchise, group
+and artist follower a 🆕 "Apply here" for a show that is off, while every
+VENUE follower on the *same request* was correctly skipped by the rollup a
+hundred lines later. The fix: `create_concert_row` returns its `newly` list
+instead of consuming it, and both callers run the pipeline after their legs
+flush, in the exact position and order `edit_concert` already used.
+
+Two decisions inside it are worth keeping. **Two calls, not one merged
+call**: merging the concert-level tags with the venue rollup's would have
+improved one notice slightly and saved a query, and was rejected to keep the
+three write paths structurally identical -- the parity the editor coherence
+pass and the cleanup batch were both largely paid for. And
+**`duplicate_concert` was deliberately left alone**: it does not go through
+`create_concert_row`, it creates no legs at all, so its clone is a genuine
+dateless draft and the exemption is right there. It is the one create path
+where announcing a legless concert is correct, and it now has a test saying
+so, because the obvious "tidy" follow-up is to make it match the others.
+
+**B. `generate_event_id` treats a reserved id as taken.** Invariant 6 reserves
+`"new"` and `"import"`; `validate_event_id` enforced it on what an editor
+types, and the app's other producer of ids never consulted the set, with
+neither caller validating what came back. A concert titled exactly "Import"
+took that id -- and since both owning routes are registered ahead of
+`/concerts/{event_id}`, deliberately, its own page was unreachable for good
+while every list kept linking to it, and its edit page pre-filled the
+offending id so saving anything at all 422'd until the editor worked out that
+the field they never filled in was the problem. One condition in the
+uniqueness loop; the suffix pass now mints `import-2`. No `.lower()`, unlike
+`validate_event_id`, because `slugify` lowercases -- pinned by a test so a
+change to `slugify` surfaces here rather than in production.
+
+One process note. A single run of the two touched test files failed once, in
+`test_user_with_existing_rules_is_skipped` -- a test neither fix touches --
+and did not reproduce in four subsequent runs of the same command, including
+the identical argument order, nor in the full suite (1609 passed). It is
+recorded here rather than quietly dropped: the failure mode was the fan
+holding ZERO rules, which points at that test's own `login_as`/subscription
+setup and not at the notify-and-apply pipeline, and the test's create passes
+no tags at all, so `newly` is empty and the reordered call returns before
+doing anything. Believed pre-existing and order-sensitive; if it resurfaces,
+this is the note that says it was seen on 2026-07-29 and not introduced here.
+
+### Real 403/404/422/500 pages, and an admin index in Preferences (2026-07-28)
+
+Shipped as: commit `d84f63e` on branch `error-pages` (PR #109). **Not a
+Proposed entry, and logged here late** -- see the 2026-07-29 revision pass
+above: this build had no Shipped entry, no spec and no plan, the only build of
+that week to skip all three, and it is dated to its commit rather than to the
+day the debt was noticed. Recorded from the commit message and the diff.
+
+Two things, both about being findable. **Admin tools in Preferences**: three
+admin pages shipped that week -- deliveries, broadcast, rehearsal -- and none
+was linked from anywhere, so reaching any of them meant already knowing its
+URL. A section beside the existing Editors block now lists them, admin-only,
+with the rehearsal link gated on the same `rehearsal_enabled` flag that
+REGISTERS the route, because offering a link that 404s is worse than offering
+none. **Error pages**: 403/404/422/500 rendered plain JSON, or for a 500
+Starlette's unstyled plain text, with no way back.
+
+The design turns on one distinction and it is deliberately NOT the status
+code: a browser navigation gets HTML, an XHR keeps the JSON body it was
+already parsing. `_tag_create_dialog.html` and `_venue_create_dialog.html`
+both read `(await resp.json()).detail` off a 409 to offer "that already
+exists, select it instead", so a blanket HTML handler would have degraded both
+to a generic failure with nothing saying why -- it has its own regression
+test. Copy is per-code, because each code has a different amount to usefully
+say: 403 NAMES the account you are signed in as, since the commonest cause is
+being on the wrong Discord account and nothing else would tell you, and 422
+lists the real messages and offers "Go back and fix it" via `history.back()`.
+
+Seven files: one shared `error.html`, the handlers in `web/app.py`, one line
+in `routes/preferences.py`, the Preferences section, and `test_error_pages.py`
+(242 lines) -- plus 19 new msgids filled in both catalogues with no fuzzies,
+which is the part a late-logged entry is likeliest to have left undone.
 
 ### Local rehearsal harness with a second Discord bot (2026-07-28)
 

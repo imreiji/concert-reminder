@@ -404,6 +404,22 @@ deleting them.
    must still go through the outbox for its retry/ordering/audit
    properties. Don't extend this carve-out to anything else without
    discussing it first.
+   **`handle_newly_tagged` must be called only once the concert's legs are
+   written.** It asks `all_legs_cancelled` (a dead concert notifies nobody
+   and applies no preset), so calling it while the legs of the current
+   submit are still unflushed asks the question of the concert as it
+   ARRIVED, and both answers are wrong in a way nothing surfaces: a
+   suppressed notice has no re-announce path, and an announced dead concert
+   has no un-send. `create_concert_row` therefore RETURNS its newly attached
+   tags instead of consuming them -- it used to call the pipeline itself,
+   which is exactly how create and import shipped a 🆕 "Apply here" for a
+   concert whose only leg arrived cancelled -- and `create_concert`,
+   `import_commit` and `edit_concert` each run it after their legs flush,
+   next to the venue rollup, which always got this right.
+   `duplicate_concert` is the one exception and is correct: it creates no
+   legs at all, so its clone is a genuine dateless draft, which
+   `all_legs_cancelled` deliberately exempts. Don't "unify" it with the
+   others.
    Any new notification kind that REPORTS ON deliveries must be added to
    `UNREPORTED_NOTE_KINDS` (`db/service.py`), or it will log its own delivery,
    report that next tick, and DM every admin once a minute forever. The

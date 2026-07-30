@@ -164,13 +164,22 @@ async def generate_event_id(
     NO backfill of existing rows, deliberately: event_id is editor-owned once
     the concert exists, and rewriting a live one would break every link people
     already hold.
+
+    A RESERVED id counts as taken, so a concert titled "Import" gets
+    `import-2`. validate_event_id guards what an editor types; this is the
+    app's other producer of ids and nothing validates what it returns, so
+    without this the reserved word lands in the DB and the concert's own page
+    is unreachable for good -- both owning routes are registered ahead of
+    /concerts/{event_id} (invariant 6) -- while every list keeps linking to it.
+    No .lower() needed, unlike validate_event_id: slugify lowercases, so
+    `candidate` is always already lowercase.
     """
     from app.domain.yaml_export import slugify
 
     base = slugify((title_en or "").strip() or title)
     candidate = base
     suffix = 2
-    while (await session.execute(
+    while candidate in RESERVED_EVENT_IDS or (await session.execute(
         select(Concert.id).where(Concert.event_id == candidate)
     )).scalar_one_or_none() is not None:
         candidate = f"{base}-{suffix}"
@@ -534,13 +543,27 @@ async def create_concert_row(
     venue_tags: list[int],
     kind: ConcertKind | None = None,
     source_url: str | None = None,
-) -> Concert:
+) -> tuple[Concert, list[Tag]]:
     """Tag-driven creation supporting collab events: MULTIPLE franchises,
     MULTIPLE groups, explicit artist list (auto-populated client-side from
     the selected groups, editor-pruned). Groups attach WITHOUT expansion —
-    the submitted artist list is authoritative. The notify-and-apply
-    pipeline fires on everything attached here. Shared by create_concert
-    and the URL-import commit route."""
+    the submitted artist list is authoritative. Shared by create_concert
+    and the URL-import commit route.
+
+    Returns the concert AND the newly attached tags, which the CALLER must
+    feed to handle_newly_tagged once its legs are flushed -- this function
+    deliberately does not run that pipeline itself. It used to, right here,
+    and that was a bug: handle_newly_tagged asks all_legs_cancelled, and at
+    this point in the transaction no ConcertDay exists yet, so the predicate
+    reads a dateless draft (correctly -- it must, or every create would
+    silence itself) and notifies. A concert created with its only leg
+    submitted cancelled therefore DM'd every franchise, group and artist
+    follower a 🆕 "Apply here" for a show that is off, while every VENUE
+    follower on the same request was correctly skipped by the rollup a
+    hundred lines later. The DM has no un-send, and the correct notice, if
+    the leg is later un-cancelled, never arrives. Same reasoning and same
+    call ordering as edit_concert -- see the comment at its own
+    handle_newly_tagged call."""
     await ensure_user(session, user.id, user.username)
     event_id = await validate_event_id(session, event_id)
 
@@ -575,8 +598,7 @@ async def create_concert_row(
         newly += await attach_tag(session, concert.id, tag, expand=False)
     for artist in a_tags:
         newly += await attach_tag(session, concert.id, artist)
-    await handle_newly_tagged(session, concert, newly)
-    return concert
+    return concert, newly
 
 
 @router.get("/concerts/new", response_class=HTMLResponse)
@@ -678,7 +700,7 @@ async def create_concert(
     # loops instead -- a trailing empty row is not a missing translation.
     require_variants("Title", title, title_en, title_zh, mandatory=True)
     require_variants("Notes", notes, notes_en, notes_zh)
-    concert = await create_concert_row(
+    concert, newly = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
         kind=ConcertKind(kind) if kind else None,
     )
@@ -807,6 +829,14 @@ async def create_concert(
                 )
 
     await session.flush()
+    # The concert-level tag attach's notify-and-apply pipeline, run HERE and
+    # not inside create_concert_row where the attach happens: it asks
+    # all_legs_cancelled, and at the attach site this submit's legs do not
+    # exist yet, so it would answer about a legless draft and announce a
+    # concert created with its only leg already cancelled. Same placement and
+    # same reasoning as edit_concert. Before sync_concert, which every rule a
+    # preset creates here still needs.
+    await handle_newly_tagged(session, concert, newly)
     # The legs are the only place a venue is entered, so the concert's VENUE
     # tags are rolled up from them here, once every leg exists. A venue that
     # newly lands on the concert goes through the same notify-and-apply

@@ -317,6 +317,35 @@ async def test_event_id_falls_back_to_the_japanese_title(db):
         assert await generate_event_id(s, "Hasunosora 6th Live", "   ") == "hasunosora-6th-live"
 
 
+async def test_generated_event_ids_skip_the_reserved_words(db):
+    """Invariant 6 reserves "new" and "import" so a concert can never collide
+    with /concerts/new and /concerts/import. validate_event_id enforces that
+    on what an editor TYPES; generate_event_id is the app's other producer of
+    ids and nothing validates what it returns, so a concert titled exactly
+    "Import" took that id -- and both owning routes are registered ahead of
+    /concerts/{event_id}, so its own page was unreachable for good while every
+    list on the site kept linking to it. Treat a reserved id as taken."""
+    from app.web.routes.concerts import RESERVED_EVENT_IDS, generate_event_id
+
+    async with db() as s:
+        assert await generate_event_id(s, "Import", None) == "import-2"
+        assert await generate_event_id(s, "New", None) == "new-2"
+        # Reached through title_en too, which is the preferred source -- and
+        # the case an editor is likeliest to actually type, since title_en is
+        # mandatory at every create boundary.
+        assert await generate_event_id(s, "インポート", "Import") == "import-2"
+        # Case: an editor types "IMPORT", slugify lowercases, and the check
+        # sees the reserved word. This is why generate_event_id needs no
+        # .lower() of its own -- pinned so a change to slugify shows up here.
+        assert await generate_event_id(s, "IMPORT", None) == "import-2"
+        # Every reserved word, so adding one to the set without teaching the
+        # loop about it fails here rather than in production.
+        for word in RESERVED_EVENT_IDS:
+            assert await generate_event_id(s, word, None) == f"{word}-2"
+        # The near miss stays untouched: only an EXACT collision is reserved.
+        assert await generate_event_id(s, "Import a concert", None) == "import-a-concert"
+
+
 async def test_commit_binds_a_round_to_multiple_legs(client):
     """The preview's leg chips let one round apply to SEVERAL legs -- an
     expression the old flat form had no field for. Each day carries a

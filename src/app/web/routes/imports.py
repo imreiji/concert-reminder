@@ -434,7 +434,7 @@ async def import_commit(
     require_variants("Notes", notes, notes_en, notes_zh)
 
     event_id = await generate_event_id(session, title, title_en)
-    concert = await create_concert_row(
+    concert, newly = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
         kind=ConcertKind(kind) if kind else None,
         source_url=checked_source_url,
@@ -557,6 +557,13 @@ async def import_commit(
         await record_round_label_phrase(session, label, label_en, label_zh)
 
     await session.flush()
+    # The concert-level tag attach's notify-and-apply pipeline, run HERE and not
+    # inside create_concert_row where the attach happens -- it asks
+    # all_legs_cancelled, and this import's legs do not exist yet at the attach
+    # site, so an import whose only leg arrives cancelled (the preview form
+    # posts day_cancelled) would announce a show that is off. Same placement
+    # and reasoning as create_concert and edit_concert.
+    await handle_newly_tagged(session, concert, newly)
     # Same rollup the manual create/edit routes run: the concert's VENUE tags
     # are derived from its legs, so an import must not leave them unset -- and
     # the newly attached ones go through the same notify-and-apply pipeline,
