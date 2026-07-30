@@ -1,7 +1,11 @@
 """Serialize a concert to YAML, shaped roughly like mting314/event-tracker's
-format (slug/kind/series/performances/rounds), for sharing -- this is an
-EXPORT only. SQLite via the web UI stays the only way to create or edit
-data; there is no importer for this format.
+format (slug/kind/series/performances/rounds), for sharing.
+
+This vocabulary is TWO-WAY as of 2026-07-23: `domain/yaml_import.py` parses it
+back, and `POST /concerts/import/draft` renders a prefilled preview from it. It
+is still not a write path -- `import_commit` remains the only one -- but the
+older claim here that "there is no importer for this format" has been wrong
+since that shipped.
 
 Pure function: no I/O, no ORM imports. The caller (web route) adapts ORM
 rows into the plain dataclasses below, exactly like domain/reminders.py
@@ -9,12 +13,12 @@ adapts ORM rows into WindowInfo/DayInfo -- keeps this module testable with
 plain Python values and free of a database dependency.
 """
 
-import re
 from dataclasses import dataclass, field
 from datetime import datetime
 
 import yaml
 
+from app.domain.slugs import slug_core
 from app.domain.timezones import utc_to_jst
 
 
@@ -46,10 +50,13 @@ class YamlRound:
 
 
 def slugify(title: str) -> str:
-    """'Hasunosora 5th Live!' -> 'hasunosora-5th-live'."""
-    lowered = title.strip().lower()
-    slug = re.sub(r"[^a-z0-9]+", "-", lowered).strip("-")
-    return slug or "concert"
+    """'Hasunosora 5th Live!' -> 'hasunosora-5th-live'.
+
+    Thin wrapper over `slug_core` with the concert-specific fallback. Kept as
+    the public name because `generate_event_id` and two Content-Disposition
+    headers import it from here.
+    """
+    return slug_core(title) or "concert"
 
 
 def _jst_str(dt: datetime | None) -> str | None:
