@@ -284,16 +284,23 @@
     <button type="button" class="x" onclick="document.getElementById('new-tag-dialog').close()">×</button>
   </div>
   <form method="post" action="/tags" class="db" data-variant-scope data-variant-guard>
-    <input type="hidden" name="kind" id="new-tag-kind" value="group">
+    {#- Defaults to PERFORMER: it is far and away the kind an editor creates
+        most (a franchise or a venue is made once and reused for years, a group
+        rarely), and it matches create_tag's own `kind: TagKind = Form(ARTIST)`
+        default, which the dialog previously contradicted. The pre-JS
+        aria-pressed below must agree with the hidden input and with the
+        setTagKind() call at the foot of this file -- four places, and a
+        disagreement shows as the wrong chip looking selected on first paint. -#}
+    <input type="hidden" name="kind" id="new-tag-kind" value="artist">
     <div class="fld">
       <span>{{ _("Kind") }}</span>
       <div class="kindpick" id="kindPick">
         <button type="button" data-kind="franchise" aria-pressed="false">{{ _("Franchise") }}</button>
-        <button type="button" data-kind="group" aria-pressed="true">{{ _("Group") }}</button>
-        <button type="button" data-kind="artist" aria-pressed="false">{{ _("Performer") }}</button>
+        <button type="button" data-kind="group" aria-pressed="false">{{ _("Group") }}</button>
+        <button type="button" data-kind="artist" aria-pressed="true">{{ _("Performer") }}</button>
         <button type="button" data-kind="venue" aria-pressed="false">{{ _("Venue") }}</button>
       </div>
-      <span class="dim" id="kindHint">{{ _("A group contains performers. Attaching it to an event adds its members.") }}</span>
+      <span class="dim" id="kindHint">{{ _("A single performer. Can belong to a group, or stand alone.") }}</span>
     </div>
 
     <label class="fld"><span>{{ _("Name") }}</span>
@@ -407,10 +414,13 @@
       if (b) setTagKind(b.dataset.kind);
     });
     nameInput.addEventListener("input", function () { checkDupe(kindInput.value); });
+    // Reopening keeps whatever kind you last picked (kindInput survives the
+    // dialog close); "artist" is only the cold-start fallback, and must match
+    // the hidden input's server-rendered value above.
     document.getElementById("newTagBtn").addEventListener("click", function () {
-      setTagKind(kindInput.value || "group");
+      setTagKind(kindInput.value || "artist");
     });
-    setTagKind("group");
+    setTagKind("artist");
   })();
 </script>
 {% endif %}
