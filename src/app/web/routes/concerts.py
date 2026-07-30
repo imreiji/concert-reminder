@@ -621,6 +621,10 @@ async def new_concert_form(
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
+            # Handles for the tags whose (name, kind) collides -- the picker
+            # shows one beneath the chip so two identical chips are
+            # distinguishable. Empty for almost every tag.
+            "tag_disambiguators": picker["tag_disambiguators"],
             "initial_selected": {},
             # Every VENUE tag, for each leg row's venue picker. A leg's venue
             # is a real tag now (ConcertDay.venue_tag_id), not typed text.
@@ -1188,6 +1192,10 @@ async def edit_concert_form(
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
+            # Handles for the tags whose (name, kind) collides -- the picker
+            # shows one beneath the chip so two identical chips are
+            # distinguishable. Empty for almost every tag.
+            "tag_disambiguators": picker["tag_disambiguators"],
             "initial_selected": initial_selected,
             # Every VENUE tag, for each leg row's venue picker (the leg's own
             # pick is pre-selected in the template from d.venue_tag_id).

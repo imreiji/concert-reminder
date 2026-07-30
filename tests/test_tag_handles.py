@@ -141,3 +141,36 @@ async def test_the_single_result_name_lookup_is_gone(db):
     assert not hasattr(service, "find_tag_by_name_and_kind"), (
         "the singular kind-scoped one is equally unsafe now"
     )
+
+
+# ── Disambiguating a picker chip, only where it is needed ─────────────────
+
+
+async def test_only_colliding_tags_get_a_disambiguator(db):
+    from app.db.service import tag_picker_context
+
+    async with db() as s:
+        a = await _add(s, name="Yuki Sato", kind=TagKind.ARTIST)
+        b = await _add(s, name="yuki sato", kind=TagKind.ARTIST)   # collides with a
+        c = await _add(s, name="Kozue", kind=TagKind.ARTIST)       # unique
+        d = await _add(s, name="Yuki Sato", kind=TagKind.VENUE)    # different kind
+        await s.commit()
+        ctx = await tag_picker_context(s)
+
+    dis = ctx["tag_disambiguators"]
+    assert set(dis) == {a.id, b.id}, "only the same-kind collision pair"
+    assert dis[a.id] == a.slug and dis[b.id] == b.slug
+    assert c.id not in dis, "a unique name earns no visual noise"
+    assert d.id not in dis, "a different kind is not a collision"
+
+
+async def test_a_three_way_name_collision_disambiguates_all_three(db):
+    from app.db.service import tag_picker_context
+
+    async with db() as s:
+        tags = [await _add(s, name="Yuki Sato", kind=TagKind.ARTIST) for _ in range(3)]
+        await s.commit()
+        ctx = await tag_picker_context(s)
+
+    assert set(ctx["tag_disambiguators"]) == {t.id for t in tags}
+    assert len(set(ctx["tag_disambiguators"].values())) == 3, "each shows its OWN handle"

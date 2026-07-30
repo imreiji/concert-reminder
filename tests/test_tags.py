@@ -2284,3 +2284,42 @@ def test_the_edit_dialog_exposes_the_handle_field(client):
     # invites bikeshedding over a value that does not matter until it collides.
     new_dialog = body.split('id="new-tag-dialog"', 1)[1]
     assert 'name="slug"' not in new_dialog
+
+
+async def test_the_picker_shows_a_handle_only_on_a_colliding_chip(client):
+    """Two same-kind tags with the same name would render two identical,
+    unusable chips. The handle appears beneath the colliding ones and nowhere
+    else -- every page that includes the picker partial."""
+    login_as(client, EDITOR_ID, "reiji")
+    for name in ("Yuki Sato", "Yuki Sato", "Kozue Otomune"):
+        client.post("/tags", data={
+            "name": name, "name_en": name, "name_zh": name, "kind": "artist",
+        })
+
+    # The two GET pages that include _tag_picker_script.html. import_preview.html
+    # includes it too, but is only reachable by POST -- covered by the import
+    # tests, which render the same partial from the same context key.
+    client.post("/concerts", data={
+        "title": "C", "title_en": "C", "title_zh": "C", "event_id": "c1",
+    })
+    for path in ("/concerts/new", "/concerts/c1/edit"):
+        body = client.get(path).text
+        assert body.count('<small class="dis">') == 2, (
+            f"{path}: exactly the two colliding chips carry a handle"
+        )
+        assert "yuki-sato-2" in body, path
+        # The unique name gets no handle: its chip is the plain name.
+        assert ">Kozue Otomune</button>" in body, f"{path}: no noise on a unique name"
+        # The JS half, for chips rendered client-side into the selected row.
+        assert "TAG_DIS" in body, path
+
+
+async def test_no_disambiguators_when_nothing_collides(client):
+    login_as(client, EDITOR_ID, "reiji")
+    for name in ("Kozue", "Sumire"):
+        client.post("/tags", data={
+            "name": name, "name_en": name, "name_zh": name, "kind": "artist",
+        })
+    body = client.get("/concerts/new").text
+    assert '<small class="dis">' not in body
+    assert "const TAG_DIS = {}" in body, "empty map, not absent -- the JS reads it"

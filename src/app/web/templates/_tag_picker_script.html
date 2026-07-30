@@ -22,9 +22,14 @@
   <div class="picker-body">
   <input type="search" placeholder="Search…" oninput="filterChips(this, '#picker-{{ kindname }}')">
   <div class="taglist">
+    {#- data-name stays exactly as it is: base.html's filterChips() reads it, and
+        data-name is deliberately NOT data-tag-name (invariant 7's collision
+        note). The handle renders only for a tag whose (name, kind) collides, so
+        two otherwise-identical chips can be told apart. -#}
     {% for t in by_kind.get(kindname, []) %}
     <button type="button" class="chip kind-{{ kindname }}" data-name="{{ t.name | lower }}"
-            data-id="{{ t.id }}" onclick="togglePick('{{ kindname }}', this)">{{ t.name }}</button>
+            data-id="{{ t.id }}" onclick="togglePick('{{ kindname }}', this)">{{ t.name }}{%
+        if t.id in tag_disambiguators %} <small class="dis">{{ tag_disambiguators[t.id] }}</small>{% endif %}</button>
     {% endfor %}
   </div>
   </div>
@@ -34,6 +39,11 @@
 <script>
   const NC_GROUPS = {{ groups | tojson }};
   const TAG_NAMES = {{ tag_names | tojson }};
+  // {tag id: handle} for tags whose (name, kind) collides -- see the chip list
+  // above. `| tojson` on the raw dict, never `| safe` and never json.dumps
+  // first (invariant 7). tojson renders the integer keys as JSON strings, which
+  // is what the string ids used below want anyway.
+  const TAG_DIS = {{ tag_disambiguators | tojson }};
   const INITIAL_SELECTED = {{ initial_selected | tojson }};
   // selection state: sets of tag ids (strings)
   const sel = {
@@ -60,6 +70,14 @@
       const chip = document.createElement("span");
       chip.className = "chip kind-" + kind + " on";
       chip.textContent = TAG_NAMES[id] || id;
+      if (TAG_DIS[id]) {
+        // Same rule as the dialog list: only a colliding name needs its handle.
+        // textContent, never innerHTML -- a handle is editor-authored.
+        const dis = document.createElement("small");
+        dis.className = "dis";
+        dis.textContent = TAG_DIS[id];
+        chip.appendChild(dis);
+      }
       const x = document.createElement("button");
       x.type = "button"; x.className = "x"; x.textContent = "×";
       x.onclick = () => removePick(kind, id);
@@ -123,6 +141,11 @@
   window.pickerAddAndSelect = function (kind, tag) {
     const id = String(tag.id);
     TAG_NAMES[id] = tag.name;
+    // TAG_DIS is deliberately NOT touched. A tag created just now cannot
+    // collide with itself, and if it shares a name with an existing one the
+    // quick-create route answered 409 and offered that one instead -- so this
+    // path only ever reaches a genuinely new name. The next full page render
+    // recomputes the map from the DB anyway.
     if (kind === "group") {
       NC_GROUPS[id] = { name: tag.name, franchise: tag.parent_id || null, members: [] };
     }

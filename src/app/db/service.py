@@ -4550,7 +4550,31 @@ async def tag_picker_context(session: AsyncSession) -> dict:
             "members": [{"id": m.id, "name": m.name} for m in await group_members(session, g.id)],
         }
     tag_names = {t.id: t.name for t in tags}
-    return {"by_kind": by_kind, "groups": groups_data, "tag_names": tag_names}
+    # Which tags must show their handle beside their name: ONLY those sharing a
+    # (name, kind) with another tag. Two identical chips are unusable, but
+    # showing every handle would put noise on the overwhelming majority that do
+    # not collide. Decided HERE rather than in the template's JS, because "are
+    # these the same tag to a reader" is a question about the data.
+    #
+    # A parallel map rather than restructuring tag_names, whose {id: name} shape
+    # several templates' inline scripts already read -- far smaller blast radius
+    # than changing a contract in place.
+    by_name_and_kind: dict[tuple[str, str], list[int]] = {}
+    for t in tags:
+        by_name_and_kind.setdefault((t.name.strip().lower(), t.kind.value), []).append(t.id)
+    slug_by_id = {t.id: t.slug for t in tags}
+    tag_disambiguators = {
+        tag_id: slug_by_id[tag_id]
+        for ids in by_name_and_kind.values()
+        if len(ids) > 1
+        for tag_id in ids
+    }
+    return {
+        "by_kind": by_kind,
+        "groups": groups_data,
+        "tag_names": tag_names,
+        "tag_disambiguators": tag_disambiguators,
+    }
 
 
 async def _is_attached(session: AsyncSession, concert_id: int, tag_id: int) -> bool:
