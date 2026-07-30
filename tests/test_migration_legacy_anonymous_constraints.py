@@ -262,6 +262,9 @@ TAG_ROWS = [
     (4, "アイドル二号", None, "artist", "artist-2"),            # ...then numbered
     (5, "Yuki Sato", "Yuki Sato", "artist", "yuki-sato"),
     (6, "yuki sato", "Yuki Sato", "artist", "yuki-sato-2"),  # collides, suffixed
+    # One stray Latin letter in an otherwise-CJK name: survives as "k", which
+    # the rule accepts. Reported rather than corrected -- see the migration.
+    (7, "Kアリーナ横浜", None, "venue", "k"),
 ]
 
 
@@ -376,3 +379,101 @@ def test_other_tag_columns_survive_the_rebuild(tag_handles_migrated):
     assert "CONSTRAINT fk_tags_parent_id" in sql
     assert "CONSTRAINT fk_tags_created_by_users" in sql
     assert con.execute("SELECT name_en FROM tags WHERE id = 1").fetchone() == ("Hasunosora",)
+
+
+def test_the_backfill_reports_what_it_had_to_guess(tmp_path, monkeypatch, capfd):
+    """A bad handle is invisible until somebody trips over it, so the moment
+    they are minted is the one moment worth naming them. Its own test rather
+    than a fixture assertion because it needs the migration's stdout.
+
+    Uses capfd, not capsys: the report is printed by code alembic invokes, and
+    capfd captures at the file-descriptor level.
+    """
+    db_path = tmp_path / "report.db"
+    con = sqlite3.connect(db_path)
+    con.executescript(_tags_schema(TAGS_UNIQUE_VARIANTS["named"]))
+    con.execute("INSERT INTO users (discord_id, username) VALUES (42, 'reiji')")
+    con.executemany(
+        "INSERT INTO tags (id, name, name_en, kind, created_by, created_at)"
+        " VALUES (?, ?, ?, ?, 42, '2026-01-01 00:00:00')",
+        [(r[0], r[1], r[2], r[3]) for r in TAG_ROWS],
+    )
+    con.execute("INSERT INTO alembic_version (version_num) VALUES (?)", (TAG_HANDLES_PARENT,))
+    con.commit()
+    con.close()
+
+    command.upgrade(_alembic_config(monkeypatch, db_path), TAG_HANDLES_REVISION)
+    out = capfd.readouterr().out
+
+    assert f"{len(TAG_ROWS)} tag(s) backfilled" in out
+    # The kind-fallback rows and the one-Latin-letter row are the ones to rename.
+    assert "no usable characters in either name" in out
+    assert "only 1 usable character(s)" in out
+    for tag_id in (3, 4, 7):
+        assert f"id {tag_id}" in out, f"tag {tag_id} should be flagged for renaming"
+    # Rows 1, 5 and 6 have English names and good handles -- not in the rename list.
+    assert "id 1 " not in out.split("no English name")[0]
+    # And the missing-name_en list, which the owner expects to be empty in prod.
+    assert "have no English name" in out
+
+
+def test_the_report_says_so_when_there_is_nothing_to_review(tmp_path, monkeypatch, capfd):
+    """The happy path must be quiet and explicit, or a clean run looks like a
+    broken report.
+
+    It ALSO asserts the schema, and that half is the important one. Phase 3 once
+    sat after the report's body, so it ran only when there was something to
+    report -- clean data hit the report's early return and got a half-migrated
+    schema with the revision stamped as applied. Every other fixture here happens
+    to contain a row worth reporting, so this is the only test positioned to
+    catch it, and asserting only the printed text is what let it through.
+    """
+    db_path = tmp_path / "clean.db"
+    con = sqlite3.connect(db_path)
+    con.executescript(_tags_schema(TAGS_UNIQUE_VARIANTS["named"]))
+    con.execute("INSERT INTO users (discord_id, username) VALUES (42, 'reiji')")
+    con.execute(
+        "INSERT INTO tags (id, name, name_en, kind, created_by, created_at)"
+        " VALUES (1, '蓮ノ空', 'Hasunosora', 'group', 42, '2026-01-01 00:00:00')"
+    )
+    con.execute("INSERT INTO alembic_version (version_num) VALUES (?)", (TAG_HANDLES_PARENT,))
+    con.commit()
+    con.close()
+
+    command.upgrade(_alembic_config(monkeypatch, db_path), TAG_HANDLES_REVISION)
+    out = capfd.readouterr().out
+
+    assert "every handle came from an English name" in out
+    assert "worth renaming" not in out
+
+    # The structural half must have happened too -- see the docstring.
+    con = sqlite3.connect(db_path)
+    sql = _table_sql(con, "tags")
+    assert "UNIQUE (name)" not in sql, "clean data must still lose the unique on name"
+    assert "uq_tags_slug" in sql, "clean data must still gain the unique on slug"
+    notnull = next(r[3] for r in con.execute("PRAGMA table_info(tags)") if r[1] == "slug")
+    assert notnull == 1, "clean data must still get NOT NULL"
+    assert con.execute("SELECT slug FROM tags").fetchone() == ("hasunosora",)
+    con.close()
+
+
+def test_a_name_the_console_cannot_encode_does_not_abort_the_migration(monkeypatch):
+    """The report prints Japanese names. The server console is UTF-8, but the
+    owner's is GBK -- and a diagnostic must never be the thing that kills a
+    deploy. Escape rather than raise."""
+    import importlib.util
+    import sys as _sys
+
+    # alembic/versions is not a package, so load the revision by path.
+    path = REPO_ROOT / "alembic" / "versions" / f"{TAG_HANDLES_REVISION}_tag_handles.py"
+    spec = importlib.util.spec_from_file_location("_tag_handles_rev", path)
+    revision = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(revision)
+
+    class _AsciiOnly:
+        encoding = "ascii"
+
+    monkeypatch.setattr(_sys, "stdout", _AsciiOnly())
+    out = revision._console_safe("Kアリーナ横浜")
+    assert out.isascii(), "must be encodable by an ascii terminal"
+    assert "K" in out, "the Latin part stays legible so the row is still findable"
