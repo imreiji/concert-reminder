@@ -1,10 +1,12 @@
 # Tag handles: a stable identity that is not the name
 
-Date: 2026-07-29. Status: **designed, not implemented**. Sub-project **A** of
-the catalogue round-trip arc (A here; B the admin export and C the tags import
+Date: 2026-07-29. Status: **implemented (2026-07-30)**, seven tasks on branch
+`tag-handles` off `main`; migration `eb4cb4f7927a`. Sub-project **A** of the
+catalogue round-trip arc (A here; B the admin export and C the tags import
 follow in one joint spec, per the decomposition agreed below). Prerequisite for
 C. Clears no WISHLIST entry directly -- it unblocks #1 and fixes two live
-crashes found while designing it.
+crashes found while designing it. Deviations are recorded at the foot; read them
+before trusting any section above, because four of them change what shipped.
 
 ## How we got here
 
@@ -351,6 +353,47 @@ point of that file.
 4. **`assign_tag_slug` needs `no_autoflush`** around its uniqueness lookup: the
    tag is pending with a null slug, and an autoflush there hits NOT NULL before
    the column can be filled. Noted because it is invisible until run.
+
+5. **The two QUICK-CREATE routes keep their 409 on a duplicate name.** Section 4
+   said all three create surfaces would stop blocking. Two things found while
+   implementing say otherwise. The question differs by surface: on the Tags page
+   you are deliberately creating a tag, while mid-import an existing tag of the
+   name you just typed is almost certainly the one you meant, so the 409 hands it
+   to you in one click rather than enforcing a rule. And
+   `tests/test_error_pages.py` uses that 409 as its ONLY vehicle for the
+   regression the whole HTML-vs-JSON split exists to protect (a dialog reading
+   `(await resp.json()).detail`) -- removing every 409 would have left that guard
+   with no subject, silently. Documented in both route docstrings and CLAUDE.md
+   so the divergence reads as deliberate.
+6. **`edit_tag`'s rename check moved into Task 4**, not Task 5: deleting
+   `find_tag_by_name` removed the only thing it called. Task 5 became purely
+   about ADDING handle editing.
+7. **Task 7 was almost entirely already built.** `tags.html`'s `#new-tag-dupe`
+   warning and `_tag_create_dialog.html`'s 409 select-existing both predate this
+   spec, so the only remaining work was removing the server-side block (Task 4).
+   Implementing section 4 as written would have added a second, competing
+   warning with worse copy and three needless msgids.
+
+## The bug this spec's own migration nearly shipped
+
+Recorded because it is the most useful thing here. Phase 3 of the migration --
+drop the unique on name, make the handle NOT NULL and unique -- briefly sat
+inside the reporting helper added afterwards, AFTER that helper's early return.
+So it ran only when there was something to report. A database whose handles all
+came out well hit the early return and was left **half-migrated**: `slug` added
+and nullable, the unique still on `name`, none on `slug`, and the revision
+stamped as applied with alembic reporting success. Nothing would ever retry it.
+
+Every fixture in the migration test happened to contain a row worth reporting,
+so all nineteen tests passed for the wrong reason. What surfaced it was an
+unrelated test in another file that migrates an EMPTY database to head and then
+downgrades, whose downgrade could not find a constraint phase 3 had never
+created.
+
+Two durable lessons, both now encoded: a migration's structural steps carry a
+comment that they must stay inside `upgrade()`, and the clean-data test asserts
+the SCHEMA and not only the printed report -- checking output alone is exactly
+what let it through.
 
 ## Open decision: the one-ASCII-character handle
 
