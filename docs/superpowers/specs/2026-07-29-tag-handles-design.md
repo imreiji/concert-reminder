@@ -351,3 +351,34 @@ point of that file.
 4. **`assign_tag_slug` needs `no_autoflush`** around its uniqueness lookup: the
    tag is pending with a null slug, and an autoflush there hits NOT NULL before
    the column can be filled. Noted because it is invisible until run.
+
+## Open decision: the one-ASCII-character handle
+
+**Raised 2026-07-30, from rehearsing the migration against real data. Worth
+settling BEFORE the migration is deployed, because the backfill runs once.**
+
+Section 2's rule takes the slugified name if it yields *anything*, and only
+falls back to the kind when it yields nothing. A name with exactly one ASCII
+character therefore produces a one-character handle:
+
+| name | handle |
+| --- | --- |
+| `蓮ノ空女学院スクールアイドルクラブ` (`name_en`: Hasunosora) | `hasunosora` |
+| `Kアリーナ横浜` | **`k`** |
+| `日野下花帆` | `artist` |
+| `Zepp Haneda` | `zepp-haneda` |
+
+`k` is unique and editable, so nothing breaks -- but it is useless as an
+identity, and venue names of that shape are common in this catalogue
+(`Kアリーナ`, `LINE CUBE`, `Zepp`). `Zepp` slugifies well; a lone Latin initial
+does not.
+
+Left as-is rather than fixed unilaterally, on two grounds: any minimum-length
+threshold is arbitrary (why 2 and not 3?), and the alternative for
+`Kアリーナ横浜` is `venue`/`venue-2`, which is not obviously better -- it trades
+a useless handle for an anonymous one. The owner can also simply rename the few
+affected rows after the backfill.
+
+If it should change, the fix is one line in BOTH `assign_tag_slug`
+(`db/service.py`) and the migration's inlined `_slug_core` caller -- they must
+stay in step -- something like `base if len(base) > 1 else tag.kind.value`.
