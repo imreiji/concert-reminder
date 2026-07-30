@@ -65,6 +65,22 @@ def test_style_hidden_attribute_wins():
     assert "[hidden] { display: none !important; }" in css()
 
 
+def test_dupe_banner_hidden_default_outspecifics_banner():
+    # The duplicate-name warning in the new-tag dialog is JS-gated by a .show
+    # class. `.banner { display: flex }` is defined LATER in this file, so a
+    # bare `.dupe { display: none }` ties on specificity and loses on source
+    # order -- which shipped, leaving the banner permanently visible and the
+    # .show toggle a no-op. Both rules must therefore carry `.banner`.
+    #
+    # Sibling of test_style_hidden_attribute_wins above: same failure mode (an
+    # author display rule quietly winning), second occurrence in this file.
+    style = css()
+    assert ".banner.dupe {" in style, "the hidden default must be qualified with .banner"
+    assert ".banner.dupe.show { display: flex; }" in style
+    # A bare `.dupe {` block would reintroduce the bug.
+    assert not re.search(r"(?m)^\.dupe\s*\{", style), "bare .dupe rule loses to .banner"
+
+
 def test_style_ports_the_demos_dark_paper_hex():
     # The dark palette is the demo's, not a naive invert -- pin one hex so a
     # future "simplify" can't quietly swap it.
@@ -167,6 +183,31 @@ def test_base_restores_open_folds_across_an_htmx_swap(client):
     assert "htmx:afterSettle" in html, "the reopen must run after the swap has settled"
     assert "details[data-fold]" in html, "the restore keys off data-fold"
     assert "dataset.fold" in html, "the keys are the data-fold values themselves"
+
+
+def test_backdrop_close_requires_the_press_to_land_there_too(client):
+    """A click's target is the nearest common ancestor of press and release, so
+    selecting text in a dialog field and overshooting the card -- press inside,
+    release on the backdrop -- reports the DIALOG and closed it, throwing away
+    what was being typed. Confirmed in a browser before the fix: pointerdown hit
+    a DIV inside the card while the click reported DIALOG#new-tag-dialog.
+
+    The guard is that the press must have landed on the same element. Asserted
+    as script TEXT for the same reason the fold-restore test above is: no
+    headless client fires mouse events, and the guard quietly disappearing is
+    precisely the regression that would ship unnoticed.
+    """
+    html = client.get("/").text
+    assert "pointerdown" in html, (
+        "the backdrop-close guard needs the press target, so it must listen for pointerdown"
+    )
+    assert "HTMLDialogElement" in html, "the close still keys off the target being a dialog"
+    # The comparison IS the fix: closing on the click target alone is the bug.
+    assert "pressedOn === e.target" in html, (
+        "close only when press and release agree, or a drag out of a field closes the dialog"
+    )
+    # Backdrop-click-to-close and Esc remain the documented conventions.
+    assert "e.target.close()" in html
 
 
 def test_header_emits_theme_toggle_and_pill_nav(client):

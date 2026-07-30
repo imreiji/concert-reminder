@@ -130,10 +130,31 @@
         try { localStorage.setItem("theme", next); } catch (e) { /* storage off */ }
       });
     })();
-    // shared: clicking the backdrop closes any dialog (Esc works natively)
-    document.addEventListener("click", (e) => {
-      if (e.target instanceof HTMLDialogElement && e.target.open) e.target.close();
-    });
+    // shared: clicking the backdrop closes any dialog (Esc works natively).
+    //
+    // The press must land on the backdrop TOO, not just the release. A click
+    // event's target is the nearest common ancestor of where the button went
+    // down and where it came up, so selecting the text in a dialog field and
+    // overshooting the card -- press inside, release on the backdrop -- reports
+    // the dialog itself and used to close it, discarding whatever was being
+    // typed. Verified in a browser: pointerdown hit a DIV inside the card while
+    // the click reported DIALOG#new-tag-dialog.
+    //
+    // Backdrop-click-to-close itself is deliberate (see CLAUDE.md's picker
+    // conventions) and still works: a real backdrop click presses and releases
+    // on the dialog element, so both targets agree.
+    (function () {
+      var pressedOn = null;
+      // Capture phase, so a handler that stops propagation cannot blind this.
+      document.addEventListener("pointerdown", function (e) { pressedOn = e.target; }, true);
+      document.addEventListener("click", function (e) {
+        var startedOnSameElement = pressedOn === e.target;
+        pressedOn = null;  // never let one press arm a later, unrelated click
+        if (startedOnSameElement && e.target instanceof HTMLDialogElement && e.target.open) {
+          e.target.close();
+        }
+      });
+    })();
     // shared: live-filter chips by their data-name within a container
     function filterChips(input, scope) {
       const q = input.value.trim().toLowerCase();

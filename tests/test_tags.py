@@ -787,6 +787,33 @@ def test_new_tag_dialog_replaces_details_form(client):
     assert 'id="new-tag-dialog"' not in r2.text
 
 
+def test_new_tag_dialog_defaults_to_performer(client):
+    """Performer is the kind an editor creates most often, and it is already
+    create_tag's own server-side default (`kind: TagKind = Form(ARTIST)`), which
+    the dialog used to contradict by opening on Group.
+
+    FOUR places encode this and all must agree -- the hidden input, the pressed
+    chip, the JS cold-start call and its reopen fallback. A disagreement is not
+    a crash: it renders the wrong chip as selected on first paint and then
+    silently corrects itself when the JS runs, which is exactly the kind of
+    thing nobody notices in review.
+    """
+    login_as(client, EDITOR_ID, "reiji")
+    body = client.get("/tags").text
+
+    assert 'id="new-tag-kind" value="artist"' in body
+    assert 'data-kind="artist" aria-pressed="true"' in body
+    assert 'setTagKind("artist")' in body
+    assert 'setTagKind(kindInput.value || "artist")' in body
+    # No OTHER kind chip may start pressed, or two look selected before the JS
+    # runs. Scoped to the picker: aria-pressed is used elsewhere on this page.
+    picker = body.split('id="kindPick"', 1)[1].split("</div>", 1)[0]
+    assert picker.count('aria-pressed="true"') == 1
+    assert 'data-kind="artist" aria-pressed="true"' in picker
+    # The hint must match the kind, not describe groups.
+    assert "A single performer. Can belong to a group, or stand alone." in body
+
+
 # ── Retroactive-apply confirmation flow ──────────────────────────────────
 
 

@@ -1356,11 +1356,17 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   background: var(--ink); border-color: var(--ink); color: var(--paper);
 }
 
-.dupe {
+/* BOTH rules must outspecific .banner's `display: flex` (defined later in this
+   file, so an equal-specificity `.dupe` LOSES on source order). Only the .show
+   rule was qualified originally, which left the hidden default beaten and the
+   banner permanently visible: every editor opening the new-tag dialog saw
+   "Already exists." with an empty detail line, and the JS `.show` toggle was a
+   no-op. Same class of bug as the [hidden] override above -- an author display
+   rule quietly winning -- and the second time it has shipped in this file. */
+.banner.dupe {
   display: none; gap: .5rem; align-items: flex-start; padding: .6rem .7rem;
   font-size: .8125rem;
 }
-/* Outspecifics .banner's display:flex -- the warning stays JS-gated. */
 .banner.dupe.show { display: flex; }
 .dupe b { font-weight: 700; }
 
