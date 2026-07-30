@@ -167,16 +167,30 @@ def test_tag_creation_is_editor_only(client):
     }).status_code == 303
 
 
-def test_creating_same_name_same_kind_still_409s(client):
-    """Kind-scoped duplicate rule (resolved with the owner): a second tag of
-    the SAME name AND SAME kind is a real duplicate and stays blocked."""
+async def test_creating_same_name_same_kind_now_succeeds(client):
+    """DELIBERATE REVERSAL of test_creating_same_name_same_kind_still_409s.
+
+    Owner ruling 2026-07-29: two performers may genuinely share a name, so
+    nothing about a name can be a uniqueness rule. The Tags page warns before
+    submit (#new-tag-dupe, which has shipped for a while) and then allows it;
+    `slug` is what keeps the two apart. The quick-create dialogs still answer
+    409 -- see test_quick_create_* -- because there you are being offered an
+    existing match, which is a different question.
+    """
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={
         "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
     })
     assert client.post("/tags", data={
         "name_en": "aqours", "name_zh": "aqours", "name": "aqours", "kind": "group",
-    }).status_code == 409
+    }).status_code == 303
+
+    async with client.db() as s:
+        rows = (await s.execute(
+            select(Tag).where(func.lower(Tag.name) == "aqours")
+        )).scalars().all()
+        assert len(rows) == 2
+        assert {r.slug for r in rows} == {"aqours", "aqours-2"}
 
 
 async def test_creating_same_name_tag_now_succeeds(client):
@@ -218,7 +232,13 @@ async def test_rename_tag_round_trips(client):
         assert tag.name == "Hasunosora Idols"
 
 
-def test_rename_tag_rejects_case_insensitive_duplicate(client):
+async def test_rename_tag_onto_an_existing_name_is_allowed(client):
+    """DELIBERATE REVERSAL of test_rename_tag_rejects_case_insensitive_duplicate.
+
+    Names are not unique any more, so a rename cannot collide. Blocking here
+    while allowing it at create would also be incoherent: you could type the
+    duplicate but never arrive at it by editing.
+    """
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={
         "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
@@ -226,8 +246,14 @@ def test_rename_tag_rejects_case_insensitive_duplicate(client):
     client.post("/tags", data={
         "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
     })
-    r = client.post("/tags/2/edit", data={"name": "hasunosora"})
-    assert r.status_code == 409
+    assert client.post("/tags/2/edit", data={"name": "hasunosora"}).status_code == 303
+
+    async with client.db() as s:
+        renamed = await s.get(Tag, 2)
+        assert renamed.name == "hasunosora"
+        # The handle is untouched by a rename -- it is the identity, and
+        # rewriting it would break anything holding it.
+        assert renamed.slug == "gakumas"
 
 
 def test_rename_tag_to_its_own_current_name_is_a_noop(client):
@@ -758,9 +784,10 @@ def test_dupe_payload_is_tojson_not_double_encoded(client):
     assert "\\u003c/script\\u003e\\u003cscript\\u003ealert(1)" in r.text
 
 
-def test_rename_to_existing_name_still_409s(client):
-    """Rename collision is name-only (global across kinds) and unchanged --
-    only CREATE became kind-scoped."""
+def test_rename_across_kinds_is_allowed_too(client):
+    """DELIBERATE REVERSAL of test_rename_to_existing_name_still_409s, which
+    pinned rename collision as name-only and global across kinds. There is no
+    name collision left to detect, in any scope."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={
         "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
@@ -768,8 +795,7 @@ def test_rename_to_existing_name_still_409s(client):
     client.post("/tags", data={
         "name_en": "Hall", "name_zh": "Hall", "name": "Hall", "kind": "venue",
     })
-    r = client.post("/tags/2/edit", data={"name": "aqours"})
-    assert r.status_code == 409
+    assert client.post("/tags/2/edit", data={"name": "aqours"}).status_code == 303
 
 
 def test_new_tag_dialog_replaces_details_form(client):
@@ -2118,3 +2144,51 @@ def test_quick_tag_create_is_403_for_a_signed_in_non_editor(client):
     assert client.post(
         "/tags/quick", data={"name": "X", "kind": "artist"}
     ).status_code == 403
+
+
+# ── The two crashes tag handles exist to close ────────────────────────────
+
+
+def test_creating_a_venue_named_like_a_group_no_longer_500s(client):
+    """MEASURED bug: the routes' duplicate check was kind-scoped while the
+    column's UNIQUE was global, so this passed the check and then died on an
+    unhandled IntegrityError -- a 500 with the editor's input lost."""
+    login_as(client, EDITOR_ID, "reiji")
+    assert client.post("/tags", data={
+        "name": "Aqours", "name_en": "Aqours", "name_zh": "Aqours", "kind": "group",
+    }).status_code == 303
+    assert client.post("/tags", data={
+        "name": "Aqours", "name_en": "Aqours", "name_zh": "Aqours", "kind": "venue",
+    }).status_code == 303
+
+
+def test_a_case_variant_across_kinds_no_longer_poisons_name_lookups(client):
+    """The nastier half: this INSERT used to SUCCEED (the DB constraint was
+    case-sensitive, the route check was not), and from then on any name lookup
+    raised MultipleResultsFound -- a working page started 500ing with nothing
+    saying why. The Tags page render is the canary."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Aqours", "name_en": "Aqours", "name_zh": "Aqours", "kind": "group",
+    })
+    assert client.post("/tags", data={
+        "name": "aqours", "name_en": "Aqours", "name_zh": "Aqours", "kind": "venue",
+    }).status_code == 303
+    assert client.get("/tags").status_code == 200
+    # And a rename still works, which is the path find_tag_by_name used to break.
+    assert client.post("/tags/1/edit", data={"name": "Aqours!"}).status_code == 303
+
+
+async def test_two_performers_with_the_same_name(client):
+    """The requirement that killed kind-scoped name uniqueness."""
+    login_as(client, EDITOR_ID, "reiji")
+    for _ in range(2):
+        assert client.post("/tags", data={
+            "name": "Yuki Sato", "name_en": "Yuki Sato", "name_zh": "佐藤有紀",
+            "kind": "artist",
+        }).status_code == 303
+
+    async with client.db() as s:
+        rows = (await s.execute(select(Tag).where(Tag.name == "Yuki Sato"))).scalars().all()
+        assert len(rows) == 2
+        assert {r.slug for r in rows} == {"yuki-sato", "yuki-sato-2"}

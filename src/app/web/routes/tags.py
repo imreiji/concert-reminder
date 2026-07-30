@@ -25,8 +25,7 @@ from app.db.service import (
     assign_tag_slug,
     attach_tag,
     ensure_user,
-    find_tag_by_name,
-    find_tag_by_name_and_kind,
+    find_tags_by_name_and_kind,
     group_members,
     handle_newly_tagged,
     resolve_group_member,
@@ -126,13 +125,21 @@ async def create_tag(
     # (This form has no city inputs; the VENUE city rule lives in
     # quick_create_venue, the only route that collects one on create.)
     require_variants("Tag name", name, name_en, name_zh, mandatory=True)
-    # Kind-scoped duplicate rule (resolved with the owner): block only a tag of
-    # the same name AND same kind; same name across kinds is allowed and the
-    # dialog warns about it client-side. Rename keeps its name-only collision.
-    if await find_tag_by_name_and_kind(session, name, kind) is not None:
-        raise HTTPException(
-            status_code=409, detail=f"a {kind.value} tag named {name!r} already exists"
-        )
+    # NO duplicate-name check, in any scope. Two performers may genuinely share
+    # a name and a venue may share one with a group (owner ruling 2026-07-29),
+    # so a name cannot be a uniqueness rule -- `slug` is the identity, and
+    # assign_tag_slug below guarantees THAT is unique.
+    #
+    # This page is the deliberate place to create a tag, and it already warns
+    # before submit (#new-tag-dupe in tags.html, fed by tag_dupe_data), naming
+    # how many events and followers the existing one has. That warning has
+    # shipped for a while telling the truth -- "creating another one will keep
+    # them separate" -- while this route 409'd and refused. Removing the block is
+    # what makes it honest.
+    #
+    # The two quick-create routes below deliberately KEEP their 409: there the
+    # editor is being offered an existing match mid-import, which is a different
+    # question from deliberately making a second tag.
     parent = None
     if parent_id:
         parent = await session.get(Tag, parent_id)
@@ -171,19 +178,26 @@ async def quick_create_venue(
     the caller can select the new tag into the leg it was creating it for.
 
     Deliberately NOT a second write path in any meaningful sense: it builds the
-    same Tag row `create_tag` above does, through the same
-    `find_tag_by_name_and_kind` duplicate check and the same `form_url`
-    boundary. It CREATES ONLY -- it never attaches anything to a concert. The
-    new venue reaches the concert's VENUE rollup the normal way, by being
-    selected into a leg and picked up by `sync_concert_venue_tags` when the
-    editor finally saves.
+    same Tag row `create_tag` above does, through the same `form_url` boundary.
+    It CREATES ONLY -- it never attaches anything to a concert. The new venue
+    reaches the concert's VENUE rollup the normal way, by being selected into a
+    leg and picked up by `sync_concert_venue_tags` when the editor finally saves.
 
-    The duplicate answer is 409, matching `create_tag`'s answer for exactly
-    the same condition (same module, two endpoints, one status for "this name
-    already exists"). Every other failure here (blank name, an unsafe
-    location_url via `form_url`, a name over `max_length`) stays 422 -- the
-    dialog's JS relies on 409 being distinguishable from the rest to pick the
-    right error copy (see `_venue_create_dialog.html`).
+    **The duplicate-name 409 stays here, and no longer matches `create_tag`.**
+    Since 2026-07-29 names are not unique and the Tags page allows a duplicate
+    outright; this route does not, because it is asking a different question.
+    Here the editor is mid-edit with a name they typed in passing, and an
+    existing venue of that name is overwhelmingly the one they meant -- so the
+    409 exists to hand it to them ("that venue already exists", one click to
+    select it), not to enforce a rule. A deliberate second venue of the same
+    name is made on the Tags page, which is where deliberate things happen.
+
+    Every other failure here (blank name, an unsafe location_url via `form_url`,
+    a name over `max_length`) stays 422 -- the dialog's JS relies on 409 being
+    distinguishable from the rest to pick the right error copy (see
+    `_venue_create_dialog.html`), and `tests/test_error_pages.py` pins that a
+    409 from these dialogs keeps its JSON body rather than becoming an HTML
+    error page.
 
     Route path note: `/tags/venue/quick` cannot be swallowed by
     `/tags/{tag_id}/...` -- those all carry a different literal third segment.
@@ -196,7 +210,7 @@ async def quick_create_venue(
     # a venue with no city recorded at all is a normal, complete row.
     require_variants("Venue name", name, name_en, name_zh, mandatory=True)
     require_variants("Venue city", city, city_en, city_zh)
-    if await find_tag_by_name_and_kind(session, name, TagKind.VENUE) is not None:
+    if await find_tags_by_name_and_kind(session, name, TagKind.VENUE):
         raise HTTPException(status_code=409, detail=f"a venue named {name!r} already exists")
     await ensure_user(session, user.id, user.username)
     tag = Tag(
@@ -238,11 +252,13 @@ async def quick_create_tag(
     Returns JSON so the caller can drop the new tag straight into the tag
     picker's selection (see `_tag_create_dialog.html`).
 
-    Sibling of `quick_create_venue` above: it builds the same Tag row
-    `create_tag` does and shares the same kind-scoped duplicate check
-    (`find_tag_by_name_and_kind`), so a second franchise/group/artist of the
-    same name is a 409 exactly as it is on the Tags page. Unlike `create_tag`,
-    the English/中文 name variants are OPTIONAL here (no `require_variants`): a
+    Sibling of `quick_create_venue` above, and it keeps its kind-scoped 409 for
+    the same reason: mid-import, an existing tag of the name you just typed is
+    almost certainly the one you meant, so the 409 hands it to you rather than
+    enforcing a rule. It no longer matches `create_tag`, which since 2026-07-29
+    allows a duplicate name outright -- deliberate divergence, not drift. Unlike
+    `create_tag`, the English/中文 name variants are OPTIONAL here (no
+    `require_variants`): a
     tag is not held to the concert all-three-or-none rule, and an editor
     quick-creating a scraped Japanese name mid-import should not be blocked for
     lacking a translation. Editing the tag later can fill them in.
@@ -267,8 +283,11 @@ async def quick_create_tag(
     name = name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="a tag needs a name")
-    existing = await find_tag_by_name_and_kind(session, name, tag_kind)
-    if existing is not None:
+    # Oldest match: with names non-unique there can be several, and the one the
+    # editor most likely meant is the one that has been around.
+    matches = await find_tags_by_name_and_kind(session, name, tag_kind)
+    if matches:
+        existing = matches[0]
         raise HTTPException(
             status_code=409,
             detail={
@@ -325,10 +344,13 @@ async def edit_tag(
     if tag is None:
         raise HTTPException(status_code=404)
     name = name.strip()
-    if name and name.lower() != tag.name.lower():
-        existing = await find_tag_by_name(session, name)
-        if existing is not None and existing.id != tag.id:
-            raise HTTPException(status_code=409, detail=f"tag {name!r} already exists")
+    if name:
+        # NO collision check. Names are not unique (owner ruling 2026-07-29), and
+        # blocking here while `create_tag` allows a duplicate would be incoherent:
+        # you could type your way to two Yuki Satos but never edit your way there.
+        # The tag's `slug` is untouched by a rename -- it is the identity, and
+        # rewriting it would break anything already holding it, exactly as
+        # invariant 6 says of a concert's event_id.
         tag.name = name
     # Name variants carry no uniqueness constraint -- two tags may share an
     # English/Chinese rendering, so no collision check here (unlike `name`).

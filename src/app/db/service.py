@@ -4122,30 +4122,32 @@ async def assign_tag_slug(session: AsyncSession, tag: Tag) -> str:
     return candidate
 
 
-async def find_tag_by_name(session: AsyncSession, name: str) -> Tag | None:
-    from sqlalchemy import func as sa_func
-
-    res = await session.execute(
-        select(Tag).where(sa_func.lower(Tag.name) == name.strip().lower())
-    )
-    return res.scalar_one_or_none()
-
-
-async def find_tag_by_name_and_kind(
+async def find_tags_by_name_and_kind(
     session: AsyncSession, name: str, kind: TagKind
-) -> Tag | None:
-    """A name+kind collision -- the kind-scoped duplicate the create route
-    blocks on. A second `Aqours` GROUP is a real duplicate; an `Aqours` VENUE
-    beside the `Aqours` GROUP is allowed (resolved with the owner). Rename
-    still uses the name-only find_tag_by_name."""
+) -> list[Tag]:
+    """EVERY tag of this kind with this name, case-insensitively, oldest first.
+
+    PLURAL because names are not unique and never will be: two performers may
+    genuinely share one (owner ruling, 2026-07-29). A name is a hint for a
+    human, never an identity -- `slug` is the identity.
+
+    This replaced two single-result lookups, `find_tag_by_name` (name only) and
+    `find_tag_by_name_and_kind`, both of which used `scalar_one_or_none` and so
+    raised `MultipleResultsFound` the moment a duplicate existed. Neither
+    survives: deleting them is what removes the bug class, rather than leaving a
+    function that is safe only while the data happens to cooperate. A caller
+    wanting "one" must say which one it means -- `[0]` for the oldest.
+
+    Ordered by id so that choice is deterministic.
+    """
     from sqlalchemy import func as sa_func
 
     res = await session.execute(
-        select(Tag).where(
-            sa_func.lower(Tag.name) == name.strip().lower(), Tag.kind == kind
-        )
+        select(Tag)
+        .where(sa_func.lower(Tag.name) == name.strip().lower(), Tag.kind == kind)
+        .order_by(Tag.id)
     )
-    return res.scalar_one_or_none()
+    return list(res.scalars())
 
 
 async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
@@ -5875,7 +5877,10 @@ async def seed_rehearsal(
     # follower of a tag, and the likeliest way this app ever messages the wrong
     # people. The shape catalogue can render the embed, but only this exercises
     # the delivery.
-    tag = await find_tag_by_name_and_kind(session, REHEARSAL_TAG_NAME, TagKind.ARTIST)
+    # First match, not "the" match: names are not unique, so this asks for A tag
+    # called this rather than THE one. Re-seeding must not mint a second.
+    existing = await find_tags_by_name_and_kind(session, REHEARSAL_TAG_NAME, TagKind.ARTIST)
+    tag = existing[0] if existing else None
     if tag is None:
         tag = Tag(
             name=REHEARSAL_TAG_NAME,
@@ -5885,6 +5890,7 @@ async def seed_rehearsal(
             created_by=user_id,
         )
         session.add(tag)
+        await assign_tag_slug(session, tag)
         await session.flush()
 
     following = (

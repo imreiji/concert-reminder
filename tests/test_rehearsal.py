@@ -27,7 +27,7 @@ from app.db.service import (
     REHEARSAL_EVENT_ID,
     REHEARSAL_TAG_NAME,
     cancel_rehearsal_show,
-    find_tag_by_name_and_kind,
+    find_tags_by_name_and_kind,
     get_rehearsal_concert,
     notify_newly_cancelled_legs,
     pull_rehearsal_forward,
@@ -728,8 +728,11 @@ async def test_the_tag_is_attached_before_the_rules_exist(db):
         await s.flush()
         concert = await seed_rehearsal(s, ADMIN_ID)
         await s.commit()
-        tag = await find_tag_by_name_and_kind(s, REHEARSAL_TAG_NAME, TagKind.ARTIST)
-        assert tag is not None
+        # Plural lookup: names are not unique, so this asks for A tag called
+        # this. Seeding must produce exactly one.
+        matches = await find_tags_by_name_and_kind(s, REHEARSAL_TAG_NAME, TagKind.ARTIST)
+        assert len(matches) == 1
+        tag = matches[0]
         attached = (await s.execute(select(ConcertTag).where(
             ConcertTag.concert_id == concert.id))).scalars().all()
         assert [a.tag_id for a in attached] == [tag.id]

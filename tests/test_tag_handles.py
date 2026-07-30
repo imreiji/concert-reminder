@@ -109,3 +109,35 @@ async def test_the_handle_itself_is_still_unique(db):
         s.add(Tag(name="B", kind=TagKind.ARTIST, slug="dup"))
         with pytest.raises(IntegrityError):
             await s.commit()
+
+
+# ── The lookup goes plural, and the ambiguous one is gone ─────────────────
+
+
+async def test_find_tags_by_name_and_kind_returns_every_match(db):
+    from app.db.service import find_tags_by_name_and_kind
+
+    async with db() as s:
+        await _add(s, name="Yuki Sato", kind=TagKind.ARTIST)
+        await _add(s, name="yuki sato", kind=TagKind.ARTIST)
+        await _add(s, name="Yuki Sato", kind=TagKind.VENUE)
+        await s.commit()
+    async with db() as s:
+        found = await find_tags_by_name_and_kind(s, "YUKI SATO", TagKind.ARTIST)
+        assert len(found) == 2, "case-insensitive, and BOTH artists"
+        assert all(t.kind is TagKind.ARTIST for t in found), "kind-scoped"
+        assert [t.id for t in found] == sorted(t.id for t in found), "ordered by id"
+
+
+async def test_the_single_result_name_lookup_is_gone(db):
+    """`find_tag_by_name` took a name and returned one Tag via
+    scalar_one_or_none. With names non-unique that raises MultipleResultsFound
+    by construction, so it must not exist to be called -- deleting it is what
+    removes the bug class rather than papering over it."""
+    import app.db.service as service
+
+    assert not hasattr(service, "find_tag_by_name")
+    assert hasattr(service, "find_tags_by_name_and_kind")
+    assert not hasattr(service, "find_tag_by_name_and_kind"), (
+        "the singular kind-scoped one is equally unsafe now"
+    )
