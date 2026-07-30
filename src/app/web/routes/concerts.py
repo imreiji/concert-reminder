@@ -52,6 +52,7 @@ from app.db.service import (
     all_legs_cancelled,
     attach_tag,
     concert_audit_log,
+    concert_export_yaml,
     concert_next_moment,
     concert_round_rows,
     concert_subscription_states,
@@ -1538,75 +1539,17 @@ async def export_concert_yaml(
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Read-only sharing format, shaped like mting314/event-tracker's YAML --
-    export only, never an import path. SQLite via the web UI stays the only
-    way to create/edit data."""
-    from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml, slugify
+    """Read-only sharing format, shaped like mting314/event-tracker's YAML.
+
+    The assembly lives in service.concert_export_yaml because the admin
+    catalogue zip emits the SAME document, and a restore file that differed
+    from the one an editor downloads would be a second format nobody agreed
+    to.
+    """
+    from app.domain.yaml_export import slugify
 
     concert = await get_concert_by_event_id(session, event_id)
-    await session.refresh(concert, ["days", "rounds", "tags"])
-
-    # The legs, with their venue tags: the export's city/venue/venue_address
-    # come off the tag when the leg has one, and ConcertDay.venue_tag is
-    # lazy="raise", so the eager load below is load-bearing -- without it every
-    # export is a MissingGreenlet 500. A leg with NO venue tag exports no venue.
-    days = list((await session.execute(
-        select(ConcertDay)
-        .where(ConcertDay.concert_id == concert.id)
-        .options(selectinload(ConcertDay.venue_tag))
-        .order_by(ConcertDay.starts_at_utc, ConcertDay.id)
-    )).scalars())
-    days_by_id = {d.id: d.label for d in days}
-    # The tag's CANONICAL columns, never loc(): an export is data, and its
-    # contents must not change with whoever happened to download it.
-    yaml_days = [
-        YamlDay(
-            label=d.label, label_en=d.label_en, label_zh=d.label_zh,
-            starts_at_utc=d.starts_at_utc,
-            city=d.venue_tag.city if d.venue_tag else None,
-            venue=d.venue_tag.name if d.venue_tag else None,
-            venue_address=d.venue_tag.address if d.venue_tag else None,
-            venue_handle=d.venue_tag.slug if d.venue_tag else None,
-            doors_at_utc=d.doors_at_utc,
-        )
-        for d in days
-    ]
-    yaml_rounds = [
-        YamlRound(
-            label=r.label, label_en=r.label_en, label_zh=r.label_zh, kind=r.kind.value,
-            applies_to_labels=[days_by_id[d] for d in (r.applies_to or []) if d in days_by_id],
-            opens_at_utc=r.opens_at_utc, closes_at_utc=r.closes_at_utc,
-            results_at_utc=r.results_at_utc, payment_deadline_at_utc=r.payment_deadline_at_utc,
-            url=r.url, notes=r.notes,
-        )
-        for r in concert.rounds
-    ]
-
-    text = concert_to_yaml(
-        # So a re-import lands on this exact URL rather than minting a new one.
-        event_id=concert.event_id,
-        title=concert.title,
-        kind=concert.kind.value if concert.kind else None,
-        franchises=[t.name for t in concert.tags if t.kind is TagKind.FRANCHISE],
-        groups=[t.name for t in concert.tags if t.kind is TagKind.GROUP],
-        artists=[t.name for t in concert.tags if t.kind is TagKind.ARTIST],
-        venues=[t.name for t in concert.tags if t.kind is TagKind.VENUE],
-        series_handles={
-            "franchises": [t.slug for t in concert.tags if t.kind is TagKind.FRANCHISE],
-            "groups": [t.slug for t in concert.tags if t.kind is TagKind.GROUP],
-            "artists": [t.slug for t in concert.tags if t.kind is TagKind.ARTIST],
-        },
-        days=yaml_days, rounds=yaml_rounds, notes=concert.notes,
-        title_en=concert.title_en, title_zh=concert.title_zh,
-        organizer=concert.organizer, categories=concert.categories,
-        notes_en=concert.notes_en, notes_zh=concert.notes_zh,
-        eventernote_url=concert.eventernote_url, official_url=concert.official_url,
-        source_url=concert.source_url,
-        performers=(
-            [line.strip() for line in concert.performers_text.splitlines() if line.strip()]
-            if concert.performers_text else []
-        ),
-    )
+    text = await concert_export_yaml(session, concert)
     return Response(
         content=text,
         media_type="application/yaml",

@@ -19,9 +19,11 @@ operational page only admins see should not cost msgids in three languages
 (tests/test_i18n_catalogues.py would enforce them).
 """
 
+import io
+import zipfile
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +35,7 @@ from app.db.service import (
     DELIVERY_LOG_RETENTION_DAYS,
     TYPED_CONFIRM_THRESHOLD,
     cancel_broadcast,
+    catalogue_export_files,
     delivery_batch_rows,
     delivery_batches,
     delivery_failures,
@@ -318,3 +321,32 @@ async def import_tags_commit(
     report = await import_tags(session, parsed, created_by=user.id)
     await session.commit()
     return page(report=report)
+
+
+@router.get("/admin/export.zip")
+async def export_zip(
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """The whole catalogue, zipped at request time.
+
+    Same shape as GET /concerts/import/skill.zip: a committed binary would go
+    stale the moment the data changed, and a few hundred KB of YAML is not worth
+    a thread hop.
+
+    Every entry goes through an EXPLICIT ZipInfo pinned to the 1980
+    reproducible-build epoch. ZipFile.writestr otherwise stamps the current
+    time, and zip timestamps have TWO-SECOND resolution -- so two exports
+    seconds apart would differ in bytes while every file inside was identical,
+    quietly costing the archive its diffability, which is most of a backup's
+    value. Measured, not assumed.
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path, text in await catalogue_export_files(session):
+            zf.writestr(zipfile.ZipInfo(path, date_time=(1980, 1, 1, 0, 0, 0)), text)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="dekimasen-catalogue.zip"'},
+    )

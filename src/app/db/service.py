@@ -58,7 +58,7 @@ from app.domain.digest import DeliveryFact, build_digest
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.slugs import tag_slug_base
-from app.domain.tags_yaml import ParsedTagFile
+from app.domain.tags_yaml import RESTORE_NOTES, ParsedTagFile, TagExport, tags_to_yaml
 from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import (
@@ -73,6 +73,7 @@ from app.domain.types import (
     TagKind,
 )
 from app.domain.upgrades import is_upgrade_eligible
+from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml
 from app.i18n import N_, get_locale, gettext_in, loc_field
 from app.i18n import gettext as _
 
@@ -4274,6 +4275,122 @@ async def import_tags(
                 continue
             session.add(TagMember(group_tag_id=tag_id, member_tag_id=member_id))
     return report
+
+
+async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
+    """One concert as a draft-vocabulary YAML document.
+
+    Shared by GET /concerts/{event_id}/export.yaml and the admin catalogue
+    zip, which must not drift: a restore file that differed from the one an
+    editor downloads would be a second format nobody agreed to.
+
+    Loads the legs with their venue_tag eagerly. ConcertDay.venue_tag is
+    lazy="raise", so a missed selectinload here is a MissingGreenlet 500
+    rather than a slow export. Emits the tags' CANONICAL columns, never
+    loc() -- an export is data, and its contents must not change with
+    whoever happened to download it.
+    """
+    await session.refresh(concert, ["days", "rounds", "tags"])
+    # The legs, with their venue tags: the export's city/venue/venue_address
+    # come off the tag when the leg has one, and ConcertDay.venue_tag is
+    # lazy="raise", so the eager load below is load-bearing -- without it every
+    # export is a MissingGreenlet 500. A leg with NO venue tag exports no venue.
+    days = list((await session.execute(
+        select(ConcertDay)
+        .where(ConcertDay.concert_id == concert.id)
+        .options(selectinload(ConcertDay.venue_tag))
+        .order_by(ConcertDay.starts_at_utc, ConcertDay.id)
+    )).scalars())
+    days_by_id = {d.id: d.label for d in days}
+    # The tag's CANONICAL columns, never loc(): an export is data, and its
+    # contents must not change with whoever happened to download it.
+    yaml_days = [
+        YamlDay(
+            label=d.label, label_en=d.label_en, label_zh=d.label_zh,
+            starts_at_utc=d.starts_at_utc,
+            city=d.venue_tag.city if d.venue_tag else None,
+            venue=d.venue_tag.name if d.venue_tag else None,
+            venue_address=d.venue_tag.address if d.venue_tag else None,
+            venue_handle=d.venue_tag.slug if d.venue_tag else None,
+            doors_at_utc=d.doors_at_utc,
+        )
+        for d in days
+    ]
+    yaml_rounds = [
+        YamlRound(
+            label=r.label, label_en=r.label_en, label_zh=r.label_zh, kind=r.kind.value,
+            applies_to_labels=[days_by_id[d] for d in (r.applies_to or []) if d in days_by_id],
+            opens_at_utc=r.opens_at_utc, closes_at_utc=r.closes_at_utc,
+            results_at_utc=r.results_at_utc, payment_deadline_at_utc=r.payment_deadline_at_utc,
+            url=r.url, notes=r.notes,
+        )
+        for r in concert.rounds
+    ]
+
+    return concert_to_yaml(
+        # So a re-import lands on this exact URL rather than minting a new one.
+        event_id=concert.event_id,
+        title=concert.title,
+        kind=concert.kind.value if concert.kind else None,
+        franchises=[t.name for t in concert.tags if t.kind is TagKind.FRANCHISE],
+        groups=[t.name for t in concert.tags if t.kind is TagKind.GROUP],
+        artists=[t.name for t in concert.tags if t.kind is TagKind.ARTIST],
+        venues=[t.name for t in concert.tags if t.kind is TagKind.VENUE],
+        series_handles={
+            "franchises": [t.slug for t in concert.tags if t.kind is TagKind.FRANCHISE],
+            "groups": [t.slug for t in concert.tags if t.kind is TagKind.GROUP],
+            "artists": [t.slug for t in concert.tags if t.kind is TagKind.ARTIST],
+        },
+        days=yaml_days, rounds=yaml_rounds, notes=concert.notes,
+        title_en=concert.title_en, title_zh=concert.title_zh,
+        organizer=concert.organizer, categories=concert.categories,
+        notes_en=concert.notes_en, notes_zh=concert.notes_zh,
+        eventernote_url=concert.eventernote_url, official_url=concert.official_url,
+        source_url=concert.source_url,
+        performers=(
+            [line.strip() for line in concert.performers_text.splitlines() if line.strip()]
+            if concert.performers_text else []
+        ),
+    )
+
+
+
+async def catalogue_export_files(session: AsyncSession) -> list[tuple[str, str]]:
+    """(path in zip, text) for the whole catalogue, deterministically ordered.
+
+    CATALOGUE TABLES ONLY -- concerts, days, rounds, qualifiers, tags,
+    tag_members. Never a JOIN to a user table, and `created_by` is never
+    emitted: nothing to leak beats a filter to get wrong. `users`,
+    `web_sessions`, `round_outcomes`, `concert_subscriptions`, `leg_opt_outs`,
+    `reminder_rules`, `reminder_queue`, `notifications` and `delivery_log` are
+    all personal and none is touched.
+    """
+    tags = list((await session.execute(
+        select(Tag).options(selectinload(Tag.members)).order_by(Tag.kind, Tag.slug)
+    )).scalars())
+    by_id = {t.id: t for t in tags}
+    exports = [
+        TagExport(
+            handle=t.slug, name=t.name, kind=t.kind.value,
+            name_en=t.name_en, name_zh=t.name_zh,
+            parent=by_id[t.parent_id].slug if t.parent_id in by_id else None,
+            members=tuple(sorted(m.slug for m in t.members)),
+            region=t.region, city=t.city, city_en=t.city_en, city_zh=t.city_zh,
+            address=t.address, location_url=t.location_url,
+            eventernote_url=t.eventernote_url,
+        )
+        for t in tags
+    ]
+    files = [("tags.yaml", tags_to_yaml(exports)), ("RESTORE.txt", RESTORE_NOTES)]
+
+    concerts = list((await session.execute(
+        select(Concert).order_by(Concert.event_id)
+    )).scalars())
+    for concert in concerts:
+        files.append(
+            (f"concerts/{concert.event_id}.yaml", await concert_export_yaml(session, concert))
+        )
+    return files
 
 
 async def find_tags_by_name_and_kind(
