@@ -37,13 +37,17 @@ from app.db.service import (
     delivery_batches,
     delivery_failures,
     duplicate_body_recently,
+    ensure_user,
+    import_tags,
     queue_broadcast,
     recent_broadcasts,
     resolve_recipients,
 )
 from app.db.session import get_session
+from app.domain.tags_yaml import TagsFileError, parse_tags
 from app.domain.types import BroadcastMode
 from app.web.auth import SessionUser, require_admin
+from app.web.routes.imports import MAX_DRAFT_CHARS
 
 router = APIRouter()
 
@@ -257,3 +261,60 @@ async def broadcast_cancel(
     await cancel_broadcast(session, broadcast_id)
     await session.commit()
     return RedirectResponse(f"/admin/broadcast/{broadcast_id}", status_code=303)
+
+
+# ── Catalogue import ─────────────────────────────────────────────────────
+
+
+@router.get("/admin/import/tags", response_class=HTMLResponse)
+async def import_tags_form(
+    request: Request,
+    user: SessionUser = Depends(require_admin),
+):
+    """Paste a tags.yaml from a catalogue export.
+
+    English-only and NOT wrapped in _(), like every other admin surface
+    (/admin/deliveries, /admin/rehearsal). Only the Preferences LINK to this
+    page is translated, because Preferences is a page users read.
+    """
+    return templates.TemplateResponse(
+        request,
+        "admin_import_tags.html",
+        {"user": user, "report": None, "error": None, "text": ""},
+    )
+
+
+@router.post("/admin/import/tags", response_class=HTMLResponse)
+async def import_tags_commit(
+    request: Request,
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+    text: str = Form(""),
+):
+    """Create missing tags from a pasted export, and report what happened.
+
+    NO preview, deliberately. The concert import needs one because its commit
+    writes rich, ambiguous data a human should eyeball; the only outcome here is
+    "tags that did not exist now do", so a result page afterwards carries the
+    same information for a fraction of the build.
+
+    One transaction: a file that raises leaves nothing behind.
+    """
+
+    def page(report=None, error=None):
+        return templates.TemplateResponse(
+            request,
+            "admin_import_tags.html",
+            {"user": user, "report": report, "error": error, "text": text},
+        )
+
+    if len(text) > MAX_DRAFT_CHARS:
+        return page(error="that file is too large -- pastes are capped at 200k characters")
+    try:
+        parsed = parse_tags(text)
+    except TagsFileError as exc:
+        return page(error=str(exc))
+    await ensure_user(session, user.id, user.username)
+    report = await import_tags(session, parsed, created_by=user.id)
+    await session.commit()
+    return page(report=report)
