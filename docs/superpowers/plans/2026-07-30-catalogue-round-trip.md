@@ -1807,7 +1807,14 @@ return the same `Response`.
 
 - [ ] **Step 4: Add `catalogue_export_files`**
 
+> **Correction (Task 1 shipped):** `RESTORE_NOTES` already exists as a public
+> constant in `domain/tags_yaml.py` — it is format documentation, so it belongs
+> beside the format, and it keeps a 25-line string literal out of the service
+> layer. Import it rather than re-declaring the `_RESTORE_NOTES` below, which is
+> kept only so you can see the text without opening another file.
+
 ```python
+# ALREADY IN domain/tags_yaml.py as RESTORE_NOTES -- import it, do not re-declare.
 _RESTORE_NOTES = """\
 dekimasen.app catalogue export
 
@@ -1858,7 +1865,7 @@ async def catalogue_export_files(session: AsyncSession) -> list[tuple[str, str]]
         )
         for t in tags
     ]
-    files = [("tags.yaml", tags_to_yaml(exports)), ("RESTORE.txt", _RESTORE_NOTES)]
+    files = [("tags.yaml", tags_to_yaml(exports)), ("RESTORE.txt", RESTORE_NOTES)]
 
     concerts = list((await session.execute(
         select(Concert)
