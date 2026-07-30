@@ -2192,3 +2192,95 @@ async def test_two_performers_with_the_same_name(client):
         rows = (await s.execute(select(Tag).where(Tag.name == "Yuki Sato"))).scalars().all()
         assert len(rows) == 2
         assert {r.slug for r in rows} == {"yuki-sato", "yuki-sato-2"}
+
+
+# ── Editing a handle ──────────────────────────────────────────────────────
+
+
+async def test_editing_a_handle_round_trips(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Kアリーナ横浜", "name_en": "K Arena", "name_zh": "K竞技场", "kind": "venue",
+    })
+    assert client.post("/tags/1/edit", data={
+        "name": "Kアリーナ横浜", "slug": "k-arena-yokohama",
+    }).status_code == 303
+
+    async with client.db() as s:
+        assert (await s.get(Tag, 1)).slug == "k-arena-yokohama"
+
+
+def test_editing_a_handle_onto_a_taken_one_409s(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Aqours", "name_en": "Aqours", "name_zh": "Aqours", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    r = client.post("/tags/2/edit", data={"name": "Hall", "slug": "aqours"})
+    assert r.status_code == 409
+
+
+async def test_a_handle_keeping_its_own_value_is_not_a_collision(client):
+    """Resubmitting the edit form unchanged must not 409 against itself."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    assert client.post("/tags/1/edit", data={"name": "Hall", "slug": "hall"}).status_code == 303
+    async with client.db() as s:
+        assert (await s.get(Tag, 1)).slug == "hall"
+
+
+async def test_a_submitted_handle_is_normalised_not_rejected(client):
+    """Uppercase and spaces are what a person types, not an error. Normalise on
+    the editor's behalf rather than bouncing them for punctuation."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    assert client.post("/tags/1/edit", data={
+        "name": "Hall", "slug": "  Zepp Haneda!  ",
+    }).status_code == 303
+    async with client.db() as s:
+        assert (await s.get(Tag, 1)).slug == "zepp-haneda"
+
+
+def test_a_handle_that_normalises_to_nothing_422s(client):
+    """The one case there is nothing to store and nothing to fix for them."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    assert client.post("/tags/1/edit", data={
+        "name": "Hall", "slug": "ホール",
+    }).status_code == 422
+
+
+async def test_omitting_the_handle_leaves_it_alone(client):
+    """Every existing caller posts this form without a slug field; none of them
+    may blank the identity."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    assert client.post("/tags/1/edit", data={"name": "Hall Renamed"}).status_code == 303
+    async with client.db() as s:
+        tag = await s.get(Tag, 1)
+        assert tag.slug == "hall"
+        assert tag.name == "Hall Renamed"
+
+
+def test_the_edit_dialog_exposes_the_handle_field(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    body = client.get("/tags").text
+    assert 'name="slug"' in body, "the edit dialog must offer the handle"
+    assert 'value="hall"' in body
+    # NOT on the create form: it is auto-generated, and offering it up front
+    # invites bikeshedding over a value that does not matter until it collides.
+    new_dialog = body.split('id="new-tag-dialog"', 1)[1]
+    assert 'name="slug"' not in new_dialog

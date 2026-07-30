@@ -96,6 +96,13 @@
         data-variant-group="tag_name" data-variant-slot="en"></label>
       <label class="fld"><span>{{ _("Name") }} · 中文</span><input name="name_zh" maxlength="100" value="{{ t.name_zh or '' }}"
         data-variant-group="tag_name" data-variant-slot="zh"></label>
+      {#- The handle: this tag's identity, and what tells two same-named tags
+          apart. Auto-generated, so it appears only here (on edit) and never on
+          the create form -- offering it up front invites bikeshedding over a
+          value that does not matter until it collides. Deliberately NOT inside
+          data-variant-group: it is one ASCII value, not a translated trio. -#}
+      <label class="fld"><span>{{ _("Handle") }}</span><input name="slug" maxlength="100"
+        value="{{ t.slug }}"></label>
       {% if is_group or is_artist %}
       <label class="fld"><span>{{ _("eventernote URL") }}</span>
         <input name="eventernote_url" type="url" value="{{ t.eventernote_url or '' }}"

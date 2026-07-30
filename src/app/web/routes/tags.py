@@ -33,6 +33,7 @@ from app.db.service import (
     tag_variant_gaps,
 )
 from app.db.session import get_session
+from app.domain.slugs import slug_core
 from app.domain.types import TagKind
 from app.web.auth import SessionUser, require_editor, require_user
 from app.web.forms import form_url, require_variants
@@ -331,15 +332,19 @@ async def edit_tag(
     name: str = Form("", max_length=100),
     name_en: str = Form(""),
     name_zh: str = Form(""),
+    slug: str = Form(""),
     location_url: str = Form(""),
     region: str = Form(""),
     eventernote_url: str = Form(""),
 ):
-    """Rename (any kind) plus venue-only location_url/region and the
-    artist/group eventernote_url -- not kind-restricted on those, harmless
-    to set on others. `name` is optional so callers that never send it
-    (there were none before this feature; kept optional in case any external
-    client still doesn't) leave the tag's name untouched."""
+    """Rename (any kind), edit the handle, plus venue-only location_url/region
+    and the artist/group eventernote_url -- not kind-restricted on those,
+    harmless to set on others.
+
+    `name` and `slug` are both optional, and an omitted one leaves the stored
+    value ALONE rather than blanking it: every caller of this form predates the
+    handle, and none of them may wipe a tag's identity by not knowing about it.
+    """
     tag = await session.get(Tag, tag_id)
     if tag is None:
         raise HTTPException(status_code=404)
@@ -352,6 +357,31 @@ async def edit_tag(
         # rewriting it would break anything already holding it, exactly as
         # invariant 6 says of a concert's event_id.
         tag.name = name
+    if slug.strip():
+        # NORMALISED, not validated: uppercase and spaces are what a person
+        # types, and bouncing them for punctuation they cannot see the rule for
+        # is hostile. Same helper that mints one, so a typed handle and a
+        # generated one can never disagree about shape.
+        normalised = slug_core(slug)
+        if not normalised:
+            # Nothing survives (an all-CJK handle), so there is nothing to store
+            # and nothing to correct on their behalf. The ONE case worth a 422.
+            raise HTTPException(
+                status_code=422,
+                detail="a handle needs at least one letter or digit (a-z, 0-9)",
+            )
+        if normalised != tag.slug:
+            # The handle IS the identity, so this is the only uniqueness check
+            # left in this module. Excluding itself, or resubmitting the edit
+            # form unchanged would 409 against the tag being edited.
+            clash = await session.execute(
+                select(Tag.id).where(Tag.slug == normalised, Tag.id != tag.id)
+            )
+            if clash.scalar_one_or_none() is not None:
+                raise HTTPException(
+                    status_code=409, detail=f"handle {normalised!r} is already taken"
+                )
+            tag.slug = normalised
     # Name variants carry no uniqueness constraint -- two tags may share an
     # English/Chinese rendering, so no collision check here (unlike `name`).
     tag.name_en = name_en.strip() or None
