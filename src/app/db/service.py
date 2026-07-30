@@ -57,6 +57,7 @@ from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.digest import DeliveryFact, build_digest
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
+from app.domain.slugs import tag_slug_base
 from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import (
@@ -4079,6 +4080,46 @@ async def concert_audit_log(
 
 
 # ── Tags ─────────────────────────────────────────────────────────────────
+
+
+async def assign_tag_slug(session: AsyncSession, tag: Tag) -> str:
+    """Give `tag` a unique handle. Call after `session.add(tag)`, before commit.
+
+    The handle is a tag's identity -- names are not unique (owner ruling
+    2026-07-29) -- so this is the single place one is minted, and every create
+    path goes through it.
+
+    When the name yields no ASCII at all (a Japanese-only tag) the base is the
+    KIND, so the de-duplication below numbers it: `artist`, `artist-2`. The spec
+    called for `{kind}-{id}`, and that is not buildable -- the id needs a flush,
+    a flush needs a non-null slug, and `slug` is NOT NULL, so it would take a
+    throwaway placeholder written purely to be overwritten. The row id bought
+    nothing anyway: a handle only has to be unique and improvable, and it is
+    stable from the moment it is assigned either way.
+
+    De-duplication reads the DB AND the pending session, because a caller may
+    add several tags before committing (the catalogue import will) and two
+    pending rows must not agree on a handle -- the unique constraint would only
+    catch that at flush time, by which point the useful context is gone.
+
+    `no_autoflush` is load-bearing: `tag` is already in `session.new` with a
+    null slug, and letting the SELECT autoflush it would hit the NOT NULL
+    constraint before this function ever gets to fill the column in.
+    """
+    base = tag_slug_base(tag.name, tag.name_en) or tag.kind.value
+    with session.no_autoflush:
+        taken = {
+            slug for (slug,) in await session.execute(
+                select(Tag.slug).where(Tag.slug.is_not(None))
+            )
+        }
+    taken |= {t.slug for t in session.new if isinstance(t, Tag) and t.slug}
+    candidate, suffix = base, 2
+    while candidate in taken:
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    tag.slug = candidate
+    return candidate
 
 
 async def find_tag_by_name(session: AsyncSession, name: str) -> Tag | None:
