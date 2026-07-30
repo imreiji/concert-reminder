@@ -65,6 +65,22 @@ def test_style_hidden_attribute_wins():
     assert "[hidden] { display: none !important; }" in css()
 
 
+def test_dupe_banner_hidden_default_outspecifics_banner():
+    # The duplicate-name warning in the new-tag dialog is JS-gated by a .show
+    # class. `.banner { display: flex }` is defined LATER in this file, so a
+    # bare `.dupe { display: none }` ties on specificity and loses on source
+    # order -- which shipped, leaving the banner permanently visible and the
+    # .show toggle a no-op. Both rules must therefore carry `.banner`.
+    #
+    # Sibling of test_style_hidden_attribute_wins above: same failure mode (an
+    # author display rule quietly winning), second occurrence in this file.
+    style = css()
+    assert ".banner.dupe {" in style, "the hidden default must be qualified with .banner"
+    assert ".banner.dupe.show { display: flex; }" in style
+    # A bare `.dupe {` block would reintroduce the bug.
+    assert not re.search(r"(?m)^\.dupe\s*\{", style), "bare .dupe rule loses to .banner"
+
+
 def test_style_ports_the_demos_dark_paper_hex():
     # The dark palette is the demo's, not a naive invert -- pin one hex so a
     # future "simplify" can't quietly swap it.
