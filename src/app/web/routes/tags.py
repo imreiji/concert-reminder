@@ -22,8 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Tag, TagMember, TagSubscription
 from app.db.service import (
     active_concerts_missing_member,
-    assign_tag_slug,
     attach_tag,
+    create_tag_row,
     ensure_user,
     find_tags_by_name_and_kind,
     group_members,
@@ -129,7 +129,7 @@ async def create_tag(
     # NO duplicate-name check, in any scope. Two performers may genuinely share
     # a name and a venue may share one with a group (owner ruling 2026-07-29),
     # so a name cannot be a uniqueness rule -- `slug` is the identity, and
-    # assign_tag_slug below guarantees THAT is unique.
+    # create_tag_row below mints one, and that IS unique.
     #
     # This page is the deliberate place to create a tag, and it already warns
     # before submit (#new-tag-dupe in tags.html, fed by tag_dupe_data), naming
@@ -149,14 +149,15 @@ async def create_tag(
         if kind is not TagKind.GROUP:
             raise HTTPException(status_code=422, detail="only group tags take a franchise parent")
     await ensure_user(session, user.id, user.username)
-    tag = Tag(
+    # slug omitted -> minted. The catalogue importer is the one caller that
+    # passes an explicit handle, because its handles come from a file.
+    await create_tag_row(
+        session,
         name=name, name_en=name_en.strip() or None, name_zh=name_zh.strip() or None,
         kind=kind, created_by=user.id, parent_id=parent.id if parent else None,
         location_url=form_url(location_url), region=region.strip() or None,
         eventernote_url=form_url(eventernote_url),
     )
-    session.add(tag)
-    await assign_tag_slug(session, tag)
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
 
@@ -214,7 +215,8 @@ async def quick_create_venue(
     if await find_tags_by_name_and_kind(session, name, TagKind.VENUE):
         raise HTTPException(status_code=409, detail=f"a venue named {name!r} already exists")
     await ensure_user(session, user.id, user.username)
-    tag = Tag(
+    tag = await create_tag_row(
+        session,
         name=name,
         name_en=name_en.strip() or None,
         name_zh=name_zh.strip() or None,
@@ -227,8 +229,6 @@ async def quick_create_venue(
         location_url=form_url(location_url),
         created_by=user.id,
     )
-    session.add(tag)
-    await assign_tag_slug(session, tag)
     await session.commit()
     return {"id": tag.id, "name": tag.name}
 
@@ -305,7 +305,8 @@ async def quick_create_tag(
         if parent is None or parent.kind is not TagKind.FRANCHISE:
             raise HTTPException(status_code=422, detail="parent must be a franchise tag")
     await ensure_user(session, user.id, user.username)
-    tag = Tag(
+    tag = await create_tag_row(
+        session,
         name=name,
         name_en=name_en.strip() or None,
         name_zh=name_zh.strip() or None,
@@ -313,8 +314,6 @@ async def quick_create_tag(
         parent_id=parent.id if parent else None,
         created_by=user.id,
     )
-    session.add(tag)
-    await assign_tag_slug(session, tag)
     await session.commit()
     return {
         "id": tag.id, "name": tag.name, "slug": tag.slug,

@@ -1,0 +1,42 @@
+{#- Admin surface: English-only and NOT wrapped in _(), like admin_deliveries
+    and rehearsal. Only the Preferences LINK to this page is translated. -#}
+{% extends "base.html" %}
+{% block title %}Import tags — dekimasen.app{% endblock %}
+{% block content %}
+<div class="lede">
+  <h1>Import tags</h1>
+  <p class="dim">Paste the <code>tags.yaml</code> from a catalogue export.
+    Tags that already exist are skipped, never updated — so this is safe to run
+    twice, and a stale file cannot revert an edit you have made since.</p>
+</div>
+
+{% if error %}
+<p class="banner dgr"><span>⚠</span> <span><b>That file could not be read.</b> {{ error }}</span></p>
+{% endif %}
+
+{% if report %}
+<div class="edgecard ok">
+  <p><b>Created {{ report.created | length }}</b> · Skipped {{ report.skipped | length }}</p>
+  {% if report.created %}
+  <p class="dim">Created: {% for h in report.created %}<code>{{ h }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  {% endif %}
+  {% if report.skipped %}
+  <p class="dim">Skipped (already present): {% for h in report.skipped %}<code>{{ h }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  {% endif %}
+</div>
+{% if report.warnings %}
+<div class="banner warn">
+  <span>⚠</span>
+  <span><b>{{ report.warnings | length }} warning(s).</b> Everything else still imported.
+    <ul>{% for w in report.warnings %}<li>{{ w }}</li>{% endfor %}</ul></span>
+</div>
+{% endif %}
+{% endif %}
+
+<form method="post" action="/admin/import/tags" class="stack wide">
+  <label class="fld"><span>tags.yaml</span>
+    <textarea name="text" rows="18" spellcheck="false"
+              placeholder="tags:&#10;  - handle: love-live&#10;    name: ラブライブ！&#10;    kind: franchise">{{ text or "" }}</textarea></label>
+  <button type="submit">Import tags</button>
+</form>
+{% endblock %}

@@ -19,9 +19,11 @@ operational page only admins see should not cost msgids in three languages
 (tests/test_i18n_catalogues.py would enforce them).
 """
 
+import io
+import zipfile
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,17 +35,22 @@ from app.db.service import (
     DELIVERY_LOG_RETENTION_DAYS,
     TYPED_CONFIRM_THRESHOLD,
     cancel_broadcast,
+    catalogue_export_files,
     delivery_batch_rows,
     delivery_batches,
     delivery_failures,
     duplicate_body_recently,
+    ensure_user,
+    import_tags,
     queue_broadcast,
     recent_broadcasts,
     resolve_recipients,
 )
 from app.db.session import get_session
+from app.domain.tags_yaml import TagsFileError, parse_tags
 from app.domain.types import BroadcastMode
 from app.web.auth import SessionUser, require_admin
+from app.web.routes.imports import MAX_DRAFT_CHARS
 
 router = APIRouter()
 
@@ -257,3 +264,89 @@ async def broadcast_cancel(
     await cancel_broadcast(session, broadcast_id)
     await session.commit()
     return RedirectResponse(f"/admin/broadcast/{broadcast_id}", status_code=303)
+
+
+# ── Catalogue import ─────────────────────────────────────────────────────
+
+
+@router.get("/admin/import/tags", response_class=HTMLResponse)
+async def import_tags_form(
+    request: Request,
+    user: SessionUser = Depends(require_admin),
+):
+    """Paste a tags.yaml from a catalogue export.
+
+    English-only and NOT wrapped in _(), like every other admin surface
+    (/admin/deliveries, /admin/rehearsal). Only the Preferences LINK to this
+    page is translated, because Preferences is a page users read.
+    """
+    return templates.TemplateResponse(
+        request,
+        "admin_import_tags.html",
+        {"user": user, "report": None, "error": None, "text": ""},
+    )
+
+
+@router.post("/admin/import/tags", response_class=HTMLResponse)
+async def import_tags_commit(
+    request: Request,
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+    text: str = Form(""),
+):
+    """Create missing tags from a pasted export, and report what happened.
+
+    NO preview, deliberately. The concert import needs one because its commit
+    writes rich, ambiguous data a human should eyeball; the only outcome here is
+    "tags that did not exist now do", so a result page afterwards carries the
+    same information for a fraction of the build.
+
+    One transaction: a file that raises leaves nothing behind.
+    """
+
+    def page(report=None, error=None):
+        return templates.TemplateResponse(
+            request,
+            "admin_import_tags.html",
+            {"user": user, "report": report, "error": error, "text": text},
+        )
+
+    if len(text) > MAX_DRAFT_CHARS:
+        return page(error="that file is too large -- pastes are capped at 200k characters")
+    try:
+        parsed = parse_tags(text)
+    except TagsFileError as exc:
+        return page(error=str(exc))
+    await ensure_user(session, user.id, user.username)
+    report = await import_tags(session, parsed, created_by=user.id)
+    await session.commit()
+    return page(report=report)
+
+
+@router.get("/admin/export.zip")
+async def export_zip(
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """The whole catalogue, zipped at request time.
+
+    Same shape as GET /concerts/import/skill.zip: a committed binary would go
+    stale the moment the data changed, and a few hundred KB of YAML is not worth
+    a thread hop.
+
+    Every entry goes through an EXPLICIT ZipInfo pinned to the 1980
+    reproducible-build epoch. ZipFile.writestr otherwise stamps the current
+    time, and zip timestamps have TWO-SECOND resolution -- so two exports
+    seconds apart would differ in bytes while every file inside was identical,
+    quietly costing the archive its diffability, which is most of a backup's
+    value. Measured, not assumed.
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path, text in await catalogue_export_files(session):
+            zf.writestr(zipfile.ZipInfo(path, date_time=(1980, 1, 1, 0, 0, 0)), text)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="dekimasen-catalogue.zip"'},
+    )

@@ -31,6 +31,7 @@ class YamlDay:
     city: str | None = None
     venue: str | None = None
     venue_address: str | None = None
+    venue_handle: str | None = None   # the VENUE tag's handle; beats `venue`
     doors_at_utc: datetime | None = None
 
 
@@ -83,12 +84,19 @@ def concert_to_yaml(
     title_zh: str | None = None,
     notes_en: str | None = None,
     notes_zh: str | None = None,
+    event_id: str | None = None,
+    series_handles: dict[str, list[str]] | None = None,
 ) -> str:
     """All timestamps are rendered in JST (the "Datetime contract" boundary
     for this app), formatted the same way forms accept them: 'YYYY-MM-DD HH:MM'.
     """
     data = {
-        "slug": slugify(title),
+        # The URL handle, so a restore lands on the ORIGINAL address. This
+        # replaced a `slug` key that was slugify(title) and unrelated to
+        # event_id -- two near-identical keys with different meanings is a trap
+        # in a file whose whole job is to be read back later. yaml_import still
+        # TOLERATES `slug` so drafts written before this keep parsing.
+        "event_id": event_id,
         "title": title,
         "title_en": title_en,
         "title_zh": title_zh,
@@ -100,6 +108,12 @@ def concert_to_yaml(
             "groups": groups,
             "artists": artists,
         },
+        # The same tags by HANDLE. Both are written on purpose: the names so a
+        # person reading a restore file sees 佐藤有紀 rather than
+        # yuki-sato-liella, the handles so it binds to exactly that tag. The
+        # importer treats the handles as authoritative -- names repeat now, and
+        # matching by one is a guess.
+        "series_handles": series_handles,
         "venues": venues,
         "performers": performers or [],
         "eventernote_url": eventernote_url,
@@ -113,6 +127,7 @@ def concert_to_yaml(
                 "city": d.city,
                 "venue": d.venue,
                 "venue_address": d.venue_address,
+                "venue_handle": d.venue_handle,
                 "doors_jst": _jst_str(d.doors_at_utc),
                 "starts_at_jst": _jst_str(d.starts_at_utc),
             }

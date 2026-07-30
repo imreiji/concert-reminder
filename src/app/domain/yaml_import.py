@@ -32,14 +32,16 @@ from app.domain.draft import ParsedConcert, ParsedDay, ParsedRound
 from app.domain.types import ConcertKind, RoundKind
 
 _TOP_KEYS = {
-    "slug", "title", "title_en", "title_zh", "kind", "organizer",
-    "categories", "series", "venues", "performers", "eventernote_url",
-    "official_url", "source_url", "performances", "rounds", "notes",
-    "notes_en", "notes_zh",
+    # "slug" is TOLERATED, not used: it predates event_id and meant
+    # slugify(title). Exports stopped emitting it; older drafts still parse.
+    "slug", "event_id", "title", "title_en", "title_zh", "kind", "organizer",
+    "categories", "series", "series_handles", "venues", "performers",
+    "eventernote_url", "official_url", "source_url", "performances", "rounds",
+    "notes", "notes_en", "notes_zh",
 }
 _SERIES_KEYS = {"franchises", "groups", "artists"}
 _DAY_KEYS = {
-    "label", "label_en", "label_zh", "city", "venue", "venue_address",
+    "label", "label_en", "label_zh", "city", "venue", "venue_address", "venue_handle",
     "doors_jst", "starts_at_jst",
 }
 _ROUND_KEYS = {
@@ -187,6 +189,15 @@ def parse_draft(text: str) -> ParsedConcert:
         series = {}
     _warn_unknown(series, _SERIES_KEYS, "series", warnings)
 
+    # The handle block, written by an export and omitted by an agent. Where a
+    # kind appears here it is AUTHORITATIVE -- see ParsedConcert -- so the
+    # route resolves these first and ignores the matching name list.
+    handles = data.get("series_handles") or {}
+    if not isinstance(handles, dict):
+        warnings.append("series_handles: expected a mapping -- ignored")
+        handles = {}
+    _warn_unknown(handles, _SERIES_KEYS, "series_handles", warnings)
+
     performers = _names(data.get("performers"), "performers", warnings)
 
     days: list[ParsedDay] = []
@@ -209,6 +220,7 @@ def parse_draft(text: str) -> ParsedConcert:
             venue_name=_text(raw.get("venue"), f"{where} venue", warnings),
             venue_city=_text(raw.get("city"), f"{where} city", warnings),
             venue_address=_text(raw.get("venue_address"), f"{where} venue_address", warnings),
+            venue_handle=_text(raw.get("venue_handle"), f"{where} venue_handle", warnings),
         ))
 
     rounds: list[ParsedRound] = []
@@ -263,6 +275,7 @@ def parse_draft(text: str) -> ParsedConcert:
         notes=_text(data.get("notes"), "notes", warnings),
         notes_en=_text(data.get("notes_en"), "notes_en", warnings),
         notes_zh=_text(data.get("notes_zh"), "notes_zh", warnings),
+        event_id=_text(data.get("event_id"), "event_id", warnings),
         organizer=_text(data.get("organizer"), "organizer", warnings),
         categories=_text(data.get("categories"), "categories", warnings),
         kind=_concert_kind(data.get("kind"), warnings),
@@ -273,4 +286,9 @@ def parse_draft(text: str) -> ParsedConcert:
         franchise_names=_names(series.get("franchises"), "series.franchises", warnings),
         group_names=_names(series.get("groups"), "series.groups", warnings),
         artist_names=_names(series.get("artists"), "series.artists", warnings),
+        franchise_handles=_names(
+            handles.get("franchises"), "series_handles.franchises", warnings
+        ),
+        group_handles=_names(handles.get("groups"), "series_handles.groups", warnings),
+        artist_handles=_names(handles.get("artists"), "series_handles.artists", warnings),
     )

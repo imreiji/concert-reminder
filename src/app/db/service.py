@@ -19,7 +19,7 @@ Sync semantics (per rule):
 import hashlib
 import secrets
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import case, delete, exists, false, func, or_, select
@@ -58,6 +58,7 @@ from app.domain.digest import DeliveryFact, build_digest
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.slugs import tag_slug_base
+from app.domain.tags_yaml import RESTORE_NOTES, ParsedTagFile, TagExport, tags_to_yaml
 from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import (
@@ -72,6 +73,7 @@ from app.domain.types import (
     TagKind,
 )
 from app.domain.upgrades import is_upgrade_eligible
+from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml
 from app.i18n import N_, get_locale, gettext_in, loc_field
 from app.i18n import gettext as _
 
@@ -4122,6 +4124,275 @@ async def assign_tag_slug(session: AsyncSession, tag: Tag) -> str:
     return candidate
 
 
+async def create_tag_row(
+    session: AsyncSession,
+    *,
+    name: str,
+    kind: TagKind,
+    slug: str | None = None,
+    name_en: str | None = None,
+    name_zh: str | None = None,
+    parent_id: int | None = None,
+    region: str | None = None,
+    city: str | None = None,
+    city_en: str | None = None,
+    city_zh: str | None = None,
+    address: str | None = None,
+    location_url: str | None = None,
+    eventernote_url: str | None = None,
+    created_by: int | None = None,
+) -> Tag:
+    """Build and add a Tag. The ONE place a tag row is constructed.
+
+    `slug=None` means MINT one (`assign_tag_slug` de-duplicates); a value means
+    the caller already owns the handle and it is used verbatim. That distinction
+    is the whole reason this exists: the three editor routes generate a handle,
+    while the catalogue import carries handles in the file and must not have them
+    silently renamed. A caller passing a slug is responsible for having
+    normalised it -- `domain.tags_yaml.parse_tags` does.
+
+    Does NOT commit, and does NOT notify: creating a tag is not attaching one
+    (invariant 4), which is why `quick_create_tag` is silent too.
+    """
+    tag = Tag(
+        name=name.strip(),
+        kind=kind,
+        slug=slug,
+        name_en=name_en,
+        name_zh=name_zh,
+        parent_id=parent_id,
+        region=region,
+        city=city,
+        city_en=city_en,
+        city_zh=city_zh,
+        address=address,
+        location_url=location_url,
+        eventernote_url=eventernote_url,
+        created_by=created_by,
+    )
+    session.add(tag)
+    if slug is None:
+        await assign_tag_slug(session, tag)
+    return tag
+
+
+@dataclass
+class TagImportReport:
+    """What an import did, for the result page. HANDLES, not ids: the operator
+    reads this next to the file they pasted."""
+
+    created: list[str] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+async def import_tags(
+    session: AsyncSession, parsed: ParsedTagFile, created_by: int | None = None
+) -> TagImportReport:
+    """Create missing tags, then wire the ones just created. NEVER updates.
+
+    TWO PASSES because `parent` and `members` are HANDLES: nothing can resolve
+    until every tag in the file exists. Pass 2 wires only tags CREATED in this
+    run -- re-wiring an existing tag's membership would be an update, and the
+    rule (owner, 2026-07-30) is that an import is additive, so a stale file can
+    never revert an edit made since the export.
+
+    Warnings from the parser are carried through: one the operator never sees is
+    one that did not happen. Does not commit -- the caller owns the transaction,
+    so a rejected file leaves nothing behind.
+
+    Writes `TagMember` rows directly rather than through `attach_tag`, which is
+    correct and deliberate: `attach_tag` is about CONCERT attachment and carries
+    invariant 3's expansion with it, and this must touch no concert at all.
+    """
+    report = TagImportReport(warnings=list(parsed.warnings))
+    existing = {
+        slug: tag_id for tag_id, slug in await session.execute(select(Tag.id, Tag.slug))
+    }
+
+    # Pass 1: create what is missing.
+    created_ids: dict[str, int] = {}
+    for tag in parsed.tags:
+        if tag.handle in existing:
+            report.skipped.append(tag.handle)
+            continue
+        row = await create_tag_row(
+            session,
+            name=tag.name,
+            kind=tag.kind,
+            slug=tag.handle,
+            name_en=tag.name_en,
+            name_zh=tag.name_zh,
+            region=tag.region,
+            city=tag.city,
+            city_en=tag.city_en,
+            city_zh=tag.city_zh,
+            address=tag.address,
+            location_url=tag.location_url,
+            eventernote_url=tag.eventernote_url,
+            created_by=created_by,
+        )
+        await session.flush()  # pass 2 needs the id
+        created_ids[tag.handle] = row.id
+        report.created.append(tag.handle)
+
+    # Pass 2: resolve handles to ids. `known` spans both, because a parent may
+    # legitimately already exist while the child referring to it is new.
+    known = {**existing, **created_ids}
+    kinds = {slug: kind for slug, kind in await session.execute(select(Tag.slug, Tag.kind))}
+    for tag in parsed.tags:
+        if tag.handle not in created_ids:
+            continue  # skipped, so untouched -- including its membership
+        tag_id = created_ids[tag.handle]
+        if tag.parent:
+            parent_id = known.get(tag.parent)
+            if parent_id is None:
+                report.warnings.append(
+                    f"{tag.handle}: parent {tag.parent!r} is in neither the file nor the "
+                    f"catalogue -- created without a parent"
+                )
+            elif kinds.get(tag.parent) is not TagKind.FRANCHISE:
+                report.warnings.append(
+                    f"{tag.handle}: parent {tag.parent!r} is not a franchise -- "
+                    f"created without a parent"
+                )
+            else:
+                row = await session.get(Tag, tag_id)
+                row.parent_id = parent_id
+        for member in tag.members:
+            member_id = known.get(member)
+            if member_id is None:
+                report.warnings.append(
+                    f"{tag.handle}: member {member!r} is in neither the file nor the "
+                    f"catalogue -- that membership dropped"
+                )
+                continue
+            if kinds.get(member) is TagKind.GROUP:
+                report.warnings.append(
+                    f"{tag.handle}: member {member!r} is a group, and groups do not "
+                    f"nest -- dropped"
+                )
+                continue
+            session.add(TagMember(group_tag_id=tag_id, member_tag_id=member_id))
+    return report
+
+
+async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
+    """One concert as a draft-vocabulary YAML document.
+
+    Shared by GET /concerts/{event_id}/export.yaml and the admin catalogue
+    zip, which must not drift: a restore file that differed from the one an
+    editor downloads would be a second format nobody agreed to.
+
+    Loads the legs with their venue_tag eagerly. ConcertDay.venue_tag is
+    lazy="raise", so a missed selectinload here is a MissingGreenlet 500
+    rather than a slow export. Emits the tags' CANONICAL columns, never
+    loc() -- an export is data, and its contents must not change with
+    whoever happened to download it.
+    """
+    await session.refresh(concert, ["days", "rounds", "tags"])
+    # The legs, with their venue tags: the export's city/venue/venue_address
+    # come off the tag when the leg has one, and ConcertDay.venue_tag is
+    # lazy="raise", so the eager load below is load-bearing -- without it every
+    # export is a MissingGreenlet 500. A leg with NO venue tag exports no venue.
+    days = list((await session.execute(
+        select(ConcertDay)
+        .where(ConcertDay.concert_id == concert.id)
+        .options(selectinload(ConcertDay.venue_tag))
+        .order_by(ConcertDay.starts_at_utc, ConcertDay.id)
+    )).scalars())
+    days_by_id = {d.id: d.label for d in days}
+    # The tag's CANONICAL columns, never loc(): an export is data, and its
+    # contents must not change with whoever happened to download it.
+    yaml_days = [
+        YamlDay(
+            label=d.label, label_en=d.label_en, label_zh=d.label_zh,
+            starts_at_utc=d.starts_at_utc,
+            city=d.venue_tag.city if d.venue_tag else None,
+            venue=d.venue_tag.name if d.venue_tag else None,
+            venue_address=d.venue_tag.address if d.venue_tag else None,
+            venue_handle=d.venue_tag.slug if d.venue_tag else None,
+            doors_at_utc=d.doors_at_utc,
+        )
+        for d in days
+    ]
+    yaml_rounds = [
+        YamlRound(
+            label=r.label, label_en=r.label_en, label_zh=r.label_zh, kind=r.kind.value,
+            applies_to_labels=[days_by_id[d] for d in (r.applies_to or []) if d in days_by_id],
+            opens_at_utc=r.opens_at_utc, closes_at_utc=r.closes_at_utc,
+            results_at_utc=r.results_at_utc, payment_deadline_at_utc=r.payment_deadline_at_utc,
+            url=r.url, notes=r.notes,
+        )
+        for r in concert.rounds
+    ]
+
+    return concert_to_yaml(
+        # So a re-import lands on this exact URL rather than minting a new one.
+        event_id=concert.event_id,
+        title=concert.title,
+        kind=concert.kind.value if concert.kind else None,
+        franchises=[t.name for t in concert.tags if t.kind is TagKind.FRANCHISE],
+        groups=[t.name for t in concert.tags if t.kind is TagKind.GROUP],
+        artists=[t.name for t in concert.tags if t.kind is TagKind.ARTIST],
+        venues=[t.name for t in concert.tags if t.kind is TagKind.VENUE],
+        series_handles={
+            "franchises": [t.slug for t in concert.tags if t.kind is TagKind.FRANCHISE],
+            "groups": [t.slug for t in concert.tags if t.kind is TagKind.GROUP],
+            "artists": [t.slug for t in concert.tags if t.kind is TagKind.ARTIST],
+        },
+        days=yaml_days, rounds=yaml_rounds, notes=concert.notes,
+        title_en=concert.title_en, title_zh=concert.title_zh,
+        organizer=concert.organizer, categories=concert.categories,
+        notes_en=concert.notes_en, notes_zh=concert.notes_zh,
+        eventernote_url=concert.eventernote_url, official_url=concert.official_url,
+        source_url=concert.source_url,
+        performers=(
+            [line.strip() for line in concert.performers_text.splitlines() if line.strip()]
+            if concert.performers_text else []
+        ),
+    )
+
+
+
+async def catalogue_export_files(session: AsyncSession) -> list[tuple[str, str]]:
+    """(path in zip, text) for the whole catalogue, deterministically ordered.
+
+    CATALOGUE TABLES ONLY -- concerts, days, rounds, qualifiers, tags,
+    tag_members. Never a JOIN to a user table, and `created_by` is never
+    emitted: nothing to leak beats a filter to get wrong. `users`,
+    `web_sessions`, `round_outcomes`, `concert_subscriptions`, `leg_opt_outs`,
+    `reminder_rules`, `reminder_queue`, `notifications` and `delivery_log` are
+    all personal and none is touched.
+    """
+    tags = list((await session.execute(
+        select(Tag).options(selectinload(Tag.members)).order_by(Tag.kind, Tag.slug)
+    )).scalars())
+    by_id = {t.id: t for t in tags}
+    exports = [
+        TagExport(
+            handle=t.slug, name=t.name, kind=t.kind.value,
+            name_en=t.name_en, name_zh=t.name_zh,
+            parent=by_id[t.parent_id].slug if t.parent_id in by_id else None,
+            members=tuple(sorted(m.slug for m in t.members)),
+            region=t.region, city=t.city, city_en=t.city_en, city_zh=t.city_zh,
+            address=t.address, location_url=t.location_url,
+            eventernote_url=t.eventernote_url,
+        )
+        for t in tags
+    ]
+    files = [("tags.yaml", tags_to_yaml(exports)), ("RESTORE.txt", RESTORE_NOTES)]
+
+    concerts = list((await session.execute(
+        select(Concert).order_by(Concert.event_id)
+    )).scalars())
+    for concert in concerts:
+        files.append(
+            (f"concerts/{concert.event_id}.yaml", await concert_export_yaml(session, concert))
+        )
+    return files
+
+
 async def find_tags_by_name_and_kind(
     session: AsyncSession, name: str, kind: TagKind
 ) -> list[Tag]:
@@ -4440,6 +4711,36 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
         "summary": summary,
         "eligible_members": eligible_members,
     }
+
+
+def match_tag_ids_by_slug(
+    slugs: Sequence[str], tags: Sequence[Tag]
+) -> tuple[list[int], list[str]]:
+    """Resolve HANDLES to ids: (matched ids, unmatched handles).
+
+    EXACT, unlike its by-name sibling, and that is the entire point: a handle
+    identifies one tag, so there is no first-tag-wins rule to explain and no
+    locale variant to match by accident. Ids come back deduplicated in
+    first-mention order; unmatched handles keep their input order so the preview
+    can list them verbatim.
+    """
+    by_slug = {t.slug: t.id for t in tags}
+    ids: list[int] = []
+    missing: list[str] = []
+    for slug in slugs:
+        tag_id = by_slug.get(slug)
+        if tag_id is None:
+            missing.append(slug)
+        elif tag_id not in ids:
+            ids.append(tag_id)
+    return ids, missing
+
+
+def match_venue_tag_id_by_slug(slug: str | None, venue_tags: Sequence[Tag]) -> int | None:
+    """A leg's venue by handle. Exact, for the same reason as above."""
+    if not slug:
+        return None
+    return next((t.id for t in venue_tags if t.slug == slug), None)
 
 
 def match_venue_tag_id(name: str | None, venue_tags: Sequence[Tag]) -> int | None:

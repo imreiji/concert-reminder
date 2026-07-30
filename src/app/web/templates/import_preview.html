@@ -154,6 +154,12 @@
           value="{{ parsed.official_url or '' }}"></label>
         <label>{{ _("Source URL") }} <input name="source_url" type="url" value="{{ source_url }}"
           placeholder="{{ _('where this was sourced from') }}"></label>
+        {#- Editable rather than hidden, for the same reason Source URL is: an
+            exported draft carries the concert's own event_id so a restore keeps
+            its URL, and the editor should see the address they are about to
+            claim. Blank means "generate one from the English title". -#}
+        <label>{{ _("Event ID") }} <input name="event_id" maxlength="100" value="{{ event_id }}"
+          placeholder="{{ _('auto-generated from the English title') }}"></label>
       </div>
       <label>{{ _("Performers (one per line)") }} <textarea name="performers_text"
         rows="3">{{ parsed.performers_text or '' }}</textarea></label>

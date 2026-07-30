@@ -115,6 +115,15 @@ generated `event_id` taking a reserved word -- have shipped since).
   same family, opposite direction (a same-origin PATH or None, never an
   absolute URL), and it returns None rather than raising, since a bad
   `next` is a stale link, not an editor mistake worth a 422.
+  `tags_yaml.py` is the TAGS vocabulary and holds BOTH halves --
+  `tags_to_yaml` and `parse_tags` in one module, deliberately. Splitting a
+  format's serializer from its parser is how the catalogue round-trip hole
+  opened: the concert export looked complete until something had to read it
+  back, and only then did it turn out a tag had no identity to key on. Keep
+  them together, and add fields to both at once. Its parser follows
+  `parse_draft`'s philosophy -- warnings over failures, one bad row skipped and
+  named, only an unusable file raises -- and `RESTORE_NOTES`, the text written
+  into every export, lives here too because it documents the format.
 - `src/app/db/` — models, session, and `service.py` (all business logic that
   touches the DB; discord-free so it's testable).
 - **Venues live on the LEG, as a tag.** `ConcertDay.venue_tag_id` (FK ->
@@ -429,7 +438,11 @@ deleting them.
    share one with a group (owner ruling, 2026-07-29). `Tag.slug` is the only
    unique column — auto-generated from `name_en`/`name` by `assign_tag_slug`
    (`db/service.py`, the single minting path; a model-level default guarantees
-   non-nullness, but only that helper de-duplicates), editable on the Tags page,
+   non-nullness, but only that helper de-duplicates). **`create_tag_row` is the
+   single place a `Tag` row is constructed**: `slug=None` mints one, a value is
+   used verbatim — the three editor routes take the first branch, the catalogue
+   importer the second, because its handles come from a file and must not be
+   silently renamed. The handle is editable on the Tags page,
    ASCII by construction, and absent from every URL (tag pages stay on the
    numeric id). Anything answering "do I already have this tag?" must ask by
    slug; a name match is a hint for a human. There is deliberately NO
@@ -445,6 +458,22 @@ deleting them.
    mid-import, an existing tag of the name you just typed is almost certainly
    the one you meant. `tests/test_error_pages.py` pins that those 409s keep
    their JSON body instead of becoming an HTML error page.
+   **The catalogue round-trip keys on handles, and only on handles.**
+   `GET /admin/export.zip` writes `tags.yaml` plus one draft per concert;
+   `POST /admin/import/tags` reads the former. A concert draft carries
+   `series_handles` and per-leg `venue_handle` beside the names, and where a
+   handle block names a kind it is AUTHORITATIVE — the name list is ignored
+   outright, with NO per-entry fallback, because falling back would reintroduce
+   `match_tag_ids_by_name`'s first-tag-wins guess, which is the exact failure
+   handles exist to remove. A missing handle means "import tags.yaml first" and
+   surfaces as unmatched. The import SKIPS an existing handle entirely, never
+   updating it, so it is idempotent and a stale file cannot revert a later edit;
+   it wires `parent`/`members` only for tags it created, writes `TagMember`
+   directly (never `attach_tag`, which would drag invariant 3's expansion into
+   something that must touch no concert), and queues no notification. A draft
+   may also carry `event_id`, checked by the same `validate_event_id` the edit
+   page uses, so a restore keeps its URLs and a re-import of a concert that
+   still exists answers 409 rather than duplicating it.
 4. **Notifications**: new-event notices go through the `notifications`
    table (DB outbox drained by the scheduler) — never send DMs directly
    from web routes. One narrow, explicit exception: `POST /me/test-dm`
