@@ -185,6 +185,31 @@ def test_base_restores_open_folds_across_an_htmx_swap(client):
     assert "dataset.fold" in html, "the keys are the data-fold values themselves"
 
 
+def test_backdrop_close_requires_the_press_to_land_there_too(client):
+    """A click's target is the nearest common ancestor of press and release, so
+    selecting text in a dialog field and overshooting the card -- press inside,
+    release on the backdrop -- reports the DIALOG and closed it, throwing away
+    what was being typed. Confirmed in a browser before the fix: pointerdown hit
+    a DIV inside the card while the click reported DIALOG#new-tag-dialog.
+
+    The guard is that the press must have landed on the same element. Asserted
+    as script TEXT for the same reason the fold-restore test above is: no
+    headless client fires mouse events, and the guard quietly disappearing is
+    precisely the regression that would ship unnoticed.
+    """
+    html = client.get("/").text
+    assert "pointerdown" in html, (
+        "the backdrop-close guard needs the press target, so it must listen for pointerdown"
+    )
+    assert "HTMLDialogElement" in html, "the close still keys off the target being a dialog"
+    # The comparison IS the fix: closing on the click target alone is the bug.
+    assert "pressedOn === e.target" in html, (
+        "close only when press and release agree, or a drag out of a field closes the dialog"
+    )
+    # Backdrop-click-to-close and Esc remain the documented conventions.
+    assert "e.target.close()" in html
+
+
 def test_header_emits_theme_toggle_and_pill_nav(client):
     html = client.get("/").text
     assert "data-theme-toggle" in html, "theme toggle control must be in the header"
