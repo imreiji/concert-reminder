@@ -975,6 +975,155 @@ async def test_a_dateless_draft_is_not_dead_when_tagged(db):
     assert len(await _all(db, Notification)) == 1
 
 
+# ── A born-dead concert announces nothing, through create AND import ─────
+#
+# The block above pins the rule on the EDIT route, where it shipped. It did
+# not hold on create or import: create_concert_row called
+# handle_newly_tagged straight after flushing the Concert, before any leg
+# existed, so all_legs_cancelled read a dateless draft (correctly -- see
+# test_a_dateless_draft_is_not_dead_when_tagged) and notified. A concert
+# whose only leg was submitted cancelled DM'd every franchise/group/artist
+# follower a 🆕 "Apply here" for a show that is off, while every VENUE
+# follower on the same request was correctly skipped by the rollup. No
+# un-send, and no re-announce if the leg is later un-cancelled.
+
+
+async def _follower_with_a_notifying_subscription(db) -> int:
+    """One FRANCHISE tag, one fan following it with notify on and a preset
+    linked -- so a notice AND an auto-apply are both owed if the pipeline
+    runs. Returns the tag id, ready to pass as `franchise_tags`."""
+    from app.db.models import PresetItem, ReminderPreset, Tag, TagSubscription
+    from app.db.service import ensure_user
+    from app.domain.types import Anchor, TagKind
+
+    async with db() as s:
+        await ensure_user(s, FAN_ID, "fan")
+        tag = Tag(name="Hasunosora", kind=TagKind.FRANCHISE)
+        preset = ReminderPreset(user_id=FAN_ID, name="standard")
+        s.add_all([tag, preset])
+        await s.flush()
+        s.add(PresetItem(preset_id=preset.id, anchor=Anchor.CLOSES, offset_days=-3))
+        s.add(TagSubscription(
+            user_id=FAN_ID, tag_id=tag.id, preset_id=preset.id, notify=True
+        ))
+        await s.commit()
+        return tag.id
+
+
+def _create_payload(tag_id: int, *, cancelled: list[str], labels: list[str]) -> dict:
+    """A create/import submit with `labels` legs, each flagged per
+    `cancelled`, attached to one followed franchise tag. One round, so there
+    is a deadline for a preset to attach a rule to."""
+    return {
+        "title": "6th", "title_en": "6th", "title_zh": "6th",
+        "event_id": "sixth",
+        "franchise_tags": [tag_id],
+        "day_label": labels,
+        "day_label_en": labels, "day_label_zh": labels,
+        "day_starts_at": ["2099-08-01T18:00"] * len(labels),
+        "day_doors_at": [""] * len(labels),
+        "day_cancelled": cancelled,
+        "round_label": ["R1"], "round_label_en": ["R1"], "round_label_zh": ["R1"],
+        "round_kind": ["lottery_round"],
+        "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
+        "round_results_at": [""], "round_payment_at": [""],
+        "round_url": [""], "round_notes": [""],
+    }
+
+
+async def test_creating_a_concert_with_its_only_leg_cancelled_notifies_nobody(client):
+    tag_id = await _follower_with_a_notifying_subscription(client.db)
+    login_as(client, EDITOR_ID, "reiji")
+
+    r = client.post("/concerts", data=_create_payload(
+        tag_id, cancelled=["true"], labels=["Day 1"]
+    ))
+    assert r.status_code == 303  # the concert is still created -- only the notice is suppressed
+
+    assert await _all(client.db, Notification) == []
+    assert await _all(client.db, ReminderRule) == []
+
+
+async def test_importing_a_concert_with_its_only_leg_cancelled_notifies_nobody(client):
+    """The same suppression on the import commit, which is a create boundary
+    too and accepts day_cancelled from its preview form."""
+    tag_id = await _follower_with_a_notifying_subscription(client.db)
+    login_as(client, EDITOR_ID, "reiji")
+
+    payload = _create_payload(tag_id, cancelled=["true"], labels=["Day 1"])
+    del payload["event_id"]  # import has no such field; generate_event_id mints it
+    r = client.post("/concerts/import/commit", data=payload)
+    assert r.status_code == 303
+
+    assert await _all(client.db, Notification) == []
+    assert await _all(client.db, ReminderRule) == []
+
+
+async def test_creating_a_live_concert_still_notifies_and_applies(client):
+    """The regression half, and it matters more than the fix half: moving the
+    handle_newly_tagged call later must not silence the ordinary create."""
+    tag_id = await _follower_with_a_notifying_subscription(client.db)
+    login_as(client, EDITOR_ID, "reiji")
+
+    r = client.post("/concerts", data=_create_payload(
+        tag_id, cancelled=["false"], labels=["Day 1"]
+    ))
+    assert r.status_code == 303
+
+    (note,) = await _all(client.db, Notification)
+    assert note.kind == "new_event"
+    assert len(await _all(client.db, ReminderRule)) == 1
+
+
+async def test_importing_a_live_concert_still_notifies_and_applies(client):
+    """The import's own regression half -- it gained a call it never had, so
+    its live path is newly exercised rather than merely preserved."""
+    tag_id = await _follower_with_a_notifying_subscription(client.db)
+    login_as(client, EDITOR_ID, "reiji")
+
+    payload = _create_payload(tag_id, cancelled=["false"], labels=["Day 1"])
+    del payload["event_id"]
+    assert client.post("/concerts/import/commit", data=payload).status_code == 303
+
+    (note,) = await _all(client.db, Notification)
+    assert note.kind == "new_event"
+    assert len(await _all(client.db, ReminderRule)) == 1
+
+
+async def test_one_cancelled_leg_of_two_still_notifies(client):
+    """A concert is dead only when EVERY leg is cancelled. A tour that loses
+    one date is still happening, and its followers are still owed the notice
+    -- the boundary the whole fix has to land on the right side of."""
+    tag_id = await _follower_with_a_notifying_subscription(client.db)
+    login_as(client, EDITOR_ID, "reiji")
+
+    r = client.post("/concerts", data=_create_payload(
+        tag_id, cancelled=["true", "false"], labels=["Day 1", "Day 2"]
+    ))
+    assert r.status_code == 303
+
+    (note,) = await _all(client.db, Notification)
+    assert note.kind == "new_event"
+
+
+async def test_duplicating_a_concert_still_notifies_though_the_clone_is_legless(client):
+    """duplicate_concert does NOT go through create_concert_row and creates no
+    legs at all, so its clone is a genuine dateless draft -- the one create
+    path where notifying a legless concert is right. Pins the exemption this
+    fix leaves in place rather than removing."""
+    tag_id = await _follower_with_a_notifying_subscription(client.db)
+    login_as(client, EDITOR_ID, "reiji")
+    assert client.post("/concerts", data=_create_payload(
+        tag_id, cancelled=["true"], labels=["Day 1"]
+    )).status_code == 303
+    assert await _all(client.db, Notification) == []  # the born-dead source, suppressed
+
+    assert client.post("/concerts/sixth/duplicate").status_code == 303
+
+    (note,) = await _all(client.db, Notification)
+    assert note.kind == "new_event"
+
+
 async def test_notice_context_state_awareness(client):
     from app.db.service import notice_context
 
