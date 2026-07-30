@@ -27,7 +27,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.service import (
     handle_newly_tagged,
     match_tag_ids_by_name,
+    match_tag_ids_by_slug,
     match_venue_tag_id,
+    match_venue_tag_id_by_slug,
     record_round_label_phrase,
     round_label_phrases,
     sync_concert,
@@ -277,7 +279,13 @@ async def import_draft(
 
     # Per-leg venue resolution: a draft names a venue on each performance.
     for d in parsed.days:
-        d.matched_venue_tag_id = match_venue_tag_id(d.venue_name, venue_tags)
+        # Same rule per leg: a handle is authoritative, so the name is only
+        # consulted when there is no handle at all.
+        d.matched_venue_tag_id = (
+            match_venue_tag_id_by_slug(d.venue_handle, venue_tags)
+            if d.venue_handle
+            else match_venue_tag_id(d.venue_name, venue_tags)
+        )
 
     # Tag names -> picker pre-selection. Unmatched names surface in the Tags
     # fold as per-name "create this tag" chips rather than vanishing -- each
@@ -286,12 +294,32 @@ async def import_draft(
     # list: the kind is what the chip and the dialog both need.
     initial_selected: dict[str, list[str]] = {}
     unmatched_tags: list[dict] = []
-    for kind_name, names in (
-        ("franchise", parsed.franchise_names),
-        ("group", parsed.group_names),
-        ("artist", parsed.artist_names),
+    for kind_name, names, handles in (
+        ("franchise", parsed.franchise_names, parsed.franchise_handles),
+        ("group", parsed.group_names, parsed.group_handles),
+        ("artist", parsed.artist_names, parsed.artist_handles),
     ):
-        ids, missing = match_tag_ids_by_name(names, picker["by_kind"].get(kind_name, []))
+        pool = picker["by_kind"].get(kind_name, [])
+        # THE RULE, in one sentence: if series_handles names this kind it is
+        # AUTHORITATIVE and the name list is ignored outright; otherwise names
+        # resolve exactly as they always have.
+        #
+        # No per-entry fallback, deliberately. A handle identifies exactly one
+        # tag, while a name is documented first-tag-wins and -- now that names
+        # may repeat -- a guess. Falling back to the name for a handle that is
+        # not here yet would quietly reintroduce that guess, which is the
+        # failure this whole arc removed. A missing handle means "import
+        # tags.yaml first", so it surfaces as unmatched and the editor decides.
+        if handles:
+            ids, missing = match_tag_ids_by_slug(handles, pool)
+            if missing:
+                parsed.warnings.append(
+                    f"series_handles.{kind_name}s: {', '.join(missing)} not in the "
+                    f"catalogue -- import tags.yaml first, or pick them by hand. "
+                    f"The name list was NOT used as a fallback."
+                )
+        else:
+            ids, missing = match_tag_ids_by_name(names, pool)
         if ids:
             initial_selected[kind_name] = [str(i) for i in ids]
         unmatched_tags.extend({"name": name, "kind": kind_name} for name in missing)

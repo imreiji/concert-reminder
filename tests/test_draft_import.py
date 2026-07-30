@@ -392,3 +392,99 @@ def test_a_malformed_event_id_in_a_draft_is_refused(client):
         "title": "X", "title_en": "X", "title_zh": "X", "event_id": "not a slug!",
     })
     assert r.status_code == 422
+
+
+# ── Handles: exact binding, and the rule that makes it exact ──────────────
+
+
+def test_handles_bind_the_right_one_of_two_same_named_performers(client):
+    """THE case the whole round-trip arc exists for. Two performers are both
+    written 佐藤有紀. Bound by NAME, match_tag_ids_by_name is documented
+    first-tag-wins, so an exported concert would silently re-import against the
+    wrong person. series_handles is what makes it exact."""
+    login_as(client, EDITOR_ID, "reiji")
+    for en in ("Yuki Sato", "Yuki Sato (Liella)"):
+        client.post("/tags", data={
+            "name": "佐藤有紀", "name_en": en, "name_zh": en, "kind": "artist",
+        })
+
+    body = client.post("/concerts/import/draft", data={
+        "draft": (
+            "title: 6th\ntitle_en: 6th\ntitle_zh: 6th\n"
+            "series:\n  artists: [佐藤有紀]\n"
+            "series_handles:\n  artists: [yuki-sato-liella]\n"
+        ),
+    }).text
+    assert '"artist": ["2"]' in body or "'artist': ['2']" in body, (
+        "the SECOND Yuki Sato (id 2, handle yuki-sato-liella) must be selected"
+    )
+
+
+def test_a_handle_block_makes_the_names_irrelevant(client):
+    """THE RULE: if series_handles names a kind, it is authoritative for that
+    kind and the name list is ignored outright. An export taken before a rename
+    carries both and they disagree; resolving the name too would re-select a tag
+    the handle deliberately did not choose."""
+    login_as(client, EDITOR_ID, "reiji")
+    for jp, en in (("乙宗梢", "Kozue"), ("日野下花帆", "Kaho")):
+        client.post("/tags", data={
+            "name": jp, "name_en": en, "name_zh": en, "kind": "artist",
+        })
+
+    body = client.post("/concerts/import/draft", data={
+        "draft": (
+            "title: 6th\ntitle_en: 6th\ntitle_zh: 6th\n"
+            "series:\n  artists: [日野下花帆]\n"       # would resolve to id 2
+            "series_handles:\n  artists: [kozue]\n"   # but the handle says id 1
+        ),
+    }).text
+    assert '"artist": ["1"]' in body or "'artist': ['1']" in body
+    assert '"2"' not in body.split('"artist"')[1][:20], "the name must not also select"
+
+
+def test_a_handle_that_is_not_here_yet_does_not_fall_back_to_the_name(client):
+    """No fallback, deliberately. A handle that is missing means "import tags
+    first"; quietly binding its name instead would reintroduce exactly the
+    first-tag-wins guess this whole arc removed. It surfaces as unmatched."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "乙宗梢", "name_en": "Kozue", "name_zh": "Kozue", "kind": "artist",
+    })
+    body = client.post("/concerts/import/draft", data={
+        "draft": (
+            "title: 6th\ntitle_en: 6th\ntitle_zh: 6th\n"
+            "series:\n  artists: [乙宗梢]\n"
+            "series_handles:\n  artists: [never-imported]\n"
+        ),
+    }).text
+    assert "never-imported" in body, "the missing handle must be named, not swallowed"
+    assert "import tags.yaml first" in body
+
+
+def test_without_a_handle_block_names_resolve_exactly_as_before(client):
+    """The backward-compatibility half, and it matters more than the fix half:
+    every agent-authored draft omits series_handles."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "乙宗梢", "name_en": "Kozue", "name_zh": "Kozue", "kind": "artist",
+    })
+    body = client.post("/concerts/import/draft", data={
+        "draft": "title: 6th\ntitle_en: 6th\ntitle_zh: 6th\nseries:\n  artists: [乙宗梢]\n",
+    }).text
+    assert '"artist": ["1"]' in body or "'artist': ['1']" in body
+
+
+def test_a_leg_venue_handle_preselects_the_venue(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Kアリーナ横浜", "name_en": "K Arena", "name_zh": "K", "kind": "venue",
+    })
+    body = client.post("/concerts/import/draft", data={
+        "draft": (
+            "title: 6th\ntitle_en: 6th\ntitle_zh: 6th\n"
+            "performances:\n"
+            "  - label: Day 1\n    starts_at_jst: '2027-01-23 17:00'\n"
+            "    venue: Anything At All\n    venue_handle: k-arena\n"
+        ),
+    }).text
+    assert 'value="1" selected' in body, "the handle must win over the unmatchable name"

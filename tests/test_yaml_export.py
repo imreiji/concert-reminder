@@ -80,15 +80,19 @@ def test_concert_to_yaml_full_shape():
     assert data["notes"] == "Some notes"
 
     assert len(data["performances"]) == 2
+    # venue_handle joined the leg shape on 2026-07-30: the VENUE tag's handle,
+    # which the importer prefers over the free-text `venue` name. None here
+    # because this test builds YamlDay directly rather than from a tagged leg.
     assert data["performances"][0] == {
         "label": "Day 1", "label_en": None, "label_zh": None,
         "city": "Kanagawa", "venue": "K Arena Yokohama",
-        "venue_address": "Yokohama, Japan", "doors_jst": "2026-08-01 17:00",
+        "venue_address": "Yokohama, Japan", "venue_handle": None,
+        "doors_jst": "2026-08-01 17:00",
         "starts_at_jst": "2026-08-01 18:00",
     }
     assert data["performances"][1] == {
         "label": "Day 2", "label_en": None, "label_zh": None,
-        "city": None, "venue": None, "venue_address": None,
+        "city": None, "venue": None, "venue_address": None, "venue_handle": None,
         "doors_jst": None, "starts_at_jst": "2026-08-02 18:00",
     }
 

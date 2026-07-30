@@ -1566,6 +1566,7 @@ async def export_concert_yaml(
             city=d.venue_tag.city if d.venue_tag else None,
             venue=d.venue_tag.name if d.venue_tag else None,
             venue_address=d.venue_tag.address if d.venue_tag else None,
+            venue_handle=d.venue_tag.slug if d.venue_tag else None,
             doors_at_utc=d.doors_at_utc,
         )
         for d in days
@@ -1590,6 +1591,11 @@ async def export_concert_yaml(
         groups=[t.name for t in concert.tags if t.kind is TagKind.GROUP],
         artists=[t.name for t in concert.tags if t.kind is TagKind.ARTIST],
         venues=[t.name for t in concert.tags if t.kind is TagKind.VENUE],
+        series_handles={
+            "franchises": [t.slug for t in concert.tags if t.kind is TagKind.FRANCHISE],
+            "groups": [t.slug for t in concert.tags if t.kind is TagKind.GROUP],
+            "artists": [t.slug for t in concert.tags if t.kind is TagKind.ARTIST],
+        },
         days=yaml_days, rounds=yaml_rounds, notes=concert.notes,
         title_en=concert.title_en, title_zh=concert.title_zh,
         organizer=concert.organizer, categories=concert.categories,

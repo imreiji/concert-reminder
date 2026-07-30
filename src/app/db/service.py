@@ -4596,6 +4596,36 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
     }
 
 
+def match_tag_ids_by_slug(
+    slugs: Sequence[str], tags: Sequence[Tag]
+) -> tuple[list[int], list[str]]:
+    """Resolve HANDLES to ids: (matched ids, unmatched handles).
+
+    EXACT, unlike its by-name sibling, and that is the entire point: a handle
+    identifies one tag, so there is no first-tag-wins rule to explain and no
+    locale variant to match by accident. Ids come back deduplicated in
+    first-mention order; unmatched handles keep their input order so the preview
+    can list them verbatim.
+    """
+    by_slug = {t.slug: t.id for t in tags}
+    ids: list[int] = []
+    missing: list[str] = []
+    for slug in slugs:
+        tag_id = by_slug.get(slug)
+        if tag_id is None:
+            missing.append(slug)
+        elif tag_id not in ids:
+            ids.append(tag_id)
+    return ids, missing
+
+
+def match_venue_tag_id_by_slug(slug: str | None, venue_tags: Sequence[Tag]) -> int | None:
+    """A leg's venue by handle. Exact, for the same reason as above."""
+    if not slug:
+        return None
+    return next((t.id for t in venue_tags if t.slug == slug), None)
+
+
 def match_venue_tag_id(name: str | None, venue_tags: Sequence[Tag]) -> int | None:
     """The id of the VENUE tag whose canonical `name` matches `name`, or None.
 

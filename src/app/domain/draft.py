@@ -32,6 +32,7 @@ class ParsedDay:
     venue_name: str | None = None
     venue_city: str | None = None
     venue_address: str | None = None
+    venue_handle: str | None = None   # a VENUE tag's handle; BEATS venue_name
     matched_venue_tag_id: int | None = None  # route-resolved, never parsed
 
 
@@ -78,3 +79,12 @@ class ParsedConcert:
     franchise_names: list[str] = field(default_factory=list)
     group_names: list[str] = field(default_factory=list)
     artist_names: list[str] = field(default_factory=list)
+    # Tag HANDLES. When a kind's list here is non-empty it is
+    # AUTHORITATIVE and the matching *_names list is ignored outright --
+    # a handle identifies exactly one tag, while a name is first-tag-wins
+    # and, now that names may repeat, a guess. An export writes both (names
+    # so a person can read the file); an agent-authored draft writes only
+    # names, which is why absence must behave exactly as before.
+    franchise_handles: list[str] = field(default_factory=list)
+    group_handles: list[str] = field(default_factory=list)
+    artist_handles: list[str] = field(default_factory=list)
