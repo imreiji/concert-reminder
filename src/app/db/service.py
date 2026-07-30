@@ -19,7 +19,7 @@ Sync semantics (per rule):
 import hashlib
 import secrets
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import case, delete, exists, false, func, or_, select
@@ -58,6 +58,7 @@ from app.domain.digest import DeliveryFact, build_digest
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.slugs import tag_slug_base
+from app.domain.tags_yaml import ParsedTagFile
 from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import (
@@ -4120,6 +4121,159 @@ async def assign_tag_slug(session: AsyncSession, tag: Tag) -> str:
         suffix += 1
     tag.slug = candidate
     return candidate
+
+
+async def create_tag_row(
+    session: AsyncSession,
+    *,
+    name: str,
+    kind: TagKind,
+    slug: str | None = None,
+    name_en: str | None = None,
+    name_zh: str | None = None,
+    parent_id: int | None = None,
+    region: str | None = None,
+    city: str | None = None,
+    city_en: str | None = None,
+    city_zh: str | None = None,
+    address: str | None = None,
+    location_url: str | None = None,
+    eventernote_url: str | None = None,
+    created_by: int | None = None,
+) -> Tag:
+    """Build and add a Tag. The ONE place a tag row is constructed.
+
+    `slug=None` means MINT one (`assign_tag_slug` de-duplicates); a value means
+    the caller already owns the handle and it is used verbatim. That distinction
+    is the whole reason this exists: the three editor routes generate a handle,
+    while the catalogue import carries handles in the file and must not have them
+    silently renamed. A caller passing a slug is responsible for having
+    normalised it -- `domain.tags_yaml.parse_tags` does.
+
+    Does NOT commit, and does NOT notify: creating a tag is not attaching one
+    (invariant 4), which is why `quick_create_tag` is silent too.
+    """
+    tag = Tag(
+        name=name.strip(),
+        kind=kind,
+        slug=slug,
+        name_en=name_en,
+        name_zh=name_zh,
+        parent_id=parent_id,
+        region=region,
+        city=city,
+        city_en=city_en,
+        city_zh=city_zh,
+        address=address,
+        location_url=location_url,
+        eventernote_url=eventernote_url,
+        created_by=created_by,
+    )
+    session.add(tag)
+    if slug is None:
+        await assign_tag_slug(session, tag)
+    return tag
+
+
+@dataclass
+class TagImportReport:
+    """What an import did, for the result page. HANDLES, not ids: the operator
+    reads this next to the file they pasted."""
+
+    created: list[str] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+async def import_tags(
+    session: AsyncSession, parsed: ParsedTagFile, created_by: int | None = None
+) -> TagImportReport:
+    """Create missing tags, then wire the ones just created. NEVER updates.
+
+    TWO PASSES because `parent` and `members` are HANDLES: nothing can resolve
+    until every tag in the file exists. Pass 2 wires only tags CREATED in this
+    run -- re-wiring an existing tag's membership would be an update, and the
+    rule (owner, 2026-07-30) is that an import is additive, so a stale file can
+    never revert an edit made since the export.
+
+    Warnings from the parser are carried through: one the operator never sees is
+    one that did not happen. Does not commit -- the caller owns the transaction,
+    so a rejected file leaves nothing behind.
+
+    Writes `TagMember` rows directly rather than through `attach_tag`, which is
+    correct and deliberate: `attach_tag` is about CONCERT attachment and carries
+    invariant 3's expansion with it, and this must touch no concert at all.
+    """
+    report = TagImportReport(warnings=list(parsed.warnings))
+    existing = {
+        slug: tag_id for tag_id, slug in await session.execute(select(Tag.id, Tag.slug))
+    }
+
+    # Pass 1: create what is missing.
+    created_ids: dict[str, int] = {}
+    for tag in parsed.tags:
+        if tag.handle in existing:
+            report.skipped.append(tag.handle)
+            continue
+        row = await create_tag_row(
+            session,
+            name=tag.name,
+            kind=tag.kind,
+            slug=tag.handle,
+            name_en=tag.name_en,
+            name_zh=tag.name_zh,
+            region=tag.region,
+            city=tag.city,
+            city_en=tag.city_en,
+            city_zh=tag.city_zh,
+            address=tag.address,
+            location_url=tag.location_url,
+            eventernote_url=tag.eventernote_url,
+            created_by=created_by,
+        )
+        await session.flush()  # pass 2 needs the id
+        created_ids[tag.handle] = row.id
+        report.created.append(tag.handle)
+
+    # Pass 2: resolve handles to ids. `known` spans both, because a parent may
+    # legitimately already exist while the child referring to it is new.
+    known = {**existing, **created_ids}
+    kinds = {slug: kind for slug, kind in await session.execute(select(Tag.slug, Tag.kind))}
+    for tag in parsed.tags:
+        if tag.handle not in created_ids:
+            continue  # skipped, so untouched -- including its membership
+        tag_id = created_ids[tag.handle]
+        if tag.parent:
+            parent_id = known.get(tag.parent)
+            if parent_id is None:
+                report.warnings.append(
+                    f"{tag.handle}: parent {tag.parent!r} is in neither the file nor the "
+                    f"catalogue -- created without a parent"
+                )
+            elif kinds.get(tag.parent) is not TagKind.FRANCHISE:
+                report.warnings.append(
+                    f"{tag.handle}: parent {tag.parent!r} is not a franchise -- "
+                    f"created without a parent"
+                )
+            else:
+                row = await session.get(Tag, tag_id)
+                row.parent_id = parent_id
+        for member in tag.members:
+            member_id = known.get(member)
+            if member_id is None:
+                report.warnings.append(
+                    f"{tag.handle}: member {member!r} is in neither the file nor the "
+                    f"catalogue -- that membership dropped"
+                )
+                continue
+            if kinds.get(member) is TagKind.GROUP:
+                report.warnings.append(
+                    f"{tag.handle}: member {member!r} is a group, and groups do not "
+                    f"nest -- dropped"
+                )
+                continue
+            session.add(TagMember(group_tag_id=tag_id, member_tag_id=member_id))
+    return report
 
 
 async def find_tags_by_name_and_kind(
