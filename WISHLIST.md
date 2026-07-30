@@ -447,52 +447,68 @@ One rider for whoever picks up #1: the export must carry each tag's HANDLE, and
 the import must match on it. Matching on names would reintroduce exactly the
 ambiguity this build removed, and it would do so silently.
 
+The 2026-07-31 pass ships #1, the admin catalogue export -- the only entry the
+owner ever personally asked for, and the last one standing from the 2026-07-26
+usage batch. It shipped together with the tags import, in ONE spec, because an
+export whose importer is designed later is precisely what produced the tag-handles
+detour: the format looked complete until something had to read it back, and only
+then did it turn out a tag had no identity to key on. Two entries left Proposed
+across the arc (this one, plus nothing else -- tag handles was never a Proposed
+entry), and the rest renumber 1-9 by that single removal, on position rather than
+merit.
+
+Two entries were re-read against what shipped, and one genuinely moved on merit.
+**Eventernote actor-page discovery rises to #1.** A sweep that walks a followed
+artist's page has always had to answer "is this concert already in the
+catalogue?", and its sibling question "is this performer already a tag?" was a
+guess until this week -- names repeat, `match_tag_ids_by_name` is first-tag-wins,
+and there was no identity to compare. There is now, and the draft seam it would
+emit into carries handles. That is the second time this arc has made an
+unrelated entry cheaper without touching its code, and this time it is enough to
+re-rank. Minute-level offsets, previously #2, was untouched by any of it and is
+displaced on position only, which is worth saying plainly because it has now
+been displaced four passes running without ever being judged less valuable.
+
+The round-trip also leaves one thing DELIBERATELY unbuilt, recorded here so it
+is a decision rather than an oversight: bulk concert restore. The export writes
+one draft per concert and the tags import handles the taxonomy, but concerts
+still go back one at a time through the paste-a-draft preview. That keeps
+`import_commit` the only concert write path with a human confirming each one,
+which is the app's main guard against a bad import. If a catalogue ever grows
+past the point where that is tolerable, the work is: extract the write path out
+of the Form-based route, and decide what replaces the preview.
+
 ## Proposed (highest impact first)
 
 
-### 1. Admin-only catalogue export (never any user data)
+### 1. Eventernote actor-page discovery
 
-Impact: medium - effort: small-medium. Raised: 2026-07-26 (owner).
+Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
+(during the agent-import design discussion). Buildable as of 2026-07-23, when
+the draft seam and the add-concert skill shipped.
 
-One download of the shared catalogue -- concerts, days, rounds,
-qualifiers, tags, memberships -- with user-specific data excluded by
-construction: build it from the catalogue tables only (never JOIN a user
-table) and strip `created_by`, so there is nothing to leak rather than a
-filter to get wrong. Natural shape: reuse the draft YAML vocabulary --
-one `yaml_export` draft per concert, which already round-trips through
-`POST /concerts/import/draft`, so the export doubles as a rebuild path --
-plus a tags file for what drafts don't carry (kind, parent, members,
-region/city/address, urls), zipped under `GET /admin/export.zip` behind
-`require_admin`. Streaming a zip at request time has precedent
-(`/concerts/import/skill.zip`). Decide with the owner whether
-re-importability matters or a read-only JSON dump is enough -- the YAML
-shape costs a little more and pays only if it does.
+Re-ranked to #1 on 2026-07-31 by the catalogue round-trip, and on merit rather
+than by removal. This entry has always had to answer a second question beside
+"is this concert already here?" -- namely "is this performer already a tag?" --
+and until tag handles shipped that was a guess: names repeat, and
+`match_tag_ids_by_name` is documented first-tag-wins. There is an identity to
+compare now, and the draft seam this would emit into carries handles, so the
+discovery half is all that is left to build. The entry it passed, minute-level
+offsets, was untouched by any of it.
 
-As of 2026-07-30 the prerequisite this entry did not know it had is DONE: tags now
-carry a `slug` (see Shipped, tag handles), so a tag has an identity that is not its
-name. That is what makes the round-trip possible at all -- the tags file must carry
-handles and the import must match on them, because matching on names is the exact
-ambiguity that build removed, and it would go wrong silently. The entry's own
-preference for the re-importable YAML shape over a read-only dump is now backed by
-something rather than merely argued.
-
-A SECOND use for it turned up on 2026-07-28, in the rehearsal harness spec
-(shipped since -- see Shipped): a catalogue-only copy is the clean way to
-seed a local dev DB with realistic data, because it contains no personal
-data by construction -- `users`, `web_sessions`, `round_outcomes`,
-`concert_subscriptions`, `reminder_rules` and now `delivery_log` are all
-personal, and a wholesale copy of production on a laptop sits outside every
-deletion path this app promises. That raises the entry's value beyond the
-backup/rebuild case it was filed for, and it argues for the re-importable
-YAML shape over a read-only dump, since a seed you cannot load back is not a
-seed. It does NOT raise the entry's RANK: this list orders by user impact,
-and a dev-seeding path is developer value. Unchanged in size -- it touches
-the catalogue tables and a zip route, and nothing the delivery feed or the
-harness went near. As of 2026-07-28 the pointer runs the other way too:
-`docs/local-dev-bot.md`, the setup guide an operator actually follows, talks
-them out of copying production wholesale and names this export as the clean
-alternative -- so the entry now has a live cross-reference from a document,
-not just from a spec.
+A concert nobody has added to the app has NO deadline tracking at all -- the
+worst failure the app has, worse than a mistimed reminder, because the user
+never learns there was a deadline to miss. The skill (or a scheduled agent) can
+close that gap: walk each followed artist's Eventernote `/actors/<id>/events`
+page and flag concerts not yet in the catalogue. Cheap now that the pieces
+exist -- discovery produces a paste-ready YAML draft through the exact
+`POST /concerts/import/draft` path the skill already builds, so the "add it"
+half is done; what remains is the walk-and-diff (mapping each followed artist to
+its actor id, deduping candidates against existing concerts by title/date).
+Ranked directly under the established minute-offset entry: it is the
+highest-impact NET-NEW capability the import build unlocked, but it sits below
+that one because that need is proven while this is unbuilt and unproven -- the
+actor-id mapping is manual today and a scraped page's structure can drift.
 
 ### 2. Minute-level reminder offsets
 
@@ -534,27 +550,7 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 3. Eventernote actor-page discovery
-
-Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
-(during the agent-import design discussion). Buildable as of 2026-07-23, when
-the draft seam and the add-concert skill shipped.
-
-A concert nobody has added to the app has NO deadline tracking at all -- the
-worst failure the app has, worse than a mistimed reminder, because the user
-never learns there was a deadline to miss. The skill (or a scheduled agent) can
-close that gap: walk each followed artist's Eventernote `/actors/<id>/events`
-page and flag concerts not yet in the catalogue. Cheap now that the pieces
-exist -- discovery produces a paste-ready YAML draft through the exact
-`POST /concerts/import/draft` path the skill already builds, so the "add it"
-half is done; what remains is the walk-and-diff (mapping each followed artist to
-its actor id, deduping candidates against existing concerts by title/date).
-Ranked directly under the established minute-offset entry: it is the
-highest-impact NET-NEW capability the import build unlocked, but it sits below
-that one because that need is proven while this is unbuilt and unproven -- the
-actor-id mapping is manual today and a scraped page's structure can drift.
-
-### 4. Franchise-aware round-label suggestions
+### 3. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -575,7 +571,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 5. Nine of ten `RoundKind` members are purely cosmetic
+### 4. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -598,7 +594,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 6. PWA / installability
+### 5. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -618,7 +614,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 7. In-app LLM extraction behind the same draft seam
+### 6. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -636,7 +632,7 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 8. Minor demo-parity cosmetics
+### 7. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -675,7 +671,7 @@ this entry's single pass, not its own task. Both gaps are now also named in
 CLAUDE.md's demo inventory, so the next person meets them where they look for
 the reference rather than only here.
 
-### 9. Discover sort in the content head, plus the catalogue-count note
+### 8. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -701,7 +697,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 10. Name the destination on the sign-in bounce
+### 9. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -737,6 +733,63 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### The catalogue round-trip: an admin export and a tags import (2026-07-31)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-30-catalogue-round-trip-design.md`
++ impl plan `docs/superpowers/plans/2026-07-30-catalogue-round-trip.md`, seven
+tasks on branch `catalogue-round-trip`. **Proposed #1**, and the only entry the
+owner ever personally asked for. No migration.
+
+`GET /admin/export.zip` writes `tags.yaml`, one `concerts/<event_id>.yaml` per
+concert, and a `RESTORE.txt` that states the order -- tags first, because a
+concert draft refers to its tags by handle and a handle that does not exist yet
+cannot bind. `POST /admin/import/tags` reads the first back.
+
+**No personal data by CONSTRUCTION, not by filter.** The queries reach concerts,
+days, rounds, qualifiers, tags and tag_members and nothing else; no JOIN to a
+user table exists to get wrong, and `created_by` is never emitted. Nothing to
+leak beats a filter to maintain.
+
+Three things the arc turned on.
+
+**The format has two masters, and one file serves both.** An agent authoring a
+draft knows NAMES; a restore needs IDENTITY. So the concert draft gained
+`series_handles` and per-leg `venue_handle` beside the existing names, plus
+`event_id` -- all optional, so every agent-authored draft and the skill's pinned
+example kept working untouched. Where a handle block names a kind it is
+authoritative and the name list is ignored outright, with no per-entry fallback:
+falling back would reintroduce `match_tag_ids_by_name`'s first-tag-wins guess,
+which is the exact failure handles exist to remove. Its test is two performers
+both written 佐藤有紀, and the right one binding.
+
+**`event_id` round-trips**, so a restore lands on the original URLs rather than
+minting new ones and breaking every link anybody holds -- and re-importing a file
+whose concert still exists answers 409 instead of quietly creating a second.
+`validate_event_id` does the checking, the same function the edit page calls, so
+format, reserved words and uniqueness could not drift apart.
+
+**The import skips, never updates.** An existing handle is left entirely alone,
+including its membership, which makes the import idempotent and means a stale
+file can never revert an edit made since the export. It wires parents and
+members only for tags it created, writes `TagMember` directly rather than
+through `attach_tag` (which would drag invariant 3's expansion into something
+that must touch no concert), and queues no notification.
+
+Two test traps were caught in the SPEC, before either was written, and both are
+the kind that pass while proving nothing. "Assert the zip's bytes contain no
+`created_by`" would pass vacuously -- entries are DEFLATE-compressed, so the
+string is not there to find even when the data is; the test extracts every entry
+instead. And "two exports are byte-identical" is false with
+`ZipFile.writestr`, which stamps the current time; zip timestamps have
+two-second resolution, so the first probe slept 1.1s, landed in the same bucket
+and "proved" determinism that did not exist. Entries now go through an explicit
+`ZipInfo` pinned to the 1980 epoch and the test crosses a bucket boundary.
+
+The shared tag writer that the tag-handles spec deliberately deferred landed
+here, because the importer is its second real caller -- and unlike the three
+editor routes it supplies an explicit handle from a file rather than generating
+one, which is the distinction the extraction had to express.
 
 ### Tag handles: a stable identity that is not the name (2026-07-30)
 

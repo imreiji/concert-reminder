@@ -1,6 +1,7 @@
 # The catalogue round-trip: an admin export and a tags import
 
-Date: 2026-07-30. Status: **designed, not implemented**. Sub-projects **B** (the
+Date: 2026-07-30. Status: **implemented (2026-07-31)**, seven tasks on branch
+`catalogue-round-trip`; no migration. Deviations are recorded at the foot. Sub-projects **B** (the
 export) and **C** (the tags import) of the catalogue round-trip arc, in ONE spec
 by deliberate decision -- see "Why these are one spec" below. Clears WISHLIST
 **#1**. Depends on sub-project A, tag handles
@@ -270,3 +271,42 @@ test that only checks "some tags exist" would pass on a badly lossy export.
 - **A restore that reproduces `id` values.** FKs are internal; handles and
   `event_id` are the identities that matter, and forcing ids would fight the
   autoincrement for no gain.
+
+
+## Deviations (recorded during implementation)
+
+1. **`RESTORE_NOTES` lives in `domain/tags_yaml.py`**, not `db/service.py` as
+   the plan had it. It is format documentation, so it belongs beside the format,
+   and it keeps a 25-line string literal out of the service layer.
+2. **The plan's "no catalogue work outside task 4" constraint was wrong.**
+   `preferences.html` IS a translated page -- its admin rows use `_()` -- so the
+   links to both new admin routes needed both catalogues even though the pages
+   they point at are English-only. The rule that actually holds: admin PAGES are
+   English-only; the Preferences links to them are not.
+3. **The handle-resolution rule was rewritten during plan self-review**, before
+   any code existed. The first version resolved handles AND names and merged
+   them, so two tags -- a handle pointing at one and a name at the other --
+   selected BOTH. The rule shipped is: a handles block is authoritative for its
+   kind and the name list is ignored outright, with no per-entry fallback. That
+   is the more correct answer, not merely the simpler one.
+4. **The ramen-scrape preview passes `event_id=""` explicitly.** It shares
+   `import_preview.html` but has no event_id to preserve. Relying on Jinja's
+   Undefined being falsy works, but works by luck.
+
+## What the catalogue work cost, and what to expect next time
+
+Three separate `pybabel update` runs marked a new msgid **fuzzy** and pre-filled
+it from a similar one: "Import tags" became ja 「イベントをインポート」 (*Import
+EVENTS*), and "Export catalogue" became "Export YAML" in both languages. Fuzzy
+counts as untranslated to `i18n.py`, so `test_i18n_catalogues.py` catches the
+ABSENCE of a translation -- but a routine `pybabel update` followed by a glance
+would have shipped the wrong words with the suite green.
+
+Two further traps in the same work: long msgids WRAP across lines in the `.po`,
+so a single-line regex silently matches nothing; and this console is GBK, so
+neither language renders legibly and translations must be verified by comparing
+the resolved string in Python rather than by reading them.
+
+The reliable procedure is a line-based filler that drops any `#, fuzzy` flag,
+replaces the msgstr and its continuation lines, and asserts it matched exactly
+once -- then a Python-side comparison per string.
