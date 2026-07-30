@@ -324,3 +324,30 @@ point of that file.
   instead of a speculative one now.
 - **Unicode-aware case folding.** Handles are ASCII by construction, so the
   question does not arise for the unique column.
+
+## Deviations (recorded during implementation)
+
+1. **The Japanese-only fallback is the KIND, not `{kind}-{id}`** (section 2).
+   The id is not obtainable: it needs a flush, a flush needs a non-null slug,
+   and `slug` is NOT NULL, so it would take a throwaway placeholder written
+   purely to be overwritten. `artist`, `artist-2` fall out of the same
+   de-duplication as any other collision. The id bought nothing -- a handle has
+   only to be unique and improvable, and it is stable from assignment either
+   way.
+2. **A model-level `default=_derive_tag_slug` fills the column at INSERT.**
+   Section 2 implied every create path must call `assign_tag_slug` or crash;
+   there are ~90 bare `Tag(...)` constructions in the test suite, and the
+   `slug=` noise would have buried the change and burdened every future test.
+   The default guarantees NON-nullness; `assign_tag_slug` remains the single
+   guarantor of a non-COLLIDING handle, and a duplicate reaching the DB raises
+   IntegrityError at the boundary rather than silently.
+3. **Section 4's warning was already built.** `tags.html` has shipped
+   `#new-tag-dupe` -- fed by `tag_dupe_data`, translated, non-blocking -- since
+   before this spec, and its copy already says *"Creating another one will keep
+   them separate because tags cannot be merged yet."* So the spec's proposed
+   warning copy is not implemented; the existing one is kept. This also means
+   the shipped app has been PROMISING this feature while the server 409'd it,
+   which makes removing that 409 a correctness fix and not only an enabler.
+4. **`assign_tag_slug` needs `no_autoflush`** around its uniqueness lookup: the
+   tag is pending with a null slug, and an autoflush there hits NOT NULL before
+   the column can be filled. Noted because it is invisible until run.

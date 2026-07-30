@@ -10,6 +10,44 @@
 
 **Spec:** `docs/superpowers/specs/2026-07-29-tag-handles-design.md`
 
+## Corrections found during execution (2026-07-29)
+
+Read these before starting a task; they override the task text below.
+
+- **Tasks 1 and 2 are DONE** (`930b9e7`, `4bcda64`). Task 2 absorbed the three
+  create routes' `assign_tag_slug` wiring, which the plan had put in Task 4: 100
+  of its failures were `POST /tags` 500ing, so leaving it to Task 4 would have
+  meant a red suite across a commit for a reason unrelated to tests.
+- **Task 2's `{kind}-{id}` fallback was not buildable** and shipped as the bare
+  kind (`artist`, `artist-2`) instead. The id needs a flush, a flush needs a
+  non-null slug, `slug` is NOT NULL. Task 3's migration must use the SAME rule
+  or the backfill and the app will disagree.
+- **`assign_tag_slug` needs `no_autoflush`** around its lookup; the plan's code
+  omitted it and crashed on NOT NULL.
+- **A model-level `default=_derive_tag_slug` now fills the column at INSERT**,
+  so a bare `Tag(...)` is valid. Task 2's step 6 ("fix every test that builds a
+  Tag") is therefore obsolete — there were ~90 such sites and the default
+  handles all but genuine collisions. `assign_tag_slug` remains the only thing
+  guaranteeing a non-colliding handle.
+- **TASK 7 IS ALREADY MOSTLY BUILT AND MUST NOT BE WRITTEN AS SPECIFIED.**
+  `tags.html` already has a pre-submit duplicate-name warning: `#new-tag-dupe`,
+  fed by `tag_dupe_data` from the `/tags` route, with translated copy that
+  already reads *"A {kind} tag with this name is already used by {concerts} and
+  followed by {followers}. Creating another one will keep them separate because
+  tags cannot be merged yet."* It toggles a `.show` class and does NOT block
+  submission — exactly the warn-don't-block design the spec asks for. So:
+  - Do NOT add `#dup-name-warn`, "A tag with this name already exists.",
+    "Create anyway" or "Select the existing one". They would be a second,
+    competing warning with worse copy, and three needless msgids in two
+    catalogues.
+  - What actually remains is removing the server-side 409 (Task 4), which is
+    what makes the existing warning honest. Today the UI promises the two tags
+    will be kept separate and the server then refuses the create — a live
+    inconsistency in the shipped app.
+  - Task 7's remaining real work: confirm `_tag_create_dialog.html` (the
+    import-preview quick-create) warns the same way, and rewrite Task 7's tests
+    to assert against the EXISTING ids and copy.
+
 **Branch:** `tag-handles` (already exists, off `main`, carrying the spec commit).
 
 ## Global Constraints
