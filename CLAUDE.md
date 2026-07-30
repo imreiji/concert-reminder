@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 1222 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 1609 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -61,8 +61,24 @@ at the msgid layer (mapping preserved in
 coherence pass: the three editor surfaces' leg/round cards share two
 partials, destructive actions moved into a kebab menu, EN/中文 variants
 got their own row, and the sentence-style reminder builders render
-through locale-ordered slot patterns so ja/zh read grammatically -- have
-shipped since).
+through locale-ordered slot patterns so ja/zh read grammatically -- and a
+UX pass (20 changes across the board heads, Discover's active-filter chips
+and live counts, the concert header's "Next for you" strip, the Tags
+chips⇄table view, an htmx progress bar, and the two-shape callout grammar)
+-- and a standing-at-a-glance arc: per-leg outcome truth (a round covering
+Sat+Sun can come back won on one leg and lost on the other, and a round
+whose legs you already hold stops asking), "Coming up" collapsed to one
+block per concert, the board's ladder capped at the rungs that matter,
+settled rounds folded per leg on the concert page, and performer chips
+clustered by group -- and a dead concert (every leg cancelled) leaving
+*Open now*, offering no capture and announcing nothing -- and the
+operations trio: a `delivery_log` of every DM with `/admin/deliveries` and
+a per-tick counts digest, a cancellable admin broadcast held 120s in the
+outbox, and the flag-gated local rehearsal harness -- and real
+403/404/422/500 pages (HTML for a navigation, the original JSON for an
+XHR) with the admin pages indexed in Preferences -- and a correctness
+sweep closing a born-dead concert's permanent "new event" DM and a
+generated `event_id` taking a reserved word -- have shipped since).
 
 ## Commands
 
@@ -316,13 +332,26 @@ shipped since).
   substantial features. `docs/codebase-review-2026-07-17.md` records a
   full-codebase review and the fixes it drove.
 - `docs/superpowers/demo/` — the interactive concept demos that drove the UI,
-  and the **design source of truth** for it: `dekimasen-demo.html` (the
-  reconciliation reference for Home/Discover/concert/editor/tags/preferences/
-  setup) and `dekimasen-onboarding-demo.html` (the signed-out landing, the
-  new-user flow, import + import preview, retroactive-apply, legal). Review
-  UI/UX changes against the matching demo; when the shipped design
-  deliberately moves, update that demo so it stays the reference. Both are
-  self-contained single-file mockups on the same design tokens the app ships.
+  and the **design source of truth** for it. All are self-contained
+  single-file mockups on the same design tokens the app ships. Review UI/UX
+  changes against the matching one; when the shipped design deliberately
+  moves, update that demo so it stays the reference. The full inventory,
+  because reaching for the wrong file wastes a whole pass:
+  - `dekimasen-demo.html` — the reconciliation reference for Home/Discover/
+    concert/editor/tags/preferences/setup. The default answer.
+  - `dekimasen-onboarding-demo.html` — the signed-out landing, the new-user
+    flow, import + import preview, retroactive-apply, legal.
+  - `dekimasen-mobile-demo.html` (static frames, reference CSS values) and
+    `dekimasen-mobile-live.html` (interactions) — the phone reference.
+  - `dekimasen-tablet-demo.html` — the 701-1040px band.
+  - `dekimasen-ux-pass-demo.html` — the 2026-07-24 UX pass's 20 changes,
+    including the two-shape callout grammar.
+  - `_tablet_harness.html` — not a demo: the measuring rig the tablet band
+    was built against (see the measure-don't-reason rule below).
+
+  Known gap: the 403/404/422/500 error pages shipped with no demo frame, and
+  the signed-out `.signin-note` never got one either. Both are logged in
+  WISHLIST's demo-parity cosmetics entry rather than left to be rediscovered.
 
 ## Feature wishlist
 
@@ -849,6 +878,14 @@ deleting them.
   section -- phone cards and chips use the same `border-radius: 3px` as
   desktop; only the bottom-sheet corners deliberately deviate (`14px 14px
   0 0`, a sheet-specific shape, never 6px or 8px).
+- **Measure a layout bug; do not reason about it.** Before diagnosing any
+  layout, overflow or breakpoint problem, put the real app in a real viewport
+  at a real width and read the numbers off it -- a seeded dev server in an
+  iframe harness, the way `docs/superpowers/demo/_tablet_harness.html` was
+  used to build the 701-1040px band, and the way the header measurements
+  above (59px -> 77px -> 112px) were obtained. Reasoning from the CSS
+  shipped a confidently wrong fix twice. The tell is a sentence of the shape
+  "this must be overflowing because..." with no measurement in it.
 
 ## Deploy
 

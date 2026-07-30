@@ -33,9 +33,14 @@ src/app/
   bot/           discord.py client + cogs, embed builders, persistent buttons
   scheduler/     the 60s loop that drains reminder_queue + notifications
   web/           FastAPI app: Discord OAuth, htmx CRUD UI, calendar feed
+  i18n.py        gettext plumbing (en/ja/zh); top-level because the bot needs
+                 it too, and it does file I/O at startup
+  ops.py         the I/O half of the health checks (domain/health.py is pure)
 tests/           pytest; domain logic is tested hardest
 deploy/          setup.sh, systemd unit, Caddyfile, backup.sh
-docs/            deploy runbook + per-feature design specs and plans
+docs/            deploy runbook, the local dev-bot guide, per-feature design
+                 specs and plans, and the concept demos that are the design
+                 source of truth for the UI
 ```
 
 ## Rules that prevent the classic bugs
@@ -64,11 +69,22 @@ uv run pytest                  # tests
 uv run ruff check .            # lint
 ```
 
+The Python version is pinned in `.python-version`, which `uv` honours in dev,
+in CI and on the server, so all three run the same interpreter.
+
 To run the bot locally: create an app at https://discord.com/developers,
 put the token in `.env`, invite the bot to a test server with the
 `bot` + `applications.commands` scopes, then `/ping` it. Set
 `DEV_GUILD_ID` to that test server's ID for slash commands to sync in
 seconds instead of up to an hour (global sync, used when it's unset).
+Full walkthrough, including the redirect URI that bites: `docs/local-dev-bot.md`.
+
+To exercise the DM side without waiting for real deadlines, set
+`REHEARSAL_ENABLED=true` and visit `/admin/rehearsal`: it seeds one canonical
+concert, pulls its reminders forward so the real 60s tick delivers them now,
+and sends any DM shape in any language on demand. Leave the flag off in
+production — the routes are then not registered at all, which is the safety
+model, not the `require_admin` on each one.
 
 ## Deployment (short version — full runbook: docs/deploy.md)
 
@@ -124,3 +140,16 @@ Shipped since Phase 12 (no phase numbers assigned, tracked as feature PRs instea
 - [x] Editor coherence — create/edit/import leg-and-round cards share two partials; destructive actions in a kebab menu (the × beside Cancelled is gone); ja/EN/中文 labels on their own row; reminder sentence builders read grammatically in all three languages via locale-ordered slot patterns
 - [x] Tablet band (701–1040px) — one bounded `@media` section like the phone retrofit: compact one-row header, swipeable campaign board, Discover's filter sheet as an inline panel; the scattered mid-band breakpoints are gone and a guard test keeps them gone
 - [x] Inline tag creation — unmatched draft tags in the import preview become per-name create chips opening a kind-aware popup (kind pre-selected, parent franchise for groups); the created tag joins the picker on the spot
+- [x] UX pass — 20 changes in five batches: board column-head colours, Discover active-filter chips with live section counts, the "Next for you" strip moved into the concert header, a numbered create-form spine, the Tags chips⇄table view and follow bell, an htmx progress bar, and the two-shape callout grammar (`.edgecard` for ongoing state, `.banner` for needs-attention)
+- [x] Per-leg outcome truth — a real lottery resolves per performance, so a round covering Sat+Sun can come back won on one and lost on the other; a round whose legs you already hold stops asking
+- [x] "Coming up" de-crowded — one block per concert (a header, the row that actually wants you, the rest behind a fold) instead of one row per anchor, so the row budget counts concerts
+- [x] Board ladder capped — a card shows the rung that explains its column plus the next actionable one, with the remainder as a count line; uniform card height is what makes four columns scan as a board
+- [x] Settled rounds fold per leg on the concert page — a secured leg keeps its receipt visible while everything resolved goes behind one fold (still in the DOM, so its capture form works)
+- [x] Performer chips cluster by group on the concert page — one block per attached group, then an unlabelled trailer for performers in no attached group
+- [x] A concert whose every leg is cancelled stops asking you to act — it leaves *Open now*, offers no capture, and a tag attached to it announces nothing and applies no preset
+- [x] Cleanup batch — `event_id` slugs prefer `title_en`; the unfollow dialog stops overstating what it removes; nothing is announced about a dead concert; expanded folds survive an htmx swap; importer review debt
+- [x] Delivery feed — every DM is recorded in `delivery_log` and readable at `/admin/deliveries`, plus a per-tick digest DM that reports counts rather than names (a name in Discord history is a record account deletion cannot reach)
+- [x] Targeted admin broadcast — `/admin/broadcast` puts admin-authored text in users' DMs through the same outbox, held 120s so it can be cancelled before it sends
+- [x] Local rehearsal harness — `/admin/rehearsal`, registered only when `REHEARSAL_ENABLED` so production has no such routes: seed a canonical concert, pull its reminders forward, send any DM shape in any language on demand
+- [x] Real 403/404/422/500 pages — a browser navigation gets styled HTML with a way back, an XHR keeps the JSON body it was already parsing; the admin pages are indexed in Preferences instead of needing their URLs known
+- [x] Correctness sweep — create and import no longer DM followers a "new event" for a concert whose only leg arrived cancelled, and a generated `event_id` can no longer take a reserved word and mint an unreachable page

@@ -629,6 +629,17 @@ state. Per the CLAUDE.md rule that a deliberate move should update the demo
 so it stays the reference, the demo owes this frame -- fold it into this
 entry's single polish pass rather than treating it as its own task.
 
+Grew a second of exactly the same kind on 2026-07-29 (documentation pass):
+the 403/404/422/500 pages shipped on 2026-07-28 as a genuinely new SURFACE --
+a full-page state with its own copy per status code -- and no demo has a
+frame for any of them. That is a bigger gap than the `.signin-note` above,
+because there is no existing frame to amend: whoever next reworks error-page
+copy or chrome has no reference to work against and will invent one. Same
+resolution though -- one frame per code in `dekimasen-demo.html`, folded into
+this entry's single pass, not its own task. Both gaps are now also named in
+CLAUDE.md's demo inventory, so the next person meets them where they look for
+the reference rather than only here.
+
 ### 9. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation

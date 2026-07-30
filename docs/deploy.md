@@ -71,13 +71,33 @@ DISCORD_TOKEN=<bot token>
 DISCORD_CLIENT_ID=<id>
 DISCORD_CLIENT_SECRET=<secret>
 EDITOR_WHITELIST=<your discord id>
+ADMIN_WHITELIST=<your discord id>
 BASE_URL=https://dekimasen.app
 SESSION_SECRET=<fresh: python -c "import secrets; print(secrets.token_hex(32))">
 DATABASE_URL=sqlite+aiosqlite:////home/ubuntu/app/app.db
 DEFAULT_TIMEZONE=America/Moncton
+PRIVACY_CONTACT_DISCORD=<your handle>
+PRIVACY_CONTACT_EMAIL=<your address>
 ```
 Note the **four** slashes in DATABASE_URL: absolute path, so the DB location
 doesn't depend on the service's working directory.
+
+`ADMIN_WHITELIST` is not optional in practice even though the app starts
+without it. It is the only way to be an admin (env-only by design, no runtime
+UI), and admins are who the ops alerts and the per-tick delivery digest are
+DM'd to, and who can reach `/admin/deliveries` and `/admin/broadcast`. Deploy
+without it and the app runs fine while nobody is told when backups go stale or
+the disk fills. `PRIVACY_CONTACT_*` fill the public `/privacy` page's
+data-request channel; set either, both, or neither (the page shows a neutral
+fallback), but they are the operator's real contact details and so live only
+here and in the local `.env`, never in the repo.
+
+**`REHEARSAL_ENABLED` must stay absent or false here.** It registers
+`/admin/rehearsal`, whose whole purpose is a "deliver every reminder now"
+button and a send-any-DM-shape catalogue. When the flag is off the router is
+never registered, so the routes do not exist at all — the `require_admin` on
+each one is a second layer for a misconfigured deploy, not the guard. It is a
+local-development tool; see `docs/local-dev-bot.md`.
 
 SESSION_SECRET is validated at startup: with an https BASE_URL, a blank,
 placeholder, or under-32-character secret is fatal. `alembic/env.py` imports
@@ -246,6 +266,19 @@ the tick beats the heartbeat immediately before running, so from in there the
 last beat is always seconds old. It can never observe its own death - only
 false-alarm about a tick that is legitimately running long. It stays on
 `/healthz`, where an outside caller can see the truth.
+
+### Watching what actually got delivered
+
+Both DM drains - reminders AND notifications - write a `delivery_log` row per
+attempt, and every tick that delivered anything DMs the admins a digest of
+COUNTS. `/admin/deliveries` is the reader and the only surface that names
+recipients; the digest deliberately does not, because a name in Discord
+history is a record `POST /me/delete` cannot reach. When a user reports a
+missing reminder, this is the first place to look: a `FORBIDDEN` row means
+their DMs are closed (the app also banners them about it), and no row at all
+means the queue never planned it, which is a different bug in a different
+place. All three admin pages are linked from Preferences, admin-only, so none
+of them needs its URL remembered.
 
 ## Updating (every deploy after the first)
 
