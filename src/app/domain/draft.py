@@ -56,6 +56,10 @@ class ParsedRound:
 class ParsedConcert:
     title: str
     venue_name: str | None
+    # The URL handle, when a draft carries one. An export writes it so a
+    # restore lands on the original address; an agent-authored draft omits it
+    # and import_commit generates one as before.
+    event_id: str | None = None
     days: list[ParsedDay] = field(default_factory=list)
     rounds: list[ParsedRound] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)

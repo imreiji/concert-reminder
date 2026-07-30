@@ -83,12 +83,18 @@ def concert_to_yaml(
     title_zh: str | None = None,
     notes_en: str | None = None,
     notes_zh: str | None = None,
+    event_id: str | None = None,
 ) -> str:
     """All timestamps are rendered in JST (the "Datetime contract" boundary
     for this app), formatted the same way forms accept them: 'YYYY-MM-DD HH:MM'.
     """
     data = {
-        "slug": slugify(title),
+        # The URL handle, so a restore lands on the ORIGINAL address. This
+        # replaced a `slug` key that was slugify(title) and unrelated to
+        # event_id -- two near-identical keys with different meanings is a trap
+        # in a file whose whole job is to be read back later. yaml_import still
+        # TOLERATES `slug` so drafts written before this keep parsing.
+        "event_id": event_id,
         "title": title,
         "title_en": title_en,
         "title_zh": title_zh,

@@ -54,10 +54,16 @@ def test_concert_to_yaml_full_shape():
         official_url="https://official.example/x",
         source_url="https://ramen.events/x",
         performers=["Kaho", "Sayaka"],
+        event_id="hasunosora-5th-live",
     )
     data = yaml.safe_load(text)
 
-    assert data["slug"] == "hasunosora-5th-live"
+    # DELIBERATE REVERSAL: this asserted `slug` (slugify(title)) until
+    # 2026-07-30. The export now carries the concert's real URL handle so a
+    # restore lands on the original address, and two near-identical keys with
+    # different meanings had no place in a file whose job is to be read back.
+    assert data["event_id"] == "hasunosora-5th-live"
+    assert "slug" not in data
     assert data["title"] == "Hasunosora 5th Live"
     assert data["title_en"] == "Hasunosora 5th Live (EN)"
     assert data["kind"] == "concert"
@@ -178,3 +184,16 @@ def test_concert_to_yaml_is_deterministic():
         notes=None,
     )
     assert concert_to_yaml(**kwargs) == concert_to_yaml(**kwargs)
+
+
+def test_export_emits_event_id_and_no_slug():
+    """`slug` was slugify(title) and unrelated to event_id -- two near-identical
+    keys with different meanings has no place in a restore file. The PARSER
+    still tolerates it so older drafts keep working."""
+    text = concert_to_yaml(
+        title="6th", event_id="hasunosora-6th-live", kind=None,
+        franchises=[], groups=[], artists=[], venues=[], days=[], rounds=[],
+        notes=None,
+    )
+    assert "event_id: hasunosora-6th-live" in text
+    assert "slug:" not in text

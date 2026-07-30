@@ -1582,6 +1582,8 @@ async def export_concert_yaml(
     ]
 
     text = concert_to_yaml(
+        # So a re-import lands on this exact URL rather than minting a new one.
+        event_id=concert.event_id,
         title=concert.title,
         kind=concert.kind.value if concert.kind else None,
         franchises=[t.name for t in concert.tags if t.kind is TagKind.FRANCHISE],

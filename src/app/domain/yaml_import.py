@@ -32,7 +32,9 @@ from app.domain.draft import ParsedConcert, ParsedDay, ParsedRound
 from app.domain.types import ConcertKind, RoundKind
 
 _TOP_KEYS = {
-    "slug", "title", "title_en", "title_zh", "kind", "organizer",
+    # "slug" is TOLERATED, not used: it predates event_id and meant
+    # slugify(title). Exports stopped emitting it; older drafts still parse.
+    "slug", "event_id", "title", "title_en", "title_zh", "kind", "organizer",
     "categories", "series", "venues", "performers", "eventernote_url",
     "official_url", "source_url", "performances", "rounds", "notes",
     "notes_en", "notes_zh",
@@ -263,6 +265,7 @@ def parse_draft(text: str) -> ParsedConcert:
         notes=_text(data.get("notes"), "notes", warnings),
         notes_en=_text(data.get("notes_en"), "notes_en", warnings),
         notes_zh=_text(data.get("notes_zh"), "notes_zh", warnings),
+        event_id=_text(data.get("event_id"), "event_id", warnings),
         organizer=_text(data.get("organizer"), "organizer", warnings),
         categories=_text(data.get("categories"), "categories", warnings),
         kind=_concert_kind(data.get("kind"), warnings),

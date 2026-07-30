@@ -330,3 +330,65 @@ async def test_import_preview_serves_kebab_with_remove_in_menu(client, db):
     seg = body.split("data-cancel-toggle", 1)[1].split("data-remove-leg", 1)[0]
     assert 'class="kmenu"' in seg
     assert "data-remove-leg>×" not in body
+
+
+# ── event_id: a restore keeps the URLs people hold ────────────────────────
+
+
+def test_a_draft_can_carry_its_event_id(client):
+    """A restore must land on the ORIGINAL urls, or every link anybody holds
+    breaks. Absent, generate_event_id runs exactly as before."""
+    login_as(client, EDITOR_ID, "reiji")
+    body = client.post("/concerts/import/draft", data={
+        "draft": "event_id: hasunosora-6th-live\ntitle: 6th\ntitle_en: 6th\ntitle_zh: 6th\n",
+    }).text
+    assert 'name="event_id"' in body
+    assert 'value="hasunosora-6th-live"' in body
+
+
+def test_committing_with_an_event_id_uses_it(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/concerts/import/commit", data={
+        "title": "6th", "title_en": "6th", "title_zh": "6th",
+        "event_id": "hasunosora-6th-live",
+    })
+    assert r.status_code == 303
+    assert r.headers["location"] == "/concerts/hasunosora-6th-live"
+
+
+def test_committing_the_same_event_id_twice_is_a_409(client):
+    """How re-importing a file into a populated catalogue announces itself,
+    instead of quietly creating a second concert."""
+    login_as(client, EDITOR_ID, "reiji")
+    data = {
+        "title": "6th", "title_en": "6th", "title_zh": "6th",
+        "event_id": "hasunosora-6th-live",
+    }
+    assert client.post("/concerts/import/commit", data=data).status_code == 303
+    assert client.post("/concerts/import/commit", data=data).status_code == 409
+
+
+def test_committing_without_an_event_id_still_generates_one(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/concerts/import/commit", data={
+        "title": "蓮ノ空", "title_en": "Hasunosora 6th", "title_zh": "6th",
+    })
+    assert r.status_code == 303
+    assert r.headers["location"] == "/concerts/hasunosora-6th"
+
+
+def test_a_reserved_event_id_in_a_draft_is_refused(client):
+    """validate_event_id, not a second copy of the rule (invariant 6)."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/concerts/import/commit", data={
+        "title": "X", "title_en": "X", "title_zh": "X", "event_id": "import",
+    })
+    assert r.status_code == 422
+
+
+def test_a_malformed_event_id_in_a_draft_is_refused(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/concerts/import/commit", data={
+        "title": "X", "title_en": "X", "title_zh": "X", "event_id": "not a slug!",
+    })
+    assert r.status_code == 422

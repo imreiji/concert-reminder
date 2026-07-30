@@ -48,6 +48,7 @@ from app.web.routes.concerts import (
     generate_event_id,
     parse_round_legs,
     resolve_day_venue_tags,
+    validate_event_id,
 )
 
 log = logging.getLogger(__name__)
@@ -196,6 +197,10 @@ async def import_preview(
         "import_preview.html",
         {
             "user": user, "parsed": parsed, "source_url": url,
+            # A scrape has no event_id to preserve; the field renders blank
+            # and import_commit generates one. Passed explicitly rather than
+            # left to Jinja Undefined being falsy by luck.
+            "event_id": "",
             # Served from POST-only /preview: aim the language chip's `next`
             # at the GET-able import form (its own path would 405).
             "lang_next_url": "/concerts/import",
@@ -316,6 +321,7 @@ async def import_draft(
         "import_preview.html",
         {
             "user": user, "parsed": parsed,
+            "event_id": parsed.event_id or "",
             "source_url": parsed.source_url or "",
             "lang_next_url": "/concerts/import",
             "fmt": _fmt, "kinds": list(RoundKind),
@@ -382,6 +388,7 @@ async def import_commit(
     notes: str = Form(default=""),
     notes_en: str = Form(default=""),
     notes_zh: str = Form(default=""),
+    event_id: str = Form(default=""),
     source_url: str = Form(default=""),
     eventernote_url: str = Form(default=""),
     official_url: str = Form(default=""),
@@ -412,9 +419,12 @@ async def import_commit(
 ):
     """Same validation as manual entry (build_day/build_round), just looped
     -- create_concert_row + add_day + add_round combined into one commit.
-    event_id isn't a field the import form collects, so it's auto-suggested
-    from the title (slugified, de-duplicated) -- editable afterward via the
-    edit page.
+    event_id is OPTIONAL here: an exported draft carries the concert's own,
+    so a restore lands on the original URL, and validate_event_id checks it
+    exactly as the edit page would (format, reserved words, uniqueness -- so a
+    re-import of a concert that still exists answers 409). Absent, it is
+    auto-suggested from the title (slugified, de-duplicated) and editable
+    afterward via the edit page.
 
     Rounds bind to legs by chip exactly as create_concert does: every leg is
     brand-new here (no id until the flush), so its card carries a client-side
@@ -441,7 +451,18 @@ async def import_commit(
     # no field to fill.
     require_variants("Notes", notes, notes_en, notes_zh)
 
-    event_id = await generate_event_id(session, title, title_en)
+    # A draft may carry its own event_id, so a restore lands on the ORIGINAL
+    # URL rather than minting a new one and breaking every link people hold.
+    # validate_event_id is the SAME check the edit page runs -- format,
+    # reserved words (invariant 6), uniqueness -- rather than a second copy of
+    # the rule, so re-importing a file whose concert still exists answers 409
+    # instead of quietly creating a duplicate.
+    submitted_event_id = event_id.strip()
+    event_id = (
+        await validate_event_id(session, submitted_event_id)
+        if submitted_event_id
+        else await generate_event_id(session, title, title_en)
+    )
     concert, newly = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
         kind=ConcertKind(kind) if kind else None,

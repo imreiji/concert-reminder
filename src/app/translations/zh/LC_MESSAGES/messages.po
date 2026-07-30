@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-30 11:05-0300\n"
+"POT-Creation-Date: 2026-07-30 11:44-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -578,8 +578,8 @@ msgstr "标题"
 #: src/app/web/templates/concert_new.html:91
 #: src/app/web/templates/concert_new.html:103
 #: src/app/web/templates/concert_new.html:108
-#: src/app/web/templates/import_preview.html:165
-#: src/app/web/templates/import_preview.html:167
+#: src/app/web/templates/import_preview.html:171
+#: src/app/web/templates/import_preview.html:173
 msgid "Notes"
 msgstr "备注"
 
@@ -1466,7 +1466,7 @@ msgstr "发现"
 #: src/app/web/templates/concert_detail.html:49
 #: src/app/web/templates/concert_edit.html:140
 #: src/app/web/templates/concert_new.html:114
-#: src/app/web/templates/import_preview.html:176
+#: src/app/web/templates/import_preview.html:182
 #: src/app/web/templates/tags.html:7
 msgid "Tags"
 msgstr "标签"
@@ -1654,6 +1654,7 @@ msgstr "标题（日文）"
 
 #: src/app/web/templates/concert_edit.html:41
 #: src/app/web/templates/concert_new.html:36
+#: src/app/web/templates/import_preview.html:161
 msgid "Event ID"
 msgstr "活动 ID"
 
@@ -1754,7 +1755,7 @@ msgstr "来源链接"
 
 #: src/app/web/templates/concert_edit.html:113
 #: src/app/web/templates/concert_new.html:88
-#: src/app/web/templates/import_preview.html:158
+#: src/app/web/templates/import_preview.html:164
 msgid "Performers (one per line)"
 msgstr "出演者（每行一名）"
 
@@ -1908,7 +1909,7 @@ msgid "Franchise, group, artists, venue — optional"
 msgstr "系列、组合、艺人、场馆 — 可选"
 
 #: src/app/web/templates/concert_new.html:121
-#: src/app/web/templates/import_preview.html:197
+#: src/app/web/templates/import_preview.html:203
 msgid "Create event"
 msgstr "创建活动"
 
@@ -2372,19 +2373,23 @@ msgstr "标题（EN）"
 msgid "Title (中文)"
 msgstr "标题（中文）"
 
-#: src/app/web/templates/import_preview.html:168
+#: src/app/web/templates/import_preview.html:162
+msgid "auto-generated from the English title"
+msgstr "根据英文标题自动生成"
+
+#: src/app/web/templates/import_preview.html:174
 msgid "Notes (EN)"
 msgstr "备注（EN）"
 
-#: src/app/web/templates/import_preview.html:170
+#: src/app/web/templates/import_preview.html:176
 msgid "Notes (中文)"
 msgstr "备注（中文）"
 
-#: src/app/web/templates/import_preview.html:177
+#: src/app/web/templates/import_preview.html:183
 msgid "Franchise, group, artists, venue — imported and editable"
 msgstr "系列、组合、艺人、场馆 — 已导入，可编辑"
 
-#: src/app/web/templates/import_preview.html:189
+#: src/app/web/templates/import_preview.html:195
 msgid "No tag yet:"
 msgstr "尚无标签:"
 
@@ -2882,8 +2887,7 @@ msgstr "导入标签"
 msgid ""
 "Restore a tags.yaml from a catalogue export. Existing tags are skipped, "
 "never overwritten."
-msgstr ""
-"从目录导出文件恢复 tags.yaml。已存在的标签会被跳过，不会被覆盖。"
+msgstr "从目录导出文件恢复 tags.yaml。已存在的标签会被跳过，不会被覆盖。"
 
 #: src/app/web/templates/preferences.html:460
 msgid "Rehearsal"

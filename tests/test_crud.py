@@ -702,7 +702,11 @@ async def test_export_yaml_shape(client):
     data = yaml.safe_load(r.text)
     assert data["title"] == "Export Me"
     assert data["kind"] == "concert"
-    assert data["slug"] == "export-me"
+    # DELIBERATE REVERSAL (2026-07-30): the export carries the concert's real
+    # URL handle now, not slugify(title), so a re-import lands on this exact
+    # address instead of minting a new one.
+    assert data["event_id"] == "export-me"
+    assert "slug" not in data
     assert data["series"]["franchises"] == ["Hasunosora"]
     assert len(data["performances"]) == 1
     assert data["performances"][0]["label"] == "Day 1"
