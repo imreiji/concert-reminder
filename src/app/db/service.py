@@ -57,6 +57,7 @@ from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.digest import DeliveryFact, build_digest
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
+from app.domain.slugs import tag_slug_base
 from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import (
@@ -4081,30 +4082,72 @@ async def concert_audit_log(
 # ── Tags ─────────────────────────────────────────────────────────────────
 
 
-async def find_tag_by_name(session: AsyncSession, name: str) -> Tag | None:
-    from sqlalchemy import func as sa_func
+async def assign_tag_slug(session: AsyncSession, tag: Tag) -> str:
+    """Give `tag` a unique handle. Call after `session.add(tag)`, before commit.
 
-    res = await session.execute(
-        select(Tag).where(sa_func.lower(Tag.name) == name.strip().lower())
-    )
-    return res.scalar_one_or_none()
+    The handle is a tag's identity -- names are not unique (owner ruling
+    2026-07-29) -- so this is the single place one is minted, and every create
+    path goes through it.
+
+    When the name yields no ASCII at all (a Japanese-only tag) the base is the
+    KIND, so the de-duplication below numbers it: `artist`, `artist-2`. The spec
+    called for `{kind}-{id}`, and that is not buildable -- the id needs a flush,
+    a flush needs a non-null slug, and `slug` is NOT NULL, so it would take a
+    throwaway placeholder written purely to be overwritten. The row id bought
+    nothing anyway: a handle only has to be unique and improvable, and it is
+    stable from the moment it is assigned either way.
+
+    De-duplication reads the DB AND the pending session, because a caller may
+    add several tags before committing (the catalogue import will) and two
+    pending rows must not agree on a handle -- the unique constraint would only
+    catch that at flush time, by which point the useful context is gone.
+
+    `no_autoflush` is load-bearing: `tag` is already in `session.new` with a
+    null slug, and letting the SELECT autoflush it would hit the NOT NULL
+    constraint before this function ever gets to fill the column in.
+    """
+    base = tag_slug_base(tag.name, tag.name_en) or tag.kind.value
+    with session.no_autoflush:
+        taken = {
+            slug for (slug,) in await session.execute(
+                select(Tag.slug).where(Tag.slug.is_not(None))
+            )
+        }
+    taken |= {t.slug for t in session.new if isinstance(t, Tag) and t.slug}
+    candidate, suffix = base, 2
+    while candidate in taken:
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    tag.slug = candidate
+    return candidate
 
 
-async def find_tag_by_name_and_kind(
+async def find_tags_by_name_and_kind(
     session: AsyncSession, name: str, kind: TagKind
-) -> Tag | None:
-    """A name+kind collision -- the kind-scoped duplicate the create route
-    blocks on. A second `Aqours` GROUP is a real duplicate; an `Aqours` VENUE
-    beside the `Aqours` GROUP is allowed (resolved with the owner). Rename
-    still uses the name-only find_tag_by_name."""
+) -> list[Tag]:
+    """EVERY tag of this kind with this name, case-insensitively, oldest first.
+
+    PLURAL because names are not unique and never will be: two performers may
+    genuinely share one (owner ruling, 2026-07-29). A name is a hint for a
+    human, never an identity -- `slug` is the identity.
+
+    This replaced two single-result lookups, `find_tag_by_name` (name only) and
+    `find_tag_by_name_and_kind`, both of which used `scalar_one_or_none` and so
+    raised `MultipleResultsFound` the moment a duplicate existed. Neither
+    survives: deleting them is what removes the bug class, rather than leaving a
+    function that is safe only while the data happens to cooperate. A caller
+    wanting "one" must say which one it means -- `[0]` for the oldest.
+
+    Ordered by id so that choice is deterministic.
+    """
     from sqlalchemy import func as sa_func
 
     res = await session.execute(
-        select(Tag).where(
-            sa_func.lower(Tag.name) == name.strip().lower(), Tag.kind == kind
-        )
+        select(Tag)
+        .where(sa_func.lower(Tag.name) == name.strip().lower(), Tag.kind == kind)
+        .order_by(Tag.id)
     )
-    return res.scalar_one_or_none()
+    return list(res.scalars())
 
 
 async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
@@ -4507,7 +4550,31 @@ async def tag_picker_context(session: AsyncSession) -> dict:
             "members": [{"id": m.id, "name": m.name} for m in await group_members(session, g.id)],
         }
     tag_names = {t.id: t.name for t in tags}
-    return {"by_kind": by_kind, "groups": groups_data, "tag_names": tag_names}
+    # Which tags must show their handle beside their name: ONLY those sharing a
+    # (name, kind) with another tag. Two identical chips are unusable, but
+    # showing every handle would put noise on the overwhelming majority that do
+    # not collide. Decided HERE rather than in the template's JS, because "are
+    # these the same tag to a reader" is a question about the data.
+    #
+    # A parallel map rather than restructuring tag_names, whose {id: name} shape
+    # several templates' inline scripts already read -- far smaller blast radius
+    # than changing a contract in place.
+    by_name_and_kind: dict[tuple[str, str], list[int]] = {}
+    for t in tags:
+        by_name_and_kind.setdefault((t.name.strip().lower(), t.kind.value), []).append(t.id)
+    slug_by_id = {t.id: t.slug for t in tags}
+    tag_disambiguators = {
+        tag_id: slug_by_id[tag_id]
+        for ids in by_name_and_kind.values()
+        if len(ids) > 1
+        for tag_id in ids
+    }
+    return {
+        "by_kind": by_kind,
+        "groups": groups_data,
+        "tag_names": tag_names,
+        "tag_disambiguators": tag_disambiguators,
+    }
 
 
 async def _is_attached(session: AsyncSession, concert_id: int, tag_id: int) -> bool:
@@ -5834,7 +5901,10 @@ async def seed_rehearsal(
     # follower of a tag, and the likeliest way this app ever messages the wrong
     # people. The shape catalogue can render the embed, but only this exercises
     # the delivery.
-    tag = await find_tag_by_name_and_kind(session, REHEARSAL_TAG_NAME, TagKind.ARTIST)
+    # First match, not "the" match: names are not unique, so this asks for A tag
+    # called this rather than THE one. Re-seeding must not mint a second.
+    existing = await find_tags_by_name_and_kind(session, REHEARSAL_TAG_NAME, TagKind.ARTIST)
+    tag = existing[0] if existing else None
     if tag is None:
         tag = Tag(
             name=REHEARSAL_TAG_NAME,
@@ -5844,6 +5914,7 @@ async def seed_rehearsal(
             created_by=user_id,
         )
         session.add(tag)
+        await assign_tag_slug(session, tag)
         await session.flush()
 
     following = (

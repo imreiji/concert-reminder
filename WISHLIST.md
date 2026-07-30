@@ -420,6 +420,33 @@ that week to skip all three. It is in Shipped now, dated to its commit rather
 than to today. It was never a Proposed entry, so nothing moved up from
 Proposed on its account.
 
+The 2026-07-30 pass ships no Proposed entry at all, which is unusual enough to
+explain. Tag handles came out of DESIGNING #1, the admin catalogue export: the
+owner asked for the export and immediately named the hole in it, and the answer
+turned out to be a prerequisite that entry never knew it had. It is logged in
+Shipped with the two crashes it closed on the way.
+
+The re-rank moves nothing, and no entry is renumbered, because nothing left
+Proposed. What DID change is what #1 costs and what it can promise. A tag now
+has an identity that is not its name, so the export can key on it and an import
+can answer "do I already have this tag?" without guessing -- which is the whole
+reason a tags file was unloadable before. #1's own text already argued for the
+re-importable YAML shape over a read-only dump; that argument is now backed by
+something rather than merely preferred, and the entry is annotated in place
+instead of re-ranked, since a dev-seeding path is still developer value and this
+list orders by user impact.
+
+Two entries were re-read against what shipped and both stand. Minute-level
+offsets (#2) goes nowhere near any of this. Eventernote actor-page discovery
+(#3) gets quietly cheaper for the same reason #1 does -- a sweep that finds
+forty new performers has to decide which are already in the catalogue, and it can
+now be told rather than guess -- but not cheaper enough to move it. The
+`RoundKind` observation (#5) is untouched.
+
+One rider for whoever picks up #1: the export must carry each tag's HANDLE, and
+the import must match on it. Matching on names would reintroduce exactly the
+ambiguity this build removed, and it would do so silently.
+
 ## Proposed (highest impact first)
 
 
@@ -440,6 +467,14 @@ region/city/address, urls), zipped under `GET /admin/export.zip` behind
 (`/concerts/import/skill.zip`). Decide with the owner whether
 re-importability matters or a read-only JSON dump is enough -- the YAML
 shape costs a little more and pays only if it does.
+
+As of 2026-07-30 the prerequisite this entry did not know it had is DONE: tags now
+carry a `slug` (see Shipped, tag handles), so a tag has an identity that is not its
+name. That is what makes the round-trip possible at all -- the tags file must carry
+handles and the import must match on them, because matching on names is the exact
+ambiguity that build removed, and it would go wrong silently. The entry's own
+preference for the re-importable YAML shape over a read-only dump is now backed by
+something rather than merely argued.
 
 A SECOND use for it turned up on 2026-07-28, in the rehearsal harness spec
 (shipped since -- see Shipped): a catalogue-only copy is the clean way to
@@ -702,6 +737,84 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Tag handles: a stable identity that is not the name (2026-07-30)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-29-tag-handles-design.md` +
+impl plan `docs/superpowers/plans/2026-07-29-tag-handles.md`, seven tasks on
+branch `tag-handles`, migration `eb4cb4f7927a`. **Not a Proposed entry** -- it
+came out of designing #1, the admin catalogue export, and it is the prerequisite
+that entry did not know it had. Three dialog fixes found alongside it shipped
+separately as PR #112.
+
+The owner asked for the export and named the hole in the same breath: *"the
+issue is I also want a way to import tags."* Correct -- a YAML draft can
+REFERENCE tags but never DEFINE them, so an export was a pile of concerts
+pointing at a taxonomy you would have to hand-rebuild first. Designing that
+importer ran into a question it could not answer: **"do I already have this
+tag?"**
+
+**Two live crashes fell out of asking it**, both measured against a real DB
+rather than reasoned about. `Tag.name` was globally unique in the schema while
+the routes checked name+kind, and `find_tag_by_name_and_kind`'s own docstring
+recorded an owner ruling -- same name across kinds is allowed -- that was never
+implemented. So creating an `Aqours` VENUE beside the `Aqours` GROUP passed the
+routes' check and died on the column's UNIQUE: an unhandled IntegrityError, a
+500, the editor's input gone. The same thing in different case SUCCEEDED (the
+constraint was case-sensitive, the check was not) and from then on every
+name lookup raised `MultipleResultsFound` -- a working page started 500ing with
+nothing saying why.
+
+**The owner then supplied the requirement that killed the obvious fix**:
+uniqueness scoped to a kind is still wrong, because two performers may share a
+name. Which means a tag's name is not its identity and no amount of scoping
+makes it one -- every name-match in the app was a guess. Concerts had solved
+this years earlier with `event_id`; tags had no equivalent, and that absence
+was the actual gap.
+
+So tags got a `slug`: auto-generated from `name_en`/`name`, editable, unique,
+ASCII, and deliberately absent from every URL. Name uniqueness was dropped
+outright rather than narrowed, both crashes died with it, and the single-result
+name lookups were DELETED rather than fixed -- `scalar_one_or_none` raises the
+moment a duplicate exists, so keeping either would have left a function that is
+safe only while the data cooperates.
+
+Four things worth keeping on the record.
+
+**The `#new-tag-dupe` warning had been telling the truth while the server
+refused.** The Tags page has warned "creating another one will keep them
+separate because tags cannot be merged yet" for a while, and `create_tag` 409'd
+exactly that. Removing the block was a correctness fix, not merely an enabler --
+and it meant the UI work budgeted for this arc mostly already existed.
+
+**The three create surfaces deliberately diverge**, which is documented in
+CLAUDE.md so it does not read as drift: `POST /tags` allows a duplicate name,
+while the two quick-create routes still answer 409 with the existing tag's id.
+Mid-import, an existing tag of the name you just typed is almost certainly the
+one you meant. `tests/test_error_pages.py` also uses that 409 as its only
+vehicle for the HTML-vs-JSON regression guard, which removing it would have
+quietly emptied.
+
+**The migration nearly shipped half-applied.** Its structural phase briefly sat
+inside the reporting helper, after that helper's early return, so it ran only
+when there was something to report -- a database whose handles all came out well
+would have been left with `slug` nullable, the unique still on `name`, and the
+revision stamped as applied. All nineteen migration tests passed for the wrong
+reason because every fixture happened to contain a reportable row; an unrelated
+downgrade test in another file is what caught it. The full account is in the
+spec, along with the two guards now encoding the lesson.
+
+**The backfill reports what it guessed at**, at the owner's request: handles
+that fell back to the kind, handles built from one stray Latin letter
+(`Kアリーナ横浜` -> `k`), and every tag with no English name -- the last being
+the one the owner expects to come back empty, which is exactly why it is worth
+printing. Names escape rather than raise if the console cannot encode them,
+because a diagnostic must never be the thing that aborts a deploy.
+
+One decision left open on purpose and recorded in the spec: whether a
+one-ASCII-character handle should fall back to the kind. Left as-is because any
+threshold is arbitrary, the alternative is an anonymous handle rather than a
+useless one, and handles are editable.
 
 ### Correctness sweep: a permanent wrong DM and an unreachable URL (2026-07-29)
 

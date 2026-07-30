@@ -207,6 +207,10 @@ async def import_preview(
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
+            # Handles for the tags whose (name, kind) collides -- the picker
+            # shows one beneath the chip so two identical chips are
+            # distinguishable. Empty for almost every tag.
+            "tag_disambiguators": picker["tag_disambiguators"],
             "initial_selected": {},
             # Every VENUE tag, for the per-leg <select>.
             "venue_tags": venue_tags,
@@ -319,6 +323,10 @@ async def import_draft(
             "by_kind": picker["by_kind"],
             "groups": picker["groups"],
             "tag_names": picker["tag_names"],
+            # Handles for the tags whose (name, kind) collides -- the picker
+            # shows one beneath the chip so two identical chips are
+            # distinguishable. Empty for almost every tag.
+            "tag_disambiguators": picker["tag_disambiguators"],
             "initial_selected": initial_selected,
             "venue_tags": venue_tags,
             "round_phrases": await round_label_phrases(session),

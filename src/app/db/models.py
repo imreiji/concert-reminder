@@ -29,6 +29,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from app.domain.slugs import tag_slug_base
 from app.domain.types import (
     Anchor,
     BroadcastMode,
@@ -213,6 +214,26 @@ class ConcertAudit(Base):
     editor: Mapped["User | None"] = relationship()
 
 
+def _derive_tag_slug(context) -> str:
+    """INSERT-time default for `Tag.slug`, so a handle is never absent.
+
+    Guarantees NON-NULLNESS only. `service.assign_tag_slug` is still the single
+    path that guarantees a non-COLLIDING handle -- it de-duplicates against the
+    DB and the pending session, which a column default cannot do (it has no
+    session and cannot query). Every production create path calls it, so this
+    default does not fire there at all; it exists so that constructing a `Tag`
+    without one is not a NOT NULL crash, in tests and in any future caller.
+
+    Two same-derived handles reaching the DB raise IntegrityError, which is the
+    correct outcome: loud, at the boundary, rather than a silent duplicate
+    identity.
+    """
+    params = context.get_current_parameters()
+    kind = params.get("kind")
+    fallback = kind.value if hasattr(kind, "value") else str(kind or "tag")
+    return tag_slug_base(params.get("name") or "", params.get("name_en")) or fallback
+
+
 class Tag(Base):
     """A label events carry: franchise, artist, venue, or group.
 
@@ -227,9 +248,16 @@ class Tag(Base):
     __tablename__ = "tags"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True)
-    # Viewer-locale variants of the tag name. NOT unique -- two tags may share
-    # an English/Chinese rendering (only the canonical `name` is unique).
+    # The stable identity, and the ONLY unique column here. Names are NOT unique
+    # and never will be: two performers may genuinely share one, and a venue may
+    # share one with a group (owner ruling, 2026-07-29). So a name cannot
+    # identify a tag and nothing may treat it as if it could. Auto-generated via
+    # service.assign_tag_slug, editable, ASCII by construction, and deliberately
+    # absent from every URL -- tag pages stay on the numeric id. This is what
+    # catalogue export/import key on.
+    slug: Mapped[str] = mapped_column(String(100), unique=True, default=_derive_tag_slug)
+    name: Mapped[str] = mapped_column(String(100))
+    # Viewer-locale variants of the tag name. Like `name`, not unique.
     name_en: Mapped[str | None] = mapped_column(String(100))
     name_zh: Mapped[str | None] = mapped_column(String(100))
     kind: Mapped[TagKind] = mapped_column(

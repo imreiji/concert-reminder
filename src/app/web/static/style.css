@@ -1370,6 +1370,11 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .banner.dupe.show { display: flex; }
 .dupe b { font-weight: 700; }
 
+/* A tag's handle, shown inside a chip ONLY where two same-kind tags share a
+   name (service.tag_picker_context decides which). Secondary weight and size so
+   the name still reads as the label and the handle as the tiebreaker. */
+.chip .dis { margin-left: .35em; font-weight: 400; opacity: .65; font-size: .85em; }
+
 .upgradebox {
   padding: .6rem .75rem; border-radius: 3px; display: grid; gap: .45rem;
 }

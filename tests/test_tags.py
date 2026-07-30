@@ -167,16 +167,30 @@ def test_tag_creation_is_editor_only(client):
     }).status_code == 303
 
 
-def test_creating_same_name_same_kind_still_409s(client):
-    """Kind-scoped duplicate rule (resolved with the owner): a second tag of
-    the SAME name AND SAME kind is a real duplicate and stays blocked."""
+async def test_creating_same_name_same_kind_now_succeeds(client):
+    """DELIBERATE REVERSAL of test_creating_same_name_same_kind_still_409s.
+
+    Owner ruling 2026-07-29: two performers may genuinely share a name, so
+    nothing about a name can be a uniqueness rule. The Tags page warns before
+    submit (#new-tag-dupe, which has shipped for a while) and then allows it;
+    `slug` is what keeps the two apart. The quick-create dialogs still answer
+    409 -- see test_quick_create_* -- because there you are being offered an
+    existing match, which is a different question.
+    """
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={
         "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
     })
     assert client.post("/tags", data={
         "name_en": "aqours", "name_zh": "aqours", "name": "aqours", "kind": "group",
-    }).status_code == 409
+    }).status_code == 303
+
+    async with client.db() as s:
+        rows = (await s.execute(
+            select(Tag).where(func.lower(Tag.name) == "aqours")
+        )).scalars().all()
+        assert len(rows) == 2
+        assert {r.slug for r in rows} == {"aqours", "aqours-2"}
 
 
 async def test_creating_same_name_tag_now_succeeds(client):
@@ -218,7 +232,13 @@ async def test_rename_tag_round_trips(client):
         assert tag.name == "Hasunosora Idols"
 
 
-def test_rename_tag_rejects_case_insensitive_duplicate(client):
+async def test_rename_tag_onto_an_existing_name_is_allowed(client):
+    """DELIBERATE REVERSAL of test_rename_tag_rejects_case_insensitive_duplicate.
+
+    Names are not unique any more, so a rename cannot collide. Blocking here
+    while allowing it at create would also be incoherent: you could type the
+    duplicate but never arrive at it by editing.
+    """
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={
         "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
@@ -226,8 +246,14 @@ def test_rename_tag_rejects_case_insensitive_duplicate(client):
     client.post("/tags", data={
         "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
     })
-    r = client.post("/tags/2/edit", data={"name": "hasunosora"})
-    assert r.status_code == 409
+    assert client.post("/tags/2/edit", data={"name": "hasunosora"}).status_code == 303
+
+    async with client.db() as s:
+        renamed = await s.get(Tag, 2)
+        assert renamed.name == "hasunosora"
+        # The handle is untouched by a rename -- it is the identity, and
+        # rewriting it would break anything holding it.
+        assert renamed.slug == "gakumas"
 
 
 def test_rename_tag_to_its_own_current_name_is_a_noop(client):
@@ -758,9 +784,10 @@ def test_dupe_payload_is_tojson_not_double_encoded(client):
     assert "\\u003c/script\\u003e\\u003cscript\\u003ealert(1)" in r.text
 
 
-def test_rename_to_existing_name_still_409s(client):
-    """Rename collision is name-only (global across kinds) and unchanged --
-    only CREATE became kind-scoped."""
+def test_rename_across_kinds_is_allowed_too(client):
+    """DELIBERATE REVERSAL of test_rename_to_existing_name_still_409s, which
+    pinned rename collision as name-only and global across kinds. There is no
+    name collision left to detect, in any scope."""
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={
         "name_en": "Aqours", "name_zh": "Aqours", "name": "Aqours", "kind": "group",
@@ -768,8 +795,7 @@ def test_rename_to_existing_name_still_409s(client):
     client.post("/tags", data={
         "name_en": "Hall", "name_zh": "Hall", "name": "Hall", "kind": "venue",
     })
-    r = client.post("/tags/2/edit", data={"name": "aqours"})
-    assert r.status_code == 409
+    assert client.post("/tags/2/edit", data={"name": "aqours"}).status_code == 303
 
 
 def test_new_tag_dialog_replaces_details_form(client):
@@ -2118,3 +2144,182 @@ def test_quick_tag_create_is_403_for_a_signed_in_non_editor(client):
     assert client.post(
         "/tags/quick", data={"name": "X", "kind": "artist"}
     ).status_code == 403
+
+
+# ── The two crashes tag handles exist to close ────────────────────────────
+
+
+def test_creating_a_venue_named_like_a_group_no_longer_500s(client):
+    """MEASURED bug: the routes' duplicate check was kind-scoped while the
+    column's UNIQUE was global, so this passed the check and then died on an
+    unhandled IntegrityError -- a 500 with the editor's input lost."""
+    login_as(client, EDITOR_ID, "reiji")
+    assert client.post("/tags", data={
+        "name": "Aqours", "name_en": "Aqours", "name_zh": "Aqours", "kind": "group",
+    }).status_code == 303
+    assert client.post("/tags", data={
+        "name": "Aqours", "name_en": "Aqours", "name_zh": "Aqours", "kind": "venue",
+    }).status_code == 303
+
+
+def test_a_case_variant_across_kinds_no_longer_poisons_name_lookups(client):
+    """The nastier half: this INSERT used to SUCCEED (the DB constraint was
+    case-sensitive, the route check was not), and from then on any name lookup
+    raised MultipleResultsFound -- a working page started 500ing with nothing
+    saying why. The Tags page render is the canary."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Aqours", "name_en": "Aqours", "name_zh": "Aqours", "kind": "group",
+    })
+    assert client.post("/tags", data={
+        "name": "aqours", "name_en": "Aqours", "name_zh": "Aqours", "kind": "venue",
+    }).status_code == 303
+    assert client.get("/tags").status_code == 200
+    # And a rename still works, which is the path find_tag_by_name used to break.
+    assert client.post("/tags/1/edit", data={"name": "Aqours!"}).status_code == 303
+
+
+async def test_two_performers_with_the_same_name(client):
+    """The requirement that killed kind-scoped name uniqueness."""
+    login_as(client, EDITOR_ID, "reiji")
+    for _ in range(2):
+        assert client.post("/tags", data={
+            "name": "Yuki Sato", "name_en": "Yuki Sato", "name_zh": "佐藤有紀",
+            "kind": "artist",
+        }).status_code == 303
+
+    async with client.db() as s:
+        rows = (await s.execute(select(Tag).where(Tag.name == "Yuki Sato"))).scalars().all()
+        assert len(rows) == 2
+        assert {r.slug for r in rows} == {"yuki-sato", "yuki-sato-2"}
+
+
+# ── Editing a handle ──────────────────────────────────────────────────────
+
+
+async def test_editing_a_handle_round_trips(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Kアリーナ横浜", "name_en": "K Arena", "name_zh": "K竞技场", "kind": "venue",
+    })
+    assert client.post("/tags/1/edit", data={
+        "name": "Kアリーナ横浜", "slug": "k-arena-yokohama",
+    }).status_code == 303
+
+    async with client.db() as s:
+        assert (await s.get(Tag, 1)).slug == "k-arena-yokohama"
+
+
+def test_editing_a_handle_onto_a_taken_one_409s(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Aqours", "name_en": "Aqours", "name_zh": "Aqours", "kind": "group",
+    })
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    r = client.post("/tags/2/edit", data={"name": "Hall", "slug": "aqours"})
+    assert r.status_code == 409
+
+
+async def test_a_handle_keeping_its_own_value_is_not_a_collision(client):
+    """Resubmitting the edit form unchanged must not 409 against itself."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    assert client.post("/tags/1/edit", data={"name": "Hall", "slug": "hall"}).status_code == 303
+    async with client.db() as s:
+        assert (await s.get(Tag, 1)).slug == "hall"
+
+
+async def test_a_submitted_handle_is_normalised_not_rejected(client):
+    """Uppercase and spaces are what a person types, not an error. Normalise on
+    the editor's behalf rather than bouncing them for punctuation."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    assert client.post("/tags/1/edit", data={
+        "name": "Hall", "slug": "  Zepp Haneda!  ",
+    }).status_code == 303
+    async with client.db() as s:
+        assert (await s.get(Tag, 1)).slug == "zepp-haneda"
+
+
+def test_a_handle_that_normalises_to_nothing_422s(client):
+    """The one case there is nothing to store and nothing to fix for them."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    assert client.post("/tags/1/edit", data={
+        "name": "Hall", "slug": "ホール",
+    }).status_code == 422
+
+
+async def test_omitting_the_handle_leaves_it_alone(client):
+    """Every existing caller posts this form without a slug field; none of them
+    may blank the identity."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    assert client.post("/tags/1/edit", data={"name": "Hall Renamed"}).status_code == 303
+    async with client.db() as s:
+        tag = await s.get(Tag, 1)
+        assert tag.slug == "hall"
+        assert tag.name == "Hall Renamed"
+
+
+def test_the_edit_dialog_exposes_the_handle_field(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name": "Hall", "name_en": "Hall", "name_zh": "Hall", "kind": "venue",
+    })
+    body = client.get("/tags").text
+    assert 'name="slug"' in body, "the edit dialog must offer the handle"
+    assert 'value="hall"' in body
+    # NOT on the create form: it is auto-generated, and offering it up front
+    # invites bikeshedding over a value that does not matter until it collides.
+    new_dialog = body.split('id="new-tag-dialog"', 1)[1]
+    assert 'name="slug"' not in new_dialog
+
+
+async def test_the_picker_shows_a_handle_only_on_a_colliding_chip(client):
+    """Two same-kind tags with the same name would render two identical,
+    unusable chips. The handle appears beneath the colliding ones and nowhere
+    else -- every page that includes the picker partial."""
+    login_as(client, EDITOR_ID, "reiji")
+    for name in ("Yuki Sato", "Yuki Sato", "Kozue Otomune"):
+        client.post("/tags", data={
+            "name": name, "name_en": name, "name_zh": name, "kind": "artist",
+        })
+
+    # The two GET pages that include _tag_picker_script.html. import_preview.html
+    # includes it too, but is only reachable by POST -- covered by the import
+    # tests, which render the same partial from the same context key.
+    client.post("/concerts", data={
+        "title": "C", "title_en": "C", "title_zh": "C", "event_id": "c1",
+    })
+    for path in ("/concerts/new", "/concerts/c1/edit"):
+        body = client.get(path).text
+        assert body.count('<small class="dis">') == 2, (
+            f"{path}: exactly the two colliding chips carry a handle"
+        )
+        assert "yuki-sato-2" in body, path
+        # The unique name gets no handle: its chip is the plain name.
+        assert ">Kozue Otomune</button>" in body, f"{path}: no noise on a unique name"
+        # The JS half, for chips rendered client-side into the selected row.
+        assert "TAG_DIS" in body, path
+
+
+async def test_no_disambiguators_when_nothing_collides(client):
+    login_as(client, EDITOR_ID, "reiji")
+    for name in ("Kozue", "Sumire"):
+        client.post("/tags", data={
+            "name": name, "name_en": name, "name_zh": name, "kind": "artist",
+        })
+    body = client.get("/concerts/new").text
+    assert '<small class="dis">' not in body
+    assert "const TAG_DIS = {}" in body, "empty map, not absent -- the JS reads it"

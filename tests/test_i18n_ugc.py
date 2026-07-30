@@ -102,12 +102,21 @@ async def test_tag_variant_columns_nullable(session):
 
 @pytest.mark.asyncio
 async def test_tag_name_variants_not_unique(session):
-    # name is unique; the variants must NOT be, so two tags can share an
-    # English or Chinese rendering without colliding.
+    # NEITHER the canonical name NOR its variants are unique (owner ruling
+    # 2026-07-29): only `slug` is. Two tags may share an English or Chinese
+    # rendering, and these two also share a derived handle -- both name_en
+    # values are "Love Live" -- so they go through assign_tag_slug, which is
+    # what de-duplicates that into love-live / love-live-2.
+    from app.db.service import assign_tag_slug
+
     t1 = Tag(name="ラブライブ", kind=TagKind.FRANCHISE, name_en="Love Live", name_zh="爱")
     t2 = Tag(name="ラブライブ！", kind=TagKind.FRANCHISE, name_en="Love Live", name_zh="爱")
     session.add_all([t1, t2])
+    await assign_tag_slug(session, t1)
+    await assign_tag_slug(session, t2)
     await session.commit()  # must not raise
+
+    assert [t1.slug, t2.slug] == ["love-live", "love-live-2"]
 
 
 def test_tag_venue_detail_columns_are_nullable():

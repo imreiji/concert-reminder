@@ -424,6 +424,27 @@ deleting them.
    (`web/routes/concerts.py`) follows the same rule when cloning a concert:
    it re-attaches the source's exact already-pruned tag set with
    `expand=False`, never re-expanding a GROUP tag to its current membership.
+   **A tag is identified by its `slug`, never its name.** Names are NOT unique
+   and never will be: two performers may genuinely share one, and a venue may
+   share one with a group (owner ruling, 2026-07-29). `Tag.slug` is the only
+   unique column — auto-generated from `name_en`/`name` by `assign_tag_slug`
+   (`db/service.py`, the single minting path; a model-level default guarantees
+   non-nullness, but only that helper de-duplicates), editable on the Tags page,
+   ASCII by construction, and absent from every URL (tag pages stay on the
+   numeric id). Anything answering "do I already have this tag?" must ask by
+   slug; a name match is a hint for a human. There is deliberately NO
+   single-result lookup by name — `find_tags_by_name_and_kind` is plural, and
+   both single-result ancestors were DELETED because `scalar_one_or_none` raises
+   `MultipleResultsFound` by construction once names repeat. A rename never
+   touches the slug, for the same reason invariant 6 freezes `event_id`.
+   The three create surfaces deliberately DIVERGE on a duplicate name, and this
+   is not drift: `POST /tags` allows it (the Tags page is where deliberate
+   things happen, and it already warns before submit via `#new-tag-dupe`), while
+   `POST /tags/quick` and `POST /tags/venue/quick` still answer 409 with the
+   existing tag's id so their dialogs can offer one-click select-existing —
+   mid-import, an existing tag of the name you just typed is almost certainly
+   the one you meant. `tests/test_error_pages.py` pins that those 409s keep
+   their JSON body instead of becoming an HTML error page.
 4. **Notifications**: new-event notices go through the `notifications`
    table (DB outbox drained by the scheduler) — never send DMs directly
    from web routes. One narrow, explicit exception: `POST /me/test-dm`
