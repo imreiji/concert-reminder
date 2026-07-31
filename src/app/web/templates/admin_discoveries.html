@@ -56,8 +56,8 @@
   <table class="tagtable">
     <thead>
       <tr>
-        <th>Performance</th><th>Date</th><th>Venue</th><th>Artist</th>
-        <th>Announced</th><th></th>
+        <th>Performance</th><th class="nw">Date</th><th>Venue</th><th>Artist</th>
+        <th class="nw">Announced</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -74,10 +74,10 @@
           <div class="banner warn">May already have this — same date and venue as a leg you hold.</div>
           {% endif %}
         </td>
-        <td>{{ r.lead.event_date.strftime('%Y-%m-%d') }}</td>
+        <td class="nw">{{ r.lead.event_date.strftime('%Y-%m-%d') }}</td>
         <td>{{ r.lead.venue or '—' }}</td>
         <td>{{ r.artist or '—' }}</td>
-        <td>{{ r.lead.announced_at.strftime('%Y-%m-%d') if r.lead.announced_at else 'Not yet' }}</td>
+        <td class="nw">{{ r.lead.announced_at.strftime('%Y-%m-%d') if r.lead.announced_at else 'Not yet' }}</td>
         <td class="r">
           <form method="post" action="/admin/discoveries/{{ r.lead.id }}/dismiss">
             <button class="act no" type="submit">Dismiss lead</button>
