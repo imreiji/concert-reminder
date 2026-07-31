@@ -11,12 +11,13 @@ naive datetimes on write and always returns aware-UTC on read. SQLite itself
 has no timezone concept, so we make the ORM the gatekeeper.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -355,6 +356,12 @@ class ConcertDay(Base):
     # cancelled ("General" rounds with no day association are never
     # auto-cancelled this way).
     cancelled: Mapped[bool] = mapped_column(default=False, server_default="0")
+    # The Eventernote event this leg came from, when it was imported from one.
+    # This is what makes discovery's "do I already have this?" an exact id
+    # lookup instead of fuzzy title matching -- Japanese titles vary in spacing,
+    # brackets and ~ marks; ids do not. Nullable and never backfilled: legs that
+    # predate discovery simply fall through to the date-and-venue hint.
+    eventernote_event_id: Mapped[str | None] = mapped_column(String(20), index=True)
 
     concert: Mapped[Concert] = relationship(back_populates="days")
     # Always eager-load this before handing a day to a template -- a lazy load
@@ -778,6 +785,45 @@ class ReminderQueue(Base):
     )
     fire_at_utc: Mapped[datetime] = mapped_column(UTCDateTime)
     sent_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class DiscoveredEvent(Base):
+    """A performance Eventernote lists that the catalogue may not have.
+
+    A LEAD, not a concert: Eventernote carries no ticket information at all, so
+    this can say "this exists and you are not tracking it" and nothing more.
+    Rounds come from the official ticket page, via an agent following the
+    add-concert skill. Nothing here ever writes to `concerts`.
+
+    Keyed on the Eventernote event id, one row per EVENT rather than per
+    artist: the LoveLive 15th anniversary concert lists nine catalogue tags as
+    performers, and a per-artist key would announce it nine times.
+    """
+
+    __tablename__ = "discovered_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    eventernote_event_id: Mapped[str] = mapped_column(String(20), unique=True)
+    title: Mapped[str] = mapped_column(String(300))
+    # A plain Date, NOT a UTCDateTime: the source gives a calendar day with no
+    # time, and inventing midnight would put a fake deadline-shaped value into a
+    # schema where every datetime is an aware UTC instant (invariant 1). It is a
+    # JST calendar date, like the performance dates rendered by fmt_day_month.
+    event_date: Mapped[date] = mapped_column(Date)
+    venue: Mapped[str] = mapped_column(String(200), default="")
+    # Which artist surfaced it. SET NULL, never CASCADE: deleting a tag must not
+    # silently drop leads the maintainer has not triaged yet.
+    first_seen_via_tag_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tags.id", ondelete="SET NULL")
+    )
+    first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    # A lead is OPEN when all three of these are NULL.
+    announced_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    dismissed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    concert_id: Mapped[int | None] = mapped_column(
+        ForeignKey("concerts.id", ondelete="SET NULL")
+    )
 
 
 class OpsCheckState(Base):
