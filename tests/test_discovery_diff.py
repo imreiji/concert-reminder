@@ -8,7 +8,7 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.db.models import Base, Concert, ConcertDay, Tag
+from app.db.models import Base, Concert, ConcertDay, DiscoveredEvent, Tag
 from app.db.service import (
     dismiss_lead,
     leads_matching_existing_legs,
@@ -122,6 +122,59 @@ async def test_an_event_already_held_by_a_leg_is_never_a_lead(db):
         await s.commit()
         assert fresh == []
         assert await open_leads(s) == []
+
+
+async def test_a_lead_that_became_a_concert_leaves_the_queue(db):
+    """The maintainer's happy path, end to end: a lead is announced, an agent
+    turns it into a draft, the import stamps the Eventernote id onto the leg --
+    and the NEXT sweep must close the lead against that concert. Without a
+    writer for `concert_id` the review page only ever grew, and the sole exit
+    was pressing Dismiss on a row the catalogue had already resolved."""
+    async with db() as s:
+        fresh = await record_discovered(s, [(_ev(), None)], NOW)
+        await s.commit()
+        lead_id = fresh[0].id
+        assert [row.id for row in await open_leads(s)] == [lead_id]
+
+        # The catalogue gains the concert, carrying the id the import stamped.
+        s.add(Concert(title="t", event_id="c1"))
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=1, label="Day 1",
+            starts_at_utc=datetime(2026, 11, 15, 9, 0, tzinfo=UTC),
+            eventernote_event_id="1",
+        ))
+        await s.commit()
+
+        assert await record_discovered(s, [(_ev(), None)], NOW) == []
+        await s.commit()
+        assert await open_leads(s) == [], "the lead closed itself"
+        row = await s.get(DiscoveredEvent, lead_id)
+        assert row.concert_id == 1, "bound to the concert, not deleted"
+        assert row.dismissed_at is None, "closed by being catalogued, not waved off"
+
+
+async def test_binding_a_lead_leaves_an_unrelated_one_open(db):
+    """The control for the test above: closing one lead must not empty the
+    queue, so that assertion is about the binding and not about `open_leads`
+    going quiet for some other reason."""
+    async with db() as s:
+        fresh = await record_discovered(s, [(_ev(), None), (_ev(event_id="2"), None)], NOW)
+        await s.commit()
+        other_id = [row.id for row in fresh if row.eventernote_event_id == "2"][0]
+
+        s.add(Concert(title="t", event_id="c1"))
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=1, label="Day 1",
+            starts_at_utc=datetime(2026, 11, 15, 9, 0, tzinfo=UTC),
+            eventernote_event_id="1",
+        ))
+        await s.commit()
+
+        await record_discovered(s, [(_ev(), None), (_ev(event_id="2"), None)], NOW)
+        await s.commit()
+        assert [row.id for row in await open_leads(s)] == [other_id]
 
 
 async def test_same_date_same_venue_is_a_HINT_not_a_suppression(db):

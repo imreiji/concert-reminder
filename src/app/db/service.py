@@ -18,7 +18,7 @@ Sync semantics (per rule):
 
 import hashlib
 import secrets
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 
@@ -6533,7 +6533,9 @@ async def rehearsal_rows(session: AsyncSession, user_id: int) -> list[RehearsalR
 # one of these holds, checked in that order:
 #
 #   1. an existing ConcertDay already carries that eventernote_event_id --
-#      we have it, say nothing;
+#      we have it, say nothing (and if a lead for it is still open, bind it to
+#      that concert, which is how a lead leaves the review queue by being
+#      catalogued rather than by being dismissed);
 #   2. it was dismissed -- never mention it again;
 #   3. it was already announced -- do not re-announce;
 #   4. otherwise it is a new lead.
@@ -6544,6 +6546,44 @@ async def rehearsal_rows(session: AsyncSession, user_id: int) -> list[RehearsalR
 # plus venue would hide exactly the second show. That comparison is a HINT,
 # computed separately by leads_matching_existing_legs so a surface can mark a
 # lead "you may already have this" -- it never removes anything.
+
+
+async def _bind_leads_to_concerts(
+    session: AsyncSession, held: Mapping[str, int]
+) -> None:
+    """THE writer for `DiscoveredEvent.concert_id`, and the loop's other end.
+
+    `open_leads` reads that column and nothing wrote it, so the maintainer's
+    happy path -- lead, agent, draft, import (which stamps the Eventernote id
+    onto the leg) -- left the review page dirtier rather than cleaner, and the
+    only exit was pressing Dismiss by hand on a row the catalogue already
+    resolved.
+
+    Called from `record_discovered`'s branch 1 and BEFORE it drops the held ids:
+    once an id is dropped it is never looked up in `discovered_events` at all,
+    so a later sweep could not even see the row it needed to close. A lead that
+    is not stored is simply absent here, which is the common case and costs one
+    empty `IN ()`-free query.
+
+    Only writes a row whose `concert_id` disagrees, so a lead already bound is
+    not re-dirtied on every sweep. Nothing else on the row is touched: a bound
+    lead is out of the queue and its `announced_at`/`dismissed_at` history is
+    the record of how it got there.
+    """
+    if not held:
+        return
+    rows = (await session.execute(
+        select(DiscoveredEvent)
+        .where(DiscoveredEvent.eventernote_event_id.in_(list(held)))
+    )).scalars()
+    changed = False
+    for row in rows:
+        concert_id = held[row.eventernote_event_id]
+        if row.concert_id != concert_id:
+            row.concert_id = concert_id
+            changed = True
+    if changed:
+        await session.flush()
 
 
 async def record_discovered(
@@ -6557,7 +6597,9 @@ async def record_discovered(
     first sight. A sweep passes ~86 artists' worth of events in one call, so
     this is two queries total regardless of size -- one to find the ids legs
     already hold, one to load the DiscoveredEvent rows for the rest -- never
-    a query per event.
+    a query per event. A third runs only when a leg holds one of the incoming
+    ids, to close those leads (`_bind_leads_to_concerts`); still batched, still
+    independent of how many events arrived.
     """
     if not events:
         return []
@@ -6569,11 +6611,17 @@ async def record_discovered(
         incoming.setdefault(actor_event.event_id, (actor_event, tag_id))
 
     # Branch 1, one query. These are dropped entirely and never stored: a leg
-    # carrying the id is the catalogue saying it already has this.
-    held = set((await session.execute(
-        select(ConcertDay.eventernote_event_id)
+    # carrying the id is the catalogue saying it already has this. The CONCERT
+    # comes back with the id because branch 1 is also where a lead's life ends
+    # -- see _bind_leads_to_concerts.
+    held: dict[str, int] = {}
+    for event_id, concert_id in (await session.execute(
+        select(ConcertDay.eventernote_event_id, ConcertDay.concert_id)
         .where(ConcertDay.eventernote_event_id.in_(list(incoming)))
-    )).scalars())
+    )).all():
+        held.setdefault(event_id, concert_id)
+    await _bind_leads_to_concerts(session, held)
+
     remaining = [event_id for event_id in incoming if event_id not in held]
     if not remaining:
         return []
