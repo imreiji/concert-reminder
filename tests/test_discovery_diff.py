@@ -161,6 +161,47 @@ async def test_a_leg_whose_utc_instant_is_a_different_jst_day_is_no_hint(db):
         assert hinted == {by_id["15"]}
 
 
+async def test_a_leg_at_a_different_venue_on_the_same_day_is_no_hint(db):
+    """The hint is date AND venue. Without this the date half alone would pass
+    every test in this file, and a lead would be flagged "you may already have
+    this" for any leg anywhere in Japan that night."""
+    async with db() as s:
+        elsewhere = Tag(name="Nippon Budokan", kind=TagKind.VENUE, slug="budokan")
+        s.add_all([Concert(title="t", event_id="c1"), elsewhere])
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=1, label="Day 1", venue_tag_id=elsewhere.id,
+            starts_at_utc=datetime(2026, 11, 15, 4, 0, tzinfo=UTC),
+        ))
+        await s.commit()
+
+        fresh = await record_discovered(s, [(_ev(venue="Zepp Haneda"), None)], NOW)
+        await s.commit()
+        assert len(fresh) == 1
+        assert await leads_matching_existing_legs(s, fresh) == set()
+
+
+async def test_a_venue_matching_only_via_name_en_is_a_hint(db):
+    """Eventernote writes a venue under whichever name it is commonly listed
+    by, so the Latin string it carries may only match the tag's name_en."""
+    async with db() as s:
+        venue = Tag(
+            name="日本武道館", name_en="Nippon Budokan",
+            kind=TagKind.VENUE, slug="nippon-budokan",
+        )
+        s.add_all([Concert(title="t", event_id="c1"), venue])
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=1, label="Day 1", venue_tag_id=venue.id,
+            starts_at_utc=datetime(2026, 11, 15, 4, 0, tzinfo=UTC),
+        ))
+        await s.commit()
+
+        fresh = await record_discovered(s, [(_ev(venue="nippon budokan"), None)], NOW)
+        await s.commit()
+        assert {r.id for r in fresh} == await leads_matching_existing_legs(s, fresh)
+
+
 async def test_record_discovered_batches_its_queries(db):
     """A sweep passes ~86 artists' worth of events in one call. Two queries,
     whatever the size -- a per-event lookup here is what makes a sweep crawl."""
