@@ -1,6 +1,7 @@
 # Tag import: fills, and conflicts you resolve
 
-Date: 2026-07-31. Status: **designed, not implemented**. A follow-on to the
+Date: 2026-07-31. Status: **implemented (2026-07-31)**, three code tasks on
+branch `tag-import-conflicts`; no migration. Deviations at the foot. A follow-on to the
 catalogue round-trip (`2026-07-30-catalogue-round-trip-design.md`), which
 shipped and deployed the same day. Not a WISHLIST entry -- it came out of a
 question the owner asked about that build.
@@ -168,3 +169,36 @@ apply reports what it did.
   through their own preview, and `import_commit` stays their only write path.
 - **Creating tags the file does not mention.** Nothing is deleted, ever -- a tag
   in the DB and absent from the file is untouched and unmentioned.
+
+
+## Deviations (recorded during implementation)
+
+1. **`TagImportReport` gained an `unchanged` list**, which this spec did not
+   anticipate. `skipped` previously meant "existing, left alone" and now means
+   "REFUSED -- the kind disagrees". Without a separate list a no-op import would
+   have reported nothing at all, and a single count would have conflated
+   "nothing to do" with "I would not touch this".
+2. **The plan's task boundary was wrong and two tasks became one commit.**
+   Deleting `import_tags` broke the route that still called it -- 43 collection
+   errors from one import. A task that cannot leave the suite green is not a
+   task.
+3. **The kind-mismatch warning quotes the kinds** rather than giving them
+   articles. The first version f-stringed one and produced "a artist"; quoting
+   sidesteps articles entirely and is more precise anyway.
+
+## A test that lied, and the shape of the lie
+
+A new test asserted `"alert(1)"` was absent from the apply response, to prove a
+forged choice value could not be echoed. It failed -- because `base.html`
+contains that exact string inside its own comment explaining invariant 7. The
+test was matching the codebase DESCRIBING the attack, not suffering it.
+
+It now asserts two things instead: the raw `<script>` tag is not echoed, and the
+forged choice was not WRITTEN. The second is the property that actually matters
+and the first version never checked it at all.
+
+This is the second test in two days to pass or fail for a reason unrelated to
+its claim -- the others were grepping DEFLATE-compressed zip bytes for a string,
+and a determinism check whose sleep was shorter than the timestamp resolution it
+was testing. The pattern is the same each time: an assertion that is a PROXY for
+the property rather than the property.

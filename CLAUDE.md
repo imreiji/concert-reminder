@@ -295,7 +295,14 @@ generated `event_id` taking a reserved word -- have shipped since).
   `LABEL_BY_ROUND_KIND`) instead wraps each literal in `N_()`, a no-op marker
   that only makes `pybabel extract` see it — the real translation happens
   later, at lookup time, via `_`/`gettext`, never at the dict's definition
-  time. `gettext_in(locale, msg)` is the explicit-locale escape hatch for
+  time.
+  `tags_diff.py` is the third piece of the tags vocabulary and deliberately its
+  own module: `tags_yaml.py` is about the FORMAT (serialize/parse), this is
+  about COMPARISON, and one module doing all three is how a file starts growing
+  unwieldy. It reuses `TagExport` as the current-catalogue carrier rather than
+  inventing a second shape, and `service.current_tag_exports` is the ONE builder
+  of that snapshot -- the zip export and the differ must compare against exactly
+  the same thing or a restore drifts. `gettext_in(locale, msg)` is the explicit-locale escape hatch for
   text composed before a per-recipient locale is known (e.g. `NoticeContext`,
   built once for many recipients up front). `loc_field(obj, field, locale)`
   resolves a UGC field's viewer-locale variant: en → `{field}_en`, zh →
@@ -466,9 +473,20 @@ deleting them.
    outright, with NO per-entry fallback, because falling back would reintroduce
    `match_tag_ids_by_name`'s first-tag-wins guess, which is the exact failure
    handles exist to remove. A missing handle means "import tags.yaml first" and
-   surfaces as unmatched. The import SKIPS an existing handle entirely, never
-   updating it, so it is idempotent and a stale file cannot revert a later edit;
-   it wires `parent`/`members` only for tags it created, writes `TagMember`
+   surfaces as unmatched. **The tags import PLANS before it writes** (2026-07-31):
+   `domain/tags_diff.py` compares the file against the catalogue and
+   `POST /admin/import/tags` renders that plan, while `/apply` commits it. Per
+   field, a blank on the DB side is a FILL applied automatically (writing into
+   emptiness cannot lose anything), a blank in the file changes nothing, and two
+   differing values are a CONFLICT somebody resolves. EVERY DEFAULT CHANGES
+   NOTHING: an unanswered conflict keeps the catalogue's value, and a member
+   removal — the only destructive act in the feature — happens solely when
+   explicitly ticked. `kind` is compared but never choosable: a venue arriving as
+   an artist could orphan a leg's `venue_tag_id`, so it warns and the tag is
+   refused whole. `/apply` RE-PARSES and RE-PLANS from the pasted file, so the
+   browser only ever sends `mine`/`theirs`, never a value — nothing can be
+   injected. Nothing is ever deleted: a catalogue tag the file omits is untouched
+   and unmentioned. It writes `TagMember`
    directly (never `attach_tag`, which would drag invariant 3's expansion into
    something that must touch no concert), and queues no notification. A draft
    may also carry `event_id`, checked by the same `validate_event_id` the edit

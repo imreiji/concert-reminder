@@ -478,6 +478,21 @@ which is the app's main guard against a bad import. If a catalogue ever grows
 past the point where that is tolerable, the work is: extract the write path out
 of the Form-based route, and decide what replaces the preview.
 
+The 2026-07-31 pass ships no Proposed entry and moves none, which is worth a
+line rather than silence. Tag-import conflict resolution came out of a question
+the owner asked about the round-trip that had shipped hours earlier -- "does it
+compare contents and add what's missing?" -- and the honest answer was no, which
+turned out to matter: the restore-only importer could not carry the 79 empty
+`eventernote_url` values that #1 needs.
+
+So the re-rank is a no-op by design, but #1 got materially cheaper for the
+second time in two days. Eventernote actor-page discovery has to populate an
+actor id per performer, and until today there was no way to move those values
+from wherever they were gathered into the live catalogue. There is now, and it
+is the fills half of this feature -- no decision required, because a blank
+cannot lose anything. The entry stands at #1 unchanged in rank and smaller in
+cost.
+
 ## Proposed (highest impact first)
 
 
@@ -733,6 +748,49 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Tag import: fills, and conflicts you resolve (2026-07-31)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-31-tag-import-conflicts-design.md`
++ impl plan `docs/superpowers/plans/2026-07-31-tag-import-conflicts.md`, three
+code tasks on branch `tag-import-conflicts`. Not a Proposed entry -- it came out
+of a question the owner asked hours after the round-trip shipped. No migration.
+
+The importer that shipped that morning was a RESTORE tool: match on handle,
+skip the tag whole if it exists. Right first answer, and the limit surfaced the
+same day. All 79 artist tags in the live catalogue have an empty
+`eventernote_url`, the Eventernote-discovery entry needs them populated, and
+there was no way to carry them across -- every one of those tags already exists
+by handle, so an import skipped all 79 and the field never moved.
+
+The first proposal was a fill-blanks-only mode. The owner asked for something
+better: **show the disagreements and let a person choose.** That subsumes
+fill-blanks -- a blank on one side is not a disagreement, so it simply happens
+-- and it makes the importer a real sync tool without the stale-file danger,
+because nothing is overwritten that was not looked at.
+
+Four cases per field; only "both differ, both non-blank" asks anything. Every
+default changes nothing: an unanswered conflict keeps the catalogue's value, and
+a member removal -- the single destructive act in the feature -- happens only
+when explicitly ticked. `kind` is compared but never choosable, because a venue
+arriving as an artist could orphan a leg's `venue_tag_id`; it warns and refuses
+the tag whole.
+
+Two properties worth the design's weight. `/apply` re-parses and re-plans from
+the pasted file, so the browser sends only a decision and never a value -- a
+forged post cannot inject, and a conflict that vanished since the preview is
+simply not applied. And nothing is ever deleted: a catalogue tag the file omits
+is untouched and unmentioned.
+
+Three findings worth keeping. The plan's task boundary was WRONG -- deleting
+`import_tags` broke the route that still called it, 43 collection errors from
+one import, so two tasks were really one change. The report needed an
+`unchanged` list that the plan did not anticipate, because `skipped` had
+silently changed meaning from "left alone" to "refused" and a no-op import would
+otherwise have reported nothing at all. And one new test asserted `"alert(1)"`
+was absent from a response, which matched `base.html`'s own comment explaining
+invariant 7 rather than any injected value -- the second test that day to pass
+or fail for a reason unrelated to its claim.
 
 ### The catalogue round-trip: an admin export and a tags import (2026-07-31)
 
