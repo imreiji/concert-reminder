@@ -49,3 +49,72 @@ def _pin_discord_token(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(settings, "discord_token", "")
+
+
+class RealNetworkAttempt(AssertionError):
+    """A test tried to open a real socket. Always a bug in the test."""
+
+
+@pytest.fixture(autouse=True)
+def _no_real_network(monkeypatch):
+    """Make a test that would actually hit the internet FAIL, loudly.
+
+    The suite's protection against reaching ramen.events and eventernote.com
+    was, until this fixture, every author remembering to stub the fetch. That
+    is the worst shape of test safety: forgetting it does not fail, it
+    SUCCEEDS -- on any machine with a working connection -- and fails only on
+    an offline laptop or a sandboxed CI runner, i.e. it disagrees with itself
+    depending on who runs it, exactly like `_pin_discord_token` above. It also
+    silently makes a third party's uptime a dependency of `pytest -q`, and
+    sends real traffic to sites this project scrapes by permission.
+
+    The seam is `transport`. Every legitimate test either patches the named
+    wrapper (`fetch_actor_events`, `fetch_ramen_html`) or passes an explicit
+    `httpx.MockTransport`; only a `transport=None` call constructs a real
+    connection pool. So the rule is exactly "no client without a transport",
+    which needs no allow-list and stays correct as tests are added.
+
+    Guarded in two places on purpose:
+
+    * `httpx.AsyncClient.__init__` is the CHOKEPOINT -- `fetching.fetch_html`
+      and `web/auth.py`'s two OAuth calls all end there, so nothing can route
+      around it, including code written later.
+    * `fetch_html` is re-exported by name into `app.discovery` and
+      `app.web.routes.imports` (`from app.fetching import fetch_html`), so
+      patching `app.fetching` alone would miss both. Every module holding a
+      reference is found by walking `sys.modules` rather than by keeping a
+      list here that would silently rot the next time it is imported
+      somewhere new. Its only job is a better message than the chokepoint's:
+      it names the fetch that should have been stubbed.
+    """
+    import sys
+
+    import httpx
+
+    from app import fetching
+
+    real_init = httpx.AsyncClient.__init__
+    real_fetch = fetching.fetch_html
+
+    def guarded_init(self, *args, transport=None, **kwargs):
+        if transport is None:
+            raise RealNetworkAttempt(
+                "a test constructed a real httpx.AsyncClient. Pass "
+                "transport=httpx.MockTransport(...), or patch the fetch "
+                "wrapper (fetch_actor_events / fetch_ramen_html) instead."
+            )
+        return real_init(self, *args, transport=transport, **kwargs)
+
+    async def guarded_fetch(url, *, transport=None, **kwargs):
+        if transport is None:
+            raise RealNetworkAttempt(
+                f"a test called fetch_html({url!r}) with no transport, which "
+                "would hit the real host. Patch the caller's fetch wrapper, or "
+                "pass transport=httpx.MockTransport(...)."
+            )
+        return await real_fetch(url, transport=transport, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "__init__", guarded_init)
+    for module in list(sys.modules.values()):
+        if getattr(module, "fetch_html", None) is real_fetch:
+            monkeypatch.setattr(module, "fetch_html", guarded_fetch)
