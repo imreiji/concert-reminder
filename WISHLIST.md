@@ -978,7 +978,12 @@ press rather than machinery.
 
 Was Proposed #10, logged PRE-DEPLOY during the discovery build and closed the
 same day by doing what the entry asked: putting the seeded page in a real
-viewport at 1440px instead of reasoning from the CSS.
+browser instead of reasoning from the CSS. Measured at an `innerWidth` of
+2560px -- a `resize_window(1440)` call was issued and did NOT take, which was
+only noticed later, so read the numbers below as desktop-at-2560 and not as the
+1440 they were first reported at. The finding survives the correction with room
+to spare: the table is width-capped at 1104px either way, so a NARROWER viewport
+makes the wrapping worse, never better.
 
 **The measurement moved the answer.** Hint-marked rows are 81px against a plain
 row's 60px -- real, consistent, and NOT the cause of the unevenness. The actual
@@ -1002,6 +1007,19 @@ cell's height to its line height proves nothing, because a `<td>` stretches to
 its ROW height -- it was reporting the title column's wrapping and reported
 "still wrapping" after the fix had already worked. The honest check measures the
 text's own client rects via a `Range`.
+
+**Three traps in browser measurement, all hit for real on 2026-07-31 and all
+invisible unless instrumented for.** Worth reading before the next layout
+question, because each one produces a confident, wrong number:
+1. **`resize_window` can silently not take.** A side panel ate the viewport and
+   `innerWidth` read 546 while `outerWidth` read 2560 -- which matches the PHONE
+   media query, so a measurement there would have described the bottom-sheet
+   layout and called it desktop. Assert `innerWidth` and the matched media
+   query on every read; do not trust the resize.
+2. **The browser caches the stylesheet.** A first post-fix read returned the
+   pre-fix numbers. Dump the matched CSS rule alongside the rects, so a stale
+   sheet is visible rather than reported as "the fix did not work".
+3. **A `<td>` reports its ROW's height**, per the paragraph above.
 
 ### Eventernote actor-page discovery (2026-07-31)
 
