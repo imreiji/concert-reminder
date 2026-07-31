@@ -531,17 +531,99 @@ git commit -m "feat: discovered_events table and a leg's eventernote event id"
 
 ---
 
-## Task 3: The guarded fetch
+## Task 3: Extract the shared guarded fetch, then build discovery's on it
+
+**TWO COMMITS, in this order.** The extraction lands first and is proven by the
+EXISTING ramen.events import tests before anything new depends on it. If those
+tests do not stay green, stop — you have changed a working production path.
+
+Rationale: `routes/imports.py` already contains exactly the three-way guard
+discovery needs. Copying it would leave two copies of a security control, and a
+weakness found later would be fixed in one and missed in the other. The two
+callers genuinely differ only in the exception they raise.
 
 **Files:**
+- Create: `src/app/fetching.py`
+- Modify: `src/app/web/routes/imports.py`
 - Create: `src/app/discovery.py`
 - Test: `tests/test_discovery_fetch.py`
 
 **Interfaces:**
-- Consumes: `app.domain.eventernote.HOST`.
-- Produces: `fetch_actor_events(url: str, transport: httpx.AsyncBaseTransport | None = None) -> str`; `DiscoveryFetchError(Exception)`; module constants `ALLOWED_HOST`, `FETCH_TIMEOUT`, `MAX_RESPONSE_BYTES`, `MAX_REDIRECTS`, `SWEEP_DELAY_SECONDS`.
+- Consumes: `app.domain.eventernote.HOST` (Task 1).
+- Produces, in `src/app/fetching.py`:
+  - `class FetchError(Exception)` — base
+  - `class HostNotAllowed(FetchError)` — scheme or host rejected
+  - `class FetchFailed(FetchError)` — non-200, oversized, timeout, transport error
+  - `def check_host(url: str, allowed_host: str) -> None` — raises `HostNotAllowed`
+  - `async def fetch_html(url: str, *, allowed_host: str, user_agent: str, timeout: float = 10.0, max_bytes: int = 2_000_000, max_redirects: int = 5, transport: httpx.AsyncBaseTransport | None = None) -> str`
+- Produces, in `src/app/discovery.py`: `fetch_actor_events(url, transport=None) -> str`; `DiscoveryFetchError(Exception)`; `SWEEP_DELAY_SECONDS = 1.0`.
 
-- [ ] **Step 1: Write the failing test**
+`src/app/fetching.py` is top-level, beside `i18n.py` and `ops.py`: it does I/O so
+it cannot live in `domain/`, and both a web route and the scheduler import it.
+
+### Commit 1 — the extraction
+
+- [ ] **Step 1: Move the guard into `src/app/fetching.py`**
+
+Lift `_check_host`, `_check_redirect_host` and the streaming body of
+`fetch_ramen_html` from `web/routes/imports.py` into the new module, replacing
+the hard-coded `ALLOWED_HOST` with the `allowed_host` parameter and raising
+`HostNotAllowed` / `FetchFailed` instead of `HTTPException`. Keep every comment
+explaining WHY the redirect hook exists — it is the reason the guard works.
+
+- [ ] **Step 2: Make `imports.py` call it, preserving its exact status codes**
+
+`imports.py` currently answers **400** for a bad host and **502** for a fetch
+failure. That mapping is observable behaviour with tests on it and MUST NOT
+change:
+
+```python
+def _check_host(url: str) -> None:
+    try:
+        check_host(url, ALLOWED_HOST)
+    except HostNotAllowed as exc:
+        raise HTTPException(
+            status_code=400, detail=f"only https://{ALLOWED_HOST}/... URLs are supported"
+        ) from exc
+
+
+async def fetch_ramen_html(url: str, transport=None) -> str:
+    try:
+        return await fetch_html(
+            url,
+            allowed_host=ALLOWED_HOST,
+            user_agent="dekimasen.app/1.0 (event import)",
+            transport=transport,
+        )
+    except HostNotAllowed as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FetchFailed as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+```
+
+- [ ] **Step 3: Prove the extraction changed nothing**
+
+Run the existing import tests in the FOREGROUND:
+
+```bash
+uv run --isolated pytest tests/test_imports.py tests/test_import_preview.py -q
+uv run --isolated pytest -q
+```
+
+Expected: PASS, with no test edited. If a test needed changing to pass, the
+extraction altered behaviour — revert and report rather than adjusting the test.
+
+- [ ] **Step 4: Commit the extraction on its own**
+
+```bash
+uv run --isolated ruff check .
+git add src/app/fetching.py src/app/web/routes/imports.py
+git commit -m "refactor: extract the host-pinned fetch shared by importers"
+```
+
+### Commit 2 — discovery's fetch
+
+- [ ] **Step 5: Write the failing test**
 
 ```python
 """The discovery fetch: pinned to one host, on every hop."""
@@ -610,37 +692,38 @@ async def test_a_non_200_raises():
         await fetch_actor_events(OK, transport=_transport(handler))
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [ ] **Step 6: Run to verify it fails**
 
 Run: `uv run --isolated pytest tests/test_discovery_fetch.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'app.discovery'`
 
-- [ ] **Step 3: Implement the fetch**
+- [ ] **Step 7: Implement the fetch**
 
-Mirror `web/routes/imports.py`'s guard exactly, but raise `DiscoveryFetchError` instead of `HTTPException` — this runs in the scheduler, where there is no request to fail.
+Thin: the guard now lives in `app/fetching.py` (Commit 1). This module only pins
+the host and translates the error type — the scheduler has no request to fail,
+so `HTTPException` would be wrong here.
 
 ```python
-"""Eventernote discovery: the guarded fetch, and the daily sweep.
+"""Eventernote discovery: the fetch, and the daily sweep.
 
 Sits ABOVE db/ like app/ops.py: it imports domain/ and db.service, and nothing
 in db/ imports it. The parser is pure and lives in domain/eventernote.py; the
-network lives here.
+host-pinned fetch is shared with the ramen.events importer and lives in
+app/fetching.py -- ONE copy of that guard, deliberately, so a weakness found in
+it cannot be fixed in one caller and missed in the other.
 """
 
-import asyncio
 import logging
-from urllib.parse import urljoin, urlparse
 
 import httpx
 
 from app.domain.eventernote import HOST
+from app.fetching import FetchError, fetch_html
 
 log = logging.getLogger(__name__)
 
 ALLOWED_HOST = HOST
-FETCH_TIMEOUT = 10.0
-MAX_RESPONSE_BYTES = 2_000_000
-MAX_REDIRECTS = 5
+USER_AGENT = "dekimasen.app/1.0 (event discovery)"
 # Sequential with a pause: 86 parallel requests at a third party is rude and is
 # how an IP gets blocked.
 SWEEP_DELAY_SECONDS = 1.0
@@ -650,55 +733,28 @@ class DiscoveryFetchError(Exception):
     """A page could not be fetched. One artist failing must not abort a sweep."""
 
 
-def _check_host(url: str) -> None:
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.hostname != ALLOWED_HOST:
-        raise DiscoveryFetchError(f"refused: only https://{ALLOWED_HOST}/... is fetched")
-
-
-async def _check_redirect_host(response: httpx.Response) -> None:
-    """Called on every hop. follow_redirects=True alone would chase a redirect
-    to an arbitrary address, silently defeating _check_host. The site really
-    does advertise an S3 host for its next page, so this is load-bearing."""
-    if response.is_redirect:
-        _check_host(urljoin(str(response.url), response.headers.get("location", "")))
-
-
 async def fetch_actor_events(
     url: str, transport: httpx.AsyncBaseTransport | None = None
 ) -> str:
-    """Fetch one actor-events page. `transport` is test-only."""
-    _check_host(url)
+    """Fetch one actor-events page. `transport` is test-only.
+
+    Catches FetchError -- the BASE class, so both HostNotAllowed and FetchFailed
+    become the one error a sweep knows how to skip past.
+    """
     try:
-        async with httpx.AsyncClient(
-            timeout=FETCH_TIMEOUT,
-            follow_redirects=True,
-            max_redirects=MAX_REDIRECTS,
-            event_hooks={"response": [_check_redirect_host]},
-            transport=transport,
-        ) as client:
-            async with client.stream(
-                "GET", url,
-                headers={"User-Agent": "dekimasen.app/1.0 (event discovery)"},
-            ) as resp:
-                if resp.status_code != 200:
-                    raise DiscoveryFetchError(f"HTTP {resp.status_code}")
-                body = bytearray()
-                async for chunk in resp.aiter_bytes():
-                    body.extend(chunk)
-                    if len(body) > MAX_RESPONSE_BYTES:
-                        raise DiscoveryFetchError("page too large")
-                return bytes(body).decode("utf-8", errors="replace")
-    except httpx.HTTPError as exc:
+        return await fetch_html(
+            url, allowed_host=ALLOWED_HOST, user_agent=USER_AGENT, transport=transport
+        )
+    except FetchError as exc:
         raise DiscoveryFetchError(str(exc)) from exc
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [ ] **Step 8: Run to verify it passes**
 
 Run: `uv run --isolated pytest tests/test_discovery_fetch.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Lint and commit**
+- [ ] **Step 9: Lint and commit**
 
 ```bash
 uv run --isolated ruff check .
