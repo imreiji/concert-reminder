@@ -264,8 +264,9 @@ async def tick(bot) -> int:
                     report = await run_sweep(session, now)
                     await session.commit()
                     log.info(
-                        "discovery sweep: %d fetched, %d failed, %d new",
+                        "discovery sweep: %d fetched, %d failed, %d new%s",
                         report.fetched, report.failed, report.new_leads,
+                        " (stopped at its time budget)" if report.budget_exhausted else "",
                     )
             except Exception:
                 log.exception("discovery sweep failed; delivery was unaffected")

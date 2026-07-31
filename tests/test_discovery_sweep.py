@@ -37,6 +37,15 @@ def _page(count: int) -> str:
     return "<html><body>" + "".join(rows) + "</body></html>"
 
 
+def _page_for(n: int) -> str:
+    """One artist's page, carrying an event id nobody else's page carries."""
+    return (
+        f'<html><body><li><a href="/events/{8000 + n}">Show {n}</a>'
+        f'<span>2026-11-15</span><a href="/places/1">Zepp Haneda</a>'
+        "</li></body></html>"
+    )
+
+
 @pytest_asyncio.fixture()
 async def db():
     engine = create_async_engine(
@@ -310,6 +319,77 @@ async def test_the_sweep_beats_the_heartbeat_per_artist(db, monkeypatch):
 
         await run_sweep(s, NOW, fetcher=fake_fetch)
         assert len(beats) == 2
+
+
+async def test_the_sweep_stops_when_its_wall_clock_budget_runs_out(db, monkeypatch):
+    """The sweep runs INLINE in the reminder tick and reminder_loop is strictly
+    serial, so every second it holds is a second the next reminder pass is late.
+    Nothing else bounds it -- httpx's timeout is per read, not per request -- and
+    the per-artist heartbeat means the blackout raises no alarm. So the sweep
+    keeps a wall clock and leaves the rest of the artists for tomorrow.
+
+    The clock is faked rather than slept through: a real 240s budget is not a
+    test. `monotonic` is called once for the deadline and once per artist, so
+    the second artist's check is the one that lands past it."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.SWEEP_DELAY_SECONDS", 0)
+    clock = iter([0.0, 0.0, 1000.0, 1000.0, 1000.0])
+    monkeypatch.setattr("app.discovery.monotonic", lambda: next(clock))
+
+    async with db() as s:
+        s.add(User(discord_id=42, username="reiji"))
+        for n in range(3):
+            s.add(Tag(
+                name=f"A{n}", kind=TagKind.ARTIST, slug=f"a{n}",
+                eventernote_url=f"https://www.eventernote.com/actors/a/{n}",
+            ))
+        await s.commit()
+
+        pages = {}
+
+        async def fake_fetch(url, transport=None):
+            pages[url] = pages.get(url, 0) + 1
+            n = int(url.split("/events")[0].rsplit("/", 1)[1])
+            return _page_for(n)
+
+        report = await run_sweep(s, NOW, fetcher=fake_fetch)
+        await s.commit()
+
+        assert report.budget_exhausted is True
+        assert report.fetched == 1, "the second artist's check landed past the deadline"
+        assert len(pages) == 1, "nothing past the budget was even asked for"
+        ids = {
+            row.eventernote_event_id
+            for row in (await s.execute(select(DiscoveredEvent))).scalars()
+        }
+        assert ids == {"8000"}, "only the artist inside the budget was recorded"
+
+
+async def test_a_sweep_inside_its_budget_reads_every_artist(db, monkeypatch):
+    """The control: the same three tags with a clock that never runs out. Without
+    it the assertions above could be satisfied by a sweep that simply stopped
+    after one artist for any reason at all."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.SWEEP_DELAY_SECONDS", 0)
+    monkeypatch.setattr("app.discovery.monotonic", lambda: 0.0)
+
+    async with db() as s:
+        s.add(User(discord_id=42, username="reiji"))
+        for n in range(3):
+            s.add(Tag(
+                name=f"A{n}", kind=TagKind.ARTIST, slug=f"a{n}",
+                eventernote_url=f"https://www.eventernote.com/actors/a/{n}",
+            ))
+        await s.commit()
+
+        async def fake_fetch(url, transport=None):
+            n = int(url.split("/events")[0].rsplit("/", 1)[1])
+            return _page_for(n)
+
+        report = await run_sweep(s, NOW, fetcher=fake_fetch)
+        await s.commit()
+        assert report.budget_exhausted is False
+        assert report.fetched == 3
 
 
 async def test_discovery_is_due_when_it_has_never_run_and_again_after_a_day(db):

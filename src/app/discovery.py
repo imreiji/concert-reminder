@@ -12,6 +12,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
+from time import monotonic
 
 import httpx
 from sqlalchemy import select
@@ -46,6 +47,22 @@ USER_AGENT = "dekimasen.app/1.0 (event discovery)"
 # Sequential with a pause: 86 parallel requests at a third party is rude and is
 # how an IP gets blocked.
 SWEEP_DELAY_SECONDS = 1.0
+# The sweep runs INLINE in the reminder tick, and reminder_loop is strictly
+# serial (beat, tick, sleep 60) -- so a sweep occupying the tick for T seconds
+# delays the next reminder pass by T. A live sweep measured 442s; the structural
+# worst case at these constants is 86 x (10s timeout + 1s pause) ~= 946s. And
+# nothing above bounds it: httpx's timeout is per READ, not per request, so a
+# server dripping bytes under the 2 MB cap holds a connection open with no
+# deadline at all. Since heartbeat.beat() now fires per artist (the right fix
+# for the false /healthz alarm), that reminder blackout produces no signal
+# whatever, on an app whose worst failure is a missed deadline.
+#
+# So the sweep gets a wall clock. Artists past the budget simply wait for
+# tomorrow: leads are deferred, never lost -- the next sweep re-reads the same
+# pages and record_discovered's id key means a lead surfaced late is still
+# fresh. Moving the sweep off the tick entirely is the right end state and is
+# logged as such; this bounds the tick absolutely in the meantime.
+SWEEP_BUDGET_SECONDS = 240.0
 
 
 class DiscoveryFetchError(Exception):
@@ -76,6 +93,11 @@ class SweepReport:
     failed: int = 0
     new_leads: int = 0
     announced: int = 0
+    # True when SWEEP_BUDGET_SECONDS ran out and artists were left for
+    # tomorrow. Recorded rather than merely logged: a truncation that only the
+    # journal knows about is the same silent-degradation shape this branch keeps
+    # producing.
+    budget_exhausted: bool = False
 
 
 async def run_sweep(
@@ -110,7 +132,20 @@ async def run_sweep(
     artist_by_tag_id: dict[int, str] = {}
     fetched_any = False
 
-    for tag in tags:
+    deadline = monotonic() + SWEEP_BUDGET_SECONDS
+
+    for index, tag in enumerate(tags):
+        # Checked at the TOP, before anything is fetched: the budget is a cap on
+        # how long the reminder tick is held, so the answer has to be "stop"
+        # before the next page is asked for, not after.
+        if monotonic() >= deadline:
+            report.budget_exhausted = True
+            log.warning(
+                "discovery: %.0fs budget spent after %d artist(s); %d left for tomorrow",
+                SWEEP_BUDGET_SECONDS, index, len(tags) - index,
+            )
+            break
+
         # The sweep occupies one tick for minutes (86 pages, each with its own
         # deliberate pause), and heartbeat.beat() fires BEFORE tick() -- so
         # without this, a long sweep ages the heartbeat past MAX_AGE_SECONDS
