@@ -184,10 +184,13 @@ queues; the existing drain delivers.
   `delivery_log` like any other.
 - **Recipients: admins** (`ADMIN_WHITELIST`), the same audience as `ops_alert`.
   This is catalogue maintenance, not a per-user feed. `Notification.user_id` is
-  an FK to `users.discord_id`, so only admins who have actually signed in have a
-  row to target: queue for those, and skip the rest rather than failing the
-  sweep. An admin whitelisted but never signed in is a configuration fact, not
-  an error.
+  an FK to `users.discord_id`, so an admin who has never signed in has no row to
+  target and queuing would raise `IntegrityError` at flush, far from the cause.
+  Follow `queue_ops_alerts`' existing precedent exactly: `ensure_user` with a
+  placeholder name only when `session.get(User, admin_id)` returns None. Guarded
+  on absence rather than called unconditionally, because `ensure_user` refreshes
+  the username and would otherwise overwrite a real admin's name with the
+  placeholder on every sweep.
 - **One DM per sweep**, leads grouped by artist, listing at most ten with a
   "+N more" line and a link to the review page.
 
