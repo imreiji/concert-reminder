@@ -51,8 +51,19 @@ def _pin_discord_token(monkeypatch):
     monkeypatch.setattr(settings, "discord_token", "")
 
 
-class RealNetworkAttempt(AssertionError):
-    """A test tried to open a real socket. Always a bug in the test."""
+class RealNetworkAttempt(BaseException):
+    """A test tried to open a real socket. Always a bug in the test.
+
+    BaseException, not AssertionError, and deliberately: this is not an
+    application error and no application `except Exception` may swallow it.
+    It shipped as AssertionError first and `sweep_one_tag`'s `except Exception`
+    -- which is correct and load-bearing, since a `2026年2月30` page raises
+    ValueError from the parse -- duly caught it, turning a test that reached
+    the real internet into a quiet "the sweep failed" assertion several frames
+    away from the cause. Same category as KeyboardInterrupt and SystemExit:
+    control flow that application code has no business handling. `pytest.raises`
+    accepts BaseException, so the guard's own tests are unaffected, and nothing
+    in production changes -- this class exists only under the test fixture."""
 
 
 @pytest.fixture(autouse=True)
@@ -74,18 +85,24 @@ def _no_real_network(monkeypatch):
     connection pool. So the rule is exactly "no client without a transport",
     which needs no allow-list and stays correct as tests are added.
 
-    Guarded in two places on purpose:
+    Guarded in two places, and the second is NOT a second safety net:
 
-    * `httpx.AsyncClient.__init__` is the CHOKEPOINT -- `fetching.fetch_html`
-      and `web/auth.py`'s two OAuth calls all end there, so nothing can route
-      around it, including code written later.
-    * `fetch_html` is re-exported by name into `app.discovery` and
+    * `httpx.AsyncClient.__init__` is the CHOKEPOINT, and it alone is what
+      makes the guard sound -- `fetching.fetch_html` and `web/auth.py`'s two
+      OAuth calls all end there, so nothing routes around it, including code
+      written later. Remove the walk below and every network path is still
+      blocked.
+    * The `fetch_html` walk exists for the MESSAGE. The chokepoint can only say
+      "someone built a real client"; this says WHICH fetch went unstubbed, with
+      the URL, which is the difference between a one-line fix and a hunt.
+      `fetch_html` is re-exported by name into `app.discovery` and
       `app.web.routes.imports` (`from app.fetching import fetch_html`), so
-      patching `app.fetching` alone would miss both. Every module holding a
-      reference is found by walking `sys.modules` rather than by keeping a
-      list here that would silently rot the next time it is imported
-      somewhere new. Its only job is a better message than the chokepoint's:
-      it names the fetch that should have been stubbed.
+      every module holding a reference is found by walking `sys.modules`
+      rather than by keeping a list here that would rot the next time it is
+      imported somewhere new. Patching `app.fetching` itself is also what makes
+      the walk self-healing: a module imported AFTER this fixture runs binds
+      the already-guarded function. `test_network_guard.py` pins the message,
+      not just the raise, or this half would be untested by construction.
     """
     import sys
 

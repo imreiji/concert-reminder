@@ -601,7 +601,14 @@ async def test_a_tag_with_no_eventernote_url_is_reported_not_swept(client):
     login_as(client, ADMIN_ID, "reiji")
     r = client.post(f"/admin/discoveries/sweep/{tag_id}")
     assert r.headers["location"] == "/admin/discoveries?swept=no_actor&new=0"
-    assert "not an actor page" in client.get(r.headers["location"]).text
+    body = client.get(r.headers["location"]).text
+    assert "not an actor page" in body
+    # LOAD-BEARING COPY, not decoration. Checking navigates away and discards
+    # unsaved dialog edits, so an operator who retypes the URL without saving
+    # sweeps the OLD value and lands on this identical banner -- a loop with no
+    # tell. Telling them to fix it without telling them to save is the bug.
+    assert "and save" in body
+    assert "discards unsaved edits" in body
 
 
 async def test_sweeping_an_unknown_tag_is_a_404(client):
@@ -639,6 +646,10 @@ async def test_a_plain_visit_carries_no_sweep_banner(client):
     assert "Checked that artist" not in body
     assert "Could not read" not in body
     assert "not an actor page" not in body
+    # Also the control for the no_actor banner's "and save" clause above: it
+    # proves that assertion reads the banner rather than page furniture.
+    assert "and save" not in body
+    assert "discards unsaved edits" not in body
 
 
 async def test_an_invented_swept_code_never_reaches_the_page(client):

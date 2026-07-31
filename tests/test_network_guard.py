@@ -28,10 +28,19 @@ async def test_the_named_wrapper_is_blocked():
         await fetch_actor_events(URL)
 
 
-async def test_fetch_html_direct_is_blocked():
-    """`fetch_html` is re-exported by name into app.discovery and
-    app.web.routes.imports, so patching app.fetching alone would miss both."""
-    with pytest.raises(RealNetworkAttempt):
+async def test_fetch_html_direct_is_blocked_and_names_the_fetch():
+    """A direct `fetch_html` call is blocked, and the error NAMES the fetch.
+
+    The `match=` is the whole point, and the docstring used to overclaim
+    without it. SAFETY here does not depend on conftest's `sys.modules` walk at
+    all: drop the walk and this still raises, because the real `fetch_html`
+    goes on to construct an `AsyncClient` and the chokepoint catches it (the
+    re-reviewer checked exactly that -- all four of these passed with the walk
+    removed). What the walk actually buys is the MESSAGE, and a message is
+    worth a test only if something fails without it. Without the walk the error
+    reads "a test constructed a real httpx.AsyncClient", which does not say
+    which fetch to stub; with it, the failing URL is in the text."""
+    with pytest.raises(RealNetworkAttempt, match=r"fetch_html\('https://www\.eventernote"):
         await fetch_html(URL, allowed_host="www.eventernote.com", user_agent="x")
 
 
