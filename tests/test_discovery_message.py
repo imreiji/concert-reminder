@@ -4,9 +4,12 @@ import datetime as dt
 
 from app.domain.discovery_message import (
     DM_CHAR_BUDGET,
+    DM_LIST_LIMIT,
     Lead,
     build_discovery_dm,
 )
+
+_EVENT_PREFIX = "https://www.eventernote.com/events/"
 
 
 def _lead(n=1, artist="Liyuu", maybe_held=False):
@@ -70,7 +73,7 @@ def test_it_stays_inside_the_budget_with_many_leads():
     truncation (1639 chars either way) and prove nothing about this code
     path. These inputs run the untruncated body to 2459 chars, past even
     Discord's real 2000 cap, so staying under DM_CHAR_BUDGET here actually
-    depends on the block-truncation loop doing its job."""
+    depends on the shrink loop doing its job."""
     leads = [
         Lead(
             event_id=str(400000 + n),
@@ -87,10 +90,10 @@ def test_it_stays_inside_the_budget_with_many_leads():
     assert len(body) <= DM_CHAR_BUDGET
     assert "more not shown" in block
     # Partial, not total: the loop drops from the END only as far as it has
-    # to. A mutation that empties the whole block outright (skipping the
-    # loop and relying on the hard floor to save the day) would still
-    # satisfy the two asserts above -- this is what actually pins the loop's
-    # own behaviour rather than the floor's.
+    # to. A mutation that lists nothing at all (skipping the loop and relying
+    # on the "+N more" skeleton to come in under budget) would still satisfy
+    # the two asserts above -- this is what actually pins the loop's own
+    # behaviour rather than the floor's.
     assert f"/events/{leads[0].event_id}" in block
 
 
@@ -149,14 +152,18 @@ def test_a_long_artist_name_is_clipped_in_the_header():
     assert long_artist not in prose
 
 
-def test_the_hard_floor_holds_under_absurd_field_lengths():
-    """Per-field clipping bounds ONE field at a time; nothing bounds the
-    prose half as a WHOLE once enough over-length fields pile up across many
-    leads with distinct artists (one header line each). Un-floored, this
-    exact input assembles to 2310 chars even with title/venue/artist all
-    clipped and the copy block fully emptied -- past Discord's real 2000 cap,
-    where discord.py raises and the maintainer gets nothing that day. The
-    hard floor must truncate the prose itself rather than let that happen."""
+def test_the_hard_floor_holds_when_not_even_one_lead_fits():
+    """The last resort. Both halves now shrink together, so a message naming
+    ANY lead is short enough for Discord long before the floor matters -- what
+    is left below it is the "+N more" skeleton, measured at 262 chars for this
+    input. A budget under that has nothing listable in it at all, and the floor
+    has to truncate the prose rather than emit an over-budget message: past
+    Discord's real 2000 cap discord.py raises and the maintainer hears nothing
+    at all that day, which is the one outcome this code path exists to prevent.
+
+    budget=200 is deliberate: below the 262-char skeleton so the floor is
+    genuinely entered, above the 175-char fenced footer so truncating can
+    actually reach the bound."""
     leads = [
         Lead(
             event_id=str(i),
@@ -168,14 +175,92 @@ def test_the_hard_floor_holds_under_absurd_field_lengths():
         )
         for i in range(10)
     ]
-    body = build_discovery_dm(leads, total=10)
-    assert len(body) <= DM_CHAR_BUDGET
+    assert len(build_discovery_dm(leads, total=10, budget=None)) > 200, (
+        "the input really does overrun this budget"
+    )
+    body = build_discovery_dm(leads, total=10, budget=200)
+    assert len(body) <= 200
     assert body.count("```") == 2
 
 
-def test_dropped_block_lines_are_announced_in_the_block():
-    """A DM that lists a lead above but silently omits it from the copy block is
-    the quiet kind of wrong. If lines are dropped, the block must say so."""
+def _prose_and_block_counts(body: str) -> tuple[int, int]:
+    """How many leads each half names."""
+    prose, block = body.split("```")[0], body.split("```")[1]
+    return (
+        sum(1 for line in prose.splitlines() if line.startswith("· ")),
+        sum(1 for line in block.splitlines() if line.startswith(_EVENT_PREFIX)),
+    )
+
+
+def test_the_two_halves_name_exactly_the_same_leads():
+    """The copy block IS the deliverable -- "paste this to an agent" -- and the
+    prose above it is duplicate content. Trimming only the block inverted that:
+    measured against a real Hasunosora-length title and a real venue, ten leads
+    in prose left THREE in the block, so 70% of the point of the message was
+    crowded out by its own restatement. Both halves now name the same leads.
+
+    This input genuinely forces the shrink (an untruncated ten runs past the
+    budget), which is what makes the equality assertion about the sync rule
+    rather than about a message that happened to fit whole."""
+    title = (
+        "ラブライブ！蓮ノ空女学院スクールアイドルクラブ "
+        "3rd Live Tour Blooming with 105 Day.1 昼公演"
+    )
+    leads = [
+        Lead(
+            event_id=str(460000 + n),
+            title=title,
+            date=dt.date(2026, 11, n + 1),
+            venue="バンテリンドーム ナゴヤ",
+            artist="蓮ノ空女学院スクールアイドルクラブ",
+            maybe_held=False,
+        )
+        for n in range(10)
+    ]
+    assert len(build_discovery_dm(leads, total=10, budget=None)) > DM_CHAR_BUDGET, (
+        "this input really does need truncating"
+    )
+
+    body = build_discovery_dm(leads, total=10)
+    assert len(body) <= DM_CHAR_BUDGET
+    listed, blocked = _prose_and_block_counts(body)
+    assert listed == blocked, "the two halves disagree about today's leads"
+    assert 0 < listed < 10, "the message really was shrunk, not merely rendered whole"
+    # And the counts stay honest about the backlog that is NOT in the message.
+    assert f"+{10 - listed} more" in body
+    assert f"# {10 - listed} more not shown" in body
+
+
+def test_the_dm_never_names_more_than_the_list_limit():
+    """DM_LIST_LIMIT is a real cap now, not a comment in a module nothing
+    imported: past ten a digest stops being scannable whatever the character
+    budget allows. Applied inside the builder because the caller cannot know
+    how many will fit, and the two halves have to agree on the answer.
+
+    An enormous budget so nothing else can be doing the capping."""
+    leads = [_lead(n) for n in range(1, 26)]
+    body = build_discovery_dm(leads, total=25, budget=100_000)
+    listed, blocked = _prose_and_block_counts(body)
+    assert listed == blocked == DM_LIST_LIMIT
+    assert "+15 more" in body
+
+
+def test_an_uncapped_caller_is_not_held_to_the_list_limit():
+    """The control for the cap: /admin/discoveries passes budget=None and gets
+    every lead, so the assertion above is about DM_LIST_LIMIT and not about the
+    builder refusing to render more than ten of anything."""
+    leads = [_lead(n) for n in range(1, 26)]
+    listed, blocked = _prose_and_block_counts(
+        build_discovery_dm(leads, total=25, budget=None)
+    )
+    assert listed == blocked == 25
+
+
+def test_dropped_leads_are_announced_in_the_block():
+    """The block is what gets pasted, so it has to say when it is partial --
+    an agent handed a silently short list catalogues a silently short backlog.
+    The prose carries the same count in its "+N more" line; this pins the
+    block's own copy, which lives inside the fence where no link survives."""
     long_title = "x" * 300
     leads = [
         Lead(

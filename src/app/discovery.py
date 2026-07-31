@@ -27,7 +27,7 @@ from app.db.service import (
     record_discovered,
     stamp_discovery_run,
 )
-from app.domain.discovery_message import DM_LIST_LIMIT, Lead, build_discovery_dm
+from app.domain.discovery_message import Lead, build_discovery_dm
 from app.domain.eventernote import (
     HOST,
     ActorEvent,
@@ -231,7 +231,12 @@ async def _record_and_announce(
     if fresh:
         hinted = await leads_matching_existing_legs(session, fresh)
         leads = [_lead(row, artist_by_tag_id, maybe_held=row.id in hinted) for row in fresh]
-        body = build_discovery_dm(leads[:DM_LIST_LIMIT], total=len(fresh))
+        # EVERY fresh lead is offered; build_discovery_dm decides how many the
+        # message can name. It caps at DM_LIST_LIMIT and then shrinks until the
+        # whole thing fits, so the prose and the copy block always name the same
+        # ones -- slicing here is what let the caller pick a number neither half
+        # could honour.
+        body = build_discovery_dm(leads, total=len(fresh))
         # An empty body is a quiet day, and silence is the right output: a
         # daily "nothing found" trains the reader to ignore the channel.
         if body:

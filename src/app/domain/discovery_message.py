@@ -14,6 +14,9 @@ from dataclasses import dataclass
 from datetime import date
 
 DM_CHAR_BUDGET = 1900
+# The most leads one DM ever names. Applied INSIDE build_discovery_dm rather
+# than by the caller slicing first: the caller does not know how many will
+# actually fit, and the two halves have to agree on the answer.
 DM_LIST_LIMIT = 10
 MAX_TITLE_CHARS = 70
 MAX_VENUE_CHARS = 40
@@ -68,10 +71,64 @@ def build_discovery_dm(
     points to would leave those leads reachable from nowhere. ONE formatter
     either way -- a second one would drift, and the block's job (a prompt an
     agent can act on) is identical in both places.
+
+    THE TWO HALVES ALWAYS NAME THE SAME LEADS (owner ruling, 2026-07-31).
+    Trimming the block alone shipped first and it inverted the message's own
+    priorities: the prose half is DUPLICATE content, the block is the
+    deliverable ("paste this to an agent"), and measured against real
+    Hasunosora-length Japanese titles ten leads in prose left THREE in the
+    block. So the number of leads is chosen once, by shrinking the whole
+    message until it fits, and both halves render exactly that many. The "+N
+    more" count and the block's own "N more not shown" line are both against
+    `total`, so they stay honest about the real backlog whatever gets rendered.
     """
     if not leads:
         return ""
 
+    if budget is None:
+        # Unbounded: nothing to trade off, so none of the shrinking below runs
+        # at all. Kept as its own branch rather than a huge int, so an uncapped
+        # caller is obviously total instead of merely unlikely to trip.
+        return _compose(leads, total)
+
+    # DM_LIST_LIMIT first, and it is a real cap rather than a comment: past ten
+    # a digest stops being scannable whatever the character budget allows.
+    kept = list(leads[:DM_LIST_LIMIT])
+    while kept:
+        body = _compose(kept, total)
+        if len(body) <= budget:
+            return body
+        kept.pop()
+
+    # Nothing listable fits. Say how many there are and where they live -- a
+    # short message that is entirely "+N more" still gets the maintainer to the
+    # review page, which is where all of them are anyway.
+    body = _compose([], total)
+    if len(body) <= budget:
+        return body
+
+    # HARD FLOOR, and only reachable on an absurdly small budget now that the
+    # prose shrinks alongside the block. Going over the budget is worse than
+    # truncating: past Discord's real 2000 cap, discord.py raises and the WHOLE
+    # DM is lost, so the maintainer hears nothing that day from the one code
+    # path whose job is to guarantee that can't happen.
+    prose, _ = _prose_and_block([], total)
+    return _hard_truncate(prose, total, budget)
+
+
+def _compose(leads: Sequence[Lead], total: int) -> str:
+    """One message over ONE set of leads -- both halves, same leads."""
+    prose, block_lines = _prose_and_block(leads, total)
+    return _assemble(prose, block_lines, max(total - len(leads), 0))
+
+
+def _prose_and_block(leads: Sequence[Lead], total: int) -> tuple[str, list[str]]:
+    """The readable half and the copyable half, over the same leads.
+
+    Split out from the assembly so the shrink loop can build a whole candidate
+    message per size and measure it, rather than trimming one half against a
+    prose half that was already fixed.
+    """
     head = [f"**{total} new lead{'s' if total != 1 else ''} from your artists**", ""]
     by_artist: dict[str, list[Lead]] = {}
     for lead in leads:
@@ -93,43 +150,11 @@ def build_discovery_dm(
         head.append(f"+{total - len(leads)} more — {REVIEW_URL}")
         head.append("")
 
-    prose = "\n".join(head)
     block_lines = [
         f"{EVENT_URL.format(event_id=lead.event_id)}  {lead.date:%Y-%m-%d}  {lead.venue}"
         for lead in leads
     ]
-
-    # Unbounded: nothing to trade off, so none of the truncation machinery
-    # below runs at all. Kept as its own branch rather than a huge int, so an
-    # uncapped caller is obviously total instead of merely unlikely to trip.
-    if budget is None:
-        return _assemble(prose, block_lines, 0)
-
-    # The block yields FIRST. Announcing a lead in the prose above while
-    # silently dropping it from the copy block is the quiet kind of wrong, so
-    # when lines go, the block says so.
-    kept = list(block_lines)
-    while kept:
-        dropped = len(block_lines) - len(kept)
-        body = _assemble(prose, kept, dropped)
-        if len(body) <= budget:
-            return body
-        kept.pop()
-
-    body = _assemble(prose, [], len(block_lines))
-    if len(body) <= budget:
-        return body
-
-    # HARD FLOOR. Per-field clipping above bounds any ONE field, but nothing
-    # bounds the prose half as a whole (many leads, many distinct artist
-    # groups, ...), and an empty block has nothing left to give. Going over
-    # DM_CHAR_BUDGET here is worse than truncating: past Discord's real 2000
-    # cap, discord.py raises and the WHOLE DM is lost, so the maintainer
-    # hears nothing that day from the one code path whose job is to
-    # guarantee that can't happen. Truncate the prose itself as the last
-    # resort -- the block (now just the truncation notice) is left intact so
-    # it still tells the truth about what's missing.
-    return _hard_truncate(prose, len(block_lines), budget)
+    return "\n".join(head), block_lines
 
 
 def _assemble(prose: str, kept: Sequence[str], dropped: int) -> str:
