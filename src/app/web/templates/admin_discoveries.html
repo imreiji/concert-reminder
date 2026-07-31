@@ -49,6 +49,30 @@
 </p>
 {% endif %}
 
+{#- "Sweep now" REQUESTS a sweep; it never runs one. A sweep is bounded at four
+    minutes and a live one measured seven, so an inline run would hold the
+    request open past any sane timeout and would fork the one carefully bounded
+    execution path in two. The scheduler ticks every 60s and owns the only
+    implementation.
+
+    The pending line matters as much as the button: the POST returns instantly,
+    and without a word saying the request landed, a button that worked is
+    indistinguishable from one that did nothing -- so the reader presses it
+    again. The button is DISABLED while a request is pending for the same
+    reason: a second press cannot make the tick come sooner, and offering it
+    invites reading the delay as a failure. -#}
+<form method="post" action="/admin/discoveries/sweep" style="margin:.6rem 0">
+  <button class="act" type="submit" {% if sweep_pending %}disabled{% endif %}>Sweep now</button>
+  {% if sweep_pending %}
+  <span class="dim">Sweep requested — the scheduler will start it within a minute.</span>
+  {% else %}
+  <span class="dim">
+    Starts on the next scheduler tick (within a minute) and takes up to four
+    minutes. Works whether or not the daily sweep is switched on.
+  </span>
+  {% endif %}
+</form>
+
 {% if rows %}
 <h2>{{ rows | length }} open lead{{ '' if rows | length == 1 else 's' }}</h2>
 

@@ -550,10 +550,80 @@ duplicate concerts already held, which is what the "you may already have this"
 date-and-venue HINT is for. Revisit either if the hints turn out to be frequent
 enough to be annoying.
 
+The 2026-07-31 evening pass follows hours later, on the manual sweep button (PR
+#117) and one entry closed by measurement. Neither was a Proposed entry, so
+nothing moved up FROM Proposed, and both are logged in Shipped -- but the pass
+they trigger produced the largest re-rank since discovery itself. It ADDS the
+scrape-to-agent workflow at **#1**, raised by the owner in the same breath as the
+button, and that is a merit ranking rather than an insertion: discovery now
+manufactures leads on demand, and a lead that still costs a full manual research
+session has not saved anybody anything. Minute-level offsets is displaced to #2
+for that reason and no other -- it is unchanged in substance, and its own
+condition (FCFS sales) is still fired.
+
+The same pass CLOSED old #10, the `/admin/discoveries` row-height question, by
+doing what it asked and putting the seeded page in a real viewport. It is in
+Shipped because the measurement is the valuable part: the hint banner was NOT
+the cause. Every row was wrapping its date mid-token because automatic table
+layout left the column 83px, and fixing that improved rows the entry never
+mentioned. Recorded as the standing argument against settling a layout question
+on paper -- and against the follow-up trap, since the first verification of the
+FIX was itself a proxy (a `<td>` stretches to its row height, so measuring the
+cell reported the title column and not the date).
+
+Old #9 (nothing caps the discovery review path) is the one entry the button
+genuinely touches, and it is re-reviewed rather than re-ranked. Its impact is
+unchanged -- still admin-only, still nil by this list's ordering -- but it is now
+reachable ON DEMAND rather than only on the daily schedule, so the largest-page
+case can be summoned deliberately instead of waited for. That makes it easier to
+diagnose, not more urgent. It stays at #10 (renumbered from #9). Every other
+entry was reviewed and is unchanged in substance; none goes near a sweep, a
+lead, or that page.
+
 ## Proposed (highest impact first)
 
 
-### 1. Minute-level reminder offsets
+### 1. The scrape-to-agent workflow: a `triage-leads` skill
+
+Impact: high - effort: small-to-medium. Raised: 2026-07-31 (owner, immediately
+after the manual sweep button merged: "then we can start building the actual
+scrape -> agent workflow").
+
+Discovery now produces leads and a manual button to produce them on demand. What
+it does NOT do is close the loop: a lead becomes a tracked concert only when
+somebody finds the official ticket page, extracts the rounds, groups the legs and
+writes the trilingual titles. That half is deliberately agent work -- eventernote
+carries no ticket information at all, so no amount of scraping can supply it --
+and it is currently improvised fresh in each session.
+
+**The durable form is a skill, not a schedule.** `.claude/skills/triage-leads/`,
+invoked with the DM's copy block (or the page's) pasted as arguments. A file, so
+it survives sessions, gets reviewed in PRs, and sharpens as the real leads teach
+what they look like. It should CALL the existing `add-concert` skill for the
+draft itself rather than duplicate it -- that one already owns the schema and is
+pinned to the parser by a test.
+
+Two things worth settling in its design rather than during it:
+
+- **Grouping is the judgment the app deliberately refuses.** One eventernote
+  event is one LEG; a tour is one concert with several. The DM's copy block
+  already carries the instruction, but the skill is where the heuristics live
+  (title stem, adjacent dates, same venue).
+- **The commit stays manual.** `import_commit` is the only write path into
+  `concerts` and a lead must never bypass it. The goal is fewer steps, not an
+  agent writing to the catalogue unattended.
+
+A second, cheaper shortening is available and needs no skill: after building a
+draft, drive the owner's signed-in browser to `/concerts/import`, paste it, and
+leave the filled preview on screen. That removes a copy-paste and a tab hunt.
+
+Ranked #1 on merit rather than by removal: it is what makes a feature that
+shipped today actually pay off, and without it every lead costs the same manual
+research it always did. Note the honest caveat -- its value is in the specifics
+of what real leads look like, so it is worth writing AFTER a few production
+sweeps rather than before, and the first version should expect revision.
+
+### 2. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -593,6 +663,10 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
+Displaced to #2 later the same day by the scrape-to-agent workflow, on merit and
+not by insertion: that entry is what makes the feature which just shipped pay
+off, while this one remains a proven-but-uncomplained-about gap.
+
 Back at #1 on 2026-07-31 by pure removal, when Eventernote discovery -- the
 entry that had passed it two days earlier -- shipped. Re-read against that build
 and unchanged in every respect: discovery lived in a parser, a fetch, the
@@ -600,7 +674,7 @@ scheduler tick and an admin page, and touches neither `PresetItem` nor the
 sentence builders. Worth saying plainly, since this entry has now been displaced
 five passes running without once being judged less valuable.
 
-### 2. Franchise-aware round-label suggestions
+### 3. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -621,7 +695,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 3. Nine of ten `RoundKind` members are purely cosmetic
+### 4. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -644,7 +718,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 4. PWA / installability
+### 5. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -664,7 +738,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 5. In-app LLM extraction behind the same draft seam
+### 6. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -693,7 +767,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 6. Minor demo-parity cosmetics
+### 7. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -732,7 +806,7 @@ this entry's single pass, not its own task. Both gaps are now also named in
 CLAUDE.md's demo inventory, so the next person meets them where they look for
 the reference rather than only here.
 
-### 7. Discover sort in the content head, plus the catalogue-count note
+### 8. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -758,7 +832,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 8. Name the destination on the sign-in bounce
+### 9. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -780,7 +854,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 9. Nothing caps the discovery review path
+### 10. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -806,23 +880,9 @@ USER impact and this one's is nil -- the same argument that kept the rehearsal
 harness low until it was ranked on a borrowed claim. Raise it if the first
 production sweep actually produces a page somebody has to fight.
 
-### 10. `/admin/discoveries` row height wants a real viewport
-
-Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
-discovery, Task 7, logged PRE-DEPLOY and never closed).
-
-`.banner.warn` is `display: flex`, so a lead marked "you may already have this"
-is TALLER than an unmarked one. On a bulk-triage table where most rows carry the
-hint on the first sweep and few do later, that will read as uneven -- but whether
-it actually looks wrong, and at what proportion of marked rows, is not something
-to settle on paper. This project's own measure-don't-reason rule applies with
-full force: put the seeded page in a real viewport and look, because reasoning
-from the CSS has shipped a confidently wrong fix here twice before.
-
-Note what is NOT in scope: `.banner` is the sanctioned needs-attention callout
-shape (CLAUDE.md's two-shape callout grammar), and inventing a third shape for
-this was deliberately declined. Whatever the measurement says, the answer has to
-come out of the existing two shapes or out of the row's own layout.
+(The former "`/admin/discoveries` row height wants a real viewport" entry
+(2026-07-31) was closed the same day by measuring it -- see its Shipped entry.
+The measurement moved the answer: the hint banner was not the cause.)
 
 (The former "Editor page parity with the demo" entry (2026-07-20) was
 absorbed on 2026-07-23 into the editor-pages coherence pass --
@@ -838,6 +898,70 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Manual sweep button, and `DISCOVERY_ENABLED` documented (2026-07-31)
+
+Shipped as PR #117, branch `discovery-manual-sweep`, migration `34179560cec0`
+(`DiscoveryState.sweep_requested_at`). Not a Proposed entry -- an owner request
+the same day discovery merged, made while planning the scrape-to-agent workflow
+that needs a sweep on demand.
+
+`DISCOVERY_ENABLED` existed only in `config.py`, so nothing in the repo hinted
+the knob was there; `.env.example` now carries it. A later correction to that
+same comment is worth keeping visible: "the first sweep runs within a minute of
+enabling" is true only when it has NEVER run, since `discovery_due` keys on a
+NULL `last_run_at` -- disable and re-enable after a run and the next sweep waits
+out the remaining 24h, which is exactly the shape of an "I turned it on and
+nothing happened" evening.
+
+The button does NOT run the sweep. A sweep can occupy 240 seconds, which no HTTP
+request should hold open, and an inline run would be a second execution path for
+something already bounded by a budget, a cursor and a heartbeat. It sets
+`sweep_requested_at` and the existing 60s tick picks it up. **A pending request
+sweeps even with the flag off** -- the flag gates the AUTOMATIC behaviour, and
+scraping on demand should not require committing to a daily job.
+
+The load-bearing detail is that the request is cleared whether the sweep
+succeeded or failed, and the clear lives inside `stamp_discovery_run` rather
+than at either call site -- the single point the sweep's own `finally` and the
+scheduler's post-rollback re-stamp both converge on. A request surviving a
+failure would re-run the sweep every 60 seconds: 86 third-party fetches a
+minute, the exact trap this subsystem was bitten by once already.
+
+Two accepted consequences: a manual sweep DISPLACES that day's automatic one
+(it sets `last_run_at`, so a habit of pressing mid-morning drifts the daily
+slot), and a second press during a running sweep is absorbed by the finishing
+sweep's stamp -- the page then shows nothing pending, so the recovery is another
+press rather than machinery.
+
+### `/admin/discoveries` row height, measured (2026-07-31)
+
+Was Proposed #10, logged PRE-DEPLOY during the discovery build and closed the
+same day by doing what the entry asked: putting the seeded page in a real
+viewport at 1440px instead of reasoning from the CSS.
+
+**The measurement moved the answer.** Hint-marked rows are 81px against a plain
+row's 60px -- real, consistent, and NOT the cause of the unevenness. The actual
+cause was elsewhere and affected every row: `.tagtable` uses automatic layout, a
+column of long Japanese titles left the date column 83px, and at
+`white-space: normal` an ISO date rendered as `2027-03-` / `22`. Fixed with a
+`.nw` class on the Date and Announced columns; the date now claims 91px from the
+title column, which wraps happily. Re-measured after: every date cell is one
+text line, was two.
+
+Row heights are unchanged and that is correct -- a four-line title is what sets
+them, and titles should wrap. The 81-vs-60 delta was accepted as-is rather than
+softened, because `.banner` is the sanctioned needs-attention shape and
+inventing a third callout shape for this was declined. The Artist column still
+wraps `大西亜玖璃` across two lines at 84px; left alone as a width judgment, not
+a bug.
+
+Also worth recording, because it is the same lesson this codebase keeps
+relearning: the FIRST verification of the fix was itself a proxy. Comparing a
+cell's height to its line height proves nothing, because a `<td>` stretches to
+its ROW height -- it was reporting the title column's wrapping and reported
+"still wrapping" after the fix had already worked. The honest check measures the
+text's own client rects via a `Range`.
 
 ### Eventernote actor-page discovery (2026-07-31)
 

@@ -1,6 +1,7 @@
 """The Eventernote discovery review surface.
 
   GET  /admin/discoveries                    every open lead, plus one paste block
+  POST /admin/discoveries/sweep              ask the scheduler to sweep now
   POST /admin/discoveries/{lead_id}/dismiss  wave one off for good
 
 Its own module rather than a section of admin.py: that one is the delivery
@@ -35,6 +36,7 @@ from app.db.service import (
     dismiss_lead,
     leads_matching_existing_legs,
     open_leads,
+    request_sweep,
 )
 from app.db.session import get_session
 from app.domain.discovery_message import Lead, build_discovery_dm
@@ -144,8 +146,36 @@ async def discoveries(
             "last_fetched": state.last_fetched if state else None,
             "last_failed": state.last_failed if state else None,
             "last_truncated": state.last_truncated if state else None,
+            # Whether a "Sweep now" press is still waiting for a tick. Shown so
+            # a second press is not needed: the button writes a request and
+            # returns instantly, which without this line is indistinguishable
+            # from a button that did nothing.
+            "sweep_pending": bool(state and state.sweep_requested_at),
         },
     )
+
+
+@router.post("/admin/discoveries/sweep")
+async def sweep_now(
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Ask the scheduler to sweep on its next tick.
+
+    It does NOT sweep. A sweep is bounded at SWEEP_BUDGET_SECONDS (240) and a
+    live one measured 442s before that budget existed -- neither is a thing an
+    HTTP request may hold, and running it here would fork the one carefully
+    bounded execution path in two. This writes `sweep_requested_at`; the tick
+    picks it up within 60 seconds and calls the same `run_sweep`.
+
+    No 404 branch, unlike dismiss: there is no such thing as a request that
+    could not be made, and asking twice is harmless (the page disables the
+    button while one is pending). 303, never 307, for dismiss's reason -- the
+    POST must not be replayed against the page it lands on.
+    """
+    await request_sweep(session, datetime.now(UTC))
+    await session.commit()
+    return RedirectResponse("/admin/discoveries", status_code=303)
 
 
 @router.post("/admin/discoveries/{lead_id}/dismiss")

@@ -12,7 +12,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.db.models import Base, DiscoveredEvent, DiscoveryState, Notification, Tag, User
-from app.db.service import discovery_due, stamp_discovery_run
+from app.db.service import (
+    discovery_due,
+    discovery_status,
+    request_sweep,
+    stamp_discovery_run,
+    sweep_requested,
+)
 from app.discovery import DiscoveryFetchError, run_sweep
 from app.domain.discovery_message import DM_LIST_LIMIT
 from app.domain.types import TagKind
@@ -595,3 +601,77 @@ async def test_discovery_is_due_when_it_has_never_run_and_again_after_a_day(db):
         await s.commit()
         assert not await discovery_due(s, NOW + dt.timedelta(hours=23))
         assert await discovery_due(s, NOW + dt.timedelta(hours=25))
+
+
+# -- The manual sweep request -------------------------------------------------
+#
+# These are about the REQUEST, not about fetching, so the tag table is left
+# empty and this fetcher stands as the assertion that nothing reached for a
+# page.
+
+
+async def _never_called(url, transport=None):
+    raise AssertionError(f"no page should have been fetched, but {url} was")
+
+
+async def test_a_request_is_recorded_before_any_state_row_exists(db):
+    """The button can be pressed before the first sweep ever runs, when there is
+    no DiscoveryState row at all -- the same create-if-absent branch
+    stamp_discovery_run has, for the same reason."""
+    async with db() as s:
+        assert not await sweep_requested(s)
+        await request_sweep(s, NOW)
+        await s.commit()
+    async with db() as s:
+        assert await sweep_requested(s)
+        assert (await s.get(DiscoveryState, 1)).sweep_requested_at == NOW
+
+
+async def test_an_existing_state_row_with_no_request_is_not_pending(db):
+    """The control for the test above: `sweep_requested` reads the COLUMN, not
+    the presence of the row -- every sweep that has ever run leaves a row
+    behind, and a row-shaped answer would make the button permanently pending."""
+    async with db() as s:
+        s.add(DiscoveryState(id=1, last_run_at=NOW, last_fetched=86))
+        await s.commit()
+        assert not await sweep_requested(s)
+
+
+async def test_a_sweep_clears_the_request(db):
+    """Cleared by the stamp, so every exit reaches it. A request that survived
+    its sweep would re-run 60 seconds later, forever -- the 86-fetches-a-minute
+    trap the 24h clock exists to prevent."""
+    async with db() as s:
+        await request_sweep(s, NOW)
+        await s.commit()
+        await run_sweep(s, NOW, fetcher=_never_called)
+        await s.commit()
+        assert not await sweep_requested(s)
+
+
+async def test_the_request_survives_a_sweep_that_never_ran(db):
+    """The control: nothing but a sweep clears it. Reading the state (which
+    /admin/discoveries does on every render) must not consume the request."""
+    async with db() as s:
+        await request_sweep(s, NOW)
+        await s.commit()
+        await discovery_status(s)
+        await discovery_due(s, NOW)
+        assert await sweep_requested(s)
+        # The column, not just the predicate: a reader that answered True and
+        # consumed the row on its way out would satisfy the line above and
+        # still lose the request before the tick could act on it.
+        assert (await s.get(DiscoveryState, 1)).sweep_requested_at == NOW
+
+
+async def test_a_stamp_with_no_report_still_clears_the_request(db):
+    """scheduler.loop's re-stamp after a failed sweep passes no counts at all.
+    It must still clear the request, or a sweep that dies is retried every tick
+    forever -- which is why the clear lives in stamp_discovery_run rather than
+    beside run_sweep's own success path."""
+    async with db() as s:
+        await request_sweep(s, NOW)
+        await s.commit()
+        await stamp_discovery_run(s, NOW)
+        await s.commit()
+        assert not await sweep_requested(s)
