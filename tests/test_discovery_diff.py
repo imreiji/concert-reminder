@@ -77,11 +77,25 @@ async def test_a_second_sweep_returns_nothing_new(db):
 
 
 async def test_an_announced_lead_is_not_re_announced(db):
+    """Announced means the DM has said it once -- record_discovered stops
+    returning it, so the next sweep cannot repeat it."""
     async with db() as s:
         fresh = await record_discovered(s, [(_ev(), None)], NOW)
         await mark_leads_announced(s, [r.id for r in fresh], NOW)
         await s.commit()
-        assert await open_leads(s) == []
+        assert await record_discovered(s, [(_ev(), None)], NOW) == []
+
+
+async def test_an_announced_lead_is_still_open_for_triage(db):
+    """Announced is not triaged (owner ruling, 2026-07-31). The sweep announces
+    every fresh lead, including the ones the DM only COUNTS -- so if announcing
+    closed the lead, the "+N more -- /admin/discoveries" line would point at an
+    empty page and those leads would be reachable from nowhere."""
+    async with db() as s:
+        fresh = await record_discovered(s, [(_ev(), None)], NOW)
+        await mark_leads_announced(s, [r.id for r in fresh], NOW)
+        await s.commit()
+        assert [row.id for row in await open_leads(s)] == [fresh[0].id]
 
 
 async def test_a_dismissed_lead_stays_gone(db):

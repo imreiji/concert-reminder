@@ -3,6 +3,7 @@
 import datetime as dt
 from datetime import UTC, datetime
 
+import pytest
 import pytest_asyncio
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -14,6 +15,7 @@ from app.db.service import discovery_due
 from app.discovery import DiscoveryFetchError, run_sweep
 from app.domain.discovery_message import DM_LIST_LIMIT
 from app.domain.types import TagKind
+from app.scheduler import heartbeat
 
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
 PAGE = """
@@ -220,6 +222,59 @@ async def test_every_fresh_lead_is_marked_announced_not_only_the_listed_ones(db,
         assert [r.announced_at for r in rows] == [NOW] * 15
 
 
+async def test_a_page_that_cannot_be_parsed_does_not_abort_the_sweep(db, monkeypatch):
+    """A malformed date on a third-party page raises ValueError out of
+    parse_actor_events (date(2026, 2, 30) is not a date), which is NOT a
+    DiscoveryFetchError. Letting it escape would leave the clock unstamped, so
+    the next tick would re-fetch every page up to the poisoned one -- a
+    permanent 86-fetch-a-minute loop nobody asked for."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    async with db() as s:
+        await _seed(s)
+        s.add(Tag(
+            name="Other", kind=TagKind.ARTIST, slug="other",
+            eventernote_url="https://www.eventernote.com/actors/o/2",
+        ))
+        await s.commit()
+
+        async def poisoned(url, transport=None):
+            if "/2" in url:
+                return (
+                    '<html><body><li><a href="/events/999">Show</a>'
+                    "<span>2026-02-30</span></li></body></html>"
+                )
+            return PAGE
+
+        report = await run_sweep(s, NOW, fetcher=poisoned)
+        await s.commit()
+        assert report.failed == 1 and report.fetched == 1
+        # The healthy artist's lead still landed, and the sweep still announced.
+        assert report.new_leads == 1
+        assert len((await s.execute(select(Notification))).scalars().all()) == 1
+        assert not await discovery_due(s, NOW + dt.timedelta(hours=1))
+
+
+async def test_a_write_failure_still_stamps_the_state(db, monkeypatch):
+    """The `finally`. If the diff itself raises, the sweep must still record
+    that it ran -- otherwise the failure re-arms itself every 60 seconds."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+
+    async def boom(*_a, **_kw):
+        raise RuntimeError("diff exploded")
+
+    monkeypatch.setattr("app.discovery.record_discovered", boom)
+    async with db() as s:
+        await _seed(s)
+
+        async def fake_fetch(url, transport=None):
+            return PAGE
+
+        with pytest.raises(RuntimeError, match="diff exploded"):
+            await run_sweep(s, NOW, fetcher=fake_fetch)
+        # The caller's transaction is its own; here nothing rolled it back.
+        assert not await discovery_due(s, NOW + dt.timedelta(hours=1))
+
+
 async def test_a_quiet_sweep_still_stamps_the_state(db, monkeypatch):
     """Without this the 24h clock never starts on a quiet day, and the sweep
     re-runs every tick -- 86 third-party fetches a minute."""
@@ -233,6 +288,28 @@ async def test_a_quiet_sweep_still_stamps_the_state(db, monkeypatch):
         await run_sweep(s, NOW, fetcher=fake_fetch)
         await s.commit()
         assert not await discovery_due(s, NOW + dt.timedelta(hours=1))
+
+
+async def test_the_sweep_beats_the_heartbeat_per_artist(db, monkeypatch):
+    """heartbeat.beat() fires BEFORE tick(), and a real sweep occupies the tick
+    for minutes -- long enough to age past MAX_AGE_SECONDS and have /healthz
+    report a healthy app as down. The loop IS alive, so it says so."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    beats = []
+    monkeypatch.setattr(heartbeat, "beat", lambda: beats.append(1))
+    async with db() as s:
+        # A skipped tag beats too, and pays no inter-fetch pause.
+        s.add(Tag(
+            name="Bad", kind=TagKind.ARTIST, slug="bad",
+            eventernote_url="https://www.eventernote.com/events/1",
+        ))
+        await _seed(s)
+
+        async def fake_fetch(url, transport=None):
+            return PAGE
+
+        await run_sweep(s, NOW, fetcher=fake_fetch)
+        assert len(beats) == 2
 
 
 async def test_discovery_is_due_when_it_has_never_run_and_again_after_a_day(db):

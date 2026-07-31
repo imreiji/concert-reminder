@@ -6613,12 +6613,23 @@ async def record_discovered(
 
 
 async def open_leads(session: AsyncSession) -> list[DiscoveredEvent]:
-    """Leads still awaiting triage -- not announced, not dismissed, not bound
-    to a concert. Newest performance date first."""
+    """Leads still awaiting triage -- not dismissed, not bound to a concert.
+    Newest performance date first.
+
+    ANNOUNCED IS NOT TRIAGED, and `announced_at` is deliberately NOT a filter
+    here (owner ruling, 2026-07-31). It exists for one job: stop the daily DM
+    repeating a lead. The real exits from this queue are `dismissed_at` (waved
+    off) and `concert_id` (it became a concert).
+
+    Filtering on it shipped once and was a hole with no bottom: the sweep marks
+    EVERY fresh lead announced, listed or merely counted (see run_sweep), so the
+    first sweep's DM would name ten, say "+30 more -- /admin/discoveries", and
+    send the maintainer to an empty page -- with those thirty reachable from
+    nowhere and never announced again.
+    """
     return list((await session.execute(
         select(DiscoveredEvent)
         .where(
-            DiscoveredEvent.announced_at.is_(None),
             DiscoveredEvent.dismissed_at.is_(None),
             DiscoveredEvent.concert_id.is_(None),
         )

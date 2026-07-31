@@ -37,6 +37,7 @@ from app.domain.eventernote import (
 )
 from app.domain.timezones import utc_to_jst
 from app.fetching import FetchError, fetch_html
+from app.scheduler import heartbeat
 
 log = logging.getLogger(__name__)
 
@@ -110,6 +111,15 @@ async def run_sweep(
     fetched_any = False
 
     for tag in tags:
+        # The sweep occupies one tick for minutes (86 pages, each with its own
+        # deliberate pause), and heartbeat.beat() fires BEFORE tick() -- so
+        # without this, a long sweep ages the heartbeat past MAX_AGE_SECONDS
+        # and /healthz reports a perfectly healthy app as down. Beating per
+        # artist is honest, not a workaround: the loop genuinely is alive.
+        # Imported directly rather than passed in as a callback, following
+        # app/ops.py, which sits at this same layer and does exactly this.
+        heartbeat.beat()
+
         actor_id = actor_id_from_url(tag.eventernote_url or "")
         if actor_id is None:
             log.warning(
@@ -125,22 +135,61 @@ async def run_sweep(
         fetched_any = True
 
         url = actor_events_url(actor_id, tag.name)
+        # READING the page is inside the try, not just fetching it. `Exception`
+        # rather than DiscoveryFetchError, deliberately: parse_actor_events
+        # builds date(y, m, d) out of a regex match, so a page carrying
+        # `2026年2月30` -- a typo, or a date-shaped string in a title -- raises
+        # ValueError. Escaping here would mean run_sweep never stamps its
+        # clock, so the next tick re-fetches every page up to the poisoned one,
+        # a minute later, forever. One artist's page must cost the other 85
+        # nothing whatever is wrong with it, which is also what
+        # domain/eventernote.py's docstring already promises.
         try:
             html = await fetcher(url)
-        except DiscoveryFetchError as exc:
-            # One artist's page being unreachable must not cost the other 85.
-            log.warning("discovery: fetch failed for %s: %s", url, exc)
+            page = parse_actor_events(html)
+            events = future_events(page.events, today_jst)
+        except Exception:
+            log.exception("discovery: could not read %s", url)
             report.failed += 1
             continue
 
+        # Counted after the parse: `fetched` means "pages actually read".
         report.fetched += 1
-        page = parse_actor_events(html)
         if page.skipped:
             log.info("discovery: %d unreadable row(s) on %s", page.skipped, url)
         artist_by_tag_id[tag.id] = tag.name
-        for actor_event in future_events(page.events, today_jst):
+        for actor_event in events:
             seen.append((actor_event, tag.id))
 
+    try:
+        await _record_and_announce(session, seen, artist_by_tag_id, now, report)
+    finally:
+        # In a `finally`, and OUTSIDE the "did we find anything" question: the
+        # clock starts on every sweep -- quiet ones, and ones that died partway.
+        # Any exit that leaves last_run_at unset re-arms discovery_due, and the
+        # next tick re-runs the same sweep a minute later, forever.
+        #
+        # This covers run_sweep's own transaction. A caller that rolls back on
+        # the exception (scheduler.loop does, correctly -- the session may be
+        # poisoned) takes this stamp with it, which is why loop.py re-stamps in
+        # its handler after the rollback. Both halves are needed.
+        try:
+            await stamp_discovery_run(session, now)
+        except Exception:
+            # Never mask the real failure with a bookkeeping one.
+            log.exception("discovery: could not stamp the sweep timestamp")
+    return report
+
+
+async def _record_and_announce(
+    session: AsyncSession,
+    seen: list[tuple[ActorEvent, int | None]],
+    artist_by_tag_id: dict[int, str],
+    now: datetime,
+    report: SweepReport,
+) -> None:
+    """The write half: diff, compose, queue, mark. Split out only so run_sweep's
+    stamp can wrap all of it in one `finally` without a wall of indentation."""
     fresh = await record_discovered(session, seen, now)
     report.new_leads = len(fresh)
 
@@ -168,12 +217,6 @@ async def run_sweep(
             # what carries the rest, and that surface is built for bulk triage.
             await mark_leads_announced(session, [row.id for row in fresh], now)
             report.announced = len(fresh)
-
-    # OUTSIDE the `if`, deliberately: the clock starts on every sweep, quiet
-    # ones included. Skipping it on a quiet day would leave discovery_due true
-    # and re-sweep on the next tick, a minute later.
-    await stamp_discovery_run(session, now)
-    return report
 
 
 def _lead(row: DiscoveredEvent, artists: dict[int, str], *, maybe_held: bool) -> Lead:

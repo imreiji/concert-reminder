@@ -123,3 +123,23 @@ async def test_a_failing_sweep_leaves_the_delivered_notice_marked_sent(maker, mo
     async with maker() as s:
         note = (await s.execute(select(Notification))).scalar_one()
         assert note.sent_at_utc is not None
+
+
+@pytest.mark.asyncio
+async def test_a_failing_sweep_still_counts_as_todays_sweep(maker, monkeypatch):
+    """run_sweep stamps its clock in a `finally`, but the handler's rollback
+    would take that stamp with it -- so the handler re-stamps on the clean
+    transaction. Without this the sweep that died runs again 60 seconds later
+    and dies the same way, forever."""
+    monkeypatch.setattr(settings, "discovery_enabled", True)
+
+    async def boom(*_a, **_kw):
+        raise RuntimeError("sweep exploded")
+
+    monkeypatch.setattr(loop_mod, "run_sweep", boom)
+
+    await loop_mod.tick(FakeBot())
+
+    async with maker() as s:
+        state = (await s.execute(select(DiscoveryState))).scalar_one()
+        assert state.last_run_at is not None

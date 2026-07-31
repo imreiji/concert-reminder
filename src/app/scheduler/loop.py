@@ -52,6 +52,7 @@ from app.db.service import (
     queue_delivery_digest,
     record_deliveries,
     record_dm_outcome,
+    stamp_discovery_run,
 )
 from app.db.session import SessionMaker
 from app.discovery import run_sweep
@@ -269,6 +270,18 @@ async def tick(bot) -> int:
             except Exception:
                 log.exception("discovery sweep failed; delivery was unaffected")
                 await session.rollback()
+                # The rollback takes run_sweep's own last_run_at stamp with it,
+                # so re-stamp on the now-clean transaction. Without this, a
+                # sweep that dies -- on a malformed third-party page, say --
+                # leaves discovery_due true and runs again 60 seconds later,
+                # dying the same way forever. A failed sweep still counts as
+                # today's sweep; the next one is tomorrow's.
+                try:
+                    await stamp_discovery_run(session, now)
+                    await session.commit()
+                except Exception:
+                    log.exception("discovery: could not record the failed sweep")
+                    await session.rollback()
     return delivered
 
 
