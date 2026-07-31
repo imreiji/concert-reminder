@@ -37,6 +37,34 @@ def test_event_ids_are_unique_within_a_page():
     assert len(ids) == len(set(ids))
 
 
+def test_the_same_event_linked_twice_is_only_counted_once():
+    """A dedup guard, not a proxy for one: two separate anchors point at the
+    SAME /events/<id> in one page, and the parser must still emit exactly
+    one event. Built as a literal string, not from the fixture, so it fails
+    if the dedup guard is ever removed -- the fixture's 20 links are already
+    distinct and can't exercise this path (see
+    test_event_ids_are_unique_within_a_page above, which doesn't)."""
+    html = """
+    <html><body><ul>
+      <li class="clearfix">
+        <div class="date"><p class="day0">2026-08-12 (土)</p></div>
+        <div class="event">
+          <h4><a href="/events/900001">Show One</a></h4>
+          <div class="place">会場: <a href="/places/1">Venue A</a></div>
+        </div>
+      </li>
+      <li class="clearfix">
+        <div class="date"><p class="day0">2026-08-12 (土)</p></div>
+        <div class="event">
+          <h4><a href="/events/900001">Show One, linked again</a></h4>
+        </div>
+      </li>
+    </ul></body></html>
+    """
+    page = parse_actor_events(html)
+    assert [e.event_id for e in page.events] == ["900001"]
+
+
 def test_rows_are_newest_first():
     """The stop rule depends on this ordering. If the site ever changes it,
     future_events would silently truncate at the first past row and report
