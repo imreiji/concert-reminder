@@ -194,8 +194,10 @@ async def test_a_lead_elsewhere_is_not_marked(client):
 
 async def test_an_announced_lead_says_when_it_was_announced(client):
     """announced_at is surfaced rather than left write-only: on a first-sweep
-    backlog it is what separates "the DM already named this" from "this arrived
-    today"."""
+    backlog it is what separates "an earlier sweep already reported this" from
+    "this arrived today". It does NOT mean the DM described the lead --
+    mark_leads_announced stamps every fresh row, including the ones the DM only
+    counted in its "+N more" -- and the page copy says so."""
     await _seed(client, announced_at=datetime(2026, 8, 3, 9, 0, tzinfo=UTC))
     login_as(client, ADMIN_ID, "reiji")
     assert "2026-08-03" in client.get("/admin/discoveries").text

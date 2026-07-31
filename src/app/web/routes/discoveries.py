@@ -96,9 +96,13 @@ async def discoveries(
     ANNOUNCED IS NOT TRIAGED: `open_leads` deliberately does not filter on
     `announced_at`, because the sweep marks every fresh lead announced whether
     the DM listed it or merely counted it -- so this page is where the "+N
-    more" of a first sweep is actually reachable. The column is SHOWN instead:
-    on a backlog it is what separates a lead the DM already named from one that
-    arrived today.
+    more" of a first sweep is actually reachable. The column is SHOWN instead,
+    and it means SEEN EARLIER, not DESCRIBED: `mark_leads_announced` stamps
+    every fresh lead, so a date here separates a lead an earlier sweep already
+    reported from one that arrived today, and says nothing about whether the DM
+    named it or only counted it. The page copy has to say that -- reading a
+    date as "I have already read about this" and skipping the row is exactly
+    how a merely-counted lead gets lost.
     """
     leads = await open_leads(session)
     hinted = await leads_matching_existing_legs(session, leads)
