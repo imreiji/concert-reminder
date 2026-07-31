@@ -826,6 +826,20 @@ class DiscoveredEvent(Base):
     )
 
 
+class DiscoveryState(Base):
+    """When the last Eventernote sweep ran. One row, id=1.
+
+    A table rather than memory for the same reason OpsCheckState is one: a
+    restart must not re-run a sweep that already went out, because the sweep
+    ends in a DM.
+    """
+
+    __tablename__ = "discovery_state"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
 class OpsCheckState(Base):
     """Last confirmed result per operational check, so alerting survives
     restarts. In-memory state would re-announce every problem on every deploy.

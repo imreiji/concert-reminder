@@ -37,8 +37,10 @@ from app.bot.messages import (
     build_new_event_message,
     build_reminder_message,
 )
+from app.config import settings
 from app.db.service import (
     DueReminder,
+    discovery_due,
     due_notifications,
     due_reminders,
     evaluate_and_alert,
@@ -52,6 +54,7 @@ from app.db.service import (
     record_dm_outcome,
 )
 from app.db.session import SessionMaker
+from app.discovery import run_sweep
 from app.domain.types import DeliveryOutcome
 from app.ops import run_checks
 from app.scheduler import heartbeat
@@ -247,6 +250,24 @@ async def tick(bot) -> int:
                 await session.commit()
             except Exception:
                 log.exception("delivery log prune failed; nothing else was affected")
+                await session.rollback()
+
+        # Discovery sweeps once a DAY, not once a tick: 86 third-party fetches
+        # on a 60s loop would be both useless and rude. Its own try/except and
+        # its own commit, for the same reason the prune has them -- the least
+        # important operation in the tick must never be able to roll back the
+        # most important one.
+        if settings.discovery_enabled:
+            try:
+                if await discovery_due(session, now):
+                    report = await run_sweep(session, now)
+                    await session.commit()
+                    log.info(
+                        "discovery sweep: %d fetched, %d failed, %d new",
+                        report.fetched, report.failed, report.new_leads,
+                    )
+            except Exception:
+                log.exception("discovery sweep failed; delivery was unaffected")
                 await session.rollback()
     return delivered
 

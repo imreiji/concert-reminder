@@ -37,6 +37,7 @@ from app.db.models import (
     ConcertTag,
     DeliveryLog,
     DiscoveredEvent,
+    DiscoveryState,
     LegOptOut,
     Notification,
     OpsCheckState,
@@ -6701,3 +6702,30 @@ async def leads_matching_existing_legs(
         lead.id for lead in candidates
         if (lead.event_date, lead.venue.casefold()) in seen
     }
+
+
+# One sweep a day. The scheduler ticks every 60s, so the cadence has to live
+# somewhere durable: in-memory state would re-sweep on every restart, and a
+# sweep ends in a DM.
+DISCOVERY_INTERVAL = timedelta(hours=24)
+DISCOVERY_STATE_ID = 1
+
+
+async def discovery_due(session: AsyncSession, now: datetime) -> bool:
+    """Has it been a day? True also when the sweep has never run at all."""
+    state = await session.get(DiscoveryState, DISCOVERY_STATE_ID)
+    if state is None or state.last_run_at is None:
+        return True
+    return now - state.last_run_at >= DISCOVERY_INTERVAL
+
+
+async def stamp_discovery_run(session: AsyncSession, now: datetime) -> None:
+    """Start the 24h clock. Called on EVERY sweep, including one that found
+    nothing -- a quiet day that left the clock unset would re-sweep on the very
+    next tick, which is 86 third-party fetches a minute."""
+    state = await session.get(DiscoveryState, DISCOVERY_STATE_ID)
+    if state is None:
+        state = DiscoveryState(id=DISCOVERY_STATE_ID)
+        session.add(state)
+    state.last_run_at = now
+    await session.flush()

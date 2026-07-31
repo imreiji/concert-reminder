@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # Same shape as bot_enabled: one config value switching a subsystem off.
     rehearsal_enabled: bool = False
 
+    # Same shape as bot_enabled and rehearsal_enabled: one config value
+    # switching a subsystem off. Default False so the feature ships switched
+    # off, and so tests and dev runs never reach the network.
+    discovery_enabled: bool = False
+
     # Access control: comma-separated Discord user IDs with edit rights
     editor_whitelist: str = ""
     # Access control: comma-separated Discord user IDs who can manage editors
