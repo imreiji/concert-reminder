@@ -191,6 +191,44 @@ queues; the existing drain delivers.
 - **One DM per sweep**, leads grouped by artist, listing at most ten with a
   "+N more" line and a link to the review page.
 
+### The DM carries a paste-ready agent prompt
+
+The point of a lead is to become a concert, and the step between them is handing
+the sources to an agent. The DM therefore ends with a **fenced code block** the
+maintainer can copy straight into an agent session to start the add-concert
+workflow.
+
+Two halves, because Discord forces the split: text inside a fenced block is NOT
+linkified, so the readable list above stays clickable while the block below stays
+copyable. The same content twice is deliberate, not redundancy.
+
+The block is a PROMPT, not a bare URL list -- it names the skill, so pasting it
+is the whole action:
+
+    Add these to dekimasen.app using the add-concert skill.
+    Group legs of the same tour into ONE draft.
+
+    https://www.eventernote.com/events/464372  2026-11-15  バンテリンドーム ナゴヤ
+    https://www.eventernote.com/events/464371  2026-11-14  バンテリンドーム ナゴヤ
+    https://www.eventernote.com/events/486174  2026-10-31  Veats Shibuya
+
+Rules:
+
+- **One block per DM, covering the leads that DM names.** Grouping legs into
+  concerts is judgment and stays with the agent (the seam this whole design
+  rests on), so the block does not attempt to cluster -- it carries the second
+  instruction line telling the agent to do it.
+- **The 2000-character message limit is a hard budget, and the block yields
+  first.** Prose, the readable list, then as many block lines as fit; if lines
+  are dropped the block says so on its last line. A DM that silently loses
+  leads from the copy block while listing them above is the quiet kind of wrong.
+- The venue is included as free text because it is what the agent needs to
+  disambiguate a tour's legs, and it costs one column.
+- `/admin/discoveries` offers the same block with a real copy button -- per lead
+  and for a ticked selection. That surface has no character limit and is the
+  better ergonomics; the DM version exists so a lead can be acted on from a
+  phone without opening the site.
+
 ### Announcing marks EVERY reported lead, listed or merely counted
 
 `announced_at` is set on all open leads the DM covers -- including those folded
@@ -252,6 +290,13 @@ It is also where the agent reads when asked to turn a lead into a draft.
 - **No re-announce**: two sweeps over the same page produce one DM.
 - **Page render**: a logged-in admin GET of `/admin/discoveries`, per the
   every-page-has-a-render-test convention.
+- **DM budget**: a sweep with many leads produces a message under 2000
+  characters, and when block lines are dropped the block SAYS so. Assert the
+  rendered length and the truncation notice -- not that "the code is careful",
+  which is not a property.
+- **Copy block content**: assert one line per named lead with its event URL, and
+  that the fenced block is present and closed. An unclosed fence swallows the
+  rest of the message into a code block, which is invisible in a length check.
 
 Tests must assert the property, not a proxy for it -- the lesson recorded in the
 2026-07-31 next-session notes after three tests in two days passed or failed for
