@@ -94,6 +94,35 @@ def test_it_stays_inside_the_budget_with_many_leads():
     assert f"/events/{leads[0].event_id}" in block
 
 
+def test_an_uncapped_caller_keeps_every_line():
+    """The budget belongs to the CHANNEL. /admin/discoveries has none, and it
+    is where the DM's "+N more" line points -- so a lead dropped there would be
+    reachable from nowhere.
+
+    Uses the same long-field fixtures as the budget test above so the input
+    genuinely overruns DM_CHAR_BUDGET; short 'Show N' leads would fit either
+    way and would pass with budget=None ignored entirely."""
+    leads = [
+        Lead(
+            event_id=str(400000 + n),
+            title=f"Show {n} at a moderately long venue tour name here",
+            date=dt.date(2026, 11, n),
+            venue="Zepp Haneda Tokyo Bayside Arena",
+            artist="Liyuu",
+            maybe_held=False,
+        )
+        for n in range(1, 11)
+    ]
+    assert len(build_discovery_dm(leads, total=10)) <= DM_CHAR_BUDGET, "the DM still caps"
+
+    body = build_discovery_dm(leads, total=10, budget=None)
+    assert len(body) > DM_CHAR_BUDGET, "this input really does overrun the DM budget"
+    block = body.split("```")[1]
+    for lead in leads:
+        assert f"/events/{lead.event_id}" in block
+    assert "more not shown" not in block
+
+
 def test_a_long_venue_is_clipped_in_the_prose():
     """venue is scraped free text off eventernote just like title (see
     domain/eventernote.py's _venue) -- an unclipped one sits ugly in the

@@ -52,11 +52,22 @@ def _clip(text: str, n: int) -> str:
     return text[: n - 1].rstrip() + "…"
 
 
-def build_discovery_dm(leads: Sequence[Lead], total: int) -> str:
+def build_discovery_dm(
+    leads: Sequence[Lead], total: int, *, budget: int | None = DM_CHAR_BUDGET
+) -> str:
     """The message, or "" when there is nothing to say.
 
     Silence is the correct output for a quiet day: a daily "nothing found"
     trains the reader to ignore the channel.
+
+    `budget` is the CHANNEL's character cap, not the message's, which is why it
+    is a parameter and not the constant it used to be. Discord's is
+    DM_CHAR_BUDGET and stays the default, so the DM path is unchanged; the
+    /admin/discoveries copy block passes None, because a web page has no cap and
+    a block that silently drops leads on the very page the DM's "+N more" line
+    points to would leave those leads reachable from nowhere. ONE formatter
+    either way -- a second one would drift, and the block's job (a prompt an
+    agent can act on) is identical in both places.
     """
     if not leads:
         return ""
@@ -88,6 +99,12 @@ def build_discovery_dm(leads: Sequence[Lead], total: int) -> str:
         for lead in leads
     ]
 
+    # Unbounded: nothing to trade off, so none of the truncation machinery
+    # below runs at all. Kept as its own branch rather than a huge int, so an
+    # uncapped caller is obviously total instead of merely unlikely to trip.
+    if budget is None:
+        return _assemble(prose, block_lines, 0)
+
     # The block yields FIRST. Announcing a lead in the prose above while
     # silently dropping it from the copy block is the quiet kind of wrong, so
     # when lines go, the block says so.
@@ -95,12 +112,12 @@ def build_discovery_dm(leads: Sequence[Lead], total: int) -> str:
     while kept:
         dropped = len(block_lines) - len(kept)
         body = _assemble(prose, kept, dropped)
-        if len(body) <= DM_CHAR_BUDGET:
+        if len(body) <= budget:
             return body
         kept.pop()
 
     body = _assemble(prose, [], len(block_lines))
-    if len(body) <= DM_CHAR_BUDGET:
+    if len(body) <= budget:
         return body
 
     # HARD FLOOR. Per-field clipping above bounds any ONE field, but nothing
@@ -112,7 +129,7 @@ def build_discovery_dm(leads: Sequence[Lead], total: int) -> str:
     # guarantee that can't happen. Truncate the prose itself as the last
     # resort -- the block (now just the truncation notice) is left intact so
     # it still tells the truth about what's missing.
-    return _hard_truncate(prose, len(block_lines))
+    return _hard_truncate(prose, len(block_lines), budget)
 
 
 def _assemble(prose: str, kept: Sequence[str], dropped: int) -> str:
@@ -123,7 +140,7 @@ def _assemble(prose: str, kept: Sequence[str], dropped: int) -> str:
     return f"{prose}```\n" + "\n".join(lines) + "\n```"
 
 
-def _hard_truncate(prose: str, dropped: int) -> str:
+def _hard_truncate(prose: str, dropped: int, budget: int) -> str:
     footer = _assemble("", [], dropped)
-    available = max(DM_CHAR_BUDGET - len(footer), 0)
+    available = max(budget - len(footer), 0)
     return _assemble(prose[:available], [], dropped)

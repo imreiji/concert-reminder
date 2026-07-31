@@ -2872,6 +2872,16 @@ msgid "Every DM the scheduler attempted, and recent failures."
 msgstr "调度器尝试发送的每一条 DM，以及最近的失败。"
 
 #: src/app/web/templates/preferences.html:448
+msgid "Discoveries"
+msgstr "新发现"
+
+#: src/app/web/templates/preferences.html:449
+msgid ""
+"Performances your artists' Eventernote pages list that the catalogue does "
+"not have."
+msgstr "你关注的艺人的 Eventernote 页面上列出、而目录中还没有的演出。"
+
+#: src/app/web/templates/preferences.html:452
 msgid "Broadcast"
 msgstr "群发"
 

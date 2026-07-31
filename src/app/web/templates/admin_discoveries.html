@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{#- Admin-only operational page: English-only and deliberately NOT wrapped in
+    _(), following admin_deliveries.html. Styling reuses the existing
+    `.tagtable` rules and the two sanctioned callout shapes rather than
+    inventing tokens for a page only admins see. -#}
+{% block title %}Discoveries — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Discoveries</h1>
+<p class="dim">
+  Performances your artists' Eventernote pages advertise that the catalogue
+  does not have. A lead, not a concert — Eventernote carries no ticket
+  information, so rounds still come from the official page.
+</p>
+
+{% if rows %}
+<h2>{{ rows | length }} open lead{{ '' if rows | length == 1 else 's' }}</h2>
+
+<div>
+  <table class="tagtable">
+    <thead>
+      <tr>
+        <th>Performance</th><th>Date</th><th>Venue</th><th>Artist</th>
+        <th>Announced</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>
+          <a href="https://www.eventernote.com/events/{{ r.lead.eventernote_event_id }}"
+             target="_blank" rel="noopener">{{ r.lead.title }}</a>
+          {% if r.maybe_held %}
+          {#- The hint, never a suppression: two shows on one day at one venue
+              is the normal shape of a Japanese concert day, so this can only
+              say "look before you add". .banner.warn is the sanctioned
+              needs-attention shape (G2). -#}
+          <div class="banner warn">May already have this — same date and venue as a leg you hold.</div>
+          {% endif %}
+        </td>
+        <td>{{ r.lead.event_date.strftime('%Y-%m-%d') }}</td>
+        <td>{{ r.lead.venue or '—' }}</td>
+        <td>{{ r.artist or '—' }}</td>
+        <td>{{ r.lead.announced_at.strftime('%Y-%m-%d') if r.lead.announced_at else 'Not yet' }}</td>
+        <td class="r">
+          <form method="post" action="/admin/discoveries/{{ r.lead.id }}/dismiss">
+            <button class="act no" type="submit">Dismiss lead</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="dim">
+  Dates are the JST calendar day of the performance; announced is the UTC day
+  the daily DM first named the lead. Dismissing is permanent — the sweep never
+  raises a dismissed lead again.
+</p>
+
+<h2>Hand these to an agent</h2>
+<div class="edgecard" style="padding:.8rem">
+  <p style="margin:0 0 .6rem">
+    The same block the daily DM carries, with every open lead in it rather
+    than the DM's first ten. Paste it to an agent with the add-concert skill.
+    {%- if hinted %} {{ hinted }} of these are marked above as possibly already held.{% endif %}
+  </p>
+  {#- Invariant 7: the text goes in a data- attribute and the handler reads it
+      via dataset. Interpolating it into the onclick would be an injection --
+      the browser HTML-decodes the attribute before parsing it as JS, so
+      Jinja's escaping does not protect you there. Same pattern as
+      preferences.html's calendar-feed copy button. -#}
+  <p style="margin:0 0 .6rem">
+    <button type="button" class="act" data-copy="{{ copy_text }}"
+            onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy block</button>
+  </p>
+  {#- Bare <pre>, like admin_broadcast.html's body preview -- no new token for
+      an admin page. It wraps rather than scrolls: the block is long URLs, and
+      a horizontal scrollbar on the thing you are about to copy is noise. -#}
+  <pre style="white-space:pre-wrap;margin:0">{{ copy_text }}</pre>
+</div>
+{% else %}
+<p class="dim">Nothing waiting. The sweep runs daily and DMs when it finds something.</p>
+{% endif %}
+{% endblock %}
