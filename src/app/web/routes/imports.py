@@ -17,7 +17,6 @@ import logging
 import zipfile
 from collections import namedtuple
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -40,6 +39,7 @@ from app.db.session import get_session
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import ConcertKind, RoundKind
 from app.domain.yaml_import import DraftError, parse_draft
+from app.fetching import FetchFailed, HostNotAllowed, check_host, fetch_html
 from app.web.auth import SessionUser, require_editor
 from app.web.forms import form_url, require_variants
 from app.web.routes.concerts import (
@@ -66,62 +66,49 @@ MAX_DRAFT_CHARS = 200_000
 
 
 def _check_host(url: str) -> None:
-    """SSRF guard: v1 only fetches ramen.events, an allowlist, not a blocklist."""
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.hostname != ALLOWED_HOST:
+    """SSRF guard: v1 only fetches ramen.events, an allowlist, not a blocklist.
+
+    The guard itself lives in `app/fetching.py`, shared with the Eventernote
+    discovery sweep; this wrapper only turns its error into the 400 this route
+    has always answered.
+    """
+    try:
+        check_host(url, ALLOWED_HOST)
+    except HostNotAllowed as exc:
         raise HTTPException(
             status_code=400,
             detail=f"only https://{ALLOWED_HOST}/... URLs are supported",
-        )
-
-
-async def _check_redirect_host(response: httpx.Response) -> None:
-    """httpx response event hook, called for every hop including redirects.
-
-    follow_redirects=True alone would chase a redirect issued by ramen.events
-    (a compromised host, or an open-redirect endpoint there) to an arbitrary
-    address, silently defeating _check_host's allowlist. Re-running the same
-    check against the Location header on every hop closes that gap.
-    """
-    if response.is_redirect:
-        location = response.headers.get("location", "")
-        _check_host(urljoin(str(response.url), location))
+        ) from exc
 
 
 async def fetch_ramen_html(url: str, transport: httpx.AsyncBaseTransport | None = None) -> str:
-    """Fetch an already-host-checked URL.
+    """Fetch a ramen.events page, or raise this route's HTTP errors.
 
-    The body is read in capped chunks so an oversized response is aborted
-    mid-download, instead of being fully buffered into memory first (as a
-    plain `client.get()` + `len(resp.content)` check would do).
+    `fetch_html` re-checks the host on EVERY redirect hop (a bare
+    follow_redirects=True would chase a redirect issued by ramen.events to an
+    arbitrary address, silently defeating the allowlist) and reads the body in
+    capped chunks so an oversized response is aborted mid-download.
+
+    The module constants are passed explicitly rather than left to the shared
+    defaults, so this route's limits stay this route's to tune.
 
     `transport` is test-only (httpx.MockTransport); production always uses
     httpx's default.
     """
-    async with httpx.AsyncClient(
-        timeout=FETCH_TIMEOUT,
-        follow_redirects=True,
-        max_redirects=MAX_REDIRECTS,
-        event_hooks={"response": [_check_redirect_host]},
-        transport=transport,
-    ) as client:
-        async with client.stream(
-            "GET", url, headers={"User-Agent": "dekimasen.app/1.0 (event import)"}
-        ) as resp:
-            if resp.status_code != 200:
-                raise HTTPException(
-                    status_code=502, detail=f"fetch failed: HTTP {resp.status_code}"
-                )
-            body = bytearray()
-            async for chunk in resp.aiter_bytes():
-                body.extend(chunk)
-                if len(body) > MAX_RESPONSE_BYTES:
-                    raise HTTPException(status_code=502, detail="page too large")
-            content_type = resp.headers.get("content-type", "")
-            charset = "utf-8"
-            if "charset=" in content_type:
-                charset = content_type.split("charset=", 1)[1].split(";", 1)[0].strip()
-            return bytes(body).decode(charset, errors="replace")
+    try:
+        return await fetch_html(
+            url,
+            allowed_host=ALLOWED_HOST,
+            user_agent="dekimasen.app/1.0 (event import)",
+            timeout=FETCH_TIMEOUT,
+            max_bytes=MAX_RESPONSE_BYTES,
+            max_redirects=MAX_REDIRECTS,
+            transport=transport,
+        )
+    except HostNotAllowed as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FetchFailed as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 def _fmt(dt) -> str:
@@ -433,6 +420,7 @@ async def import_commit(
     day_venue_tag_id: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
     day_cancelled: list[str] = Form(default=[]),
+    day_eventernote_event_id: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
     round_label_en: list[str] = Form(default=[]),
     round_label_zh: list[str] = Form(default=[]),
@@ -543,6 +531,15 @@ async def import_commit(
     # the field, including this route's older tests -- is padded to blanks.
     if not day_venue_tag_id:
         day_venue_tag_id = [""] * n_days
+    # The Eventernote id follows day_venue_tag_id's rule, not the end-padding
+    # above: it is a per-leg FACT, not display text, so a partial array is left
+    # alone and the strict zip raises rather than stamping one leg's id onto
+    # another -- a wrong id here is worse than a missing one, because the
+    # discovery diff would then treat a performance we do NOT have as held and
+    # never mention it again. Only a WHOLLY-omitted array (the minimal import
+    # contract, and every client predating this field) is padded to blanks.
+    if not day_eventernote_event_id:
+        day_eventernote_event_id = [""] * n_days
     # Resolved (and kind-checked) after the padding, so the strict zip below
     # still sees one entry per row. Same route-boundary check the manual
     # create/edit paths run -- see resolve_day_venue_tags.
@@ -554,10 +551,10 @@ async def import_commit(
     key_rows: list[tuple[str, object]] = []
     for row_no, (
         key, label, label_en, label_zh, starts_at,
-        doors_at, cancelled, v_tag
+        doors_at, cancelled, v_tag, en_event_id
     ) in enumerate(zip(
         day_key, day_label, day_label_en, day_label_zh, day_starts_at,
-        day_doors_at, day_cancelled, day_venue_tags, strict=True,
+        day_doors_at, day_cancelled, day_venue_tags, day_eventernote_event_id, strict=True,
     ), start=1):
         # v_tag is in the guard so a row where the editor picked ONLY a venue
         # (no label, no start time yet) is not read as blank and dropped.
@@ -570,6 +567,13 @@ async def import_commit(
             concert.id, label, starts_at, doors_at, cancelled,
             v_tag, label_en, label_zh,
         )
+        # Set here rather than through build_day: the import is the ONLY path
+        # that carries it (the manual create/edit forms have no such field), and
+        # build_day is shared with them. This is what lets discovery answer "do
+        # I already have this performance?" by id later -- see
+        # ConcertDay.eventernote_event_id and service.record_discovered's
+        # branch 1.
+        day.eventernote_event_id = en_event_id.strip() or None
         session.add(day)
         days.append(day)
         if key.strip():

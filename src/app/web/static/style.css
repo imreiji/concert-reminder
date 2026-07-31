@@ -1296,6 +1296,13 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .tagtable th.r, .tagtable td.r { text-align: right; font-variant-numeric: tabular-nums; }
 .tagtable td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); }
 .tagtable tr:hover td { background: var(--raise); }
+/* A date is one token and must never break. `.tagtable` uses automatic layout,
+   so the browser apportions width by content -- and a column of long Japanese
+   titles beside a column of dates leaves the date ~83px, which is under the
+   ~90px an ISO date needs, so it wrapped as "2027-03-" / "22" on EVERY row
+   (measured at 1440px on /admin/discoveries). nowrap makes the date claim its
+   width from the title column, which wraps happily and has the most to give. */
+.tagtable th.nw, .tagtable td.nw { white-space: nowrap; }
 
 .tchip {
   font: inherit; font-size: .8rem; padding: .22rem .6rem; border-radius: 999px;

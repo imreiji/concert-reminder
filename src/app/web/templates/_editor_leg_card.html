@@ -25,14 +25,25 @@
                         NOT none, the three data-hint-* attrs are emitted (the
                         clone template passes none, staying hint-free)
       show_venue_hint, venue_hint_name  import-only unmatched-venue notice on
-                        the variants row -#}
+                        the variants row
+      eventernote_event_id  the Eventernote event this leg came from, carried
+                        through the import round trip as provenance. Read by
+                        import_commit ONLY; the manual create/edit routes do not
+                        collect it, so there it posts blank and is ignored. The
+                        input is emitted UNCONDITIONALLY all the same -- every
+                        day_* array import_commit zips is strict, so a card
+                        without the field (a clone row added by "Add day") would
+                        shorten that one array and slide every later row's id
+                        onto the wrong leg -#}
 {% macro leg_card(day_id="", day_key="", label="", label_en="", label_zh="",
                   cancelled=False, venue_id=none, doors="", starts="",
                   hint_venue=none, hint_city="", hint_address="",
-                  show_venue_hint=False, venue_hint_name="") %}
+                  show_venue_hint=False, venue_hint_name="",
+                  eventernote_event_id="") %}
 <div class="eleg{% if cancelled %} cancelled{% endif %}" data-variant-scope>
   <input type="hidden" name="day_id" value="{{ day_id }}">
   <input type="hidden" name="day_key" value="{{ day_key }}">
+  <input type="hidden" name="day_eventernote_event_id" value="{{ eventernote_event_id }}">
   <div class="cardtop">
     <input class="cardname" name="day_label" maxlength="100" placeholder="{{ _('Day 1') }}" value="{{ label }}"
            data-variant-group="day_label" data-variant-slot="ja"

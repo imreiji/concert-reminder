@@ -37,8 +37,10 @@ from app.bot.messages import (
     build_new_event_message,
     build_reminder_message,
 )
+from app.config import settings
 from app.db.service import (
     DueReminder,
+    discovery_due,
     due_notifications,
     due_reminders,
     evaluate_and_alert,
@@ -50,8 +52,10 @@ from app.db.service import (
     queue_delivery_digest,
     record_deliveries,
     record_dm_outcome,
+    stamp_discovery_run,
 )
 from app.db.session import SessionMaker
+from app.discovery import run_sweep
 from app.domain.types import DeliveryOutcome
 from app.ops import run_checks
 from app.scheduler import heartbeat
@@ -248,6 +252,37 @@ async def tick(bot) -> int:
             except Exception:
                 log.exception("delivery log prune failed; nothing else was affected")
                 await session.rollback()
+
+        # Discovery sweeps once a DAY, not once a tick: 86 third-party fetches
+        # on a 60s loop would be both useless and rude. Its own try/except and
+        # its own commit, for the same reason the prune has them -- the least
+        # important operation in the tick must never be able to roll back the
+        # most important one.
+        if settings.discovery_enabled:
+            try:
+                if await discovery_due(session, now):
+                    report = await run_sweep(session, now)
+                    await session.commit()
+                    log.info(
+                        "discovery sweep: %d fetched, %d failed, %d new%s",
+                        report.fetched, report.failed, report.new_leads,
+                        " (stopped at its time budget)" if report.budget_exhausted else "",
+                    )
+            except Exception:
+                log.exception("discovery sweep failed; delivery was unaffected")
+                await session.rollback()
+                # The rollback takes run_sweep's own last_run_at stamp with it,
+                # so re-stamp on the now-clean transaction. Without this, a
+                # sweep that dies -- on a malformed third-party page, say --
+                # leaves discovery_due true and runs again 60 seconds later,
+                # dying the same way forever. A failed sweep still counts as
+                # today's sweep; the next one is tomorrow's.
+                try:
+                    await stamp_discovery_run(session, now)
+                    await session.commit()
+                except Exception:
+                    log.exception("discovery: could not record the failed sweep")
+                    await session.rollback()
     return delivered
 
 

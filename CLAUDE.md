@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 1609 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 1835 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -78,7 +78,11 @@ outbox, and the flag-gated local rehearsal harness -- and real
 403/404/422/500 pages (HTML for a navigation, the original JSON for an
 XHR) with the admin pages indexed in Preferences -- and a correctness
 sweep closing a born-dead concert's permanent "new event" DM and a
-generated `event_id` taking a reserved word -- have shipped since).
+generated `event_id` taking a reserved word -- and Eventernote
+discovery, a daily flag-gated sweep of every tag carrying an
+`eventernote_url` that records performances the catalogue lacks, DMs
+admins one digest ending in a paste-ready agent prompt, and reviews them
+at `/admin/discoveries` -- have shipped since).
 
 ## Commands
 
@@ -124,6 +128,33 @@ generated `event_id` taking a reserved word -- have shipped since).
   `parse_draft`'s philosophy -- warnings over failures, one bad row skipped and
   named, only an unusable file raises -- and `RESTORE_NOTES`, the text written
   into every export, lives here too because it documents the format.
+  `eventernote.py` parses an actor's events page the way `ingest.py` parses a
+  ramen.events page -- HTML string in, rows out, no httpx -- and skips-and-counts
+  an unreadable row rather than raising, so a site redesign degrades to "found
+  nothing" instead of crashing a scheduler tick every day. Its `future_events`
+  is a TAKE-WHILE, not a filter, and that is the whole economy of discovery:
+  rows are strictly newest-first (measured, and pinned by a test), so stopping
+  at the first past row means ONE fetch per artist -- ~86 a sweep instead of the
+  ~1,548 that reading all 18 pages of every artist would cost. A filter would
+  be correct and eighteen times as expensive, so don't "simplify" it into one.
+  An event dated TODAY counts as future. `actor_events_url` builds
+  `/actors/<name>/<id>/events` from OUR name because **the name segment is
+  DECORATIVE** -- `/actors/x/5847` resolves the same as the site's own path
+  (verified against the live site) -- so only the id is identity, which is also
+  why `actor_id_from_url` reads nothing else out of a stored URL. The site's own
+  slug sometimes disagrees with the displayed name; that is fine and expected.
+  `discovery_message.py` composes the discovery DM and is its own module for the
+  reason `tags_yaml`/`tags_diff` are two: that one is about READING a source,
+  this is about COMPOSING a message. The message is deliberately the same content
+  TWICE -- a readable markdown list, then a fenced block carrying the same leads
+  as a paste-ready agent prompt -- because Discord does not linkify inside a
+  fence, so one half stays clickable and the other stays copyable. The 2000-char
+  limit is a hard budget and **the block yields first**, saying so on its last
+  line when lines are dropped; every free-text field is clipped and there is a
+  final prose truncation floor, because past Discord's real cap discord.py
+  raises and the WHOLE DM is lost rather than trimmed. `build_discovery_dm` takes
+  `budget=None` for `/admin/discoveries`, which has no character limit and is
+  where the DM's "+N more" points.
 - `src/app/db/` — models, session, and `service.py` (all business logic that
   touches the DB; discord-free so it's testable).
 - **Venues live on the LEG, as a tag.** `ConcertDay.venue_tag_id` (FK ->
@@ -176,7 +207,10 @@ generated `event_id` taking a reserved word -- have shipped since).
   before literal segments. Its fetch is SSRF-guarded three ways: https +
   `ramen.events` host only, the same check re-run on every redirect hop via
   an httpx response hook, and the body streamed under a byte cap — don't
-  loosen any of them. Its preview (`import_preview.html`) is built in the
+  loosen any of them. That guard is no longer local to this route: it lives in
+  `app/fetching.py` and is SHARED with the Eventernote sweep (see below), so
+  `fetch_ramen_html` is now a thin wrapper that translates the shared errors
+  into this route's 400/502. Its preview (`import_preview.html`) is built in the
   same day-card/round-card/leg-chip vocabulary as `concert_new.html`/
   `concert_edit.html`, and `import_commit` binds a parsed round's
   `applies_to` to legs via the same `round_legs`/`day_key`/
@@ -231,6 +265,43 @@ generated `event_id` taking a reserved word -- have shipped since).
   you owe outranks a round you could still enter. LOST and NOT_APPLIED place
   nothing (neither is an end state). `service.board_cards` gathers its
   inputs and `OPEN_COLUMN_LIMIT` caps the open column.
+- `src/app/fetching.py` — the ONE host-pinned HTTP fetch, top-level beside
+  `i18n.py` and `ops.py` (it does I/O, so it cannot live in `domain/`; both a
+  web route and the scheduler import it). It was private to the ramen.events
+  importer first, and it was EXTRACTED rather than copied when discovery needed
+  it: two copies of a security control means a weakness found later gets fixed
+  in one and missed in the other. The caller names its `allowed_host`; the guard
+  raises its own `FetchError`/`HostNotAllowed`/`FetchFailed` and each caller
+  translates (the web route to HTTP status codes, the sweep to a per-artist
+  skip). The redirect hook is built PER CALL so it closes over that caller's
+  host — a module-level hook pinned to one host is the obvious extraction bug
+  and is exactly what a shared guard must not have.
+- `src/app/discovery.py` — the Eventernote fetch and the daily sweep. Sits
+  ABOVE `db/` like `ops.py`: it imports `domain/` and `db.service`, and nothing
+  in `db/` imports it. It walks every tag with an `eventernote_url`, keeps the
+  future prefix of each page, hands the whole sweep's events to
+  `record_discovered` in ONE call (its event-id key is what stops the LoveLive
+  15th, listed by nine catalogue tags, being reported nine times), and queues
+  ONE `Notification` — never a DM of its own (invariant 4). Fetches are
+  SEQUENTIAL with a 1s pause; 86 parallel requests at a third party is how an
+  IP gets blocked. Gated by `settings.discovery_enabled` (default False, same
+  shape as `rehearsal_enabled`), which is also what keeps tests and dev runs
+  off the network. Two operational rules, both learned the hard way and both
+  silent when broken:
+  - **A long in-tick job must beat the heartbeat inside its own loop.** The
+    scheduler calls `heartbeat.beat()` BEFORE `tick()`, and `/healthz` reports
+    unhealthy once the last beat is `MAX_AGE_SECONDS` (180s) old. A sweep of 86
+    pages each with its own deliberate pause occupies the tick for minutes, so
+    without a beat per artist it pages the owner about a perfectly healthy app.
+    The loop genuinely IS alive, so beating in it is honest, not a workaround.
+  - **`stamp_discovery_run` only FLUSHES**, so a stamp written in run_sweep's
+    `finally` is thrown away by `scheduler/loop.py`'s handler when it (correctly)
+    rolls the poisoned session back. The handler therefore RE-stamps and commits
+    on the cleaned transaction. Both halves are needed, and the failure mode is
+    the nastiest kind: tests are green because they never roll back, while in
+    production a sweep that dies leaves `discovery_due` true and re-runs 86
+    fetches every 60 seconds forever. Any future "record that we ran" written in
+    a `finally` on the scheduler's session has the same hole.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
 - `routes/welcome.py` -- the five-step welcome wizard, rebuilt on the design
   system and flowing seamlessly into `/setup` (`POST /welcome/advance`
@@ -273,6 +344,31 @@ generated `event_id` taking a reserved word -- have shipped since).
   route is absent from production entirely. Don't read either as licence for a
   third. Operator setup (second Discord app, test server, the redirect URI
   that bites) is `docs/local-dev-bot.md`.
+- `routes/discoveries.py` — the Eventernote discovery review surface
+  (`GET /admin/discoveries`, `POST /admin/discoveries/{id}/dismiss`), admin-only,
+  linked from Preferences with the other admin pages. Its own module rather than
+  a section of `admin.py` for the same reason `rehearsal.py` is: a router
+  registers whole, and discovery is a fourth unrelated concern beside the
+  delivery log, the broadcast and the catalogue round-trip. English-only and NOT
+  wrapped in `_()`, like `/admin/deliveries`; only the Preferences LINK is
+  translated. **It writes exactly one column, `dismissed_at`** — it never creates
+  a concert, because Eventernote carries no ticket information at all, so a lead
+  can say "this exists and you are not tracking it" and nothing more. Turning one
+  into a concert stays with an agent following `.claude/skills/add-concert`,
+  which is what the page's copy block (the same `build_discovery_dm`, with
+  `budget=None`) is for. `import_commit` remains the only write path into
+  `concerts`. Two things it deliberately does NOT do: `open_leads` does not
+  filter on `announced_at` (announced is not triaged — the sweep marks every
+  fresh lead announced whether the DM named it or merely counted it, so this page
+  is where a first sweep's "+N more" is actually reachable; the column is SHOWN
+  instead), and a same-date-same-venue collision with an existing leg is a HINT
+  on the row, never a suppression, because 昼公演 and 夜公演 are two Eventernote
+  events on one date at one venue and suppressing would hide exactly the second
+  show. `ConcertDay.eventernote_event_id` is the exact-match half of the same
+  question: populated by the import path going forward, so "do I already have
+  this?" is an id lookup rather than a guess about Japanese titles that vary in
+  spacing, brackets and 〜 marks. It is not backfilled, so that branch gains
+  coverage over time rather than arriving complete.
 - Concert edit history: `db/service.py`'s `snapshot_concert`/
   `record_concert_edit`/`concert_audit_log`, backing the `ConcertAudit`
   table (`db/models.py`). Deliberately lightweight — only the concert's own
@@ -537,6 +633,20 @@ deleting them.
    entire outbox. The broadcast is NOT in `UNREPORTED_NOTE_KINDS` and must not
    be added -- it terminates after one hop, and whether the remedy reached its
    recipients (`FORBIDDEN` ones included) is the question it was sent asking.
+   The Eventernote sweep's `discovery` notice is likewise NOT in
+   `UNREPORTED_NOTE_KINDS`, and for the plainer reason: that set is only for
+   notices that REPORT ON deliveries, and this one reports on a third-party
+   page. It is an ordinary notice and belongs in `delivery_log` like any other.
+   It is queued with `concert_id = NULL`, which already means "render the
+   plain-text body, not a rich embed" and already makes `record_deliveries` skip
+   the title lookup, so the drain needed no change at all. Its recipients are
+   `ADMIN_WHITELIST`, the same audience as `ops_alert`, and it follows
+   `evaluate_and_alert`'s precedent exactly: `Notification.user_id` is an FK to
+   `users.discord_id`, so an admin who has never signed in must be `ensure_user`d
+   first or the queue raises `IntegrityError` at flush, far from the cause -- but
+   only when `session.get(User, admin_id)` returns None, since `ensure_user`
+   refreshes the username and would otherwise overwrite a real admin's name with
+   the placeholder on every single sweep.
 5. **Auth**: three tiers — admin, editor, user. Admins = `ADMIN_WHITELIST`
    env (Discord IDs), env-only by design (no runtime UI; edit `.env` +
    restart). Editors = `EDITOR_WHITELIST` env (permanent bootstrap/

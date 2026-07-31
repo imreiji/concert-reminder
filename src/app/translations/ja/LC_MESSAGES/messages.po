@@ -2870,6 +2870,16 @@ msgid "Every DM the scheduler attempted, and recent failures."
 msgstr "スケジューラーが送信を試みたすべてのDMと、最近の失敗。"
 
 #: src/app/web/templates/preferences.html:448
+msgid "Discoveries"
+msgstr "新着候補"
+
+#: src/app/web/templates/preferences.html:449
+msgid ""
+"Performances your artists' Eventernote pages list that the catalogue does "
+"not have."
+msgstr "登録アーティストのEventernoteページに載っていて、カタログにまだない公演。"
+
+#: src/app/web/templates/preferences.html:452
 msgid "Broadcast"
 msgstr "一斉送信"
 

@@ -33,6 +33,11 @@ class YamlDay:
     venue_address: str | None = None
     venue_handle: str | None = None   # the VENUE tag's handle; beats `venue`
     doors_at_utc: datetime | None = None
+    # The Eventernote event this leg was imported from, when it has one. Written
+    # only when set (see below) -- it is provenance, not something an author
+    # fills in, so an empty key on every leg of every export would be noise in a
+    # file whose other job is to be read by a person.
+    eventernote_event_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -130,6 +135,17 @@ def concert_to_yaml(
                 "venue_handle": d.venue_handle,
                 "doors_jst": _jst_str(d.doors_at_utc),
                 "starts_at_jst": _jst_str(d.starts_at_utc),
+                # The one key here written ONLY when it has a value. Every field
+                # above is a thing a human fills in, so a null spells out what
+                # is still missing; this one is provenance stamped by the
+                # importer, and `eventernote_event_id: null` on every leg of
+                # every export would just be a key nobody can act on. Absent and
+                # null parse identically (yaml_import reads it through _text),
+                # so the round trip is unaffected either way.
+                **(
+                    {"eventernote_event_id": d.eventernote_event_id}
+                    if d.eventernote_event_id else {}
+                ),
             }
             for d in days
         ],

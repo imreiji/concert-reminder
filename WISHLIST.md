@@ -493,39 +493,67 @@ is the fills half of this feature -- no decision required, because a blank
 cannot lose anything. The entry stands at #1 unchanged in rank and smaller in
 cost.
 
+The third 2026-07-31 pass ships #1, Eventernote actor-page discovery, two days
+after the catalogue round-trip promoted it there on merit and one day after the
+tag-import conflicts pass made it cheaper for the second time. It is the third
+consecutive pass whose subject was made buildable by the one before it: tag
+handles gave a performer an identity, the export/import round-trip gave the 79
+empty `eventernote_url` values a way into the live catalogue, and this walks
+them. Nine tasks on branch `eventernote-discovery`, migrations `48cd59cae5d7`
+and `052f924bbcb0`.
+
+What shipped is narrower than the entry described in one respect and wider in
+another, and both are worth recording. Narrower: it does NOT emit a YAML draft.
+The entry assumed discovery would produce a paste-ready draft through
+`POST /concerts/import/draft`, and the spec talked itself out of that on a fact
+about the source -- Eventernote carries no ticket information at all, so a
+scrape can never produce ROUNDS, which are the entire point of this app. So it
+produces a LEAD ("this performance exists and you are not tracking it") plus a
+paste-ready agent PROMPT, and the judgment half (grouping legs into one concert,
+finding the official ticket page, extracting rounds) stays with the add-concert
+skill exactly as it already worked. Wider: it is scheduled from v1 at the
+owner's request, with a review surface and a per-leg source-id column, rather
+than the on-demand walk the entry imagined.
+
+The pass also ADDED two entries at the bottom, #9 and #10, and the reason they
+are here at all is worth more than their rank: both were found by the build's own
+reviews, deferred as minors, and lived only in the branch's SDD ledger, which is
+deleted when the branch finishes. Neither is a defect the build caused. Both are
+admin-only, so both rank below every user-facing entry on this list -- but "known
+and written down badly" is how the Python-pinning embarrassment five entries up
+happened in reverse, and a finding that survives only in a file scheduled for
+deletion is not written down at all.
+
+The re-rank otherwise moves nothing on merit and entries renumber 1-8 by that
+single removal. Minute-level offsets returns to #1 by pure removal, having now been
+displaced five passes running without once being judged less valuable, and is
+untouched in substance. Nothing got cheaper: this build lived in a new domain
+parser, a shared fetch, the scheduler tick, two new tables and an admin page,
+and no remaining entry goes near any of them.
+
+**In-app LLM extraction (#5) is explicitly NOT changed by this**, and it is
+worth saying so because the two look adjacent and are not. That entry is about
+EXTRACTION -- turning an event page into a filled draft -- and is blocked on API
+budget. This was about DISCOVERY -- finding out an event exists at all -- and
+involved no LLM at any point, which was a hard constraint rather than a
+preference, since the deploy has no API access. Shipping this neither unblocks
+that entry nor reduces its cost; if anything it sharpens the case for it, since
+discovery now produces a steady stream of leads whose drafts a human or an agent
+still has to author. Its rank is unchanged apart from the renumber.
+
+Two things the build left DELIBERATELY unbuilt, recorded so they are decisions
+rather than oversights and not re-derived later. Dismissing a lead does NOT
+backfill `eventernote_event_id` onto the existing leg it duplicated, so the
+exact-match branch gains coverage only through the import path, over time.
+And existing legs were not backfilled at all -- for a while many leads will
+duplicate concerts already held, which is what the "you may already have this"
+date-and-venue HINT is for. Revisit either if the hints turn out to be frequent
+enough to be annoying.
+
 ## Proposed (highest impact first)
 
 
-### 1. Eventernote actor-page discovery
-
-Impact: medium - effort: small, now that the skill exists. Raised: 2026-07-22
-(during the agent-import design discussion). Buildable as of 2026-07-23, when
-the draft seam and the add-concert skill shipped.
-
-Re-ranked to #1 on 2026-07-31 by the catalogue round-trip, and on merit rather
-than by removal. This entry has always had to answer a second question beside
-"is this concert already here?" -- namely "is this performer already a tag?" --
-and until tag handles shipped that was a guess: names repeat, and
-`match_tag_ids_by_name` is documented first-tag-wins. There is an identity to
-compare now, and the draft seam this would emit into carries handles, so the
-discovery half is all that is left to build. The entry it passed, minute-level
-offsets, was untouched by any of it.
-
-A concert nobody has added to the app has NO deadline tracking at all -- the
-worst failure the app has, worse than a mistimed reminder, because the user
-never learns there was a deadline to miss. The skill (or a scheduled agent) can
-close that gap: walk each followed artist's Eventernote `/actors/<id>/events`
-page and flag concerts not yet in the catalogue. Cheap now that the pieces
-exist -- discovery produces a paste-ready YAML draft through the exact
-`POST /concerts/import/draft` path the skill already builds, so the "add it"
-half is done; what remains is the walk-and-diff (mapping each followed artist to
-its actor id, deduping candidates against existing concerts by title/date).
-Ranked directly under the established minute-offset entry: it is the
-highest-impact NET-NEW capability the import build unlocked, but it sits below
-that one because that need is proven while this is unbuilt and unproven -- the
-actor-id mapping is manual today and a scraped page's structure can drift.
-
-### 2. Minute-level reminder offsets
+### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -565,7 +593,14 @@ under it for the reason given there. (The same evening's owner-priority batch
 then pushed both down by insertion -- position, not substance; the heading
 carries the current rank.)
 
-### 3. Franchise-aware round-label suggestions
+Back at #1 on 2026-07-31 by pure removal, when Eventernote discovery -- the
+entry that had passed it two days earlier -- shipped. Re-read against that build
+and unchanged in every respect: discovery lived in a parser, a fetch, the
+scheduler tick and an admin page, and touches neither `PresetItem` nor the
+sentence builders. Worth saying plainly, since this entry has now been displaced
+five passes running without once being judged less valuable.
+
+### 2. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -586,7 +621,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 4. Nine of ten `RoundKind` members are purely cosmetic
+### 3. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -609,7 +644,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 5. PWA / installability
+### 4. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -629,7 +664,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 6. In-app LLM extraction behind the same draft seam
+### 5. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -647,7 +682,18 @@ rediscovered later. Ranked here by its low-medium impact, above the pure-cosmeti
 entries below it, but note it is NOT actionable until the budget question
 changes -- the seam being ready does not make this buildable.
 
-### 7. Minor demo-parity cosmetics
+Re-reviewed 2026-07-31 (Eventernote discovery) and explicitly UNCHANGED, which
+is worth stating because the two entries read as adjacent and are not. That
+build was about DISCOVERY -- finding out an event exists -- and used no LLM at
+any point, deliberately: the deploy has no API access, so "no LLM anywhere" was
+a hard constraint on its design rather than a preference. This entry is about
+EXTRACTION -- turning a page into a filled draft -- and is blocked on the same
+budget it always was. Discovery neither unblocks it nor makes it cheaper; it
+does sharpen the case, since there is now a steady stream of leads whose drafts
+somebody still has to author by hand or by agent. Rank unchanged apart from the
+renumber.
+
+### 6. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -686,7 +732,7 @@ this entry's single pass, not its own task. Both gaps are now also named in
 CLAUDE.md's demo inventory, so the next person meets them where they look for
 the reference rather than only here.
 
-### 8. Discover sort in the content head, plus the catalogue-count note
+### 7. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -712,7 +758,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 9. Name the destination on the sign-in bounce
+### 8. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -734,6 +780,50 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
+### 9. Nothing caps the discovery review path
+
+Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
+discovery, Task 7 review; deferred as a minor at the time).
+
+`open_leads` has no LIMIT, `/admin/discoveries` renders every row it returns,
+and `copy_text` is emitted TWICE per page -- once in a `data-copy` attribute for
+the copy button and once in the visible `<pre>`. A first sweep produces a lead
+for every future event of all 86 tags at once, most of them duplicating concerts
+already held, so a few hundred rows is the expected first-day case rather than a
+pathological one: roughly a 150KB admin page. Survivable, admin-only, and it
+degrades rather than breaks -- but it is unbounded, and the page it happens on is
+the one the DM's "+N more" line exists to send you to, which is precisely the
+occasion when the backlog is largest.
+
+The fix is not obvious enough to call small-and-done: a LIMIT plus paging is the
+usual answer, but the page's whole job is BULK triage and the copy block is
+supposed to cover what you can see, so paging the rows means deciding what the
+block covers. Emitting the block once and reading it from the `<pre>` is the
+cheap half and can be done independently.
+
+Ranked here, below every user-facing entry above it, because this list orders by
+USER impact and this one's is nil -- the same argument that kept the rehearsal
+harness low until it was ranked on a borrowed claim. Raise it if the first
+production sweep actually produces a page somebody has to fight.
+
+### 10. `/admin/discoveries` row height wants a real viewport
+
+Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
+discovery, Task 7, logged PRE-DEPLOY and never closed).
+
+`.banner.warn` is `display: flex`, so a lead marked "you may already have this"
+is TALLER than an unmarked one. On a bulk-triage table where most rows carry the
+hint on the first sweep and few do later, that will read as uneven -- but whether
+it actually looks wrong, and at what proportion of marked rows, is not something
+to settle on paper. This project's own measure-don't-reason rule applies with
+full force: put the seeded page in a real viewport and look, because reasoning
+from the CSS has shipped a confidently wrong fix here twice before.
+
+Note what is NOT in scope: `.banner` is the sanctioned needs-attention callout
+shape (CLAUDE.md's two-shape callout grammar), and inventing a third shape for
+this was deliberately declined. Whatever the measurement says, the answer has to
+come out of the existing two shapes or out of the row's own layout.
+
 (The former "Editor page parity with the demo" entry (2026-07-20) was
 absorbed on 2026-07-23 into the editor-pages coherence pass --
 everything it tracked (demo's nested-rounds structure vs shipped flat lists,
@@ -748,6 +838,95 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Eventernote actor-page discovery (2026-07-31)
+
+Shipped as: spec `docs/superpowers/specs/2026-07-31-eventernote-discovery-design.md`
++ impl plan `docs/superpowers/plans/2026-07-31-eventernote-discovery.md`, nine
+tasks on branch `eventernote-discovery`, migrations `48cd59cae5d7`
+(`discovered_events` + `ConcertDay.eventernote_event_id`) and `052f924bbcb0`
+(`discovery_state`). **Proposed #1**, promoted there on merit two days earlier by
+the catalogue round-trip.
+
+A concert nobody has added has NO deadline tracking at all -- the worst failure
+this app has, because the user never learns there was a deadline to miss. A
+daily sweep now walks every tag carrying an `eventernote_url`, parses that
+artist's events page, and records what the catalogue does not have as a lead.
+
+**It is a lead generator, not an importer, and the spec talked itself out of the
+entry's own premise to get there.** The entry assumed discovery would emit a
+paste-ready YAML draft through `POST /concerts/import/draft`. It cannot:
+Eventernote carries no ticket information, so a scrape can never produce ROUNDS
+-- the lottery windows and deadlines that are the entire point of this app. So
+the app does what is mechanical (fetch, parse, diff, report) and an agent
+following `.claude/skills/add-concert` does what needs judgment (grouping loose
+legs into one concert, finding the official ticket page, extracting rounds). A
+second consequence is robustness: parsing a LIST of (title, date, venue, id) is
+far less fragile than parsing a whole event page, because an index's markup
+changes less often than a detail page's.
+
+**One fetch per artist, not eighteen.** Measured against the live site rather
+than assumed: rows are 20 to a page and strictly newest-first, so future events
+are always a PREFIX. The stop rule is a take-while, which makes a sweep ~86
+fetches instead of the ~1,548 that reading every page of every artist would
+cost. Also measured: the actor URL's name segment is decorative (`/actors/x/5847`
+resolves the same), so only the id is identity.
+
+**The date-and-venue collision is a HINT, never a suppression.** The obvious
+heuristic -- same date, same venue, therefore already held -- is wrong in a case
+this app models explicitly: 昼公演 and 夜公演 are two Eventernote events on one
+date at one venue and two legs of one concert, so auto-suppressing would hide
+precisely the second show. `ConcertDay.eventernote_event_id` is the exact half
+of that question instead, populated by the import path going forward, which
+turns "do I already have this?" from a guess about Japanese titles into an id
+lookup over time.
+
+Four things worth keeping on the record.
+
+**The host-pinned fetch was EXTRACTED, not copied.** The ramen.events importer's
+three-way SSRF guard became `app/fetching.py` on an owner ruling made before a
+line was written, because two copies of a security control means a weakness
+found later is fixed in one and missed in the other. The site's own next-page
+link points at an `eventernote.s3.amazonaws.com` host, so the redirect re-check
+is not hypothetical paranoia here. The extraction's obvious bug -- a module-level
+hook pinned to one host -- was avoided by building the hook per call, and the
+control was re-verified by measurement (13 hostile URLs and 10 hostile Location
+headers, no bypass).
+
+**Two ways the same failure nearly shipped: a sweep that does not stamp its clock
+re-runs 86 third-party fetches every 60 seconds, forever.** The plan's own step 7
+returned early on a quiet day and so never stamped; and only `DiscoveryFetchError`
+was caught, while `parse_actor_events` builds `date(y, m, d)` from a regex, so one
+`2026年2月30` anywhere would have escaped and re-armed the same loop. Both were
+caught in review. The fix needed a third part nobody instructed: `stamp_discovery_run`
+only FLUSHES, so the stamp written in a `finally` is discarded when the scheduler
+handler rolls the poisoned session back -- and when the raise is itself a DB error
+the `finally` cannot even flush. `scheduler/loop.py` re-stamps on the cleaned
+transaction, and that half is the only one that works in the worst case.
+
+**A long in-tick job must beat the heartbeat itself.** `heartbeat.beat()` fires
+BEFORE `tick()` and `/healthz` goes false at 180s, so a nominal ~130s sweep had
+no margin and a slow one would have paged the owner about a perfectly healthy
+app. The sweep beats per artist. Moving discovery off the tick entirely is the
+right end state and is logged rather than done.
+
+**Announcing marks every lead the DM covers, listed or merely counted**, and
+`open_leads` deliberately does not filter on `announced_at`. The two together are
+one decision: on the first sweep every future event of all 86 tags is new at
+once, mostly duplicating concerts already held, so marking only the named ten
+would trickle a real backlog out at ten a day for weeks. The count-plus-link says
+the true thing once and sends the maintainer to the surface built for bulk
+triage -- which only works if that surface still shows announced rows. Getting
+that wrong (the spec did, and review caught it) would have left a first sweep's
+"+N more" reachable from nowhere.
+
+One decision came from the DM's shape rather than the design: the message is the
+same content twice, a readable markdown list and then a fenced copy block,
+because Discord does not linkify inside a fence. The budget work behind it is
+larger than it looks -- every scraped field is unbounded free text, and past
+Discord's real 2000-char cap discord.py raises and the WHOLE DM is lost rather
+than trimmed, so the block yields first, says so when it drops lines, and a hard
+prose floor sits under all of it (verified by a 4,000-case fuzz, not by reading).
 
 ### Tag import: fills, and conflicts you resolve (2026-07-31)
 
