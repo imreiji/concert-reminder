@@ -58,7 +58,8 @@ from app.domain.digest import DeliveryFact, build_digest
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.slugs import tag_slug_base
-from app.domain.tags_yaml import RESTORE_NOTES, ParsedTagFile, TagExport, tags_to_yaml
+from app.domain.tags_diff import ImportPlan
+from app.domain.tags_yaml import RESTORE_NOTES, TagExport, tags_to_yaml
 from app.domain.timezones import fmt_day_month
 from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import (
@@ -4182,99 +4183,15 @@ class TagImportReport:
     reads this next to the file they pasted."""
 
     created: list[str] = field(default_factory=list)
+    filled: list[str] = field(default_factory=list)
+    resolved: list[str] = field(default_factory=list)
+    unchanged: list[str] = field(default_factory=list)
+    # REFUSED, not merely untouched: a kind mismatch. Kept distinct from
+    # `unchanged` because "nothing to do" and "I would not touch this" read the
+    # same in a count and mean very different things to whoever pasted the file.
     skipped: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
-
-async def import_tags(
-    session: AsyncSession, parsed: ParsedTagFile, created_by: int | None = None
-) -> TagImportReport:
-    """Create missing tags, then wire the ones just created. NEVER updates.
-
-    TWO PASSES because `parent` and `members` are HANDLES: nothing can resolve
-    until every tag in the file exists. Pass 2 wires only tags CREATED in this
-    run -- re-wiring an existing tag's membership would be an update, and the
-    rule (owner, 2026-07-30) is that an import is additive, so a stale file can
-    never revert an edit made since the export.
-
-    Warnings from the parser are carried through: one the operator never sees is
-    one that did not happen. Does not commit -- the caller owns the transaction,
-    so a rejected file leaves nothing behind.
-
-    Writes `TagMember` rows directly rather than through `attach_tag`, which is
-    correct and deliberate: `attach_tag` is about CONCERT attachment and carries
-    invariant 3's expansion with it, and this must touch no concert at all.
-    """
-    report = TagImportReport(warnings=list(parsed.warnings))
-    existing = {
-        slug: tag_id for tag_id, slug in await session.execute(select(Tag.id, Tag.slug))
-    }
-
-    # Pass 1: create what is missing.
-    created_ids: dict[str, int] = {}
-    for tag in parsed.tags:
-        if tag.handle in existing:
-            report.skipped.append(tag.handle)
-            continue
-        row = await create_tag_row(
-            session,
-            name=tag.name,
-            kind=tag.kind,
-            slug=tag.handle,
-            name_en=tag.name_en,
-            name_zh=tag.name_zh,
-            region=tag.region,
-            city=tag.city,
-            city_en=tag.city_en,
-            city_zh=tag.city_zh,
-            address=tag.address,
-            location_url=tag.location_url,
-            eventernote_url=tag.eventernote_url,
-            created_by=created_by,
-        )
-        await session.flush()  # pass 2 needs the id
-        created_ids[tag.handle] = row.id
-        report.created.append(tag.handle)
-
-    # Pass 2: resolve handles to ids. `known` spans both, because a parent may
-    # legitimately already exist while the child referring to it is new.
-    known = {**existing, **created_ids}
-    kinds = {slug: kind for slug, kind in await session.execute(select(Tag.slug, Tag.kind))}
-    for tag in parsed.tags:
-        if tag.handle not in created_ids:
-            continue  # skipped, so untouched -- including its membership
-        tag_id = created_ids[tag.handle]
-        if tag.parent:
-            parent_id = known.get(tag.parent)
-            if parent_id is None:
-                report.warnings.append(
-                    f"{tag.handle}: parent {tag.parent!r} is in neither the file nor the "
-                    f"catalogue -- created without a parent"
-                )
-            elif kinds.get(tag.parent) is not TagKind.FRANCHISE:
-                report.warnings.append(
-                    f"{tag.handle}: parent {tag.parent!r} is not a franchise -- "
-                    f"created without a parent"
-                )
-            else:
-                row = await session.get(Tag, tag_id)
-                row.parent_id = parent_id
-        for member in tag.members:
-            member_id = known.get(member)
-            if member_id is None:
-                report.warnings.append(
-                    f"{tag.handle}: member {member!r} is in neither the file nor the "
-                    f"catalogue -- that membership dropped"
-                )
-                continue
-            if kinds.get(member) is TagKind.GROUP:
-                report.warnings.append(
-                    f"{tag.handle}: member {member!r} is a group, and groups do not "
-                    f"nest -- dropped"
-                )
-                continue
-            session.add(TagMember(group_tag_id=tag_id, member_tag_id=member_id))
-    return report
 
 
 async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
@@ -4355,21 +4272,19 @@ async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
 
 
 
-async def catalogue_export_files(session: AsyncSession) -> list[tuple[str, str]]:
-    """(path in zip, text) for the whole catalogue, deterministically ordered.
+async def current_tag_exports(session: AsyncSession) -> list[TagExport]:
+    """The whole catalogue as TagExport rows, ordered kind then handle.
 
-    CATALOGUE TABLES ONLY -- concerts, days, rounds, qualifiers, tags,
-    tag_members. Never a JOIN to a user table, and `created_by` is never
-    emitted: nothing to leak beats a filter to get wrong. `users`,
-    `web_sessions`, `round_outcomes`, `concert_subscriptions`, `leg_opt_outs`,
-    `reminder_rules`, `reminder_queue`, `notifications` and `delivery_log` are
-    all personal and none is touched.
+    ONE builder, shared by the zip export and the import differ. Two would
+    drift, and a differ comparing against a slightly different snapshot than the
+    export wrote is the sort of bug that only surfaces months later, in a
+    restore, when it is least welcome.
     """
     tags = list((await session.execute(
         select(Tag).options(selectinload(Tag.members)).order_by(Tag.kind, Tag.slug)
     )).scalars())
     by_id = {t.id: t for t in tags}
-    exports = [
+    return [
         TagExport(
             handle=t.slug, name=t.name, kind=t.kind.value,
             name_en=t.name_en, name_zh=t.name_zh,
@@ -4381,6 +4296,19 @@ async def catalogue_export_files(session: AsyncSession) -> list[tuple[str, str]]
         )
         for t in tags
     ]
+
+
+async def catalogue_export_files(session: AsyncSession) -> list[tuple[str, str]]:
+    """(path in zip, text) for the whole catalogue, deterministically ordered.
+
+    CATALOGUE TABLES ONLY -- concerts, days, rounds, qualifiers, tags,
+    tag_members. Never a JOIN to a user table, and `created_by` is never
+    emitted: nothing to leak beats a filter to get wrong. `users`,
+    `web_sessions`, `round_outcomes`, `concert_subscriptions`, `leg_opt_outs`,
+    `reminder_rules`, `reminder_queue`, `notifications` and `delivery_log` are
+    all personal and none is touched.
+    """
+    exports = await current_tag_exports(session)
     files = [("tags.yaml", tags_to_yaml(exports)), ("RESTORE.txt", RESTORE_NOTES)]
 
     concerts = list((await session.execute(
@@ -4391,6 +4319,153 @@ async def catalogue_export_files(session: AsyncSession) -> list[tuple[str, str]]
             (f"concerts/{concert.event_id}.yaml", await concert_export_yaml(session, concert))
         )
     return files
+
+
+@dataclass
+class ImportChoices:
+    """What the operator decided, keyed by (handle, field) and (handle, member).
+
+    Values are the literal strings "mine"/"theirs" and "add"/"remove" and
+    nothing else. The browser never sends a VALUE -- the data always comes from
+    re-parsing the pasted file -- so a forged form cannot inject anything, only
+    choose between two things that were already in front of it.
+    """
+
+    fields: dict[tuple[str, str], str] = field(default_factory=dict)
+    members: dict[tuple[str, str], str] = field(default_factory=dict)
+
+
+async def apply_tag_import(
+    session: AsyncSession,
+    plan: ImportPlan,
+    choices: ImportChoices,
+    created_by: int | None = None,
+) -> TagImportReport:
+    """Write what the plan says, resolved by the operator's choices.
+
+    EVERY DEFAULT IS THE ONE THAT CHANGES NOTHING: an unanswered conflict keeps
+    the catalogue's value, and a member removal happens only when explicitly
+    chosen. A truncated or forged form therefore cannot overwrite or delete.
+
+    Two passes, for the same reason the original importer had two: `parent` and
+    members are HANDLES, so nothing can resolve until every tag in the file
+    exists.
+
+    Writes TagMember rows directly rather than through `attach_tag`, which is
+    deliberate -- attach_tag is about CONCERT attachment and carries invariant
+    3's expansion with it, and this must touch no concert at all.
+
+    Does not commit; the caller owns the transaction, so a rejected file leaves
+    nothing behind.
+    """
+    report = TagImportReport(warnings=list(plan.warnings))
+    by_slug = {
+        slug: tag_id for tag_id, slug in await session.execute(select(Tag.id, Tag.slug))
+    }
+
+    for entry in plan.tags:
+        if entry.kind_mismatch:
+            report.skipped.append(entry.handle)
+            continue
+        tag = entry.incoming
+        if entry.is_new:
+            row = await create_tag_row(
+                session,
+                name=tag.name, kind=tag.kind, slug=tag.handle,
+                name_en=tag.name_en, name_zh=tag.name_zh,
+                region=tag.region, city=tag.city, city_en=tag.city_en,
+                city_zh=tag.city_zh, address=tag.address,
+                location_url=tag.location_url, eventernote_url=tag.eventernote_url,
+                created_by=created_by,
+            )
+            await session.flush()
+            by_slug[tag.handle] = row.id
+            report.created.append(entry.handle)
+            continue
+
+        row = await session.get(Tag, by_slug[entry.handle])
+        touched = False
+        for name, value in entry.fills.items():
+            if name == "parent":
+                continue  # a handle, not a value -- resolved in pass 2
+            setattr(row, name, value)
+            touched = True
+        resolved = False
+        for conflict in entry.conflicts:
+            if choices.fields.get((entry.handle, conflict.field)) != "theirs":
+                continue  # KEEP MINE is the default, and "no answer" means it
+            if conflict.field == "parent":
+                resolved = True
+                continue  # resolved in pass 2
+            setattr(row, conflict.field, conflict.incoming)
+            resolved = True
+        if touched:
+            report.filled.append(entry.handle)
+        if resolved:
+            report.resolved.append(entry.handle)
+        if not touched and not resolved and not entry.needs_choice:
+            report.unchanged.append(entry.handle)
+
+    # Pass 2: parent and membership, once every tag exists.
+    for entry in plan.tags:
+        if entry.kind_mismatch or entry.handle not in by_slug:
+            continue
+        row = await session.get(Tag, by_slug[entry.handle])
+        wanted_parent = entry.incoming.parent
+        take_parent = (
+            entry.is_new
+            or "parent" in entry.fills
+            or choices.fields.get((entry.handle, "parent")) == "theirs"
+        )
+        if take_parent and wanted_parent:
+            parent_id = by_slug.get(wanted_parent)
+            if parent_id is None:
+                report.warnings.append(
+                    f"{entry.handle}: parent {wanted_parent!r} is in neither the file "
+                    f"nor the catalogue -- left without a parent"
+                )
+            elif (await session.get(Tag, parent_id)).kind is not TagKind.FRANCHISE:
+                report.warnings.append(
+                    f"{entry.handle}: parent {wanted_parent!r} is not a franchise -- "
+                    f"left without a parent"
+                )
+            else:
+                row.parent_id = parent_id
+
+        # A NEW tag simply gets the file's members; an existing one only gets
+        # the additions the operator ticked.
+        additions = list(entry.incoming.members) if entry.is_new else entry.member_additions
+        for member in additions:
+            if not entry.is_new and choices.members.get((entry.handle, member)) != "add":
+                continue
+            member_id = by_slug.get(member)
+            if member_id is None:
+                report.warnings.append(
+                    f"{entry.handle}: member {member!r} is in neither the file nor the "
+                    f"catalogue -- that membership dropped"
+                )
+                continue
+            if (await session.get(Tag, member_id)).kind is TagKind.GROUP:
+                report.warnings.append(
+                    f"{entry.handle}: member {member!r} is a group, and groups do not "
+                    f"nest -- dropped"
+                )
+                continue
+            session.add(
+                TagMember(group_tag_id=by_slug[entry.handle], member_tag_id=member_id)
+            )
+        for member in entry.member_removals:
+            if choices.members.get((entry.handle, member)) != "remove":
+                continue  # NEVER by default -- the one destructive act in here
+            member_id = by_slug.get(member)
+            if member_id is not None:
+                await session.execute(
+                    delete(TagMember).where(
+                        TagMember.group_tag_id == by_slug[entry.handle],
+                        TagMember.member_tag_id == member_id,
+                    )
+                )
+    return report
 
 
 async def find_tags_by_name_and_kind(
