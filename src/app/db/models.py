@@ -868,6 +868,21 @@ class DiscoveryState(Base):
     # ON DELETE SET NULL would silently rewind the sweep to the head of the list,
     # which is the failure the cursor exists to prevent.
     sweep_cursor_tag_id: Mapped[int | None] = mapped_column(Integer)
+    # An operator pressed "Sweep now" on /admin/discoveries. A REQUEST, not a
+    # run: a sweep takes up to SWEEP_BUDGET_SECONDS, far longer than an HTTP
+    # request may hold, and running it inline would be a second execution path
+    # for something carefully bounded. The scheduler's next tick (<= 60s) sees
+    # this and runs the ONE sweep implementation.
+    #
+    # It runs the sweep even when settings.discovery_enabled is false: the flag
+    # gates the AUTOMATIC daily behaviour, and an operator should be able to
+    # scrape on demand without committing to a schedule.
+    #
+    # Cleared by stamp_discovery_run, which every sweep reaches -- including one
+    # that raised, re-stamped by scheduler.loop after its rollback. A request
+    # that survived a failure would re-run the sweep every 60 seconds forever,
+    # which is the 86-fetches-a-minute trap the 24h clock already had to fix.
+    sweep_requested_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class OpsCheckState(Base):

@@ -366,3 +366,89 @@ async def test_preferences_does_not_link_it_for_an_editor(client):
     only get a 403."""
     login_as(client, EDITOR_ID, "editor")
     assert "/admin/discoveries" not in client.get("/preferences").text
+
+
+# -- Sweep now ------------------------------------------------------------
+
+
+async def _state(client):
+    async with client.db() as s:
+        return (await s.execute(select(DiscoveryState))).scalar_one_or_none()
+
+
+def _sweep_button(body):
+    """The one line carrying the Sweep now button, so `disabled` is asserted
+    about THAT control and not about anything else the page may disable."""
+    lines = [ln for ln in body.splitlines() if ">Sweep now<" in ln]
+    assert len(lines) == 1, f"expected exactly one Sweep now button, got {len(lines)}"
+    return lines[0]
+
+
+async def test_an_editor_cannot_request_a_sweep(client):
+    """Admin-only on the write half too -- the sweep hits a third party 86
+    times, which is not an editor's decision to make."""
+    login_as(client, EDITOR_ID, "editor")
+    assert client.post("/admin/discoveries/sweep").status_code == 403
+    assert await _state(client) is None, "the refused post wrote nothing"
+
+
+async def test_signed_out_cannot_request_a_sweep(client):
+    """Signed out is a redirect, not a 403 (invariant 5) -- and still no write."""
+    assert client.post("/admin/discoveries/sweep").status_code == 303
+    assert await _state(client) is None
+
+
+async def test_the_admin_requests_a_sweep(client):
+    """The button REQUESTS; it never runs the sweep. A sweep is bounded at four
+    minutes, so what the route may do is write a row and redirect."""
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post("/admin/discoveries/sweep")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin/discoveries"
+    state = await _state(client)
+    assert state is not None and state.sweep_requested_at is not None
+
+
+async def test_requesting_a_sweep_leaves_the_daily_clock_alone(client):
+    """A request is not a run. Touching last_run_at here would report a sweep
+    that has not happened and would suppress the daily one for 24h."""
+    async with client.db() as s:
+        s.add(DiscoveryState(id=1, last_run_at=NOW, last_fetched=86, last_failed=0))
+        await s.commit()
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/discoveries/sweep")
+    state = await _state(client)
+    assert state.last_run_at == NOW and state.last_fetched == 86
+
+
+async def test_the_page_says_a_request_is_pending(client):
+    """The POST returns instantly, so without this line a button that worked
+    looks exactly like one that did nothing -- and gets pressed again."""
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/discoveries/sweep")
+    body = client.get("/admin/discoveries").text
+    assert "Sweep requested" in body
+    assert "disabled" in _sweep_button(body), "a second press cannot hurry the tick"
+
+
+async def test_the_page_offers_the_button_when_nothing_is_pending(client):
+    """The control: the pending line and the disabled button come from the
+    column, not from the template printing them unconditionally."""
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "Sweep requested" not in body
+    assert "disabled" not in _sweep_button(body)
+
+
+async def test_a_swept_request_leaves_the_button_pressable_again(client):
+    """The page reads the live column, so the tick clearing the request is what
+    re-enables the button -- no second piece of state to fall out of step."""
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/discoveries/sweep")
+    async with client.db() as s:
+        state = (await s.execute(select(DiscoveryState))).scalar_one()
+        state.sweep_requested_at = None  # what stamp_discovery_run does
+        await s.commit()
+    body = client.get("/admin/discoveries").text
+    assert "Sweep requested" not in body
+    assert "disabled" not in _sweep_button(body)

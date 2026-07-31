@@ -6802,6 +6802,16 @@ async def stamp_discovery_run(
     today's timestamp would read as a healthy sweep on the day the sweep died.
     The sweep CURSOR is deliberately not here for exactly that reason -- see
     `set_sweep_cursor`.
+
+    A pending manual request is cleared HERE, and here specifically, because
+    this is the one call every sweep reaches on every exit: run_sweep's own
+    `finally`, and scheduler.loop's re-stamp after a sweep raised and its
+    rollback undid that finally. A request that survived a failure would re-run
+    the sweep 60 seconds later and fail the same way forever -- the
+    86-fetches-a-minute trap the 24h clock exists to prevent. It obeys
+    last_run_at's rule ("a sweep happened"), not the cursor's ("progress
+    accumulated"), which is why it is a keyword-less unconditional write and
+    not its own writer.
     """
     state = await session.get(DiscoveryState, DISCOVERY_STATE_ID)
     if state is None:
@@ -6811,7 +6821,46 @@ async def stamp_discovery_run(
     state.last_fetched = fetched
     state.last_failed = failed
     state.last_truncated = truncated
+    state.sweep_requested_at = None
     await session.flush()
+
+
+async def request_sweep(session: AsyncSession, now: datetime) -> None:
+    """Ask the scheduler to sweep on its next tick.
+
+    THE button does not run the sweep. A sweep costs up to
+    SWEEP_BUDGET_SECONDS, which no HTTP request may hold, and an inline run
+    would be a second execution path for something whose whole design is a
+    single carefully bounded one. This writes a request; scheduler.loop picks
+    it up within TICK_SECONDS and calls the same `run_sweep` the daily job
+    calls.
+
+    Unconditional rather than set-if-absent: the stored instant is "when an
+    operator last asked", and the only reader is a boolean. (A second request
+    arriving while a sweep is already in flight is therefore cleared by that
+    sweep's stamp -- a ~4 minute window in which one click is absorbed. Left
+    alone deliberately: the page then shows no request pending, so the operator
+    can simply press it again, and the alternative is threading the exact
+    timestamp through both stamping paths to serve a button.)
+    """
+    state = await session.get(DiscoveryState, DISCOVERY_STATE_ID)
+    if state is None:
+        state = DiscoveryState(id=DISCOVERY_STATE_ID)
+        session.add(state)
+    state.sweep_requested_at = now
+    await session.flush()
+
+
+async def sweep_requested(session: AsyncSession) -> bool:
+    """Is a manual sweep waiting for the next tick?
+
+    A named predicate beside `discovery_due` because scheduler.loop asks the
+    two together and they are NOT the same question: `discovery_due` is the
+    24h clock and is only consulted when the flag is on, while a manual request
+    runs the sweep whichever way the flag is set.
+    """
+    state = await session.get(DiscoveryState, DISCOVERY_STATE_ID)
+    return state is not None and state.sweep_requested_at is not None
 
 
 async def set_sweep_cursor(session: AsyncSession, tag_id: int | None) -> None:

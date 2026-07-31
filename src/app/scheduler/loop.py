@@ -53,6 +53,7 @@ from app.db.service import (
     record_deliveries,
     record_dm_outcome,
     stamp_discovery_run,
+    sweep_requested,
 )
 from app.db.session import SessionMaker
 from app.discovery import run_sweep
@@ -258,31 +259,47 @@ async def tick(bot) -> int:
         # its own commit, for the same reason the prune has them -- the least
         # important operation in the tick must never be able to roll back the
         # most important one.
-        if settings.discovery_enabled:
+        #
+        # TWO triggers, and the OR between them is deliberate. The flag plus the
+        # 24h clock is the automatic job. A manual request (the "Sweep now"
+        # button on /admin/discoveries) runs the sweep WHATEVER the flag says:
+        # settings.discovery_enabled gates the automatic behaviour, and an
+        # operator should be able to scrape on demand without committing to a
+        # daily schedule. The request is read on every tick, flag or no flag,
+        # which is one primary-key lookup a minute.
+        try:
+            requested = await sweep_requested(session)
+            due = settings.discovery_enabled and await discovery_due(session, now)
+            if requested or due:
+                report = await run_sweep(session, now)
+                await session.commit()
+                log.info(
+                    "discovery sweep%s: %d fetched, %d failed, %d new%s",
+                    " (requested)" if requested else "",
+                    report.fetched, report.failed, report.new_leads,
+                    " (stopped at its time budget)" if report.budget_exhausted else "",
+                )
+        except Exception:
+            log.exception("discovery sweep failed; delivery was unaffected")
+            await session.rollback()
+            # The rollback takes run_sweep's own last_run_at stamp with it, so
+            # re-stamp on the now-clean transaction. Without this, a sweep that
+            # dies -- on a malformed third-party page, say -- leaves
+            # discovery_due true and runs again 60 seconds later, dying the same
+            # way forever. A failed sweep still counts as today's sweep; the
+            # next one is tomorrow's.
+            #
+            # The rollback ALSO restores a pending manual request, and that is
+            # the same trap wearing the flag's clothes: an uncleared request
+            # re-runs the sweep every single tick, flag or no flag. It is
+            # cleared inside stamp_discovery_run precisely so this path and
+            # run_sweep's own `finally` cannot disagree about it.
             try:
-                if await discovery_due(session, now):
-                    report = await run_sweep(session, now)
-                    await session.commit()
-                    log.info(
-                        "discovery sweep: %d fetched, %d failed, %d new%s",
-                        report.fetched, report.failed, report.new_leads,
-                        " (stopped at its time budget)" if report.budget_exhausted else "",
-                    )
+                await stamp_discovery_run(session, now)
+                await session.commit()
             except Exception:
-                log.exception("discovery sweep failed; delivery was unaffected")
+                log.exception("discovery: could not record the failed sweep")
                 await session.rollback()
-                # The rollback takes run_sweep's own last_run_at stamp with it,
-                # so re-stamp on the now-clean transaction. Without this, a
-                # sweep that dies -- on a malformed third-party page, say --
-                # leaves discovery_due true and runs again 60 seconds later,
-                # dying the same way forever. A failed sweep still counts as
-                # today's sweep; the next one is tomorrow's.
-                try:
-                    await stamp_discovery_run(session, now)
-                    await session.commit()
-                except Exception:
-                    log.exception("discovery: could not record the failed sweep")
-                    await session.rollback()
     return delivered
 
 
