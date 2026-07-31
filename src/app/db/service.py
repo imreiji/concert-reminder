@@ -20,7 +20,7 @@ import hashlib
 import secrets
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import case, delete, exists, false, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -36,6 +36,7 @@ from app.db.models import (
     ConcertSubscription,
     ConcertTag,
     DeliveryLog,
+    DiscoveredEvent,
     LegOptOut,
     Notification,
     OpsCheckState,
@@ -55,12 +56,13 @@ from app.db.models import (
 )
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.digest import DeliveryFact, build_digest
+from app.domain.eventernote import ActorEvent
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.slugs import tag_slug_base
 from app.domain.tags_diff import ImportPlan
 from app.domain.tags_yaml import RESTORE_NOTES, TagExport, tags_to_yaml
-from app.domain.timezones import fmt_day_month
+from app.domain.timezones import fmt_day_month, utc_to_jst
 from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import (
     Anchor,
@@ -6517,3 +6519,185 @@ async def rehearsal_rows(session: AsyncSession, user_id: int) -> list[RehearsalR
             expected=expected,
         ))
     return out
+
+
+# ── Eventernote discovery ────────────────────────────────────────────────
+#
+# The diff: given performances scraped off an artist's Eventernote page,
+# which ones does the catalogue not already have? A lead is reported unless
+# one of these holds, checked in that order:
+#
+#   1. an existing ConcertDay already carries that eventernote_event_id --
+#      we have it, say nothing;
+#   2. it was dismissed -- never mention it again;
+#   3. it was already announced -- do not re-announce;
+#   4. otherwise it is a new lead.
+#
+# What is deliberately NOT on that list is a same-date-same-venue collision
+# with an existing leg. 昼公演 and 夜公演 are two separate Eventernote events
+# on one date at one venue, and two legs of one concert; suppressing on date
+# plus venue would hide exactly the second show. That comparison is a HINT,
+# computed separately by leads_matching_existing_legs so a surface can mark a
+# lead "you may already have this" -- it never removes anything.
+
+
+async def record_discovered(
+    session: AsyncSession,
+    events: Sequence[tuple[ActorEvent, int | None]],
+    now: datetime,
+) -> list[DiscoveredEvent]:
+    """Upsert one row per Eventernote event id; return only the FRESH rows.
+
+    The int beside each event is the tag that surfaced it, recorded only on
+    first sight. A sweep passes ~86 artists' worth of events in one call, so
+    this is two queries total regardless of size -- one to find the ids legs
+    already hold, one to load the DiscoveredEvent rows for the rest -- never
+    a query per event.
+    """
+    if not events:
+        return []
+
+    # One event surfaced by nine artist tags arrives here nine times; the
+    # first sighting wins, which is what first_seen_via_tag_id means.
+    incoming: dict[str, tuple[ActorEvent, int | None]] = {}
+    for actor_event, tag_id in events:
+        incoming.setdefault(actor_event.event_id, (actor_event, tag_id))
+
+    # Branch 1, one query. These are dropped entirely and never stored: a leg
+    # carrying the id is the catalogue saying it already has this.
+    held = set((await session.execute(
+        select(ConcertDay.eventernote_event_id)
+        .where(ConcertDay.eventernote_event_id.in_(list(incoming)))
+    )).scalars())
+    remaining = [event_id for event_id in incoming if event_id not in held]
+    if not remaining:
+        return []
+
+    # Branches 2 and 3, one query. Dismissed and announced leads are rows in
+    # this same table, so the lookup a repeat sighting needs answers all three.
+    existing = {
+        row.eventernote_event_id: row for row in (await session.execute(
+            select(DiscoveredEvent)
+            .where(DiscoveredEvent.eventernote_event_id.in_(remaining))
+        )).scalars()
+    }
+
+    fresh: list[DiscoveredEvent] = []
+    for event_id in remaining:
+        actor_event, tag_id = incoming[event_id]
+        row = existing.get(event_id)
+        if row is not None:
+            # Seen again. Nothing else is touched: re-writing the title or the
+            # surfacing tag would let a later sweep quietly rewrite a lead the
+            # maintainer has already read, and re-writing dismissed_at would
+            # resurrect something explicitly killed.
+            row.last_seen_at = now
+            continue
+        row = DiscoveredEvent(
+            eventernote_event_id=actor_event.event_id,
+            title=actor_event.title,
+            event_date=actor_event.date,
+            venue=actor_event.venue,
+            first_seen_via_tag_id=tag_id,
+            first_seen_at=now,
+            last_seen_at=now,
+        )
+        session.add(row)
+        fresh.append(row)
+
+    # Flush, not commit: callers need the ids (to announce them), the
+    # transaction stays theirs.
+    await session.flush()
+    return fresh
+
+
+async def open_leads(session: AsyncSession) -> list[DiscoveredEvent]:
+    """Leads still awaiting triage -- not announced, not dismissed, not bound
+    to a concert. Newest performance date first."""
+    return list((await session.execute(
+        select(DiscoveredEvent)
+        .where(
+            DiscoveredEvent.announced_at.is_(None),
+            DiscoveredEvent.dismissed_at.is_(None),
+            DiscoveredEvent.concert_id.is_(None),
+        )
+        .order_by(DiscoveredEvent.event_date.desc(), DiscoveredEvent.id.desc())
+    )).scalars())
+
+
+async def dismiss_lead(session: AsyncSession, lead_id: int, now: datetime) -> bool:
+    """Kill a lead for good. False when there was nothing to dismiss (an
+    unknown id, or one already dismissed) so a caller can 404 rather than
+    report a write that did not happen."""
+    row = await session.get(DiscoveredEvent, lead_id)
+    if row is None or row.dismissed_at is not None:
+        return False
+    row.dismissed_at = now
+    await session.flush()
+    return True
+
+
+async def mark_leads_announced(
+    session: AsyncSession, lead_ids: Sequence[int], now: datetime
+) -> None:
+    """Stamp leads as announced so the next sweep does not repeat them.
+
+    Written through the ORM rather than a bulk UPDATE on purpose: the caller
+    is holding these very rows (record_discovered just returned them), and a
+    bulk statement would leave those instances claiming announced_at is None.
+    """
+    ids = list(lead_ids)
+    if not ids:
+        return
+    rows = (await session.execute(
+        select(DiscoveredEvent).where(DiscoveredEvent.id.in_(ids))
+    )).scalars()
+    for row in rows:
+        row.announced_at = now
+    await session.flush()
+
+
+async def leads_matching_existing_legs(
+    session: AsyncSession, leads: Sequence[DiscoveredEvent]
+) -> set[int]:
+    """The HINT set: ids of leads landing on the same date and venue as an
+    existing leg.
+
+    NOT a suppression -- see the section note. Two shows on one day at one
+    venue is the normal shape of a Japanese concert day, so this can only ever
+    say "you may already have this", and the caller must keep every one of
+    these leads in its list.
+    """
+    candidates = [lead for lead in leads if lead.venue]
+    if not candidates:
+        return set()
+
+    # DiscoveredEvent.event_date is a JST calendar date; ConcertDay.starts_at_utc
+    # is an aware UTC instant, and the two only agree after a conversion (a leg
+    # at 2026-11-14 16:00 UTC is 2026-11-15 in JST). The SQL window is
+    # deliberately one day loose on each side -- it only has to be a superset;
+    # utc_to_jst settles the actual date per leg below.
+    dates = {lead.event_date for lead in candidates}
+    midnight = datetime.min.time()
+    lo = datetime.combine(min(dates), midnight, tzinfo=UTC) - timedelta(days=1)
+    hi = datetime.combine(max(dates), midnight, tzinfo=UTC) + timedelta(days=1)
+
+    rows = (await session.execute(
+        select(ConcertDay.starts_at_utc, Tag.name, Tag.name_en)
+        .join(Tag, Tag.id == ConcertDay.venue_tag_id)
+        .where(ConcertDay.starts_at_utc >= lo, ConcertDay.starts_at_utc <= hi)
+    )).all()
+
+    # Both the Japanese name and the English variant count: Eventernote writes
+    # whichever the venue is commonly listed under.
+    seen: set[tuple[date, str]] = set()
+    for starts_at_utc, name, name_en in rows:
+        jst_date = utc_to_jst(starts_at_utc).date()
+        for label in (name, name_en):
+            if label:
+                seen.add((jst_date, label.casefold()))
+
+    return {
+        lead.id for lead in candidates
+        if (lead.event_date, lead.venue.casefold()) in seen
+    }
