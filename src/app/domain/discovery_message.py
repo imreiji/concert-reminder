@@ -16,6 +16,8 @@ from datetime import date
 DM_CHAR_BUDGET = 1900
 DM_LIST_LIMIT = 10
 MAX_TITLE_CHARS = 70
+MAX_VENUE_CHARS = 40
+MAX_ARTIST_CHARS = 40
 EVENT_URL = "https://www.eventernote.com/events/{event_id}"
 REVIEW_URL = "https://dekimasen.app/admin/discoveries"
 
@@ -35,17 +37,19 @@ class Lead:
     maybe_held: bool
 
 
-def _clip_title(title: str) -> str:
-    """Cap a title's DISPLAY length in the prose list.
+def _clip(text: str, n: int) -> str:
+    """Cap a free-text field's DISPLAY length in the prose list.
 
-    A stray 300-character eventernote title (seen in the wild on multi-leg
-    tour listings) would alone blow the whole message past the budget before
-    the block-truncation loop even runs -- clip here, unconditionally, rather
-    than let one long title crowd out every other lead's prose line.
+    `title`, `venue` and `artist` are all unbounded scraped free text (see
+    `domain/eventernote.py`'s `_venue`, which gets its text the same way the
+    title does) -- any one of them running long would blow the whole message
+    past the budget before the block-truncation loop even runs. Clip each
+    one here, unconditionally, rather than let one long field crowd out
+    every other lead's prose line.
     """
-    if len(title) <= MAX_TITLE_CHARS:
-        return title
-    return title[: MAX_TITLE_CHARS - 1].rstrip() + "…"
+    if len(text) <= n:
+        return text
+    return text[: n - 1].rstrip() + "…"
 
 
 def build_discovery_dm(leads: Sequence[Lead], total: int) -> str:
@@ -63,13 +67,14 @@ def build_discovery_dm(leads: Sequence[Lead], total: int) -> str:
         by_artist.setdefault(lead.artist, []).append(lead)
 
     for artist, group in by_artist.items():
-        head.append(f"**{artist}**")
+        head.append(f"**{_clip(artist, MAX_ARTIST_CHARS)}**")
         for lead in group:
             url = EVENT_URL.format(event_id=lead.event_id)
             hint = " *(you may already have this)*" if lead.maybe_held else ""
-            title = _clip_title(lead.title)
+            title = _clip(lead.title, MAX_TITLE_CHARS)
+            venue = _clip(lead.venue, MAX_VENUE_CHARS)
             head.append(
-                f"· [{title}]({url}) — {lead.date:%d %b}, {lead.venue}{hint}"
+                f"· [{title}]({url}) — {lead.date:%d %b}, {venue}{hint}"
             )
         head.append("")
 
@@ -93,7 +98,21 @@ def build_discovery_dm(leads: Sequence[Lead], total: int) -> str:
         if len(body) <= DM_CHAR_BUDGET:
             return body
         kept.pop()
-    return _assemble(prose, [], len(block_lines))
+
+    body = _assemble(prose, [], len(block_lines))
+    if len(body) <= DM_CHAR_BUDGET:
+        return body
+
+    # HARD FLOOR. Per-field clipping above bounds any ONE field, but nothing
+    # bounds the prose half as a whole (many leads, many distinct artist
+    # groups, ...), and an empty block has nothing left to give. Going over
+    # DM_CHAR_BUDGET here is worse than truncating: past Discord's real 2000
+    # cap, discord.py raises and the WHOLE DM is lost, so the maintainer
+    # hears nothing that day from the one code path whose job is to
+    # guarantee that can't happen. Truncate the prose itself as the last
+    # resort -- the block (now just the truncation notice) is left intact so
+    # it still tells the truth about what's missing.
+    return _hard_truncate(prose, len(block_lines))
 
 
 def _assemble(prose: str, kept: Sequence[str], dropped: int) -> str:
@@ -102,3 +121,9 @@ def _assemble(prose: str, kept: Sequence[str], dropped: int) -> str:
     if dropped:
         lines.append(f"# {dropped} more not shown -- see {REVIEW_URL}")
     return f"{prose}```\n" + "\n".join(lines) + "\n```"
+
+
+def _hard_truncate(prose: str, dropped: int) -> str:
+    footer = _assemble("", [], dropped)
+    available = max(DM_CHAR_BUDGET - len(footer), 0)
+    return _assemble(prose[:available], [], dropped)
