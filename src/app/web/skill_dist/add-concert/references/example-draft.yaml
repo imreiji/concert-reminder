@@ -25,6 +25,7 @@ performances:
     venue_address: 神奈川県横浜市西区みなとみらい6-2-14
     doors_jst: 2026-11-07 15:30
     starts_at_jst: 2026-11-07 17:00
+    eventernote_event_id: "465358"
   - label: Day 2
     label_en: Day 2
     label_zh: 第2天
@@ -32,6 +33,7 @@ performances:
     city: 横浜
     doors_jst: 2026-11-08 15:30
     starts_at_jst: 2026-11-08 17:00
+    eventernote_event_id: "465359"
 rounds:
   - label: 最速先行抽選（CD封入シリアル）
     label_en: Earliest advance lottery (CD serial code)

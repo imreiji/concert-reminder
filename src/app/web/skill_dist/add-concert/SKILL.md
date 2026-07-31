@@ -69,6 +69,9 @@ you find actual application windows.
   - アップグレード (needs an existing ticket) -> do NOT emit; upgrade rounds
     have qualifier semantics the import path doesn't carry -- note it in
     `notes` for the user to add by hand.
+- `eventernote_event_id`: on each performance, the numeric id out of the
+  eventernote URL that leg came from (`.../events/465358` -> `"465358"`,
+  quoted) -- it is how the app later recognizes it already has that show.
 - 当落発表 / results and 入金期限 / payment are ANCHORS on their lottery
   round (`results_jst`, `payment_deadline_jst`), not separate rounds.
 - `applies_to`: the exact `label` strings of the performances a round

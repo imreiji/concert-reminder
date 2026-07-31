@@ -85,6 +85,7 @@
         venue_id=d.matched_venue_tag_id,
         doors=fmt(d.doors_at_jst), starts=fmt(d.starts_at_jst),
         hint_venue=d.venue_name or '', hint_city=d.venue_city or '', hint_address=d.venue_address or '',
+        eventernote_event_id=d.eventernote_event_id or '',
         show_venue_hint=(d.venue_name and not d.matched_venue_tag_id), venue_hint_name=d.venue_name) }}
     {% else %}
     <p class="dim tiny" data-no-legs-row>{{ _("No days were imported — add the first one below.") }}</p>

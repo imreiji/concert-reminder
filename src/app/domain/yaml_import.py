@@ -42,7 +42,7 @@ _TOP_KEYS = {
 _SERIES_KEYS = {"franchises", "groups", "artists"}
 _DAY_KEYS = {
     "label", "label_en", "label_zh", "city", "venue", "venue_address", "venue_handle",
-    "doors_jst", "starts_at_jst",
+    "doors_jst", "starts_at_jst", "eventernote_event_id",
 }
 _ROUND_KEYS = {
     "label", "label_en", "label_zh", "kind", "applies_to",
@@ -221,6 +221,12 @@ def parse_draft(text: str) -> ParsedConcert:
             venue_city=_text(raw.get("city"), f"{where} city", warnings),
             venue_address=_text(raw.get("venue_address"), f"{where} venue_address", warnings),
             venue_handle=_text(raw.get("venue_handle"), f"{where} venue_handle", warnings),
+            # Through _text like every other scalar, so a YAML integer id
+            # (464372 unquoted) arrives as the string the column stores, and a
+            # list/dict is refused rather than stringified.
+            eventernote_event_id=_text(
+                raw.get("eventernote_event_id"), f"{where} eventernote_event_id", warnings
+            ),
         ))
 
     rounds: list[ParsedRound] = []

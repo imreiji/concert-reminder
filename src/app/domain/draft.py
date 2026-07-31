@@ -33,6 +33,12 @@ class ParsedDay:
     venue_city: str | None = None
     venue_address: str | None = None
     venue_handle: str | None = None   # a VENUE tag's handle; BEATS venue_name
+    # The Eventernote event this performance came from, when the draft says so.
+    # Per-LEG, never per-concert: one Eventernote event page is one performance,
+    # so a two-day tour carries two different ids. It is what turns discovery's
+    # "do I already have this?" into an exact id lookup instead of a fuzzy
+    # date-and-venue guess -- see ConcertDay.eventernote_event_id.
+    eventernote_event_id: str | None = None
     matched_venue_tag_id: int | None = None  # route-resolved, never parsed
 
 

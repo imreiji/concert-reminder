@@ -4233,6 +4233,10 @@ async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
             venue_address=d.venue_tag.address if d.venue_tag else None,
             venue_handle=d.venue_tag.slug if d.venue_tag else None,
             doors_at_utc=d.doors_at_utc,
+            # Provenance, carried so an export -> re-import round trip keeps the
+            # exact-match the discovery diff depends on. A leg that predates
+            # discovery has none and the key is simply not written.
+            eventernote_event_id=d.eventernote_event_id,
         )
         for d in days
     ]

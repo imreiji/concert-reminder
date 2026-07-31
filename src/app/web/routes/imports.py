@@ -420,6 +420,7 @@ async def import_commit(
     day_venue_tag_id: list[str] = Form(default=[]),
     day_doors_at: list[str] = Form(default=[]),
     day_cancelled: list[str] = Form(default=[]),
+    day_eventernote_event_id: list[str] = Form(default=[]),
     round_label: list[str] = Form(default=[]),
     round_label_en: list[str] = Form(default=[]),
     round_label_zh: list[str] = Form(default=[]),
@@ -530,6 +531,15 @@ async def import_commit(
     # the field, including this route's older tests -- is padded to blanks.
     if not day_venue_tag_id:
         day_venue_tag_id = [""] * n_days
+    # The Eventernote id follows day_venue_tag_id's rule, not the end-padding
+    # above: it is a per-leg FACT, not display text, so a partial array is left
+    # alone and the strict zip raises rather than stamping one leg's id onto
+    # another -- a wrong id here is worse than a missing one, because the
+    # discovery diff would then treat a performance we do NOT have as held and
+    # never mention it again. Only a WHOLLY-omitted array (the minimal import
+    # contract, and every client predating this field) is padded to blanks.
+    if not day_eventernote_event_id:
+        day_eventernote_event_id = [""] * n_days
     # Resolved (and kind-checked) after the padding, so the strict zip below
     # still sees one entry per row. Same route-boundary check the manual
     # create/edit paths run -- see resolve_day_venue_tags.
@@ -541,10 +551,10 @@ async def import_commit(
     key_rows: list[tuple[str, object]] = []
     for row_no, (
         key, label, label_en, label_zh, starts_at,
-        doors_at, cancelled, v_tag
+        doors_at, cancelled, v_tag, en_event_id
     ) in enumerate(zip(
         day_key, day_label, day_label_en, day_label_zh, day_starts_at,
-        day_doors_at, day_cancelled, day_venue_tags, strict=True,
+        day_doors_at, day_cancelled, day_venue_tags, day_eventernote_event_id, strict=True,
     ), start=1):
         # v_tag is in the guard so a row where the editor picked ONLY a venue
         # (no label, no start time yet) is not read as blank and dropped.
@@ -557,6 +567,13 @@ async def import_commit(
             concert.id, label, starts_at, doors_at, cancelled,
             v_tag, label_en, label_zh,
         )
+        # Set here rather than through build_day: the import is the ONLY path
+        # that carries it (the manual create/edit forms have no such field), and
+        # build_day is shared with them. This is what lets discovery answer "do
+        # I already have this performance?" by id later -- see
+        # ConcertDay.eventernote_event_id and service.record_discovered's
+        # branch 1.
+        day.eventernote_event_id = en_event_id.strip() or None
         session.add(day)
         days.append(day)
         if key.strip():
