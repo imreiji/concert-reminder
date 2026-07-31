@@ -284,6 +284,88 @@ async def run_sweep(
     return report
 
 
+@dataclass(frozen=True)
+class TagSweepReport:
+    """What a one-artist sweep did, for the operator who is watching.
+
+    `status` rather than a bare count because "nothing new" and "could not
+    reach the page" are the two answers a manual check exists to tell apart,
+    and a count alone renders them identically as zero. Eventernote timed out
+    on 12 of 86 fetches in a live run, so the failing case is ordinary.
+    """
+
+    status: str  # "ok" | "no_actor" | "failed"
+    new_leads: int = 0
+
+
+async def sweep_one_tag(
+    session: AsyncSession,
+    tag: Tag,
+    now: datetime,
+    *,
+    fetcher: Callable[[str], Awaitable[str]] = fetch_actor_events,
+) -> TagSweepReport:
+    """Read ONE artist's page and record what the catalogue is missing.
+
+    Runs INLINE in the request that asks for it, unlike `run_sweep`: one page
+    is 1-10 seconds and is already bounded by FETCH_DEADLINE_SECONDS, which is
+    an ordinary length for an HTTP request. Nothing is queued and the scheduler
+    is not involved.
+
+    It reuses `run_sweep`'s pieces exactly -- `actor_id_from_url`,
+    `actor_events_url`, the injected fetcher, `parse_actor_events`,
+    `future_events` and `record_discovered` -- so dedup, the branch-1 exact
+    event-id match and the date-and-venue hint all behave identically to the
+    daily sweep. It must never grow its own diff.
+
+    THREE THINGS IT DELIBERATELY DOES NOT DO, each of which would be a silent
+    regression in the daily sweep:
+
+    1. It does NOT call `stamp_discovery_run`. That sets `last_run_at`, which
+       is the 24h clock -- checking one artist would suppress that day's
+       automatic sweep of all 86 and count as it on the status line.
+    2. It does NOT call `set_sweep_cursor`. The cursor is accumulated progress
+       through the full tag list; one artist read out of order is not progress
+       through it, and moving the cursor there would make the next full sweep
+       resume past artists it never read.
+    3. It does NOT queue a `Notification`. The operator pressed a button and is
+       looking at the result page; a Discord DM describing what they just
+       clicked is noise, and the leads land on /admin/discoveries anyway.
+       (`announced_at` is therefore left unset, which is correct: the next
+       daily sweep will not re-report a lead that is still open, because
+       `record_discovered` only ever returns rows it created.)
+
+    The transaction stays the caller's: this flushes, never commits.
+    """
+    actor_id = actor_id_from_url(tag.eventernote_url or "")
+    if actor_id is None:
+        # Not a fetch failure: the tag's URL is missing or is not an actor
+        # page. Distinct because the remedy is different -- fix the URL, not
+        # try again later.
+        return TagSweepReport(status="no_actor")
+
+    url = actor_events_url(actor_id, tag.name)
+    # Same wrapping as run_sweep's loop, and for the same reasons: `Exception`
+    # rather than DiscoveryFetchError, because parse_actor_events builds a
+    # date() out of a regex match and a page carrying `2026年2月30` raises
+    # ValueError; and the TOTAL deadline, because httpx's timeout is per READ
+    # and a server dripping bytes would otherwise hold this request open with
+    # no bound at all.
+    try:
+        async with asyncio.timeout(FETCH_DEADLINE_SECONDS):
+            html = await fetcher(url)
+        page = parse_actor_events(html)
+        events = future_events(page.events, utc_to_jst(now).date())
+    except Exception:
+        log.exception("discovery: could not read %s", url)
+        return TagSweepReport(status="failed")
+
+    if page.skipped:
+        log.info("discovery: %d unreadable row(s) on %s", page.skipped, url)
+    fresh = await record_discovered(session, [(event, tag.id) for event in events], now)
+    return TagSweepReport(status="ok", new_leads=len(fresh))
+
+
 async def _record_and_announce(
     session: AsyncSession,
     seen: list[tuple[ActorEvent, int | None]],

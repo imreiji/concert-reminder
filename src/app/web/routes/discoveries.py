@@ -2,7 +2,14 @@
 
   GET  /admin/discoveries                    every open lead, plus one paste block
   POST /admin/discoveries/sweep              ask the scheduler to sweep now
+  POST /admin/discoveries/sweep/{tag_id}     read ONE artist's page, inline
   POST /admin/discoveries/{lead_id}/dismiss  wave one off for good
+
+The per-tag sweep lives HERE rather than in routes/tags.py even though its
+button is on the Tags page: a router registers whole, so putting an admin-only
+discovery write next to that module's editor-gated routes would split the
+feature's gating across two files. Every discovery route is admin-only, in one
+place, and that is the property worth keeping.
 
 Its own module rather than a section of admin.py: that one is the delivery
 log, the broadcast and the catalogue round-trip, and discovery is a fourth
@@ -39,12 +46,24 @@ from app.db.service import (
     request_sweep,
 )
 from app.db.session import get_session
+from app.discovery import sweep_one_tag
 from app.domain.discovery_message import Lead, build_discovery_dm
 from app.web.auth import SessionUser, require_admin
 
 router = APIRouter()
 
 templates = None  # set by web.app at startup
+
+# The closed vocabulary of `?swept=` codes. A CODE, never a sentence: this
+# codebase has no flash-message system (see routes/rehearsal.py, which puts its
+# note text straight in `?note=`), and the URL of a page an operator lands on
+# ends up in logs, history and any Referer that leaves the box. A fixed
+# four-word vocabulary carries nothing about the operator, nothing about which
+# artist was checked, and nothing editor-typed -- the wording lives in the
+# template, where it is also easier to keep in the page's own voice. The
+# template matches these literally, so an invented code renders no banner at
+# all rather than anything of the visitor's choosing.
+SWEPT_CODES = frozenset({"ok", "no_actor", "failed"})
 
 
 @dataclass(frozen=True)
@@ -95,6 +114,8 @@ def _to_lead(row: LeadRow) -> Lead:
 @router.get("/admin/discoveries", response_class=HTMLResponse)
 async def discoveries(
     request: Request,
+    swept: str | None = None,
+    new: int = 0,
     user: SessionUser = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
@@ -151,6 +172,12 @@ async def discoveries(
             # returns instantly, which without this line is indistinguishable
             # from a button that did nothing.
             "sweep_pending": bool(state and state.sweep_requested_at),
+            # How the per-tag sweep that redirected here went, or None on a
+            # plain visit. Filtered against the closed vocabulary so a
+            # hand-typed value cannot select a branch by accident; the template
+            # compares literals anyway, so this is belt and braces.
+            "swept": swept if swept in SWEPT_CODES else None,
+            "swept_new": max(new, 0),
         },
     )
 
@@ -176,6 +203,47 @@ async def sweep_now(
     await request_sweep(session, datetime.now(UTC))
     await session.commit()
     return RedirectResponse("/admin/discoveries", status_code=303)
+
+
+@router.post("/admin/discoveries/sweep/{tag_id}")
+async def sweep_tag(
+    tag_id: int,
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Read ONE artist's Eventernote page, now, in this request.
+
+    The opposite call from `sweep_now` above, and deliberately so: a FULL sweep
+    is 86 third-party fetches bounded at SWEEP_BUDGET_SECONDS (240) and no HTTP
+    request may hold that, so it is queued. ONE fetch is 1-10 seconds and is
+    already bounded at FETCH_DEADLINE_SECONDS (30) -- an ordinary length for a
+    request, and queueing it would mean waiting up to a minute for an answer
+    the operator is sitting there watching for.
+
+    It leaves the daily sweep's bookkeeping entirely alone -- no `last_run_at`,
+    no cursor, no DM. `sweep_one_tag` carries the reasons.
+
+    404 on an unknown tag, following dismiss: reporting a read that never
+    happened as a cheerful 303 is how a stale link looks like it worked.
+
+    303, never 307, for dismiss's reason -- the POST must not be replayed
+    against the page it lands on. It redirects to /admin/discoveries rather
+    than back to /tags because that is where anything found is visible; the
+    result rides back in `?swept=`, a closed code (see SWEPT_CODES).
+    """
+    tag = await session.get(Tag, tag_id)
+    if tag is None:
+        raise HTTPException(status_code=404, detail="no such tag")
+    report = await sweep_one_tag(session, tag, datetime.now(UTC))
+    # Committed on every path: a failed or non-actor sweep never reaches
+    # `record_discovered`, so there is nothing to write and this is a no-op --
+    # while making the commit conditional would put the one path that DOES
+    # write behind a branch that has to stay correct forever.
+    await session.commit()
+    return RedirectResponse(
+        f"/admin/discoveries?swept={report.status}&new={report.new_leads}",
+        status_code=303,
+    )
 
 
 @router.post("/admin/discoveries/{lead_id}/dismiss")

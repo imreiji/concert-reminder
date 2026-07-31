@@ -155,6 +155,24 @@
   <div class="df">
     <button class="btn" form="tag-edit-{{ t.id }}">{{ _("Save") }}</button>
     <button class="btn quiet" type="button" onclick="document.getElementById('tag-dialog-{{ t.id }}').close()">{{ _("Cancel") }}</button>
+    {#- Read THIS artist's Eventernote page now, instead of paying 86 fetches
+        for a full sweep to check one. A sibling <form>, like Delete beside it
+        -- never nested inside tag-edit-{{ t.id }}, which is invalid HTML and
+        silently breaks the outer form's submission. It carries no on* handler
+        at all, so no tag name goes anywhere near one (invariant 7).
+
+        Three conditions, all narrowing: ADMIN (this dialog only needs an
+        editor, and hitting a third party is not an editor's call -- the route
+        answers 403 either way, so a visible button that 403s would be the
+        only lie here), artist or group (a venue has no actor page), and a URL
+        to read. The POST lands on /admin/discoveries, so unsaved edits in
+        this dialog are left behind -- deliberate: the leads are the thing
+        being asked for, and Save is right there. -#}
+    {% if user.is_admin and (is_artist or is_group) and t.eventernote_url %}
+    <form method="post" action="/admin/discoveries/sweep/{{ t.id }}">
+      <button class="btn quiet">{{ _("Check eventernote now") }}</button>
+    </form>
+    {% endif %}
     <form method="post" action="/tags/{{ t.id }}/delete"
           data-tag-name="{{ t.name }}" onsubmit="return confirmDeleteTag(this)">
       <button class="btn warn">{{ _("Delete tag") }}</button>

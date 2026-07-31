@@ -899,6 +899,46 @@ performer chips - see its Shipped entry below.)
 
 ## Shipped
 
+### Per-tag sweep button (2026-07-31)
+
+Joins PR #117, branch `discovery-manual-sweep`. No migration. Checking whether
+one artist has a new performance cost 86 third-party fetches and a wait for the
+next tick; now it is one fetch, in the request.
+
+**It runs INLINE, and that is the one interesting decision.** The full sweep is
+queued because 240 seconds is not a thing an HTTP request may hold; ONE page is
+1-10 seconds and already bounded at `FETCH_DEADLINE_SECONDS` (30), which is an
+ordinary request. Queueing it would mean waiting up to a minute for an answer
+the operator is sitting there watching for.
+
+`sweep_one_tag` reuses every piece of `run_sweep`'s diff, so dedup, the exact
+event-id match and the date-and-venue hint behave identically. Three things it
+deliberately does NOT do, each of which would be a silent regression in the
+DAILY sweep and visible nowhere near this button: no `stamp_discovery_run` (that
+is the 24h clock -- checking one artist would displace that day's sweep of all
+86), no `set_sweep_cursor` (the cursor is progress through the full list; one
+artist read out of order is not, and moving it would skip artists), and no
+`Notification` (the operator is looking at the page they land on). All three are
+pinned by tests carrying a positive control, so none can pass against a function
+that swept nothing.
+
+The route lives in `routes/discoveries.py`, not `routes/tags.py`, even though
+the button is on the Tags page: a router registers whole, and every discovery
+route being admin-only in one module is the property worth keeping. The button
+narrows further than the dialog it sits in -- admin AND artist-or-group AND a
+URL to read -- so a visible button never 403s.
+
+A fetch failure is the COMMON case (Eventernote timed out on 12 of 86 in a live
+run), so it redirects rather than 500s, and "swept, found nothing" and "could
+not reach the page" get different words. This codebase has no flash mechanism,
+so the result rides in `?swept=`, a closed three-code vocabulary with the
+wording in the template -- unlike `/admin/rehearsal`'s `?note=`, which puts its
+sentence straight in the URL. Nothing operator-typed, editor-typed or fetched
+ever reaches that URL, which ends up in logs and history.
+
+No re-rank pass: a per-tag convenience button changes no other entry's impact or
+effort, and the head of the list is untouched.
+
 ### Manual sweep button, and `DISCOVERY_ENABLED` documented (2026-07-31)
 
 Shipped as PR #117, branch `discovery-manual-sweep`, migration `34179560cec0`
