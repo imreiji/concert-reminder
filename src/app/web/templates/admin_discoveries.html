@@ -12,6 +12,32 @@
   information, so rounds still come from the official page.
 </p>
 
+{#- How the last sweep went, above the table and rendered whether or not there
+    are leads. A broken parser, a blocked IP and a genuinely quiet day all show
+    the same empty table; only these counts tell them apart. NULL counts mean
+    UNKNOWN (the sweep raised and the scheduler re-stamped without a report),
+    which is why the zero case and the missing case read differently. -#}
+{% if not last_run_at %}
+<p class="dim">The sweep has not run yet.</p>
+{% elif last_fetched is none %}
+<div class="banner warn">
+  Last sweep {{ last_run_at.strftime('%Y-%m-%d %H:%M') }} UTC did not finish —
+  it recorded no counts, so nothing is known about what it read.
+</div>
+{% elif last_failed %}
+<div class="banner warn">
+  Last sweep {{ last_run_at.strftime('%Y-%m-%d %H:%M') }} UTC:
+  {{ last_fetched }} fetched, {{ last_failed }} failed. Those artists got no
+  coverage — a redesigned page or a blocked address looks exactly like a quiet
+  day without this line.
+</div>
+{% else %}
+<p class="dim">
+  Last sweep {{ last_run_at.strftime('%Y-%m-%d %H:%M') }} UTC:
+  {{ last_fetched }} fetched, no failures.
+</p>
+{% endif %}
+
 {% if rows %}
 <h2>{{ rows | length }} open lead{{ '' if rows | length == 1 else 's' }}</h2>
 

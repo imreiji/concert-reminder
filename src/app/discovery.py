@@ -207,9 +207,15 @@ async def run_sweep(
         # This covers run_sweep's own transaction. A caller that rolls back on
         # the exception (scheduler.loop does, correctly -- the session may be
         # poisoned) takes this stamp with it, which is why loop.py re-stamps in
-        # its handler after the rollback. Both halves are needed.
+        # its handler after the rollback. Both halves are needed. That re-stamp
+        # passes no counts, and that is right: a sweep that raised has no report
+        # to give, and NULL means UNKNOWN rather than zero -- displaying
+        # yesterday's numbers beside today's timestamp would read as a healthy
+        # sweep on the day the sweep died.
         try:
-            await stamp_discovery_run(session, now)
+            await stamp_discovery_run(
+                session, now, fetched=report.fetched, failed=report.failed
+            )
         except Exception:
             # Never mask the real failure with a bookkeeping one.
             log.exception("discovery: could not stamp the sweep timestamp")

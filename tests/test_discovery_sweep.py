@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.db.models import Base, DiscoveredEvent, DiscoveryState, Notification, Tag, User
-from app.db.service import discovery_due
+from app.db.service import discovery_due, stamp_discovery_run
 from app.discovery import DiscoveryFetchError, run_sweep
 from app.domain.discovery_message import DM_LIST_LIMIT
 from app.domain.types import TagKind
@@ -390,6 +390,49 @@ async def test_a_sweep_inside_its_budget_reads_every_artist(db, monkeypatch):
         await s.commit()
         assert report.budget_exhausted is False
         assert report.fetched == 3
+
+
+async def test_the_sweep_records_what_it_read_and_what_failed(db, monkeypatch):
+    """A broken sweep and a quiet sweep produce identical output -- nothing. A
+    site redesign that breaks the parser, a blocked IP and a genuinely quiet day
+    are indistinguishable to the maintainer, and the first real sweep failed 12
+    of 86 fetches with nothing saying so. The counts land on DiscoveryState,
+    which is the durable surface /admin/discoveries can read; the scheduler's
+    log line is not a monitor."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    async with db() as s:
+        await _seed(s)
+        s.add(Tag(
+            name="Other", kind=TagKind.ARTIST, slug="other",
+            eventernote_url="https://www.eventernote.com/actors/o/2",
+        ))
+        await s.commit()
+
+        async def flaky(url, transport=None):
+            if "/2/" in url:
+                raise DiscoveryFetchError("boom")
+            return PAGE
+
+        report = await run_sweep(s, NOW, fetcher=flaky)
+        await s.commit()
+        assert (report.fetched, report.failed) == (1, 1), "the fixture really did fail one"
+
+        state = await s.get(DiscoveryState, 1)
+        assert state.last_fetched == 1
+        assert state.last_failed == 1
+
+
+async def test_a_sweep_with_no_report_clears_the_counts(db):
+    """NULL means UNKNOWN, not zero. scheduler.loop re-stamps after a sweep
+    RAISED, with no report to give -- and leaving yesterday's 74/0 beside
+    today's timestamp would read as a healthy sweep on the day the sweep died."""
+    async with db() as s:
+        s.add(DiscoveryState(id=1, last_run_at=NOW, last_fetched=74, last_failed=0))
+        await s.commit()
+        await stamp_discovery_run(s, NOW + dt.timedelta(days=1))
+        await s.commit()
+        state = await s.get(DiscoveryState, 1)
+        assert state.last_fetched is None and state.last_failed is None
 
 
 async def test_discovery_is_due_when_it_has_never_run_and_again_after_a_day(db):

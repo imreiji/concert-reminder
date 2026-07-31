@@ -6782,13 +6782,39 @@ async def discovery_due(session: AsyncSession, now: datetime) -> bool:
     return now - state.last_run_at >= DISCOVERY_INTERVAL
 
 
-async def stamp_discovery_run(session: AsyncSession, now: datetime) -> None:
-    """Start the 24h clock. Called on EVERY sweep, including one that found
-    nothing -- a quiet day that left the clock unset would re-sweep on the very
-    next tick, which is 86 third-party fetches a minute."""
+async def stamp_discovery_run(
+    session: AsyncSession,
+    now: datetime,
+    *,
+    fetched: int | None = None,
+    failed: int | None = None,
+) -> None:
+    """Start the 24h clock, and record how the sweep went.
+
+    Called on EVERY sweep, including one that found nothing -- a quiet day that
+    left the clock unset would re-sweep on the very next tick, which is 86
+    third-party fetches a minute.
+
+    The counts are ALWAYS assigned, defaults included. A caller with no report
+    to give (scheduler.loop re-stamping after a sweep raised) means the counts
+    are unknown, and unknown must clear them: leaving yesterday's 74/0 beside
+    today's timestamp would read as a healthy sweep on the day the sweep died.
+    """
     state = await session.get(DiscoveryState, DISCOVERY_STATE_ID)
     if state is None:
         state = DiscoveryState(id=DISCOVERY_STATE_ID)
         session.add(state)
     state.last_run_at = now
+    state.last_fetched = fetched
+    state.last_failed = failed
     await session.flush()
+
+
+async def discovery_status(session: AsyncSession) -> DiscoveryState | None:
+    """The last sweep's record, or None before the first one ever runs.
+
+    Exists so /admin/discoveries can answer "is the sweep still working?" --
+    without it a broken sweep and a quiet one both render an empty table, which
+    is how a site redesign becomes a silent no-op that looks like good news.
+    """
+    return await session.get(DiscoveryState, DISCOVERY_STATE_ID)

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, DiscoveredEvent, Tag
+from app.db.models import Base, Concert, ConcertDay, DiscoveredEvent, DiscoveryState, Tag
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web import auth
@@ -211,6 +211,56 @@ async def test_a_lead_never_announced_says_so(client):
     body = client.get("/admin/discoveries").text
     assert "2026-08-03" not in body
     assert "Not yet" in body
+
+
+# ── The last sweep ───────────────────────────────────────────────────────
+
+
+async def test_the_page_reports_a_sweep_that_failed_fetches(client):
+    """A broken parser, a blocked IP and a quiet day all render the same empty
+    table. The counts are the only thing that tells them apart, so they are on
+    the page and not only in journalctl."""
+    async with client.db() as s:
+        s.add(DiscoveryState(id=1, last_run_at=NOW, last_fetched=74, last_failed=12))
+        await s.commit()
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "74 fetched" in body
+    assert "12 failed" in body
+    assert "2026-07-31 12:00" in body
+
+
+async def test_a_clean_sweep_does_not_cry_wolf(client):
+    """The control: the same line with no failures must not use the
+    needs-attention shape, or the one that matters stops being noticed."""
+    async with client.db() as s:
+        s.add(DiscoveryState(id=1, last_run_at=NOW, last_fetched=86, last_failed=0))
+        await s.commit()
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "86 fetched, no failures" in body
+    assert "failed." not in body
+
+
+async def test_a_sweep_with_no_counts_says_it_did_not_finish(client):
+    """NULL is UNKNOWN, not zero: the scheduler re-stamps a sweep that raised
+    with no report at all. Rendering that as "0 fetched, 0 failed" would be a
+    number the app never measured."""
+    async with client.db() as s:
+        s.add(DiscoveryState(id=1, last_run_at=NOW))
+        await s.commit()
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "did not finish" in body
+    assert "0 fetched" not in body
+
+
+async def test_a_page_with_no_sweep_yet_says_so(client):
+    """Before the first sweep there is no DiscoveryState row at all, and the
+    page must not present that as a sweep that found nothing."""
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "has not run yet" in body
 
 
 # ── The copy block ───────────────────────────────────────────────────────

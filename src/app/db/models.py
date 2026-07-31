@@ -22,6 +22,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
     MetaData,
     String,
     Text,
@@ -827,7 +828,7 @@ class DiscoveredEvent(Base):
 
 
 class DiscoveryState(Base):
-    """When the last Eventernote sweep ran. One row, id=1.
+    """When the last Eventernote sweep ran, and how it went. One row, id=1.
 
     A table rather than memory for the same reason OpsCheckState is one: a
     restart must not re-run a sweep that already went out, because the sweep
@@ -838,6 +839,18 @@ class DiscoveryState(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # How the last sweep went. Without these, a broken sweep and a quiet one
+    # produce identical output -- nothing: a site redesign that breaks the
+    # parser, an IP block and a genuinely quiet day are indistinguishable, and
+    # the first real sweep failed 12 of 86 fetches with nothing saying so.
+    # /admin/discoveries reads them; the scheduler's log line is not a monitor.
+    #
+    # NULL means UNKNOWN, not zero, and that distinction is load-bearing: a
+    # sweep that died is re-stamped by scheduler.loop with no counts at all, so
+    # NULL is what stops yesterday's numbers from being displayed beside
+    # today's timestamp.
+    last_fetched: Mapped[int | None] = mapped_column(Integer)
+    last_failed: Mapped[int | None] = mapped_column(Integer)
 
 
 class OpsCheckState(Base):

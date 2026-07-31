@@ -30,7 +30,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import DiscoveredEvent, Tag
-from app.db.service import dismiss_lead, leads_matching_existing_legs, open_leads
+from app.db.service import (
+    discovery_status,
+    dismiss_lead,
+    leads_matching_existing_legs,
+    open_leads,
+)
 from app.db.session import get_session
 from app.domain.discovery_message import Lead, build_discovery_dm
 from app.web.auth import SessionUser, require_admin
@@ -107,6 +112,11 @@ async def discoveries(
     leads = await open_leads(session)
     hinted = await leads_matching_existing_legs(session, leads)
     names = await _artist_names(session, leads)
+    # How the last sweep went, shown whether or not there are leads -- an empty
+    # table is exactly where "is this still working?" is the question, and a
+    # broken sweep, a blocked IP and a quiet day all render the same empty table
+    # without it.
+    state = await discovery_status(session)
     rows = [
         LeadRow(
             lead=lead,
@@ -130,6 +140,9 @@ async def discoveries(
                 [_to_lead(row) for row in rows], total=len(rows), budget=None
             ),
             "hinted": len(hinted),
+            "last_run_at": state.last_run_at if state else None,
+            "last_fetched": state.last_fetched if state else None,
+            "last_failed": state.last_failed if state else None,
         },
     )
 
