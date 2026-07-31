@@ -236,6 +236,52 @@ async def test_commit_then_export_then_reparse_keeps_the_id(client, db):
     ]
 
 
+async def test_editing_a_concert_does_not_erase_a_leg_s_event_id(client, db):
+    """The highest-consequence property here, and one that currently holds by
+    an ABSENCE: `apply_day_fields` assigns seven fields and this is not one of
+    them, so the edit page's save leaves the column alone.
+
+    Nothing else guards that. The edit page's leg cards render through the same
+    shared macro, WITHOUT the stored value, so every save posts
+    `day_eventernote_event_id=""` for a leg that has a real id -- exactly the
+    payload below. Wire the field into the edit route the obvious way (declare
+    the Form param, pad, zip, hand it to apply_day_fields) without first
+    feeding the stored value into the macro, and the next save of every
+    imported concert nulls the exact-match data this whole feature exists to
+    accumulate, catalogue-wide, with the suite green. This test is the thing
+    that fails instead."""
+    login_as(client, EDITOR_ID, "reiji")
+    assert client.post("/concerts/import/commit", data={
+        "title": "テスト", "title_en": "Edit Guard", "title_zh": "测试",
+        "event_id": "edit-guard",
+        "day_key": ["d0"], "day_label": ["Day 1"],
+        "day_label_en": ["Day 1"], "day_label_zh": ["第1天"],
+        "day_starts_at": ["2026-11-15T17:00"],
+        "day_eventernote_event_id": ["464372"],
+    }).status_code == 303
+    (leg,) = await _legs(db)
+    assert leg.eventernote_event_id == "464372"   # the precondition, not the claim
+
+    # The edit form's real field set (modelled on test_editor_legs.resubmit),
+    # including the blank the shared leg card posts today. A payload short of a
+    # required field would 422 and this test would pass having saved nothing,
+    # so the status is asserted before the column is.
+    r = client.post("/concerts/edit-guard/edit", data={
+        "title": "テスト", "title_en": "Edit Guard", "title_zh": "测试",
+        "event_id": "edit-guard",
+        "day_id": [str(leg.id)], "day_key": [str(leg.id)],
+        "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["第1天"],
+        "day_starts_at": ["2026-11-15T18:00"],   # a real change, so the save is real
+        "day_doors_at": [""], "day_cancelled": ["false"],
+        "day_eventernote_event_id": [""],
+    })
+    assert r.status_code == 303
+
+    (saved,) = await _legs(db)
+    assert saved.starts_at_utc.hour == 9        # 18:00 JST -- the edit did land
+    assert saved.eventernote_event_id == "464372"
+
+
 async def test_a_commit_that_sends_no_ids_at_all_still_works(client, db):
     """The minimal import contract (and every client predating the field)
     posts no day_eventernote_event_id array -- the strict zip must not care."""
