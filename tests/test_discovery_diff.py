@@ -284,3 +284,33 @@ async def test_record_discovered_batches_its_queries(db):
         await record_discovered(s, events, NOW)
         selects = [q for q in statements if q.lstrip().upper().startswith("SELECT")]
         assert len(selects) == 2, selects
+
+
+async def test_binding_leads_to_concerts_is_batched_too(db):
+    """The lead-binding branch is skipped entirely when no leg holds an incoming
+    id, so the test above never reaches it -- a per-event `_bind_leads_to_concerts`
+    would sail through it. This fixture holds ten of the fifty, so the binding
+    query really runs: THREE selects, not fifty-two."""
+    statements: list[str] = []
+
+    async with db() as s:
+        s.add(Concert(title="t", event_id="c1"))
+        await s.flush()
+        for i in range(10):
+            s.add(ConcertDay(
+                concert_id=1, label=f"Day {i}",
+                starts_at_utc=datetime(2026, 11, 15, 9, 0, tzinfo=UTC),
+                eventernote_event_id=str(i),
+            ))
+        await s.commit()
+
+        conn = await s.connection()
+        event.listen(
+            conn.sync_connection.engine, "before_cursor_execute",
+            lambda c, cur, stmt, *a: statements.append(stmt),
+        )
+        events = [(_ev(event_id=str(i), day=1 + i % 20), None) for i in range(50)]
+        fresh = await record_discovered(s, events, NOW)
+        assert len(fresh) == 40, "the ten held ones really were held"
+        selects = [q for q in statements if q.lstrip().upper().startswith("SELECT")]
+        assert len(selects) == 3, selects

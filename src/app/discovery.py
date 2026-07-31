@@ -21,10 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.models import DiscoveredEvent, Notification, Tag, User
 from app.db.service import (
+    discovery_status,
     ensure_user,
     leads_matching_existing_legs,
     mark_leads_announced,
     record_discovered,
+    set_sweep_cursor,
     stamp_discovery_run,
 )
 from app.domain.discovery_message import Lead, build_discovery_dm
@@ -57,12 +59,29 @@ SWEEP_DELAY_SECONDS = 1.0
 # for the false /healthz alarm), that reminder blackout produces no signal
 # whatever, on an app whose worst failure is a missed deadline.
 #
-# So the sweep gets a wall clock. Artists past the budget simply wait for
-# tomorrow: leads are deferred, never lost -- the next sweep re-reads the same
-# pages and record_discovered's id key means a lead surfaced late is still
-# fresh. Moving the sweep off the tick entirely is the right end state and is
-# logged as such; this bounds the tick absolutely in the meantime.
+# So the sweep gets a wall clock. Artists past the budget wait for the NEXT
+# sweep, which resumes where this one stopped (see the cursor in run_sweep):
+# leads are deferred, never lost. A fixed start point would have been worse than
+# no budget -- ~374s of real work against a 240s budget reads roughly the first
+# half of the list, every day, forever, and since a Tag id is creation order
+# that starves exactly the artists added most recently.
+#
+# THE BOUND IS NOT THE BUDGET ALONE. The check happens between artists, so the
+# worst case is one full budget plus the pause and fetch already in flight:
+# SWEEP_BUDGET_SECONDS + SWEEP_DELAY_SECONDS + FETCH_DEADLINE_SECONDS, ~271s.
+# That last term is why FETCH_DEADLINE_SECONDS exists at all -- without a TOTAL
+# per-fetch deadline the final fetch is unbounded, and "the sweep is bounded"
+# would be a comment rather than a fact.
+#
+# Moving the sweep off the tick entirely is still the right end state and is
+# logged as such.
 SWEEP_BUDGET_SECONDS = 240.0
+# A TOTAL deadline per page. httpx's own timeout is per READ operation, so a
+# server dripping bytes can hold a connection open indefinitely up to the 2 MB
+# cap without ever tripping it. Generous next to the 10s read timeout, because
+# its job is to catch the pathological case, not to tighten the normal one: a
+# fetch that takes 30 wall-clock seconds has already failed at being a fetch.
+FETCH_DEADLINE_SECONDS = 30.0
 
 
 class DiscoveryFetchError(Exception):
@@ -124,6 +143,25 @@ async def run_sweep(
         select(Tag).where(Tag.eventernote_url.is_not(None)).order_by(Tag.id)
     )).scalars())
 
+    # Where the last sweep stopped. The budget cannot reach the whole list at
+    # the shipped constants, so a sweep that always started at tags[0] would
+    # read the same head every day and NEVER touch the tail -- and since a Tag
+    # id is creation order, the tail is the artists added most recently.
+    #
+    # Resume at the first id AT OR AFTER the cursor (the stored tag may have
+    # been deleted, or may have lost its eventernote_url), then wrap: the visit
+    # order is tags[start:] + tags[:start], which is every tag exactly once, so
+    # a wrap can never re-read what this run already read.
+    state = await discovery_status(session)
+    cursor = state.sweep_cursor_tag_id if state else None
+    start = 0
+    if cursor is not None:
+        start = next((i for i, tag in enumerate(tags) if tag.id >= cursor), 0)
+    order = tags[start:] + tags[:start]
+    # Unchanged unless this sweep gets somewhere: a run that dies before the
+    # loop must not silently rewind the list to the head.
+    next_cursor = cursor
+
     today_jst = utc_to_jst(now).date()
     # Accumulated across ALL artists and handed to record_discovered in ONE
     # call: it batches its queries, and its event-id key deduplicates an event
@@ -134,15 +172,18 @@ async def run_sweep(
 
     deadline = monotonic() + SWEEP_BUDGET_SECONDS
 
-    for index, tag in enumerate(tags):
+    for index, tag in enumerate(order):
         # Checked at the TOP, before anything is fetched: the budget is a cap on
         # how long the reminder tick is held, so the answer has to be "stop"
         # before the next page is asked for, not after.
         if monotonic() >= deadline:
             report.budget_exhausted = True
+            # This tag was NOT read, so it is where the next sweep starts.
+            next_cursor = tag.id
             log.warning(
-                "discovery: %.0fs budget spent after %d artist(s); %d left for tomorrow",
-                SWEEP_BUDGET_SECONDS, index, len(tags) - index,
+                "discovery: %.0fs budget spent after %d artist(s); "
+                "%d resume from tag %s next sweep",
+                SWEEP_BUDGET_SECONDS, index, len(order) - index, tag.id,
             )
             break
 
@@ -179,8 +220,16 @@ async def run_sweep(
         # a minute later, forever. One artist's page must cost the other 85
         # nothing whatever is wrong with it, which is also what
         # domain/eventernote.py's docstring already promises.
+        #
+        # The fetch carries its own TOTAL deadline, which httpx's per-read
+        # timeout is not: without it the last fetch of a sweep is unbounded and
+        # the budget above bounds nothing. TimeoutError is an Exception, so a
+        # page that runs long is counted failed and skipped like any other.
+        # Only the fetch is wrapped -- parse_actor_events never awaits, so a
+        # timeout could not fire inside it anyway.
         try:
-            html = await fetcher(url)
+            async with asyncio.timeout(FETCH_DEADLINE_SECONDS):
+                html = await fetcher(url)
             page = parse_actor_events(html)
             events = future_events(page.events, today_jst)
         except Exception:
@@ -195,6 +244,13 @@ async def run_sweep(
         artist_by_tag_id[tag.id] = tag.name
         for actor_event in events:
             seen.append((actor_event, tag.id))
+
+    if not report.budget_exhausted:
+        # The loop ran to the end, so every artist was visited and there is no
+        # partial sweep in progress: the next one starts at the head again.
+        # Written as an explicit check rather than a `for ... else`, which is
+        # easy to misread as belonging to the nested loop just above.
+        next_cursor = None
 
     try:
         await _record_and_announce(session, seen, artist_by_tag_id, now, report)
@@ -211,11 +267,17 @@ async def run_sweep(
         # passes no counts, and that is right: a sweep that raised has no report
         # to give, and NULL means UNKNOWN rather than zero -- displaying
         # yesterday's numbers beside today's timestamp would read as a healthy
-        # sweep on the day the sweep died.
+        # sweep on the day the sweep died. The CURSOR is the opposite case and
+        # has its own writer for that reason -- it is progress, not a report,
+        # so loop.py's re-stamp must leave it alone (see set_sweep_cursor).
         try:
             await stamp_discovery_run(
-                session, now, fetched=report.fetched, failed=report.failed
+                session, now,
+                fetched=report.fetched,
+                failed=report.failed,
+                truncated=report.budget_exhausted,
             )
+            await set_sweep_cursor(session, next_cursor)
         except Exception:
             # Never mask the real failure with a bookkeeping one.
             log.exception("discovery: could not stamp the sweep timestamp")

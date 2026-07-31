@@ -143,6 +143,7 @@ async def discoveries(
             "last_run_at": state.last_run_at if state else None,
             "last_fetched": state.last_fetched if state else None,
             "last_failed": state.last_failed if state else None,
+            "last_truncated": state.last_truncated if state else None,
         },
     )
 

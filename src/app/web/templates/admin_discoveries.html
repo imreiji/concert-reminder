@@ -24,6 +24,17 @@
   Last sweep {{ last_run_at.strftime('%Y-%m-%d %H:%M') }} UTC did not finish —
   it recorded no counts, so nothing is known about what it read.
 </div>
+{% elif last_truncated %}
+{#- Truncation gets its own branch rather than being folded into the clean one:
+    at the shipped budget a full sweep does not fit, so "47 fetched, no
+    failures" would be the STEADY state and would read as a healthy short day.
+    The artists it did not reach are not lost -- the cursor resumes there. -#}
+<div class="banner warn">
+  Last sweep {{ last_run_at.strftime('%Y-%m-%d %H:%M') }} UTC
+  stopped at its time budget:
+  {{ last_fetched }} fetched{% if last_failed %}, {{ last_failed }} failed{% endif %}.
+  The rest of the artists resume from where it stopped on the next sweep.
+</div>
 {% elif last_failed %}
 <div class="banner warn">
   Last sweep {{ last_run_at.strftime('%Y-%m-%d %H:%M') }} UTC:

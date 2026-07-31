@@ -851,6 +851,23 @@ class DiscoveryState(Base):
     # today's timestamp.
     last_fetched: Mapped[int | None] = mapped_column(Integer)
     last_failed: Mapped[int | None] = mapped_column(Integer)
+    # Whether the last sweep stopped at SWEEP_BUDGET_SECONDS rather than
+    # finishing. Persisted rather than only logged because truncation is the
+    # NORMAL case at the shipped constant (~374s of real work against a 240s
+    # budget), not a rare third state -- and a truncated sweep otherwise renders
+    # as "47 fetched, no failures", which is the reassuring branch.
+    last_truncated: Mapped[bool | None] = mapped_column(Boolean)
+    # Where the NEXT sweep starts, so a budget that cannot reach the whole list
+    # walks it round instead of re-reading the same head every day and never
+    # touching the tail. Tags sweep in `id` order, which is creation order, so a
+    # fixed start point starves exactly the artists added most recently.
+    #
+    # A plain Integer, NOT a ForeignKey: it is a POSITION in an ordering, not a
+    # reference to a row. The sweep resumes at the first tag whose id is >= this
+    # value, so a deleted tag leaves it harmlessly pointing into a gap -- where
+    # ON DELETE SET NULL would silently rewind the sweep to the head of the list,
+    # which is the failure the cursor exists to prevent.
+    sweep_cursor_tag_id: Mapped[int | None] = mapped_column(Integer)
 
 
 class OpsCheckState(Base):

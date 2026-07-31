@@ -6788,6 +6788,7 @@ async def stamp_discovery_run(
     *,
     fetched: int | None = None,
     failed: int | None = None,
+    truncated: bool | None = None,
 ) -> None:
     """Start the 24h clock, and record how the sweep went.
 
@@ -6799,6 +6800,8 @@ async def stamp_discovery_run(
     to give (scheduler.loop re-stamping after a sweep raised) means the counts
     are unknown, and unknown must clear them: leaving yesterday's 74/0 beside
     today's timestamp would read as a healthy sweep on the day the sweep died.
+    The sweep CURSOR is deliberately not here for exactly that reason -- see
+    `set_sweep_cursor`.
     """
     state = await session.get(DiscoveryState, DISCOVERY_STATE_ID)
     if state is None:
@@ -6807,6 +6810,27 @@ async def stamp_discovery_run(
     state.last_run_at = now
     state.last_fetched = fetched
     state.last_failed = failed
+    state.last_truncated = truncated
+    await session.flush()
+
+
+async def set_sweep_cursor(session: AsyncSession, tag_id: int | None) -> None:
+    """Where the next sweep starts. None means the head of the list.
+
+    Its OWN writer rather than a keyword on `stamp_discovery_run`, because the
+    two obey opposite rules and folding them together would quietly break this
+    one. The counts describe a single sweep, so "no report" must clear them;
+    the cursor is accumulated PROGRESS through the artist list, so "no report"
+    must leave it alone. scheduler.loop re-stamps after a sweep raised -- and if
+    that re-stamp reset the cursor, a run of failures would pin the sweep at the
+    head of the list forever, which is precisely the starvation the cursor
+    exists to prevent.
+    """
+    state = await session.get(DiscoveryState, DISCOVERY_STATE_ID)
+    if state is None:
+        state = DiscoveryState(id=DISCOVERY_STATE_ID)
+        session.add(state)
+    state.sweep_cursor_tag_id = tag_id
     await session.flush()
 
 

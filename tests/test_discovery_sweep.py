@@ -1,5 +1,6 @@
 """The sweep: one DM, no network in tests, and silence on a quiet day."""
 
+import asyncio
 import datetime as dt
 from datetime import UTC, datetime
 
@@ -363,6 +364,158 @@ async def test_the_sweep_stops_when_its_wall_clock_budget_runs_out(db, monkeypat
             for row in (await s.execute(select(DiscoveredEvent))).scalars()
         }
         assert ids == {"8000"}, "only the artist inside the budget was recorded"
+
+
+async def _three_tags(s):
+    s.add(User(discord_id=42, username="reiji"))
+    for n in range(3):
+        s.add(Tag(
+            name=f"A{n}", kind=TagKind.ARTIST, slug=f"a{n}",
+            eventernote_url=f"https://www.eventernote.com/actors/a/{n}",
+        ))
+    await s.commit()
+    return [
+        row.id for row in (await s.execute(select(Tag).order_by(Tag.id))).scalars()
+    ]
+
+
+def _order_recorder():
+    """A fetcher that records which artists it was asked for, in order."""
+    asked: list[int] = []
+
+    async def fetch(url, transport=None):
+        n = int(url.split("/events")[0].rsplit("/", 1)[1])
+        asked.append(n)
+        return _page_for(n)
+
+    return asked, fetch
+
+
+async def test_a_truncated_sweep_resumes_where_it_stopped(db, monkeypatch):
+    """The budget alone is not enough. Tags sweep in `id` order, the deadline is
+    recomputed every sweep, and ~374s of real work against a 240s budget reads
+    roughly the first half of the list -- so without a cursor the SAME artists
+    are read every day and the tail is never swept at all. A Tag id is creation
+    order, so that tail is the artists the owner added most recently."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.SWEEP_DELAY_SECONDS", 0)
+
+    async with db() as s:
+        tag_ids = await _three_tags(s)
+
+        # Sweep one: budget runs out before the second artist.
+        clock = iter([0.0, 0.0, 1000.0])
+        monkeypatch.setattr("app.discovery.monotonic", lambda: next(clock))
+        asked, fetch = _order_recorder()
+        report = await run_sweep(s, NOW, fetcher=fetch)
+        await s.commit()
+        assert report.budget_exhausted is True and asked == [0]
+        state = await s.get(DiscoveryState, 1)
+        assert state.sweep_cursor_tag_id == tag_ids[1], "stopped before the second"
+
+        # Sweep two, same budget shape: it must start at the SECOND artist, not
+        # read the first one all over again.
+        clock = iter([0.0, 0.0, 1000.0])
+        monkeypatch.setattr("app.discovery.monotonic", lambda: next(clock))
+        asked, fetch = _order_recorder()
+        await run_sweep(s, NOW + dt.timedelta(days=1), fetcher=fetch)
+        await s.commit()
+        assert asked == [1], "resumed, rather than re-reading the head of the list"
+        state = await s.get(DiscoveryState, 1)
+        assert state.sweep_cursor_tag_id == tag_ids[2]
+
+
+async def test_a_resumed_sweep_wraps_without_re_reading_anyone(db, monkeypatch):
+    """The wrap. Starting mid-list and running to the end has to come back round
+    to the artists before the cursor -- otherwise resuming would starve the HEAD
+    of the list instead of the tail -- and it must visit each exactly once, or a
+    third of every sweep is spent re-reading pages it already read this run."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.SWEEP_DELAY_SECONDS", 0)
+    monkeypatch.setattr("app.discovery.monotonic", lambda: 0.0)
+
+    async with db() as s:
+        tag_ids = await _three_tags(s)
+        s.add(DiscoveryState(id=1, sweep_cursor_tag_id=tag_ids[2]))
+        await s.commit()
+
+        asked, fetch = _order_recorder()
+        report = await run_sweep(s, NOW, fetcher=fetch)
+        await s.commit()
+        assert asked == [2, 0, 1], "started at the cursor and wrapped"
+        assert report.fetched == 3
+        state = await s.get(DiscoveryState, 1)
+        assert state.sweep_cursor_tag_id is None, "a whole pass clears the cursor"
+
+
+async def test_a_cursor_pointing_at_a_deleted_tag_starts_over(db, monkeypatch):
+    """The cursor is a POSITION, not a foreign key: it resumes at the first id
+    at or after it, and an id past the end of the list wraps to the head rather
+    than sweeping nobody. A tag deleted between sweeps must not stall discovery
+    permanently."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.SWEEP_DELAY_SECONDS", 0)
+    monkeypatch.setattr("app.discovery.monotonic", lambda: 0.0)
+
+    async with db() as s:
+        await _three_tags(s)
+        s.add(DiscoveryState(id=1, sweep_cursor_tag_id=9999))
+        await s.commit()
+
+        asked, fetch = _order_recorder()
+        await run_sweep(s, NOW, fetcher=fetch)
+        await s.commit()
+        assert asked == [0, 1, 2]
+
+
+async def test_a_truncated_sweep_still_counts_as_todays_sweep(db, monkeypatch):
+    """The budget break must not skip the clock. A truncated sweep that left
+    last_run_at unset would re-arm discovery_due and re-run 60 seconds later,
+    truncating identically, forever -- the same failure the `finally` exists to
+    prevent, arriving through a new exit."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.SWEEP_DELAY_SECONDS", 0)
+    clock = iter([0.0, 1000.0])
+    monkeypatch.setattr("app.discovery.monotonic", lambda: next(clock))
+
+    async with db() as s:
+        await _three_tags(s)
+
+        async def boom(url, transport=None):
+            raise AssertionError("the budget was spent before any fetch")
+
+        report = await run_sweep(s, NOW, fetcher=boom)
+        await s.commit()
+        assert report.budget_exhausted is True and report.fetched == 0
+        assert not await discovery_due(s, NOW + dt.timedelta(hours=1))
+        state = await s.get(DiscoveryState, 1)
+        assert state.last_truncated is True
+
+
+async def test_a_hanging_fetch_is_cut_off_and_counted_failed(db, monkeypatch):
+    """httpx's timeout is per READ, not per request, so a server dripping bytes
+    under the 2 MB cap holds a connection open with no deadline at all -- and
+    the budget is checked BETWEEN artists, so the fetch already in flight when
+    it expires is unbounded. Without a total per-fetch deadline "the sweep is
+    bounded" is a comment rather than a fact.
+
+    The slow fetch is bounded at 5s rather than left hanging: with the deadline
+    removed this test must FAIL in five seconds, not block the suite forever. A
+    test that hangs under mutation is not a test anyone can run."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.FETCH_DEADLINE_SECONDS", 0.01)
+
+    async with db() as s:
+        await _seed(s)
+
+        async def far_too_slow(url, transport=None):
+            await asyncio.sleep(5)
+            return PAGE
+
+        report = await run_sweep(s, NOW, fetcher=far_too_slow)
+        await s.commit()
+        assert report.failed == 1 and report.fetched == 0
+        assert not await discovery_due(s, NOW + dt.timedelta(hours=1))
 
 
 async def test_a_sweep_inside_its_budget_reads_every_artist(db, monkeypatch):

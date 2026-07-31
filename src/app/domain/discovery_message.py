@@ -166,6 +166,14 @@ def _assemble(prose: str, kept: Sequence[str], dropped: int) -> str:
 
 
 def _hard_truncate(prose: str, dropped: int, budget: int) -> str:
+    """Cut the prose down to the budget.
+
+    ITS OWN GUARANTEE HAS A FLOOR: the fenced footer (the prompt header, the
+    "N more not shown" line and the two fences) is ~175 characters and cannot
+    be cut, so a budget below that comes back over it. Nothing real is near
+    that -- Discord's is 1900 -- but the bound is "budget or ~175, whichever is
+    larger", not "budget".
+    """
     footer = _assemble("", [], dropped)
     available = max(budget - len(footer), 0)
     return _assemble(prose[:available], [], dropped)

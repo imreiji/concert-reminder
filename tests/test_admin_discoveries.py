@@ -230,6 +230,24 @@ async def test_the_page_reports_a_sweep_that_failed_fetches(client):
     assert "2026-07-31 12:00" in body
 
 
+async def test_the_page_says_when_a_sweep_ran_out_of_time(client):
+    """At the shipped budget a full sweep does NOT fit, so truncation is the
+    steady state rather than a rare third case. Folded into the clean branch it
+    would read "47 fetched, no failures" every single day -- the reassuring
+    line, on the page built so a partial sweep would be visible."""
+    async with client.db() as s:
+        s.add(DiscoveryState(
+            id=1, last_run_at=NOW, last_fetched=47, last_failed=0,
+            last_truncated=True, sweep_cursor_tag_id=52,
+        ))
+        await s.commit()
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "stopped at its time budget" in body
+    assert "47 fetched" in body
+    assert "no failures" not in body, "a truncated sweep is not a clean one"
+
+
 async def test_a_clean_sweep_does_not_cry_wolf(client):
     """The control: the same line with no failures must not use the
     needs-attention shape, or the one that matters stops being noticed."""
