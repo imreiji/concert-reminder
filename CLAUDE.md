@@ -641,7 +641,7 @@ deleting them.
    plain-text body, not a rich embed" and already makes `record_deliveries` skip
    the title lookup, so the drain needed no change at all. Its recipients are
    `ADMIN_WHITELIST`, the same audience as `ops_alert`, and it follows
-   `queue_ops_alerts`' precedent exactly: `Notification.user_id` is an FK to
+   `evaluate_and_alert`'s precedent exactly: `Notification.user_id` is an FK to
    `users.discord_id`, so an admin who has never signed in must be `ensure_user`d
    first or the queue raises `IntegrityError` at flush, far from the cause -- but
    only when `session.get(User, admin_id)` returns None, since `ensure_user`

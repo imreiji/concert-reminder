@@ -145,7 +145,7 @@ async def test_a_tag_without_a_url_is_skipped(db, monkeypatch):
 async def test_an_admin_who_never_signed_in_gets_a_user_row(db, monkeypatch):
     """Notification.user_id is an FK to users.discord_id -- queuing without a
     row raises IntegrityError at flush, far from the cause. Follows
-    queue_ops_alerts' precedent."""
+    evaluate_and_alert's precedent."""
     monkeypatch.setattr(settings, "admin_whitelist", "99")
     async with db() as s:
         s.add(Tag(

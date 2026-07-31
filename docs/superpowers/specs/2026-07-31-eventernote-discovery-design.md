@@ -186,7 +186,7 @@ queues; the existing drain delivers.
   This is catalogue maintenance, not a per-user feed. `Notification.user_id` is
   an FK to `users.discord_id`, so an admin who has never signed in has no row to
   target and queuing would raise `IntegrityError` at flush, far from the cause.
-  Follow `queue_ops_alerts`' existing precedent exactly: `ensure_user` with a
+  Follow `evaluate_and_alert`'s existing precedent exactly: `ensure_user` with a
   placeholder name only when `session.get(User, admin_id)` returns None. Guarded
   on absence rather than called unconditionally, because `ensure_user` refreshes
   the username and would otherwise overwrite a real admin's name with the

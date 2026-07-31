@@ -515,8 +515,17 @@ skill exactly as it already worked. Wider: it is scheduled from v1 at the
 owner's request, with a review surface and a per-leg source-id column, rather
 than the on-demand walk the entry imagined.
 
-The re-rank moves nothing on merit and entries renumber 1-8 by that single
-removal. Minute-level offsets returns to #1 by pure removal, having now been
+The pass also ADDED two entries at the bottom, #9 and #10, and the reason they
+are here at all is worth more than their rank: both were found by the build's own
+reviews, deferred as minors, and lived only in the branch's SDD ledger, which is
+deleted when the branch finishes. Neither is a defect the build caused. Both are
+admin-only, so both rank below every user-facing entry on this list -- but "known
+and written down badly" is how the Python-pinning embarrassment five entries up
+happened in reverse, and a finding that survives only in a file scheduled for
+deletion is not written down at all.
+
+The re-rank otherwise moves nothing on merit and entries renumber 1-8 by that
+single removal. Minute-level offsets returns to #1 by pure removal, having now been
 displaced five passes running without once being judged less valuable, and is
 untouched in substance. Nothing got cheaper: this build lived in a new domain
 parser, a shared fetch, the scheduler tick, two new tables and an admin page,
@@ -770,6 +779,50 @@ because those close several visible gaps each; this refines one sentence that
 is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
+
+### 9. Nothing caps the discovery review path
+
+Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
+discovery, Task 7 review; deferred as a minor at the time).
+
+`open_leads` has no LIMIT, `/admin/discoveries` renders every row it returns,
+and `copy_text` is emitted TWICE per page -- once in a `data-copy` attribute for
+the copy button and once in the visible `<pre>`. A first sweep produces a lead
+for every future event of all 86 tags at once, most of them duplicating concerts
+already held, so a few hundred rows is the expected first-day case rather than a
+pathological one: roughly a 150KB admin page. Survivable, admin-only, and it
+degrades rather than breaks -- but it is unbounded, and the page it happens on is
+the one the DM's "+N more" line exists to send you to, which is precisely the
+occasion when the backlog is largest.
+
+The fix is not obvious enough to call small-and-done: a LIMIT plus paging is the
+usual answer, but the page's whole job is BULK triage and the copy block is
+supposed to cover what you can see, so paging the rows means deciding what the
+block covers. Emitting the block once and reading it from the `<pre>` is the
+cheap half and can be done independently.
+
+Ranked here, below every user-facing entry above it, because this list orders by
+USER impact and this one's is nil -- the same argument that kept the rehearsal
+harness low until it was ranked on a borrowed claim. Raise it if the first
+production sweep actually produces a page somebody has to fight.
+
+### 10. `/admin/discoveries` row height wants a real viewport
+
+Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
+discovery, Task 7, logged PRE-DEPLOY and never closed).
+
+`.banner.warn` is `display: flex`, so a lead marked "you may already have this"
+is TALLER than an unmarked one. On a bulk-triage table where most rows carry the
+hint on the first sweep and few do later, that will read as uneven -- but whether
+it actually looks wrong, and at what proportion of marked rows, is not something
+to settle on paper. This project's own measure-don't-reason rule applies with
+full force: put the seeded page in a real viewport and look, because reasoning
+from the CSS has shipped a confidently wrong fix here twice before.
+
+Note what is NOT in scope: `.banner` is the sanctioned needs-attention callout
+shape (CLAUDE.md's two-shape callout grammar), and inventing a third shape for
+this was deliberately declined. Whatever the measurement says, the answer has to
+come out of the existing two shapes or out of the row's own layout.
 
 (The former "Editor page parity with the demo" entry (2026-07-20) was
 absorbed on 2026-07-23 into the editor-pages coherence pass --
