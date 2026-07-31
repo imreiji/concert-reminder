@@ -14,14 +14,104 @@
 <p class="banner dgr"><span>⚠</span> <span><b>That file could not be read.</b> {{ error }}</span></p>
 {% endif %}
 
+{% if plan %}
+<form method="post" action="/admin/import/tags/apply" class="stack wide">
+  <input type="hidden" name="text" value="{{ text }}">
+
+  {% if plan.created %}
+  <div class="edgecard ok">
+    <p><b>{{ plan.created | length }} new tag(s)</b> will be created.</p>
+    <p class="dim">{% for t in plan.created %}<code>{{ t.handle }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  </div>
+  {% endif %}
+
+  {% if plan.changed %}
+  <div class="edgecard ok">
+    <p><b>{{ plan.changed | length }} tag(s)</b> have empty fields the file can fill.
+      Filling cannot lose anything, so these are not asked about.</p>
+    <ul class="dim">
+      {% for t in plan.changed %}
+      <li><code>{{ t.handle }}</code> — {% for f, v in t.fills.items() %}{{ f }}: {{ v }}{% if not loop.last %}; {% endif %}{% endfor %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if plan.conflicted %}
+  <div class="banner warn">
+    <span>⚠</span>
+    <span><b>{{ plan.conflicted | length }} tag(s) disagree with the file.</b>
+      Nothing is overwritten unless you say so — leaving a row alone keeps what is
+      in the catalogue.</span>
+  </div>
+  <p><button type="button" id="all-mine">Keep all mine</button>
+     <button type="button" id="all-theirs">Take all theirs</button></p>
+
+  {% for t in plan.conflicted %}
+  <div class="edgecard dg">
+    <p><b><code>{{ t.handle }}</code></b></p>
+    {% for c in t.conflicts %}
+    <div class="subrow two">
+      <span class="nm3">{{ c.field }}</span>
+      <span class="sw">
+        <label><input type="radio" name="conflict__{{ t.handle }}__{{ c.field }}" value="mine" checked> keep <code>{{ c.current }}</code></label>
+        <label><input type="radio" name="conflict__{{ t.handle }}__{{ c.field }}" value="theirs"> take <code>{{ c.incoming }}</code></label>
+      </span>
+    </div>
+    {% endfor %}
+    {% for m in t.member_additions %}
+    <div class="subrow two">
+      <span class="nm3">member</span>
+      <span class="sw"><label><input type="checkbox" name="member__{{ t.handle }}__{{ m }}" value="add" checked> add <code>{{ m }}</code></label></span>
+    </div>
+    {% endfor %}
+    {% for m in t.member_removals %}
+    <div class="subrow two">
+      <span class="nm3">member</span>
+      <span class="sw"><label><input type="checkbox" name="member__{{ t.handle }}__{{ m }}" value="remove"> remove <code>{{ m }}</code> — the only destructive choice here</label></span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if not plan.tags %}
+  <p class="dim">That file describes no tags.</p>
+  {% endif %}
+
+  <button type="submit">Apply</button>
+</form>
+
+<script>
+  // Bulk controls: a long list is otherwise a lot of clicking for what is
+  // usually one decision repeated. RADIOS ONLY -- member checkboxes keep their
+  // own defaults, because "take all theirs" must never quietly mean "delete
+  // members".
+  (function () {
+    function setAll(value) {
+      document.querySelectorAll('input[type=radio][value="' + value + '"]')
+        .forEach(function (r) { r.checked = true; });
+    }
+    var mine = document.getElementById("all-mine");
+    var theirs = document.getElementById("all-theirs");
+    if (mine) mine.addEventListener("click", function () { setAll("mine"); });
+    if (theirs) theirs.addEventListener("click", function () { setAll("theirs"); });
+  })();
+</script>
+{% endif %}
+
 {% if report %}
 <div class="edgecard ok">
-  <p><b>Created {{ report.created | length }}</b> · Skipped {{ report.skipped | length }}</p>
+  <p><b>Created {{ report.created | length }}</b>
+     · Filled {{ report.filled | length }}
+     · Resolved {{ report.resolved | length }}
+     · Unchanged {{ report.unchanged | length }}
+     {% if report.skipped %}· <b>Refused {{ report.skipped | length }}</b>{% endif %}</p>
   {% if report.created %}
   <p class="dim">Created: {% for h in report.created %}<code>{{ h }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
   {% endif %}
   {% if report.skipped %}
-  <p class="dim">Skipped (already present): {% for h in report.skipped %}<code>{{ h }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  <p class="dim">Refused (the kind disagrees — see the warnings): {% for h in report.skipped %}<code>{{ h }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
   {% endif %}
 </div>
 {% if report.warnings %}

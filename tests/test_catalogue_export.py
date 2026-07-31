@@ -165,7 +165,9 @@ async def test_the_export_round_trips_through_the_importer(client):
             await s.delete(tag)
         await s.commit()
 
-    client.post("/admin/import/tags", data={"text": entries["tags.yaml"]})
+    # /apply, not /tags: since 2026-07-31 the latter only PREVIEWS. Nothing to
+    # resolve here -- restoring into an emptied catalogue is all creates.
+    client.post("/admin/import/tags/apply", data={"text": entries["tags.yaml"]})
 
     async with client.db() as s:
         after = snapshot((await s.execute(select(Tag))).scalars())

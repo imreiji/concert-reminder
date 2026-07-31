@@ -34,19 +34,22 @@ from app.db.service import (
     BROADCAST_BODY_MAX,
     DELIVERY_LOG_RETENTION_DAYS,
     TYPED_CONFIRM_THRESHOLD,
+    ImportChoices,
+    apply_tag_import,
     cancel_broadcast,
     catalogue_export_files,
+    current_tag_exports,
     delivery_batch_rows,
     delivery_batches,
     delivery_failures,
     duplicate_body_recently,
     ensure_user,
-    import_tags,
     queue_broadcast,
     recent_broadcasts,
     resolve_recipients,
 )
 from app.db.session import get_session
+from app.domain.tags_diff import plan_tag_import
 from app.domain.tags_yaml import TagsFileError, parse_tags
 from app.domain.types import BroadcastMode
 from app.web.auth import SessionUser, require_admin
@@ -269,6 +272,49 @@ async def broadcast_cancel(
 # ── Catalogue import ─────────────────────────────────────────────────────
 
 
+def _import_page(request, user, text, *, plan=None, report=None, error=None):
+    return templates.TemplateResponse(
+        request,
+        "admin_import_tags.html",
+        {"user": user, "text": text, "plan": plan, "report": report, "error": error},
+    )
+
+
+def _read_choices(form) -> ImportChoices:
+    """Pull the operator's decisions out of the posted form.
+
+    Names are `conflict__<handle>__<field>` and `member__<handle>__<member>`;
+    handles are [a-z0-9_-] by construction, so they need no escaping. Values are
+    checked against the literal sets and ANYTHING ELSE IS DISCARDED -- the
+    browser supplies a decision, never data, so an unexpected value can only
+    ever mean "keep mine".
+    """
+    choices = ImportChoices()
+    for key, value in form.multi_items():
+        parts = key.split("__")
+        if len(parts) != 3:
+            continue
+        kind, handle, name = parts
+        if kind == "conflict" and value in ("mine", "theirs"):
+            choices.fields[(handle, name)] = value
+        elif kind == "member" and value in ("add", "remove"):
+            choices.members[(handle, name)] = value
+    return choices
+
+
+async def _plan_or_error(session, text):
+    """(plan, error). Shared by both halves so they cannot disagree about what
+    a bad file is."""
+    if len(text) > MAX_DRAFT_CHARS:
+        return None, "that file is too large -- pastes are capped at 200k characters"
+    try:
+        parsed = parse_tags(text)
+    except TagsFileError as exc:
+        return None, str(exc)
+    plan = plan_tag_import(parsed.tags, await current_tag_exports(session), parsed.warnings)
+    return plan, None
+
+
 @router.get("/admin/import/tags", response_class=HTMLResponse)
 async def import_tags_form(
     request: Request,
@@ -276,51 +322,49 @@ async def import_tags_form(
 ):
     """Paste a tags.yaml from a catalogue export.
 
-    English-only and NOT wrapped in _(), like every other admin surface
-    (/admin/deliveries, /admin/rehearsal). Only the Preferences LINK to this
-    page is translated, because Preferences is a page users read.
+    English-only and NOT wrapped in _(), like every other admin surface. Only
+    the Preferences LINK to this page is translated.
     """
-    return templates.TemplateResponse(
-        request,
-        "admin_import_tags.html",
-        {"user": user, "report": None, "error": None, "text": ""},
-    )
+    return _import_page(request, user, "")
 
 
 @router.post("/admin/import/tags", response_class=HTMLResponse)
-async def import_tags_commit(
+async def import_tags_preview(
     request: Request,
     user: SessionUser = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
     text: str = Form(""),
 ):
-    """Create missing tags from a pasted export, and report what happened.
+    """Show what the import WOULD do. Writes nothing -- looking is not doing."""
+    plan, error = await _plan_or_error(session, text)
+    return _import_page(request, user, text, plan=plan, error=error)
 
-    NO preview, deliberately. The concert import needs one because its commit
-    writes rich, ambiguous data a human should eyeball; the only outcome here is
-    "tags that did not exist now do", so a result page afterwards carries the
-    same information for a fraction of the build.
+
+@router.post("/admin/import/tags/apply", response_class=HTMLResponse)
+async def import_tags_apply(
+    request: Request,
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+    text: str = Form(""),
+):
+    """Commit, resolved by the choices in the form.
+
+    RE-PARSES and RE-PLANS from the pasted file rather than trusting anything
+    the browser says about content. The form carries decisions only, so a forged
+    post cannot inject a value that was not in the file -- and a conflict that
+    vanished since the preview, because the catalogue changed underneath, simply
+    is not applied.
 
     One transaction: a file that raises leaves nothing behind.
     """
-
-    def page(report=None, error=None):
-        return templates.TemplateResponse(
-            request,
-            "admin_import_tags.html",
-            {"user": user, "report": report, "error": error, "text": text},
-        )
-
-    if len(text) > MAX_DRAFT_CHARS:
-        return page(error="that file is too large -- pastes are capped at 200k characters")
-    try:
-        parsed = parse_tags(text)
-    except TagsFileError as exc:
-        return page(error=str(exc))
+    plan, error = await _plan_or_error(session, text)
+    if error:
+        return _import_page(request, user, text, error=error)
+    choices = _read_choices(await request.form())
     await ensure_user(session, user.id, user.username)
-    report = await import_tags(session, parsed, created_by=user.id)
+    report = await apply_tag_import(session, plan, choices, created_by=user.id)
     await session.commit()
-    return page(report=report)
+    return _import_page(request, user, text, report=report)
 
 
 @router.get("/admin/export.zip")

@@ -18,7 +18,7 @@ ADMIN_ID, EDITOR_ID = 42, 77
 FILE = """
 tags:
   - {handle: love-live, name: "ラブライブ！", name_en: Love Live!, kind: franchise}
-  - {handle: kozue, name: "乙宗梢", kind: artist}
+  - {handle: kozue, name: "乙宗梢", name_en: Kozue Otomune, kind: artist}
 """
 
 
@@ -84,24 +84,29 @@ def test_the_admin_gets_a_paste_form(client):
     assert "tags.yaml" in body
 
 
-async def test_a_good_file_creates_the_tags_and_reports(client):
+async def test_a_good_file_is_previewed_then_applied(client):
+    """REWRITTEN 2026-07-31: the route was one step and now it is two. Looking
+    is no longer doing, which is the whole point of the conflict flow."""
     login_as(client, ADMIN_ID, "reiji")
-    body = client.post("/admin/import/tags", data={"text": FILE}).text
-    assert "love-live" in body and "kozue" in body
-    assert "Created 2" in body
+    preview = client.post("/admin/import/tags", data={"text": FILE}).text
+    assert "love-live" in preview and "kozue" in preview
+    async with client.db() as s:
+        assert (await s.execute(select(Tag))).scalars().all() == [], "preview writes nothing"
 
+    body = client.post("/admin/import/tags/apply", data={"text": FILE}).text
+    assert "2" in body
     async with client.db() as s:
         assert sorted(t.slug for t in (await s.execute(select(Tag))).scalars()) == [
             "kozue", "love-live",
         ]
 
 
-async def test_a_second_import_reports_skips_and_writes_nothing(client):
+async def test_a_second_import_has_nothing_to_do(client):
+    """REWRITTEN 2026-07-31 alongside the two-step flow."""
     login_as(client, ADMIN_ID, "reiji")
-    client.post("/admin/import/tags", data={"text": FILE})
-    body = client.post("/admin/import/tags", data={"text": FILE}).text
-    assert "Created 0" in body
-    assert "Skipped 2" in body
+    client.post("/admin/import/tags/apply", data={"text": FILE})
+    body = client.post("/admin/import/tags/apply", data={"text": FILE}).text
+    assert "unchanged" in body.lower()
     async with client.db() as s:
         assert len((await s.execute(select(Tag))).scalars().all()) == 2
 
@@ -131,3 +136,65 @@ def test_an_oversized_paste_is_refused(client):
 def test_preferences_links_the_importer_for_an_admin(client):
     login_as(client, ADMIN_ID, "reiji")
     assert "/admin/import/tags" in client.get("/preferences").text
+
+
+# ── The two-step flow: preview, choose, apply ─────────────────────────────
+
+
+async def test_a_conflict_is_shown_with_both_values(client):
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/import/tags/apply", data={"text": FILE})
+    body = client.post("/admin/import/tags", data={
+        "text": 'tags:\n  - {handle: kozue, name: "乙宗梢", name_en: Renamed, kind: artist}\n',
+    }).text
+    assert "Kozue Otomune" in body, "the catalogue's value"
+    assert "Renamed" in body, "the file's value"
+    assert 'name="conflict__kozue__name_en"' in body
+
+
+async def test_apply_honours_a_theirs_choice(client):
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/import/tags/apply", data={"text": FILE})
+    newer = 'tags:\n  - {handle: kozue, name: "乙宗梢", name_en: Renamed, kind: artist}\n'
+    client.post("/admin/import/tags/apply", data={
+        "text": newer, "conflict__kozue__name_en": "theirs",
+    })
+    async with client.db() as s:
+        row = (await s.execute(select(Tag).where(Tag.slug == "kozue"))).scalar_one()
+        assert row.name_en == "Renamed"
+
+
+async def test_apply_with_no_choices_changes_nothing_it_was_not_asked_to(client):
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/admin/import/tags/apply", data={"text": FILE})
+    newer = 'tags:\n  - {handle: kozue, name: "乙宗梢", name_en: Renamed, kind: artist}\n'
+    client.post("/admin/import/tags/apply", data={"text": newer})
+    async with client.db() as s:
+        row = (await s.execute(select(Tag).where(Tag.slug == "kozue"))).scalar_one()
+        assert row.name_en == "Kozue Otomune"
+
+
+async def test_a_forged_choice_value_is_refused(client):
+    """Only the literal strings are accepted, and the VALUE always comes from
+    the re-parsed file -- so there is nothing to inject.
+
+    Asserts the raw tag rather than the substring "alert(1)": base.html contains
+    that exact string inside its own comment about invariant 7, so the naive
+    check matches the codebase explaining the attack rather than suffering it.
+    """
+    login_as(client, ADMIN_ID, "reiji")
+    payload = "<script>alert(1)</script>"
+    r = client.post("/admin/import/tags/apply", data={
+        "text": FILE, "conflict__kozue__name_en": payload,
+    })
+    assert r.status_code == 200
+    assert payload not in r.text, "the forged value must never be echoed unescaped"
+
+    async with client.db() as s:
+        row = (await s.execute(select(Tag).where(Tag.slug == "kozue"))).scalar_one()
+        assert row.name_en == "Kozue Otomune", "and it must never be WRITTEN"
+
+
+def test_an_editor_cannot_reach_apply(client):
+    login_as(client, EDITOR_ID, "editor")
+    assert client.post("/admin/import/tags/apply", data={"text": FILE}).status_code == 403
