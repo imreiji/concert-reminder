@@ -1836,14 +1836,42 @@ def test_tagdlg_radius_matches_other_dialogs():
     assert re.search(r"border-radius:\s*[34]px", m.group(1))
 
 
+# The one rule that right-aligns the tag dialog's footer, pinned from both
+# sides: it must land on the FORM (or it does nothing), and it must be SCOPED
+# to one form (or it strands every other one mid-footer).
+_DF_PUSH = r"\.df\s+form(?P<scope>:[\w-]+)?\s*\{(?P<body>[^}]*margin-left:\s*auto[^}]*)\}"
+
+
 def test_delete_button_alignment_targets_the_form_not_the_button():
     """The Delete button in the edit-tag dialog footer is wrapped in its own
     real <form> (a POST, unlike the demo's JS-only button) -- .df is a flex
     row, so `.df .btn.warn { margin-left: auto }` targets the BUTTON while
     the actual flex item is the FORM around it, which has no effect. The
-    auto-margin must land on the form itself."""
+    auto-margin must land on the form itself.
+
+    The selector may carry a pseudo-class (it does -- see the test below);
+    what this pins is the ELEMENT it lands on. Matching `\\.df form \\{`
+    exactly made the test fail when the rule was correctly scoped, which is a
+    proxy failing, not the property."""
     text = css()
-    assert re.search(r"\.df\s+form\s*\{[^}]*margin-left:\s*auto", text)
+    assert re.search(_DF_PUSH, text), "no `.df form` rule sets margin-left: auto"
+
+
+def test_only_the_last_footer_form_is_pushed_right():
+    """`.df form` unscoped gives EVERY form in the footer margin-left: auto, so
+    the free space SPLITS between them instead of pushing one to the edge.
+
+    That shipped once: the rule was written when Delete was the only form
+    there, and the admin-only "Check eventernote now" form made it two.
+    Measured at a 1440px viewport, both resolved to margin-left: 52.28px and
+    the sweep button sat stranded mid-footer with a 60px gap on either side,
+    rather than beside Cancel. Only the LAST footer item may be pushed right."""
+    rule = re.search(_DF_PUSH, css())
+    assert rule, "no `.df form` rule sets margin-left: auto"
+    assert rule.group("scope") == ":last-child", (
+        "the auto-margin must be scoped to the last footer form; "
+        f"got `.df form{rule.group('scope') or ''}`, which pushes every form"
+    )
 
 
 def test_new_tag_dialog_footer_has_no_border_padding_override(client):

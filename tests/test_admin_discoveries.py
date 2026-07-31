@@ -13,9 +13,11 @@ from sqlalchemy.pool import StaticPool
 from app.config import settings
 from app.db.models import Base, Concert, ConcertDay, DiscoveredEvent, DiscoveryState, Tag
 from app.db.session import get_session
+from app.discovery import DiscoveryFetchError
 from app.domain.types import TagKind
 from app.web import auth
 from app.web.app import create_app
+from app.web.routes import discoveries
 
 ADMIN_ID, EDITOR_ID = 42, 77
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
@@ -452,3 +454,283 @@ async def test_a_swept_request_leaves_the_button_pressable_again(client):
     body = client.get("/admin/discoveries").text
     assert "Sweep requested" not in body
     assert "disabled" not in _sweep_button(body)
+
+
+# -- Sweep one tag --------------------------------------------------------
+#
+# The per-tag button on the Tags page posts HERE, not to routes/tags.py: every
+# discovery route is admin-only and a router registers whole. It runs INLINE --
+# one fetch is bounded at FETCH_DEADLINE_SECONDS and is an ordinary length for
+# a request, unlike the 240s full sweep the button above merely requests.
+
+PAGE = """
+<html><body>
+<li><a href="/events/464372">Anniversary Day 2</a>
+    <span>2026-11-15</span><a href="/places/1">Zepp Haneda</a></li>
+</body></html>
+"""
+
+
+async def _artist(client, **overrides):
+    """One artist tag with an actor URL. Returns its id."""
+    fields = dict(
+        name="Liyuu", kind=TagKind.ARTIST, slug="liyuu",
+        eventernote_url="https://www.eventernote.com/actors/Liyuu/34637",
+    )
+    fields.update(overrides)
+    async with client.db() as s:
+        tag = Tag(**fields)
+        s.add(tag)
+        await s.flush()
+        tag_id = tag.id
+        await s.commit()
+    return tag_id
+
+
+def _with_fetcher(client, fetcher):
+    """Run the REAL sweep_one_tag, stubbing only the network.
+
+    Patched at the route module's own name because `fetcher` is a default
+    argument bound at def time -- monkeypatching app.discovery.fetch_actor_events
+    would do nothing at all, and the test would silently reach eventernote.com.
+    """
+    real = discoveries.sweep_one_tag
+
+    async def patched(session, tag, now, **kwargs):
+        return await real(session, tag, now, fetcher=fetcher)
+
+    client.monkeypatch.setattr(discoveries, "sweep_one_tag", patched)
+
+
+async def _fetch_page(url, transport=None):
+    return PAGE
+
+
+async def _leads(client):
+    async with client.db() as s:
+        return (await s.execute(select(DiscoveredEvent))).scalars().all()
+
+
+async def test_an_editor_cannot_sweep_one_tag(client):
+    """Admin-only, like every other discovery route: it hits a third party, and
+    the Tags dialog it is reached from only needs an editor."""
+    tag_id = await _artist(client)
+    _with_fetcher(client, _fetch_page)
+    login_as(client, EDITOR_ID, "editor")
+    assert client.post(f"/admin/discoveries/sweep/{tag_id}").status_code == 403
+    assert await _leads(client) == [], "the refused post wrote nothing"
+
+
+async def test_signed_out_cannot_sweep_one_tag(client):
+    """Signed out is a redirect, not a 403 (invariant 5) -- and still no write."""
+    tag_id = await _artist(client)
+    _with_fetcher(client, _fetch_page)
+    assert client.post(f"/admin/discoveries/sweep/{tag_id}").status_code == 303
+    assert await _leads(client) == []
+
+
+async def test_the_admin_sweeps_one_tag_inline(client):
+    """It runs in the request, unlike the full sweep: the leads exist by the
+    time the redirect is issued."""
+    tag_id = await _artist(client)
+    _with_fetcher(client, _fetch_page)
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(f"/admin/discoveries/sweep/{tag_id}")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin/discoveries?swept=ok&new=1"
+    rows = await _leads(client)
+    assert len(rows) == 1 and rows[0].eventernote_event_id == "464372"
+
+
+async def test_a_swept_tag_lands_on_the_page_that_shows_its_leads(client):
+    """The redirect target is the point: the operator sees what the check
+    found, not the Tags dialog they pressed it from."""
+    tag_id = await _artist(client)
+    _with_fetcher(client, _fetch_page)
+    login_as(client, ADMIN_ID, "reiji")
+    location = client.post(f"/admin/discoveries/sweep/{tag_id}").headers["location"]
+    body = client.get(location).text
+    assert "Anniversary Day 2" in body
+    assert "1 new lead" in body
+
+
+async def test_a_sweep_that_finds_nothing_says_so(client):
+    """Nothing-new and could-not-reach are the two answers this button exists
+    to tell apart, so the quiet one needs its own words."""
+    tag_id = await _artist(client)
+
+    async def empty(url, transport=None):
+        return "<html></html>"
+
+    _with_fetcher(client, empty)
+    login_as(client, ADMIN_ID, "reiji")
+    location = client.post(f"/admin/discoveries/sweep/{tag_id}").headers["location"]
+    assert location == "/admin/discoveries?swept=ok&new=0"
+    body = client.get(location).text
+    assert "nothing the catalogue does not already have" in body
+    assert "Could not read" not in body
+
+
+async def test_a_failed_fetch_does_not_500_and_tells_the_operator(client):
+    """Eventernote timed out on 12 of 86 fetches in a live run. A 500 here would
+    be the common case, and a cheerful "0 new leads" would be a lie."""
+    tag_id = await _artist(client)
+
+    async def boom(url, transport=None):
+        raise DiscoveryFetchError("timed out")
+
+    _with_fetcher(client, boom)
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(f"/admin/discoveries/sweep/{tag_id}")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin/discoveries?swept=failed&new=0"
+    body = client.get(r.headers["location"]).text
+    assert "Could not read that artist" in body
+    assert "new lead" not in body
+
+
+async def test_a_tag_with_no_eventernote_url_is_reported_not_swept(client):
+    """The button is hidden without a URL, but the route is reachable anyway.
+    Its own status, because the remedy is to fix the URL rather than retry."""
+    tag_id = await _artist(client, eventernote_url=None)
+
+    async def never(url, transport=None):
+        raise AssertionError("should not fetch")
+
+    _with_fetcher(client, never)
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(f"/admin/discoveries/sweep/{tag_id}")
+    assert r.headers["location"] == "/admin/discoveries?swept=no_actor&new=0"
+    body = client.get(r.headers["location"]).text
+    assert "not an actor page" in body
+    # LOAD-BEARING COPY, not decoration. Checking navigates away and discards
+    # unsaved dialog edits, so an operator who retypes the URL without saving
+    # sweeps the OLD value and lands on this identical banner -- a loop with no
+    # tell. Telling them to fix it without telling them to save is the bug.
+    assert "and save" in body
+    assert "discards unsaved edits" in body
+
+
+async def test_sweeping_an_unknown_tag_is_a_404(client):
+    """Following dismiss: a read that never happened must not report a
+    cheerful 303."""
+    login_as(client, ADMIN_ID, "reiji")
+    assert client.post("/admin/discoveries/sweep/999").status_code == 404
+
+
+async def test_a_one_tag_sweep_leaves_the_daily_clock_and_cursor_alone(client):
+    """Through the route, not only the function: `last_run_at` would displace
+    the day's automatic sweep of all 86, and the cursor would make the next full
+    sweep skip artists it never read."""
+    async with client.db() as s:
+        s.add(DiscoveryState(
+            id=1, last_run_at=NOW, last_fetched=86, last_failed=0,
+            sweep_cursor_tag_id=52,
+        ))
+        await s.commit()
+    tag_id = await _artist(client)
+    _with_fetcher(client, _fetch_page)
+    login_as(client, ADMIN_ID, "reiji")
+    assert client.post(f"/admin/discoveries/sweep/{tag_id}").status_code == 303
+    assert len(await _leads(client)) == 1, "it really did sweep"
+    state = await _state(client)
+    assert state.last_run_at == NOW and state.last_fetched == 86
+    assert state.sweep_cursor_tag_id == 52
+
+
+async def test_a_plain_visit_carries_no_sweep_banner(client):
+    """The control for every banner above: they come from the query parameter,
+    not from the template printing them unconditionally."""
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "Checked that artist" not in body
+    assert "Could not read" not in body
+    assert "not an actor page" not in body
+    # Also the control for the no_actor banner's "and save" clause above: it
+    # proves that assertion reads the banner rather than page furniture.
+    assert "and save" not in body
+    assert "discards unsaved edits" not in body
+
+
+async def test_an_invented_swept_code_never_reaches_the_page(client):
+    """`swept` is a CLOSED vocabulary, filtered to None in the route before the
+    template ever sees it -- so a hand-typed value cannot select a branch, and
+    cannot be echoed by a template that later grows an else. The URL of a page
+    an operator lands on ends up in logs and history, which is why only codes
+    ever ride in it."""
+    login_as(client, ADMIN_ID, "reiji")
+    # A sentinel rather than a <script> payload: the page legitimately carries
+    # both the word "script" and SVG path data, so a substring check against
+    # markup would pass or fail for reasons that have nothing to do with this.
+    r = client.get("/admin/discoveries?swept=zzsentinelzz&new=9")
+    assert r.status_code == 200
+    assert "zzsentinelzz" not in r.text
+    assert "Checked that artist" not in r.text
+
+
+async def test_a_negative_lead_count_reads_as_none(client):
+    """`new` is a plain integer off the URL. A crafted negative would otherwise
+    render "-5 new leads" -- a number the app never counted."""
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries?swept=ok&new=-5").text
+    assert "nothing the catalogue does not already have" in body
+    # "listed below" belongs to the count branch alone. A bare "-5" check would
+    # collide with the SVG path data in the page's own icons.
+    assert "listed below" not in body
+
+
+# -- The Tags page button -------------------------------------------------
+
+
+def _tags_dialog(client, tag_id):
+    """The one tag dialog, so a button is asserted about THAT tag."""
+    body = client.get("/tags").text
+    start = body.find(f'id="tag-dialog-{tag_id}"')
+    assert start != -1, "the dialog is on the page"
+    return body[start:body.find("</dialog>", start)]
+
+
+async def test_the_tags_page_offers_the_button_to_an_admin(client):
+    tag_id = await _artist(client)
+    login_as(client, ADMIN_ID, "reiji")
+    assert f"/admin/discoveries/sweep/{tag_id}" in _tags_dialog(client, tag_id)
+
+
+async def test_an_editor_does_not_see_the_button(client):
+    """An additional narrowing, not a replacement: the dialog is editor-gated,
+    the sweep is admin-only, and a visible button that 403s would be a lie."""
+    tag_id = await _artist(client)
+    login_as(client, EDITOR_ID, "editor")
+    assert f"/admin/discoveries/sweep/{tag_id}" not in _tags_dialog(client, tag_id)
+
+
+async def test_a_tag_with_no_eventernote_url_offers_no_button(client):
+    """Nothing to sweep."""
+    tag_id = await _artist(client, eventernote_url=None)
+    login_as(client, ADMIN_ID, "reiji")
+    assert f"/admin/discoveries/sweep/{tag_id}" not in _tags_dialog(client, tag_id)
+
+
+async def test_a_venue_offers_no_button(client):
+    """A venue has no actor page, and the URL column is shared across kinds --
+    so the kind is a condition of its own, not an implication of the URL."""
+    tag_id = await _artist(
+        client, name="Zepp Haneda", kind=TagKind.VENUE, slug="zepp",
+        eventernote_url="https://www.eventernote.com/actors/x/1",
+    )
+    login_as(client, ADMIN_ID, "reiji")
+    assert f"/admin/discoveries/sweep/{tag_id}" not in _tags_dialog(client, tag_id)
+
+
+async def test_the_button_never_nests_inside_the_edit_form(client):
+    """A <form> inside a <form> is invalid HTML and silently breaks the outer
+    one's submission -- so this button is a sibling, like Delete. Asserted by
+    reading the dialog rather than by eye: the failure is invisible in a
+    browser until Save stops working."""
+    tag_id = await _artist(client)
+    login_as(client, ADMIN_ID, "reiji")
+    dialog = _tags_dialog(client, tag_id)
+    edit_open = dialog.find(f'id="tag-edit-{tag_id}"')
+    edit_close = dialog.find("</form>", edit_open)
+    sweep = dialog.find(f"/admin/discoveries/sweep/{tag_id}")
+    assert -1 < edit_open < edit_close < sweep, "the sweep form starts after the edit form ends"

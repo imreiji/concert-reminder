@@ -11,7 +11,16 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, DiscoveredEvent, DiscoveryState, Notification, Tag, User
+from app.db.models import (
+    Base,
+    Concert,
+    ConcertDay,
+    DiscoveredEvent,
+    DiscoveryState,
+    Notification,
+    Tag,
+    User,
+)
 from app.db.service import (
     discovery_due,
     discovery_status,
@@ -19,7 +28,7 @@ from app.db.service import (
     stamp_discovery_run,
     sweep_requested,
 )
-from app.discovery import DiscoveryFetchError, run_sweep
+from app.discovery import DiscoveryFetchError, run_sweep, sweep_one_tag
 from app.domain.discovery_message import DM_LIST_LIMIT
 from app.domain.types import TagKind
 from app.scheduler import heartbeat
@@ -675,3 +684,175 @@ async def test_a_stamp_with_no_report_still_clears_the_request(db):
         await stamp_discovery_run(s, NOW)
         await s.commit()
         assert not await sweep_requested(s)
+
+
+# ── One artist, inline ────────────────────────────────────────────────────
+#
+# The narrow sweep behind the Tags page's "Check eventernote now" button. What
+# matters here is not that it records leads -- run_sweep's tests already cover
+# the diff it shares -- but the THREE things it must not do. Each would be a
+# silent regression in the DAILY sweep, visible nowhere near this button.
+
+
+async def _one_tag(s, url="https://www.eventernote.com/actors/Liyuu/34637"):
+    """One artist tag, returned, with no admin user and no state row."""
+    tag = Tag(name="Liyuu", kind=TagKind.ARTIST, slug="liyuu", eventernote_url=url)
+    s.add(tag)
+    await s.commit()
+    return tag
+
+
+async def test_a_one_tag_sweep_records_leads(db):
+    """The positive control for the three below: without it they would all pass
+    against a function that read nothing at all."""
+    async with db() as s:
+        tag = await _one_tag(s)
+
+        async def fake_fetch(url, transport=None):
+            return PAGE
+
+        report = await sweep_one_tag(s, tag, NOW, fetcher=fake_fetch)
+        await s.commit()
+        assert report.status == "ok" and report.new_leads == 1
+        row = (await s.execute(select(DiscoveredEvent))).scalar_one()
+        assert row.eventernote_event_id == "464372"
+        assert row.first_seen_via_tag_id == tag.id
+
+
+async def test_a_one_tag_sweep_does_not_stamp_the_daily_clock(db):
+    """`last_run_at` is the 24h clock. Stamping it here would let a check of one
+    artist displace that day's automatic sweep of all 86 -- and the counts on
+    /admin/discoveries would describe one page as though they described the
+    whole run."""
+    async with db() as s:
+        tag = await _one_tag(s)
+        s.add(DiscoveryState(
+            id=1, last_run_at=NOW - dt.timedelta(hours=23),
+            last_fetched=86, last_failed=0, last_truncated=False,
+        ))
+        await s.commit()
+
+        async def fake_fetch(url, transport=None):
+            return PAGE
+
+        report = await sweep_one_tag(s, tag, NOW, fetcher=fake_fetch)
+        await s.commit()
+        assert report.new_leads == 1, "it really did sweep"
+        state = await s.get(DiscoveryState, 1)
+        assert state.last_run_at == NOW - dt.timedelta(hours=23)
+        assert state.last_fetched == 86 and state.last_failed == 0
+        # The daily sweep is still due at the hour it was already due.
+        assert not await discovery_due(s, NOW)
+
+
+async def test_a_one_tag_sweep_does_not_move_the_sweep_cursor(db):
+    """The cursor is accumulated progress through the FULL tag list. One artist
+    read out of order is not progress through it, and writing here would make
+    the next full sweep resume past artists it never read -- or, with None,
+    restart at the head and starve the tail the cursor exists to protect."""
+    async with db() as s:
+        tag = await _one_tag(s)
+        s.add(DiscoveryState(id=1, sweep_cursor_tag_id=52))
+        await s.commit()
+
+        async def fake_fetch(url, transport=None):
+            return PAGE
+
+        report = await sweep_one_tag(s, tag, NOW, fetcher=fake_fetch)
+        await s.commit()
+        assert report.new_leads == 1, "it really did sweep"
+        assert (await s.get(DiscoveryState, 1)).sweep_cursor_tag_id == 52
+
+
+async def test_a_one_tag_sweep_queues_no_dm(db, monkeypatch):
+    """The operator is looking at the page they will be redirected to. A Discord
+    DM about the button they just pressed is noise -- and the admin whitelist is
+    deliberately set here, so this fails for the absent notice specifically and
+    not merely for there being no admin to notify."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    async with db() as s:
+        s.add(User(discord_id=42, username="reiji"))
+        tag = await _one_tag(s)
+
+        async def fake_fetch(url, transport=None):
+            return PAGE
+
+        report = await sweep_one_tag(s, tag, NOW, fetcher=fake_fetch)
+        await s.commit()
+        assert report.new_leads == 1, "it really did find something to announce"
+        assert (await s.execute(select(Notification))).scalars().all() == []
+        # Nothing was announced, so the lead is still un-stamped and the next
+        # DAILY sweep is free to report it in the ordinary way.
+        assert (await s.execute(select(DiscoveredEvent))).scalar_one().announced_at is None
+
+
+async def test_a_one_tag_sweep_reports_a_fetch_failure_instead_of_raising(db):
+    """Eventernote timed out on 12 of 86 fetches in a live run, so this is the
+    ordinary case, not the exotic one. It must come back as a distinguishable
+    status -- reported as zero leads it would read as a healthy quiet check."""
+    async with db() as s:
+        tag = await _one_tag(s)
+
+        async def boom(url, transport=None):
+            raise DiscoveryFetchError("timed out")
+
+        report = await sweep_one_tag(s, tag, NOW, fetcher=boom)
+        await s.commit()
+        assert report.status == "failed" and report.new_leads == 0
+        assert (await s.execute(select(DiscoveredEvent))).scalars().all() == []
+
+
+async def test_a_one_tag_sweep_survives_an_unparseable_page(db):
+    """`Exception`, not DiscoveryFetchError: parse_actor_events builds a date()
+    out of a regex match, so `2026年2月30` raises ValueError -- from the parse,
+    not from the fetch."""
+    async with db() as s:
+        tag = await _one_tag(s)
+
+        async def impossible_date(url, transport=None):
+            return (
+                '<html><body><li><a href="/events/1">X</a>'
+                "<span>2026-02-30</span></li></body></html>"
+            )
+
+        assert (await sweep_one_tag(s, tag, NOW, fetcher=impossible_date)).status == "failed"
+
+
+async def test_a_one_tag_sweep_of_a_tag_with_no_url_fetches_nothing(db):
+    """The button is hidden without a URL, but the route is reachable anyway --
+    and `no_actor` is its own status because the remedy is to fix the URL, not
+    to try again later."""
+    async with db() as s:
+        tag = await _one_tag(s, url=None)
+        report = await sweep_one_tag(s, tag, NOW, fetcher=_never_called)
+        assert report.status == "no_actor" and report.new_leads == 0
+
+
+async def test_a_one_tag_sweep_of_a_non_actor_url_fetches_nothing(db):
+    """An eventernote URL that is not an actor page yields no actor id."""
+    async with db() as s:
+        tag = await _one_tag(s, url="https://www.eventernote.com/events/464372")
+        assert (await sweep_one_tag(s, tag, NOW, fetcher=_never_called)).status == "no_actor"
+
+
+async def test_a_one_tag_sweep_shares_the_daily_sweep_s_diff(db):
+    """It must never grow its own idea of what the catalogue already has: a leg
+    carrying the event id is branch 1 of record_discovered, and the lead is
+    dropped entirely rather than reported."""
+    async with db() as s:
+        tag = await _one_tag(s)
+        s.add(Concert(title="Held", event_id="held"))
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=1, label="Day 2", eventernote_event_id="464372",
+            starts_at_utc=datetime(2026, 11, 14, 16, 0, tzinfo=UTC),
+        ))
+        await s.commit()
+
+        async def fake_fetch(url, transport=None):
+            return PAGE
+
+        report = await sweep_one_tag(s, tag, NOW, fetcher=fake_fetch)
+        await s.commit()
+        assert report.status == "ok" and report.new_leads == 0
+        assert (await s.execute(select(DiscoveredEvent))).scalars().all() == []

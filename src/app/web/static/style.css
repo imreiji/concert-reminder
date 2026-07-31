@@ -1397,8 +1397,16 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 /* Delete tag is a real POST, so it is wrapped in its own <form> (the demo's
    button has no form -- it is JS-only). .df is a flex row, so the actual
    flex item pushed right must be the FORM, not the button nested inside it;
-   margin-left: auto on the button alone has no effect. */
-.df form { margin-left: auto; }
+   margin-left: auto on the button alone has no effect.
+
+   :last-child, not `.df form`, and that scope is load-bearing. The bare
+   selector was written when Delete was the ONLY form in the footer; once the
+   admin-only "Check eventernote now" form joined it, BOTH forms resolved
+   margin-left to auto and the free space SPLIT between them -- measured at a
+   1440px viewport, 52.28px each, stranding the sweep button mid-footer with a
+   60px gap on either side instead of sitting beside Cancel. Only the LAST
+   footer item is pushed right; everything before it stays one left group. */
+.df form:last-child { margin-left: auto; }
 
 /* ── First-run capture flow (/setup) ─────────────────────────────────────
    Ported from the setup concept. Tile styling hangs off :has(input:checked)

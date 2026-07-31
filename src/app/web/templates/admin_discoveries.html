@@ -12,6 +12,39 @@
   information, so rounds still come from the official page.
 </p>
 
+{#- The result of a per-tag "Check eventernote now" press on the Tags page,
+    which redirects here so anything it found is visible where the operator
+    lands. `swept` is a CODE from a closed set (routes/discoveries.py's
+    SWEPT_CODES) and the wording lives here, so nothing operator- or
+    editor-typed ever rides in the URL. The failing branch is not the exotic
+    one: a live sweep timed out on 12 of 86 pages, and "swept, found nothing"
+    and "could not reach the page" are exactly the two answers this button
+    exists to tell apart. -#}
+{% if swept == "ok" %}
+<div class="edgecard ok">
+  Checked that artist's Eventernote page:
+  {% if swept_new %}{{ swept_new }} new lead{{ '' if swept_new == 1 else 's' }},
+  listed below.{% else %}nothing the catalogue does not already have.{% endif %}
+</div>
+{% elif swept == "failed" %}
+<div class="banner warn">
+  Could not read that artist's Eventernote page — nothing was checked. The page
+  may be slow, redesigned or blocking us; try again, and see journalctl for the
+  actual error.
+</div>
+{% elif swept == "no_actor" %}
+{#- "and save" is not a nicety. Checking navigates AWAY from the tag dialog, so
+    an operator who retypes the URL and presses Check without saving loses the
+    edit, sweeps the OLD stored URL, and lands back on this exact banner --
+    a loop with no tell. The instruction has to name the save. -#}
+<div class="banner warn">
+  That tag's eventernote URL is not an actor page, so there was nothing to
+  read. Fix it on the Tags page <b>and save</b>, then check again — checking
+  discards unsaved edits, so an unsaved fix reads the old URL and lands you
+  back here. It should look like https://www.eventernote.com/actors/…
+</div>
+{% endif %}
+
 {#- How the last sweep went, above the table and rendered whether or not there
     are leads. A broken parser, a blocked IP and a genuinely quiet day all show
     the same empty table; only these counts tell them apart. NULL counts mean
