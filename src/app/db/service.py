@@ -5054,12 +5054,48 @@ async def attach_tag(
 
 
 async def detach_tag(session: AsyncSession, concert_id: int, tag_id: int) -> None:
-    res = await session.execute(
+    """Remove a tag from a concert -- and, for a CHARACTER, her seiyuu with her.
+
+    Owner rule (2026-08-01), with one refinement that is load-bearing: the
+    seiyuu goes ONLY IF no other still-attached character shares her. A seiyuu
+    can voice two characters on one bill, and detaching her because one was
+    pruned would silently drop the other's performer.
+
+    KNOWN EDGE, accepted rather than solved: concert_tags does not record WHY a
+    tag was attached -- group expansion has had that blind spot since it
+    shipped -- so a seiyuu who was ALSO there in her own right is removed when
+    the character is pruned, and the editor re-adds her. Building provenance to
+    fix that would touch every attach path for a rare case.
+    """
+    tag = await session.get(Tag, tag_id)
+    await _detach_one(session, concert_id, tag_id)
+
+    if tag is None or tag.kind is not TagKind.CHARACTER or tag.voiced_by_tag_id is None:
+        await session.flush()
+        return
+
+    still_needed = await session.scalar(
+        select(func.count())
+        .select_from(ConcertTag)
+        .join(Tag, Tag.id == ConcertTag.tag_id)
+        .where(
+            ConcertTag.concert_id == concert_id,
+            Tag.kind == TagKind.CHARACTER,
+            Tag.voiced_by_tag_id == tag.voiced_by_tag_id,
+        )
+    )
+    if not still_needed:
+        await _detach_one(session, concert_id, tag.voiced_by_tag_id)
+    await session.flush()
+
+
+async def _detach_one(session: AsyncSession, concert_id: int, tag_id: int) -> None:
+    """The single-row delete detach_tag used to be."""
+    row = (await session.execute(
         select(ConcertTag).where(
             ConcertTag.concert_id == concert_id, ConcertTag.tag_id == tag_id
         )
-    )
-    row = res.scalar_one_or_none()
+    )).scalar_one_or_none()
     if row is not None:
         await session.delete(row)
         await session.flush()
