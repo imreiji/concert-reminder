@@ -1364,11 +1364,16 @@ diff. The concert silently loses the performer on the first save. A second
 identical save restores her, which makes it a save-twice recovery rather than a
 visible error.
 
-Fix the ordering as well as the resolution. Three shapes work; pick one and say
+Fix the ordering as well as the resolution. Two shapes work; pick one and say
 why:
-- move the detach loop after the attach loop;
 - skip the cascade for any id present in `after_ids`;
 - recompute the attach set from actual post-detach attachment.
+
+**A third shape was listed here and is WRONG** — "move the detach loop after the
+attach loop" does not fix it, verified empirically during implementation. The
+seiyuu is in BOTH `before_ids` and `after_ids`, so she appears in neither diff
+and the attach loop never sees her whenever it runs. Recorded so nobody goes
+looking for a fix that cannot exist.
 
 **The naive version of the third has a trap.** Iterating `after_ids` and letting
 `attach_tag`'s `_is_attached` deduplicate puts the re-attached seiyuu into
