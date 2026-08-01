@@ -1409,6 +1409,71 @@ def test_group_parent_must_be_franchise(client):
     assert r.status_code == 422
 
 
+async def test_group_may_be_parented_to_a_group_subunit(client):
+    """Widened 2026-08-01: a subunit belongs to its group the same way a
+    group belongs to its franchise, so GROUP -> GROUP is now permitted."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "group",
+    })
+    r = client.post("/tags", data={
+        "name_en": "CatChu!", "name_zh": "CatChu!", "name": "CatChu!", "kind": "group",
+        "parent_id": 1,
+    })
+    assert r.status_code == 303
+    async with client.db() as s:
+        subunit = (await s.execute(select(Tag).where(Tag.name == "CatChu!"))).scalar_one()
+        assert subunit.parent_id == 1
+
+
+async def test_character_may_be_parented_to_a_franchise(client):
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Idolmaster", "name_zh": "Idolmaster", "name": "Idolmaster", "kind": "franchise",
+    })
+    r = client.post("/tags", data={
+        "name_en": "Chihaya Kisaragi", "name_zh": "Chihaya Kisaragi", "name": "如月千早",
+        "kind": "character", "parent_id": 1,
+    })
+    assert r.status_code == 303
+    async with client.db() as s:
+        character = (await s.execute(
+            select(Tag).where(Tag.kind == TagKind.CHARACTER)
+        )).scalar_one()
+        assert character.parent_id == 1
+
+
+def test_character_parent_must_be_franchise_not_artist(client):
+    """The case the whole design turns on: a CHARACTER parented to an ARTIST
+    would give the seiyuu link two competing homes -- `parent_id` AND
+    `voiced_by_tag_id` -- so this must 422 exactly like GROUP-under-ARTIST
+    already does above."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Haruka Amami", "name_zh": "Haruka Amami", "name": "Haruka Amami",
+        "kind": "artist",
+    })
+    r = client.post("/tags", data={
+        "name_en": "Chihaya Kisaragi", "name_zh": "Chihaya Kisaragi", "name": "如月千早",
+        "kind": "character", "parent_id": 1,
+    })
+    assert r.status_code == 422
+
+
+def test_a_kind_that_takes_no_parent_is_refused(client):
+    """VENUE (like ARTIST) is in neither branch of the `allowed` dict, so any
+    parent at all -- even a franchise -- must be refused."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Hasunosora", "name_zh": "Hasunosora", "name": "Hasunosora", "kind": "franchise",
+    })
+    r = client.post("/tags", data={
+        "name_en": "Zepp Haneda", "name_zh": "Zepp Haneda", "name": "Zepp Haneda",
+        "kind": "venue", "parent_id": 1,
+    })
+    assert r.status_code == 422
+
+
 async def test_creation_supports_multiple_groups_and_franchises(client):
     """Collab events: two franchises, two groups, union of artists minus prunes."""
     login_as(client, EDITOR_ID, "reiji")
