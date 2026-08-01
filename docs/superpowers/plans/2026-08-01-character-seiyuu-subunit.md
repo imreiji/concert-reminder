@@ -1295,6 +1295,83 @@ Report what you saw. If the concert is NOT tracked, the chain is broken somewher
 
 ---
 
+## Task 10: The concert editor handles character tags
+
+**ADDED 2026-08-01, mid-execution.** Task 3's review found that the plan never
+scheduled this, and without it the feature is unreachable and self-destructing:
+`resolve_tags` is called only for FRANCHISE / GROUP / ARTIST / VENUE, so there
+is **no way to attach a character to a concert through the UI at all**, and
+`edit_concert` builds `desired_tags` from those four kinds while `before_ids`
+holds every non-VENUE attached tag — so every attached CHARACTER lands in
+`before_ids - after_ids` and is **silently detached on any edit save**.
+
+Today that detach is survivable, because the seiyuu is an ARTIST, is preselected,
+and therefore appears in both sets. **After Task 4 it is not**: pruning a
+character prunes its seiyuu, so a routine edit of an im@s concert would strip
+both the character and the performer this entire feature exists to reach.
+
+**EXECUTE THIS IMMEDIATELY AFTER TASK 4**, before Task 5.
+
+**Files:**
+- Modify: `src/app/web/routes/concerts.py` (`create_concert_row`, `create_concert`, `edit_concert`, the `initial_selected` context)
+- Modify: the shared editor tag-picker partial (find it — `concert_new.html` and `concert_edit.html` both include it)
+- Test: `tests/test_concert_character_tags.py`
+
+**Interfaces:**
+- Consumes: `TagKind.CHARACTER` (Task 1), `attach_tag`'s chaining (Task 3), the prune rule (Task 4).
+- Produces: `character_tags: list[int]` accepted by the create and edit routes.
+
+- [ ] **Step 1: Write the failing regression test**
+
+The load-bearing one is the survival test — it is the exact bug the review found:
+
+```python
+async def test_a_character_survives_an_edit_save(client):
+    """The regression this task exists for. edit_concert diffs desired_tags
+    against every attached non-venue tag, so a kind it does not resolve is
+    detached on save. Combined with Task 4's prune rule that would strip the
+    seiyuu too, silently undoing the whole feature on a routine edit."""
+```
+
+Seed a concert carrying a CHARACTER (and, through Task 3's chaining, her
+seiyuu). POST the edit form with the character id in `character_tags`. Re-read
+`concert_tags` from a fresh session and assert BOTH the character and the seiyuu
+are still attached.
+
+Then a second test asserting the same POST **without** `character_tags` — an
+older form, or one that predates this field — does not silently strip them
+either, or, if the plan's chosen behaviour is that omission means removal, that
+this is deliberate and asserted. Decide which, and say why in your report.
+
+Also: creating a concert with a character attaches the character AND her seiyuu,
+and `initial_selected` round-trips the character so the edit page renders it
+already ticked.
+
+- [ ] **Step 2: Run to verify it fails**
+
+Expected: the character is missing after the edit save.
+
+- [ ] **Step 3: Implement**
+
+Add `TagKind.CHARACTER` to the resolve/collect path in `create_concert_row` and
+`edit_concert`, a `character_tags: list[int] = Form(default=[])` parameter on
+both routes, a `character` bucket in `initial_selected`, and a character section
+in the shared picker partial following the existing kind sections exactly.
+
+The picker is user-facing and translated: any new visible label needs `_()` and
+BOTH catalogues filled non-fuzzy.
+
+- [ ] **Step 4: Run, lint, commit**
+
+```bash
+uv run --isolated pytest -q
+uv run --isolated ruff check .
+git add -A
+git commit -m "feat: attach character tags from the concert editor"
+```
+
+---
+
 ## Self-Review Notes
 
 **Spec coverage.** `TagKind.CHARACTER` and `voiced_by_tag_id` (Task 1); `parent_id` widening and the cycle guard (Task 2); attach chaining, its asymmetry, and the `expand=False` carve-out (Task 3); the prune rule with its shared-seiyuu refinement (Task 4); both display rules, the standalone-seiyuu rule and the chosen shapes (Task 5); the round-trip with `COMPARABLE_FIELDS` 11 → 12 (Task 6); the editor surface (Task 7); docs (Task 8); an end-to-end gate (Task 9).
