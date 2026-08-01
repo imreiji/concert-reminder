@@ -291,11 +291,13 @@ seiyuu chips they were built with.
   reaches future attachments only. Old shows keep the seiyuu chips they were
   built with, and that is deliberate.
 
-## Suggested split into plans
+## Shape of the work
 
-This is one coherent design but likely two implementation plans, in this order,
-because the second is useless before the first and the third is an operation
-rather than code:
+**Owner ruling (2026-08-01): ONE plan**, covering all of the below. A split was
+proposed and declined -- the pieces land together.
+
+The ordering below still holds inside that plan, because the second half is
+useless before the first and the third is an operation rather than code:
 
 1. **The model and its behaviour** -- `TagKind.CHARACTER`, `voiced_by_tag_id`,
    `parent_id` widening plus the cycle guard, attach-time chaining, the prune
