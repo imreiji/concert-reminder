@@ -40,7 +40,7 @@ src/app/
                  importer and the Eventernote sweep
   discovery.py   the daily Eventernote sweep: walk each artist's page, record
                  what the catalogue is missing, queue one digest DM
-tests/           pytest; 1835 of them, and domain logic is tested hardest
+tests/           pytest; 2008 of them, and domain logic is tested hardest
 deploy/          setup.sh, systemd unit, Caddyfile, backup.sh
 docs/            deploy runbook, the local dev-bot guide, per-feature design
                  specs and plans, and the concept demos that are the design

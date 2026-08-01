@@ -27,6 +27,7 @@ def test_concert_to_yaml_full_shape():
         kind="concert",
         franchises=["Hasunosora"],
         groups=["Kaho's Class"],
+        characters=["Chihaya Kisaragi"],
         artists=["Kaho", "Sayaka"],
         venues=["Yokohama Arena"],
         days=[
@@ -69,8 +70,13 @@ def test_concert_to_yaml_full_shape():
     assert data["kind"] == "concert"
     assert data["organizer"] == "LustQueen"
     assert data["categories"] == "concert, tour"
+    # `characters` joined the series block on 2026-08-01: the export dropped
+    # CHARACTER tags entirely, so an im@s concert re-imported as artists-only --
+    # the derived seiyuu survived (she is an ARTIST row) and the character, and
+    # with her the reason the concert reads as it does, was lost.
     assert data["series"] == {
-        "franchises": ["Hasunosora"], "groups": ["Kaho's Class"], "artists": ["Kaho", "Sayaka"],
+        "franchises": ["Hasunosora"], "groups": ["Kaho's Class"],
+        "characters": ["Chihaya Kisaragi"], "artists": ["Kaho", "Sayaka"],
     }
     assert data["venues"] == ["Yokohama Arena"]
     assert data["performers"] == ["Kaho", "Sayaka"]
@@ -113,7 +119,7 @@ def test_concert_to_yaml_handles_missing_optional_fields():
     text = concert_to_yaml(
         title="Bare Concert",
         kind=None,
-        franchises=[], groups=[], artists=[], venues=[],
+        franchises=[], groups=[], characters=[], artists=[], venues=[],
         days=[],
         rounds=[YamlRound(label="TBD round", kind="other")],
         notes=None,
@@ -140,7 +146,8 @@ def test_yaml_export_carries_every_label_variant():
     existing label_en. An export is data, not a viewer-facing render, so
     every variant is emitted -- no locale resolution happens here."""
     text = concert_to_yaml(
-        title="T", kind="tour", franchises=[], groups=[], artists=[], venues=[],
+        title="T", kind="tour", franchises=[], groups=[], characters=[], artists=[],
+        venues=[],
         days=[
             YamlDay(
                 label="2日目", label_en="Day 2", label_zh="第二天",
@@ -170,7 +177,8 @@ def test_yaml_export_carries_every_label_variant():
 
 def test_title_zh_and_notes_variants_export():
     text = concert_to_yaml(
-        title="T", kind=None, franchises=[], groups=[], artists=[], venues=[],
+        title="T", kind=None, franchises=[], groups=[], characters=[], artists=[],
+        venues=[],
         days=[], rounds=[], notes="メモ",
         title_zh="T中文", notes_en="note", notes_zh="笔记",
     )
@@ -182,7 +190,8 @@ def test_title_zh_and_notes_variants_export():
 
 def test_concert_to_yaml_is_deterministic():
     kwargs = dict(
-        title="C", kind="tour", franchises=[], groups=[], artists=[], venues=[],
+        title="C", kind="tour", franchises=[], groups=[], characters=[], artists=[],
+        venues=[],
         days=[YamlDay(label="Day 1", starts_at_utc=dt(8, 1))],
         rounds=[YamlRound(label="R1", kind="lottery_round")],
         notes=None,
@@ -196,7 +205,7 @@ def test_export_emits_event_id_and_no_slug():
     still tolerates it so older drafts keep working."""
     text = concert_to_yaml(
         title="6th", event_id="hasunosora-6th-live", kind=None,
-        franchises=[], groups=[], artists=[], venues=[], days=[], rounds=[],
+        franchises=[], groups=[], characters=[], artists=[], venues=[], days=[], rounds=[],
         notes=None,
     )
     assert "event_id: hasunosora-6th-live" in text

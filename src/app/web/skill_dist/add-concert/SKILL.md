@@ -102,6 +102,12 @@ you find actual application windows.
 - `series.artists`: list the PERFORMERS explicitly (from eventernote's
   cast list) -- group tags do not auto-expand on this path, and the cast
   actually announced is the truth anyway.
+- `series.characters`: for a bill credited to CHARACTERS rather than to the
+  performers who play them (an idolm@ster event bills 如月千早, not 今井麻美),
+  name the characters here. The app attaches each character's voice actor
+  automatically, so do NOT also list her under `series.artists` -- the
+  character is the credit and the seiyuu is derived from it. A Love Live-shaped
+  bill has no characters at all; leave the key out.
 - `performers`: the same cast list, one name per entry (this fills the
   free-text performers field).
 

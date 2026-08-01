@@ -94,7 +94,8 @@ def _yaml_day(**kw) -> YamlDay:
 
 def test_the_export_omits_the_key_when_a_leg_has_no_id():
     text = concert_to_yaml(
-        title="T", kind=None, franchises=[], groups=[], artists=[], venues=[],
+        title="T", kind=None, franchises=[], groups=[], characters=[], artists=[],
+        venues=[],
         days=[_yaml_day()], rounds=[], notes=None,
     )
     (performance,) = yaml.safe_load(text)["performances"]
@@ -103,7 +104,8 @@ def test_the_export_omits_the_key_when_a_leg_has_no_id():
 
 def test_the_export_writes_the_key_when_a_leg_has_one():
     text = concert_to_yaml(
-        title="T", kind=None, franchises=[], groups=[], artists=[], venues=[],
+        title="T", kind=None, franchises=[], groups=[], characters=[], artists=[],
+        venues=[],
         days=[_yaml_day(eventernote_event_id="464372")], rounds=[], notes=None,
     )
     (performance,) = yaml.safe_load(text)["performances"]
@@ -114,7 +116,8 @@ def test_export_then_parse_round_trips_the_id_per_leg():
     """The whole point: a concert exported to YAML and read back keeps every
     leg's id, on the SAME leg -- not shuffled, not collapsed to one."""
     text = concert_to_yaml(
-        title="T", kind=None, franchises=[], groups=[], artists=[], venues=[],
+        title="T", kind=None, franchises=[], groups=[], characters=[], artists=[],
+        venues=[],
         days=[
             _yaml_day(eventernote_event_id="464372"),
             YamlDay(

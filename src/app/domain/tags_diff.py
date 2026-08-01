@@ -18,15 +18,20 @@ from dataclasses import dataclass, field
 
 from app.domain.tags_yaml import ParsedTag, TagExport
 
-# The eleven fields that participate. `kind` is compared but never offered (see
+# The twelve fields that participate. `kind` is compared but never offered (see
 # plan_tag_import), and `handle` is the match key so it cannot differ. A field
 # missing from this tuple would silently never fill and never conflict -- it
 # would just be ignored -- which is why a test pins both the count and the set.
+#
+# `parent` and `voiced_by` are HANDLES rather than values, so they compare here
+# like any other string but are WRITTEN in apply_tag_import's second pass, once
+# every tag in the file exists.
 COMPARABLE_FIELDS = (
     "name",
     "name_en",
     "name_zh",
     "parent",
+    "voiced_by",
     "region",
     "city",
     "city_en",

@@ -2,7 +2,7 @@
 {% block title %}{{ _("tags") }} — dekimasen.app{% endblock %}
 {% block content %}
 {%- from "_variant_gaps.html" import variant_gaps with context %}
-{%- set KIND_LABELS = {"franchise": _("franchise"), "group": _("group"), "venue": _("venue"), "artist": _("performer")} %}
+{%- set KIND_LABELS = {"franchise": _("franchise"), "group": _("group"), "venue": _("venue"), "artist": _("performer"), "character": _("character")} %}
 <div class="tags-head">
   <h1>{{ _("Tags") }}</h1>
   <span class="note dim">
@@ -63,6 +63,7 @@
 {%- set is_group = t.kind.value == "group" -%}
 {%- set is_venue = t.kind.value == "venue" -%}
 {%- set is_artist = t.kind.value == "artist" -%}
+{%- set is_character = t.kind.value == "character" -%}
 {%- set kind_label = KIND_LABELS.get(t.kind.value, t.kind.value) -%}
 <dialog id="tag-dialog-{{ t.id }}" class="tagdlg">
   <div class="dh">
@@ -103,7 +104,29 @@
           data-variant-group: it is one ASCII value, not a translated trio. -#}
       <label class="fld"><span>{{ _("Handle") }}</span><input name="slug" maxlength="100"
         value="{{ t.slug }}"></label>
-      {% if is_group or is_artist %}
+      {% if is_character %}
+      {#- Her seiyuu. Kind-scoped to ARTIST tags exactly as the leg venue
+          picker is scoped to VENUEs -- resolve_seiyuu 422s on anything else,
+          so offering more here would only invite the refusal. A recast is
+          this one select re-pointed; nothing keeps a history.
+          The field renders ONLY on a character's dialog, which is what makes
+          edit_tag's omitted-leaves-alone rule cover every other kind's
+          submit. "— none —" posts 0, the explicit clear. -#}
+      <label class="fld"><span>{{ _("Voiced by") }}</span>
+        <select name="voiced_by_tag_id">
+          <option value="0">{{ _("— none —") }}</option>
+          {% for a in artist_tags %}<option value="{{ a.id }}"{% if t.voiced_by_tag_id == a.id %} selected{% endif %}>{{ loc(a, "name") }}</option>{% endfor %}
+        </select></label>
+      {% endif %}
+      {#- CHARACTERS TOO, and that is the point of the kind: 如月千早 has her own
+          Eventernote actor page, and the daily sweep is kind-blind, so this one
+          field is the whole "discovery is nearly free" payoff. Without it the
+          only way to give a character a URL was the catalogue import -- and
+          edit_tag then wiped it on the next rename.
+          `eventernote_kinds` is EVENTERNOTE_KINDS, the same table edit_tag
+          gates its write on: a kind that renders here and a kind that may be
+          written must never be two lists. -#}
+      {% if t.kind.value in eventernote_kinds %}
       <label class="fld"><span>{{ _("eventernote URL") }}</span>
         <input name="eventernote_url" type="url" value="{{ t.eventernote_url or '' }}"
                placeholder="https://www.eventernote.com/actors/…"></label>
@@ -164,11 +187,12 @@
         Three conditions, all narrowing: ADMIN (this dialog only needs an
         editor, and hitting a third party is not an editor's call -- the route
         answers 403 either way, so a visible button that 403s would be the
-        only lie here), artist or group (a venue has no actor page), and a URL
-        to read. The POST lands on /admin/discoveries, so unsaved edits in
-        this dialog are left behind -- deliberate: the leads are the thing
-        being asked for, and Save is right there. -#}
-    {% if user.is_admin and (is_artist or is_group) and t.eventernote_url %}
+        only lie here), a kind that HAS an actor page (artist, group or
+        character -- not a franchise, not a venue), and a URL to read. The POST
+        lands on /admin/discoveries, so unsaved edits in this dialog are left
+        behind -- deliberate: the leads are the thing being asked for, and Save
+        is right there. -#}
+    {% if user.is_admin and t.kind.value in eventernote_kinds and t.eventernote_url %}
     <form method="post" action="/admin/discoveries/sweep/{{ t.id }}">
       <button class="btn quiet">{{ _("Check eventernote now") }}</button>
     </form>
@@ -196,8 +220,14 @@
 {%- endif -%}
 {% endmacro %}
 
-{% macro group_row(g, mems) %}
-<div class="grow2">
+{#- One group row. `depth` is 0 for a group under its franchise (or under
+    none) and 1+ for a SUBUNIT -- a group whose parent is another group, which
+    the service emits directly beneath its parent. Nested rows sit on an
+    indent + rail, the same shape the concert page gives a subunit cluster
+    (.pcluster.sub), never a nested card. `--d` carries the depth so a subunit
+    of a subunit indents again; it is a server-computed integer, never text. -#}
+{% macro group_row(g, mems, depth) %}
+<div class="grow2{% if depth %} sub{% endif %}"{% if depth %} style="--d: {{ depth }}" data-subunit-of="{{ g.parent_id }}"{% endif %}>
   <span>{{ tag_chip(g, counts[g.id].concerts) }}</span>
   <span class="memb">{% for m in mems %}{{ tag_chip(m, none) }}{% else %}<em class="dim">{{ _("no members yet") }}</em>{% endfor %}</span>
 </div>
@@ -209,13 +239,13 @@
     {% for f, group_pairs in franchise_families %}
     <div class="fam">
       <div class="famhead">{{ tag_chip(f, counts[f.id].concerts) }}</div>
-      {% for g, mems in group_pairs %}{{ group_row(g, mems) }}{% endfor %}
+      {% for g, mems, depth in group_pairs %}{{ group_row(g, mems, depth) }}{% endfor %}
     </div>
     {% endfor %}
     {% if no_franchise_groups %}
     <div class="fam">
       <div class="famhead"><span class="eyebrow">{{ _("No franchise") }}</span></div>
-      {% for g, mems in no_franchise_groups %}{{ group_row(g, mems) }}{% endfor %}
+      {% for g, mems, depth in no_franchise_groups %}{{ group_row(g, mems, depth) }}{% endfor %}
     </div>
     {% endif %}
   </div>
@@ -230,6 +260,31 @@
       </div>
     </div>
     {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if characters %}
+  {#- Characters, each row naming her seiyuu. Its own section rather than a
+      row inside the franchise families: a character may be a member of a
+      group (where she already renders as a member chip) or belong to no
+      group at all, and the seiyuu link is visible nowhere else. The row
+      reuses the group row's layout classes -- a chip beside a chip is a
+      shape this page already has, and the two-shape callout grammar has no
+      third shape to invent here. data-character-id, never data-name: that
+      one is filterChips()'s hook and every chip below already carries it. -#}
+  <div class="tsec">
+    <h3>{{ _("Characters") }} <span>{{ _("— each with the performer who voices her") }}</span></h3>
+    <div class="fam">
+      {% for c, seiyuu in characters %}
+      <div class="grow2" data-character-id="{{ c.id }}">
+        <span>{{ tag_chip(c, counts[c.id].concerts) }}</span>
+        <span class="memb">
+          {%- if seiyuu %}<span class="dim">{{ _("voiced by") }}</span> {{ tag_chip(seiyuu, none) }}
+          {%- else %}<em class="dim">{{ _("no performer set") }}</em>{% endif -%}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
 
@@ -323,6 +378,7 @@
         <button type="button" data-kind="franchise" aria-pressed="false">{{ _("Franchise") }}</button>
         <button type="button" data-kind="group" aria-pressed="false">{{ _("Group") }}</button>
         <button type="button" data-kind="artist" aria-pressed="true">{{ _("Performer") }}</button>
+        <button type="button" data-kind="character" aria-pressed="false">{{ _("Character") }}</button>
         <button type="button" data-kind="venue" aria-pressed="false">{{ _("Venue") }}</button>
       </div>
       <span class="dim" id="kindHint">{{ _("A single performer. Can belong to a group, or stand alone.") }}</span>
@@ -345,7 +401,12 @@
       <span><b>{{ _("Already exists.") }}</b> <span class="dupe-msg"></span></span>
     </div>
 
-    <div class="fld kf k-group">
+    {#- Shared by group and character: ALLOWED_PARENT_KINDS lets both sit under
+        a franchise, and create_tag 422s any other pairing (a character under
+        an ARTIST above all -- that is what voiced_by_tag_id exists to prevent).
+        Only the visible copy submits: setTagKind disables the fields of every
+        other kind, so a kind switch can never post a stale parent. -#}
+    <div class="fld kf k-group k-character">
       <span>{{ _("Parent franchise") }}</span>
       <select name="parent_id">
         <option value="0">{{ _("— none —") }}</option>
@@ -353,7 +414,24 @@
       </select>
     </div>
 
-    <div class="fld kf k-group k-artist">
+    {#- Her seiyuu, ARTIST tags only (resolve_seiyuu refuses anything else).
+        Optional: a character with no performer recorded yet is a normal row,
+        and the Tags page says so rather than blocking the create. -#}
+    <div class="fld kf k-character">
+      <span>{{ _("Voiced by") }} <span class="plain">{{ _("(optional)") }}</span></span>
+      <select name="voiced_by_tag_id">
+        <option value="0">{{ _("— none —") }}</option>
+        {% for a in artist_tags %}<option value="{{ a.id }}">{{ loc(a, "name") }}</option>{% endfor %}
+      </select>
+    </div>
+
+    {#- Characters too: her own actor page is what makes discovery free for an
+        im@s bill. The class list is built from EVENTERNOTE_KINDS rather than
+        typed out, so this dialog and the edit dialog above and edit_tag's write
+        gate can only ever agree. setTagKind hides AND disables every
+        non-matching kind's inputs, so a franchise or venue submit still carries
+        nothing here. -#}
+    <div class="fld kf{% for k in eventernote_kinds %} k-{{ k }}{% endfor %}">
       <span>{{ _("eventernote URL") }} <span class="plain">{{ _("(optional)") }}</span></span>
       <input name="eventernote_url" type="url" placeholder="https://www.eventernote.com/actors/…">
     </div>
@@ -396,6 +474,7 @@
       "franchise": _("A franchise is the top level. It contains groups."),
       "group": _("A group contains performers. Attaching it to an event adds its members."),
       "artist": _("A single performer. Can belong to a group, or stand alone."),
+      "character": _("A character. Events credit her instead of the performer who voices her."),
       "venue": _("A place. Discover filters venues by region, not individually."),
     } | tojson }};
     const DUPE_MSG = {{ _("A {kind} tag with this name is already used by {concerts} and followed by {followers}. Creating another one will keep them separate because tags cannot be merged yet.") | tojson }};

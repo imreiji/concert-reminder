@@ -18,7 +18,7 @@ Sync semantics (per rule):
 
 import hashlib
 import secrets
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 
@@ -61,11 +61,12 @@ from app.domain.eventernote import ActorEvent
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.slugs import tag_slug_base
-from app.domain.tags_diff import ImportPlan
+from app.domain.tags_diff import ImportPlan, TagPlan
 from app.domain.tags_yaml import RESTORE_NOTES, TagExport, tags_to_yaml
 from app.domain.timezones import fmt_day_month, utc_to_jst
 from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import (
+    ALLOWED_PARENT_KINDS,
     Anchor,
     BroadcastMode,
     DeliveryOutcome,
@@ -4137,6 +4138,7 @@ async def create_tag_row(
     name_en: str | None = None,
     name_zh: str | None = None,
     parent_id: int | None = None,
+    voiced_by_tag_id: int | None = None,
     region: str | None = None,
     city: str | None = None,
     city_en: str | None = None,
@@ -4165,6 +4167,11 @@ async def create_tag_row(
         name_en=name_en,
         name_zh=name_zh,
         parent_id=parent_id,
+        # CHARACTER-only, and the caller owns the check that it names an
+        # ARTIST -- this constructor validates nothing (the catalogue importer
+        # warns-and-skips where the editor route 422s, and both would lose
+        # their voice if the rule moved down here).
+        voiced_by_tag_id=voiced_by_tag_id,
         region=region,
         city=city,
         city_en=city_en,
@@ -4178,6 +4185,37 @@ async def create_tag_row(
     if slug is None:
         await assign_tag_slug(session, tag)
     return tag
+
+
+async def would_create_tag_cycle(
+    session: AsyncSession, tag_id: int, parent_id: int
+) -> bool:
+    """Would parenting `tag_id` to `parent_id` close a loop?
+
+    GROUP -> GROUP made loops possible for the first time, and nothing in this
+    codebase walks parent_id transitively -- so a cycle would not be noticed
+    until something did, and then it would hang rather than fail. The guard
+    belongs at the write boundary, which is the only place a loop can be
+    created.
+
+    The `seen` set is not belt-and-braces: it terminates the walk on data that
+    is ALREADY looped (written before this guard existed, or by a direct DB
+    edit), where following parents alone would spin forever.
+    """
+    if tag_id == parent_id:
+        return True
+    seen: set[int] = {tag_id}
+    cursor: int | None = parent_id
+    while cursor is not None:
+        if cursor in seen:
+            # Reaching tag_id means the proposed parent is BELOW us, so the
+            # edge would close a loop. Reaching any other repeat means the
+            # table already contains a loop that does not involve us -- not a
+            # new cycle, but the reason the walk must stop rather than spin.
+            return cursor == tag_id
+        seen.add(cursor)
+        cursor = await session.scalar(select(Tag.parent_id).where(Tag.id == cursor))
+    return False
 
 
 @dataclass
@@ -4258,11 +4296,19 @@ async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
         kind=concert.kind.value if concert.kind else None,
         franchises=[t.name for t in concert.tags if t.kind is TagKind.FRANCHISE],
         groups=[t.name for t in concert.tags if t.kind is TagKind.GROUP],
+        # CHARACTERS, without which `export.zip` is not a faithful backup of an
+        # im@s concert: on a restore the derived seiyuu survives (she is an
+        # ARTIST row) but the character is lost, and with her the reason the
+        # concert reads the way it does. import_commit has accepted
+        # `character_tags` since the kind shipped; only the file could not
+        # express one.
+        characters=[t.name for t in concert.tags if t.kind is TagKind.CHARACTER],
         artists=[t.name for t in concert.tags if t.kind is TagKind.ARTIST],
         venues=[t.name for t in concert.tags if t.kind is TagKind.VENUE],
         series_handles={
             "franchises": [t.slug for t in concert.tags if t.kind is TagKind.FRANCHISE],
             "groups": [t.slug for t in concert.tags if t.kind is TagKind.GROUP],
+            "characters": [t.slug for t in concert.tags if t.kind is TagKind.CHARACTER],
             "artists": [t.slug for t in concert.tags if t.kind is TagKind.ARTIST],
         },
         days=yaml_days, rounds=yaml_rounds, notes=concert.notes,
@@ -4296,6 +4342,12 @@ async def current_tag_exports(session: AsyncSession) -> list[TagExport]:
             handle=t.slug, name=t.name, kind=t.kind.value,
             name_en=t.name_en, name_zh=t.name_zh,
             parent=by_id[t.parent_id].slug if t.parent_id in by_id else None,
+            # The seiyuu's HANDLE, never her id: an id means nothing across a
+            # restore into an empty database. `apply_tag_import` runs the same
+            # conversion in reverse, in its second pass.
+            voiced_by=(
+                by_id[t.voiced_by_tag_id].slug if t.voiced_by_tag_id in by_id else None
+            ),
             members=tuple(sorted(m.slug for m in t.members)),
             region=t.region, city=t.city, city_en=t.city_en, city_zh=t.city_zh,
             address=t.address, location_url=t.location_url,
@@ -4340,6 +4392,32 @@ class ImportChoices:
 
     fields: dict[tuple[str, str], str] = field(default_factory=dict)
     members: dict[tuple[str, str], str] = field(default_factory=dict)
+
+
+# The COMPARABLE_FIELDS that hold a HANDLE rather than a value. They compare like
+# any other string, but nothing can WRITE one until every tag in the file exists,
+# so pass 1 skips them and pass 2 resolves them.
+#
+# Today the ORM attribute a missing entry would hit does not exist (the columns
+# are `parent_id`/`voiced_by_tag_id`), so the setattr would be an inert write to
+# an unmapped attribute -- but it would still put the handle in `report.filled`,
+# claiming pass 1 wrote something it cannot write, and it would become a real
+# corruption the day a relationship of that name is added.
+_HANDLE_FIELDS = frozenset({"parent", "voiced_by"})
+
+
+def _takes_handle(entry: TagPlan, choices: ImportChoices, name: str) -> bool:
+    """Does this handle field get written at all?
+
+    A new tag takes everything the file says; an existing one takes a FILL
+    automatically (writing into emptiness loses nothing) and a CONFLICT only when
+    the operator picked the file's value. No answer means keep mine.
+    """
+    return (
+        entry.is_new
+        or name in entry.fills
+        or choices.fields.get((entry.handle, name)) == "theirs"
+    )
 
 
 async def apply_tag_import(
@@ -4393,7 +4471,7 @@ async def apply_tag_import(
         row = await session.get(Tag, by_slug[entry.handle])
         touched = False
         for name, value in entry.fills.items():
-            if name == "parent":
+            if name in _HANDLE_FIELDS:
                 continue  # a handle, not a value -- resolved in pass 2
             setattr(row, name, value)
             touched = True
@@ -4401,7 +4479,7 @@ async def apply_tag_import(
         for conflict in entry.conflicts:
             if choices.fields.get((entry.handle, conflict.field)) != "theirs":
                 continue  # KEEP MINE is the default, and "no answer" means it
-            if conflict.field == "parent":
+            if conflict.field in _HANDLE_FIELDS:
                 resolved = True
                 continue  # resolved in pass 2
             setattr(row, conflict.field, conflict.incoming)
@@ -4413,31 +4491,71 @@ async def apply_tag_import(
         if not touched and not resolved and not entry.needs_choice:
             report.unchanged.append(entry.handle)
 
-    # Pass 2: parent and membership, once every tag exists.
+    # Pass 2: parent, voiced_by and membership, once every tag exists.
     for entry in plan.tags:
         if entry.kind_mismatch or entry.handle not in by_slug:
             continue
         row = await session.get(Tag, by_slug[entry.handle])
         wanted_parent = entry.incoming.parent
-        take_parent = (
-            entry.is_new
-            or "parent" in entry.fills
-            or choices.fields.get((entry.handle, "parent")) == "theirs"
-        )
-        if take_parent and wanted_parent:
+        if _takes_handle(entry, choices, "parent") and wanted_parent:
             parent_id = by_slug.get(wanted_parent)
+            allowed = ALLOWED_PARENT_KINDS.get(row.kind, ())
             if parent_id is None:
                 report.warnings.append(
                     f"{entry.handle}: parent {wanted_parent!r} is in neither the file "
                     f"nor the catalogue -- left without a parent"
                 )
-            elif (await session.get(Tag, parent_id)).kind is not TagKind.FRANCHISE:
+            # The SAME table POST /tags enforces, deliberately shared rather
+            # than restated: this path kept a franchise-only rule of its own
+            # after the editor widened, and a catalogue file therefore could not
+            # express a subunit at all.
+            elif (await session.get(Tag, parent_id)).kind not in allowed:
                 report.warnings.append(
-                    f"{entry.handle}: parent {wanted_parent!r} is not a franchise -- "
+                    f"{entry.handle}: a {row.kind.value} tag cannot have "
+                    f"{wanted_parent!r} as a parent -- left without one"
+                )
+            # GROUP -> GROUP made loops possible for the first time, and this is
+            # a write path fed by a hand-editable file, so the guard belongs
+            # here as much as on the route.
+            elif await would_create_tag_cycle(session, row.id, parent_id):
+                report.warnings.append(
+                    f"{entry.handle}: parent {wanted_parent!r} would close a loop -- "
                     f"left without a parent"
                 )
             else:
                 row.parent_id = parent_id
+
+        # Her seiyuu, by handle. The TARGET must be an ARTIST, checked here for
+        # the same reason `parent` and `members` are checked three lines either
+        # side: a blank column makes this an auto-applied FILL, so a hand-edited
+        # `voiced_by: k-arena` would be written with nobody deciding anything --
+        # and the next `attach_tag` of that character materialises whatever the
+        # id names onto the concert, so a VENUE renders as a performer and its
+        # followers get a "new event" DM out of `handle_newly_tagged`.
+        #
+        # `detach_tag`'s kind guard does NOT cover this: it protects the SOURCE
+        # (a non-character carrying voiced_by) and says nothing about the target.
+        #
+        # Refusing a non-ARTIST also refuses SELF-voicing for free. A character
+        # pointed at herself is a real trap: `performer_clusters` puts her in
+        # `paired_seiyuu` and filters her out of `entries`, so she vanishes from
+        # the Performing panel altogether.
+        wanted_voice = entry.incoming.voiced_by
+        if _takes_handle(entry, choices, "voiced_by") and wanted_voice:
+            voice_id = by_slug.get(wanted_voice)
+            if voice_id is None:
+                report.warnings.append(
+                    f"{entry.handle}: voiced_by {wanted_voice!r} is in neither the file "
+                    f"nor the catalogue -- left unvoiced"
+                )
+            elif (voice := await session.get(Tag, voice_id)).kind is not TagKind.ARTIST:
+                report.warnings.append(
+                    f"{entry.handle}: voiced_by {wanted_voice!r} is a "
+                    f"{voice.kind.value}, and only an artist can voice a character "
+                    f"-- left unvoiced"
+                )
+            else:
+                row.voiced_by_tag_id = voice_id
 
         # A NEW tag simply gets the file's members; an existing one only gets
         # the additions the operator ticked.
@@ -4514,13 +4632,27 @@ async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
 
 
 @dataclass(frozen=True)
+class PerformerEntry:
+    """One chip. `seiyuu` is set ONLY when the tag is a CHARACTER and her voice
+    actor is ALSO attached to this concert -- the both-ends rule. Otherwise it
+    is None and the chip renders plain, which is what makes a lone character
+    and a lone artist look identical, deliberately."""
+
+    tag: Tag
+    seiyuu: Tag | None = None
+
+
+@dataclass(frozen=True)
 class PerformerCluster:
     """One labelled row of the concert page's Performing panel: a GROUP tag
-    and the concert's attached ARTIST tags belonging to it. `group is None`
-    is the trailing cluster of performers in no attached group."""
+    and the concert's attached performers belonging to it. `group is None` is
+    the trailing cluster of performers in no attached group. `depth` is 1 when
+    this group's DIRECT parent is an attached GROUP -- a subunit with no parent
+    group present is an ordinary top-level cluster (owner rule)."""
 
     group: Tag | None
-    artists: tuple[Tag, ...] = ()
+    performers: tuple[PerformerEntry, ...] = ()
+    depth: int = 0
 
 
 async def performer_clusters(
@@ -4555,12 +4687,59 @@ async def performer_clusters(
       and deduplicating would leave the main group's cluster looking
       incomplete to exactly the reader who came to see it. Do not "optimize"
       it away.
+
+    Two relationships are DRAWN here, and both obey one rule: a relationship
+    shows only when BOTH of its ends are attached to this concert.
+
+    * A CHARACTER pairs with her seiyuu into one entry (the split-pill chip)
+      only when that seiyuu is attached too, and she is then dropped from the
+      standalone list because she is rendered inside the pill. Either end
+      alone renders exactly as an ordinary artist does.
+    * A GROUP nests under its parent only when the parent is an attached
+      GROUP. "Attached GROUP", not "attached tag": a group's parent_id is
+      usually a FRANCHISE, and a franchise opens no cluster to nest beneath,
+      so asking the looser question would drop every franchise bill's
+      performer blocks off the page.
+
+    Both are DERIVED per concert, never stored -- which is also why nothing
+    here needs provenance for a seiyuu: she is paired exactly when some
+    attached character names her, the same derivation the prune rule and the
+    editor already use.
     """
     groups = [t for t in concert.tags if t.kind is TagKind.GROUP]
-    artists = [t for t in concert.tags if t.kind is TagKind.ARTIST]
+    people = [
+        t for t in concert.tags if t.kind in (TagKind.ARTIST, TagKind.CHARACTER)
+    ]
+    attached_ids = {t.id for t in concert.tags}
+    by_id = {t.id: t for t in concert.tags}
+
+    # Pair each character with her seiyuu, but only when BOTH ends are here.
+    # The seiyuu is then dropped from the standalone list: she is rendered
+    # inside the split pill. A seiyuu attached in her own right survives this
+    # filter and is listed as herself (owner rule) -- and she reaches the
+    # trailer for free, because a group's members are CHARACTER tags now, so
+    # she is not in members_by_group at all.
+    paired_seiyuu: set[int] = {
+        t.voiced_by_tag_id for t in people
+        if t.kind is TagKind.CHARACTER
+        and t.voiced_by_tag_id is not None
+        and t.voiced_by_tag_id in attached_ids
+    }
+    # `people` keeps concert.tags' order (Tag.name) inside every cluster.
+    entries = [
+        PerformerEntry(
+            t,
+            by_id[t.voiced_by_tag_id]
+            if t.kind is TagKind.CHARACTER and t.voiced_by_tag_id in attached_ids
+            else None,
+        )
+        for t in people
+        if t.id not in paired_seiyuu
+    ]
+
     # Solo-artist concerts are common and have nothing to look up.
     if not groups:
-        return [PerformerCluster(None, tuple(artists))] if artists else []
+        return [PerformerCluster(None, tuple(entries))] if entries else []
 
     res = await session.execute(
         select(TagMember.group_tag_id, TagMember.member_tag_id).where(
@@ -4571,15 +4750,54 @@ async def performer_clusters(
     for group_tag_id, member_tag_id in res:
         members_by_group[group_tag_id].add(member_tag_id)
 
-    # `artists` keeps concert.tags' order (Tag.name) inside every cluster.
-    clusters = [
-        PerformerCluster(
-            g, tuple(a for a in artists if a.id in members_by_group[g.id])
+    # Parent-first ordering with depth, and NO second query: `concert.tags`
+    # already carries every attached group, so a parent is present exactly
+    # when its id is among them. A `session.get(Tag, g.parent_id)` here would
+    # be one SELECT per unit on the franchise bills this is for.
+    group_ids = {g.id for g in groups}
+    children: dict[int, list[Tag]] = {}
+    roots: list[Tag] = []
+    for g in groups:
+        if g.parent_id in group_ids:
+            children.setdefault(g.parent_id, []).append(g)
+        else:
+            roots.append(g)
+
+    clusters: list[PerformerCluster] = []
+    emitted: set[int] = set()
+
+    def _emit(g: Tag, depth: int) -> None:
+        if g.id in emitted:
+            return
+        emitted.add(g.id)
+        clusters.append(
+            PerformerCluster(
+                g,
+                tuple(e for e in entries if e.tag.id in members_by_group[g.id]),
+                depth,
+            )
         )
-        for g in groups
-    ]
+        # Depth stays 1 however deep the chain runs: the rail is one indent,
+        # not a ladder. Recursing anyway is what keeps a third rung ON the
+        # page -- emitting a root's direct children only would drop it.
+        for child in children.get(g.id, ()):
+            _emit(child, 1)
+
+    for g in roots:
+        _emit(g, 0)
+    # A parent cycle (A under B under A, or a group that is its own parent)
+    # has no root between its members, so the walk above never reaches them.
+    # `apply_tag_import` writes parent_id and is not cycle-guarded, so the
+    # shape is reachable from a hand-edited catalogue file -- and an attached
+    # group must appear on the page whatever its parent says. This is also
+    # why no separate self-parent guard is needed above: a 1-cycle is a cycle
+    # and lands here like any other. `emitted` makes the sweep a no-op in the
+    # ordinary case, and stops the walk from recursing through a cycle.
+    for g in groups:
+        _emit(g, 0)
+
     grouped = {mid for ids in members_by_group.values() for mid in ids}
-    trailer = tuple(a for a in artists if a.id not in grouped)
+    trailer = tuple(e for e in entries if e.tag.id not in grouped)
     if trailer:
         clusters.append(PerformerCluster(None, trailer))
     return clusters
@@ -4660,9 +4878,12 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
 
     Returns a dict with:
       counts             -- {tag_id: TagCounts}
-      franchise_families -- [(franchise Tag, [(group Tag, [member Tag, ...]), ...]), ...]
-                            in franchise name order; groups in name order
-      no_franchise_groups-- [(group Tag, [member Tag, ...]), ...] for parentless groups
+      franchise_families -- [(franchise Tag, [(group Tag, [member Tag, ...], depth),
+                            ...]), ...] in franchise name order; groups in name
+                            order, each immediately followed by its subunits at
+                            depth+1 (see the walk below -- no group is ever
+                            omitted, whatever its parent_id says)
+      no_franchise_groups-- the same row triples for groups under no franchise
       venue_regions      -- [(region_name, [venue Tag, ...]), ...] alpha, "No region" last
       ungrouped_performers -- ARTIST tags that are no group's member, name order
       summary            -- {concerts, franchises, groups, performers, venues,
@@ -4732,14 +4953,52 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
     artists = [t for t in tags if t.kind is TagKind.ARTIST]
     venues = [t for t in tags if t.kind is TagKind.VENUE]
 
-    def group_with_members(g: Tag) -> tuple[Tag, list[Tag]]:
-        return g, members_of.get(g.id, [])
+    # ── group rows, with subunits nested under their parent group ──
+    # GROUP -> GROUP became legal on 2026-08-01, and until this walk existed
+    # the two buckets below ("under this franchise" / "no parent at all")
+    # named no bucket for a group parented to a GROUP. A subunit therefore
+    # fell out of the chips directory entirely -- and so did every performer
+    # whose only membership was in it, since `grouped_member_ids` already
+    # counted them as grouped and `ungrouped_performers` skips those. A
+    # signed-in non-editor saw neither anywhere on /tags, the table view
+    # being editor-only.
+    #
+    # The walk happens HERE and yields a FLAT, pre-ordered list of
+    # (group, members, depth). Not a children map recursed over in the
+    # template: a parent cycle would loop forever there, and a cycle is
+    # reachable (older rows predate `would_create_tag_cycle`, and nothing
+    # walks parent_id transitively to notice). `seen` terminates the walk and
+    # `leftovers` below carries the property this fix is actually about --
+    # EVERY group renders exactly once, whatever its parent_id says.
+    children_of: dict[int, list[Tag]] = {}
+    for g in groups:
+        parent = by_id.get(g.parent_id) if g.parent_id else None
+        if parent is not None and parent.kind is TagKind.GROUP:
+            children_of.setdefault(parent.id, []).append(g)
+    walked: set[int] = set()
+
+    def group_rows(g: Tag, depth: int = 0) -> list[tuple[Tag, list[Tag], int]]:
+        if g.id in walked:
+            return []
+        walked.add(g.id)
+        rows = [(g, members_of.get(g.id, []), depth)]
+        for child in children_of.get(g.id, []):
+            rows.extend(group_rows(child, depth + 1))
+        return rows
 
     franchise_families = [
-        (f, [group_with_members(g) for g in groups if g.parent_id == f.id])
+        (f, [row for g in groups if g.parent_id == f.id for row in group_rows(g)])
         for f in franchises
     ]
-    no_franchise_groups = [group_with_members(g) for g in groups if g.parent_id is None]
+    no_franchise_groups = [
+        row for g in groups if g.parent_id is None for row in group_rows(g)
+    ]
+    # Whatever the walk never reached: a group inside a parent cycle, or one
+    # whose parent_id names a tag that is neither a franchise nor a group. It
+    # renders at the top of the parentless bucket rather than nowhere at all.
+    no_franchise_groups += [
+        row for g in groups if g.id not in walked for row in group_rows(g)
+    ]
 
     # ── venues by region, "No region" last ──
     by_region: dict[str, list[Tag]] = {}
@@ -4927,11 +5186,50 @@ async def tag_picker_context(session: AsyncSession) -> dict:
         by_kind.setdefault(t.kind.value, []).append(t)
     groups_data = {}
     for g in by_kind.get("group", []):
+        members = await group_members(session, g.id)
         groups_data[g.id] = {
             "name": g.name,
             "franchise": g.parent_id,
-            "members": [{"id": m.id, "name": m.name} for m in await group_members(session, g.id)],
+            # SPLIT BY KIND, and load-bearing rather than tidy. A GROUP's members
+            # may be ARTIST tags, CHARACTER tags or a mix -- the im@s reformat
+            # produces the second -- and the picker posts each row into its own
+            # field: `members` feeds autoArtists() -> artist_tags,
+            # `character_members` feeds autoCharacters() -> character_tags.
+            #
+            # Unsplit, ticking such a group put CHARACTER ids into artist_tags,
+            # `resolve_tags(..., ARTIST)` answered 422 and the concert could not
+            # be created at all. Worse, the workaround an editor reaches for
+            # after that -- × the auto-added chips -- SUCCEEDED and attached the
+            # group alone: the creation form expands with expand=False, so
+            # neither the characters nor (via attach_tag's chained step) their
+            # seiyuu ever landed, and a follower of the performer was not
+            # matched. The loud half and the silent half are one bug.
+            #
+            # A member of any OTHER kind is dropped rather than defaulted into
+            # the artist row: a franchise or venue somehow made a member is not
+            # a performer, and offering it as one only reproduces the 422.
+            "members": [
+                {"id": m.id, "name": m.name} for m in members if m.kind is TagKind.ARTIST
+            ],
+            "character_members": [
+                {"id": m.id, "name": m.name}
+                for m in members
+                if m.kind is TagKind.CHARACTER
+            ],
         }
+    # {character id: her seiyuu's ARTIST id}. The picker reads it for ONE thing:
+    # keeping a derived seiyuu OUT of the artist row while her character is
+    # selected (owner ruling 2026-08-01 -- she is auto-correlated and shown as
+    # `cv. xxx`, never offered as a tick). Without it, a seiyuu who is also a
+    # direct ARTIST member of a selected group is re-ticked by autoArtists(),
+    # posted as artist_tags, and therefore lands in edit_concert's `after_ids`
+    # -- so she is never detached when her character goes, which is the prune
+    # rule unreachable from the editor all over again.
+    character_seiyuu = {
+        t.id: t.voiced_by_tag_id
+        for t in by_kind.get("character", [])
+        if t.voiced_by_tag_id is not None
+    }
     tag_names = {t.id: t.name for t in tags}
     # Which tags must show their handle beside their name: ONLY those sharing a
     # (name, kind) with another tag. Two identical chips are unusable, but
@@ -4955,6 +5253,7 @@ async def tag_picker_context(session: AsyncSession) -> dict:
     return {
         "by_kind": by_kind,
         "groups": groups_data,
+        "character_seiyuu": character_seiyuu,
         "tag_names": tag_names,
         "tag_disambiguators": tag_disambiguators,
     }
@@ -4993,17 +5292,109 @@ async def attach_tag(
                 if not await _is_attached(session, concert_id, member.id):
                     session.add(ConcertTag(concert_id=concert_id, tag_id=member.id))
                     added.append(member)
+
+    # THE CHAINED STEP. Every character now attached pulls in its seiyuu.
+    # Without it a group-credited im@s show materialises characters only, and
+    # tracked_concert_ids -- which matches materialised rows -- never matches
+    # anyone following the performer. That is the whole feature.
+    #
+    # Bounded by construction, and NOT the nested-groups rule returning: a
+    # seiyuu is an ARTIST, so group -> character -> seiyuu terminates in two
+    # steps and cannot recurse.
+    #
+    # Deliberately NOT gated on `expand`. That flag exists so the creation
+    # form's explicit artist list is not overridden; attaching the seiyuu
+    # overrides nothing, and gating it would leave concerts made on that form
+    # unmatched for her followers.
+    seiyuu_ids = {
+        t.voiced_by_tag_id for t in added
+        if t.kind is TagKind.CHARACTER and t.voiced_by_tag_id is not None
+    }
+    for seiyuu_id in sorted(seiyuu_ids):
+        if not await _is_attached(session, concert_id, seiyuu_id):
+            seiyuu = await session.get(Tag, seiyuu_id)
+            if seiyuu is not None:
+                session.add(ConcertTag(concert_id=concert_id, tag_id=seiyuu.id))
+                added.append(seiyuu)
+
     await session.flush()
     return added
 
 
-async def detach_tag(session: AsyncSession, concert_id: int, tag_id: int) -> None:
-    res = await session.execute(
+async def detach_tag(
+    session: AsyncSession,
+    concert_id: int,
+    tag_id: int,
+    keep_tag_ids: Collection[int] = (),
+) -> None:
+    """Remove a tag from a concert -- and, for a CHARACTER, her seiyuu with her.
+
+    Owner rule (2026-08-01), with TWO refinements, both load-bearing:
+
+    * the seiyuu goes ONLY IF no other still-attached character shares her. A
+      seiyuu can voice two characters on one bill, and detaching her because
+      one was pruned would silently drop the other's performer.
+    * the seiyuu goes ONLY IF the caller has not said it is keeping her.
+      `keep_tag_ids` is that statement, and it is what makes the concert
+      editor's detach-then-attach order safe: `edit_concert` computes the
+      final tag set up front, so a seiyuu the editor ticked EXPLICITLY while
+      unticking her character is in that set and must not be cascaded off.
+      Without it she is in `keep_ids & before_ids` -- in NEITHER of the
+      route's two diffs -- so nothing puts her back, the first save loses her
+      silently, and a second identical save restores her. The set is the
+      caller's DESIRED end state, not the current attachment, so it stays a
+      statement of intent rather than a read of the row this call is deleting.
+
+      It stayed load-bearing through the 2026-08-01 ruling that a derived
+      seiyuu is never PRE-ticked, which was expected to make it inert and did
+      not: ticking her is still a gesture the picker offers, and it now means
+      something sharper than it used to -- "credit the performer, not the
+      character" -- so honouring it matters more, not less. Measured by
+      removing the parameter and running the suite; two editor tests fail.
+
+    KNOWN EDGE, accepted rather than solved: concert_tags does not record WHY a
+    tag was attached -- group expansion has had that blind spot since it
+    shipped -- so a seiyuu who was ALSO there in her own right is removed when
+    the character is pruned, and the editor re-adds her. Building provenance to
+    fix that would touch every attach path for a rare case. Under the ruling
+    that case is contradictory data rather than a supported state (an event
+    credits the character OR the performer), so the missing provenance is now
+    the DEFINITION of the behaviour: a standalone tick over an attached
+    character is accepted, not remembered, and re-reads as derived.
+    """
+    tag = await session.get(Tag, tag_id)
+    await _detach_one(session, concert_id, tag_id)
+
+    if tag is None or tag.kind is not TagKind.CHARACTER or tag.voiced_by_tag_id is None:
+        await session.flush()
+        return
+
+    if tag.voiced_by_tag_id in keep_tag_ids:
+        await session.flush()
+        return
+
+    still_needed = await session.scalar(
+        select(func.count())
+        .select_from(ConcertTag)
+        .join(Tag, Tag.id == ConcertTag.tag_id)
+        .where(
+            ConcertTag.concert_id == concert_id,
+            Tag.kind == TagKind.CHARACTER,
+            Tag.voiced_by_tag_id == tag.voiced_by_tag_id,
+        )
+    )
+    if not still_needed:
+        await _detach_one(session, concert_id, tag.voiced_by_tag_id)
+    await session.flush()
+
+
+async def _detach_one(session: AsyncSession, concert_id: int, tag_id: int) -> None:
+    """The single-row delete detach_tag used to be."""
+    row = (await session.execute(
         select(ConcertTag).where(
             ConcertTag.concert_id == concert_id, ConcertTag.tag_id == tag_id
         )
-    )
-    row = res.scalar_one_or_none()
+    )).scalar_one_or_none()
     if row is not None:
         await session.delete(row)
         await session.flush()

@@ -267,6 +267,17 @@ class Tag(Base):
     )
     # GROUP tags may belong to a FRANCHISE tag (Hasunosora -> Love Live!, etc.)
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("tags.id", ondelete="SET NULL"))
+    # CHARACTER-specific: the ARTIST tag who voices her. Its OWN column rather
+    # than parent_id, deliberately -- parent_id means "the broader thing I
+    # belong to" and renders the Tags hierarchy, and a seiyuu is not broader
+    # than a character. Keeping parent_id free also lets a character say she
+    # belongs to a franchise, which she could not otherwise do.
+    # SET NULL, never CASCADE: deleting a seiyuu's tag must not take the
+    # character down with it, the same reasoning as ConcertDay.venue_tag_id.
+    # A recast is one re-pointed value; there is deliberately no history here.
+    voiced_by_tag_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tags.id", ondelete="SET NULL")
+    )
     # VENUE-specific (harmless if unset on other kinds): a maps/location link,
     # and a free-text region so venues can be browsed/filtered by area instead
     # of one-by-one ("Kanto", "Kansai", etc.)

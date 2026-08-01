@@ -1,9 +1,10 @@
 {#- Pairs with _tag_picker_fields.html: the picker <dialog>s + the vanilla-JS
     client-side staging (selection stays in the DOM until the form's one real
     POST fires). Include right after the </form> that has id="new-concert".
-    Caller provides by_kind, groups, tag_names, and initial_selected
-    (string tag ids per kind, plus artist_excluded -- {} for a blank
-    creation form, the concert's current tags for the edit page).
+    Caller provides by_kind, groups, character_seiyuu, tag_names, and
+    initial_selected (string tag ids per kind, plus artist_excluded and
+    character_excluded -- {} for a blank creation form, the concert's current
+    tags for the edit page).
     All three are RAW PYTHON DICTS, never pre-serialized JSON: `| tojson`
     below serializes them itself and escapes < > & ' as \uXXXX, so an
     editor-authored tag name containing "</script>" cannot break out of
@@ -13,7 +14,7 @@
     (sync_concert_venue_tags is their sole writer), so there is no chip row
     to render and no venue_tags hidden input to submit. See
     _tag_picker_fields.html. -#}
-{% for kindname in ["franchise", "group", "artist"] %}
+{% for kindname in ["franchise", "group", "character", "artist"] %}
 <dialog id="picker-{{ kindname }}" class="picker">
   <div class="picker-head">
     <h3>Add {{ kindname }}s</h3>
@@ -44,19 +45,49 @@
   // first (invariant 7). tojson renders the integer keys as JSON strings, which
   // is what the string ids used below want anyway.
   const TAG_DIS = {{ tag_disambiguators | tojson }};
+  // {character id: her seiyuu's ARTIST id}. Read by autoArtists() only.
+  const CHAR_SEIYUU = {{ character_seiyuu | tojson }};
   const INITIAL_SELECTED = {{ initial_selected | tojson }};
   // selection state: sets of tag ids (strings)
   const sel = {
     franchise: new Set(INITIAL_SELECTED.franchise || []),
     group: new Set(INITIAL_SELECTED.group || []),
+    // Characters are DERIVED exactly the way artists are, because a GROUP's
+    // members may be characters (the im@s shape) and ticking the group must
+    // materialise them the same way it materialises artist members. Ticking a
+    // CHARACTER still adds no artist chip: her seiyuu is chained server-side in
+    // attach_tag on save, and is deliberately never offered as a tick here.
+    character: new Set(),
     artist: new Set(),
   };
   const artistExcluded = new Set(INITIAL_SELECTED.artist_excluded || []); // auto-added artists the editor removed
   const artistManual = new Set(INITIAL_SELECTED.artist || []);     // artists added explicitly via the picker
+  const characterExcluded = new Set(INITIAL_SELECTED.character_excluded || []); // pruned group characters
+  const characterManual = new Set(INITIAL_SELECTED.character || []);  // characters ticked in their own right
 
+  function autoCharacters() {
+    const ids = new Set();
+    for (const g of sel.group) (NC_GROUPS[g]?.character_members || []).forEach(m => ids.add(String(m.id)));
+    return ids;
+  }
+  function recomputeCharacters() {
+    sel.character = new Set([...autoCharacters()].filter(id => !characterExcluded.has(id)));
+    characterManual.forEach(id => sel.character.add(id));
+  }
   function autoArtists() {
     const ids = new Set();
     for (const g of sel.group) (NC_GROUPS[g]?.members || []).forEach(m => ids.add(String(m.id)));
+    // A seiyuu implied by a SELECTED character is never offered as an artist
+    // tick (owner ruling 2026-08-01) -- even when she is also a direct artist
+    // member of one of these groups, which is exactly the pre-reformat shape.
+    // Offering her means posting her, which means edit_concert's `after_ids`
+    // holds her forever and dropping her character can never drop her.
+    // artistManual still wins below: ticking her by hand is the deliberate
+    // "credit the performer, not the character" gesture, and it must survive.
+    for (const c of sel.character) {
+      const s = CHAR_SEIYUU[c];
+      if (s !== undefined && s !== null) ids.delete(String(s));
+    }
     return ids;
   }
   function recomputeArtists() {
@@ -86,14 +117,20 @@
     }
   }
   function renderAll() {
+    // ORDER MATTERS: autoArtists() reads sel.character to keep a derived
+    // seiyuu out of the artist row, so the character set must be current first.
+    recomputeCharacters();
     recomputeArtists();
-    ["franchise", "group", "artist"].forEach(renderRow);
+    ["franchise", "group", "character", "artist"].forEach(renderRow);
     syncHidden();
   }
   function removePick(kind, id) {
     if (kind === "artist") {
       artistManual.delete(id);
       if (autoArtists().has(id)) artistExcluded.add(id);  // pruned non-performer
+    } else if (kind === "character") {
+      characterManual.delete(id);
+      if (autoCharacters().has(id)) characterExcluded.add(id);  // pruned non-performer
     } else {
       sel[kind].delete(id);
     }
@@ -104,6 +141,9 @@
     if (kind === "artist") {
       if (sel.artist.has(id)) { removePick("artist", id); }
       else { artistManual.add(id); artistExcluded.delete(id); }
+    } else if (kind === "character") {
+      if (sel.character.has(id)) { removePick("character", id); }
+      else { characterManual.add(id); characterExcluded.delete(id); }
     } else {
       sel[kind].has(id) ? sel[kind].delete(id) : sel[kind].add(id);
     }
@@ -126,6 +166,7 @@
     }};
     put("franchise_tags", sel.franchise);
     put("group_tags", sel.group);
+    put("character_tags", sel.character);
     put("artist_tags", sel.artist);
   }
 
@@ -147,7 +188,10 @@
     // path only ever reaches a genuinely new name. The next full page render
     // recomputes the map from the DB anyway.
     if (kind === "group") {
-      NC_GROUPS[id] = { name: tag.name, franchise: tag.parent_id || null, members: [] };
+      NC_GROUPS[id] = {
+        name: tag.name, franchise: tag.parent_id || null,
+        members: [], character_members: [],
+      };
     }
     const list = document.querySelector("#picker-" + kind + " .taglist");
     if (list && !list.querySelector('.chip[data-id="' + id + '"]')) {
@@ -163,6 +207,11 @@
     if (kind === "artist") {
       artistManual.add(id);
       artistExcluded.delete(id);
+    } else if (kind === "character") {
+      // Same reason as artists: sel.character is recomputed on every render,
+      // so a bare sel.character.add() here would be wiped by renderAll().
+      characterManual.add(id);
+      characterExcluded.delete(id);
     } else {
       sel[kind].add(id);
     }

@@ -84,6 +84,10 @@ class ParsedConcert:
     performers_text: str | None = None
     franchise_names: list[str] = field(default_factory=list)
     group_names: list[str] = field(default_factory=list)
+    # CHARACTER tags. `import_commit` has accepted `character_tags` since the
+    # kind shipped -- this is what lets the FILE say one, so an export is a
+    # faithful backup and the add-concert skill can author an im@s bill.
+    character_names: list[str] = field(default_factory=list)
     artist_names: list[str] = field(default_factory=list)
     # Tag HANDLES. When a kind's list here is non-empty it is
     # AUTHORITATIVE and the matching *_names list is ignored outright --
@@ -93,4 +97,5 @@ class ParsedConcert:
     # names, which is why absence must behave exactly as before.
     franchise_handles: list[str] = field(default_factory=list)
     group_handles: list[str] = field(default_factory=list)
+    character_handles: list[str] = field(default_factory=list)
     artist_handles: list[str] = field(default_factory=list)

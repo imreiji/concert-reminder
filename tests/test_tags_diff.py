@@ -78,16 +78,44 @@ def test_every_comparable_field_is_actually_compared():
     incoming = _incoming(
         name="A", name_en="B", name_zh="C", parent="p", region="R", city="D",
         city_en="E", city_zh="F", address="G", location_url="http://h",
-        eventernote_url="http://i",
+        eventernote_url="http://i", voiced_by="j",
     )
     current = _current(
         name="z", name_en="z", name_zh="z", parent="z", region="z", city="z",
         city_en="z", city_zh="z", address="z", location_url="z",
-        eventernote_url="z",
+        eventernote_url="z", voiced_by="z",
     )
     conflicts = {c.field for c in plan_tag_import([incoming], [current]).tags[0].conflicts}
     assert conflicts == set(COMPARABLE_FIELDS)
-    assert len(COMPARABLE_FIELDS) == 11
+
+
+def test_voiced_by_is_compared_like_any_other_field():
+    plan = plan_tag_import(
+        [_incoming(voiced_by="asami-imai")], [_current(voiced_by=None)]
+    )
+    assert plan.tags[0].fills == {"voiced_by": "asami-imai"}
+
+
+def test_a_recast_is_a_conflict_not_a_silent_fill():
+    """A character already pointed at one seiyuu, and a file naming another, is
+    two different values -- so it is a decision, not an automatic write."""
+    plan = plan_tag_import(
+        [_incoming(voiced_by="asami-imai")], [_current(voiced_by="someone-else")]
+    )
+    (tag,) = plan.tags
+    assert tag.fills == {}
+    (conflict,) = tag.conflicts
+    assert (conflict.field, conflict.current, conflict.incoming) == (
+        "voiced_by", "someone-else", "asami-imai",
+    )
+
+
+def test_the_comparable_field_count_moved_to_twelve():
+    """This pin exists so a field cannot join the FORMAT while the differ
+    silently skips it -- which would make the reformat look successful and
+    quietly drop every seiyuu link."""
+    assert len(COMPARABLE_FIELDS) == 12
+    assert "voiced_by" in COMPARABLE_FIELDS
 
 
 def test_kind_disagreeing_skips_the_tag_entirely():

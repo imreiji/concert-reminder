@@ -200,6 +200,9 @@ async def import_preview(
             "by_kind": picker["by_kind"],
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
+            # {character id: seiyuu id} -- keeps a derived seiyuu out of the
+            # artist row while her character is selected.
+            "character_seiyuu": picker["character_seiyuu"],
             "tag_names": picker["tag_names"],
             # Handles for the tags whose (name, kind) collides -- the picker
             # shows one beneath the chip so two identical chips are
@@ -276,14 +279,19 @@ async def import_draft(
 
     # Tag names -> picker pre-selection. Unmatched names surface in the Tags
     # fold as per-name "create this tag" chips rather than vanishing -- each
-    # carries its kind (franchise/group/artist) so the quick-create dialog can
-    # pre-select the right kind. Structured (name, kind) pairs, not a flat name
-    # list: the kind is what the chip and the dialog both need.
+    # carries its kind (franchise/group/character/artist) so the quick-create
+    # dialog can pre-select the right kind. Structured (name, kind) pairs, not a
+    # flat name list: the kind is what the chip and the dialog both need.
     initial_selected: dict[str, list[str]] = {}
     unmatched_tags: list[dict] = []
     for kind_name, names, handles in (
         ("franchise", parsed.franchise_names, parsed.franchise_handles),
         ("group", parsed.group_names, parsed.group_handles),
+        # A draft that names characters prefills the character row like any
+        # other. The picker adds `character_excluded` on top for a group's
+        # characters; a draft has no group expansion to prune, so it supplies
+        # only the positive list.
+        ("character", parsed.character_names, parsed.character_handles),
         ("artist", parsed.artist_names, parsed.artist_handles),
     ):
         pool = picker["by_kind"].get(kind_name, [])
@@ -343,6 +351,7 @@ async def import_draft(
             "concert_kinds": list(ConcertKind),
             "by_kind": picker["by_kind"],
             "groups": picker["groups"],
+            "character_seiyuu": picker["character_seiyuu"],
             "tag_names": picker["tag_names"],
             # Handles for the tags whose (name, kind) collides -- the picker
             # shows one beneath the chip so two identical chips are
@@ -411,6 +420,12 @@ async def import_commit(
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
+    # The preview renders the SHARED tag picker, so its character row submits
+    # here whether or not a draft can name one yet. Collected and passed
+    # through rather than left to FastAPI's silent drop of unknown fields: an
+    # editor who ticks 如月千早 on the preview would otherwise watch the chip
+    # vanish on commit with nothing said.
+    character_tags: list[int] = Form(default=[]),
     venue_tags: list[int] = Form(default=[]),
     day_key: list[str] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
@@ -481,6 +496,7 @@ async def import_commit(
     )
     concert, newly = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
+        character_tags=character_tags,
         kind=ConcertKind(kind) if kind else None,
         source_url=checked_source_url,
     )

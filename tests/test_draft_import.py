@@ -6,6 +6,7 @@ route never fetches.
 """
 
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -488,3 +489,76 @@ def test_a_leg_venue_handle_preselects_the_venue(client):
         ),
     }).text
     assert 'value="1" selected' in body, "the handle must win over the unmatchable name"
+
+
+# ── characters in a pasted draft (2026-08-01) ───────────────────────────
+#
+# The draft vocabulary had no character bucket, so the ONE producer CLAUDE.md
+# points at for new concerts -- an agent following .claude/skills/add-concert --
+# could not author an im@s bill at all, and an export could not be pasted back
+# with its characters intact.
+
+CHARACTER_DRAFT = """
+title: THE IDOLM@STER 10th
+series:
+  characters:
+    - 如月千早
+performances:
+  - label: Day 1
+    starts_at_jst: 2099-08-01 18:00
+"""
+
+
+async def _seed_character(db):
+    async with db() as s:
+        imai = Tag(name="今井麻美", kind=TagKind.ARTIST)
+        s.add(imai)
+        await s.flush()
+        s.add(Tag(name="如月千早", kind=TagKind.CHARACTER, voiced_by_tag_id=imai.id))
+        await s.commit()
+        return {
+            t.name: t.id for t in (await s.execute(select(Tag))).scalars()
+        }
+
+
+def _selected(html: str) -> dict:
+    return json.loads(html.split("const INITIAL_SELECTED = ")[1].split(";\n")[0])
+
+
+async def test_a_draft_names_a_character_and_the_picker_pre_selects_her(client, db):
+    ids = await _seed_character(db)
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/concerts/import/draft", data={"draft": CHARACTER_DRAFT})
+    assert r.status_code == 200, r.text
+    assert _selected(r.text)["character"] == [str(ids["如月千早"])]
+
+
+async def test_a_character_handle_beats_the_name(client, db):
+    """Same rule as every other kind: where `series_handles` names a kind it is
+    authoritative and the name list is ignored outright."""
+    ids = await _seed_character(db)
+    login_as(client, EDITOR_ID, "reiji")
+    draft = CHARACTER_DRAFT.replace(
+        "performances:",
+        "series_handles:\n  characters:\n    - chihaya\nperformances:",
+    ).replace("    - 如月千早", "    - 誰か別の人")
+    async with db() as s:
+        row = (await s.execute(
+            select(Tag).where(Tag.name == "如月千早")
+        )).scalar_one()
+        row.slug = "chihaya"
+        await s.commit()
+
+    r = client.post("/concerts/import/draft", data={"draft": draft})
+    assert r.status_code == 200, r.text
+    assert _selected(r.text)["character"] == [str(ids["如月千早"])]
+
+
+async def test_an_unmatched_character_name_becomes_a_create_chip(client, db):
+    """Never dropped: an unknown name surfaces as its own quick-create chip
+    carrying `character` as the kind, so the dialog opens on the right one."""
+    login_as(client, EDITOR_ID, "reiji")  # nothing seeded
+    r = client.post("/concerts/import/draft", data={"draft": CHARACTER_DRAFT})
+    assert r.status_code == 200
+    assert 'data-tag-name="如月千早"' in r.text
+    assert 'data-tag-kind="character"' in r.text

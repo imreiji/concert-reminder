@@ -25,6 +25,7 @@ via domain.timezones.jst_to_utc. Nowhere else.
 """
 
 import re
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
@@ -460,7 +461,7 @@ async def render_rules_fragment(
 # ── Concerts ─────────────────────────────────────────────────────────────
 
 
-async def resolve_tags(session: AsyncSession, tag_ids: list[int], kind) -> list[Tag]:
+async def resolve_tags(session: AsyncSession, tag_ids: Sequence[int], kind) -> list[Tag]:
     """Shared by create_concert_row and the edit route: every submitted tag
     id must exist and match the expected kind."""
     out = []
@@ -542,6 +543,7 @@ async def create_concert_row(
     group_tags: list[int],
     artist_tags: list[int],
     venue_tags: list[int],
+    character_tags: Sequence[int] = (),
     kind: ConcertKind | None = None,
     source_url: str | None = None,
 ) -> tuple[Concert, list[Tag]]:
@@ -571,6 +573,11 @@ async def create_concert_row(
     f_tags = await resolve_tags(session, franchise_tags, TagKind.FRANCHISE)
     g_tags = await resolve_tags(session, group_tags, TagKind.GROUP)
     a_tags = await resolve_tags(session, artist_tags, TagKind.ARTIST)
+    # CHARACTER is a first-class picked kind, not a derived one: an im@s show is
+    # credited to 如月千早, and attach_tag chains from her to 今井麻美. The reverse
+    # never happens (a seiyuu implies no character), so this list has to come
+    # from the editor.
+    c_tags = await resolve_tags(session, character_tags, TagKind.CHARACTER)
     # VENUE ids are validated and then DROPPED. sync_concert_venue_tags, which
     # the caller runs once the legs exist, is the sole writer of this
     # concert's VENUE rows (the leg is where a venue is entered, so the
@@ -597,6 +604,13 @@ async def create_concert_row(
     newly: list[Tag] = []
     for tag in [*f_tags, *g_tags]:
         newly += await attach_tag(session, concert.id, tag, expand=False)
+    # A character pulls her seiyuu in behind her (attach_tag's chained step),
+    # so an ARTIST id the editor also ticked explicitly is already attached
+    # when the loop below reaches it -- `_is_attached` skips it and she lands
+    # in `newly` exactly once, which is what keeps handle_newly_tagged from
+    # DM-ing her followers twice for one create.
+    for character in c_tags:
+        newly += await attach_tag(session, concert.id, character)
     for artist in a_tags:
         newly += await attach_tag(session, concert.id, artist)
     return concert, newly
@@ -621,6 +635,9 @@ async def new_concert_form(
             "by_kind": picker["by_kind"],
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
+            # {character id: seiyuu id} -- keeps a derived seiyuu out of the
+            # artist row while her character is selected.
+            "character_seiyuu": picker["character_seiyuu"],
             "tag_names": picker["tag_names"],
             # Handles for the tags whose (name, kind) collides -- the picker
             # shows one beneath the chip so two identical chips are
@@ -664,6 +681,7 @@ async def create_concert(
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
+    character_tags: list[int] = Form(default=[]),
     venue_tags: list[int] = Form(default=[]),
     day_key: list[str] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
@@ -707,6 +725,7 @@ async def create_concert(
     require_variants("Notes", notes, notes_en, notes_zh)
     concert, newly = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
+        character_tags=character_tags,
         kind=ConcertKind(kind) if kind else None,
     )
     concert.title_en = title_en.strip() or None
@@ -1122,18 +1141,68 @@ async def edit_concert_form(
     # picker's group->members auto-population would show them as selected
     # again just because their group is initially checked, and an editor
     # who doesn't notice would silently re-add a pruned non-performer.
+    #
+    # SPLIT BY KIND, mirroring tag_picker_context's split of the members
+    # themselves. A CHARACTER member of an attached group used to be filed here
+    # as a "pruned artist" -- right outcome (the picker filtered her back out),
+    # entirely wrong reason, and it meant a group's characters could never be
+    # attached from this page at all. Now each kind is compared against the
+    # tags of its own kind, so a character the editor pruned is remembered as a
+    # pruned CHARACTER and one they kept is simply selected.
     attached_artist_ids = {t.id for t in concert.tags if t.kind is TagKind.ARTIST}
+    attached_character_ids = {t.id for t in concert.tags if t.kind is TagKind.CHARACTER}
     excluded_ids: list[int] = []
+    excluded_character_ids: list[int] = []
     for t in concert.tags:
         if t.kind is TagKind.GROUP:
             for m in await group_members(session, t.id):
-                if m.id not in attached_artist_ids:
+                if m.kind is TagKind.CHARACTER:
+                    if m.id not in attached_character_ids:
+                        excluded_character_ids.append(m.id)
+                # NOTE the `elif` is wider than its twin in tag_picker_context,
+                # which keeps ARTIST members only and drops every other kind. A
+                # member that is neither (add_member refuses only GROUPs, so a
+                # franchise or venue is reachable by hand-crafted POST or by
+                # file) is filed here as a pruned artist and is not in the
+                # picker's list at all -- inert, since excluding an id nothing
+                # offers changes nothing, but the two halves no longer state the
+                # same rule. Narrow both together if either moves.
+                elif m.id not in attached_artist_ids:
                     excluded_ids.append(m.id)
+    # Owner ruling (2026-08-01): where a seiyuu represents a CHARACTER, only the
+    # character is added and the artist is auto-correlated -- shown as `cv. xxx`,
+    # never offered as a tick. An artist added by herself correlates with no
+    # character, so "derived" needs no provenance column: she is derived exactly
+    # when some ATTACHED character names her, which is the same derivation the
+    # display rule and the prune rule already run.
+    #
+    # Pre-ticking her is what made the prune rule unreachable from this editor:
+    # ticked means submitted means always in `after_ids` means never detached,
+    # whatever happened to her character. Both halves of that are fixed together
+    # -- see the desired-set expansion in edit_concert, without which dropping
+    # her from this list would detach her on every save instead.
+    derived_seiyuu_ids = {
+        t.voiced_by_tag_id for t in concert.tags
+        if t.kind is TagKind.CHARACTER and t.voiced_by_tag_id is not None
+    }
+    # `attached_artist_ids` above is deliberately NOT narrowed: artist_excluded
+    # answers "which group members did the editor prune", a different question,
+    # and a derived seiyuu is attached, not pruned.
     initial_selected = {
         "franchise": [str(t.id) for t in concert.tags if t.kind is TagKind.FRANCHISE],
         "group": [str(t.id) for t in concert.tags if t.kind is TagKind.GROUP],
-        "artist": [str(i) for i in attached_artist_ids],
+        # Without this bucket the picker renders an empty character row over a
+        # concert that HAS characters, the editor saves without noticing, and
+        # the POST twin -- which now diffs characters like every other kind --
+        # detaches them and cascades their seiyuu away. The round trip is not
+        # cosmetic here; it is half the fix.
+        "character": [str(t.id) for t in concert.tags if t.kind is TagKind.CHARACTER],
+        "artist": [str(i) for i in attached_artist_ids - derived_seiyuu_ids],
         "artist_excluded": [str(i) for i in excluded_ids],
+        # The character twin of artist_excluded: members of an attached group
+        # the editor already pruned. Without it, re-rendering the page would
+        # show a pruned character selected again just because her group is.
+        "character_excluded": [str(i) for i in excluded_character_ids],
         "venue": [str(t.id) for t in concert.tags if t.kind is TagKind.VENUE],
     }
     # Each round row renders one toggle chip per LIVE leg, pre-selected from
@@ -1179,7 +1248,8 @@ async def edit_concert_form(
     # re-deriving, and audit_log needs a query.
     tag_summary = [
         t.name
-        for kind in (TagKind.FRANCHISE, TagKind.GROUP, TagKind.ARTIST, TagKind.VENUE)
+        for kind in (TagKind.FRANCHISE, TagKind.GROUP, TagKind.CHARACTER,
+                     TagKind.ARTIST, TagKind.VENUE)
         for t in concert.tags
         if t.kind is kind
     ]
@@ -1192,6 +1262,7 @@ async def edit_concert_form(
             "by_kind": picker["by_kind"],
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
+            "character_seiyuu": picker["character_seiyuu"],
             "tag_names": picker["tag_names"],
             # Handles for the tags whose (name, kind) collides -- the picker
             # shows one beneath the chip so two identical chips are
@@ -1243,6 +1314,7 @@ async def edit_concert(
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
+    character_tags: list[int] = Form(default=[]),
     venue_tags: list[int] = Form(default=[]),
     day_id: list[str] = Form(default=[]),
     day_key: list[str] = Form(default=[]),
@@ -1297,6 +1369,16 @@ async def edit_concert(
     f_tags = await resolve_tags(session, franchise_tags, TagKind.FRANCHISE)
     g_tags = await resolve_tags(session, group_tags, TagKind.GROUP)
     a_tags = await resolve_tags(session, artist_tags, TagKind.ARTIST)
+    # CHARACTER is resolved here for a reason that is not symmetry. It is a
+    # non-VENUE kind, so an attached character has always been in `before_ids`;
+    # leaving it out of `desired_tags` put every one of them in
+    # `before_ids - after_ids` and detached it on a save that never mentioned
+    # it -- and detach_tag then cascaded her seiyuu off too, so a routine edit
+    # of an im@s concert stripped exactly the performer this feature exists to
+    # reach. Omission means removal, as it does for every other kind: the
+    # picker emits one hidden input per SELECTED id and none for an empty row,
+    # so "no character_tags" is the only way the form can say "no characters".
+    c_tags = await resolve_tags(session, character_tags, TagKind.CHARACTER)
     # VENUE is excluded from BOTH sides of the diff below, so the leg-driven
     # rollup (sync_concert_venue_tags, further down) stays the only writer of
     # this concert's VENUE rows. Leaving them in produced two real bugs: a
@@ -1307,13 +1389,50 @@ async def edit_concert(
     # (the "already has rules on this concert" guard never fires for them).
     # Still resolved, so a bad or wrong-kind id 422s exactly as before.
     await resolve_tags(session, venue_tags, TagKind.VENUE)
-    desired_tags = {t.id: t for t in [*f_tags, *g_tags, *a_tags]}
+    desired_tags = {t.id: t for t in [*f_tags, *g_tags, *c_tags, *a_tags]}
 
     await session.refresh(concert, ["tags"])
     before_ids = {t.id for t in concert.tags if t.kind is not TagKind.VENUE}
     after_ids = set(desired_tags)
-    for tid in before_ids - after_ids:
-        await detach_tag(session, concert.id, tid)
+    # THE DESIRED SET EXPANDS EACH CHARACTER TO HER SEIYUU, mirroring on the
+    # detach side what attach_tag's chained step already does on the attach
+    # side. Owner ruling (2026-08-01): a derived seiyuu is not an editor choice,
+    # so `initial_selected["artist"]` no longer pre-ticks her and this form no
+    # longer submits her -- a plain diff would therefore read "she is gone" from
+    # every save and detach the performer the whole feature exists to reach.
+    # Keep the character, keep the seiyuu; drop the character, drop the seiyuu.
+    #
+    # KEPT SEPARATE FROM `after_ids` on purpose. This set governs the DETACH
+    # diff only; the attach loop below still iterates what the editor actually
+    # chose. A concert whose character is attached but whose seiyuu somehow is
+    # not (a row predating this, or one an old save unticked her out of) is left
+    # exactly as it is by an ordinary save, rather than silently attaching her
+    # and DM-ing her followers a 🆕 "New event" for a concert that already
+    # existed (invariant 4). Adding the character is what attaches her, and
+    # attach_tag chains that itself -- the attach loop never needs her here.
+    keep_ids = after_ids | {
+        c.voiced_by_tag_id for c in c_tags if c.voiced_by_tag_id is not None
+    }
+    # `keep_tag_ids` covers the one case the expansion above cannot: an artist
+    # ticked EXPLICITLY (she is no longer pre-ticked, so ticking her is a
+    # deliberate "credit the performer, not the character") while her character
+    # is unticked. She is then in BOTH before_ids and keep_ids -- in NEITHER
+    # diff -- so nothing puts her back after the character's detach cascades her
+    # off. The first save would silently lose her and a second identical save
+    # restore her.
+    #
+    # Swapping the loops does NOT fix that (measured: the attach loop still
+    # never sees her). Iterating `keep_ids` and letting attach_tag's
+    # `_is_attached` deduplicate DOES fix it -- and puts the re-attached seiyuu
+    # into `newly`, which handle_newly_tagged turns into a 🆕 "New event" DM to
+    # every follower she has, for a concert that already existed and has no
+    # un-send (invariant 4).
+    #
+    # Telling the cascade what this save is keeping is the shape that neither
+    # loses her nor announces her: nothing is re-attached, so `newly` stays
+    # exactly "tags this submit added", and the FIRST save is already correct.
+    for tid in before_ids - keep_ids:
+        await detach_tag(session, concert.id, tid, keep_tag_ids=keep_ids)
     newly: list[Tag] = []
     for tid in after_ids - before_ids:
         newly += await attach_tag(session, concert.id, desired_tags[tid], expand=False)

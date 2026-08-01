@@ -65,12 +65,49 @@ class ConcertKind(enum.StrEnum):
 
 
 class TagKind(enum.StrEnum):
-    """What a tag names. GROUP tags contain member (usually ARTIST) tags."""
+    """What a tag names. GROUP tags contain member tags -- ARTIST tags,
+    CHARACTER tags, or a mix."""
 
     FRANCHISE = "franchise"   # Hasunosora, Gakumas, Ikizuraibu...
     ARTIST = "artist"         # individual performers
     VENUE = "venue"           # Yokohama Arena, K-Arena...
     GROUP = "group"           # unit/group containing artist tags
+    CHARACTER = "character"   # 如月千早 -- voiced by an ARTIST, see Tag.voiced_by_tag_id
+
+
+# Which kinds a tag of each kind may sit UNDER. Both shapes mean the same thing
+# -- "the broader thing I belong to" -- and a subunit belongs to its group the
+# way a group belongs to its franchise.
+#
+# ONE table, here in the pure vocabulary, because there are two write paths into
+# `Tag.parent_id` -- POST /tags and the catalogue importer -- and they disagreed
+# once already: the importer kept a franchise-only rule after the editor widened,
+# so a file could not express a subunit at all. A kind absent from this mapping
+# takes NO parent.
+ALLOWED_PARENT_KINDS: dict[TagKind, tuple[TagKind, ...]] = {
+    TagKind.GROUP: (TagKind.FRANCHISE, TagKind.GROUP),
+    TagKind.CHARACTER: (TagKind.FRANCHISE,),
+}
+
+# Which kinds have an Eventernote ACTOR PAGE, and may therefore carry an
+# `eventernote_url` through the editor. A CHARACTER does: 如月千早 has a page of
+# her own, and reading it is the whole "discovery is nearly free" payoff of
+# making characters real tags.
+#
+# ONE table, here, for exactly ALLOWED_PARENT_KINDS' reason. The Tags page
+# decides which dialogs RENDER the field and `edit_tag` decides which submits
+# may WRITE it, and the two disagreeing is silent in the worse direction: a kind
+# whose dialog omits the field but whose route writes it unconditionally blanks
+# the stored value on every unrelated save. That is precisely what erased a
+# character's discovery link after the catalogue import set it. An empty form
+# value cannot express "absent" here -- FastAPI folds "" into the default for an
+# optional field -- so the KIND is what says whether this submit had a box.
+#
+# The daily sweep is deliberately NOT gated on this: `discovery.py` reads every
+# tag carrying a URL, whatever its kind. This table governs the editor only.
+EVENTERNOTE_KINDS: frozenset[TagKind] = frozenset({
+    TagKind.ARTIST, TagKind.GROUP, TagKind.CHARACTER,
+})
 
 
 class Anchor(enum.StrEnum):

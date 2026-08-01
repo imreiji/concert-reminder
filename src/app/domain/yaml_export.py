@@ -74,6 +74,11 @@ def concert_to_yaml(
     kind: str | None,
     franchises: list[str],
     groups: list[str],
+    # REQUIRED, not defaulted, and deliberately so: this kind was added after
+    # the format shipped, and a defaulted-to-empty parameter is exactly how the
+    # export came to drop CHARACTER tags without a single test noticing. There
+    # is one production caller; make the next kind break it too.
+    characters: list[str],
     artists: list[str],
     venues: list[str],
     days: list[YamlDay],
@@ -111,6 +116,10 @@ def concert_to_yaml(
         "series": {
             "franchises": franchises,
             "groups": groups,
+            # Between groups and artists, matching the editor's own chip order
+            # and the fact that a character sits between the two: she belongs
+            # to a group and is played by an artist.
+            "characters": characters,
             "artists": artists,
         },
         # The same tags by HANDLE. Both are written on purpose: the names so a
