@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-31 11:03-0300\n"
+"POT-Creation-Date: 2026-08-01 02:27-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -474,7 +474,7 @@ msgid "Other"
 msgstr "其他"
 
 #: src/app/db/service.py:2538 src/app/db/service.py:2684
-#: src/app/db/service.py:5866 src/app/web/templates/_board.html:73
+#: src/app/db/service.py:5978 src/app/web/templates/_board.html:73
 #: src/app/web/templates/discover.html:79 src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "多个"
@@ -556,11 +556,11 @@ msgstr "{kind} · {n}后开放"
 msgid "All rounds closed"
 msgstr "所有轮次均已截止"
 
-#: src/app/db/service.py:5485
+#: src/app/db/service.py:5597
 msgid "From dekimasen.app"
 msgstr "来自 dekimasen.app"
 
-#: src/app/db/service.py:6118 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:6230 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -570,7 +570,7 @@ msgstr "来自 dekimasen.app"
 msgid "Title"
 msgstr "标题"
 
-#: src/app/db/service.py:6122 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:6234 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -583,17 +583,17 @@ msgstr "标题"
 msgid "Notes"
 msgstr "备注"
 
-#: src/app/db/service.py:6128
+#: src/app/db/service.py:6240
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "场次 {n} 名称"
 
-#: src/app/db/service.py:6133
+#: src/app/db/service.py:6245
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "轮次 {n} 名称"
 
-#: src/app/db/service.py:6142 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:6254 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -608,7 +608,7 @@ msgstr "轮次 {n} 名称"
 msgid "Name"
 msgstr "名称"
 
-#: src/app/db/service.py:6147
+#: src/app/db/service.py:6259
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -1383,20 +1383,32 @@ msgstr "组合"
 msgid "+ Add group"
 msgstr "+ 添加组合"
 
-#: src/app/web/templates/_tag_picker_fields.html:21
+#: src/app/web/templates/_tag_picker_fields.html:27
+msgid "Characters"
+msgstr "角色"
+
+#: src/app/web/templates/_tag_picker_fields.html:27
+msgid "(their voice actors are added for you when you save)"
+msgstr "（保存时会自动添加对应声优）"
+
+#: src/app/web/templates/_tag_picker_fields.html:29
+msgid "+ Add character"
+msgstr "+ 添加角色"
+
+#: src/app/web/templates/_tag_picker_fields.html:31
 #: src/app/web/templates/discover.html:206
 msgid "Artists"
 msgstr "艺人"
 
-#: src/app/web/templates/_tag_picker_fields.html:21
+#: src/app/web/templates/_tag_picker_fields.html:31
 msgid "(auto-filled from groups — × anyone not performing)"
 msgstr "（由组合自动填充 — 未出演者请用 × 移除）"
 
-#: src/app/web/templates/_tag_picker_fields.html:23
+#: src/app/web/templates/_tag_picker_fields.html:33
 msgid "+ Add artist"
 msgstr "+ 添加艺人"
 
-#: src/app/web/templates/_tag_picker_fields.html:25
+#: src/app/web/templates/_tag_picker_fields.html:35
 msgid ""
 "Missing a tag? Create it on the <a href=\"/tags\">tags page</a> first — "
 "events are tag-driven."

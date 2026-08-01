@@ -18,7 +18,7 @@ Sync semantics (per rule):
 
 import hashlib
 import secrets
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 
@@ -5053,13 +5053,29 @@ async def attach_tag(
     return added
 
 
-async def detach_tag(session: AsyncSession, concert_id: int, tag_id: int) -> None:
+async def detach_tag(
+    session: AsyncSession,
+    concert_id: int,
+    tag_id: int,
+    keep_tag_ids: Collection[int] = (),
+) -> None:
     """Remove a tag from a concert -- and, for a CHARACTER, her seiyuu with her.
 
-    Owner rule (2026-08-01), with one refinement that is load-bearing: the
-    seiyuu goes ONLY IF no other still-attached character shares her. A seiyuu
-    can voice two characters on one bill, and detaching her because one was
-    pruned would silently drop the other's performer.
+    Owner rule (2026-08-01), with TWO refinements, both load-bearing:
+
+    * the seiyuu goes ONLY IF no other still-attached character shares her. A
+      seiyuu can voice two characters on one bill, and detaching her because
+      one was pruned would silently drop the other's performer.
+    * the seiyuu goes ONLY IF the caller has not said it is keeping her.
+      `keep_tag_ids` is that statement, and it is what makes the concert
+      editor's detach-then-attach order safe: `edit_concert` computes the
+      final tag set up front, so a seiyuu the editor left ticked while
+      unticking her character is in that set and must not be cascaded off.
+      Without it she is in `after_ids & before_ids` -- in NEITHER of the
+      route's two diffs -- so nothing puts her back, the first save loses her
+      silently, and a second identical save restores her. The set is the
+      caller's DESIRED end state, not the current attachment, so it stays a
+      statement of intent rather than a read of the row this call is deleting.
 
     KNOWN EDGE, accepted rather than solved: concert_tags does not record WHY a
     tag was attached -- group expansion has had that blind spot since it
@@ -5071,6 +5087,10 @@ async def detach_tag(session: AsyncSession, concert_id: int, tag_id: int) -> Non
     await _detach_one(session, concert_id, tag_id)
 
     if tag is None or tag.kind is not TagKind.CHARACTER or tag.voiced_by_tag_id is None:
+        await session.flush()
+        return
+
+    if tag.voiced_by_tag_id in keep_tag_ids:
         await session.flush()
         return
 

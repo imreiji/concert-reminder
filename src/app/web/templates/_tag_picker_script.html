@@ -13,7 +13,7 @@
     (sync_concert_venue_tags is their sole writer), so there is no chip row
     to render and no venue_tags hidden input to submit. See
     _tag_picker_fields.html. -#}
-{% for kindname in ["franchise", "group", "artist"] %}
+{% for kindname in ["franchise", "group", "character", "artist"] %}
 <dialog id="picker-{{ kindname }}" class="picker">
   <div class="picker-head">
     <h3>Add {{ kindname }}s</h3>
@@ -49,6 +49,11 @@
   const sel = {
     franchise: new Set(INITIAL_SELECTED.franchise || []),
     group: new Set(INITIAL_SELECTED.group || []),
+    // Characters are a plain picked set like franchises and groups -- NOT
+    // derived the way artists are. A character implies her seiyuu, but that
+    // chaining happens server-side in attach_tag on save; nothing here adds
+    // an artist chip when a character is ticked.
+    character: new Set(INITIAL_SELECTED.character || []),
     artist: new Set(),
   };
   const artistExcluded = new Set(INITIAL_SELECTED.artist_excluded || []); // auto-added artists the editor removed
@@ -87,7 +92,7 @@
   }
   function renderAll() {
     recomputeArtists();
-    ["franchise", "group", "artist"].forEach(renderRow);
+    ["franchise", "group", "character", "artist"].forEach(renderRow);
     syncHidden();
   }
   function removePick(kind, id) {
@@ -126,6 +131,7 @@
     }};
     put("franchise_tags", sel.franchise);
     put("group_tags", sel.group);
+    put("character_tags", sel.character);
     put("artist_tags", sel.artist);
   }
 

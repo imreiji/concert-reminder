@@ -1,4 +1,4 @@
-{#- Tag-picker form fields: franchise/group/artist chip rows.
+{#- Tag-picker form fields: franchise/group/character/artist chip rows.
     Include INSIDE a <form id="new-concert">; pair with _tag_picker_script.html
     right after the form closes. Caller provides by_kind.
 
@@ -17,6 +17,16 @@
 <label>{{ _("Groups") }}</label>
 <div class="pickrow"><span class="taglist" id="sel-group"></span>
   <button type="button" class="chip add" onclick="openPicker('group')">{{ _("+ Add group") }}</button></div>
+
+{#- Characters sit between groups and artists because that is the order the
+    data flows: a group implies its members, a character implies her voice
+    actor, and the artist row below is where both land. The seiyuu is added
+    SERVER-side on save (attach_tag's chained step), not by this script, so
+    she appears in the artist row on the next render rather than the moment a
+    character chip is ticked. -#}
+<label>{{ _("Characters") }} <span class="dim tiny">{{ _("(their voice actors are added for you when you save)") }}</span></label>
+<div class="pickrow"><span class="taglist" id="sel-character"></span>
+  <button type="button" class="chip add" onclick="openPicker('character')">{{ _("+ Add character") }}</button></div>
 
 <label>{{ _("Artists") }} <span class="dim tiny">{{ _("(auto-filled from groups — × anyone not performing)") }}</span></label>
 <div class="pickrow"><span class="taglist" id="sel-artist"></span>

@@ -411,6 +411,12 @@ async def import_commit(
     franchise_tags: list[int] = Form(default=[]),
     group_tags: list[int] = Form(default=[]),
     artist_tags: list[int] = Form(default=[]),
+    # The preview renders the SHARED tag picker, so its character row submits
+    # here whether or not a draft can name one yet. Collected and passed
+    # through rather than left to FastAPI's silent drop of unknown fields: an
+    # editor who ticks 如月千早 on the preview would otherwise watch the chip
+    # vanish on commit with nothing said.
+    character_tags: list[int] = Form(default=[]),
     venue_tags: list[int] = Form(default=[]),
     day_key: list[str] = Form(default=[]),
     day_label: list[str] = Form(default=[]),
@@ -481,6 +487,7 @@ async def import_commit(
     )
     concert, newly = await create_concert_row(
         session, user, title, event_id, franchise_tags, group_tags, artist_tags, venue_tags,
+        character_tags=character_tags,
         kind=ConcertKind(kind) if kind else None,
         source_url=checked_source_url,
     )
