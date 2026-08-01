@@ -1145,6 +1145,25 @@ async def edit_concert_form(
             for m in await group_members(session, t.id):
                 if m.id not in attached_artist_ids:
                     excluded_ids.append(m.id)
+    # Owner ruling (2026-08-01): where a seiyuu represents a CHARACTER, only the
+    # character is added and the artist is auto-correlated -- shown as `cv. xxx`,
+    # never offered as a tick. An artist added by herself correlates with no
+    # character, so "derived" needs no provenance column: she is derived exactly
+    # when some ATTACHED character names her, which is the same derivation the
+    # display rule and the prune rule already run.
+    #
+    # Pre-ticking her is what made the prune rule unreachable from this editor:
+    # ticked means submitted means always in `after_ids` means never detached,
+    # whatever happened to her character. Both halves of that are fixed together
+    # -- see the desired-set expansion in edit_concert, without which dropping
+    # her from this list would detach her on every save instead.
+    derived_seiyuu_ids = {
+        t.voiced_by_tag_id for t in concert.tags
+        if t.kind is TagKind.CHARACTER and t.voiced_by_tag_id is not None
+    }
+    # `attached_artist_ids` above is deliberately NOT narrowed: artist_excluded
+    # answers "which group members did the editor prune", a different question,
+    # and a derived seiyuu is attached, not pruned.
     initial_selected = {
         "franchise": [str(t.id) for t in concert.tags if t.kind is TagKind.FRANCHISE],
         "group": [str(t.id) for t in concert.tags if t.kind is TagKind.GROUP],
@@ -1154,7 +1173,7 @@ async def edit_concert_form(
         # detaches them and cascades their seiyuu away. The round trip is not
         # cosmetic here; it is half the fix.
         "character": [str(t.id) for t in concert.tags if t.kind is TagKind.CHARACTER],
-        "artist": [str(i) for i in attached_artist_ids],
+        "artist": [str(i) for i in attached_artist_ids - derived_seiyuu_ids],
         "artist_excluded": [str(i) for i in excluded_ids],
         "venue": [str(t.id) for t in concert.tags if t.kind is TagKind.VENUE],
     }
@@ -1346,15 +1365,35 @@ async def edit_concert(
     await session.refresh(concert, ["tags"])
     before_ids = {t.id for t in concert.tags if t.kind is not TagKind.VENUE}
     after_ids = set(desired_tags)
-    # `keep_tag_ids=after_ids` is the ORDERING fix, and it is needed however the
-    # two loops are arranged. Untick a character while leaving her seiyuu
-    # ticked: she is in BOTH before_ids and after_ids, so she is in NEITHER
-    # diff and neither loop touches her -- yet the character's detach cascades
-    # her off, and nothing puts her back. The first save silently loses the
-    # performer; a second identical save restores her.
+    # THE DESIRED SET EXPANDS EACH CHARACTER TO HER SEIYUU, mirroring on the
+    # detach side what attach_tag's chained step already does on the attach
+    # side. Owner ruling (2026-08-01): a derived seiyuu is not an editor choice,
+    # so `initial_selected["artist"]` no longer pre-ticks her and this form no
+    # longer submits her -- a plain diff would therefore read "she is gone" from
+    # every save and detach the performer the whole feature exists to reach.
+    # Keep the character, keep the seiyuu; drop the character, drop the seiyuu.
+    #
+    # KEPT SEPARATE FROM `after_ids` on purpose. This set governs the DETACH
+    # diff only; the attach loop below still iterates what the editor actually
+    # chose. A concert whose character is attached but whose seiyuu somehow is
+    # not (a row predating this, or one an old save unticked her out of) is left
+    # exactly as it is by an ordinary save, rather than silently attaching her
+    # and DM-ing her followers a 🆕 "New event" for a concert that already
+    # existed (invariant 4). Adding the character is what attaches her, and
+    # attach_tag chains that itself -- the attach loop never needs her here.
+    keep_ids = after_ids | {
+        c.voiced_by_tag_id for c in c_tags if c.voiced_by_tag_id is not None
+    }
+    # `keep_tag_ids` covers the one case the expansion above cannot: an artist
+    # ticked EXPLICITLY (she is no longer pre-ticked, so ticking her is a
+    # deliberate "credit the performer, not the character") while her character
+    # is unticked. She is then in BOTH before_ids and keep_ids -- in NEITHER
+    # diff -- so nothing puts her back after the character's detach cascades her
+    # off. The first save would silently lose her and a second identical save
+    # restore her.
     #
     # Swapping the loops does NOT fix that (measured: the attach loop still
-    # never sees her). Iterating `after_ids` and letting attach_tag's
+    # never sees her). Iterating `keep_ids` and letting attach_tag's
     # `_is_attached` deduplicate DOES fix it -- and puts the re-attached seiyuu
     # into `newly`, which handle_newly_tagged turns into a 🆕 "New event" DM to
     # every follower she has, for a concert that already existed and has no
@@ -1363,8 +1402,8 @@ async def edit_concert(
     # Telling the cascade what this save is keeping is the shape that neither
     # loses her nor announces her: nothing is re-attached, so `newly` stays
     # exactly "tags this submit added", and the FIRST save is already correct.
-    for tid in before_ids - after_ids:
-        await detach_tag(session, concert.id, tid, keep_tag_ids=after_ids)
+    for tid in before_ids - keep_ids:
+        await detach_tag(session, concert.id, tid, keep_tag_ids=keep_ids)
     newly: list[Tag] = []
     for tid in after_ids - before_ids:
         newly += await attach_tag(session, concert.id, desired_tags[tid], expand=False)

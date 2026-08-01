@@ -5069,19 +5069,30 @@ async def detach_tag(
     * the seiyuu goes ONLY IF the caller has not said it is keeping her.
       `keep_tag_ids` is that statement, and it is what makes the concert
       editor's detach-then-attach order safe: `edit_concert` computes the
-      final tag set up front, so a seiyuu the editor left ticked while
+      final tag set up front, so a seiyuu the editor ticked EXPLICITLY while
       unticking her character is in that set and must not be cascaded off.
-      Without it she is in `after_ids & before_ids` -- in NEITHER of the
+      Without it she is in `keep_ids & before_ids` -- in NEITHER of the
       route's two diffs -- so nothing puts her back, the first save loses her
       silently, and a second identical save restores her. The set is the
       caller's DESIRED end state, not the current attachment, so it stays a
       statement of intent rather than a read of the row this call is deleting.
 
+      It stayed load-bearing through the 2026-08-01 ruling that a derived
+      seiyuu is never PRE-ticked, which was expected to make it inert and did
+      not: ticking her is still a gesture the picker offers, and it now means
+      something sharper than it used to -- "credit the performer, not the
+      character" -- so honouring it matters more, not less. Measured by
+      removing the parameter and running the suite; two editor tests fail.
+
     KNOWN EDGE, accepted rather than solved: concert_tags does not record WHY a
     tag was attached -- group expansion has had that blind spot since it
     shipped -- so a seiyuu who was ALSO there in her own right is removed when
     the character is pruned, and the editor re-adds her. Building provenance to
-    fix that would touch every attach path for a rare case.
+    fix that would touch every attach path for a rare case. Under the ruling
+    that case is contradictory data rather than a supported state (an event
+    credits the character OR the performer), so the missing provenance is now
+    the DEFINITION of the behaviour: a standalone tick over an attached
+    character is accepted, not remembered, and re-reads as derived.
     """
     tag = await session.get(Tag, tag_id)
     await _detach_one(session, concert_id, tag_id)

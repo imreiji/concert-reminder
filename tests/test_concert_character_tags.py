@@ -1,4 +1,5 @@
-"""The concert editor's CHARACTER path -- resolution AND detach/attach order.
+"""The concert editor's CHARACTER path -- resolution, detach/attach order, and
+the owner ruling that a DERIVED SEIYUU IS NEVER OFFERED AS A CHOICE.
 
 Two holes, both found by review rather than by the plan, both silent:
 
@@ -13,16 +14,29 @@ Two holes, both found by review rather than by the plan, both silent:
 The ordering is the subtle half and survives fixing (1): the detach loop runs
 BEFORE the attach loop, so unticking a character while leaving her seiyuu
 ticked detaches the character, cascades the seiyuu away, and then skips her in
-the attach loop because she is in `after_ids & before_ids` and therefore in
+the attach loop because she is in `keep_ids & before_ids` and therefore in
 neither diff. First save loses her; a second identical save puts her back,
 which makes it a save-twice recovery rather than a visible error.
+
+THE RULING (2026-08-01) then changed what "ticked" means. For an event where a
+seiyuu represents a character, ONLY the character is added; the artist is
+auto-correlated and displayed as `cv. xxx`. An artist added by herself
+correlates with no character. So a derived seiyuu is not pre-ticked, the form
+does not submit her, and the desired set expands each character to her seiyuu
+before the detach diff instead. The two changes are opposite sides of one idea
+and only work together: change one alone leaves her offered as a choice she is
+not, change two alone leaves the prune rule unreachable from this editor.
 
 Every test here goes through the real HTTP route and re-reads from a FRESH
 session, because the bug is entirely about what is left in `concert_tags`
 after the request commits -- an assertion against the request's own identity
-map would have believed the wrong thing.
+map would have believed the wrong thing. The tests that turn on the ruling go
+one step further and submit WHAT THE BROWSER WOULD (see `form_selection`): a
+hand-written form can tick a seiyuu the real page never offers, which is
+exactly how a test about pre-ticking ends up not depending on pre-ticking.
 """
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -168,6 +182,33 @@ def resubmit(client, event_id, day_id, *, extra=None, title="THE IDOLM@STER"):
     return client.post(f"/concerts/{event_id}/edit", data=data)
 
 
+def form_selection(client, event_id) -> dict[str, list[str]]:
+    """The tag selection the real edit page hands the picker, read off the
+    rendered HTML.
+
+    Tests that turn on "she is not offered as a tick" MUST submit this rather
+    than a hand-written tag list. `sel.artist` in the picker script is seeded
+    from `INITIAL_SELECTED.artist` and nothing else (no group is attached in
+    these fixtures, so `autoArtists()` contributes nothing), so this is exactly
+    what `syncHidden()` would POST.
+    """
+    page = client.get(f"/concerts/{event_id}/edit")
+    assert page.status_code == 200, page.text
+    marker = page.text.split("const INITIAL_SELECTED = ")[1].split(";\n")[0]
+    return json.loads(marker)
+
+
+def resubmit_as_rendered(client, event_id, day_id, *, drop_characters=(), **kw):
+    """Press save on the edit page, optionally unticking some characters
+    first -- the two gestures an editor actually has."""
+    sel = form_selection(client, event_id)
+    dropped = {str(i) for i in drop_characters}
+    return resubmit(client, event_id, day_id, extra={
+        "character_tags": [i for i in sel["character"] if i not in dropped],
+        "artist_tags": list(sel["artist"]),
+    }, **kw)
+
+
 # ── the regression this task exists for ──────────────────────────────────
 
 
@@ -181,10 +222,7 @@ async def test_a_character_survives_an_edit_save(client, db):
     cid, chihaya, imai, _o, day_id = await seed_imas(db)
     assert await attached(db, cid) == {chihaya, imai}, "seed built the wrong shape"
 
-    r = resubmit(client, "imas-1", day_id, extra={
-        "character_tags": [str(chihaya)],
-        "artist_tags": [str(imai)],
-    })
+    r = resubmit_as_rendered(client, "imas-1", day_id)
     assert r.status_code == 303, r.text
 
     got = await attached(db, cid)
@@ -192,13 +230,17 @@ async def test_a_character_survives_an_edit_save(client, db):
     assert imai in got, "the prune rule cascaded her seiyuu away with her"
 
 
-async def test_unticking_a_character_keeps_a_still_ticked_seiyuu(client, db):
-    """The ORDERING half, which survives fixing resolution alone.
+async def test_an_explicitly_ticked_seiyuu_survives_unticking_her_character(client, db):
+    """The ORDERING half, and the case that keeps `keep_tag_ids` load-bearing.
 
-    Untick 如月千早, leave 今井麻美 ticked. Detach-before-attach cascades the
-    seiyuu off with the character, and the attach loop then skips her because
-    she is in `after_ids & before_ids` -- in neither diff. She must stay: the
-    editor said so on this very submit.
+    Under the ruling this is now a DELIBERATE gesture rather than an artefact
+    of pre-ticking: 今井麻美 is not offered as a tick while 如月千早 is
+    attached, so a submit that carries her is an editor saying "credit the
+    performer, not the character". Untick the character, tick the artist.
+
+    Detach-before-attach cascades the seiyuu off with the character, and the
+    attach loop then skips her because she is in `keep_ids & before_ids` -- in
+    neither diff. She must stay: the editor said so on this very submit.
     """
     await make_editor(db)
     login(client)
@@ -221,40 +263,192 @@ async def test_omitting_character_tags_removes_the_character(client, db):
     always followed. Reading omission as "leave them alone" would make
     removing the last character impossible through the UI.
 
-    A form that predates the field still degrades safely, which is the point
-    of pairing this with the ordering fix: the seiyuu is an ARTIST and is
-    pre-selected from her own attachment, so she is submitted and survives.
+    This one submits NEITHER row, which is what a form that predates the
+    character field does. Under the ruling that is unambiguous: no character,
+    no artist ticked in her own right, so the pair goes. (Before the ruling the
+    seiyuu was pre-ticked and such a form silently rescued her.)
     """
     await make_editor(db)
     login(client)
     cid, chihaya, imai, _o, day_id = await seed_imas(db)
 
-    r = resubmit(client, "imas-1", day_id, extra={"artist_tags": [str(imai)]})
+    r = resubmit(client, "imas-1", day_id)
     assert r.status_code == 303, r.text
 
     got = await attached(db, cid)
     assert chihaya not in got
-    assert imai in got
+    assert imai not in got
 
 
 async def test_a_shared_seiyuu_survives_unticking_only_one_of_her_roles(client, db):
     """The refinement, through the route: two characters, one voice. Untick
     one and the other still needs her -- the cascade must not fire, and the
-    surviving character must not be collateral either."""
+    surviving character must not be collateral either.
+
+    Submitted as the page renders it, so the seiyuu is carried by the SURVIVING
+    character's expansion and by nothing else. Ticking her by hand here would
+    have made the test pass on the `keep_tag_ids` guard instead and said
+    nothing about the shared-role refinement.
+    """
     await make_editor(db)
     login(client)
     cid, chihaya, imai, other, day_id = await seed_imas(db, second_role=True)
 
-    r = resubmit(client, "imas-1", day_id, extra={
-        "character_tags": [str(other)],
-        "artist_tags": [str(imai)],
-    })
+    r = resubmit_as_rendered(client, "imas-1", day_id, drop_characters=[chihaya])
     assert r.status_code == 303, r.text
 
     got = await attached(db, cid)
     assert other in got
     assert imai in got
     assert chihaya not in got
+
+
+# ── the ruling: a derived seiyuu is never offered as a choice ────────────
+
+
+async def test_a_derived_seiyuu_is_not_pre_ticked(client, db):
+    """She is not an editor choice. Offering her as one is what made the prune
+    rule unreachable: pre-ticked means always submitted means always in the
+    desired set means never detached, whatever became of her character.
+
+    The character IS still pre-ticked -- the assertion pairs them so a page
+    that rendered no selection at all could not pass this.
+    """
+    await make_editor(db)
+    login(client)
+    _cid, chihaya, imai, _o, _day = await seed_imas(db)
+
+    sel = form_selection(client, "imas-1")
+    assert sel["character"] == [str(chihaya)], "the character must still be a tick"
+    assert str(imai) not in sel["artist"], (
+        "her seiyuu is derived from the character and must not be offered as a tick"
+    )
+    # Nor smuggled in as a pruned group member, which would suppress her chip
+    # for a different reason and hide a real regression here later.
+    assert str(imai) not in sel["artist_excluded"]
+
+
+async def test_a_seiyuu_attached_without_her_character_is_pre_ticked(client, db):
+    """"An artist added by herself correlates with no character." Derived means
+    "some ATTACHED character names her" -- not "she is somebody's voice", which
+    is a property of the tag and true forever. Get that wrong and every seiyuu
+    in the catalogue silently stops being editable as a performer.
+    """
+    await make_editor(db)
+    login(client)
+    async with db() as s:
+        await ensure_user(s, EDITOR, "editor")
+        c = Concert(title="Solo live", event_id="solo-1", created_by=EDITOR)
+        imai = Tag(name="今井麻美", kind=TagKind.ARTIST, slug="asami-imai")
+        s.add_all([c, imai])
+        await s.flush()
+        # She voices somebody; that character is simply not on this bill.
+        s.add(Tag(name="如月千早", kind=TagKind.CHARACTER, slug="chihaya",
+                  voiced_by_tag_id=imai.id))
+        s.add(ConcertDay(concert_id=c.id, label="Day 1",
+                         starts_at_utc=datetime(2099, 8, 1, 9, 0, tzinfo=UTC)))
+        await s.flush()
+        await attach_tag(s, c.id, imai)
+        await s.commit()
+        imai_id = imai.id
+
+    assert form_selection(client, "solo-1")["artist"] == [str(imai_id)]
+
+
+async def test_unticking_a_character_removes_her_seiyuu(client, db):
+    """The owner rule, now actually reachable from the editor.
+
+    Submitted as the page renders it: with the seiyuu no longer pre-ticked, the
+    only thing carrying her is the character, so unticking the character drops
+    both. Ticking her by hand instead is a different gesture with a different
+    (also correct) answer -- see the explicit-tick test above.
+    """
+    await make_editor(db)
+    login(client)
+    cid, chihaya, imai, _o, day_id = await seed_imas(db)
+
+    r = resubmit_as_rendered(client, "imas-1", day_id, drop_characters=[chihaya])
+    assert r.status_code == 303, r.text
+
+    got = await attached(db, cid)
+    assert chihaya not in got, "the unticked character should be gone"
+    assert imai not in got, "nothing credits her any more; the prune rule must fire"
+
+
+async def test_keeping_a_character_keeps_her_seiyuu(client, db):
+    """The case the naive fix breaks: she is not in the submitted artist list,
+    so a plain before/after diff reads "removed" and detaches her on EVERY
+    save -- silently stripping the performer the feature exists to reach.
+
+    The desired set has to expand each character to her seiyuu before the
+    detach diff, mirroring what `attach_tag` already does on the attach side.
+    """
+    await make_editor(db)
+    login(client)
+    cid, chihaya, imai, _o, day_id = await seed_imas(db)
+
+    sel = form_selection(client, "imas-1")
+    assert str(imai) not in sel["artist"], "precondition: she is not a tick"
+
+    r = resubmit_as_rendered(client, "imas-1", day_id)
+    assert r.status_code == 303, r.text
+    assert await attached(db, cid) == {chihaya, imai}
+
+
+async def test_a_standalone_artist_is_not_treated_as_derived(client, db):
+    """Two artists on one concert: one derived from an attached character, one
+    the editor added in her own right. Only the derived one disappears from the
+    tick list, and the other survives a save that never mentions the character.
+    """
+    await make_editor(db)
+    login(client)
+    cid, chihaya, imai, _o, day_id = await seed_imas(db)
+    async with db() as s:
+        guest = Tag(name="中村繪里子", kind=TagKind.ARTIST, slug="eriko-nakamura")
+        s.add(guest)
+        await s.flush()
+        await attach_tag(s, cid, guest)
+        await s.commit()
+        guest_id = guest.id
+
+    sel = form_selection(client, "imas-1")
+    assert sel["artist"] == [str(guest_id)], (
+        "the standalone artist must stay a tick and the derived seiyuu must not"
+    )
+
+    r = resubmit_as_rendered(client, "imas-1", day_id)
+    assert r.status_code == 303, r.text
+    assert await attached(db, cid) == {chihaya, imai, guest_id}
+
+
+async def test_an_artist_also_named_by_a_kept_character_collapses_to_derived(client, db):
+    """THE OVERLAP CASE, which is contradictory data rather than a supported
+    state: an event either credits the character or credits the performer.
+
+    No machinery is built for it. The behaviour that falls out is stated here
+    so it is not rediscovered as a bug: a hand-written submit CAN carry both,
+    it is accepted (she is desired either way, so nothing detaches her), and it
+    is NOT REMEMBERED -- there is no provenance column, so the very next render
+    reads her as derived and the next save treats her as derived.
+    """
+    await make_editor(db)
+    login(client)
+    cid, chihaya, imai, _o, day_id = await seed_imas(db)
+
+    r = resubmit(client, "imas-1", day_id, extra={
+        "character_tags": [str(chihaya)],
+        "artist_tags": [str(imai)],
+    })
+    assert r.status_code == 303, r.text
+    assert await attached(db, cid) == {chihaya, imai}, "the contradiction is accepted"
+
+    # ...and immediately forgotten: she is derived again on the next render.
+    assert str(imai) not in form_selection(client, "imas-1")["artist"]
+    r = resubmit_as_rendered(client, "imas-1", day_id, drop_characters=[chihaya])
+    assert r.status_code == 303, r.text
+    assert await attached(db, cid) == set(), (
+        "the standalone tick is not provenance and must not outlive the render"
+    )
 
 
 async def _follow(db, *tag_ids):
@@ -281,7 +475,7 @@ async def test_unticking_a_character_queues_no_notification_for_her_seiyuu(clien
     """Invariant 4, and the SHARP end of it -- this is the trap the brief
     warned about, in the one scenario that springs it.
 
-    The obvious ordering fix is to iterate `after_ids` and let `attach_tag`'s
+    The obvious ordering fix is to iterate `keep_ids` and let `attach_tag`'s
     `_is_attached` deduplicate. On this submit the character's detach cascades
     the seiyuu off, so `_is_attached` is FALSE when the loop reaches her, she
     is re-attached, and she lands in `newly` -- which `handle_newly_tagged`
@@ -304,23 +498,61 @@ async def test_unticking_a_character_queues_no_notification_for_her_seiyuu(clien
     )
 
 
-async def test_a_no_op_edit_save_queues_no_notification(client, db):
-    """The companion case: re-saving an unchanged concert attaches nothing, so
-    it announces nothing. Weaker than the test above -- any shape that reaches
-    `attach_tag` here is deduplicated by `_is_attached` before `newly` grows --
-    but it is the save an editor actually performs most often, and it pins that
-    merely OPENING the editor and pressing save cannot spam a tag's followers.
+async def test_an_ordinary_edit_save_changes_something_and_announces_nothing(client, db):
+    """The companion case, and the one an editor performs most often: open the
+    editor, change the title, press save. It attaches nothing, so it announces
+    nothing -- merely editing a concert cannot spam a tag's followers.
+
+    Submitted as the page renders it, and asserting BOTH tags survived, so it
+    cannot pass vacuously: a shape that detached the pair would also queue
+    nothing. The title change is what keeps it from being a no-op -- an
+    unchanged save is a weaker claim, since `record_concert_edit` would find no
+    diff either.
     """
     await make_editor(db)
     login(client)
-    _cid, chihaya, imai, _o, day_id = await seed_imas(db)
+    cid, chihaya, imai, _o, day_id = await seed_imas(db)
     await _follow(db, imai, chihaya)
 
-    r = resubmit(client, "imas-1", day_id, extra={
-        "character_tags": [str(chihaya)],
-        "artist_tags": [str(imai)],
-    })
+    r = resubmit_as_rendered(client, "imas-1", day_id, title="THE IDOLM@STER 10th")
     assert r.status_code == 303, r.text
+
+    async with db() as s:
+        assert (await s.get(Concert, cid)).title == "THE IDOLM@STER 10th", (
+            "precondition: this save has to have changed something"
+        )
+    assert await attached(db, cid) == {chihaya, imai}, "the save lost a tag"
+    assert await _queued(db) == []
+
+
+async def test_a_save_neither_attaches_nor_announces_a_missing_seiyuu(client, db):
+    """Why the expansion feeds the DETACH diff only, and not the attach loop.
+
+    A concert can carry a character without her seiyuu: rows predate the
+    chaining, and an older save could untick her while keeping the character.
+    Expanding the desired set for BOTH diffs would quietly attach her on the
+    next unrelated save -- and `handle_newly_tagged` would DM a 🆕 "New event"
+    to every follower she has, for a concert that already existed, with no
+    un-send (invariant 4). Repairing that pairing is the editor's call, made by
+    re-adding the character; a save must not make it for them.
+    """
+    await make_editor(db)
+    login(client)
+    cid, chihaya, imai, _o, day_id = await seed_imas(db)
+    await _follow(db, imai, chihaya)
+    async with db() as s:
+        row = (await s.execute(
+            select(ConcertTag).where(
+                ConcertTag.concert_id == cid, ConcertTag.tag_id == imai
+            )
+        )).scalar_one()
+        await s.delete(row)
+        await s.commit()
+
+    r = resubmit_as_rendered(client, "imas-1", day_id, title="THE IDOLM@STER 10th")
+    assert r.status_code == 303, r.text
+
+    assert await attached(db, cid) == {chihaya}, "the save attached her by itself"
     assert await _queued(db) == []
 
 
@@ -368,19 +600,19 @@ async def test_creating_a_concert_with_a_character_attaches_her_seiyuu(client, d
 async def test_the_edit_page_pre_selects_an_attached_character(client, db):
     """`initial_selected` round-trip: without a `character` bucket the picker
     renders the row empty, the editor saves without noticing, and the tag is
-    gone -- the resolution fix alone would not have been enough."""
+    gone -- the resolution fix alone would not have been enough.
+
+    Her seiyuu is a separate question and belongs to the ruling; see
+    `test_a_derived_seiyuu_is_not_pre_ticked`.
+    """
     await make_editor(db)
     login(client)
-    _cid, chihaya, imai, _o, _day = await seed_imas(db)
+    _cid, chihaya, _imai, _o, _day = await seed_imas(db)
 
     page = client.get("/concerts/imas-1/edit")
     assert page.status_code == 200
-    body = page.text
-    assert 'id="sel-character"' in body, "the picker has no character chip row"
-    # INITIAL_SELECTED is `| tojson`-serialized, so the ids are JSON strings.
-    marker = body.split("const INITIAL_SELECTED = ")[1].split(";")[0]
-    assert f'"{chihaya}"' in marker, "the attached character is not pre-selected"
-    assert f'"{imai}"' in marker, "her seiyuu is not pre-selected either"
+    assert 'id="sel-character"' in page.text, "the picker has no character chip row"
+    assert form_selection(client, "imas-1")["character"] == [str(chihaya)]
 
 
 async def test_the_creation_form_offers_the_character_picker(client, db):
