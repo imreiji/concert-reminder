@@ -353,3 +353,188 @@ async def test_a_choice_naming_a_handle_not_in_the_file_is_ignored(db):
         members={("also-not", "x"): "remove"},
     ))
     assert sorted(report.created) == ["hasunosora", "k-arena", "kozue-otomune", "love-live"]
+
+
+# ── voiced_by: a HANDLE in the file, an id in the ORM ─────────────────────
+
+
+IMAS = """
+tags:
+  - {handle: asami-imai, name: "今井麻美", kind: artist}
+  - {handle: chihaya, name: "如月千早", kind: character, voiced_by: asami-imai}
+"""
+
+
+async def test_voiced_by_round_trips_as_a_handle_not_an_id(db):
+    """Both conversions must exist or the reformat silently drops every seiyuu
+    link: apply_tag_import resolves handle -> id, current_tag_exports id ->
+    handle. A file never carries an id, and the ORM never carries a handle."""
+    await _import(db, IMAS)
+    async with db() as s:
+        tags = {t.slug: t for t in (await s.execute(select(Tag))).scalars()}
+        assert tags["chihaya"].voiced_by_tag_id == tags["asami-imai"].id
+        exports = {e.handle: e for e in await current_tag_exports(s)}
+        assert exports["chihaya"].voiced_by == "asami-imai"
+        assert exports["asami-imai"].voiced_by is None
+
+
+async def test_voiced_by_resolves_in_the_second_pass_not_the_first(db):
+    """The seiyuu is listed AFTER the character here, so a first-pass resolution
+    would find nothing. Same reason `parent` and members wait."""
+    await _import(db, """
+tags:
+  - {handle: chihaya, name: "如月千早", kind: character, voiced_by: asami-imai}
+  - {handle: asami-imai, name: "今井麻美", kind: artist}
+""")
+    async with db() as s:
+        tags = {t.slug: t for t in (await s.execute(select(Tag))).scalars()}
+        assert tags["chihaya"].voiced_by_tag_id == tags["asami-imai"].id
+
+
+async def test_voiced_by_fills_onto_an_existing_character(db):
+    """The FILL path, which is what the reformat actually runs: the characters
+    already exist by then and only the link is missing."""
+    async with db() as s:
+        await ensure_user(s, ADMIN, "reiji")
+        s.add_all([
+            Tag(name="今井麻美", kind=TagKind.ARTIST, slug="asami-imai"),
+            Tag(name="如月千早", kind=TagKind.CHARACTER, slug="chihaya"),
+        ])
+        await s.commit()
+
+    report = await _import(db, IMAS)
+    async with db() as s:
+        tags = {t.slug: t for t in (await s.execute(select(Tag))).scalars()}
+        assert tags["chihaya"].voiced_by_tag_id == tags["asami-imai"].id
+    assert report.filled == [], (
+        "pass 1 must not claim to have written a handle field -- what it holds "
+        "is a handle, and only pass 2 can turn one into an id"
+    )
+
+
+async def test_a_recast_keeps_mine_until_it_is_chosen(db):
+    """Two differing values are a decision, and the unanswered default is the
+    one that changes nothing -- voiced_by is no exception."""
+    async with db() as s:
+        await ensure_user(s, ADMIN, "reiji")
+        other = Tag(name="別人", kind=TagKind.ARTIST, slug="someone-else")
+        s.add_all([other, Tag(name="今井麻美", kind=TagKind.ARTIST, slug="asami-imai")])
+        await s.flush()
+        s.add(Tag(name="如月千早", kind=TagKind.CHARACTER, slug="chihaya",
+                  voiced_by_tag_id=other.id))
+        await s.commit()
+
+    await _import(db, IMAS)
+    async with db() as s:
+        tags = {t.slug: t for t in (await s.execute(select(Tag))).scalars()}
+        assert tags["chihaya"].voiced_by_tag_id == tags["someone-else"].id
+
+    await _import(db, IMAS, choices=ImportChoices(
+        fields={("chihaya", "voiced_by"): "theirs"}
+    ))
+    async with db() as s:
+        tags = {t.slug: t for t in (await s.execute(select(Tag))).scalars()}
+        assert tags["chihaya"].voiced_by_tag_id == tags["asami-imai"].id
+
+
+async def test_a_voiced_by_handle_that_is_nowhere_warns_and_is_dropped(db):
+    report = await _import(db, """
+tags:
+  - {handle: chihaya, name: "如月千早", kind: character, voiced_by: nobody}
+""")
+    assert report.created == ["chihaya"]
+    assert any("nobody" in w for w in report.warnings)
+    async with db() as s:
+        row = (await s.execute(select(Tag).where(Tag.slug == "chihaya"))).scalar_one()
+        assert row.voiced_by_tag_id is None
+
+
+# ── The parent rule, widened to the one POST /tags uses ───────────────────
+
+
+async def test_a_group_may_be_parented_to_a_group(db):
+    """A subunit belongs to its group the way a group belongs to its franchise.
+    Without this the catalogue file cannot express a subunit at all, which is
+    the whole point of setting them through this path."""
+    report = await _import(db, """
+tags:
+  - {handle: imas, name: "アイマス", kind: group}
+  - {handle: sub, name: "サブユニット", kind: group, parent: imas}
+""")
+    assert report.warnings == []
+    async with db() as s:
+        tags = {t.slug: t for t in (await s.execute(select(Tag))).scalars()}
+        assert tags["sub"].parent_id == tags["imas"].id
+
+
+async def test_a_character_may_be_parented_to_a_franchise(db):
+    report = await _import(db, """
+tags:
+  - {handle: imas, name: "アイマス", kind: franchise}
+  - {handle: chihaya, name: "如月千早", kind: character, parent: imas}
+""")
+    assert report.warnings == []
+    async with db() as s:
+        tags = {t.slug: t for t in (await s.execute(select(Tag))).scalars()}
+        assert tags["chihaya"].parent_id == tags["imas"].id
+
+
+async def test_an_artist_still_takes_no_parent_at_all(db):
+    """The table is the one POST /tags enforces, and it lists only GROUP and
+    CHARACTER. An artist under a franchise was never creatable in the editor and
+    must not become creatable from a file."""
+    report = await _import(db, """
+tags:
+  - {handle: imas, name: "アイマス", kind: franchise}
+  - {handle: a, name: A, kind: artist, parent: imas}
+""")
+    assert any("parent" in w for w in report.warnings)
+    async with db() as s:
+        row = (await s.execute(select(Tag).where(Tag.slug == "a"))).scalar_one()
+        assert row.parent_id is None
+
+
+async def test_a_tag_cannot_be_its_own_parent(db):
+    report = await _import(db, "tags:\n  - {handle: g, name: G, kind: group, parent: g}\n")
+    assert any("loop" in w.lower() for w in report.warnings)
+    async with db() as s:
+        row = (await s.execute(select(Tag).where(Tag.slug == "g"))).scalar_one()
+        assert row.parent_id is None
+
+
+async def test_a_parent_loop_across_two_rows_is_refused(db):
+    """GROUP -> GROUP made loops possible for the first time, and nothing walks
+    parent_id transitively -- so an unguarded loop is not noticed until
+    something does, and then it hangs rather than fails."""
+    report = await _import(db, """
+tags:
+  - {handle: a, name: A, kind: group, parent: b}
+  - {handle: b, name: B, kind: group, parent: a}
+""")
+    assert any("loop" in w.lower() for w in report.warnings)
+    async with db() as s:
+        tags = {t.slug: t for t in (await s.execute(select(Tag))).scalars()}
+    assert not (
+        tags["a"].parent_id == tags["b"].id and tags["b"].parent_id == tags["a"].id
+    ), "one of the two edges must have been refused"
+
+
+async def test_a_loop_through_an_existing_parent_chain_is_refused(db):
+    """The walk is transitive, not a single hop: a -> b already exists, and the
+    file tries to hang b under a."""
+    async with db() as s:
+        await ensure_user(s, ADMIN, "reiji")
+        b = Tag(name="B", kind=TagKind.GROUP, slug="b")
+        s.add(b)
+        await s.flush()
+        s.add(Tag(name="A", kind=TagKind.GROUP, slug="a", parent_id=b.id))
+        await s.commit()
+
+    report = await _import(db, """
+tags:
+  - {handle: b, name: B, kind: group, parent: a}
+""")
+    assert any("loop" in w.lower() for w in report.warnings)
+    async with db() as s:
+        row = (await s.execute(select(Tag).where(Tag.slug == "b"))).scalar_one()
+        assert row.parent_id is None

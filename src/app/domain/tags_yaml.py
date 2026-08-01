@@ -24,9 +24,9 @@ from app.domain.slugs import slug_core
 from app.domain.types import TagKind
 
 _TAG_KEYS = {
-    "handle", "name", "kind", "name_en", "name_zh", "parent", "members",
-    "region", "city", "city_en", "city_zh", "address", "location_url",
-    "eventernote_url",
+    "handle", "name", "kind", "name_en", "name_zh", "parent", "voiced_by",
+    "members", "region", "city", "city_en", "city_zh", "address",
+    "location_url", "eventernote_url",
 }
 
 # Written into every export. Its own constant so the serializer stays a pure
@@ -70,6 +70,11 @@ class TagExport:
     name_en: str | None = None
     name_zh: str | None = None
     parent: str | None = None
+    # CHARACTER-specific: the HANDLE of the ARTIST who voices her. A handle, not
+    # an id and not a name -- ids are meaningless across a restore and names are
+    # not unique. The adapter on either side converts (service.current_tag_exports
+    # id -> handle, service.apply_tag_import handle -> id).
+    voiced_by: str | None = None
     members: tuple[str, ...] = ()
     region: str | None = None
     city: str | None = None
@@ -88,6 +93,7 @@ class ParsedTag:
     name_en: str | None = None
     name_zh: str | None = None
     parent: str | None = None
+    voiced_by: str | None = None
     members: list[str] = field(default_factory=list)
     region: str | None = None
     city: str | None = None
@@ -116,8 +122,9 @@ def tags_to_yaml(tags: Sequence[TagExport]) -> str:
     rows = []
     for tag in sorted(tags, key=lambda t: (t.kind, t.handle)):
         row: dict[str, object] = {"handle": tag.handle, "name": tag.name, "kind": tag.kind}
-        for key in ("name_en", "name_zh", "parent", "region", "city", "city_en",
-                    "city_zh", "address", "location_url", "eventernote_url"):
+        for key in ("name_en", "name_zh", "parent", "voiced_by", "region", "city",
+                    "city_en", "city_zh", "address", "location_url",
+                    "eventernote_url"):
             value = getattr(tag, key)
             if value:
                 row[key] = value
@@ -216,6 +223,10 @@ def parse_tags(text: str) -> ParsedTagFile:
 
         seen.add(handle)
         parent = _text(row.get("parent"), f"{where} parent", out.warnings)
+        # A HANDLE like `parent`, so it takes the same normalisation: a person
+        # hand-editing this file will type the seiyuu's name, and storing that
+        # verbatim would resolve against nothing on the way back in.
+        voiced_by = _text(row.get("voiced_by"), f"{where} voiced_by", out.warnings)
         out.tags.append(ParsedTag(
             handle=handle,
             name=name,
@@ -223,6 +234,7 @@ def parse_tags(text: str) -> ParsedTagFile:
             name_en=_text(row.get("name_en"), f"{where} name_en", out.warnings),
             name_zh=_text(row.get("name_zh"), f"{where} name_zh", out.warnings),
             parent=slug_core(parent) if parent else None,
+            voiced_by=slug_core(voiced_by) if voiced_by else None,
             members=_handles(row.get("members"), f"{where} members", out.warnings),
             region=_text(row.get("region"), f"{where} region", out.warnings),
             city=_text(row.get("city"), f"{where} city", out.warnings),

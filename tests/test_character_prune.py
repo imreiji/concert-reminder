@@ -76,6 +76,31 @@ async def test_pruning_an_artist_touches_nothing_else(db):
         assert await _attached(s, concert.id) == {a.id}
 
 
+async def test_a_non_character_carrying_a_voiced_by_link_cascades_nothing(db):
+    """The `kind is not CHARACTER` half of the guard, pinned.
+
+    Every other test here leaves it unreachable: the only tag with no
+    voiced_by_tag_id is also the only non-character, so removing the kind check
+    changes no outcome. The catalogue round-trip makes the state real -- voiced_by
+    joins COMPARABLE_FIELDS with NO kind restriction and a blank DB value is an
+    auto-applied fill, so a hand-edited file carrying `voiced_by:` on an artist
+    row writes exactly this shape. Detaching such a tag must stay a plain detach.
+    """
+    async with db() as s:
+        concert, imai, _a, _b = await _two_roles(s)
+        stray = Tag(name="迷子", kind=TagKind.ARTIST, slug="stray",
+                    voiced_by_tag_id=imai.id)
+        s.add(stray)
+        await s.flush()
+        await attach_tag(s, concert.id, stray)
+        await attach_tag(s, concert.id, imai)
+
+        await detach_tag(s, concert.id, stray.id)
+        assert await _attached(s, concert.id) == {imai.id}, (
+            "only a CHARACTER cascades her seiyuu off the bill"
+        )
+
+
 async def test_pruning_a_character_with_no_seiyuu_is_a_plain_detach(db):
     async with db() as s:
         concert, *_ = await _two_roles(s)

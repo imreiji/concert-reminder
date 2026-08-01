@@ -61,11 +61,12 @@ from app.domain.eventernote import ActorEvent
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.slugs import tag_slug_base
-from app.domain.tags_diff import ImportPlan
+from app.domain.tags_diff import ImportPlan, TagPlan
 from app.domain.tags_yaml import RESTORE_NOTES, TagExport, tags_to_yaml
 from app.domain.timezones import fmt_day_month, utc_to_jst
 from app.domain.translations import SLOT_LABEL, missing_variants
 from app.domain.types import (
+    ALLOWED_PARENT_KINDS,
     Anchor,
     BroadcastMode,
     DeliveryOutcome,
@@ -4327,6 +4328,12 @@ async def current_tag_exports(session: AsyncSession) -> list[TagExport]:
             handle=t.slug, name=t.name, kind=t.kind.value,
             name_en=t.name_en, name_zh=t.name_zh,
             parent=by_id[t.parent_id].slug if t.parent_id in by_id else None,
+            # The seiyuu's HANDLE, never her id: an id means nothing across a
+            # restore into an empty database. `apply_tag_import` runs the same
+            # conversion in reverse, in its second pass.
+            voiced_by=(
+                by_id[t.voiced_by_tag_id].slug if t.voiced_by_tag_id in by_id else None
+            ),
             members=tuple(sorted(m.slug for m in t.members)),
             region=t.region, city=t.city, city_en=t.city_en, city_zh=t.city_zh,
             address=t.address, location_url=t.location_url,
@@ -4371,6 +4378,32 @@ class ImportChoices:
 
     fields: dict[tuple[str, str], str] = field(default_factory=dict)
     members: dict[tuple[str, str], str] = field(default_factory=dict)
+
+
+# The COMPARABLE_FIELDS that hold a HANDLE rather than a value. They compare like
+# any other string, but nothing can WRITE one until every tag in the file exists,
+# so pass 1 skips them and pass 2 resolves them.
+#
+# Today the ORM attribute a missing entry would hit does not exist (the columns
+# are `parent_id`/`voiced_by_tag_id`), so the setattr would be an inert write to
+# an unmapped attribute -- but it would still put the handle in `report.filled`,
+# claiming pass 1 wrote something it cannot write, and it would become a real
+# corruption the day a relationship of that name is added.
+_HANDLE_FIELDS = frozenset({"parent", "voiced_by"})
+
+
+def _takes_handle(entry: TagPlan, choices: ImportChoices, name: str) -> bool:
+    """Does this handle field get written at all?
+
+    A new tag takes everything the file says; an existing one takes a FILL
+    automatically (writing into emptiness loses nothing) and a CONFLICT only when
+    the operator picked the file's value. No answer means keep mine.
+    """
+    return (
+        entry.is_new
+        or name in entry.fills
+        or choices.fields.get((entry.handle, name)) == "theirs"
+    )
 
 
 async def apply_tag_import(
@@ -4424,7 +4457,7 @@ async def apply_tag_import(
         row = await session.get(Tag, by_slug[entry.handle])
         touched = False
         for name, value in entry.fills.items():
-            if name == "parent":
+            if name in _HANDLE_FIELDS:
                 continue  # a handle, not a value -- resolved in pass 2
             setattr(row, name, value)
             touched = True
@@ -4432,7 +4465,7 @@ async def apply_tag_import(
         for conflict in entry.conflicts:
             if choices.fields.get((entry.handle, conflict.field)) != "theirs":
                 continue  # KEEP MINE is the default, and "no answer" means it
-            if conflict.field == "parent":
+            if conflict.field in _HANDLE_FIELDS:
                 resolved = True
                 continue  # resolved in pass 2
             setattr(row, conflict.field, conflict.incoming)
@@ -4444,31 +4477,54 @@ async def apply_tag_import(
         if not touched and not resolved and not entry.needs_choice:
             report.unchanged.append(entry.handle)
 
-    # Pass 2: parent and membership, once every tag exists.
+    # Pass 2: parent, voiced_by and membership, once every tag exists.
     for entry in plan.tags:
         if entry.kind_mismatch or entry.handle not in by_slug:
             continue
         row = await session.get(Tag, by_slug[entry.handle])
         wanted_parent = entry.incoming.parent
-        take_parent = (
-            entry.is_new
-            or "parent" in entry.fills
-            or choices.fields.get((entry.handle, "parent")) == "theirs"
-        )
-        if take_parent and wanted_parent:
+        if _takes_handle(entry, choices, "parent") and wanted_parent:
             parent_id = by_slug.get(wanted_parent)
+            allowed = ALLOWED_PARENT_KINDS.get(row.kind, ())
             if parent_id is None:
                 report.warnings.append(
                     f"{entry.handle}: parent {wanted_parent!r} is in neither the file "
                     f"nor the catalogue -- left without a parent"
                 )
-            elif (await session.get(Tag, parent_id)).kind is not TagKind.FRANCHISE:
+            # The SAME table POST /tags enforces, deliberately shared rather
+            # than restated: this path kept a franchise-only rule of its own
+            # after the editor widened, and a catalogue file therefore could not
+            # express a subunit at all.
+            elif (await session.get(Tag, parent_id)).kind not in allowed:
                 report.warnings.append(
-                    f"{entry.handle}: parent {wanted_parent!r} is not a franchise -- "
+                    f"{entry.handle}: a {row.kind.value} tag cannot have "
+                    f"{wanted_parent!r} as a parent -- left without one"
+                )
+            # GROUP -> GROUP made loops possible for the first time, and this is
+            # a write path fed by a hand-editable file, so the guard belongs
+            # here as much as on the route.
+            elif await would_create_tag_cycle(session, row.id, parent_id):
+                report.warnings.append(
+                    f"{entry.handle}: parent {wanted_parent!r} would close a loop -- "
                     f"left without a parent"
                 )
             else:
                 row.parent_id = parent_id
+
+        # Her seiyuu, by handle. NO kind restriction, matching COMPARABLE_FIELDS:
+        # the field is meaningless on a non-character, but refusing it here would
+        # be a second, quieter rule than the differ's, and `detach_tag` already
+        # guards on kind rather than trusting the column to be empty.
+        wanted_voice = entry.incoming.voiced_by
+        if _takes_handle(entry, choices, "voiced_by") and wanted_voice:
+            voice_id = by_slug.get(wanted_voice)
+            if voice_id is None:
+                report.warnings.append(
+                    f"{entry.handle}: voiced_by {wanted_voice!r} is in neither the file "
+                    f"nor the catalogue -- left unvoiced"
+                )
+            else:
+                row.voiced_by_tag_id = voice_id
 
         # A NEW tag simply gets the file's members; an existing one only gets
         # the additions the operator ticked.

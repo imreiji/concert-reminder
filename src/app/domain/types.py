@@ -75,6 +75,21 @@ class TagKind(enum.StrEnum):
     CHARACTER = "character"   # 如月千早 -- voiced by an ARTIST, see Tag.voiced_by_tag_id
 
 
+# Which kinds a tag of each kind may sit UNDER. Both shapes mean the same thing
+# -- "the broader thing I belong to" -- and a subunit belongs to its group the
+# way a group belongs to its franchise.
+#
+# ONE table, here in the pure vocabulary, because there are two write paths into
+# `Tag.parent_id` -- POST /tags and the catalogue importer -- and they disagreed
+# once already: the importer kept a franchise-only rule after the editor widened,
+# so a file could not express a subunit at all. A kind absent from this mapping
+# takes NO parent.
+ALLOWED_PARENT_KINDS: dict[TagKind, tuple[TagKind, ...]] = {
+    TagKind.GROUP: (TagKind.FRANCHISE, TagKind.GROUP),
+    TagKind.CHARACTER: (TagKind.FRANCHISE,),
+}
+
+
 class Anchor(enum.StrEnum):
     """Which moment a reminder offset is measured from."""
 

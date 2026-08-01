@@ -150,3 +150,49 @@ def test_a_nested_structure_where_text_belongs_is_refused_not_stringified():
 def test_parsed_tag_defaults_are_empty_not_none_for_members():
     t = ParsedTag(handle="x", name="X", kind=TagKind.ARTIST)
     assert t.members == []
+
+
+def test_a_character_round_trips_with_its_seiyuu():
+    text = tags_to_yaml([TagExport(
+        handle="chihaya", name="如月千早", kind="character", voiced_by="asami-imai",
+    )])
+    assert "voiced_by: asami-imai" in text
+    (parsed,) = parse_tags(text).tags
+    assert parsed.voiced_by == "asami-imai"
+    assert parsed.kind is TagKind.CHARACTER
+
+
+def test_voiced_by_is_omitted_when_unset():
+    """The exporter omits empty fields -- a human reads these files, and
+    `voiced_by: null` on every artist is noise."""
+    text = tags_to_yaml([TagExport(handle="imai", name="今井麻美", kind="artist")])
+    assert "voiced_by" not in text
+
+
+def test_voiced_by_is_normalised_as_a_handle_not_kept_as_typed():
+    """It is a HANDLE, exactly like `parent` -- so it goes through the same
+    slug_core the minting path uses. A person edits these files by hand and will
+    type the seiyuu's name; storing that verbatim would resolve against nothing.
+    """
+    parsed = parse_tags(
+        "tags:\n"
+        "  - {handle: chihaya, name: 如月千早, kind: character, voiced_by: 'Asami Imai!'}\n"
+    )
+    assert parsed.tags[0].voiced_by == "asami-imai"
+
+
+def test_a_nested_structure_in_voiced_by_is_refused_not_stringified():
+    parsed = parse_tags(
+        "tags:\n  - {handle: c, name: C, kind: character, voiced_by: {a: b}}\n"
+    )
+    assert parsed.tags[0].voiced_by is None
+    assert any("voiced_by" in w for w in parsed.warnings)
+
+
+def test_voiced_by_is_a_known_key_not_an_unknown_one():
+    """`_TAG_KEYS` is what decides whether a key is real or a typo. A field the
+    parser reads but the key set does not know warns on every single row."""
+    parsed = parse_tags(
+        "tags:\n  - {handle: c, name: C, kind: character, voiced_by: imai}\n"
+    )
+    assert parsed.warnings == []

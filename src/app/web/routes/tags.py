@@ -34,7 +34,7 @@ from app.db.service import (
 )
 from app.db.session import get_session
 from app.domain.slugs import slug_core
-from app.domain.types import TagKind
+from app.domain.types import ALLOWED_PARENT_KINDS, TagKind
 from app.web.auth import SessionUser, require_editor, require_user
 from app.web.forms import form_url, require_variants
 
@@ -146,14 +146,11 @@ async def create_tag(
         parent = await session.get(Tag, parent_id)
         if parent is None:
             raise HTTPException(status_code=422, detail="parent tag not found")
-        # Widened 2026-08-01. Both shapes are the SAME meaning -- "the broader
-        # thing I belong to" -- one rung deeper: a subunit belongs to its group
-        # the way a group belongs to its franchise.
-        allowed = {
-            TagKind.GROUP: (TagKind.FRANCHISE, TagKind.GROUP),
-            TagKind.CHARACTER: (TagKind.FRANCHISE,),
-        }.get(kind, ())
-        if parent.kind not in allowed:
+        # Widened 2026-08-01, and SHARED with the catalogue importer since --
+        # two copies of this table drifted apart once (the importer stayed
+        # franchise-only and so could not express a subunit), which is why it
+        # lives in domain/types.py now.
+        if parent.kind not in ALLOWED_PARENT_KINDS.get(kind, ()):
             raise HTTPException(
                 status_code=422,
                 detail=f"a {kind.value} tag cannot have a {parent.kind.value} parent",
