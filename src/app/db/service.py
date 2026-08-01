@@ -5024,6 +5024,31 @@ async def attach_tag(
                 if not await _is_attached(session, concert_id, member.id):
                     session.add(ConcertTag(concert_id=concert_id, tag_id=member.id))
                     added.append(member)
+
+    # THE CHAINED STEP. Every character now attached pulls in its seiyuu.
+    # Without it a group-credited im@s show materialises characters only, and
+    # tracked_concert_ids -- which matches materialised rows -- never matches
+    # anyone following the performer. That is the whole feature.
+    #
+    # Bounded by construction, and NOT the nested-groups rule returning: a
+    # seiyuu is an ARTIST, so group -> character -> seiyuu terminates in two
+    # steps and cannot recurse.
+    #
+    # Deliberately NOT gated on `expand`. That flag exists so the creation
+    # form's explicit artist list is not overridden; attaching the seiyuu
+    # overrides nothing, and gating it would leave concerts made on that form
+    # unmatched for her followers.
+    seiyuu_ids = {
+        t.voiced_by_tag_id for t in added
+        if t.kind is TagKind.CHARACTER and t.voiced_by_tag_id is not None
+    }
+    for seiyuu_id in sorted(seiyuu_ids):
+        if not await _is_attached(session, concert_id, seiyuu_id):
+            seiyuu = await session.get(Tag, seiyuu_id)
+            if seiyuu is not None:
+                session.add(ConcertTag(concert_id=concert_id, tag_id=seiyuu.id))
+                added.append(seiyuu)
+
     await session.flush()
     return added
 
