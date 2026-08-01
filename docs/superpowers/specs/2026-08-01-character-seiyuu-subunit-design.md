@@ -167,6 +167,37 @@ to this concert.**
 - Either alone -> renders exactly as today. A lone character is a plain chip; a
   lone subunit is an ordinary top-level group cluster.
 
+### A seiyuu attached BY HERSELF is listed as herself, not under the group
+
+Owner rule. If 今井麻美 is on a bill in her own right rather than through a
+character, she must not appear inside the 765PRO ALLSTARS cluster -- she appears
+as herself, in the unlabelled trailer.
+
+**This needs no provenance, and that is the point.** Two independent mechanisms
+already give it:
+
+1. Under this model a group's members are the CHARACTER tags, so a seiyuu is
+   simply not in `members_by_group[…]` and falls into the trailer by
+   construction -- the existing code already does the right thing.
+2. Whether she is "via a character" is derivable: she is, exactly when some
+   CHARACTER attached to this concert has `voiced_by_tag_id` pointing at her.
+
+So the render rule is: an attached ARTIST is absorbed into a character's split
+pill when an attached character names her, and otherwise renders as an ordinary
+artist chip. Same derivation the pruning rule uses, which is why the two stay
+consistent for free.
+
+Two edges, both following existing rulings rather than inventing one:
+
+- She voices TWO attached characters -> she appears in both split pills, exactly
+  as the 2026-07-27 "a performer in two attached groups appears under both"
+  ruling already decides for the analogous case.
+- She is attached via a character AND is a direct member of an attached group
+  (a legacy Love-Live-shaped group that lists seiyuu). Then she renders in both
+  places. This is contradictory data rather than a display bug -- an im@s group
+  should list characters, not seiyuu -- and the reformat below is what prevents
+  it.
+
 The merge is **display only**. Both tags remain independently followable, both
 keep their own pages, and the underlying `concert_tags` rows are unchanged.
 
@@ -196,6 +227,56 @@ Better: leads are keyed on the Eventernote event id, so a show listed on both
 the character's page and the seiyuu's yields ONE lead. The existing dedup covers
 it unchanged.
 
+## The catalogue round-trip, and the reformat
+
+This upgrade re-shapes a LOT of existing tags, so the export/import must carry
+the new vocabulary and the reformat runs through it -- authored by an agent,
+reviewed by a human in the existing conflict UI, never by hand-editing rows.
+
+### What `tags.yaml` gains
+
+- `kind: character` as a fifth value.
+- `voiced_by: <handle>` on a character, resolved like `parent` is.
+
+`_TAG_KEYS` in `domain/tags_yaml.py` gains `voiced_by`; `TagExport` and
+`ParsedTag` gain the field; `tags_to_yaml` emits it only when set, per that
+module's omit-empty rule. `COMPARABLE_FIELDS` in `domain/tags_diff.py` gains it
+too -- **its count is pinned by a test at 11 and must move to 12**, and that
+test exists precisely so a field cannot be added to the format while being
+silently skipped by the differ.
+
+### The reformat needs NO kind mutation, which is why it is safe
+
+**Verified:** a tag's kind is immutable today. `POST /tags/{id}/edit` does not
+accept `kind` at all, and the tags importer refuses a kind mismatch outright
+(warning, and the tag is skipped whole, because a venue arriving as an artist
+could orphan a leg's `venue_tag_id`).
+
+That constraint costs this feature nothing, because **no tag needs converting**:
+
+- Seiyuu stay ARTIST tags. That is already correct and stays correct.
+- Characters are NEW tags the agent creates, with `kind: character`,
+  `voiced_by`, and a franchise `parent`.
+- A group's `members` list changes from seiyuu handles to character handles.
+
+So the reformat is creations plus a member swap, both of which the importer
+already does. **Do not add a kind-change path for this.** The refusal rule is
+load-bearing and this feature does not need it relaxed.
+
+### The member swap is the operation to watch
+
+Replacing a group's members means ADDING character handles and REMOVING seiyuu
+handles. Additions apply automatically; **removals are the only destructive act
+the importer performs and happen solely when explicitly ticked.** So the
+reformat is confirmed per group by a human looking at both lists -- which is the
+right amount of friction for an operation that rewrites the taxonomy of every
+im@s group at once.
+
+Membership edits never rewrite existing concerts (invariant 3), so the swap
+changes what FUTURE attachments expand to and leaves already-catalogued shows
+exactly as they were. That is correct and worth stating: old concerts keep the
+seiyuu chips they were built with.
+
 ## Out of scope
 
 - **Recast history.** One column, re-pointed.
@@ -204,6 +285,26 @@ it unchanged.
   parent group. `TagMember`'s rule stands.
 - **Automatic subunit attachment.** Attaching a parent group does not pull in
   its subunits; the editor attaches what the source credited.
+- **Changing an existing tag's kind.** Immutable by design; the reformat does
+  not need it. See the round-trip section.
+- **Rewriting already-catalogued concerts.** Invariant 3 means the member swap
+  reaches future attachments only. Old shows keep the seiyuu chips they were
+  built with, and that is deliberate.
+
+## Suggested split into plans
+
+This is one coherent design but likely two implementation plans, in this order,
+because the second is useless before the first and the third is an operation
+rather than code:
+
+1. **The model and its behaviour** -- `TagKind.CHARACTER`, `voiced_by_tag_id`,
+   `parent_id` widening plus the cycle guard, attach-time chaining, the prune
+   rule, and all display changes. Self-contained and shippable; with no
+   character tags in the catalogue yet it is inert in production.
+2. **The catalogue round-trip** -- `voiced_by` through export, import and the
+   differ, with `COMPARABLE_FIELDS` moving 11 -> 12.
+3. **The reformat itself** -- agent-authored `tags.yaml`, reviewed through the
+   existing conflict UI. Not code; an operation the first two enable.
 
 ## Testing notes
 
