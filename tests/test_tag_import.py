@@ -449,6 +449,44 @@ tags:
         assert row.voiced_by_tag_id is None
 
 
+async def test_only_an_artist_may_voice_a_character(db):
+    """The target kind is checked, exactly as `parent`'s and `members`' are.
+
+    A blank column makes this an auto-applied FILL, so a hand-edited
+    `voiced_by: k-arena` is written with nobody deciding anything -- and the next
+    attach of that character materialises whatever the id names onto the
+    concert, rendering a VENUE as a performer and DMing its followers.
+    """
+    report = await _import(db, """
+tags:
+  - {handle: k-arena, name: "Kアリーナ横浜", kind: venue}
+  - {handle: chihaya, name: "如月千早", kind: character, voiced_by: k-arena}
+""")
+    assert sorted(report.created) == ["chihaya", "k-arena"]
+    (warning,) = [w for w in report.warnings if "k-arena" in w]
+    assert "venue" in warning, "the operator needs the kind it actually found"
+    async with db() as s:
+        row = (await s.execute(select(Tag).where(Tag.slug == "chihaya"))).scalar_one()
+        assert row.voiced_by_tag_id is None
+
+
+async def test_a_character_cannot_voice_herself(db):
+    """Refused by the target-kind rule for free -- a CHARACTER is not an ARTIST.
+
+    Worth its own test because the consequence is invisible rather than loud:
+    `performer_clusters` would put her in `paired_seiyuu` and filter her out of
+    `entries`, so she would disappear from the Performing panel entirely.
+    """
+    report = await _import(
+        db, 'tags:\n  - {handle: chihaya, name: "如月千早", kind: character, '
+            'voiced_by: chihaya}\n'
+    )
+    assert any("chihaya" in w for w in report.warnings)
+    async with db() as s:
+        row = (await s.execute(select(Tag).where(Tag.slug == "chihaya"))).scalar_one()
+        assert row.voiced_by_tag_id is None
+
+
 # ── The parent rule, widened to the one POST /tags uses ───────────────────
 
 

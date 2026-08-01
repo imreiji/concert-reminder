@@ -4511,10 +4511,21 @@ async def apply_tag_import(
             else:
                 row.parent_id = parent_id
 
-        # Her seiyuu, by handle. NO kind restriction, matching COMPARABLE_FIELDS:
-        # the field is meaningless on a non-character, but refusing it here would
-        # be a second, quieter rule than the differ's, and `detach_tag` already
-        # guards on kind rather than trusting the column to be empty.
+        # Her seiyuu, by handle. The TARGET must be an ARTIST, checked here for
+        # the same reason `parent` and `members` are checked three lines either
+        # side: a blank column makes this an auto-applied FILL, so a hand-edited
+        # `voiced_by: k-arena` would be written with nobody deciding anything --
+        # and the next `attach_tag` of that character materialises whatever the
+        # id names onto the concert, so a VENUE renders as a performer and its
+        # followers get a "new event" DM out of `handle_newly_tagged`.
+        #
+        # `detach_tag`'s kind guard does NOT cover this: it protects the SOURCE
+        # (a non-character carrying voiced_by) and says nothing about the target.
+        #
+        # Refusing a non-ARTIST also refuses SELF-voicing for free. A character
+        # pointed at herself is a real trap: `performer_clusters` puts her in
+        # `paired_seiyuu` and filters her out of `entries`, so she vanishes from
+        # the Performing panel altogether.
         wanted_voice = entry.incoming.voiced_by
         if _takes_handle(entry, choices, "voiced_by") and wanted_voice:
             voice_id = by_slug.get(wanted_voice)
@@ -4522,6 +4533,12 @@ async def apply_tag_import(
                 report.warnings.append(
                     f"{entry.handle}: voiced_by {wanted_voice!r} is in neither the file "
                     f"nor the catalogue -- left unvoiced"
+                )
+            elif (voice := await session.get(Tag, voice_id)).kind is not TagKind.ARTIST:
+                report.warnings.append(
+                    f"{entry.handle}: voiced_by {wanted_voice!r} is a "
+                    f"{voice.kind.value}, and only an artist can voice a character "
+                    f"-- left unvoiced"
                 )
             else:
                 row.voiced_by_tag_id = voice_id
