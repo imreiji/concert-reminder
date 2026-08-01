@@ -18,3 +18,7 @@ messages.pot
 # editors
 .vscode/
 .idea/
+
+# Superpowers scratch: SDD ledgers, review packages, brainstorm mockups.
+# Session-local working state, never part of the repo.
+.superpowers/
