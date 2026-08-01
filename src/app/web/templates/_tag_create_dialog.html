@@ -1,4 +1,5 @@
-{#- Create a franchise/group/artist tag without leaving the import preview.
+{#- Create a franchise/group/character/artist tag without leaving the import
+    preview.
 
     Same shape as _venue_create_dialog.html (.picker: header with title and ×,
     no footer, backdrop-click and Esc close) and the same wiring: it POSTs
@@ -32,6 +33,11 @@
         <button type="button" data-kind="franchise" aria-pressed="false">{{ _("Franchise") }}</button>
         <button type="button" data-kind="group" aria-pressed="true">{{ _("Group") }}</button>
         <button type="button" data-kind="artist" aria-pressed="false">{{ _("Performer") }}</button>
+        {#- CHARACTER is here because a scraped name is often the character, not
+            her seiyuu: the editor opens this dialog on an unmatched artist name
+            and re-kinds it. She arrives WITHOUT a seiyuu -- that link is set on
+            the Tags page, where the artist list is on screen. -#}
+        <button type="button" data-kind="character" aria-pressed="false">{{ _("Character") }}</button>
       </div>
       <span class="dim tiny" data-tc-hint></span>
     </div>
@@ -70,6 +76,7 @@
       "franchise": _("A franchise is the top level. It contains groups."),
       "group": _("A group contains performers. Attaching it to an event adds its members."),
       "artist": _("A single performer. Can belong to a group, or stand alone."),
+      "character": _("A character. Events credit her instead of the performer who voices her."),
     } | tojson }};
 
     const nameIn = dlg.querySelector("[data-tc-name]");
@@ -95,8 +102,9 @@
       dlg.querySelectorAll("#tc-kindpick button").forEach(function (b) {
         b.setAttribute("aria-pressed", String(b.dataset.kind === kind));
       });
-      // Parent franchise applies to groups only.
-      parentFld.style.display = kind === "group" ? "" : "none";
+      // A franchise parent applies to the two kinds ALLOWED_PARENT_KINDS lets
+      // sit under one; every other kind takes no parent and /tags/quick 422s.
+      parentFld.style.display = (kind === "group" || kind === "character") ? "" : "none";
       hint.textContent = KIND_HINTS[kind] || "";
       // A kind switch invalidates any duplicate warning from the last name.
       hideError();
@@ -159,9 +167,9 @@
       body.append("name_en", nameEnIn.value);
       body.append("name_zh", nameZhIn.value);
       body.append("kind", currentKind);
-      // parent_id is a group-only concept; send it only then, and only when
-      // a real franchise is chosen (the "— none —" option is value="").
-      if (currentKind === "group" && parentSel.value) {
+      // Only the kinds that may take one send parent_id, and only when a real
+      // franchise is chosen (the "— none —" option is value="").
+      if ((currentKind === "group" || currentKind === "character") && parentSel.value) {
         body.append("parent_id", parentSel.value);
       }
 

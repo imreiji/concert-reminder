@@ -4138,6 +4138,7 @@ async def create_tag_row(
     name_en: str | None = None,
     name_zh: str | None = None,
     parent_id: int | None = None,
+    voiced_by_tag_id: int | None = None,
     region: str | None = None,
     city: str | None = None,
     city_en: str | None = None,
@@ -4166,6 +4167,11 @@ async def create_tag_row(
         name_en=name_en,
         name_zh=name_zh,
         parent_id=parent_id,
+        # CHARACTER-only, and the caller owns the check that it names an
+        # ARTIST -- this constructor validates nothing (the catalogue importer
+        # warns-and-skips where the editor route 422s, and both would lose
+        # their voice if the rule moved down here).
+        voiced_by_tag_id=voiced_by_tag_id,
         region=region,
         city=city,
         city_en=city_en,

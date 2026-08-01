@@ -4,7 +4,8 @@ Endpoints:
   GET  /tags                            tag directory (anyone signed in)
   POST /tags                            create tag                (editor)
   POST /tags/venue/quick                create a VENUE tag, JSON  (editor)
-  POST /tags/{id}/edit                  update location_url/region(editor)
+  POST /tags/{id}/edit                  name/handle/venue fields, and a
+                                        character's seiyuu           (editor)
   POST /tags/{id}/delete                delete tag everywhere     (editor)
   POST /tags/{id}/members               add member to a group     (editor)
   POST /tags/{gid}/members/{mid}/delete remove member from group  (editor)
@@ -47,6 +48,46 @@ async def all_tags(session: AsyncSession) -> list[Tag]:
     return list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
 
 
+async def resolve_seiyuu(
+    session: AsyncSession, kind: TagKind, voiced_by_tag_id: int | None
+) -> int | None:
+    """The ARTIST id a CHARACTER is voiced by, checked at the write boundary.
+
+    A falsy value (absent, or the dialog's "— none —" 0) means NO seiyuu; the
+    two are told apart by the CALLER, not here: `create_tag` has nothing to
+    preserve, while `edit_tag` must keep its omitted-leaves-alone rule.
+
+    Two refusals, both 422 and both mirroring the catalogue importer's
+    warn-and-skip (`apply_tag_import`), because an editor surface must not be
+    more permissive than the file format:
+
+    * a non-CHARACTER carrying one -- `parent_id` is where "the broader thing
+      I belong to" goes, and nothing reads `voiced_by_tag_id` off any other
+      kind, so accepting it would store a value that renders nowhere;
+    * a target that is not an ARTIST. `attach_tag` materialises whatever this
+      names onto a concert, so a VENUE here would render as a performer and
+      DM its followers. Refusing a non-ARTIST also refuses SELF-voicing for
+      free -- a character pointed at herself vanishes from the Performing
+      panel, since `performer_clusters` counts her as her own paired seiyuu
+      and filters her out.
+    """
+    if not voiced_by_tag_id:
+        return None
+    if kind is not TagKind.CHARACTER:
+        raise HTTPException(
+            status_code=422, detail=f"a {kind.value} tag cannot have a seiyuu"
+        )
+    voice = await session.get(Tag, voiced_by_tag_id)
+    if voice is None:
+        raise HTTPException(status_code=422, detail="seiyuu tag not found")
+    if voice.kind is not TagKind.ARTIST:
+        raise HTTPException(
+            status_code=422,
+            detail=f"only an artist can voice a character, not a {voice.kind.value}",
+        )
+    return voice.id
+
+
 # ── Tag directory / management ───────────────────────────────────────────
 
 
@@ -64,6 +105,7 @@ async def tag_directory(
         select(TagSubscription).where(TagSubscription.user_id == user.id)
     )).scalars())
     sub_by_tag = {sub.tag_id: sub for sub in subs}
+    by_id = {t.id: t for t in tags}
     groups = [t for t in tags if t.kind is TagKind.GROUP]
     members = {t.id: await group_members(session, t.id) for t in groups}
     grouped_artist_ids = {m.id for ms in members.values() for m in ms}
@@ -94,6 +136,17 @@ async def tag_directory(
                 t for t in tags if t.kind is TagKind.ARTIST and t.id not in grouped_artist_ids
             ],
             "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
+            # Each character paired with the ARTIST who voices her, resolved
+            # here off the already-loaded tag list rather than in the template
+            # (Tag.voiced_by is not a loaded relationship, and a lazy load
+            # during async rendering is a MissingGreenlet 500). A character
+            # whose seiyuu is unset -- or whose seiyuu tag was deleted, since
+            # the FK is ON DELETE SET NULL -- pairs with None and says so.
+            "characters": [
+                (t, by_id.get(t.voiced_by_tag_id))
+                for t in tags
+                if t.kind is TagKind.CHARACTER
+            ],
             "venues": [t for t in tags if t.kind is TagKind.VENUE],
             "tag_dupe_data": tag_dupe_data,
             # Per-tag "what's missing" notice for the edit dialogs, keyed by
@@ -115,6 +168,9 @@ async def create_tag(
     name_zh: str = Form(""),
     kind: TagKind = Form(TagKind.ARTIST),
     parent_id: int = Form(0),
+    # CHARACTER-only. `None` (the field absent) and 0 ("— none —") both mean
+    # unvoiced here -- unlike edit_tag, a create has no stored value to keep.
+    voiced_by_tag_id: int | None = Form(None),
     location_url: str = Form(""),
     region: str = Form(""),
     eventernote_url: str = Form(""),
@@ -155,6 +211,7 @@ async def create_tag(
                 status_code=422,
                 detail=f"a {kind.value} tag cannot have a {parent.kind.value} parent",
             )
+    voiced_by = await resolve_seiyuu(session, kind, voiced_by_tag_id)
     await ensure_user(session, user.id, user.username)
     # slug omitted -> minted. The catalogue importer is the one caller that
     # passes an explicit handle, because its handles come from a file.
@@ -162,6 +219,7 @@ async def create_tag(
         session,
         name=name, name_en=name_en.strip() or None, name_zh=name_zh.strip() or None,
         kind=kind, created_by=user.id, parent_id=parent.id if parent else None,
+        voiced_by_tag_id=voiced_by,
         location_url=form_url(location_url), region=region.strip() or None,
         eventernote_url=form_url(eventernote_url),
     )
@@ -240,10 +298,14 @@ async def quick_create_venue(
     return {"id": tag.id, "name": tag.name}
 
 
-# The three kinds this endpoint creates; VENUE keeps its own richer
+# The kinds this endpoint creates; VENUE keeps its own richer
 # quick_create_venue route (it collects city/region/address a franchise or
 # artist never has), so it is deliberately NOT in this set.
-_QUICK_KINDS = (TagKind.FRANCHISE, TagKind.GROUP, TagKind.ARTIST)
+# CHARACTER joined 2026-08-01: an im@s event credits 如月千早, and until then a
+# name the editor had to re-kind as a character mid-import had no one-click
+# create at all. It arrives WITHOUT a seiyuu -- `voiced_by_tag_id` is set on
+# the Tags page, where the artist list to choose from is on screen.
+_QUICK_KINDS = (TagKind.FRANCHISE, TagKind.GROUP, TagKind.ARTIST, TagKind.CHARACTER)
 
 
 @router.post("/tags/quick")
@@ -256,7 +318,8 @@ async def quick_create_tag(
     kind: str = Form(...),
     parent_id: int = Form(0),
 ) -> dict:
-    """Create a franchise/group/artist tag without leaving the import preview.
+    """Create a franchise/group/character/artist tag without leaving the
+    import preview.
     Returns JSON so the caller can drop the new tag straight into the tag
     picker's selection (see `_tag_create_dialog.html`).
 
@@ -306,11 +369,21 @@ async def quick_create_tag(
         )
     parent = None
     if parent_id:
-        if tag_kind is not TagKind.GROUP:
-            raise HTTPException(status_code=422, detail="only group tags take a franchise parent")
+        # The SAME table create_tag and the catalogue importer read. This route
+        # kept a franchise-only rule of its own ("only group tags take a
+        # franchise parent") after the editor widened -- harmless in that it
+        # can only create, so it can neither close a parent loop nor reach a
+        # forbidden state, but ALLOWED_PARENT_KINDS exists precisely so the
+        # write paths cannot drift, and domain/types.py already claimed they
+        # all read it.
         parent = await session.get(Tag, parent_id)
-        if parent is None or parent.kind is not TagKind.FRANCHISE:
-            raise HTTPException(status_code=422, detail="parent must be a franchise tag")
+        if parent is None:
+            raise HTTPException(status_code=422, detail="parent tag not found")
+        if parent.kind not in ALLOWED_PARENT_KINDS.get(tag_kind, ()):
+            raise HTTPException(
+                status_code=422,
+                detail=f"a {tag_kind.value} tag cannot have a {parent.kind.value} parent",
+            )
     await ensure_user(session, user.id, user.username)
     tag = await create_tag_row(
         session,
@@ -342,14 +415,28 @@ async def edit_tag(
     location_url: str = Form(""),
     region: str = Form(""),
     eventernote_url: str = Form(""),
+    voiced_by_tag_id: int | None = Form(None),
 ):
-    """Rename (any kind), edit the handle, plus venue-only location_url/region
-    and the artist/group eventernote_url -- not kind-restricted on those,
-    harmless to set on others.
+    """Rename (any kind), edit the handle, plus venue-only location_url/region,
+    the artist/group eventernote_url and a character's seiyuu -- not
+    kind-restricted on the first two, harmless to set on others.
 
     `name` and `slug` are both optional, and an omitted one leaves the stored
     value ALONE rather than blanking it: every caller of this form predates the
     handle, and none of them may wipe a tag's identity by not knowing about it.
+    `voiced_by_tag_id` follows the SAME rule, and is why it is `int | None`
+    rather than `int` defaulting to 0: absent means "leave her seiyuu alone"
+    (the field only renders on a character's dialog, so every other tag's
+    submit omits it), while an explicit 0 -- the select's "— none —" -- clears
+    it. A recast is this one value re-pointed; there is no history model.
+
+    NO parent editing here, deliberately. `parent_id` has never been editable
+    on this form (a group's franchise is set at creation), widening `kind`'s
+    parent rules did not change that, and inventing the surface would be the
+    one thing on this route able to close a `parent_id` loop -- which is why
+    `would_create_tag_cycle` is wired into the catalogue importer and not
+    here. Adding parent editing later means calling that guard from this
+    function, next to the ALLOWED_PARENT_KINDS check `create_tag` runs.
     """
     tag = await session.get(Tag, tag_id)
     if tag is None:
@@ -395,6 +482,8 @@ async def edit_tag(
     tag.location_url = form_url(location_url)
     tag.region = region.strip() or None
     tag.eventernote_url = form_url(eventernote_url)
+    if voiced_by_tag_id is not None:
+        tag.voiced_by_tag_id = await resolve_seiyuu(session, tag.kind, voiced_by_tag_id)
     await session.commit()
     return RedirectResponse("/tags", status_code=303)
 
