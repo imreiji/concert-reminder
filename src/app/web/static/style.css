@@ -1072,10 +1072,17 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
    The divider is --line, not a fixed rgba of the light ink: on the dark
    theme's #2a2830 chip ground an ink-tinted hairline is invisible, which
    would collapse the two halves back into one chip in exactly the theme the
-   reader cannot check against. */
+   reader cannot check against.
+   The box is DERIVED from .performers .chip's, not tuned: same vertical
+   padding, same explicit line-height (a chip SETS 1.5 -- it does not inherit
+   it; the body's 1.6 is what a half gets if this line goes), same 1px border.
+   Measured in the real page at innerWidth 1278: 22.88px against the chip's
+   28.72px before, 28.72 == 28.72 after, identical in both themes. Only the
+   INLINE padding differs, because the pill is two padded halves. */
 .mchip { display: inline-flex; align-items: stretch; border-radius: 999px;
-         overflow: hidden; background: var(--chip); font-size: .82rem; }
-.mchip > * { padding: .1rem .55rem; color: var(--ink); text-decoration: none;
+         overflow: hidden; background: var(--chip); font-size: .82rem;
+         border: 1px solid transparent; }
+.mchip > * { padding: .22rem .55rem; color: var(--ink); text-decoration: none;
              line-height: 1.5; }
 .mchip > .cv { color: var(--dim); border-left: 1px solid var(--line); }
 /* Same two states the plain chips carry, so a half behaves like a chip:

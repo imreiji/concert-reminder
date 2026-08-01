@@ -56,6 +56,38 @@ def test_style_uses_3px_radius_not_6or8():
     assert "border-radius: 3px" in text
 
 
+def _decls(selector: str) -> dict[str, str]:
+    """The declarations of the rule whose selector is exactly `selector`."""
+    m = re.search(rf"(?m)^{re.escape(selector)} \{{(.*?)\}}", css(), re.S)
+    assert m, f"no rule for {selector}"
+    return {
+        k.strip(): v.strip()
+        for k, v in (d.split(":", 1) for d in m.group(1).split(";") if ":" in d)
+    }
+
+
+def test_the_split_pill_matches_a_plain_chip_box():
+    """The character/seiyuu pill and a plain performer chip sit in the same
+    .chiprow, so their boxes must agree or the pill rides low beside its
+    neighbours. MEASURED in the real page at innerWidth 1278: the pill shipped
+    at 22.88px against the chip's 28.72px (-5.84px, both themes), and reads
+    28.72 == 28.72 with these three values shared.
+
+    Compared rule-to-rule rather than pinned as literals: the pill's box is
+    DERIVED from the chip's, so moving the chip's padding must fail here
+    rather than silently desync the pill.
+
+    Only the vertical padding is shared. Horizontally the pill is two padded
+    halves, so it carries its own inline value on purpose."""
+    chip, half, pill = _decls(".performers .chip"), _decls(".mchip > *"), _decls(".mchip")
+    assert half.get("padding", "").split()[:1] == chip["padding"].split()[:1]
+    assert half.get("line-height") == chip["line-height"], (
+        ".performers .chip SETS line-height (it does not inherit it) -- letting"
+        " the halves inherit the body's 1.6 is what left the pill 2.53px short"
+    )
+    assert pill.get("border") == _decls(".chip")["border"], "the chip's 1px box"
+
+
 def test_style_hidden_attribute_wins():
     # Any element with an author display rule (.upgradebox, .feedbox, ...)
     # renders despite hidden="" unless a global [hidden] override exists --
