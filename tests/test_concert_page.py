@@ -420,7 +420,7 @@ async def clusters_for(db, concert_id):
 
 def cluster_names(clusters):
     return [
-        (c.group.name if c.group else None, [a.name for a in c.artists])
+        (c.group.name if c.group else None, [e.tag.name for e in c.performers])
         for c in clusters
     ]
 
@@ -471,7 +471,7 @@ async def test_a_performer_in_two_groups_appears_in_both(db):
     await attach_existing(db, cid, [a_id, b_id, shared, a_members["Chika"], b_members["Mari"]])
 
     clusters = await clusters_for(db, cid)
-    ids = {c.group.id: [a.id for a in c.artists] for c in clusters if c.group}
+    ids = {c.group.id: [e.tag.id for e in c.performers] for c in clusters if c.group}
     assert shared in ids[a_id]
     assert shared in ids[b_id]
 
@@ -484,7 +484,7 @@ async def test_ungrouped_artists_land_in_the_trailer(db):
 
     clusters = await clusters_for(db, cid)
     assert clusters[-1].group is None
-    assert [a.id for a in clusters[-1].artists] == [solo]
+    assert [e.tag.id for e in clusters[-1].performers] == [solo]
 
 
 async def test_the_trailer_is_omitted_when_every_artist_is_grouped(db):
@@ -507,7 +507,7 @@ async def test_a_group_with_no_attached_members_keeps_its_label(db):
 
     clusters = await clusters_for(db, cid)
     assert any(
-        c.group is not None and c.group.id == empty_id and c.artists == ()
+        c.group is not None and c.group.id == empty_id and c.performers == ()
         for c in clusters
     )
 
@@ -523,7 +523,7 @@ async def test_a_member_whose_group_is_not_attached_stays_in_the_trailer(db):
     clusters = await clusters_for(db, cid)
     assert all(c.group is None or c.group.id != absent_id for c in clusters)
     assert clusters[-1].group is None
-    assert [a.id for a in clusters[-1].artists] == [members["Mari"]]
+    assert [e.tag.id for e in clusters[-1].performers] == [members["Mari"]]
 
 
 async def test_membership_loads_in_one_query(db):
@@ -672,6 +672,143 @@ async def test_a_concert_page_with_groups_renders(client):
     r = client.get("/concerts/np")
     assert r.status_code == 200
     assert ">Chika<" in r.text
+
+
+# ── header: the split pill and the subunit rail (rendering) ──────────────
+#
+# One rule drawn twice: a relationship renders only when BOTH of its ends are
+# attached to this concert. These pin each half of it AND its negative — a
+# lone character and a lone subunit must be indistinguishable from an
+# ordinary artist and an ordinary group, which is an owner rule, not a
+# shortcut.
+
+
+async def _make_character(db, name, seiyuu_name):
+    """A CHARACTER tag and the ARTIST who voices her, attached to nothing."""
+    async with db() as s:
+        seiyuu = Tag(name=seiyuu_name, kind=TagKind.ARTIST)
+        s.add(seiyuu)
+        await s.flush()
+        char = Tag(name=name, kind=TagKind.CHARACTER, voiced_by_tag_id=seiyuu.id)
+        s.add(char)
+        await s.commit()
+        return char.id, seiyuu.id
+
+
+async def test_a_character_and_her_seiyuu_render_as_one_split_pill(client):
+    """Both ends attached: ONE chip made of two links, not two chips. The
+    seiyuu must not also stand alone -- she is inside the pill."""
+    cid = await seed_concert(client.db)
+    char_id, seiyuu_id = await _make_character(client.db, "Chihaya", "Asami")
+    await attach_existing(client.db, cid, [char_id, seiyuu_id])
+    login(client)
+
+    panel = _performers_panel(client)
+    assert panel.count('class="mchip"') == 1
+    pill = panel.split('class="mchip"', 1)[1].split("</span>\n", 1)[0]
+    assert ">Chihaya<" in pill and ">Asami<" in pill
+    # ...and neither name is ALSO a plain chip of its own.
+    assert '"chip nolink" title="No eventernote link yet">Chihaya<' not in panel
+    assert panel.count(">Asami<") == 1
+
+
+async def test_each_half_of_the_split_pill_is_its_own_link(client):
+    """The point of the shape: a reader can click through to the character or
+    to the performer. One <a> wrapping both would answer only one of those."""
+    cid = await seed_concert(client.db)
+    char_id, seiyuu_id = await _make_character(client.db, "Chihaya", "Asami")
+    await _set_eventernote_url(client.db, char_id, "https://www.eventernote.com/actors/1")
+    await _set_eventernote_url(client.db, seiyuu_id, "https://www.eventernote.com/actors/2")
+    await attach_existing(client.db, cid, [char_id, seiyuu_id])
+    login(client)
+
+    panel = _performers_panel(client)
+    assert '<a class="cn" href="https://www.eventernote.com/actors/1"' in panel
+    assert '<a class="cv" href="https://www.eventernote.com/actors/2"' in panel
+
+
+async def test_a_character_whose_seiyuu_is_absent_is_an_ordinary_chip(client):
+    """Owner rule, the negative half: the seiyuu EXISTS and the character
+    names her, but she is not on this bill, so nothing is drawn. Rendering
+    the pill off `voiced_by_tag_id` alone would put a performer on the page
+    who is not on the concert."""
+    cid = await seed_concert(client.db)
+    char_id, _seiyuu_id = await _make_character(client.db, "Chihaya", "Asami")
+    await attach_existing(client.db, cid, [char_id])   # her seiyuu stays off
+    login(client)
+
+    panel = _performers_panel(client)
+    assert "mchip" not in panel
+    assert '<span class="chip nolink" title="No eventernote link yet">Chihaya</span>' in panel
+    assert "Asami" not in panel
+
+
+async def test_a_character_only_bill_renders_the_panel_and_counts_her(client):
+    """The panel's gate and its count both read the CHIPS now. Keying either
+    off the attached ARTIST tags hides this page's whole performer panel --
+    a character nobody voices is not an artist tag."""
+    cid = await seed_concert(client.db)
+    char_id, _seiyuu_id = await _make_character(client.db, "Chihaya", "Asami")
+    await attach_existing(client.db, cid, [char_id])
+    login(client)
+
+    panel = _performers_panel(client)
+    assert ">Chihaya<" in panel
+    assert "1 performer" in panel and "2 performer" not in panel
+
+
+async def test_a_split_pill_counts_as_one_performer(client):
+    """Two tags, one chip, one person."""
+    cid = await seed_concert(client.db)
+    char_id, seiyuu_id = await _make_character(client.db, "Chihaya", "Asami")
+    await attach_existing(client.db, cid, [char_id, seiyuu_id])
+    login(client)
+
+    panel = _performers_panel(client)
+    assert "1 performer" in panel
+    assert "2 performers" not in panel
+
+
+async def test_a_subunit_renders_indented_and_labelled(client):
+    """Both ends again: parent group and subunit on the same bill."""
+    cid = await seed_concert(client.db)
+    parent_id, _members = await add_group_with_members(client.db, cid, "765PRO", ["Chihaya"])
+    async with client.db() as s:
+        sub = Tag(name="Ryuguu", kind=TagKind.GROUP, parent_id=parent_id)
+        s.add(sub)
+        await s.commit()
+        sub_id = sub.id
+    await attach_existing(client.db, cid, [sub_id])
+    login(client)
+
+    panel = _performers_panel(client)
+    blocks = panel.split('class="pcluster', 1)[1]
+    assert panel.count('class="pcluster sub"') == 1
+    assert panel.count("Subunit") == 1
+    sub_block = panel.split('class="pcluster sub"', 1)[1]
+    assert ">Ryuguu<" in sub_block and ">765PRO<" not in sub_block
+    assert ">765PRO<" in blocks    # the parent block is still there, unindented
+
+
+async def test_a_subunit_whose_parent_is_absent_renders_flat(client):
+    """Owner rule, the negative half: no parent on the bill, no rail and no
+    label -- an indent pointing at nothing reads as a rendering bug."""
+    cid = await seed_concert(client.db)
+    async with client.db() as s:
+        parent = Tag(name="765PRO", kind=TagKind.GROUP)
+        s.add(parent)
+        await s.flush()
+        sub = Tag(name="Ryuguu", kind=TagKind.GROUP, parent_id=parent.id)
+        s.add(sub)
+        await s.commit()
+        sub_id = sub.id
+    await attach_existing(client.db, cid, [sub_id])
+    login(client)
+
+    panel = _performers_panel(client)
+    assert ">Ryuguu<" in panel
+    assert "pcluster sub" not in panel
+    assert "Subunit" not in panel
 
 
 # ── header: links and actions ────────────────────────────────────────────

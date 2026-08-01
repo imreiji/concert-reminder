@@ -8,7 +8,6 @@
       the tile you clicked and the page it opened. -#}
   {% set cf = concert.tags | selectattr("kind.value", "equalto", "franchise") | list %}
   {% set cg = concert.tags | selectattr("kind.value", "equalto", "group") | list %}
-  {% set ca = concert.tags | selectattr("kind.value", "equalto", "artist") | list %}
   {% set cv = concert.tags | selectattr("kind.value", "equalto", "venue") | list %}
   <header class="chead">
     {#- Lineage leads, because the group is what a reader recognises while
@@ -103,30 +102,42 @@
       whose members were all pruned keeps its label row and shows no chips;
       that IS the fact.
 
-      The count is DISTINCT performers (the attached ARTIST tags), not the sum
-      of the blocks: someone in two attached groups appears in both, so the
-      seats outnumber the people. At ZERO it disappears entirely rather than
-      reading "0 performers" (owner ruling, 2026-07-27) -- a groups-only bill
-      is a line-up nobody has listed yet, not a concert with nobody on it, and
-      the group label rows already say so. Deliberately no separate msgid for
-      that state: the absence carries it.
+      The count is DISTINCT performers -- the tags that actually get a chip,
+      counted once each -- not the sum of the blocks: someone in two attached
+      groups appears in both, so the seats outnumber the people. It is read
+      off the clusters rather than off the attached ARTIST tags because a
+      character and her seiyuu share ONE chip: counting artists would say two
+      where the panel shows one, and would miss a character nobody voices
+      entirely. At ZERO it disappears entirely rather than reading
+      "0 performers" (owner ruling, 2026-07-27) -- a groups-only bill is a
+      line-up nobody has listed yet, not a concert with nobody on it, and the
+      group label rows already say so. Deliberately no separate msgid for that
+      state: the absence carries it.
 
       A performer chip whose tag carries an `eventernote_url` links out to it;
-      one without stays a plain span, never a dead link. The group chip follows
-      the same rule. -#}
-  {% if cg or ca %}
+      one without stays a plain span, never a dead link. The group chip and
+      both halves of a split pill follow the same rule -- `pchip` is that one
+      rule, written once. -#}
+  {%- macro pchip(t, cls) -%}
+    {%- if t.eventernote_url %}<a class="{{ cls }}" href="{{ t.eventernote_url }}" target="_blank" rel="noopener">{{ loc(t, "name") }}</a>{% else %}<span class="{{ cls }} nolink" title="{{ _('No eventernote link yet') }}">{{ loc(t, "name") }}</span>{% endif -%}
+  {%- endmacro -%}
+  {% set pcount = performer_clusters | sum(attribute="performers", start=()) | map(attribute="tag.id") | unique | list | length %}
+  {% if cg or pcount %}
   <div class="performers">
     <div class="plabel">{{ _("Performing") }}
-      {%- if ca %}
-      <span>— {% trans count=ca | length %}{{ count }} performer{% pluralize %}{{ count }} performers{% endtrans %}</span>
+      {%- if pcount %}
+      <span>— {% trans count=pcount %}{{ count }} performer{% pluralize %}{{ count }} performers{% endtrans %}</span>
       {%- endif %}
     </div>
+    {#- `depth` is 1 only when this group's parent group is attached too, so
+        the rail marks a real relationship the reader can see both ends of.
+        A subunit whose parent is absent renders as an ordinary cluster --
+        no indent, no label (owner rule). -#}
     {% for cluster in performer_clusters %}
-    <div class="pcluster">
+    <div class="pcluster{% if cluster.depth %} sub{% endif %}">
       {% if cluster.group %}
       <div class="pclabel">
-        {% if cluster.group.eventernote_url %}<a class="chip grp" href="{{ cluster.group.eventernote_url }}" target="_blank" rel="noopener">{{ loc(cluster.group, "name") }}</a>
-        {% else %}<span class="chip grp nolink" title="{{ _('No eventernote link yet') }}">{{ loc(cluster.group, "name") }}</span>{% endif %}
+        {{ pchip(cluster.group, "chip grp") }}{% if cluster.depth %} <span class="tiny dim">{{ _("Subunit") }}</span>{% endif %}
       </div>
       {% endif %}
       {#- No chip row at all when the cluster is empty (a group attached with
@@ -135,9 +146,12 @@
           the gap after a member-less group 20px where every other cluster
           boundary is 14.4px. `.chiprow:empty` cannot reach it -- this template's
           own indentation puts whitespace text nodes inside the div. -#}
-      {% if cluster.artists %}
+      {% if cluster.performers %}
       <div class="chiprow">
-        {% for a in cluster.artists %}{% if a.eventernote_url %}<a class="chip" href="{{ a.eventernote_url }}" target="_blank" rel="noopener">{{ loc(a, "name") }}</a>{% else %}<span class="chip nolink" title="{{ _('No eventernote link yet') }}">{{ loc(a, "name") }}</span>{% endif %}{% endfor %}
+        {#- Character and seiyuu attached BOTH: one chip visibly made of two
+            halves, each its own link. Either alone falls to the plain branch
+            and is indistinguishable from any other performer chip. -#}
+        {% for e in cluster.performers %}{% if e.seiyuu %}<span class="mchip">{{ pchip(e.tag, "cn") }}{{ pchip(e.seiyuu, "cv") }}</span>{% else %}{{ pchip(e.tag, "chip") }}{% endif %}{% endfor %}
       </div>
       {% endif %}
     </div>

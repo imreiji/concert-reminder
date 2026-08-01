@@ -1064,6 +1064,33 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .performers a.chip:hover, .performers a.chip:focus-visible { background: var(--accent); color: #fff; }
 .performers a.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* The character/seiyuu split pill. ONE chip visibly made of two halves, each
+   its own link -- the shape was chosen (owner, from four mockups) because the
+   merge is CONDITIONAL: when only one end is attached the chip is plain, and
+   the split makes that difference read as meaningful rather than as
+   inconsistent styling. 999px like every other chip.
+   The divider is --line, not a fixed rgba of the light ink: on the dark
+   theme's #2a2830 chip ground an ink-tinted hairline is invisible, which
+   would collapse the two halves back into one chip in exactly the theme the
+   reader cannot check against. */
+.mchip { display: inline-flex; align-items: stretch; border-radius: 999px;
+         overflow: hidden; background: var(--chip); font-size: .82rem; }
+.mchip > * { padding: .1rem .55rem; color: var(--ink); text-decoration: none;
+             line-height: 1.5; }
+.mchip > .cv { color: var(--dim); border-left: 1px solid var(--line); }
+/* Same two states the plain chips carry, so a half behaves like a chip:
+   dimmed when there is no eventernote link, accent ground when there is. */
+.performers .mchip .nolink { opacity: .75; }
+.performers .mchip a { transition: background 150ms ease, color 150ms ease; }
+.performers .mchip a:hover, .performers .mchip a:focus-visible {
+  background: var(--accent); color: #fff;
+}
+.performers .mchip a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* A subunit sits beneath its parent. Indent + rail, NOT a nested card: the
+   two-shape callout grammar has no third shape and this is not a callout. */
+.pcluster.sub { margin-left: 1rem; padding-left: .85rem; border-left: 2px solid var(--line); }
+
 /* "Next for you": the nearest moment on THIS concert that wants the reader.
    Accent rather than the danger red Home's "Closes next" uses -- that one is
    sitewide triage, this one is a single campaign's status. */

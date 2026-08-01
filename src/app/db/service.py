@@ -4545,13 +4545,27 @@ async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
 
 
 @dataclass(frozen=True)
+class PerformerEntry:
+    """One chip. `seiyuu` is set ONLY when the tag is a CHARACTER and her voice
+    actor is ALSO attached to this concert -- the both-ends rule. Otherwise it
+    is None and the chip renders plain, which is what makes a lone character
+    and a lone artist look identical, deliberately."""
+
+    tag: Tag
+    seiyuu: Tag | None = None
+
+
+@dataclass(frozen=True)
 class PerformerCluster:
     """One labelled row of the concert page's Performing panel: a GROUP tag
-    and the concert's attached ARTIST tags belonging to it. `group is None`
-    is the trailing cluster of performers in no attached group."""
+    and the concert's attached performers belonging to it. `group is None` is
+    the trailing cluster of performers in no attached group. `depth` is 1 when
+    this group's DIRECT parent is an attached GROUP -- a subunit with no parent
+    group present is an ordinary top-level cluster (owner rule)."""
 
     group: Tag | None
-    artists: tuple[Tag, ...] = ()
+    performers: tuple[PerformerEntry, ...] = ()
+    depth: int = 0
 
 
 async def performer_clusters(
@@ -4586,12 +4600,59 @@ async def performer_clusters(
       and deduplicating would leave the main group's cluster looking
       incomplete to exactly the reader who came to see it. Do not "optimize"
       it away.
+
+    Two relationships are DRAWN here, and both obey one rule: a relationship
+    shows only when BOTH of its ends are attached to this concert.
+
+    * A CHARACTER pairs with her seiyuu into one entry (the split-pill chip)
+      only when that seiyuu is attached too, and she is then dropped from the
+      standalone list because she is rendered inside the pill. Either end
+      alone renders exactly as an ordinary artist does.
+    * A GROUP nests under its parent only when the parent is an attached
+      GROUP. "Attached GROUP", not "attached tag": a group's parent_id is
+      usually a FRANCHISE, and a franchise opens no cluster to nest beneath,
+      so asking the looser question would drop every franchise bill's
+      performer blocks off the page.
+
+    Both are DERIVED per concert, never stored -- which is also why nothing
+    here needs provenance for a seiyuu: she is paired exactly when some
+    attached character names her, the same derivation the prune rule and the
+    editor already use.
     """
     groups = [t for t in concert.tags if t.kind is TagKind.GROUP]
-    artists = [t for t in concert.tags if t.kind is TagKind.ARTIST]
+    people = [
+        t for t in concert.tags if t.kind in (TagKind.ARTIST, TagKind.CHARACTER)
+    ]
+    attached_ids = {t.id for t in concert.tags}
+    by_id = {t.id: t for t in concert.tags}
+
+    # Pair each character with her seiyuu, but only when BOTH ends are here.
+    # The seiyuu is then dropped from the standalone list: she is rendered
+    # inside the split pill. A seiyuu attached in her own right survives this
+    # filter and is listed as herself (owner rule) -- and she reaches the
+    # trailer for free, because a group's members are CHARACTER tags now, so
+    # she is not in members_by_group at all.
+    paired_seiyuu: set[int] = {
+        t.voiced_by_tag_id for t in people
+        if t.kind is TagKind.CHARACTER
+        and t.voiced_by_tag_id is not None
+        and t.voiced_by_tag_id in attached_ids
+    }
+    # `people` keeps concert.tags' order (Tag.name) inside every cluster.
+    entries = [
+        PerformerEntry(
+            t,
+            by_id[t.voiced_by_tag_id]
+            if t.kind is TagKind.CHARACTER and t.voiced_by_tag_id in attached_ids
+            else None,
+        )
+        for t in people
+        if t.id not in paired_seiyuu
+    ]
+
     # Solo-artist concerts are common and have nothing to look up.
     if not groups:
-        return [PerformerCluster(None, tuple(artists))] if artists else []
+        return [PerformerCluster(None, tuple(entries))] if entries else []
 
     res = await session.execute(
         select(TagMember.group_tag_id, TagMember.member_tag_id).where(
@@ -4602,15 +4663,54 @@ async def performer_clusters(
     for group_tag_id, member_tag_id in res:
         members_by_group[group_tag_id].add(member_tag_id)
 
-    # `artists` keeps concert.tags' order (Tag.name) inside every cluster.
-    clusters = [
-        PerformerCluster(
-            g, tuple(a for a in artists if a.id in members_by_group[g.id])
+    # Parent-first ordering with depth, and NO second query: `concert.tags`
+    # already carries every attached group, so a parent is present exactly
+    # when its id is among them. A `session.get(Tag, g.parent_id)` here would
+    # be one SELECT per unit on the franchise bills this is for.
+    group_ids = {g.id for g in groups}
+    children: dict[int, list[Tag]] = {}
+    roots: list[Tag] = []
+    for g in groups:
+        if g.parent_id in group_ids:
+            children.setdefault(g.parent_id, []).append(g)
+        else:
+            roots.append(g)
+
+    clusters: list[PerformerCluster] = []
+    emitted: set[int] = set()
+
+    def _emit(g: Tag, depth: int) -> None:
+        if g.id in emitted:
+            return
+        emitted.add(g.id)
+        clusters.append(
+            PerformerCluster(
+                g,
+                tuple(e for e in entries if e.tag.id in members_by_group[g.id]),
+                depth,
+            )
         )
-        for g in groups
-    ]
+        # Depth stays 1 however deep the chain runs: the rail is one indent,
+        # not a ladder. Recursing anyway is what keeps a third rung ON the
+        # page -- emitting a root's direct children only would drop it.
+        for child in children.get(g.id, ()):
+            _emit(child, 1)
+
+    for g in roots:
+        _emit(g, 0)
+    # A parent cycle (A under B under A, or a group that is its own parent)
+    # has no root between its members, so the walk above never reaches them.
+    # `apply_tag_import` writes parent_id and is not cycle-guarded, so the
+    # shape is reachable from a hand-edited catalogue file -- and an attached
+    # group must appear on the page whatever its parent says. This is also
+    # why no separate self-parent guard is needed above: a 1-cycle is a cycle
+    # and lands here like any other. `emitted` makes the sweep a no-op in the
+    # ordinary case, and stops the walk from recursing through a cycle.
+    for g in groups:
+        _emit(g, 0)
+
     grouped = {mid for ids in members_by_group.values() for mid in ids}
-    trailer = tuple(a for a in artists if a.id not in grouped)
+    trailer = tuple(e for e in entries if e.tag.id not in grouped)
     if trailer:
         clusters.append(PerformerCluster(None, trailer))
     return clusters

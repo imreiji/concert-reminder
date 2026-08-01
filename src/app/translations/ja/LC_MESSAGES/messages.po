@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-01 02:27-0300\n"
+"POT-Creation-Date: 2026-08-01 07:45-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -474,7 +474,7 @@ msgid "Other"
 msgstr "その他"
 
 #: src/app/db/service.py:2538 src/app/db/service.py:2684
-#: src/app/db/service.py:5978 src/app/web/templates/_board.html:73
+#: src/app/db/service.py:6086 src/app/web/templates/_board.html:73
 #: src/app/web/templates/discover.html:79 src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "複数"
@@ -556,11 +556,11 @@ msgstr "{kind}・{n}後に受付開始"
 msgid "All rounds closed"
 msgstr "すべての受付が終了"
 
-#: src/app/db/service.py:5597
+#: src/app/db/service.py:5705
 msgid "From dekimasen.app"
 msgstr "dekimasen.app より"
 
-#: src/app/db/service.py:6230 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:6338 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:127
 #: src/app/web/templates/concert_edit.html:132
 #: src/app/web/templates/concert_new.html:35
@@ -570,7 +570,7 @@ msgstr "dekimasen.app より"
 msgid "Title"
 msgstr "タイトル"
 
-#: src/app/db/service.py:6234 src/app/web/templates/concert_edit.html:114
+#: src/app/db/service.py:6342 src/app/web/templates/concert_edit.html:114
 #: src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
@@ -583,17 +583,17 @@ msgstr "タイトル"
 msgid "Notes"
 msgstr "メモ"
 
-#: src/app/db/service.py:6240
+#: src/app/db/service.py:6348
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "公演{n}の名称"
 
-#: src/app/db/service.py:6245
+#: src/app/db/service.py:6353
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "受付{n}の名称"
 
-#: src/app/db/service.py:6254 src/app/web/templates/_tag_create_dialog.html:38
+#: src/app/db/service.py:6362 src/app/web/templates/_tag_create_dialog.html:38
 #: src/app/web/templates/_tag_create_dialog.html:40
 #: src/app/web/templates/_tag_create_dialog.html:42
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -608,7 +608,7 @@ msgstr "受付{n}の名称"
 msgid "Name"
 msgstr "名前"
 
-#: src/app/db/service.py:6259
+#: src/app/db/service.py:6367
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -1475,7 +1475,7 @@ msgid "Discover"
 msgstr "探す"
 
 #: src/app/web/templates/base.html:38 src/app/web/templates/base.html:99
-#: src/app/web/templates/concert_detail.html:49
+#: src/app/web/templates/concert_detail.html:48
 #: src/app/web/templates/concert_edit.html:140
 #: src/app/web/templates/concert_new.html:114
 #: src/app/web/templates/import_preview.html:183
@@ -1574,60 +1574,63 @@ msgstr "記録しました — 落選に設定"
 msgid "Recorded — ticket secured"
 msgstr "記録しました — 確保済みに"
 
-#: src/app/web/templates/concert_detail.html:44
+#: src/app/web/templates/concert_detail.html:43
 msgid ""
 "This event is cancelled. Every performance has been called off, so there "
 "is nothing left to enter."
 msgstr "この公演は中止になりました。すべての公演日が中止のため、申し込めるものはありません。"
 
-#: src/app/web/templates/concert_detail.html:64
+#: src/app/web/templates/concert_detail.html:63
 msgid "Links"
 msgstr "リンク"
 
-#: src/app/web/templates/concert_detail.html:66
+#: src/app/web/templates/concert_detail.html:65
 msgid "official site"
 msgstr "公式サイト"
 
-#: src/app/web/templates/concert_detail.html:81
+#: src/app/web/templates/concert_detail.html:80
 #: src/app/web/templates/concert_edit.html:22
 msgid "Edit event"
 msgstr "イベントを編集"
 
-#: src/app/web/templates/concert_detail.html:82
+#: src/app/web/templates/concert_detail.html:81
 msgid "Export YAML"
 msgstr "YAMLをエクスポート"
 
-#: src/app/web/templates/concert_detail.html:119
+#: src/app/web/templates/concert_detail.html:122
+msgid "No eventernote link yet"
+msgstr "eventernoteのリンクはまだありません"
+
+#: src/app/web/templates/concert_detail.html:127
 msgid "Performing"
 msgstr "出演"
 
-#: src/app/web/templates/concert_detail.html:121
+#: src/app/web/templates/concert_detail.html:129
 #: src/app/web/templates/tags.html:15
 #, python-format
 msgid "%(count)s performer"
 msgid_plural "%(count)s performers"
 msgstr[0] "%(count)s名の出演者"
 
-#: src/app/web/templates/concert_detail.html:129
 #: src/app/web/templates/concert_detail.html:140
-msgid "No eventernote link yet"
-msgstr "eventernoteのリンクはまだありません"
+msgid "Subunit"
+msgstr "サブユニット"
 
-#: src/app/web/templates/concert_detail.html:152
+#: src/app/web/templates/concert_detail.html:166
 msgid "My reminders"
 msgstr "マイリマインダー"
 
-#: src/app/web/templates/concert_detail.html:158
+#: src/app/web/templates/concert_detail.html:172
 #, python-format
 msgid "Edit history (%(n)s)"
 msgstr "編集履歴（%(n)s）"
 
-#: src/app/web/templates/concert_detail.html:164
+#: src/app/web/templates/concert_detail.html:178
 #: src/app/web/templates/concert_edit.html:156
 msgid "Deleted user"
 msgstr "削除済みユーザー"
 
-#: src/app/web/templates/concert_detail.html:168
+#: src/app/web/templates/concert_detail.html:182
 #: src/app/web/templates/concert_edit.html:160
 msgid "(empty)"
 msgstr "（空）"
