@@ -65,12 +65,14 @@ class ConcertKind(enum.StrEnum):
 
 
 class TagKind(enum.StrEnum):
-    """What a tag names. GROUP tags contain member (usually ARTIST) tags."""
+    """What a tag names. GROUP tags contain member tags -- ARTIST tags,
+    CHARACTER tags, or a mix."""
 
     FRANCHISE = "franchise"   # Hasunosora, Gakumas, Ikizuraibu...
     ARTIST = "artist"         # individual performers
     VENUE = "venue"           # Yokohama Arena, K-Arena...
     GROUP = "group"           # unit/group containing artist tags
+    CHARACTER = "character"   # 如月千早 -- voiced by an ARTIST, see Tag.voiced_by_tag_id
 
 
 class Anchor(enum.StrEnum):
