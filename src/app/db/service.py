@@ -4296,11 +4296,19 @@ async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
         kind=concert.kind.value if concert.kind else None,
         franchises=[t.name for t in concert.tags if t.kind is TagKind.FRANCHISE],
         groups=[t.name for t in concert.tags if t.kind is TagKind.GROUP],
+        # CHARACTERS, without which `export.zip` is not a faithful backup of an
+        # im@s concert: on a restore the derived seiyuu survives (she is an
+        # ARTIST row) but the character is lost, and with her the reason the
+        # concert reads the way it does. import_commit has accepted
+        # `character_tags` since the kind shipped; only the file could not
+        # express one.
+        characters=[t.name for t in concert.tags if t.kind is TagKind.CHARACTER],
         artists=[t.name for t in concert.tags if t.kind is TagKind.ARTIST],
         venues=[t.name for t in concert.tags if t.kind is TagKind.VENUE],
         series_handles={
             "franchises": [t.slug for t in concert.tags if t.kind is TagKind.FRANCHISE],
             "groups": [t.slug for t in concert.tags if t.kind is TagKind.GROUP],
+            "characters": [t.slug for t in concert.tags if t.kind is TagKind.CHARACTER],
             "artists": [t.slug for t in concert.tags if t.kind is TagKind.ARTIST],
         },
         days=yaml_days, rounds=yaml_rounds, notes=concert.notes,

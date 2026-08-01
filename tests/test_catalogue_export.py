@@ -6,13 +6,14 @@ import zipfile
 
 import pytest
 import pytest_asyncio
+import yaml
 from fastapi.testclient import TestClient
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Tag
+from app.db.models import Base, Concert, Tag
 from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
@@ -172,3 +173,62 @@ async def test_the_export_round_trips_through_the_importer(client):
     async with client.db() as s:
         after = snapshot((await s.execute(select(Tag))).scalars())
     assert after == before
+
+
+# ── the concert draft carries CHARACTER tags (2026-08-01) ────────────────
+#
+# Until this, `concert_to_yaml` emitted franchises/groups/artists only, so
+# `export.zip` was not a faithful backup of an im@s concert: on a restore the
+# derived seiyuu came back (she is an ARTIST row and was written as one) and
+# the character -- the reason the bill reads the way it does -- was silently
+# gone. `import_commit` had accepted `character_tags` since the kind shipped;
+# only the FILE could not say one.
+
+
+def _seed_character_concert(client):
+    login_as(client, ADMIN_ID, "reiji")
+    client.post("/tags", data={
+        "name": "今井麻美", "name_en": "Asami Imai", "name_zh": "今井麻美", "kind": "artist",
+    })
+    client.post("/tags", data={
+        "name": "如月千早", "name_en": "Chihaya Kisaragi", "name_zh": "如月千早",
+        "kind": "character", "voiced_by_tag_id": 1,
+    })
+    r = client.post("/concerts", data={
+        "title": "THE IDOLM@STER 10th", "title_en": "THE IDOLM@STER 10th",
+        "title_zh": "偶像大师 10th", "event_id": "imas-10th", "character_tags": [2],
+    })
+    assert r.status_code == 303, r.text
+
+
+def test_the_concert_draft_carries_characters_by_name_and_handle(client):
+    _seed_character_concert(client)
+    draft = _entries(client.get("/admin/export.zip").content)["concerts/imas-10th.yaml"]
+    data = yaml.safe_load(draft)
+    assert data["series"]["characters"] == ["如月千早"]
+    assert data["series_handles"]["characters"] == ["chihaya-kisaragi"]
+    # Her seiyuu is attached too (attach_tag's chained step) and still exports
+    # as the ARTIST she is -- the character is an ADDITION, not a replacement.
+    assert data["series"]["artists"] == ["今井麻美"]
+
+
+async def test_a_character_concert_survives_the_export_import_round_trip(client):
+    """The whole promise, for the shape the branch exists for: export, wipe the
+    concert, re-import its own draft, and the character is back on it."""
+    _seed_character_concert(client)
+    draft = _entries(client.get("/admin/export.zip").content)["concerts/imas-10th.yaml"]
+
+    async with client.db() as s:
+        concert = (await s.execute(
+            select(Concert).where(Concert.event_id == "imas-10th")
+        )).scalar_one()
+        await s.delete(concert)
+        await s.commit()
+
+    # The draft producer and the preview are one path: paste it back, and the
+    # preview's own hidden fields are what import_commit receives.
+    r = client.post("/concerts/import/draft", data={"draft": draft})
+    assert r.status_code == 200, r.text
+    assert '"2"' in r.text.split("const INITIAL_SELECTED = ")[1].split(";\n")[0], (
+        "the character did not survive the file into the picker's selection"
+    )

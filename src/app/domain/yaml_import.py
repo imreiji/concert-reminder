@@ -39,7 +39,7 @@ _TOP_KEYS = {
     "eventernote_url", "official_url", "source_url", "performances", "rounds",
     "notes", "notes_en", "notes_zh",
 }
-_SERIES_KEYS = {"franchises", "groups", "artists"}
+_SERIES_KEYS = {"franchises", "groups", "characters", "artists"}
 _DAY_KEYS = {
     "label", "label_en", "label_zh", "city", "venue", "venue_address", "venue_handle",
     "doors_jst", "starts_at_jst", "eventernote_event_id",
@@ -291,10 +291,14 @@ def parse_draft(text: str) -> ParsedConcert:
         performers_text="\n".join(performers) or None,
         franchise_names=_names(series.get("franchises"), "series.franchises", warnings),
         group_names=_names(series.get("groups"), "series.groups", warnings),
+        character_names=_names(series.get("characters"), "series.characters", warnings),
         artist_names=_names(series.get("artists"), "series.artists", warnings),
         franchise_handles=_names(
             handles.get("franchises"), "series_handles.franchises", warnings
         ),
         group_handles=_names(handles.get("groups"), "series_handles.groups", warnings),
+        character_handles=_names(
+            handles.get("characters"), "series_handles.characters", warnings
+        ),
         artist_handles=_names(handles.get("artists"), "series_handles.artists", warnings),
     )

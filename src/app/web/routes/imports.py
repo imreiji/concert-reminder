@@ -279,14 +279,19 @@ async def import_draft(
 
     # Tag names -> picker pre-selection. Unmatched names surface in the Tags
     # fold as per-name "create this tag" chips rather than vanishing -- each
-    # carries its kind (franchise/group/artist) so the quick-create dialog can
-    # pre-select the right kind. Structured (name, kind) pairs, not a flat name
-    # list: the kind is what the chip and the dialog both need.
+    # carries its kind (franchise/group/character/artist) so the quick-create
+    # dialog can pre-select the right kind. Structured (name, kind) pairs, not a
+    # flat name list: the kind is what the chip and the dialog both need.
     initial_selected: dict[str, list[str]] = {}
     unmatched_tags: list[dict] = []
     for kind_name, names, handles in (
         ("franchise", parsed.franchise_names, parsed.franchise_handles),
         ("group", parsed.group_names, parsed.group_handles),
+        # A draft that names characters prefills the character row like any
+        # other. The picker adds `character_excluded` on top for a group's
+        # characters; a draft has no group expansion to prune, so it supplies
+        # only the positive list.
+        ("character", parsed.character_names, parsed.character_handles),
         ("artist", parsed.artist_names, parsed.artist_handles),
     ):
         pool = picker["by_kind"].get(kind_name, [])

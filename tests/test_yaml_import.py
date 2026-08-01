@@ -269,7 +269,7 @@ def _utc(y, mo, d, h, mi):
 def test_export_then_parse_round_trips():
     text = concert_to_yaml(
         title="6thライブ", kind="tour",
-        franchises=["Love Live!"], groups=["蓮ノ空"], artists=["日野下花帆"],
+        franchises=["Love Live!"], groups=["蓮ノ空"], characters=[], artists=["日野下花帆"],
         venues=["Kアリーナ横浜"],
         days=[YamlDay(
             label="Day 1", label_en="Day 1", label_zh="第1天",

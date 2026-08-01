@@ -625,9 +625,15 @@ deleting them.
    `edit_concert` must keep resolving `character_tags` into `desired_tags`:
    omission means removal for every non-VENUE kind, and leaving characters out
    of the diff detached them (and cascaded their seiyuu off) on a save that
-   never mentioned them. The concert DRAFT vocabulary has no character bucket
-   yet, so a pasted YAML draft cannot prefill that row — the editor ticks it on
-   the preview, and `import_commit` accepts it.
+   never mentioned them. The concert DRAFT vocabulary carries characters too
+   (2026-08-01): `series.characters` + `series_handles.characters` through
+   `concert_to_yaml`/`parse_draft`, so `export.zip` is a faithful backup of an
+   im@s bill (before this a restore came back artists-only — the derived seiyuu
+   survived as the ARTIST row she is and the character was simply gone) and the
+   `add-concert` skill can author one. `concert_to_yaml`'s `characters`
+   parameter is deliberately REQUIRED rather than defaulted: a kind added after
+   the format shipped and quietly defaulting to empty is exactly how this hole
+   opened, and there is only one production caller to break.
    **Pruning a character ALWAYS detaches her seiyuu** (owner, 2026-08-01),
    with one refinement that is not an exception: unless another still-attached
    character shares that seiyuu. A performer can voice two characters on one
