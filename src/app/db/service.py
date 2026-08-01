@@ -4870,9 +4870,12 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
 
     Returns a dict with:
       counts             -- {tag_id: TagCounts}
-      franchise_families -- [(franchise Tag, [(group Tag, [member Tag, ...]), ...]), ...]
-                            in franchise name order; groups in name order
-      no_franchise_groups-- [(group Tag, [member Tag, ...]), ...] for parentless groups
+      franchise_families -- [(franchise Tag, [(group Tag, [member Tag, ...], depth),
+                            ...]), ...] in franchise name order; groups in name
+                            order, each immediately followed by its subunits at
+                            depth+1 (see the walk below -- no group is ever
+                            omitted, whatever its parent_id says)
+      no_franchise_groups-- the same row triples for groups under no franchise
       venue_regions      -- [(region_name, [venue Tag, ...]), ...] alpha, "No region" last
       ungrouped_performers -- ARTIST tags that are no group's member, name order
       summary            -- {concerts, franchises, groups, performers, venues,
@@ -4942,14 +4945,52 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
     artists = [t for t in tags if t.kind is TagKind.ARTIST]
     venues = [t for t in tags if t.kind is TagKind.VENUE]
 
-    def group_with_members(g: Tag) -> tuple[Tag, list[Tag]]:
-        return g, members_of.get(g.id, [])
+    # ── group rows, with subunits nested under their parent group ──
+    # GROUP -> GROUP became legal on 2026-08-01, and until this walk existed
+    # the two buckets below ("under this franchise" / "no parent at all")
+    # named no bucket for a group parented to a GROUP. A subunit therefore
+    # fell out of the chips directory entirely -- and so did every performer
+    # whose only membership was in it, since `grouped_member_ids` already
+    # counted them as grouped and `ungrouped_performers` skips those. A
+    # signed-in non-editor saw neither anywhere on /tags, the table view
+    # being editor-only.
+    #
+    # The walk happens HERE and yields a FLAT, pre-ordered list of
+    # (group, members, depth). Not a children map recursed over in the
+    # template: a parent cycle would loop forever there, and a cycle is
+    # reachable (older rows predate `would_create_tag_cycle`, and nothing
+    # walks parent_id transitively to notice). `seen` terminates the walk and
+    # `leftovers` below carries the property this fix is actually about --
+    # EVERY group renders exactly once, whatever its parent_id says.
+    children_of: dict[int, list[Tag]] = {}
+    for g in groups:
+        parent = by_id.get(g.parent_id) if g.parent_id else None
+        if parent is not None and parent.kind is TagKind.GROUP:
+            children_of.setdefault(parent.id, []).append(g)
+    walked: set[int] = set()
+
+    def group_rows(g: Tag, depth: int = 0) -> list[tuple[Tag, list[Tag], int]]:
+        if g.id in walked:
+            return []
+        walked.add(g.id)
+        rows = [(g, members_of.get(g.id, []), depth)]
+        for child in children_of.get(g.id, []):
+            rows.extend(group_rows(child, depth + 1))
+        return rows
 
     franchise_families = [
-        (f, [group_with_members(g) for g in groups if g.parent_id == f.id])
+        (f, [row for g in groups if g.parent_id == f.id for row in group_rows(g)])
         for f in franchises
     ]
-    no_franchise_groups = [group_with_members(g) for g in groups if g.parent_id is None]
+    no_franchise_groups = [
+        row for g in groups if g.parent_id is None for row in group_rows(g)
+    ]
+    # Whatever the walk never reached: a group inside a parent cycle, or one
+    # whose parent_id names a tag that is neither a franchise nor a group. It
+    # renders at the top of the parentless bucket rather than nowhere at all.
+    no_franchise_groups += [
+        row for g in groups if g.id not in walked for row in group_rows(g)
+    ]
 
     # ── venues by region, "No region" last ──
     by_region: dict[str, list[Tag]] = {}

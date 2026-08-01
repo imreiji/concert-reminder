@@ -480,6 +480,103 @@ def test_tags_page_renders_hierarchy_and_search_box(client):
     assert 'class="tags-page"' in r.text
 
 
+# ── Subunits in the chips directory (GROUP -> GROUP, 2026-08-01) ─────────
+#
+# The chips directory is the ONLY view a non-editor gets: the table and the
+# per-tag dialogs are both editor-only, so a name that renders in those alone
+# is invisible to most of the site's users. Every assertion here is therefore
+# scoped to the chips directory, never to the whole page body.
+
+
+def _chips(body: str) -> str:
+    """Just the chips directory -- the table view and the dialogs hold every
+    tag name on the page and would make any of these assertions vacuous."""
+    after = body.split('<div class="tags-page">', 1)[1]
+    return after.split('id="tag-table-wrap"', 1)[0]
+
+
+def _seed_subunit(client):
+    """765PRO ALLSTARS > 竜宮小町 (a subunit) > one artist in no other group."""
+    ids = {}
+    for name, kind, extra in (
+        ("765PRO ALLSTARS", "group", {}),
+        ("Ryuuguu Komachi", "group", {"parent_id": 1}),
+        ("Iori", "artist", {}),
+    ):
+        client.post("/tags", data={
+            "name": name, "name_en": name, "name_zh": name, "kind": kind, **extra,
+        })
+    ids["parent"], ids["subunit"], ids["member"] = 1, 2, 3
+    client.post(f"/tags/{ids['subunit']}/members", data={"member_tag_id": ids["member"]})
+    return ids
+
+
+def test_a_subunit_renders_in_the_chips_directory(client):
+    """GROUP -> GROUP became legal on this branch, and neither the
+    under-a-franchise bucket nor the parentless one claimed a subunit, so it
+    appeared in no chips row at all."""
+    login_as(client, EDITOR_ID, "reiji")
+    _seed_subunit(client)
+    assert "Ryuuguu Komachi" in _chips(client.get("/tags").text)
+
+
+def test_a_performer_whose_only_group_is_a_subunit_renders_too(client):
+    """The half that disappeared quietly. She is a member of SOMETHING, so
+    `grouped_member_ids` holds her and `ungrouped_performers` skips her -- and
+    with her only group missing from the directory, no row named her at all.
+    Her own test, so this cannot be masked by the subunit's assertion above."""
+    login_as(client, EDITOR_ID, "reiji")
+    _seed_subunit(client)
+    assert "Iori" in _chips(client.get("/tags").text)
+
+
+def test_a_subunit_row_sits_under_its_parent(client):
+    login_as(client, EDITOR_ID, "reiji")
+    ids = _seed_subunit(client)
+    chips = _chips(client.get("/tags").text)
+    row = chips.split(f'data-subunit-of="{ids["parent"]}"', 1)[1].split("</div>", 1)[0]
+    # The subunit's own row carries it AND its members -- the member is the
+    # half that disappeared entirely, since no other row would ever show her.
+    assert "Ryuuguu Komachi" in row
+    assert "Iori" in row
+    # ...and it renders after the parent it hangs from, not before it.
+    assert chips.index("765PRO ALLSTARS") < chips.index('data-subunit-of=')
+
+
+def test_a_non_editor_sees_the_subunit_and_its_member(client):
+    """The editor-only table view is not a place a reader can stand."""
+    login_as(client, VIEWER_ID, "viewer")
+    body = client.get("/tags").text
+    assert 'id="tag-table-wrap"' not in body  # precondition: no table for them
+    login_as(client, EDITOR_ID, "reiji")
+    _seed_subunit(client)
+    login_as(client, VIEWER_ID, "viewer")
+    chips = _chips(client.get("/tags").text)
+    assert "Ryuuguu Komachi" in chips
+    assert "Iori" in chips
+
+
+async def test_every_group_is_emitted_even_inside_a_parent_cycle(db):
+    """The property the walk exists to hold: a group renders exactly once
+    whatever its parent_id says. A cycle reaches no root, so without the
+    leftover pass both members of one would be dropped -- and a template that
+    recursed over a children map would hang instead."""
+    async with db() as s:
+        s.add(User(discord_id=EDITOR_ID, username="reiji"))
+        await s.flush()
+        a = Tag(name="A", kind=TagKind.GROUP, created_by=EDITOR_ID)
+        b = Tag(name="B", kind=TagKind.GROUP, created_by=EDITOR_ID)
+        s.add_all([a, b])
+        await s.flush()
+        a.parent_id, b.parent_id = b.id, a.id  # written behind the guard's back
+        await s.commit()
+
+        ctx = await tag_directory_context(s)
+        rows = [row for _f, group_rows in ctx["franchise_families"] for row in group_rows]
+        rows += ctx["no_franchise_groups"]
+        assert sorted(g.name for g, _m, _d in rows) == ["A", "B"]
+
+
 def test_tags_page_solo_artist_bucket(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post("/tags", data={
@@ -2217,11 +2314,21 @@ def test_quick_tag_create_rejects_a_blank_name(client):
 
 
 def test_quick_tag_create_rejects_a_parent_on_a_non_group(client):
+    """The parent that gets rejected must EXIST. This test used to post
+    parent_id=1 into an empty DB, so once the route learned to answer "parent
+    tag not found" before checking the rule, it passed without ever reaching
+    the kind check it is named after -- green with the whole
+    ALLOWED_PARENT_KINDS block deleted. An ARTIST is absent from that table,
+    so it takes no parent at all: a real franchise is still refused."""
     login_as(client, EDITOR_ID, "reiji")
+    franchise = client.post(
+        "/tags/quick", data={"name": "Love Live!", "kind": "franchise"}
+    ).json()
     resp = client.post("/tags/quick", data={
-        "name": "X", "kind": "artist", "parent_id": "1",
+        "name": "X", "kind": "artist", "parent_id": str(franchise["id"]),
     })
     assert resp.status_code == 422
+    assert "artist" in resp.json()["detail"]
 
 
 def test_quick_tag_create_requires_editor(client):

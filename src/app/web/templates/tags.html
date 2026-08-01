@@ -211,8 +211,14 @@
 {%- endif -%}
 {% endmacro %}
 
-{% macro group_row(g, mems) %}
-<div class="grow2">
+{#- One group row. `depth` is 0 for a group under its franchise (or under
+    none) and 1+ for a SUBUNIT -- a group whose parent is another group, which
+    the service emits directly beneath its parent. Nested rows sit on an
+    indent + rail, the same shape the concert page gives a subunit cluster
+    (.pcluster.sub), never a nested card. `--d` carries the depth so a subunit
+    of a subunit indents again; it is a server-computed integer, never text. -#}
+{% macro group_row(g, mems, depth) %}
+<div class="grow2{% if depth %} sub{% endif %}"{% if depth %} style="--d: {{ depth }}" data-subunit-of="{{ g.parent_id }}"{% endif %}>
   <span>{{ tag_chip(g, counts[g.id].concerts) }}</span>
   <span class="memb">{% for m in mems %}{{ tag_chip(m, none) }}{% else %}<em class="dim">{{ _("no members yet") }}</em>{% endfor %}</span>
 </div>
@@ -224,13 +230,13 @@
     {% for f, group_pairs in franchise_families %}
     <div class="fam">
       <div class="famhead">{{ tag_chip(f, counts[f.id].concerts) }}</div>
-      {% for g, mems in group_pairs %}{{ group_row(g, mems) }}{% endfor %}
+      {% for g, mems, depth in group_pairs %}{{ group_row(g, mems, depth) }}{% endfor %}
     </div>
     {% endfor %}
     {% if no_franchise_groups %}
     <div class="fam">
       <div class="famhead"><span class="eyebrow">{{ _("No franchise") }}</span></div>
-      {% for g, mems in no_franchise_groups %}{{ group_row(g, mems) }}{% endfor %}
+      {% for g, mems, depth in no_franchise_groups %}{{ group_row(g, mems, depth) }}{% endfor %}
     </div>
     {% endif %}
   </div>

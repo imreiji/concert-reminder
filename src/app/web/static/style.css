@@ -1309,6 +1309,12 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
   align-items: start; padding-left: 1rem;
 }
 .grow2 + .grow2 { margin-top: .35rem; }
+/* A SUBUNIT row (a group whose parent is another group). Indent + rail, the
+   same shape .pcluster.sub gives a nested cluster on the concert page, and
+   for the same reason: it is not a callout, so it gets no card. `--d` is the
+   nesting depth, so a subunit of a subunit indents again; .grow2's own
+   padding-left is what separates the rail from the chip. */
+.grow2.sub { margin-left: calc(var(--d, 1) * 1rem); border-left: 2px solid var(--line); }
 .memb { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; }
 .region-label { width: 6rem; flex: none; }
 
