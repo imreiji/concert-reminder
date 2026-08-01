@@ -1351,12 +1351,39 @@ already ticked.
 
 Expected: the character is missing after the edit save.
 
+### The detach/attach ORDERING, which the first draft of this task missed
+
+**Added after Task 4's review.** Adding `character_tags` is necessary but NOT
+sufficient. `edit_concert` detaches (`before_ids - after_ids`) **before** it
+attaches (`after_ids - before_ids`). So even once characters are resolvable:
+
+Untick a character while leaving her seiyuu ticked. The character is detached,
+Task 4's rule cascades the seiyuu away with her — and the attach loop then skips
+the seiyuu, because she is in `after_ids ∩ before_ids` and so appears in neither
+diff. The concert silently loses the performer on the first save. A second
+identical save restores her, which makes it a save-twice recovery rather than a
+visible error.
+
+Fix the ordering as well as the resolution. Three shapes work; pick one and say
+why:
+- move the detach loop after the attach loop;
+- skip the cascade for any id present in `after_ids`;
+- recompute the attach set from actual post-detach attachment.
+
+**The naive version of the third has a trap.** Iterating `after_ids` and letting
+`attach_tag`'s `_is_attached` deduplicate puts the re-attached seiyuu into
+`newly`, which is fed to `handle_newly_tagged` — firing a spurious "New event"
+DM to everyone following her, for a concert that already existed. That is
+invariant 4 territory. Whichever shape you choose, assert in a test that an
+ordinary edit save queues NO notification.
+
 - [ ] **Step 3: Implement**
 
 Add `TagKind.CHARACTER` to the resolve/collect path in `create_concert_row` and
 `edit_concert`, a `character_tags: list[int] = Form(default=[])` parameter on
 both routes, a `character` bucket in `initial_selected`, and a character section
-in the shared picker partial following the existing kind sections exactly.
+in the shared picker partial following the existing kind sections exactly. Then
+fix the ordering per the section above.
 
 The picker is user-facing and translated: any new visible label needs `_()` and
 BOTH catalogues filled non-fuzzy.
