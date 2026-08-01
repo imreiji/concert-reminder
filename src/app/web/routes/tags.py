@@ -144,10 +144,20 @@ async def create_tag(
     parent = None
     if parent_id:
         parent = await session.get(Tag, parent_id)
-        if parent is None or parent.kind is not TagKind.FRANCHISE:
-            raise HTTPException(status_code=422, detail="parent must be a franchise tag")
-        if kind is not TagKind.GROUP:
-            raise HTTPException(status_code=422, detail="only group tags take a franchise parent")
+        if parent is None:
+            raise HTTPException(status_code=422, detail="parent tag not found")
+        # Widened 2026-08-01. Both shapes are the SAME meaning -- "the broader
+        # thing I belong to" -- one rung deeper: a subunit belongs to its group
+        # the way a group belongs to its franchise.
+        allowed = {
+            TagKind.GROUP: (TagKind.FRANCHISE, TagKind.GROUP),
+            TagKind.CHARACTER: (TagKind.FRANCHISE,),
+        }.get(kind, ())
+        if parent.kind not in allowed:
+            raise HTTPException(
+                status_code=422,
+                detail=f"a {kind.value} tag cannot have a {parent.kind.value} parent",
+            )
     await ensure_user(session, user.id, user.username)
     # slug omitted -> minted. The catalogue importer is the one caller that
     # passes an explicit handle, because its handles come from a file.

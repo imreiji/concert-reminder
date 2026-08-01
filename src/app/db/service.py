@@ -4180,6 +4180,37 @@ async def create_tag_row(
     return tag
 
 
+async def would_create_tag_cycle(
+    session: AsyncSession, tag_id: int, parent_id: int
+) -> bool:
+    """Would parenting `tag_id` to `parent_id` close a loop?
+
+    GROUP -> GROUP made loops possible for the first time, and nothing in this
+    codebase walks parent_id transitively -- so a cycle would not be noticed
+    until something did, and then it would hang rather than fail. The guard
+    belongs at the write boundary, which is the only place a loop can be
+    created.
+
+    The `seen` set is not belt-and-braces: it terminates the walk on data that
+    is ALREADY looped (written before this guard existed, or by a direct DB
+    edit), where following parents alone would spin forever.
+    """
+    if tag_id == parent_id:
+        return True
+    seen: set[int] = {tag_id}
+    cursor: int | None = parent_id
+    while cursor is not None:
+        if cursor in seen:
+            # Reaching tag_id means the proposed parent is BELOW us, so the
+            # edge would close a loop. Reaching any other repeat means the
+            # table already contains a loop that does not involve us -- not a
+            # new cycle, but the reason the walk must stop rather than spin.
+            return cursor == tag_id
+        seen.add(cursor)
+        cursor = await session.scalar(select(Tag.parent_id).where(Tag.id == cursor))
+    return False
+
+
 @dataclass
 class TagImportReport:
     """What an import did, for the result page. HANDLES, not ids: the operator
