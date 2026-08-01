@@ -9,7 +9,7 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 1835 tests as of this writing (past the
+(AWS Lightsail behind Cloudflare). 2008 tests as of this writing (past the
 Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
 export, ramen.events import, a personal calendar-feed subscription,
 free-text concert search, a personalized `/mydeadlines` Discord command, a
@@ -82,7 +82,12 @@ generated `event_id` taking a reserved word -- and Eventernote
 discovery, a daily flag-gated sweep of every tag carrying an
 `eventernote_url` that records performances the catalogue lacks, DMs
 admins one digest ending in a paste-ready agent prompt, and reviews them
-at `/admin/discoveries` -- have shipped since).
+at `/admin/discoveries` -- and CHARACTER tags: an im@s bill credits
+如月千早 rather than the 今井麻美 who voices her, so a character is a fifth
+tag kind carrying `voiced_by_tag_id`, attaching her attaches her seiyuu
+(which is what makes following the performer match the show), a group may
+now sit inside a group as a subunit, and both new relationships are DRAWN
+only when both of their ends are attached -- have shipped since).
 
 ## Commands
 
@@ -197,6 +202,35 @@ at `/admin/discoveries` -- have shipped since).
   migration reversed the deploy order (restart on new code BEFORE
   `alembic upgrade head`) so the old process could not SELECT the dropped
   columns mid-deploy; any future column-DROP migration needs the same order.
+- **A CHARACTER is a tag, and `Tag.voiced_by_tag_id` says who plays her**
+  (migration `bb9780f0ad82`, 2026-08-01). `TagKind.CHARACTER` is a fifth kind
+  beside franchise/artist/venue/group, because an idolm@ster bill credits
+  如月千早 and never mentions 今井麻美 -- a user following the performer missed
+  the show entirely, which is this app's worst failure. `voiced_by_tag_id` is a
+  nullable self-FK to the ARTIST who voices her, `ON DELETE SET NULL` for the
+  same reason `ConcertDay.venue_tag_id` is: deleting a performer's tag must not
+  take the character down with it. A recast is this ONE value re-pointed --
+  there is deliberately no history model, and the owner ruled recasting rare
+  enough that there never should be.
+  **It is NOT `parent_id`, and that was a decision, not an oversight.**
+  `parent_id` means "the broader thing I belong to" and is what the Tags page
+  renders its hierarchy from; a seiyuu is not broader than a character, and
+  spending the column on her would leave 如月千早 unable to say she belongs to
+  idolm@ster at all -- which Discover's franchise filtering reads.
+  Only an ARTIST may voice a character, checked at BOTH write boundaries
+  (`resolve_seiyuu` in `web/routes/tags.py`, 422; `apply_tag_import` in
+  `db/service.py`, warn-and-leave-unvoiced). That check also refuses
+  SELF-voicing for free, and the failure it prevents is silent rather than
+  loud: a character pointed at herself lands in `performer_clusters`'
+  `paired_seiyuu` set and is filtered out of `entries`, so she VANISHES from
+  the Performing panel instead of erroring. Pointing it at a VENUE was the
+  other reachable trap -- `attach_tag` materialises whatever it names onto the
+  concert, so the venue would render as a performer and `handle_newly_tagged`
+  would DM its followers.
+  A tag's KIND stays immutable -- no route accepts it and the importer refuses
+  a mismatch outright -- and the im@s reformat needs no exception: seiyuu stay
+  ARTIST tags, characters are NEW tags, and a group's member list swaps
+  handles. Don't add a kind-change path for this.
 - `src/app/bot/` — thin shell: cogs, embed builders (`messages.py`),
   persistent buttons (`views.py`).
 - `src/app/web/` — thin shell: routes, templates, static. `routes/imports.py`
@@ -536,6 +570,67 @@ deleting them.
    (`web/routes/concerts.py`) follows the same rule when cloning a concert:
    it re-attaches the source's exact already-pruned tag set with
    `expand=False`, never re-expanding a GROUP tag to its current membership.
+   **Expansion chains exactly ONE fixed step further: group -> character ->
+   seiyuu** (2026-08-01). A GROUP's members may be ARTIST tags, CHARACTER tags
+   or a mix — nothing requires uniformity, and a group with no character in it
+   behaves byte-for-byte as it always did. Where they ARE characters, stopping
+   at the members would leave every seiyuu unattached and a group-credited im@s
+   show would match nobody following the performer, so `attach_tag` also
+   attaches the `voiced_by_tag_id` of every character it just attached —
+   directly or via a group. Because `tracked_concert_ids` matches MATERIALIZED
+   `concert_tags` rows, that one act makes following the seiyuu work with **zero
+   change to subscription code**. This is a fixed two-step, NOT recursion, and
+   NOT the nested-groups rule returning: a seiyuu is an ARTIST and expansion
+   stops at artists, so the chain terminates by construction. It is deliberately
+   not gated on `expand` — that flag exists so the creation form's explicit
+   artist list is not overridden, and attaching the seiyuu overrides nothing.
+   The reverse NEVER happens: attaching 今井麻美 pulls in no characters, because
+   she also appears as herself at events with no im@s connection.
+   **A seiyuu attached via a character is DERIVED, never chosen** (owner ruling,
+   2026-08-01, and the principle the rest of the model hangs on). An event
+   credits the character OR the performer. So the concert editor never offers a
+   derived seiyuu as a tick — `edit_concert_form` subtracts
+   `{c.voiced_by_tag_id for attached characters}` out of
+   `initial_selected["artist"]` — and `edit_concert` EXPANDS its desired set the
+   same way before diffing (`keep_ids`), mirroring on the detach side what
+   `attach_tag` does on the attach side. Both halves are needed together: pre-
+   ticking her is what made the prune rule below unreachable for a whole task,
+   and dropping her from the picker without the expansion would instead detach
+   the performer on every save. Which seiyuu are derived needs no provenance
+   column — she is derived exactly when some attached character names her, the
+   same derivation the display rule and the prune rule run.
+   CHARACTER is a first-class PICKED kind on all three editor surfaces, so
+   `edit_concert` must keep resolving `character_tags` into `desired_tags`:
+   omission means removal for every non-VENUE kind, and leaving characters out
+   of the diff detached them (and cascaded their seiyuu off) on a save that
+   never mentioned them. The concert DRAFT vocabulary has no character bucket
+   yet, so a pasted YAML draft cannot prefill that row — the editor ticks it on
+   the preview, and `import_commit` accepts it.
+   **Pruning a character ALWAYS detaches her seiyuu** (owner, 2026-08-01),
+   with one refinement that is not an exception: unless another still-attached
+   character shares that seiyuu. A performer can voice two characters on one
+   bill, and detaching her because one was pruned would silently drop the
+   other's performer. `detach_tag` derives that at prune time; it also honours
+   `keep_tag_ids`, the caller's statement of its DESIRED end state, which is
+   what makes the editor's detach-then-attach order safe (without it a seiyuu
+   the editor ticked deliberately sits in neither diff, the first save loses her
+   and a second identical save restores her). KNOWN EDGE, accepted rather than
+   solved: `concert_tags` records no provenance — group expansion has had that
+   blind spot since it shipped — so a seiyuu who was ALSO there in her own right
+   goes when the character is pruned, and the editor re-adds her.
+   **`parent_id` widened to GROUP -> GROUP (a subunit) and CHARACTER ->
+   FRANCHISE**, both the SAME meaning the column already carried (竜宮小町
+   belongs to 765PRO ALLSTARS the way 765PRO ALLSTARS belongs to idolm@ster).
+   The permitted table is `ALLOWED_PARENT_KINDS` in `domain/types.py` and every
+   write path reads it — `POST /tags`, `POST /tags/quick` and the catalogue
+   importer — because two copies of it drifted apart once and a file could then
+   not express a subunit at all. Membership stays FLAT: a subunit's members are
+   its own tags, never the parent group, so `TagMember`'s no-nested-groups rule
+   still stands. GROUP -> GROUP made loops possible for the first time, so
+   `would_create_tag_cycle` guards the one path that can set a parent on an
+   EXISTING tag (`apply_tag_import`); nothing else in the codebase walks
+   `parent_id` transitively, which is exactly why an unguarded loop would not be
+   noticed until something did and then would hang rather than fail.
    **A tag is identified by its `slug`, never its name.** Names are NOT unique
    and never will be: two performers may genuinely share one, and a venue may
    share one with a group (owner ruling, 2026-07-29). `Tag.slug` is the only
@@ -579,7 +674,11 @@ deleting them.
    removal — the only destructive act in the feature — happens solely when
    explicitly ticked. `kind` is compared but never choosable: a venue arriving as
    an artist could orphan a leg's `venue_tag_id`, so it warns and the tag is
-   refused whole. `/apply` RE-PARSES and RE-PLANS from the pasted file, so the
+   refused whole. `voiced_by` rides the round-trip as a HANDLE, like `parent`
+   and for the same reasons (ids mean nothing across a restore, names are not
+   unique), and it joined `COMPARABLE_FIELDS` as its TWELFTH entry — the count
+   is pinned by a test precisely so a field cannot enter the format while the
+   differ silently skips it. `/apply` RE-PARSES and RE-PLANS from the pasted file, so the
    browser only ever sends `mine`/`theirs`, never a value — nothing can be
    injected. Nothing is ever deleted: a catalogue tag the file omits is untouched
    and unmentioned. It writes `TagMember`
@@ -896,6 +995,40 @@ deleting them.
   member-less group keeps its label row and emits NO `.chiprow` -- an empty
   one still pays `.pclabel`'s bottom margin, and `:empty` can't reach it past
   the template's own whitespace.
+- **Draw a relationship only when BOTH of its ends are attached to this
+  concert.** ONE rule, applied twice (2026-08-01), and both halves are derived
+  per concert, never stored:
+  - a CHARACTER and her seiyuu render as one **split pill** (`.mchip`, two
+    halves each its own link) when she is attached too; the seiyuu is then
+    dropped from the standalone list because she is rendered inside the pill.
+  - a SUBUNIT nests under its parent (`.pcluster.sub` on the concert page,
+    `.grow2.sub` on the Tags page) when the parent is an attached GROUP.
+    "Attached GROUP", not "attached tag": a group's parent is usually a
+    FRANCHISE, and asking the looser question made every group on a franchise
+    bill read as depth 1, emptied `roots`, and made the whole panel VANISH.
+  Either end alone renders exactly as it did before -- a lone character is a
+  plain chip, a lone subunit an ordinary top-level cluster. That is why the
+  split shape was chosen over an inline `如月千早（今井麻美）` gloss (owner, from
+  four mockups): the merge is CONDITIONAL, and the shape makes the difference
+  read as meaningful rather than as inconsistent styling. A seiyuu attached in
+  her OWN right is listed as herself in the unlabelled trailer -- she is not in
+  `members_by_group` once a group's members are characters, so the existing
+  code already does the right thing. The pill's box is DERIVED from
+  `.performers .chip`'s own padding/line-height/border rather than tuned to
+  match it (measured: 28.72px both, both themes; a chip SETS `line-height: 1.5`
+  and does not inherit it, so a half that inherits comes out 2.5px short), and
+  a parity test compares rule to rule so moving the chip desyncs loudly.
+- **The Tags directory walks `parent_id` in Python, not in Jinja**
+  (`tag_directory_context` returns a FLAT, pre-ordered list of
+  `(group, members, depth)`). A template recursion over a children map would
+  HANG on a `parent_id` cycle, and a cycle is reachable — rows predate
+  `would_create_tag_cycle`. The `walked` set terminates the walk, and a
+  leftover pass appends whatever it never reached, which is the property that
+  actually matters: **every group renders exactly once, whatever its
+  `parent_id` says**. Before that walk existed a GROUP under a GROUP fell out
+  of the chips directory entirely and took its members with it (they already
+  counted as grouped, so `ungrouped_performers` skipped them too), and a
+  signed-in non-editor saw neither anywhere on /tags.
 - **Membership is resolved SERVICE-side**, in `db/service.py`'s
   `performer_clusters` (one batched `tag_members` query, pinned by a
   statement-count test), and awaited in the route -- never in the template.
