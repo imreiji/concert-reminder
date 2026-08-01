@@ -142,13 +142,44 @@ so a seiyuu's followers receive the new-event notice they are owed. Same
 obligation `sync_concert_venue_tags` already carries, and it must be called
 only once the concert's legs are written.
 
+## A seiyuu attached via a character is DERIVED, never chosen
+
+**Owner ruling, 2026-08-01, after Task 10's review found the prune rule was
+inert in practice.** This is the principle the rest of the model hangs on:
+
+> For an event where a seiyuu represents a character, ONLY the character tag is
+> added. The artist tag is auto-correlated and displayed as `cv. xxx`. When an
+> artist tag is added by herself, she does not correlate with ANY character.
+
+So the editor never ticks a derived seiyuu, and two things follow that were
+previously contradictory:
+
+- **`initial_selected["artist"]` must EXCLUDE any artist who is the
+  `voiced_by_tag_id` of an attached character.** She is not an editor choice and
+  must not be offered as one. Pre-ticking her is what made her survive every
+  save and rendered the prune rule unreachable.
+- **The desired set must EXPAND characters to their seiyuu**, mirroring
+  `attach_tag`'s chaining on the submit side. Keep the character, keep the
+  seiyuu; drop the character, drop the seiyuu.
+
+Which seiyuu are derived is derivable with no provenance: she is, exactly when
+some attached character names her. The same derivation already drives the
+display rule and the prune rule, so all three stay consistent for free.
+
+The overlap case — an artist ticked standalone who is ALSO named by an attached
+character — is contradictory data rather than a supported state. An event either
+credits the character or credits the performer.
+
 ## Pruning
 
-**Pruning a character detaches its seiyuu, unless another still-attached
-character shares that seiyuu.** The refinement is load-bearing: a seiyuu can
-voice two characters on one bill, and detaching her because one was pruned would
-silently drop the other's performer. It is derivable at prune time with no new
-data.
+**Pruning a character ALWAYS detaches its seiyuu** (owner, 2026-08-01), with one
+refinement that is not an exception to it: unless another still-attached
+character shares that seiyuu. A seiyuu can voice two characters on one bill, and
+detaching her because one was pruned would silently drop the other's performer.
+It is derivable at prune time with no new data.
+
+There is no "but she was ticked" exception. Under the ruling above she cannot
+have been ticked, because a derived seiyuu is never offered.
 
 **Known edge, accepted rather than solved:** `concert_tags` does not record WHY
 a tag was attached -- group expansion has had that blind spot since it shipped.

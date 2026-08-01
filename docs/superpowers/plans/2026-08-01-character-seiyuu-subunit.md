@@ -1404,6 +1404,78 @@ git commit -m "feat: attach character tags from the concert editor"
 
 ---
 
+## Task 11: A derived seiyuu is never offered as a choice
+
+**ADDED 2026-08-01 by owner ruling**, after Task 10's review found that Task 4's
+prune rule can never fire from the concert editor. Task 10 is correct as built;
+this task changes what it should have been building.
+
+**The ruling:** for an event where a seiyuu represents a character, only the
+CHARACTER tag is added. The artist tag is auto-correlated and shown as `cv. xxx`.
+An artist added by herself correlates with no character.
+
+**Why the current code cannot honour it.** An attached seiyuu is an ARTIST, so
+`initial_selected["artist"]` pre-ticks her, so she is always submitted, so she is
+always in `after_ids`. Task 10's `keep_tag_ids` guard then short-circuits the
+cascade — and without it she would be detached even when her character is kept.
+Both branches are wrong because the premise is: she should never have been
+offered as a tick at all.
+
+**Files:**
+- Modify: `src/app/web/routes/concerts.py` (`initial_selected`, the desired-set build, `edit_concert`)
+- Modify: `src/app/db/service.py` (retire `keep_tag_ids` if it becomes inert)
+- Test: `tests/test_concert_character_tags.py` (extend)
+
+- [ ] **Step 1: Write the failing tests**
+
+Three behaviours, and the first two are the point:
+
+```python
+async def test_a_derived_seiyuu_is_not_pre_ticked(client):
+    """She is not an editor choice. Offering her as one is what made the prune
+    rule unreachable: pre-ticked means always submitted means never detached."""
+
+
+async def test_unticking_a_character_removes_her_seiyuu(client):
+    """The owner rule, now actually reachable from the editor."""
+
+
+async def test_keeping_a_character_keeps_her_seiyuu(client):
+    """The case the naive fix breaks: she is not in the submitted artist list,
+    so a plain diff would detach her even though her character stays."""
+```
+
+Plus: an artist ticked standalone survives and is NOT treated as derived; and a
+seiyuu shared by two attached characters survives when only one is unticked.
+
+- [ ] **Step 2: Run to verify they fail**
+
+- [ ] **Step 3: Implement**
+
+Two changes, and they are opposite sides of one idea:
+
+- `initial_selected["artist"]` EXCLUDES any attached artist who is the
+  `voiced_by_tag_id` of an attached character.
+- The desired set EXPANDS each desired character to its seiyuu before the
+  detach diff is computed — mirroring `attach_tag`'s chaining on the submit
+  side. Keep the character, keep the seiyuu; drop the character, drop the
+  seiyuu.
+
+With both in place `keep_tag_ids` should be inert. **Verify that by mutation
+rather than assuming it** — remove it, run the suite, and if nothing fails,
+delete it and say so. If something does fail, keep it and explain what.
+
+- [ ] **Step 4: Run, lint, commit**
+
+```bash
+uv run --isolated pytest -q
+uv run --isolated ruff check .
+git add -A
+git commit -m "feat: a derived seiyuu is never offered as an editor choice"
+```
+
+---
+
 ## Self-Review Notes
 
 **Spec coverage.** `TagKind.CHARACTER` and `voiced_by_tag_id` (Task 1); `parent_id` widening and the cycle guard (Task 2); attach chaining, its asymmetry, and the `expand=False` carve-out (Task 3); the prune rule with its shared-seiyuu refinement (Task 4); both display rules, the standalone-seiyuu rule and the chosen shapes (Task 5); the round-trip with `COMPARABLE_FIELDS` 11 → 12 (Task 6); the editor surface (Task 7); docs (Task 8); an end-to-end gate (Task 9).
