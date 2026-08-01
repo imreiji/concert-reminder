@@ -1,7 +1,7 @@
 """Attach-time chaining: character -> seiyuu, and group -> character -> seiyuu."""
 
 import pytest_asyncio
-from sqlalchemy import event, select
+from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -109,3 +109,45 @@ async def test_an_already_attached_seiyuu_is_not_added_twice(db):
         added = await attach_tag(s, concert.id, chihaya)
         assert imai.id not in {t.id for t in added}
         assert len(await _attached(s, concert.id)) == 2
+
+
+async def test_two_characters_sharing_one_seiyuu_attach_her_once(db):
+    """The duplicate shape the feature's own design names (Task 4's
+    `_two_roles`: one seiyuu voicing TWO characters). `seiyuu_ids` in
+    `attach_tag` MUST dedupe -- a plain list would try to attach the same
+    seiyuu twice in one call and hit ConcertTag's composite PK.
+
+    Counting via `_attached` (a set) cannot see a duplicate row, so this
+    counts rows directly with `func.count()`.
+    """
+    async with db() as s:
+        concert = Concert(title="im@s live 2", event_id="imas-2")
+        imai = Tag(name="今井麻美", kind=TagKind.ARTIST, slug="asami-imai-2")
+        s.add_all([concert, imai])
+        await s.flush()
+        chihaya = Tag(name="如月千早", kind=TagKind.CHARACTER, slug="chihaya-2",
+                      voiced_by_tag_id=imai.id)
+        # A second role voiced by the SAME seiyuu -- im@s casts routinely
+        # double up a seiyuu across characters.
+        anzu = Tag(name="双葉杏", kind=TagKind.CHARACTER, slug="anzu-2",
+                   voiced_by_tag_id=imai.id)
+        group = Tag(name="765PRO subunit", kind=TagKind.GROUP, slug="subunit-2")
+        s.add_all([chihaya, anzu, group])
+        await s.flush()
+        s.add_all([
+            TagMember(group_tag_id=group.id, member_tag_id=chihaya.id),
+            TagMember(group_tag_id=group.id, member_tag_id=anzu.id),
+        ])
+        await s.flush()
+
+        added = await attach_tag(s, concert.id, group)
+        assert [t.id for t in added].count(imai.id) == 1, (
+            "the seiyuu must be RETURNED exactly once"
+        )
+
+        row_count = (await s.execute(
+            select(func.count()).select_from(ConcertTag).where(
+                ConcertTag.concert_id == concert.id, ConcertTag.tag_id == imai.id
+            )
+        )).scalar_one()
+        assert row_count == 1, "the seiyuu must be ATTACHED exactly once"
