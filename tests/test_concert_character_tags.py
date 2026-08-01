@@ -53,6 +53,7 @@ from app.db.models import (
     ConcertTag,
     Notification,
     Tag,
+    TagMember,
     TagSubscription,
     User,
 )
@@ -183,30 +184,84 @@ def resubmit(client, event_id, day_id, *, extra=None, title="THE IDOLM@STER"):
 
 
 def form_selection(client, event_id) -> dict[str, list[str]]:
-    """The tag selection the real edit page hands the picker, read off the
-    rendered HTML.
+    """The RAW `INITIAL_SELECTED` the edit page hands the picker.
 
-    Tests that turn on "she is not offered as a tick" MUST submit this rather
-    than a hand-written tag list. `sel.artist` in the picker script is seeded
-    from `INITIAL_SELECTED.artist` and nothing else (no group is attached in
-    these fixtures, so `autoArtists()` contributes nothing), so this is exactly
-    what `syncHidden()` would POST.
+    Use this only to assert what the page pre-ticks (the ruling's "she is not
+    offered as a tick"). For what the browser would POST, use
+    `picker_payload` -- two of the four rows are derived, so these are not the
+    same question.
     """
+    return _js_const(_edit_page(client, event_id), "INITIAL_SELECTED")
+
+
+def _edit_page(client, event_id) -> str:
     page = client.get(f"/concerts/{event_id}/edit")
     assert page.status_code == 200, page.text
-    marker = page.text.split("const INITIAL_SELECTED = ")[1].split(";\n")[0]
-    return json.loads(marker)
+    return page.text
+
+
+def _js_const(html: str, name: str):
+    return json.loads(html.split(f"const {name} = ")[1].split(";\n")[0])
+
+
+def picker_payload(html: str, *, tick_groups=()) -> dict[str, list[str]]:
+    """What `syncHidden()` in _tag_picker_script.html would POST for this page.
+
+    A PORT of that script's `recomputeCharacters`/`recomputeArtists`, not a
+    paraphrase of `INITIAL_SELECTED`. Two of the picker's four rows are
+    DERIVED -- a selected group expands to its ARTIST members and its CHARACTER
+    members, minus each row's excluded set, plus each row's manual set, and a
+    seiyuu implied by a selected character is removed from the artist row. A
+    test that posts `INITIAL_SELECTED` directly asks a question the browser
+    never asks, and is exactly why "a group whose members are characters" went
+    unnoticed: the ids the page would have posted were never computed.
+
+    `tick_groups` is the one gesture a rendered page cannot show on its own --
+    an editor ticking a group on a blank creation form.
+    """
+    groups = _js_const(html, "NC_GROUPS")
+    seiyuu = _js_const(html, "CHAR_SEIYUU")
+    initial = _js_const(html, "INITIAL_SELECTED")
+
+    sel_group = set(initial.get("group") or []) | {str(g) for g in tick_groups}
+
+    def auto(key: str) -> set[str]:
+        ids: set[str] = set()
+        for g in sel_group:
+            for m in (groups.get(g) or {}).get(key) or []:
+                ids.add(str(m["id"]))
+        return ids
+
+    characters = auto("character_members") - set(initial.get("character_excluded") or [])
+    characters |= set(initial.get("character") or [])
+    artists = auto("members")
+    for c in characters:                      # autoArtists()'s derived-seiyuu step
+        if seiyuu.get(c) is not None:
+            artists.discard(str(seiyuu[c]))
+    artists -= set(initial.get("artist_excluded") or [])
+    artists |= set(initial.get("artist") or [])
+    return {
+        "franchise_tags": sorted(initial.get("franchise") or []),
+        "group_tags": sorted(sel_group),
+        "character_tags": sorted(characters),
+        "artist_tags": sorted(artists),
+    }
 
 
 def resubmit_as_rendered(client, event_id, day_id, *, drop_characters=(), **kw):
     """Press save on the edit page, optionally unticking some characters
-    first -- the two gestures an editor actually has."""
-    sel = form_selection(client, event_id)
+    first -- the two gestures an editor actually has.
+
+    Posts ALL FOUR tag rows the picker emits, not just the two this file cares
+    about: dropping franchise_tags/group_tags would make every save here read
+    as "the editor also removed the group", which is not the gesture under
+    test and would hide a group-shaped regression behind a character-shaped
+    one.
+    """
     dropped = {str(i) for i in drop_characters}
-    return resubmit(client, event_id, day_id, extra={
-        "character_tags": [i for i in sel["character"] if i not in dropped],
-        "artist_tags": list(sel["artist"]),
-    }, **kw)
+    payload = picker_payload(_edit_page(client, event_id))
+    payload["character_tags"] = [i for i in payload["character_tags"] if i not in dropped]
+    return resubmit(client, event_id, day_id, extra=payload, **kw)
 
 
 # ── the regression this task exists for ──────────────────────────────────
@@ -630,6 +685,223 @@ async def test_the_creation_form_offers_the_character_picker(client, db):
     assert 'id="sel-character"' in page.text
     assert 'id="picker-character"' in page.text
     assert 'put("character_tags"' in page.text
+
+
+# ── a GROUP whose members are CHARACTER tags ─────────────────────────────
+#
+# The shape the im@s reformat produces, and the case NO test anywhere combined
+# before: group_tags and character_tags together. The picker built its
+# group->members map with no kind filter, so ticking such a group posted
+# CHARACTER ids as artist_tags -- a 422 the concert could not be created past,
+# and, once the editor unticked the offending chips to get past it, a SILENT
+# loss: the group attached alone (create expands with expand=False), so neither
+# the characters nor their seiyuu landed and the performer's followers were
+# never matched.
+
+
+async def seed_765(db, *, seiyuu_is_also_a_member=False):
+    """765PRO ALLSTARS as the reformat leaves it: a GROUP whose members are
+    CHARACTER tags, each voiced by an ARTIST.
+
+    Membership is written as TagMember rows directly, which is how it really
+    arrives -- `apply_tag_import` writes them, and the Tags page's "+ Add
+    member" select offers artists only.
+
+    Returns (group, chihaya, imai, haruka, nakamura).
+    """
+    async with db() as s:
+        await ensure_user(s, EDITOR, "editor")
+        group = Tag(name="765PRO ALLSTARS", kind=TagKind.GROUP, slug="765pro")
+        imai = Tag(name="今井麻美", kind=TagKind.ARTIST, slug="asami-imai")
+        nakamura = Tag(name="中村繪里子", kind=TagKind.ARTIST, slug="eriko-nakamura")
+        s.add_all([group, imai, nakamura])
+        await s.flush()
+        chihaya = Tag(name="如月千早", kind=TagKind.CHARACTER, slug="chihaya",
+                      voiced_by_tag_id=imai.id)
+        haruka = Tag(name="天海春香", kind=TagKind.CHARACTER, slug="haruka",
+                     voiced_by_tag_id=nakamura.id)
+        s.add_all([chihaya, haruka])
+        await s.flush()
+        s.add_all([
+            TagMember(group_tag_id=group.id, member_tag_id=chihaya.id),
+            TagMember(group_tag_id=group.id, member_tag_id=haruka.id),
+        ])
+        if seiyuu_is_also_a_member:
+            # The pre-reformat overlap: the group still lists the PERFORMER as
+            # a direct artist member while also listing the character she
+            # voices.
+            s.add(TagMember(group_tag_id=group.id, member_tag_id=imai.id))
+        await s.commit()
+        return group.id, chihaya.id, imai.id, haruka.id, nakamura.id
+
+
+def create_from_picker(client, payload, *, event_id="imas-g"):
+    data = {
+        "title": "THE IDOLM@STER 10th",
+        "title_en": "THE IDOLM@STER 10th",
+        "title_zh": "偶像大师 10th",
+        "event_id": event_id,
+        "day_key": ["d0"],
+        "day_label": ["Day 1"],
+        "day_label_en": ["Day 1"],
+        "day_label_zh": ["Day 1"],
+        "day_starts_at": ["2099-08-01T18:00"],
+        "day_doors_at": [""],
+        "day_cancelled": ["false"],
+    }
+    data.update(payload)
+    return client.post("/concerts", data=data)
+
+
+async def concert_id(db, event_id):
+    async with db() as s:
+        return (await s.execute(
+            select(Concert.id).where(Concert.event_id == event_id)
+        )).scalar_one()
+
+
+async def test_ticking_a_group_of_characters_posts_them_as_characters(client, db):
+    """The 422 half, at its source. Every CHARACTER member must reach
+    `character_tags`; `artist_tags` must carry none of them -- resolve_tags
+    refuses a CHARACTER id there and the create dies with
+    422 {"detail":"invalid artist tag"}."""
+    await make_editor(db)
+    login(client)
+    group, chihaya, imai, haruka, nakamura = await seed_765(db)
+
+    payload = picker_payload(client.get("/concerts/new").text, tick_groups=[group])
+    assert payload["character_tags"] == sorted([str(chihaya), str(haruka)])
+    assert payload["artist_tags"] == [], (
+        "a character id posted as an artist is the 422; a seiyuu posted here is "
+        "the prune rule going unreachable"
+    )
+    assert payload["group_tags"] == [str(group)]
+
+
+async def test_creating_a_concert_from_a_group_of_characters(client, db):
+    """Both halves through the real route: the create SUCCEEDS, and what lands
+    in concert_tags is the group, both characters AND both seiyuu -- the last
+    being the only reason a follower of 今井麻美 is matched at all."""
+    await make_editor(db)
+    login(client)
+    group, chihaya, imai, haruka, nakamura = await seed_765(db)
+
+    payload = picker_payload(client.get("/concerts/new").text, tick_groups=[group])
+    r = create_from_picker(client, payload)
+    assert r.status_code == 303, r.text
+
+    cid = await concert_id(db, "imas-g")
+    assert await attached(db, cid) == {group, chihaya, haruka, imai, nakamura}
+
+
+async def test_a_group_of_artists_is_untouched_by_the_split(client, db):
+    """The Love Live shape -- no characters anywhere -- must behave exactly as
+    it did: artist members still expand into the artist row and nothing lands
+    in the character row."""
+    await make_editor(db)
+    login(client)
+    async with db() as s:
+        await ensure_user(s, EDITOR, "editor")
+        group = Tag(name="Hasunosora", kind=TagKind.GROUP, slug="hasunosora")
+        kozue = Tag(name="乙宗梢", kind=TagKind.ARTIST, slug="kozue")
+        s.add_all([group, kozue])
+        await s.flush()
+        s.add(TagMember(group_tag_id=group.id, member_tag_id=kozue.id))
+        await s.commit()
+        group_id, kozue_id = group.id, kozue.id
+
+    payload = picker_payload(client.get("/concerts/new").text, tick_groups=[group_id])
+    assert payload["artist_tags"] == [str(kozue_id)]
+    assert payload["character_tags"] == []
+
+    r = create_from_picker(client, payload, event_id="ll-1")
+    assert r.status_code == 303, r.text
+    assert await attached(db, await concert_id(db, "ll-1")) == {group_id, kozue_id}
+
+
+async def test_pruning_a_group_character_sticks_across_the_round_trip(client, db):
+    """Invariant 3's prune rule, now reachable for characters: × one of the
+    group's characters, save, and neither she nor her seiyuu is attached --
+    and the next render does NOT re-tick her just because her group is."""
+    await make_editor(db)
+    login(client)
+    group, chihaya, imai, haruka, nakamura = await seed_765(db)
+    r = create_from_picker(
+        client, picker_payload(client.get("/concerts/new").text, tick_groups=[group])
+    )
+    assert r.status_code == 303, r.text
+    cid = await concert_id(db, "imas-g")
+    async with db() as s:
+        day_id = (await s.execute(
+            select(ConcertDay.id).where(ConcertDay.concert_id == cid)
+        )).scalar_one()
+
+    r = resubmit_as_rendered(
+        client, "imas-g", day_id, drop_characters=[chihaya], title="THE IDOLM@STER 10th"
+    )
+    assert r.status_code == 303, r.text
+    assert await attached(db, cid) == {group, haruka, nakamura}, (
+        "the pruned character must go, and take her seiyuu with her"
+    )
+
+    assert str(chihaya) in form_selection(client, "imas-g")["character_excluded"], (
+        "a pruned character must be remembered as pruned, not as never-a-member"
+    )
+    assert picker_payload(_edit_page(client, "imas-g"))["character_tags"] == [str(haruka)]
+
+
+async def test_a_seiyuu_who_is_also_a_group_member_is_not_offered_as_a_tick(client, db):
+    """The group-member hole, closed by the same split.
+
+    今井麻美 is a direct ARTIST member of the group AND the voice of an attached
+    character. Offering her in the artist row means POSTING her, which means
+    edit_concert's `after_ids` holds her on every save -- so dropping 如月千早
+    could never drop her, and the prune rule was unreachable from this editor
+    for exactly the tag it matters most for.
+    """
+    await make_editor(db)
+    login(client)
+    group, chihaya, imai, haruka, nakamura = await seed_765(
+        db, seiyuu_is_also_a_member=True
+    )
+
+    payload = picker_payload(client.get("/concerts/new").text, tick_groups=[group])
+    assert str(imai) not in payload["artist_tags"], (
+        "a derived seiyuu is auto-correlated, never a tick -- even as a member"
+    )
+    r = create_from_picker(client, payload)
+    assert r.status_code == 303, r.text
+    cid = await concert_id(db, "imas-g")
+    assert imai in await attached(db, cid), "the chained step still attaches her"
+
+    async with db() as s:
+        day_id = (await s.execute(
+            select(ConcertDay.id).where(ConcertDay.concert_id == cid)
+        )).scalar_one()
+    r = resubmit_as_rendered(
+        client, "imas-g", day_id, drop_characters=[chihaya], title="THE IDOLM@STER 10th"
+    )
+    assert r.status_code == 303, r.text
+    assert imai not in await attached(db, cid), (
+        "dropping her character must drop her; being a group member must not pin her"
+    )
+
+
+async def test_a_group_of_characters_announces_each_follower_once(client, db):
+    """Invariant 4 across the widened path: a create that materialises two
+    characters and two seiyuu queues exactly ONE notice per follower."""
+    await make_editor(db)
+    login(client)
+    group, chihaya, imai, haruka, nakamura = await seed_765(db)
+    await _follow(db, group, chihaya, imai, haruka, nakamura)
+
+    r = create_from_picker(
+        client, picker_payload(client.get("/concerts/new").text, tick_groups=[group])
+    )
+    assert r.status_code == 303, r.text
+
+    queued = await _queued(db)
+    assert len(queued) == 1, queued
 
 
 async def test_a_wrong_kind_id_in_character_tags_is_a_422(client, db):

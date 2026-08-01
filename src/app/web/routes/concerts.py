@@ -635,6 +635,9 @@ async def new_concert_form(
             "by_kind": picker["by_kind"],
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
+            # {character id: seiyuu id} -- keeps a derived seiyuu out of the
+            # artist row while her character is selected.
+            "character_seiyuu": picker["character_seiyuu"],
             "tag_names": picker["tag_names"],
             # Handles for the tags whose (name, kind) collides -- the picker
             # shows one beneath the chip so two identical chips are
@@ -1138,12 +1141,25 @@ async def edit_concert_form(
     # picker's group->members auto-population would show them as selected
     # again just because their group is initially checked, and an editor
     # who doesn't notice would silently re-add a pruned non-performer.
+    #
+    # SPLIT BY KIND, mirroring tag_picker_context's split of the members
+    # themselves. A CHARACTER member of an attached group used to be filed here
+    # as a "pruned artist" -- right outcome (the picker filtered her back out),
+    # entirely wrong reason, and it meant a group's characters could never be
+    # attached from this page at all. Now each kind is compared against the
+    # tags of its own kind, so a character the editor pruned is remembered as a
+    # pruned CHARACTER and one they kept is simply selected.
     attached_artist_ids = {t.id for t in concert.tags if t.kind is TagKind.ARTIST}
+    attached_character_ids = {t.id for t in concert.tags if t.kind is TagKind.CHARACTER}
     excluded_ids: list[int] = []
+    excluded_character_ids: list[int] = []
     for t in concert.tags:
         if t.kind is TagKind.GROUP:
             for m in await group_members(session, t.id):
-                if m.id not in attached_artist_ids:
+                if m.kind is TagKind.CHARACTER:
+                    if m.id not in attached_character_ids:
+                        excluded_character_ids.append(m.id)
+                elif m.id not in attached_artist_ids:
                     excluded_ids.append(m.id)
     # Owner ruling (2026-08-01): where a seiyuu represents a CHARACTER, only the
     # character is added and the artist is auto-correlated -- shown as `cv. xxx`,
@@ -1175,6 +1191,10 @@ async def edit_concert_form(
         "character": [str(t.id) for t in concert.tags if t.kind is TagKind.CHARACTER],
         "artist": [str(i) for i in attached_artist_ids - derived_seiyuu_ids],
         "artist_excluded": [str(i) for i in excluded_ids],
+        # The character twin of artist_excluded: members of an attached group
+        # the editor already pruned. Without it, re-rendering the page would
+        # show a pruned character selected again just because her group is.
+        "character_excluded": [str(i) for i in excluded_character_ids],
         "venue": [str(t.id) for t in concert.tags if t.kind is TagKind.VENUE],
     }
     # Each round row renders one toggle chip per LIVE leg, pre-selected from
@@ -1234,6 +1254,7 @@ async def edit_concert_form(
             "by_kind": picker["by_kind"],
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
+            "character_seiyuu": picker["character_seiyuu"],
             "tag_names": picker["tag_names"],
             # Handles for the tags whose (name, kind) collides -- the picker
             # shows one beneath the chip so two identical chips are

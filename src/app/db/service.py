@@ -5178,11 +5178,50 @@ async def tag_picker_context(session: AsyncSession) -> dict:
         by_kind.setdefault(t.kind.value, []).append(t)
     groups_data = {}
     for g in by_kind.get("group", []):
+        members = await group_members(session, g.id)
         groups_data[g.id] = {
             "name": g.name,
             "franchise": g.parent_id,
-            "members": [{"id": m.id, "name": m.name} for m in await group_members(session, g.id)],
+            # SPLIT BY KIND, and load-bearing rather than tidy. A GROUP's members
+            # may be ARTIST tags, CHARACTER tags or a mix -- the im@s reformat
+            # produces the second -- and the picker posts each row into its own
+            # field: `members` feeds autoArtists() -> artist_tags,
+            # `character_members` feeds autoCharacters() -> character_tags.
+            #
+            # Unsplit, ticking such a group put CHARACTER ids into artist_tags,
+            # `resolve_tags(..., ARTIST)` answered 422 and the concert could not
+            # be created at all. Worse, the workaround an editor reaches for
+            # after that -- × the auto-added chips -- SUCCEEDED and attached the
+            # group alone: the creation form expands with expand=False, so
+            # neither the characters nor (via attach_tag's chained step) their
+            # seiyuu ever landed, and a follower of the performer was not
+            # matched. The loud half and the silent half are one bug.
+            #
+            # A member of any OTHER kind is dropped rather than defaulted into
+            # the artist row: a franchise or venue somehow made a member is not
+            # a performer, and offering it as one only reproduces the 422.
+            "members": [
+                {"id": m.id, "name": m.name} for m in members if m.kind is TagKind.ARTIST
+            ],
+            "character_members": [
+                {"id": m.id, "name": m.name}
+                for m in members
+                if m.kind is TagKind.CHARACTER
+            ],
         }
+    # {character id: her seiyuu's ARTIST id}. The picker reads it for ONE thing:
+    # keeping a derived seiyuu OUT of the artist row while her character is
+    # selected (owner ruling 2026-08-01 -- she is auto-correlated and shown as
+    # `cv. xxx`, never offered as a tick). Without it, a seiyuu who is also a
+    # direct ARTIST member of a selected group is re-ticked by autoArtists(),
+    # posted as artist_tags, and therefore lands in edit_concert's `after_ids`
+    # -- so she is never detached when her character goes, which is the prune
+    # rule unreachable from the editor all over again.
+    character_seiyuu = {
+        t.id: t.voiced_by_tag_id
+        for t in by_kind.get("character", [])
+        if t.voiced_by_tag_id is not None
+    }
     tag_names = {t.id: t.name for t in tags}
     # Which tags must show their handle beside their name: ONLY those sharing a
     # (name, kind) with another tag. Two identical chips are unusable, but
@@ -5206,6 +5245,7 @@ async def tag_picker_context(session: AsyncSession) -> dict:
     return {
         "by_kind": by_kind,
         "groups": groups_data,
+        "character_seiyuu": character_seiyuu,
         "tag_names": tag_names,
         "tag_disambiguators": tag_disambiguators,
     }

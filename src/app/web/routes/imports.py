@@ -200,6 +200,9 @@ async def import_preview(
             "by_kind": picker["by_kind"],
             # Raw dicts, never json.dumps -- the template applies `| tojson`.
             "groups": picker["groups"],
+            # {character id: seiyuu id} -- keeps a derived seiyuu out of the
+            # artist row while her character is selected.
+            "character_seiyuu": picker["character_seiyuu"],
             "tag_names": picker["tag_names"],
             # Handles for the tags whose (name, kind) collides -- the picker
             # shows one beneath the chip so two identical chips are
@@ -343,6 +346,7 @@ async def import_draft(
             "concert_kinds": list(ConcertKind),
             "by_kind": picker["by_kind"],
             "groups": picker["groups"],
+            "character_seiyuu": picker["character_seiyuu"],
             "tag_names": picker["tag_names"],
             # Handles for the tags whose (name, kind) collides -- the picker
             # shows one beneath the chip so two identical chips are

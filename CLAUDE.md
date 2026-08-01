@@ -599,6 +599,19 @@ deleting them.
    the performer on every save. Which seiyuu are derived needs no provenance
    column — she is derived exactly when some attached character names her, the
    same derivation the display rule and the prune rule run.
+   **The editor's picker splits a group's members BY KIND**
+   (`tag_picker_context`, `_tag_picker_script.html`): `members` is the ARTIST
+   half and feeds `autoArtists()` -> `artist_tags`, `character_members` is the
+   CHARACTER half and feeds `autoCharacters()` -> `character_tags`, and each
+   row carries its own excluded set so either kind can be pruned. Unsplit,
+   ticking such a group posted CHARACTER ids as `artist_tags` and
+   `resolve_tags(..., ARTIST)` answered 422 — and the workaround an editor
+   reaches for after that (× the offending chips) SILENTLY attached the group
+   alone, since the creation form expands with `expand=False`. `autoArtists()`
+   additionally removes the seiyuu of every SELECTED character, which is where
+   the derived-seiyuu ruling belongs for a seiyuu who is ALSO a direct artist
+   member: offering her means posting her, which means `after_ids` pins her and
+   dropping her character can never drop her.
    CHARACTER is a first-class PICKED kind on all three editor surfaces, so
    `edit_concert` must keep resolving `character_tags` into `desired_tags`:
    omission means removal for every non-VENUE kind, and leaving characters out
