@@ -204,48 +204,135 @@ def _js_const(html: str, name: str):
     return json.loads(html.split(f"const {name} = ")[1].split(";\n")[0])
 
 
-def picker_payload(html: str, *, tick_groups=()) -> dict[str, list[str]]:
-    """What `syncHidden()` in _tag_picker_script.html would POST for this page.
+class Picker:
+    """A port of `_tag_picker_script.html`'s whole client-side state machine.
 
-    A PORT of that script's `recomputeCharacters`/`recomputeArtists`, not a
-    paraphrase of `INITIAL_SELECTED`. Two of the picker's four rows are
-    DERIVED -- a selected group expands to its ARTIST members and its CHARACTER
-    members, minus each row's excluded set, plus each row's manual set, and a
-    seiyuu implied by a selected character is removed from the artist row. A
-    test that posts `INITIAL_SELECTED` directly asks a question the browser
-    never asks, and is exactly why "a group whose members are characters" went
-    unnoticed: the ids the page would have posted were never computed.
+    WHOLE, and that word is the lesson. The first version of this helper ported
+    `syncHidden()` alone and let callers edit the resulting lists by hand, which
+    made it a LIAR about the only interesting gesture: two of the picker's four
+    rows are RE-DERIVED on every render, so "remove a chip" is not "delete an id
+    from a list" -- removing a character chip changes what `autoArtists()`
+    withholds, and the artist row comes back different. A test built on the
+    partial port asserted an outcome the shipped code does not produce and
+    passed anyway, which is this branch's signature failure mode reproduced
+    inside its own test helper.
 
-    `tick_groups` is the one gesture a rendered page cannot show on its own --
-    an editor ticking a group on a blank creation form.
+    So: state, not a function. `toggle`/`remove` mutate the manual and excluded
+    sets exactly as `togglePick`/`removePick` do, each ending in `render_all()`,
+    and `payload()` is `syncHidden()`. Every method mirrors a named function in
+    that script -- keep them in step, and change them together.
+
+    There is no JS runtime in this suite, so this port is the coupling point.
+    Asserting on the script's SOURCE TEXT instead would be a proxy assertion of
+    exactly the kind that keeps getting this codebase into trouble; a faithful
+    port at least fails honestly when the server data changes.
     """
-    groups = _js_const(html, "NC_GROUPS")
-    seiyuu = _js_const(html, "CHAR_SEIYUU")
-    initial = _js_const(html, "INITIAL_SELECTED")
 
-    sel_group = set(initial.get("group") or []) | {str(g) for g in tick_groups}
+    def __init__(self, html: str):
+        self.groups = _js_const(html, "NC_GROUPS")
+        self.seiyuu = _js_const(html, "CHAR_SEIYUU")
+        initial = _js_const(html, "INITIAL_SELECTED")
+        self.sel: dict[str, set[str]] = {
+            "franchise": set(initial.get("franchise") or []),
+            "group": set(initial.get("group") or []),
+            # Derived; `render_all` fills them. Empty here exactly as the
+            # script's `sel` literal leaves them.
+            "character": set(),
+            "artist": set(),
+        }
+        self.artist_excluded = set(initial.get("artist_excluded") or [])
+        self.artist_manual = set(initial.get("artist") or [])
+        self.character_excluded = set(initial.get("character_excluded") or [])
+        self.character_manual = set(initial.get("character") or [])
+        self.render_all()
 
-    def auto(key: str) -> set[str]:
+    def _members(self, key: str) -> set[str]:
         ids: set[str] = set()
-        for g in sel_group:
-            for m in (groups.get(g) or {}).get(key) or []:
+        for g in self.sel["group"]:
+            for m in (self.groups.get(g) or {}).get(key) or []:
                 ids.add(str(m["id"]))
         return ids
 
-    characters = auto("character_members") - set(initial.get("character_excluded") or [])
-    characters |= set(initial.get("character") or [])
-    artists = auto("members")
-    for c in characters:                      # autoArtists()'s derived-seiyuu step
-        if seiyuu.get(c) is not None:
-            artists.discard(str(seiyuu[c]))
-    artists -= set(initial.get("artist_excluded") or [])
-    artists |= set(initial.get("artist") or [])
-    return {
-        "franchise_tags": sorted(initial.get("franchise") or []),
-        "group_tags": sorted(sel_group),
-        "character_tags": sorted(characters),
-        "artist_tags": sorted(artists),
-    }
+    def auto_characters(self) -> set[str]:
+        return self._members("character_members")
+
+    def auto_artists(self) -> set[str]:
+        ids = self._members("members")
+        # The derived-seiyuu step, and note what it reads: sel.character AS IT
+        # STANDS. Drop a character chip and she is no longer withheld.
+        for c in self.sel["character"]:
+            s = self.seiyuu.get(c)
+            if s is not None:
+                ids.discard(str(s))
+        return ids
+
+    def render_all(self) -> None:
+        # ORDER MATTERS, for the script's reason: auto_artists reads
+        # sel.character, so the character row must be current first.
+        self.sel["character"] = {
+            i for i in self.auto_characters() if i not in self.character_excluded
+        } | self.character_manual
+        self.sel["artist"] = {
+            i for i in self.auto_artists() if i not in self.artist_excluded
+        } | self.artist_manual
+
+    def toggle(self, kind: str, tag_id) -> "Picker":
+        i = str(tag_id)
+        if kind == "artist":
+            if i in self.sel["artist"]:
+                self.remove("artist", i)
+            else:
+                self.artist_manual.add(i)
+                self.artist_excluded.discard(i)
+        elif kind == "character":
+            if i in self.sel["character"]:
+                self.remove("character", i)
+            else:
+                self.character_manual.add(i)
+                self.character_excluded.discard(i)
+        elif i in self.sel[kind]:
+            self.sel[kind].discard(i)
+        else:
+            self.sel[kind].add(i)
+        self.render_all()
+        return self
+
+    def remove(self, kind: str, tag_id) -> "Picker":
+        """`removePick`: the × on a chip. The auto-set is consulted BEFORE the
+        re-render, exactly as the script does, so "was this one derived" is
+        asked of the state the reader was looking at."""
+        i = str(tag_id)
+        if kind == "artist":
+            self.artist_manual.discard(i)
+            if i in self.auto_artists():
+                self.artist_excluded.add(i)
+        elif kind == "character":
+            self.character_manual.discard(i)
+            if i in self.auto_characters():
+                self.character_excluded.add(i)
+        else:
+            self.sel[kind].discard(i)
+        self.render_all()
+        return self
+
+    def payload(self) -> dict[str, list[str]]:
+        """`syncHidden()`: the four hidden-input rows, as form data."""
+        return {
+            "franchise_tags": sorted(self.sel["franchise"]),
+            "group_tags": sorted(self.sel["group"]),
+            "character_tags": sorted(self.sel["character"]),
+            "artist_tags": sorted(self.sel["artist"]),
+        }
+
+
+def picker_payload(html: str, *, tick_groups=()) -> dict[str, list[str]]:
+    """What the page would POST if the editor ticked `tick_groups` and touched
+    nothing else. Anything involving a REMOVAL must build a `Picker` and call
+    `remove` on it -- editing this dict is not the same gesture."""
+    picker = Picker(html)
+    for group_id in tick_groups:
+        picker.toggle("group", group_id)
+    return picker.payload()
 
 
 def resubmit_as_rendered(client, event_id, day_id, *, drop_characters=(), **kw):
@@ -257,11 +344,18 @@ def resubmit_as_rendered(client, event_id, day_id, *, drop_characters=(), **kw):
     as "the editor also removed the group", which is not the gesture under
     test and would hide a group-shaped regression behind a character-shaped
     one.
+
+    `drop_characters` goes through `Picker.remove`, NOT through a filter on the
+    resulting list. Those are different gestures: removing a character chip
+    re-renders, and the artist row it re-derives can legitimately come back
+    LARGER (a seiyuu withheld only while her character was selected reappears
+    as a plain group member). Filtering the list instead asserts an artist row
+    that never existed.
     """
-    dropped = {str(i) for i in drop_characters}
-    payload = picker_payload(_edit_page(client, event_id))
-    payload["character_tags"] = [i for i in payload["character_tags"] if i not in dropped]
-    return resubmit(client, event_id, day_id, extra=payload, **kw)
+    picker = Picker(_edit_page(client, event_id))
+    for tag_id in drop_characters:
+        picker.remove("character", tag_id)
+    return resubmit(client, event_id, day_id, extra=picker.payload(), **kw)
 
 
 # ── the regression this task exists for ──────────────────────────────────
@@ -850,14 +944,14 @@ async def test_pruning_a_group_character_sticks_across_the_round_trip(client, db
     assert picker_payload(_edit_page(client, "imas-g"))["character_tags"] == [str(haruka)]
 
 
-async def test_a_seiyuu_who_is_also_a_group_member_is_not_offered_as_a_tick(client, db):
-    """The group-member hole, closed by the same split.
+async def test_a_seiyuu_is_not_offered_beside_the_character_she_voices(client, db):
+    """The derived-seiyuu ruling, reaching the case a group makes awkward.
 
-    今井麻美 is a direct ARTIST member of the group AND the voice of an attached
-    character. Offering her in the artist row means POSTING her, which means
-    edit_concert's `after_ids` holds her on every save -- so dropping 如月千早
-    could never drop her, and the prune rule was unreachable from this editor
-    for exactly the tag it matters most for.
+    今井麻美 is a direct ARTIST member of the group AND the voice of one of its
+    characters. WHILE 如月千早 is selected the artist row withholds her: an
+    event credits the character or the performer, and offering both is offering
+    the same person twice. She still ends up attached -- by `attach_tag`'s
+    chained step, which is the whole feature.
     """
     await make_editor(db)
     login(client)
@@ -874,16 +968,62 @@ async def test_a_seiyuu_who_is_also_a_group_member_is_not_offered_as_a_tick(clie
     cid = await concert_id(db, "imas-g")
     assert imai in await attached(db, cid), "the chained step still attaches her"
 
+
+async def test_a_group_member_seiyuu_OUTLIVES_the_character_she_voices(client, db):
+    """WHAT THE CODE ACTUALLY DOES, stated rather than wished away.
+
+    Drop 如月千早's chip and `renderAll()` re-derives the artist row. The
+    withholding in `autoArtists()` is conditional on her character being
+    SELECTED, so with the character gone 今井麻美 comes back as what she also
+    genuinely is -- a direct ARTIST member of the ticked group. She is posted,
+    she lands in `edit_concert`'s `after_ids`, and `detach_tag`'s cascade
+    therefore does not take her.
+
+    That is arguably RIGHT under invariant 3: she is a member in her own right,
+    and expansion materialises members. It is also the transitional shape the
+    im@s reformat produces -- a group listing both a character and the
+    performer who voices her -- until the redundant member row is removed.
+    Whether it should change is an OWNER decision and is being raised
+    separately; this test exists so the behaviour is pinned and visible either
+    way, not to argue for it.
+
+    An earlier version of this test asserted the OPPOSITE and passed, because
+    the helper it used modelled `syncHidden()` but not `renderAll()` -- it
+    filtered the character out of an already-computed payload and never
+    re-derived the artist row. See `Picker`'s docstring.
+    """
+    await make_editor(db)
+    login(client)
+    group, chihaya, imai, haruka, nakamura = await seed_765(
+        db, seiyuu_is_also_a_member=True
+    )
+    r = create_from_picker(
+        client, picker_payload(client.get("/concerts/new").text, tick_groups=[group])
+    )
+    assert r.status_code == 303, r.text
+    cid = await concert_id(db, "imas-g")
     async with db() as s:
         day_id = (await s.execute(
             select(ConcertDay.id).where(ConcertDay.concert_id == cid)
         )).scalar_one()
-    r = resubmit_as_rendered(
-        client, "imas-g", day_id, drop_characters=[chihaya], title="THE IDOLM@STER 10th"
+
+    # The re-derivation itself, before the save -- the mechanism, not just its
+    # consequence. Withheld beside her character, offered once it is gone.
+    picker = Picker(_edit_page(client, "imas-g"))
+    assert str(imai) not in picker.payload()["artist_tags"]
+    picker.remove("character", chihaya)
+    assert str(imai) in picker.payload()["artist_tags"], (
+        "renderAll() must re-derive her as a plain group member"
     )
+
+    r = resubmit(client, "imas-g", day_id, extra=picker.payload(),
+                 title="THE IDOLM@STER 10th")
     assert r.status_code == 303, r.text
-    assert imai not in await attached(db, cid), (
-        "dropping her character must drop her; being a group member must not pin her"
+    got = await attached(db, cid)
+    assert chihaya not in got, "the character herself is gone"
+    assert imai in got, (
+        "she is a member in her own right, so the submit carries her and the "
+        "cascade cannot take her -- pinned deliberately, see the docstring"
     )
 
 

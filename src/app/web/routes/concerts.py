@@ -1159,6 +1159,14 @@ async def edit_concert_form(
                 if m.kind is TagKind.CHARACTER:
                     if m.id not in attached_character_ids:
                         excluded_character_ids.append(m.id)
+                # NOTE the `elif` is wider than its twin in tag_picker_context,
+                # which keeps ARTIST members only and drops every other kind. A
+                # member that is neither (add_member refuses only GROUPs, so a
+                # franchise or venue is reachable by hand-crafted POST or by
+                # file) is filed here as a pruned artist and is not in the
+                # picker's list at all -- inert, since excluding an id nothing
+                # offers changes nothing, but the two halves no longer state the
+                # same rule. Narrow both together if either moves.
                 elif m.id not in attached_artist_ids:
                     excluded_ids.append(m.id)
     # Owner ruling (2026-08-01): where a seiyuu represents a CHARACTER, only the
