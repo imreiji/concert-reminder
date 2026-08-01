@@ -89,6 +89,26 @@ ALLOWED_PARENT_KINDS: dict[TagKind, tuple[TagKind, ...]] = {
     TagKind.CHARACTER: (TagKind.FRANCHISE,),
 }
 
+# Which kinds have an Eventernote ACTOR PAGE, and may therefore carry an
+# `eventernote_url` through the editor. A CHARACTER does: 如月千早 has a page of
+# her own, and reading it is the whole "discovery is nearly free" payoff of
+# making characters real tags.
+#
+# ONE table, here, for exactly ALLOWED_PARENT_KINDS' reason. The Tags page
+# decides which dialogs RENDER the field and `edit_tag` decides which submits
+# may WRITE it, and the two disagreeing is silent in the worse direction: a kind
+# whose dialog omits the field but whose route writes it unconditionally blanks
+# the stored value on every unrelated save. That is precisely what erased a
+# character's discovery link after the catalogue import set it. An empty form
+# value cannot express "absent" here -- FastAPI folds "" into the default for an
+# optional field -- so the KIND is what says whether this submit had a box.
+#
+# The daily sweep is deliberately NOT gated on this: `discovery.py` reads every
+# tag carrying a URL, whatever its kind. This table governs the editor only.
+EVENTERNOTE_KINDS: frozenset[TagKind] = frozenset({
+    TagKind.ARTIST, TagKind.GROUP, TagKind.CHARACTER,
+})
+
 
 class Anchor(enum.StrEnum):
     """Which moment a reminder offset is measured from."""

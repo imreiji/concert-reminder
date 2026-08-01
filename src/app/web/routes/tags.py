@@ -35,7 +35,7 @@ from app.db.service import (
 )
 from app.db.session import get_session
 from app.domain.slugs import slug_core
-from app.domain.types import ALLOWED_PARENT_KINDS, TagKind
+from app.domain.types import ALLOWED_PARENT_KINDS, EVENTERNOTE_KINDS, TagKind
 from app.web.auth import SessionUser, require_editor, require_user
 from app.web.forms import form_url, require_variants
 
@@ -148,6 +148,12 @@ async def tag_directory(
                 if t.kind is TagKind.CHARACTER
             ],
             "venues": [t for t in tags if t.kind is TagKind.VENUE],
+            # The kinds whose dialogs render the eventernote field, as plain
+            # strings so the template can compare them to `t.kind.value` and
+            # build the create dialog's `k-<kind>` class list. THE SAME TABLE
+            # `edit_tag` gates its write on -- see EVENTERNOTE_KINDS for why a
+            # second copy here would be silent and destructive.
+            "eventernote_kinds": sorted(k.value for k in EVENTERNOTE_KINDS),
             "tag_dupe_data": tag_dupe_data,
             # Per-tag "what's missing" notice for the edit dialogs, keyed by
             # id -- one page renders every tag's dialog, so this has to be a
@@ -418,7 +424,7 @@ async def edit_tag(
     voiced_by_tag_id: int | None = Form(None),
 ):
     """Rename (any kind), edit the handle, plus venue-only location_url/region,
-    the artist/group eventernote_url and a character's seiyuu -- not
+    the artist/group/character eventernote_url and a character's seiyuu -- not
     kind-restricted on the first two, harmless to set on others.
 
     `name` and `slug` are both optional, and an omitted one leaves the stored
@@ -429,6 +435,12 @@ async def edit_tag(
     (the field only renders on a character's dialog, so every other tag's
     submit omits it), while an explicit 0 -- the select's "— none —" -- clears
     it. A recast is this one value re-pointed; there is no history model.
+    `eventernote_url` was moved onto the same rule (2026-08-01): it is rendered
+    only for the kinds with an actor page, so a franchise or venue submit
+    omitted it and the old `Form("")` default wrote None over whatever the
+    catalogue import had put there. Silent for franchises since it shipped;
+    load-bearing the moment characters gained the field, since a character's
+    own page is the entire "discovery is nearly free" payoff.
 
     NO parent editing here, deliberately. `parent_id` has never been editable
     on this form (a group's franchise is set at creation), widening `kind`'s
@@ -481,7 +493,20 @@ async def edit_tag(
     tag.name_zh = name_zh.strip() or None
     tag.location_url = form_url(location_url)
     tag.region = region.strip() or None
-    tag.eventernote_url = form_url(eventernote_url)
+    if tag.kind in EVENTERNOTE_KINDS:
+        # GATED ON KIND, and it has to be: this is the one field whose "leave it
+        # alone" cannot be expressed by an absent value. `str | None = Form(None)`
+        # does not work -- FastAPI folds an empty form value into the default,
+        # so "" and omitted arrive identically -- which is why `slug` and
+        # `voiced_by_tag_id` get their sentinels from their own types instead.
+        # Writing it unconditionally is how renaming a CHARACTER silently wiped
+        # the discovery link the catalogue import had set on her.
+        #
+        # The kinds here are exactly the kinds whose dialog RENDERS the field,
+        # which is why both read one table. Inside those kinds an empty box
+        # still clears the value: that is an editor emptying something they can
+        # see.
+        tag.eventernote_url = form_url(eventernote_url)
     if voiced_by_tag_id is not None:
         tag.voiced_by_tag_id = await resolve_seiyuu(session, tag.kind, voiced_by_tag_id)
     await session.commit()

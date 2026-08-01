@@ -312,7 +312,16 @@ only when both of their ends are attached -- have shipped since).
   and is exactly what a shared guard must not have.
 - `src/app/discovery.py` — the Eventernote fetch and the daily sweep. Sits
   ABOVE `db/` like `ops.py`: it imports `domain/` and `db.service`, and nothing
-  in `db/` imports it. It walks every tag with an `eventernote_url`, keeps the
+  in `db/` imports it. The sweep itself is KIND-BLIND — it walks every tag with
+  an `eventernote_url`, characters included, which is what makes 如月千早's own
+  actor page free to read. The EDITOR side is not: `EVENTERNOTE_KINDS`
+  (`domain/types.py`) is the one table saying which kinds' dialogs render the
+  field AND which submits `edit_tag` may write it from, and the two must never
+  become two lists. FastAPI folds an empty form value into an optional field's
+  default, so `""` cannot mean "absent" and the omitted-leaves-alone trick
+  `slug`/`voiced_by_tag_id` use is unavailable here — the KIND is what says
+  whether this submit had a box. Writing it unconditionally is what erased a
+  character's discovery link on the next rename. The sweep keeps the
   future prefix of each page, hands the whole sweep's events to
   `record_discovered` in ONE call (its event-id key is what stops the LoveLive
   15th, listed by nine catalogue tags, being reported nine times), and queues

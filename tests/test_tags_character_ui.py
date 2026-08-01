@@ -307,3 +307,114 @@ def test_the_import_dialog_offers_the_character_kind(client):
     assert r.status_code == 200
     picker = r.text.split('id="tc-kindpick"', 1)[1].split("</div>", 1)[0]
     assert 'data-kind="character"' in picker
+
+
+# ── a character's own eventernote URL ────────────────────────────────────
+#
+# The spec's "discovery is nearly free" payoff: 如月千早 has an actor page of
+# her own, and `discovery.py`'s sweep is kind-blind, so the ONLY thing standing
+# between a character and a daily sweep is whether the Tags page will let an
+# editor put a URL on her. Three template gates said no, and `edit_tag` then
+# wiped one the catalogue import had set.
+
+EVENTERNOTE = "https://www.eventernote.com/actors/1234"
+
+
+def _dialog(html: str, tag_id: int) -> str:
+    """One tag's edit dialog, not the whole page -- the field is rendered for
+    OTHER kinds, so a page-wide `in` check passes with the character gate
+    still shut."""
+    return html.split(f'id="tag-dialog-{tag_id}"', 1)[1].split("</dialog>", 1)[0]
+
+
+async def test_the_edit_dialog_offers_a_character_an_eventernote_url(client):
+    login_as(client, EDITOR_ID, "editor")
+    _, chihaya = await _tag(client, "如月千早", "character")
+    assert 'name="eventernote_url"' in _dialog(client.get("/tags").text, chihaya.id)
+
+
+async def test_the_create_dialog_offers_a_character_an_eventernote_url(client):
+    """`setTagKind` shows and ENABLES only the fields carrying `k-<kind>`, and
+    hides-and-disables the rest -- so the class list IS the gate, not styling.
+
+    Scoped to the new-tag dialog: the per-tag edit dialogs render the same
+    field name, so a page-wide search would answer a different question.
+    """
+    login_as(client, EDITOR_ID, "editor")
+    dialog = client.get("/tags").text.split('id="new-tag-dialog"', 1)[1]
+    field = dialog.split('name="eventernote_url"', 1)[0].rsplit("<div ", 1)[1]
+    assert "k-character" in field, "the character kind cannot reach the field"
+    assert "k-venue" not in field, "a venue has no actor page"
+
+
+async def test_a_rename_does_not_wipe_a_characters_discovery_link(client):
+    """The erasure, and the reason the three template gates were the fix.
+
+    A browser posts every field the dialog RENDERS. Her dialog rendered no
+    eventernote box, so a rename carried no value, `Form("")` wrote None
+    straight over the URL the catalogue import had set, and the sweep stopped
+    reading her page. The test therefore submits what the page shows -- read
+    the box back out of her own dialog and post it -- which is the whole claim:
+    a value that renders is a value that round-trips.
+    """
+    login_as(client, EDITOR_ID, "editor")
+    _, chihaya = await _tag(client, "如月千早", "character", eventernote_url=EVENTERNOTE)
+    assert chihaya.eventernote_url == EVENTERNOTE, "precondition: the URL was stored"
+
+    field = _dialog(client.get("/tags").text, chihaya.id).split(
+        'name="eventernote_url"', 1
+    )[1].split(">", 1)[0]
+    assert f'value="{EVENTERNOTE}"' in field, "the box renders but is not prefilled"
+
+    r = client.post(f"/tags/{chihaya.id}/edit", data={
+        "name": "如月千早 (recast)", "eventernote_url": EVENTERNOTE,
+    })
+    assert r.status_code == 303
+    async with client.db() as s:
+        from app.db.models import Tag
+        assert (await s.get(Tag, chihaya.id)).eventernote_url == EVENTERNOTE
+
+
+async def test_a_franchise_keeps_its_link_through_an_edit(client):
+    """The other half, and NOT a character special case: for a kind whose
+    dialog does not render the box, the route must not write the field at all.
+
+    Pre-existing -- a franchise's URL has had this exposure since the column
+    shipped -- and unfixable by an `is None` default, because FastAPI folds an
+    empty form value into the default and "" therefore cannot mean "absent".
+    EVENTERNOTE_KINDS is what says whether this submit had a box.
+    """
+    login_as(client, EDITOR_ID, "editor")
+    _, imas = await _tag(
+        client, "THE IDOLM@STER", "franchise", eventernote_url=EVENTERNOTE
+    )
+    r = client.post(f"/tags/{imas.id}/edit", data={"name": "アイドルマスター"})
+    assert r.status_code == 303
+    async with client.db() as s:
+        from app.db.models import Tag
+        assert (await s.get(Tag, imas.id)).eventernote_url == EVENTERNOTE
+
+
+async def test_an_empty_box_still_clears_the_link(client):
+    """The other half: omitted means "leave alone", but an editor emptying a
+    box they can SEE still means "clear it". Without this the new rule would
+    make the field write-once."""
+    login_as(client, EDITOR_ID, "editor")
+    _, chihaya = await _tag(client, "如月千早", "character", eventernote_url=EVENTERNOTE)
+    r = client.post(
+        f"/tags/{chihaya.id}/edit", data={"name": "如月千早", "eventernote_url": ""}
+    )
+    assert r.status_code == 303
+    async with client.db() as s:
+        from app.db.models import Tag
+        assert (await s.get(Tag, chihaya.id)).eventernote_url is None
+
+
+async def test_an_admin_can_sweep_a_characters_page_from_her_dialog(client):
+    """The button is admin-only and needs a URL; a character now satisfies the
+    kind condition too, and `sweep_one_tag` was always kind-blind."""
+    login_as(client, ADMIN_ID, "reiji")
+    _, chihaya = await _tag(client, "如月千早", "character", eventernote_url=EVENTERNOTE)
+    assert f'action="/admin/discoveries/sweep/{chihaya.id}"' in _dialog(
+        client.get("/tags").text, chihaya.id
+    )

@@ -118,7 +118,15 @@
           {% for a in artist_tags %}<option value="{{ a.id }}"{% if t.voiced_by_tag_id == a.id %} selected{% endif %}>{{ loc(a, "name") }}</option>{% endfor %}
         </select></label>
       {% endif %}
-      {% if is_group or is_artist %}
+      {#- CHARACTERS TOO, and that is the point of the kind: 如月千早 has her own
+          Eventernote actor page, and the daily sweep is kind-blind, so this one
+          field is the whole "discovery is nearly free" payoff. Without it the
+          only way to give a character a URL was the catalogue import -- and
+          edit_tag then wiped it on the next rename.
+          `eventernote_kinds` is EVENTERNOTE_KINDS, the same table edit_tag
+          gates its write on: a kind that renders here and a kind that may be
+          written must never be two lists. -#}
+      {% if t.kind.value in eventernote_kinds %}
       <label class="fld"><span>{{ _("eventernote URL") }}</span>
         <input name="eventernote_url" type="url" value="{{ t.eventernote_url or '' }}"
                placeholder="https://www.eventernote.com/actors/…"></label>
@@ -179,11 +187,12 @@
         Three conditions, all narrowing: ADMIN (this dialog only needs an
         editor, and hitting a third party is not an editor's call -- the route
         answers 403 either way, so a visible button that 403s would be the
-        only lie here), artist or group (a venue has no actor page), and a URL
-        to read. The POST lands on /admin/discoveries, so unsaved edits in
-        this dialog are left behind -- deliberate: the leads are the thing
-        being asked for, and Save is right there. -#}
-    {% if user.is_admin and (is_artist or is_group) and t.eventernote_url %}
+        only lie here), a kind that HAS an actor page (artist, group or
+        character -- not a franchise, not a venue), and a URL to read. The POST
+        lands on /admin/discoveries, so unsaved edits in this dialog are left
+        behind -- deliberate: the leads are the thing being asked for, and Save
+        is right there. -#}
+    {% if user.is_admin and t.kind.value in eventernote_kinds and t.eventernote_url %}
     <form method="post" action="/admin/discoveries/sweep/{{ t.id }}">
       <button class="btn quiet">{{ _("Check eventernote now") }}</button>
     </form>
@@ -416,7 +425,13 @@
       </select>
     </div>
 
-    <div class="fld kf k-group k-artist">
+    {#- Characters too: her own actor page is what makes discovery free for an
+        im@s bill. The class list is built from EVENTERNOTE_KINDS rather than
+        typed out, so this dialog and the edit dialog above and edit_tag's write
+        gate can only ever agree. setTagKind hides AND disables every
+        non-matching kind's inputs, so a franchise or venue submit still carries
+        nothing here. -#}
+    <div class="fld kf{% for k in eventernote_kinds %} k-{{ k }}{% endfor %}">
       <span>{{ _("eventernote URL") }} <span class="plain">{{ _("(optional)") }}</span></span>
       <input name="eventernote_url" type="url" placeholder="https://www.eventernote.com/actors/…">
     </div>
