@@ -662,13 +662,24 @@ their own `eventernote_url`, so they joined the daily sweep immediately;
 the other seven are genuinely unregistered on Eventernote and contribute
 nothing until that changes.
 
+The same pass caught a bookkeeping debt, found by checking the code before
+building against it. **The character bucket in the draft vocabulary had already
+shipped** -- inside the character-tags branch, a task after the review that filed
+it -- so it led the morning's list as an open gap while its own three tests were
+green on main. It is in Shipped now, and its removal fixes something that
+mattered more than the rank: the `triage-leads` entry carried a bullet saying a
+draft cannot name a character and the skill must therefore end with "tick her on
+the preview", which was false when written down. That bullet now says what the
+skill actually inherits. The paragraph ABOVE this one still points at "#4" for
+the bucket, because it is a dated record of that pass and is left as written --
+the entry it names is in Shipped, not missing.
+
 The re-rank moves nothing on merit. `triage-leads` rises to #1 by removal
 and its stated prerequisite is now satisfied -- there are character tags
 for a lead to resolve to -- so the caveat inside it changes from "blocked"
 to its own honest one: it is worth writing after a few real sweeps, since
 its value lives in the specifics of what production leads actually look
-like. Entries renumbered 1-11, and the character-bucket pointer inside the
-`triage-leads` entry was corrected in place (#4 -> #3).
+like. Entries renumbered 1-10 across both removals.
 
 
 ## Proposed (highest impact first)
@@ -723,10 +734,12 @@ and the skill has to know the difference:
   way round attaches nothing (the reverse chain deliberately does not exist).
   Whichever way the lead's page names the performer, the skill must resolve it
   to the character before writing the draft.
-- **There is nowhere in a draft to say so yet.** The concert draft vocabulary
-  has franchises/groups/artists and no character bucket (see #3), so until that
-  ships the skill's honest instruction is "tick her in the import preview" --
-  the picker renders a character row and `import_commit` accepts it.
+- **The draft CAN name her, as of the same day.** `series.characters` and
+  `series_handles.characters` ride the draft vocabulary, the preview pre-selects
+  the character row from either, and an unmatched name becomes a create chip
+  carrying `character` as its kind. So the skill writes her into the draft like
+  any other credit -- no "tick her on the preview afterwards" step, which is what
+  this entry said it would have to say when it was filed that morning.
 - **The reformat (#1) is a prerequisite in practice**, not merely a nicety: with
   no character tags in the catalogue there is nothing for a lead to resolve to,
   and the skill would encode a workflow it cannot run.
@@ -787,34 +800,7 @@ scheduler tick and an admin page, and touches neither `PresetItem` nor the
 sentence builders. Worth saying plainly, since this entry has now been displaced
 five passes running without once being judged less valuable.
 
-### 3. A character bucket in the concert draft vocabulary
-
-Impact: low-medium - effort: small. Raised: 2026-08-01 (character-tags build,
-Task 10 review; deferred as a minor at the time and recorded here rather than
-left in a branch ledger that gets deleted).
-
-`domain/yaml_export.py` / `yaml_import.py` speak `series: {franchises, groups,
-artists}` plus `series_handles`, and CHARACTER is in neither. So an
-agent-authored draft cannot name 如月千早 at all: the import preview renders a
-character picker row (it shares the editor's partial) and `import_commit`
-accepts what is ticked there, but the row always arrives EMPTY, and
-`imports.py`'s `initial_selected` loop covers three kinds for the same reason.
-
-Small, and larger than it looks in one respect: the failure mode is the exact
-one this feature exists to prevent. An editor who does not notice the empty row
-commits an im@s concert credited to nobody, the seiyuu is never attached, and
-her followers are not told -- silently, because a missing performer looks like a
-sparse catalogue entry rather than a bug.
-
-The work is a `characters` key on both sides plus `series_handles.characters`
-(handles are AUTHORITATIVE where present, no per-entry fallback -- the existing
-rule), the fourth tuple entry in the preview loop, and a line in the
-`add-concert` skill whose example draft is pinned to the parser by a test.
-Ranked here, below minute-level offsets, because it is editor-facing rather than
-user-facing -- but above the code-health entries, because it is a correctness
-trap and not tidiness.
-
-### 4. Franchise-aware round-label suggestions
+### 3. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -835,7 +821,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 5. Nine of ten `RoundKind` members are purely cosmetic
+### 4. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -858,7 +844,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 6. PWA / installability
+### 5. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -878,7 +864,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 7. In-app LLM extraction behind the same draft seam
+### 6. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -907,7 +893,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 8. Minor demo-parity cosmetics
+### 7. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -946,7 +932,7 @@ this entry's single pass, not its own task. Both gaps are now also named in
 CLAUDE.md's demo inventory, so the next person meets them where they look for
 the reference rather than only here.
 
-### 9. Discover sort in the content head, plus the catalogue-count note
+### 8. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -972,7 +958,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 10. Name the destination on the sign-in bounce
+### 9. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -994,7 +980,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 11. Nothing caps the discovery review path
+### 10. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1038,6 +1024,33 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### A character bucket in the concert draft vocabulary (2026-08-01)
+
+Bookkeeping caught up, not work done: this shipped INSIDE the character-tags
+branch and was filed here anyway. It was raised at Task 10's review as a
+deferred minor, a later task in the same branch built it, and nobody moved the
+entry -- so it led the morning's list as an open gap while its own tests were
+already green on main. The same debt the cache-bust entry ran up on 2026-07-22.
+
+What exists, verified by running it rather than by reading for it:
+`domain/yaml_export.py`'s `concert_to_yaml` takes `characters` as a REQUIRED
+parameter (deliberately un-defaulted -- a kind added after the format shipped and
+quietly defaulting to empty is exactly how the hole opened);
+`domain/yaml_import.py` carries `characters` in `_SERIES_KEYS` and parses both
+`series.characters` and `series_handles.characters`; `web/routes/imports.py`'s
+preselection loop is a four-tuple with `character` in it, and `import_commit`
+takes `character_tags`; and `.claude/skills/add-concert/SKILL.md` documents the
+key, including that a Love Live-shaped bill has no characters and should leave it
+out.
+
+Three tests in `test_draft_import.py` pin exactly the failure the entry
+described: a draft naming a character pre-selects her, a handle beats a name, and
+an unmatched name becomes a create chip carrying `character` as its kind. The
+entry's stated failure mode -- the picker's character row always arrives empty,
+so an editor commits an im@s concert credited to nobody and the seiyuu's
+followers are never told -- is the thing the first of those asserts cannot
+happen.
 
 ### The im@s catalogue reformat (2026-08-01)
 
