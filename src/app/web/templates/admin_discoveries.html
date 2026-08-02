@@ -137,6 +137,15 @@
         <td class="nw">{{ r.lead.announced_at.strftime('%Y-%m-%d') if r.lead.announced_at else 'Not yet' }}</td>
         <td class="r">
           <form method="post" action="/admin/discoveries/{{ r.lead.id }}/dismiss">
+            {# A select plus one submit, not a button per class: at the
+               documented 443-lead queue, eight buttons per row was ~3,500
+               buttons and as many tab stops before the copy block below the
+               table ever got a turn. Plain markup, no JS required. #}
+            <select name="reason" aria-label="Dismissal reason">
+              {% for reason in dismiss_reasons %}
+              <option value="{{ reason.value }}">{{ dismiss_reason_labels[reason] }}</option>
+              {% endfor %}
+            </select>
             <button class="act no" type="submit">Dismiss lead</button>
           </form>
         </td>
@@ -149,7 +158,8 @@
   Dates are the JST calendar day of the performance. Announced is the UTC day a
   sweep first reported the lead — either named in that day's DM or only counted
   in its “+N more”, so a date here does not mean you have read a description of
-  it. Dismissing is permanent — the sweep never raises a dismissed lead again.
+  it. Dismissing is permanent — the sweep never raises a dismissed lead again —
+  and the button you press records which taxonomy class it was, not an excuse.
 </p>
 
 <h2>Hand these to an agent</h2>
@@ -175,5 +185,16 @@
 </div>
 {% else %}
 <p class="dim">Nothing waiting. The sweep runs daily and DMs when it finds something.</p>
+{% endif %}
+
+{#- Unconditional on `rows`, deliberately: this is the only place a dismissed
+    lead is ever readable again, and it matters MOST once the queue is fully
+    triaged (rows empty) -- that is exactly when "how did dismissals break
+    down" is the question worth asking. -#}
+{% if reason_counts %}
+<p class="dim">Dismissed so far —
+  {% for reason, n in reason_counts | dictsort %}{{ n }} {{ reason }}{{ ", " if not loop.last }}{% endfor %}.
+  Leads dismissed before reasons were recorded are not counted.
+</p>
 {% endif %}
 {% endblock %}

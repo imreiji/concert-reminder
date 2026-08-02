@@ -200,3 +200,48 @@ class BroadcastMode(enum.StrEnum):
     BATCH = "batch"        # the recipients of one delivery_log batch
     ALL = "all"            # every user
     EXPLICIT = "explicit"  # a hand-entered list of discord ids
+
+
+class DismissReason(enum.StrEnum):
+    """Why a discovery lead was waved off -- the taxonomy class it belongs to.
+
+    The CLASS, not an operational excuse ("not interested"), because the point
+    of recording it is to score a classifier against real human decisions: a
+    guess is only measurable against a judgment of the same kind. Values track
+    docs/discovery-lead-taxonomy-2026-08-01.md.
+
+    LIVE and FANMEET name classes that FIT the app, which is not a
+    contradiction -- a genuine concert you do not want to follow is still a
+    dismissal, and giving it a value keeps it out of `other`, where it would
+    quietly wreck the agreement rate.
+    """
+
+    LIVE = "live"           # A real concert or tour, not one to track
+    STAGE = "stage"         # 朗読劇 / ミュージカル / 舞台 / リーディング
+    RELEASE = "release"     # 発売記念 / お渡し会 / 特典会 / 写真集
+    TALK = "talk"           # ラジオ / 番組イベント / トークショー
+    FESTIVAL = "festival"   # Multi-artist bill; the concert is the festival
+    FANMEET = "fanmeet"     # ファンミーティング / バースデーイベント
+    FREE = "free"           # No ticket at all -- 餅まき, 盆踊り, 駅長就任式
+    OTHER = "other"         # Anything the taxonomy does not name yet
+
+
+# Sentence-case labels for /admin/discoveries' dismiss control -- the enum's
+# own values (`live`, `free`, ...) are the taxonomy's internal vocabulary, not
+# something a reader who has not read the taxonomy doc can parse on sight.
+#
+# NOT wrapped in N_() or gettext: /admin/discoveries is English-only and
+# deliberately outside the translated surface, like /admin/deliveries -- an
+# operational page only admins see should not cost msgids in three languages.
+# A module-level dict keyed by the enum, beside it, the way LABEL_BY_ROUND_KIND
+# sits beside RoundKind.
+DISMISS_REASON_LABELS: dict[DismissReason, str] = {
+    DismissReason.LIVE: "Live show, not tracking",
+    DismissReason.STAGE: "Stage play or reading",
+    DismissReason.RELEASE: "Release event",
+    DismissReason.TALK: "Talk or radio show",
+    DismissReason.FESTIVAL: "Festival",
+    DismissReason.FANMEET: "Fan meeting",
+    DismissReason.FREE: "No ticket at all",
+    DismissReason.OTHER: "Other",
+}

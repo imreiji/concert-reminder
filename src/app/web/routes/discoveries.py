@@ -31,8 +31,9 @@ the Preferences LINK to it is translated.
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +42,7 @@ from app.db.models import DiscoveredEvent, Tag
 from app.db.service import (
     discovery_status,
     dismiss_lead,
+    dismissed_reason_counts,
     leads_matching_existing_legs,
     open_leads,
     request_sweep,
@@ -48,6 +50,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.discovery import sweep_one_tag
 from app.domain.discovery_message import Lead, build_discovery_dm
+from app.domain.types import DISMISS_REASON_LABELS, DismissReason
 from app.web.auth import SessionUser, require_admin
 
 router = APIRouter()
@@ -178,6 +181,9 @@ async def discoveries(
             # compares literals anyway, so this is belt and braces.
             "swept": swept if swept in SWEPT_CODES else None,
             "swept_new": max(new, 0),
+            "reason_counts": await dismissed_reason_counts(session),
+            "dismiss_reasons": list(DismissReason),
+            "dismiss_reason_labels": DISMISS_REASON_LABELS,
         },
     )
 
@@ -249,10 +255,15 @@ async def sweep_tag(
 @router.post("/admin/discoveries/{lead_id}/dismiss")
 async def dismiss(
     lead_id: int,
+    reason: Annotated[DismissReason, Form()],
     user: SessionUser = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    """Wave a lead off for good.
+    """Wave a lead off for good, recording which taxonomy class it was.
+
+    `reason` is typed as the enum rather than validated by hand, so an invented
+    class is a 422 from FastAPI before anything is written -- this column's
+    whole value is that every row in it is a real human judgment.
 
     404 on a False from `dismiss_lead` -- an unknown id, or one already
     dismissed. Reporting a write that did not happen as a cheerful 303 is how a
@@ -260,7 +271,7 @@ async def dismiss(
 
     303, never 307: the POST must not be replayed against the page it lands on.
     """
-    if not await dismiss_lead(session, lead_id, datetime.now(UTC)):
+    if not await dismiss_lead(session, lead_id, datetime.now(UTC), reason):
         raise HTTPException(status_code=404, detail="no such lead")
     await session.commit()
     return RedirectResponse("/admin/discoveries", status_code=303)

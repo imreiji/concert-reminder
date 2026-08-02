@@ -1,6 +1,7 @@
 """The discovery review surface: admin-only, and it writes only dismissals."""
 
 import datetime as dt
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -333,7 +334,8 @@ async def test_dismissing_removes_it_from_the_list(client):
     await _seed(client)
     login_as(client, ADMIN_ID, "reiji")
     lead_id = await _lead_id(client)
-    assert client.post(f"/admin/discoveries/{lead_id}/dismiss").status_code == 303
+    r = client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": "other"})
+    assert r.status_code == 303
     assert "Anniversary Day 2" not in client.get("/admin/discoveries").text
     async with client.db() as s:
         row = (await s.execute(select(DiscoveredEvent))).scalar_one()
@@ -342,7 +344,8 @@ async def test_dismissing_removes_it_from_the_list(client):
 
 async def test_dismissing_an_unknown_lead_is_a_404(client):
     login_as(client, ADMIN_ID, "reiji")
-    assert client.post("/admin/discoveries/999/dismiss").status_code == 404
+    r = client.post("/admin/discoveries/999/dismiss", data={"reason": "other"})
+    assert r.status_code == 404
 
 
 async def test_dismissing_twice_is_a_404(client):
@@ -351,8 +354,9 @@ async def test_dismissing_twice_is_a_404(client):
     await _seed(client)
     login_as(client, ADMIN_ID, "reiji")
     lead_id = await _lead_id(client)
-    client.post(f"/admin/discoveries/{lead_id}/dismiss")
-    assert client.post(f"/admin/discoveries/{lead_id}/dismiss").status_code == 404
+    client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": "other"})
+    r = client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": "other"})
+    assert r.status_code == 404
 
 
 # ── The admin index ──────────────────────────────────────────────────────
@@ -720,6 +724,186 @@ async def test_a_venue_offers_no_button(client):
     )
     login_as(client, ADMIN_ID, "reiji")
     assert f"/admin/discoveries/sweep/{tag_id}" not in _tags_dialog(client, tag_id)
+
+
+# ── Dismissal reasons ────────────────────────────────────────────────────
+
+
+async def test_dismiss_reason_defaults_to_null_and_takes_a_taxonomy_value(db):
+    """NULL is a real state: a lead dismissed before reasons existed. It is
+    never backfilled, exactly as subscriptions and leg opt-outs are not."""
+    from app.domain.types import DismissReason
+
+    async with db() as s:
+        s.add(DiscoveredEvent(
+            eventernote_event_id="1", title="t", event_date=dt.date(2026, 9, 1),
+        ))
+        await s.commit()
+        row = (await s.execute(select(DiscoveredEvent))).scalar_one()
+        assert row.dismiss_reason is None
+
+        row.dismiss_reason = DismissReason.RELEASE
+        await s.commit()
+        assert (await s.execute(select(DiscoveredEvent))).scalar_one().dismiss_reason == "release"
+
+
+def test_dismiss_reason_covers_every_taxonomy_class():
+    """Eight values, one per class in docs/discovery-lead-taxonomy-2026-08-01.md
+    plus `other`. LIVE is present deliberately: a real concert you do not want to
+    track is a dismissal, and without a value for it every such lead lands in
+    `other` and destroys the agreement rate this column exists to measure."""
+    from app.domain.types import DismissReason
+
+    assert {r.value for r in DismissReason} == {
+        "live", "stage", "release", "talk",
+        "festival", "fanmeet", "free", "other",
+    }
+
+
+async def test_dismissing_records_the_reason(client):
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    lead_id = await _lead_id(client)
+    r = client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": "release"})
+    assert r.status_code == 303
+    async with client.db() as s:
+        row = await s.get(DiscoveredEvent, lead_id)
+        assert row.dismissed_at is not None
+        assert row.dismiss_reason == "release"
+
+
+async def test_an_unknown_reason_is_422_and_writes_nothing(client):
+    """The value reaches an enum, so a hand-posted body cannot invent a class
+    and pollute the very column that exists to be counted."""
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    lead_id = await _lead_id(client)
+    r = client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": "nonsense"})
+    assert r.status_code == 422
+    async with client.db() as s:
+        row = await s.get(DiscoveredEvent, lead_id)
+        assert row.dismissed_at is None, "a refused reason must not dismiss"
+        assert row.dismiss_reason is None
+
+
+async def test_a_missing_reason_is_422(client):
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    lead_id = await _lead_id(client)
+    r = client.post(f"/admin/discoveries/{lead_id}/dismiss", data={})
+    assert r.status_code == 422
+    async with client.db() as s:
+        assert (await s.get(DiscoveredEvent, lead_id)).dismissed_at is None
+
+
+async def test_the_page_offers_a_reason_per_taxonomy_class(client):
+    """Pins the NAME and the VALUEs together on the one control that matters:
+    a page carrying `value="live"` etc. somewhere is meaningless unless it is
+    inside a field literally named `reason` -- that is what the dismiss route
+    actually reads (`Annotated[DismissReason, Form()]`). Deleting
+    name="reason" from the template left this passing before, because it only
+    ever grepped the page for bare `value="..."` substrings."""
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    select_start = body.find('<select name="reason"')
+    assert select_start != -1, "the dismiss reason control must be named reason"
+    select_html = body[select_start:body.find("</select>", select_start)]
+    for value in ("live", "stage", "release", "talk",
+                  "festival", "fanmeet", "free", "other"):
+        assert f'value="{value}"' in select_html, f"no way to dismiss as {value}"
+
+
+async def test_dismissing_uses_the_field_name_the_page_actually_renders(client):
+    """The wiring, not the markup: this reads the dismiss control's `name`
+    attribute straight out of the rendered page and posts through exactly
+    that key, instead of assuming it is "reason" the way every other
+    dismissal test in this file does. Those tests all hardcode the field
+    name, so they stayed green even with name="reason" deleted from the
+    template entirely -- while every dismiss on the real page 422s, since
+    FastAPI never receives a `reason` field to bind. This test fails the
+    same way that mutation does: the field's name comes from the page and is
+    used verbatim, so a template that stops naming its control breaks here."""
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    lead_id = await _lead_id(client)
+    body = client.get("/admin/discoveries").text
+    form_start = body.find(f'action="/admin/discoveries/{lead_id}/dismiss"')
+    assert form_start != -1, "the dismiss form is on the page"
+    select_start = body.find("<select", form_start)
+    select_open_end = body.find(">", select_start)
+    name_match = re.search(r'name="([^"]+)"', body[select_start:select_open_end])
+    assert name_match, "the reason control must carry a name attribute"
+    field_name = name_match.group(1)
+    r = client.post(
+        f"/admin/discoveries/{lead_id}/dismiss", data={field_name: "other"}
+    )
+    assert r.status_code == 303
+    async with client.db() as s:
+        row = await s.get(DiscoveredEvent, lead_id)
+        assert row.dismissed_at is not None
+        assert row.dismiss_reason == "other"
+
+
+async def test_dismissed_counts_are_shown_so_the_column_is_readable(client):
+    """open_leads hides dismissed rows, so without this the reason is
+    write-only and nothing can ever be scored against it."""
+    await _seed(client, eventernote_event_id="1001")
+    await _seed(client, eventernote_event_id="1002")
+    await _seed(client, eventernote_event_id="1003")
+    login_as(client, ADMIN_ID, "reiji")
+    async with client.db() as s:
+        ids = (await s.execute(select(DiscoveredEvent.id))).scalars().all()
+    for lead_id, reason in zip(ids, ("release", "release", "stage"), strict=True):
+        client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": reason})
+    body = client.get("/admin/discoveries").text
+    assert "2 release" in body
+    assert "1 stage" in body
+
+
+async def test_counts_ignore_pre_reason_dismissals(client):
+    """A NULL reason is a real state -- dismissed before reasons existed -- and
+    must not be counted as `other`, which would invent a judgment nobody made.
+    With nothing BUT a NULL-reason dismissal on file, dismissed_reason_counts
+    is empty, so the entire "Dismissed so far" paragraph must not render --
+    there is nothing yet worth reading back."""
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    lead_id = await _lead_id(client)
+    async with client.db() as s:
+        row = await s.get(DiscoveredEvent, lead_id)
+        row.dismissed_at = datetime.now(UTC)
+        await s.commit()
+    body = client.get("/admin/discoveries").text
+    assert "Dismissed so far" not in body
+
+
+async def test_counts_ignore_a_pre_reason_dismissal_mixed_with_a_reasoned_one(client):
+    """The case that actually matters, and the one the NULL-only test above
+    cannot reach: a pre-migration dismissal (NULL reason) sitting alongside a
+    reasoned one. With the NULL filter removed from dismissed_reason_counts,
+    the counts dict comes back as {None: 1, "talk": 1} and Jinja's `dictsort`
+    -- which the template uses to render the paragraph -- raises TypeError
+    comparing None < "talk" while trying to order the keys: a 500 on the
+    page, not merely a wrong number. A single NULL row has nothing to sort
+    against, which is exactly why that case alone is not enough."""
+    await _seed(client, eventernote_event_id="2001")
+    await _seed(client, eventernote_event_id="2002")
+    login_as(client, ADMIN_ID, "reiji")
+    async with client.db() as s:
+        ids = (await s.execute(select(DiscoveredEvent.id))).scalars().all()
+    pre_migration_id, reasoned_id = ids
+    async with client.db() as s:
+        row = await s.get(DiscoveredEvent, pre_migration_id)
+        row.dismissed_at = datetime.now(UTC)
+        await s.commit()
+    r = client.post(
+        f"/admin/discoveries/{reasoned_id}/dismiss", data={"reason": "talk"}
+    )
+    assert r.status_code == 303
+    body = client.get("/admin/discoveries").text
+    assert "Dismissed so far" in body
+    assert "1 talk" in body
 
 
 async def test_the_button_never_nests_inside_the_edit_form(client):

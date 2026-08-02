@@ -17,7 +17,7 @@ from app.db.service import (
     record_discovered,
 )
 from app.domain.eventernote import ActorEvent
-from app.domain.types import TagKind
+from app.domain.types import DismissReason, TagKind
 
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
 
@@ -102,7 +102,7 @@ async def test_a_dismissed_lead_stays_gone(db):
     async with db() as s:
         fresh = await record_discovered(s, [(_ev(), None)], NOW)
         await s.commit()
-        assert await dismiss_lead(s, fresh[0].id, NOW) is True
+        assert await dismiss_lead(s, fresh[0].id, NOW, DismissReason.OTHER) is True
         await s.commit()
         assert await open_leads(s) == []
 
