@@ -3,7 +3,10 @@ ITEM_SALE_KINDS, ingest keyword mapping, and label/emoji coverage. Also
 covers Round.required_item_round_id, the self-FK an item-sale round's
 dependents point at (SET NULL on the target's delete)."""
 
+import json
+import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -50,6 +53,24 @@ def test_label_and_emoji_cover_every_kind():
     for kind in RoundKind:
         assert kind in LABEL_BY_ROUND_KIND
         assert kind.value in KIND_EMOJI
+
+
+def test_requires_script_item_kinds_mirrors_item_sale_kinds():
+    """_requires_select_script.html's JS ITEM_KINDS literal is the client-side
+    mirror of ITEM_SALE_KINDS (domain/types.py) -- the two other tests above
+    only assert the JS list is PRESENT on the rendered page, never that it is
+    still EQUAL to the Python set, so a kind added to ITEM_SALE_KINDS without
+    updating this template would silently desync the requires <select> and
+    every render test would keep passing."""
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "app" / "web" / "templates" / "_requires_select_script.html"
+    )
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r"const ITEM_KINDS = (\[[^\]]*\]);", text)
+    assert match, "ITEM_KINDS literal not found in _requires_select_script.html"
+    js_kinds = json.loads(match.group(1))
+    assert js_kinds == sorted(kind.value for kind in ITEM_SALE_KINDS)
 
 
 @pytest_asyncio.fixture()
@@ -257,8 +278,8 @@ def _create_goods_and_lottery(
 ) -> tuple[int, int]:
     """Seeds one concert with a GOODS_SALE round and a LOTTERY_ROUND that
     requires it (bound by round_key, exactly like
-    test_create_concert_binds_requires_by_round_key). Returns (goods_id,
-    lottery_id) for the edit-page tests below to re-post by round_id.
+    test_create_concert_binds_requires_by_round_key). Returns event_id, which
+    the tests below re-fetch via _rounds_by_label to get real round ids.
 
     The labels are overridable because "Goods sale" is ALSO the GOODS_SALE
     kind's own display label: a render test asserting that string proves
