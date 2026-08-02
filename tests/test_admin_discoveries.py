@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.db.models import Base, Concert, ConcertDay, DiscoveredEvent, DiscoveryState, Tag
-from app.db.service import apply_prune, plan_prune
+from app.db.service import PlannedDismissal, PrunePlan, apply_prune, plan_prune
 from app.db.session import get_session
 from app.discovery import DiscoveryFetchError
 from app.domain.prune_list import PruneEntry, PruneList
@@ -960,6 +960,15 @@ async def test_the_plan_sorts_leads_into_dismiss_unknown_and_already(client):
     assert [d.event_id for d in plan.already] == ["222"]
     assert plan.unknown == ("999",)
 
+    # `already` carries BOTH reasons: what the file asked for, and what the
+    # row already holds -- the disagreement is the whole point of showing
+    # this bucket at all ("file says release, already dismissed as free").
+    stuck = plan.already[0]
+    assert stuck.reason == DismissReason.RELEASE
+    assert stuck.stored_reason == DismissReason.FREE
+    # A not-yet-dismissed lead has nothing stored yet.
+    assert plan.to_dismiss[0].stored_reason is None
+
 
 async def test_planning_writes_nothing(client):
     """Rendering a plan must leave the queue exactly as it found it. If
@@ -1006,22 +1015,44 @@ async def test_apply_dismisses_with_each_lead_s_own_reason(client):
 
 
 async def test_apply_skips_the_already_dismissed_without_restamping(client):
-    """dismiss_lead already returns False for these. The original reason and
-    timestamp must survive -- a re-paste is not a re-decision. Asserting only
-    "it's still dismissed" would pass even against an implementation that
-    overwrites both fields with the file's new say-so; both must be pinned to
-    their ORIGINAL values."""
+    """The stale-plan race apply_prune's own docstring claims to guard: a plan
+    gets built, someone dismisses the lead in the meantime, and apply runs
+    against the now-stale plan. plan_prune would sort an already-dismissed
+    lead into `already` and apply_prune's loop only ever walks `to_dismiss`
+    -- so going through plan_prune here would never touch the loop this test
+    is supposed to be pinning; it would only exercise dismiss_lead's own
+    early return, one call removed. This builds the PrunePlan BY HAND with
+    the already-dismissed lead placed directly in `to_dismiss`, which is
+    exactly what a stale plan looks like, and is what actually drives
+    apply_prune's `for planned in plan.to_dismiss` loop over this lead.
+
+    The original reason and timestamp must survive -- a re-paste (or a race)
+    is not a re-decision. Asserting only "it's still dismissed" would pass
+    even against an implementation that overwrites both fields with the
+    file's new say-so; both must be pinned to their ORIGINAL values.
+
+    Confirmed by mutation: with dismiss_lead's `row.dismissed_at is not None`
+    guard deleted, this test fails (apply_prune re-stamps the lead as
+    "stage"), where the earlier plan_prune-routed version of this test passed
+    even with that guard gone."""
     original_ts = datetime(2026, 7, 1, 0, 0, tzinfo=UTC)
     await _seed(
         client, eventernote_event_id="111",
         dismissed_at=original_ts, dismiss_reason=DismissReason.FREE,
     )
-    prune = PruneList(
-        entries=(PruneEntry(event_id="111", reason=DismissReason.STAGE),),
-        warnings=(),
+    lead = await _lead_by_event_id(client, "111")
+    plan = PrunePlan(
+        to_dismiss=(
+            PlannedDismissal(
+                lead_id=lead.id, event_id="111", title=lead.title,
+                event_date=lead.event_date, reason=DismissReason.STAGE,
+                stored_reason=DismissReason.FREE,
+            ),
+        ),
+        unknown=(),
+        already=(),
     )
     async with client.db() as s:
-        plan = await plan_prune(s, prune)
         written = await apply_prune(s, plan, NOW)
         await s.commit()
     assert written == 0

@@ -7121,17 +7121,26 @@ async def dismiss_lead(
 
 @dataclass(frozen=True)
 class PlannedDismissal:
-    """One lead a prune list names, carrying the FILE's own reason for it --
-    not necessarily what the row ends up holding. For `to_dismiss` this
-    reason is exactly what apply_prune will write; for `already` it is only
-    what the file asked for, since apply_prune leaves an already-dismissed
-    row's own reason untouched (see apply_prune)."""
+    """One lead a prune list names.
+
+    `reason` is the FILE's own say-so -- not necessarily what the row ends up
+    holding. For `to_dismiss` it is exactly what apply_prune will write; for
+    `already` it is only what the file asked for, since apply_prune leaves an
+    already-dismissed row's own reason untouched (see apply_prune).
+
+    `stored_reason` is what the row ALREADY carries (None if it predates the
+    column, or if the lead isn't dismissed yet). For `already` this is the
+    truth a screen owes a human: "file says stage, already dismissed as
+    release" is the disagreement the `dismiss_reason` column exists to make
+    measurable, and dropping it here would throw that away at the one place
+    it is visible before nothing happens."""
 
     lead_id: int
     event_id: str
     title: str
     event_date: date
     reason: DismissReason
+    stored_reason: DismissReason | None
 
 
 @dataclass(frozen=True)
@@ -7179,6 +7188,9 @@ async def plan_prune(session: AsyncSession, prune: PruneList) -> PrunePlan:
         planned = PlannedDismissal(
             lead_id=row.id, event_id=entry.event_id, title=row.title,
             event_date=row.event_date, reason=entry.reason,
+            stored_reason=(
+                DismissReason(row.dismiss_reason) if row.dismiss_reason else None
+            ),
         )
         (already if row.dismissed_at is not None else to_dismiss).append(planned)
 
@@ -7196,6 +7208,12 @@ async def apply_prune(session: AsyncSession, plan: PrunePlan, now: datetime) -> 
     all: plan_prune already sorted those out, and dismiss_lead itself refuses
     an already-dismissed row, so even a stale plan racing a second apply
     cannot re-stamp one.
+
+    FLUSHES per dismiss_lead call, never commits -- the caller owns the
+    transaction and its outcome. That means a raise partway through the loop
+    (an unexpected DB error, say) rolls the WHOLE batch back via the caller's
+    session rather than leaving some leads dismissed and others not: nothing
+    here durably survives until the caller commits.
     """
     written = 0
     for planned in plan.to_dismiss:
