@@ -4283,6 +4283,10 @@ async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
         )
         for d in days
     ]
+    # ja label of every round on this concert, keyed by id -- so the export
+    # can name a requires-link by LABEL (a restore has no ids to reuse) the
+    # same way applies_to already names a leg by label.
+    round_labels_by_id = {r.id: r.label for r in concert.rounds}
     yaml_rounds = [
         YamlRound(
             label=r.label, label_en=r.label_en, label_zh=r.label_zh, kind=r.kind.value,
@@ -4290,6 +4294,10 @@ async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
             opens_at_utc=r.opens_at_utc, closes_at_utc=r.closes_at_utc,
             results_at_utc=r.results_at_utc, payment_deadline_at_utc=r.payment_deadline_at_utc,
             url=r.url, notes=r.notes,
+            requires_label=(
+                round_labels_by_id.get(r.required_item_round_id)
+                if r.required_item_round_id else None
+            ),
         )
         for r in concert.rounds
     ]

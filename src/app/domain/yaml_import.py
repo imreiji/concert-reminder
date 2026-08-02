@@ -48,7 +48,7 @@ _DAY_KEYS = {
 _ROUND_KEYS = {
     "label", "label_en", "label_zh", "kind", "applies_to",
     "apply_opens_jst", "apply_closes_jst", "results_jst",
-    "payment_deadline_jst", "url", "notes",
+    "payment_deadline_jst", "url", "notes", "requires",
 }
 
 
@@ -255,6 +255,7 @@ def parse_draft(text: str) -> ParsedConcert:
             ),
             notes=_text(raw.get("notes"), f"{where} notes", warnings),
             applies_to_labels=_names(raw.get("applies_to"), f"{where} applies_to", warnings),
+            requires_label=_text(raw.get("requires"), f"{where} requires", warnings),
         ))
 
     return ParsedConcert(

@@ -200,6 +200,20 @@ def test_unknown_keys_warn_but_do_not_fail():
     assert any("hovercraft" in w for w in p.warnings)
 
 
+def test_round_requires_parses():
+    parsed = parse_draft(
+        "title: t\n"
+        "rounds:\n"
+        "  - label: グッズ販売\n"
+        "    kind: goods_sale\n"
+        "  - label: 最速先行\n"
+        "    kind: lottery_round\n"
+        "    requires: グッズ販売\n"
+    )
+    assert parsed.rounds[1].requires_label == "グッズ販売"
+    assert not [w for w in parsed.warnings if "unknown key" in w]
+
+
 def test_slug_and_venues_keys_are_ignored_silently():
     """Both appear in every yaml_export output; neither is draft input (slug is
     derived, concert venues are derived from legs), so round-tripping an export

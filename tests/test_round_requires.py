@@ -16,6 +16,7 @@ from app.db.service import ensure_user
 from app.db.session import get_session
 from app.domain.ingest import _guess_kind
 from app.domain.types import ITEM_SALE_KINDS, RoundKind
+from app.domain.yaml_import import parse_draft
 from app.web import auth
 from app.web.app import create_app
 from app.web.routes.concerts import RoundRequiresError, resolve_round_requires
@@ -561,3 +562,67 @@ async def test_import_preview_renders_requires_script(client):
     r = client.post("/concerts/import/draft", data={"draft": "title: Requires Script Test"})
     assert r.status_code == 200
     assert 'ITEM_KINDS = ["eligibility_item_sale", "goods_sale"]' in r.text
+
+
+# ── Draft vocabulary round-trip (Task 7) ──────────────────────────────────
+#
+# export -> parse -> preview -> commit, the `requires:` link riding a draft
+# by ja LABEL (never an id -- a draft has no ids) exactly the way
+# `applies_to` already rides a leg by label.
+
+
+async def test_draft_preview_resolves_requires_to_keys(client):
+    # Two rounds in one draft: the goods sale first (becomes round_key "r0"),
+    # the lottery second ("r1") naming the goods round by its ja label. The
+    # preview must resolve that label to "r0" and pre-select it in the
+    # lottery row's requires <select>.
+    login_as(client, EDITOR_ID, "reiji")
+    draft = (
+        "title: Requires Draft Test\n"
+        "rounds:\n"
+        "  - label: グッズ販売\n"
+        "    kind: goods_sale\n"
+        "  - label: 最速先行\n"
+        "    kind: lottery_round\n"
+        "    requires: グッズ販売\n"
+    )
+    r = client.post("/concerts/import/draft", data={"draft": draft})
+    assert r.status_code == 200
+    assert 'name="round_key" value="r0"' in r.text
+    assert 'name="round_key" value="r1"' in r.text
+    assert '<option value="r0" selected>グッズ販売</option>' in r.text
+
+
+async def test_draft_preview_warns_on_unmatched_requires(client):
+    # requires: names a label no round in this draft carries -- the link is
+    # dropped (nothing to pre-select) and a warning says so, but the page
+    # still renders (a bad requires reference must not cost the whole
+    # preview, same governing rule as every other warn-and-continue path
+    # in this parser).
+    login_as(client, EDITOR_ID, "reiji")
+    draft = (
+        "title: Requires Draft Test\n"
+        "rounds:\n"
+        "  - label: 最速先行\n"
+        "    kind: lottery_round\n"
+        "    requires: ノーグッズ\n"
+    )
+    r = client.post("/concerts/import/draft", data={"draft": draft})
+    assert r.status_code == 200
+    assert "no other round labelled" in r.text
+    assert "&#39;ノーグッズ&#39;" in r.text  # Jinja-escaped repr() quotes
+
+
+async def test_export_round_trip_keeps_requires(client):
+    # Create a linked concert (same shape _create_goods_and_lottery seeds for
+    # the create/edit tests above), fetch its YAML export, and re-parse it --
+    # the lottery round's requires_label must name the goods round's ja label.
+    login_as(client, EDITOR_ID, "reiji")
+    _create_goods_and_lottery(client, "requires-export-roundtrip")
+
+    r = client.get("/concerts/requires-export-roundtrip/export.yaml")
+    assert r.status_code == 200
+
+    parsed = parse_draft(r.text)
+    lottery = next(rr for rr in parsed.rounds if rr.label == "Lottery")
+    assert lottery.requires_label == "Goods sale"

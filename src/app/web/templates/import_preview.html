@@ -112,9 +112,9 @@
         saved rounds a nested UPGRADE round could qualify against. Parsed rounds
         carry no leg info, so nothing is pre-selected unless a draft supplied
         leg_keys_selected.
-        round_key/requires_value are literal '' for now -- ParsedRound carries
-        no round_key/requires_key yet; Task 7 adds them and flips these two
-        literals to r.round_key/r.requires_key. -#}
+        round_key/requires_value come off the parsed round itself: the route
+        stamps r.round_key ("r0", "r1", ...) and resolves any requires: label
+        to another round's round_key as r.requires_key. -#}
     {% for r in parsed.rounds %}
     {{ round_card(
         label=r.label, label_en=r.label_en or '', label_zh=r.label_zh or '',
@@ -124,7 +124,8 @@
         url=r.url or '', notes=r.notes or '',
         leg_value=r.leg_keys, leg_selected=r.leg_keys_selected or none,
         with_qualifiers=False,
-        round_key='', requires_value='') }}
+        round_key=r.round_key, requires_value=r.requires_key,
+        requires_options=requires_options) }}
     {% else %}
     <p class="dim tiny" data-no-rounds>{{ _("No rounds yet — add the first one below.") }}</p>
     {% endfor %}

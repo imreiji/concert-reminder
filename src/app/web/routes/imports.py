@@ -53,7 +53,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.draft import ParsedConcert
 from app.domain.ingest import IngestError, parse_ramen_event
-from app.domain.types import ConcertKind, RoundKind
+from app.domain.types import ITEM_SALE_KINDS, ConcertKind, RoundKind
 from app.domain.yaml_import import DraftError, parse_draft, parse_drafts
 from app.fetching import FetchFailed, HostNotAllowed, check_host, fetch_html
 from app.web.auth import SessionUser, require_editor
@@ -324,6 +324,12 @@ async def import_preview(
             # No name->tag resolution on the URL path, so nothing unmatched to
             # offer a create chip for -- the draft path below is the producer.
             "unmatched_tags": [],
+            # The ramen.events parse never produces a requires-link -- see
+            # ParsedRound.requires_label, parser-filled only by yaml_import --
+            # so there is nothing to offer in the requires <select>. Passed
+            # explicitly (never left to Jinja Undefined) so the template never
+            # sees an undefined name.
+            "requires_options": [],
             # One chip target per parsed day, keyed by day_key -- the round
             # cards render their leg chips from this via _round_leg_chips.html.
             "legs": _preview_legs(parsed),
@@ -389,6 +395,25 @@ async def _draft_preview_response(
         r.leg_keys = " ".join(keys)
         r.leg_keys_selected = set(keys)
 
+    # requires -> the preview's round_key scheme ("r0", "r1", ...), the same
+    # label-claiming rule as legs: first round with a duplicate label keeps it.
+    round_label_to_key: dict[str, str] = {}
+    for i, r in enumerate(parsed.rounds):
+        r.round_key = f"r{i}"
+        round_label_to_key.setdefault(r.label.strip(), f"r{i}")
+    for r in parsed.rounds:
+        if not r.requires_label:
+            continue
+        key = round_label_to_key.get(r.requires_label.strip())
+        if key is None or key == r.round_key:
+            parsed.warnings.append(
+                f"round {r.label!r}: no other round labelled "
+                f"{r.requires_label!r} -- that item link was dropped, "
+                "pick it by hand"
+            )
+        else:
+            r.requires_key = key
+
     return templates.TemplateResponse(
         request,
         "import_preview.html",
@@ -416,6 +441,14 @@ async def _draft_preview_response(
             "matched_venue_tag_id": None,
             "legs": _preview_legs(parsed),
             "unmatched_tags": unmatched_tags,
+            # Options for the "Requires item from" <select> (Task 6/7): every
+            # item/goods-sale round IN THIS DRAFT, keyed by the preview's own
+            # round_key scheme -- there is no saved round yet to key by id.
+            "requires_options": [
+                (r.round_key, r.label)
+                for r in parsed.rounds
+                if r.kind in ITEM_SALE_KINDS
+            ],
             # None for a fresh paste (import_draft never sets it): the commit
             # form then carries no pending_id field at all, and import_commit
             # falls through to its unset-pending_id behaviour exactly as

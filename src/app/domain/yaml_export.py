@@ -53,6 +53,10 @@ class YamlRound:
     payment_deadline_at_utc: datetime | None = None
     url: str | None = None
     notes: str | None = None
+    # Another round in the SAME export, by its ja label -- the requires-item
+    # link riding the draft vocabulary exactly the way applies_to_labels
+    # already names a leg by label rather than an id a restore can't reuse.
+    requires_label: str | None = None
 
 
 def slugify(title: str) -> str:
@@ -171,6 +175,7 @@ def concert_to_yaml(
                 "payment_deadline_jst": _jst_str(r.payment_deadline_at_utc),
                 "url": r.url,
                 "notes": r.notes,
+                "requires": r.requires_label,
             }
             for r in rounds
         ],
