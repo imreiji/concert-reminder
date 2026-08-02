@@ -635,49 +635,46 @@ design source of truth does not carry the shape that won. Same resolution as the
 `.signin-note` and the error pages: fold it into that entry's single polish
 pass, not its own task. Its rank is unchanged.
 
+The 2026-08-01 pass ships the entry it filed the same morning: the im@s
+catalogue reformat, which is an OPERATION and not a commit -- an agent
+researched the roster, the app's own serializer authored the file, and the
+owner applied it through the tag-import conflict UI. Thirteen 学園アイドルマスター
+characters exist now, each with a `voiced_by` link to the seiyuu who was
+previously the group's member, and the group's membership was swapped by
+ticking thirteen removals by hand.
+
+**It closed the entry WHOLE, which nobody expected when it was filed.** The
+entry was written as though it faced the whole im@s franchise -- 765PRO,
+Cinderella Girls, Million Live, SideM, Shiny Colors -- and a survey of the
+live catalogue found exactly ONE im@s group in it: 学園アイドルマスター. The rest
+of the franchise has never been catalogued, so there is nothing left to
+reformat, and any group added later is authored with character members from
+the start rather than migrated. What read as a medium-effort multi-group
+migration was a single group, done in one import.
+
+Two things it closes on the way past. The transitional hole the character
+build documented and deliberately left unfixed -- a derived seiyuu who is
+ALSO an artist member of an attached group gets re-ticked by the picker's
+`autoArtists()`, so unticking her character does not remove her -- is GONE
+for this group, exactly as predicted, because its members are characters
+now and she is no longer one. And six of the thirteen characters carry
+their own `eventernote_url`, so they joined the daily sweep immediately;
+the other seven are genuinely unregistered on Eventernote and contribute
+nothing until that changes.
+
+The re-rank moves nothing on merit. `triage-leads` rises to #1 by removal
+and its stated prerequisite is now satisfied -- there are character tags
+for a lead to resolve to -- so the caveat inside it changes from "blocked"
+to its own honest one: it is worth writing after a few real sweeps, since
+its value lives in the specifics of what production leads actually look
+like. Entries renumbered 1-11, and the character-bucket pointer inside the
+`triage-leads` entry was corrected in place (#4 -> #3).
+
+
 ## Proposed (highest impact first)
 
 
-### 1. The im@s catalogue reformat
-
-Impact: high - effort: medium, and it is an OPERATION rather than code. Raised:
-2026-08-01 (the character-tags build, whose spec named it as phase 3 and
-deliberately did not build it).
-
-Character tags, the seiyuu link and subunits all shipped, and the live catalogue
-contains none of them. Every im@s group still lists SEIYUU as its members, so
-attaching it materialises performers and stops -- the chained expansion has no
-character to chain through, the split pill has nothing to pair, and a
-character-credited show still cannot be catalogued as one. The feature is
-correct, tested and inert.
-
-The work is a `tags.yaml` authored by an agent and reviewed by a human through
-the existing tag-import conflict UI, never by hand-editing rows. It needs no
-kind mutation, which is why it is safe: seiyuu stay ARTIST tags, characters are
-NEW tags (`kind: character`, a `voiced_by` handle, a franchise `parent`), and a
-group's `members` list swaps seiyuu handles for character handles.
-
-**The member swap is the operation to watch.** Additions apply automatically;
-REMOVALS are the only destructive act the importer performs and happen solely
-when explicitly ticked, so the reformat is confirmed per group by a human
-looking at both lists. That is the right amount of friction for something that
-rewrites the taxonomy of every im@s group at once.
-
-Two consequences to plan for rather than discover:
-
-- **Already-catalogued concerts are NOT rewritten** (invariant 3: membership
-  edits never reach existing concerts). Old shows keep the seiyuu chips they
-  were built with; the swap changes what FUTURE attachments expand to. That is
-  deliberate, and it means the payoff is prospective.
-- **One transitional hole closes with it.** While a group still lists seiyuu, a
-  derived seiyuu who is ALSO an artist member of an attached group gets
-  re-ticked by the picker's `autoArtists()`, so unticking her character no
-  longer removes her. Found by the build's own review and left unfixed on that
-  reasoning: once a group's members are characters she stops being a member and
-  the hole closes for the intended end state. If the reformat is deferred
-  indefinitely, this becomes a real defect worth fixing on its own.
-
-### 2. The scrape-to-agent workflow: a `triage-leads` skill
+### 1. The scrape-to-agent workflow: a `triage-leads` skill
 
 Impact: high - effort: small-to-medium. Raised: 2026-07-31 (owner, immediately
 after the manual sweep button merged: "then we can start building the actual
@@ -727,7 +724,7 @@ and the skill has to know the difference:
   Whichever way the lead's page names the performer, the skill must resolve it
   to the character before writing the draft.
 - **There is nowhere in a draft to say so yet.** The concert draft vocabulary
-  has franchises/groups/artists and no character bucket (see #4), so until that
+  has franchises/groups/artists and no character bucket (see #3), so until that
   ships the skill's honest instruction is "tick her in the import preview" --
   the picker renders a character row and `import_commit` accepts it.
 - **The reformat (#1) is a prerequisite in practice**, not merely a nicety: with
@@ -739,7 +736,7 @@ and the skill has to know the difference:
   Eventernote event id, a show listed on both her page and her seiyuu's yields
   ONE lead, not two.
 
-### 3. Minute-level reminder offsets
+### 2. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -790,7 +787,7 @@ scheduler tick and an admin page, and touches neither `PresetItem` nor the
 sentence builders. Worth saying plainly, since this entry has now been displaced
 five passes running without once being judged less valuable.
 
-### 4. A character bucket in the concert draft vocabulary
+### 3. A character bucket in the concert draft vocabulary
 
 Impact: low-medium - effort: small. Raised: 2026-08-01 (character-tags build,
 Task 10 review; deferred as a minor at the time and recorded here rather than
@@ -817,7 +814,7 @@ Ranked here, below minute-level offsets, because it is editor-facing rather than
 user-facing -- but above the code-health entries, because it is a correctness
 trap and not tidiness.
 
-### 5. Franchise-aware round-label suggestions
+### 4. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -838,7 +835,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 6. Nine of ten `RoundKind` members are purely cosmetic
+### 5. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -861,7 +858,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 7. PWA / installability
+### 6. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -881,7 +878,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 8. In-app LLM extraction behind the same draft seam
+### 7. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -910,7 +907,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 9. Minor demo-parity cosmetics
+### 8. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -949,7 +946,7 @@ this entry's single pass, not its own task. Both gaps are now also named in
 CLAUDE.md's demo inventory, so the next person meets them where they look for
 the reference rather than only here.
 
-### 10. Discover sort in the content head, plus the catalogue-count note
+### 9. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -975,7 +972,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 11. Name the destination on the sign-in bounce
+### 10. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -997,7 +994,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 12. Nothing caps the discovery review path
+### 11. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1041,6 +1038,46 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### The im@s catalogue reformat (2026-08-01)
+
+An operation, not a build: no code changed. The character-tags feature
+shipped inert -- every rule in it was a rule about nothing, because the live
+catalogue held no CHARACTER tags -- and this is what switched it on.
+
+`scratchpad/build_gakumas_tags.py` authored the file through the app's own
+`domain/tags_yaml.tags_to_yaml`, so the output was by construction what
+`/admin/import/tags` expects and the omit-empty rule was applied by the code
+that owns it. Thirteen new tags (`kind: character`, `parent: idolm-ster`, a
+`voiced_by` handle each, trilingual names) plus one group row listing ONLY the
+characters -- which is what made the thirteen seiyuu render as REMOVALS, the
+importer's one destructive act, applied solely when a human ticks them.
+
+**The surprise was the scope.** The entry assumed the whole franchise; the
+catalogue held one im@s group. Surveyed before authoring: `idolm-ster`
+(franchise) and `gakuen-idolm-ster` (group) and nothing else. So the reformat
+is complete rather than phase one, and future im@s groups get character
+members at creation instead of a migration.
+
+Research provenance, since a wrong pairing would bind a character to a
+stranger's event page: 13/13 seiyuu->character pairings confirmed against three
+independent sources that agreed on every row (ja.wikipedia, game8, zh.wikipedia),
+and 6/13 Eventernote actor ids verified by opening each actor's events page --
+not by trusting a search hit. The other seven were confirmed ABSENT rather than
+merely unfound: full-name search, surname substring search (Eventernote's search
+is a substring match, so a stored `有村 麻央` would otherwise hide), and a direct
+id-range probe of the block around the ids that did resolve. One near-miss is
+worth remembering: 姫崎莉杏 is a real unrelated performer one character away from
+姫崎莉波, and a fuzzy or first-result match would have bound them.
+
+Three Chinese renderings were single-sourced and went to the owner rather than
+being guessed: 藤田ことね (琴音 chosen over 言音, the reading-based form) and
+葛城リーリヤ (莉莉娅 chosen over 莉莉亚). 篠澤広 took the fully-simplified 筱泽广.
+
+What it does NOT do, by invariant 3: already-catalogued concerts keep the seiyuu
+chips they were built with. Membership edits never reach existing concerts, so
+the payoff is entirely prospective -- it changes what future attachments expand
+to.
 
 ### Character tags, their seiyuu, and subunits (2026-08-01)
 
