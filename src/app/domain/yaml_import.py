@@ -348,54 +348,108 @@ class DraftBatch:
     errors: tuple[str, ...] = field(default_factory=tuple)
 
 
-def split_documents(text: str) -> list[str]:
-    """Split a `---`-separated paste into per-document source text.
+def _drop_leading_marker_line(chunk: str) -> str:
+    """Strip a chunk's leading `---` line, when it has one, so `.text` never
+    carries the separator that got it there -- a document is stored exactly
+    as if it had been pasted alone, and a lone `---` was never part of that
+    paste. Only strips a line that is EXACTLY `---` once trimmed, never a
+    line merely starting with it (`--- {a: 1}` is valid YAML with content on
+    the same line as the marker, and is left untouched rather than losing
+    that content)."""
+    first_line, sep, rest = chunk.partition("\n")
+    return rest if sep and first_line.strip() == "---" else chunk
 
-    Deliberately NOT `text.split("---")`: a `---` inside a quoted scalar or
-    a block scalar (`notes: |` / `notes: >`) is ordinary content, not a
-    document boundary, and Japanese concert notes pasted as free text are
-    exactly the kind of thing that contains one -- a naive split would cut
-    that document in half.
 
-    Instead this uses `yaml.scan` (PyYAML's lexer) to find real
-    `DocumentStartToken`s and slices the ORIGINAL text between them, so each
-    returned string is the exact source for one document -- including
-    whichever leading `---` line it had, which `yaml.safe_load` accepts
-    without complaint. Scanning, not `compose_all`/`safe_load_all`: both of
-    those walk the WHOLE stream in one pass and raise on the first bad
-    document, which would silently discard every document after it -- the
-    opposite of what this function exists for. Scanning is lexical (it
-    tracks indentation, quoting and flow context to find token boundaries,
-    but never validates that the tokens form a well-formed document), so it
-    keeps finding every later boundary even when an earlier document is
-    broken enough that `parse_draft` will go on to reject it -- verified
-    against PyYAML directly: an unclosed `[` mid-document does not stop the
-    scanner from finding the `---` after it, only the later parse.
-    Malformed enough to break even the SCANNER (not just the parser) is the
-    one case this can't isolate; that failure is rare enough (scanning
-    tolerated an unclosed flow sequence in testing) that the whole text is
-    handed to `parse_draft` as one document, which reports the real error
-    instead of this function raising one of its own.
+def _split_on_scan_boundaries(text: str) -> list[str]:
+    """The primary strategy: find real `DocumentStartToken`s via `yaml.scan`
+    (PyYAML's lexer) and slice the ORIGINAL text between them. Correct for
+    the case this module exists to handle -- a `---` inside a quoted scalar
+    or a block scalar (`notes: |` / `notes: >`) is ordinary content, not a
+    boundary, and scanning already knows that (verified directly against
+    PyYAML: an unclosed `[` mid-document does not stop the scanner from
+    finding the `---` after it, only the later parse -- so one broken
+    document's PARSE failure never costs this pass).
 
-    Empty documents -- a trailing separator, a stray blank `---\n---\n` --
-    are dropped: they're formatting, not a document with nothing in it.
+    Raises `yaml.YAMLError` when the text breaks the SCANNER itself (not
+    just the parser) -- e.g. a tab used for indentation, an unterminated
+    quoted string, a bad backslash escape. The caller falls back to
+    `_split_on_dash_lines` in that case; this function does not degrade on
+    its own so the two strategies stay separately testable.
     """
-    try:
-        tokens = yaml.scan(text, Loader=yaml.SafeLoader)
-        starts = [0] + [
-            tok.start_mark.index for tok in tokens if isinstance(tok, yaml.DocumentStartToken)
-        ]
-    except yaml.YAMLError:
-        # The rare document broken enough to defeat the scanner itself, not
-        # just the parser -- see the docstring. One un-splittable chunk,
-        # handed whole to parse_draft, beats raising here and losing the
-        # entire paste.
-        starts = [0]
-    starts = sorted(set(starts))
+    tokens = yaml.scan(text, Loader=yaml.SafeLoader)
+    starts = sorted({0, *(
+        tok.start_mark.index for tok in tokens if isinstance(tok, yaml.DocumentStartToken)
+    )})
     boundaries = starts + [len(text)]
     # boundaries[1:] is deliberately one element shorter -- this pairs each
     # start with the next (a sliding window), not two equal-length sequences.
-    chunks = [text[a:b] for a, b in zip(boundaries, boundaries[1:], strict=False)]
+    return [text[a:b] for a, b in zip(boundaries, boundaries[1:], strict=False)]
+
+
+def _split_on_dash_lines(text: str) -> list[str]:
+    """The fallback strategy, used only when `yaml.scan` itself raises (see
+    `_split_on_scan_boundaries`). Cuts on any line that is exactly `---`
+    once stripped -- the naive approach this module otherwise avoids. This
+    is deliberately confined to the degraded path: it is used for the WHOLE
+    paste once any one document defeats the scanner (scanning runs once
+    over the whole raw text, before per-document isolation exists, so a
+    single bad character makes that one `yaml.scan` call fail for
+    everything -- there is no way to ask it for "boundaries up to the first
+    failure"). The risk this reintroduces -- a `---` inside another
+    document's block scalar being mistaken for a boundary -- is real but
+    narrow: it only bites a paste that ALSO contains a scanner-breaking
+    document, and even then each resulting fragment still goes through
+    `parse_draft` independently, so the worst case is one oddly-split
+    fragment reported as its own (probably failing) document rather than
+    the whole batch being lost.
+    """
+    lines = text.splitlines(keepends=True)
+    chunks: list[str] = []
+    current: list[str] = []
+    for line in lines:
+        if line.strip() == "---":
+            chunks.append("".join(current))
+            current = []
+        else:
+            current.append(line)
+    chunks.append("".join(current))
+    return chunks
+
+
+def split_documents(text: str) -> list[str]:
+    """Split a `---`-separated paste into per-document source text.
+
+    Tries `_split_on_scan_boundaries` first (real YAML document boundaries,
+    safe against a `---` inside a quoted scalar or block scalar -- see its
+    docstring). Falls back to `_split_on_dash_lines` -- a plain "line that is
+    exactly `---`" split -- only when the scan itself raises, which happens
+    for a document broken badly enough to defeat PyYAML's LEXER rather than
+    just its parser: a tab used for indentation, an unterminated quoted
+    string, and a bad backslash escape all do this, and all three are
+    realistic mistakes in a browser copy-paste. This is NOT rare: any one
+    such document anywhere in the paste forces every document in that same
+    paste through the fallback for this call, because `yaml.scan` walks the
+    whole raw text in one pass and cannot be asked to resume past a failure.
+    The fallback's own narrower risk is documented on `_split_on_dash_lines`.
+
+    Without the fallback, that single bad character would make THIS
+    function raise (or, as it used to, silently degrade to treating the
+    entire paste as one document) -- either way losing every other draft in
+    the paste, which is exactly the property this whole module exists to
+    prevent. Each individual document, once isolated by either strategy,
+    still goes through `parse_draft` on its own, so the bad one becomes one
+    named error and nothing else is lost.
+
+    Every chunk has its own leading `---` marker line dropped (see
+    `_drop_leading_marker_line`), and empty documents -- a trailing
+    separator, a stray blank `---\n---\n` -- are dropped entirely: both are
+    formatting, not a document with nothing in it.
+    """
+    try:
+        chunks = _split_on_scan_boundaries(text)
+    except yaml.YAMLError:
+        chunks = _split_on_dash_lines(text)
+    chunks = [_drop_leading_marker_line(chunk) for chunk in chunks]
     return [chunk for chunk in chunks if chunk.strip() and chunk.strip() != "---"]
 
 

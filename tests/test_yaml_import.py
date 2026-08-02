@@ -4,6 +4,7 @@ Pure-domain tests -- no DB, no routes (route coverage is
 tests/test_draft_import.py). Mirrors test_ingest.py's style.
 """
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -377,11 +378,17 @@ def test_three_documents_parse_into_three_drafts():
 
 def test_one_bad_document_does_not_lose_the_others():
     """The whole point at fifty concerts: a typo in draft 2 must not cost
-    drafts 1 and 3."""
+    drafts 1 and 3.
+
+    Asserts the literal `"document 2:"` prefix, not a bare `"2" in
+    message` -- PyYAML's own error text for `title: [unclosed` happens to
+    contain "line 2, column 8", which would make a bare substring check
+    pass even under an off-by-one (0-based) numbering bug. The prefix is
+    this module's own text, so only correct 1-based numbering satisfies it."""
     batch = parse_drafts(ONE + "\n---\n" + "title: [unclosed\n" + "\n---\n" + THREE)
     assert len(batch.drafts) == 2
     assert len(batch.errors) == 1
-    assert "2" in batch.errors[0], "the error must say WHICH document failed"
+    assert batch.errors[0].startswith("document 2:"), "the error must say WHICH document failed"
 
 
 def test_a_single_document_still_works():
@@ -392,10 +399,15 @@ def test_a_single_document_still_works():
 
 def test_each_draft_keeps_its_own_text_verbatim():
     """The row stores the document, not the parse, so a later preview re-parses
-    it exactly as if it had been pasted alone."""
+    it exactly as if it had been pasted alone. Checked on BOTH documents, not
+    just the first -- only the first document is ever separator-free for
+    free (nothing precedes it), so a check that stopped at drafts[0] would
+    not catch a later draft keeping its own leading `---` marker."""
     batch = parse_drafts(ONE + "\n---\n" + TWO)
     assert batch.drafts[0].text.strip().startswith(ONE.strip()[:20])
     assert "---" not in batch.drafts[0].text
+    assert batch.drafts[1].text.strip().startswith(TWO.strip()[:20])
+    assert "---" not in batch.drafts[1].text
 
 
 def test_empty_documents_are_skipped_not_errors():
@@ -414,11 +426,26 @@ def test_a_wholly_empty_paste_is_an_error_not_an_empty_batch():
         assert batch.errors, "an empty paste must say so, not report success"
 
 
-def test_safe_load_all_only():
-    """A YAML tag that would construct a Python object must not."""
+def test_safe_load_all_only(monkeypatch):
+    """A YAML tag that would construct a Python object must not -- proven by
+    the payload's own side effect never firing, not merely by checking that
+    an error was reported (which `parse_draft` already guaranteed on its
+    own via `yaml.safe_load`, before this module existed). What THIS module
+    is responsible for is not routing a document through anything other
+    than `parse_draft` on the way there -- `split_documents` only ever
+    calls `yaml.scan`, which composes no object regardless of the loader it
+    is handed (scanning never invokes a constructor), so there is nothing
+    else in this file to pin beyond "the document still reaches
+    parse_draft". Monkeypatching `os.system` turns this into a real
+    regression guard: if `parse_draft` ever switched to `yaml.load`/
+    `full_load`/an unsafe loader, this tag would call `os.system('echo
+    hi')` during construction and `calls` would be non-empty."""
+    calls: list[str] = []
+    monkeypatch.setattr(os, "system", lambda cmd: calls.append(cmd))
     batch = parse_drafts("!!python/object/apply:os.system ['echo hi']\n")
     assert batch.drafts == ()
     assert batch.errors
+    assert calls == []
 
 
 def test_triple_dash_inside_a_block_scalar_does_not_split_the_document():
@@ -443,3 +470,41 @@ def test_triple_dash_inside_a_block_scalar_does_not_split_the_document():
     assert batch.errors == ()
     assert batch.drafts[0].parsed.notes == "line one\n---\nline two"
     assert batch.drafts[1].parsed.title == "Two"
+
+
+# -- Scanner-level breakage (a single character must not defeat the whole
+# -- paste): yaml.scan() runs once over the WHOLE raw text before any
+# -- per-document isolation happens, so a construct that breaks PyYAML's
+# -- *lexer* -- not just its parser -- makes that one scan() call raise for
+# -- everything, not just the offending document. split_documents must fall
+# -- back to a line-based split in that case (see its docstring), so the
+# -- other documents still come back as drafts and only the broken one
+# -- becomes a single named error. Three realistic triggers, each plausible
+# -- from a browser copy-paste on Windows: a tab-indented line, an
+# -- unterminated quoted string, and a bad backslash escape. All three were
+# -- confirmed (before the fix) to collapse a 3-document batch into
+# -- `drafts=()` and one generic, undated error.
+
+
+def test_tab_indentation_in_one_document_does_not_lose_the_others():
+    bad = "title: Bad\n\tnotes: tabbed\n"
+    batch = parse_drafts(ONE + "\n---\n" + bad + "\n---\n" + THREE)
+    assert [d.parsed.title for d in batch.drafts] == ["One", "Three"]
+    assert len(batch.errors) == 1
+    assert batch.errors[0].startswith("document 2:")
+
+
+def test_unterminated_quote_in_one_document_does_not_lose_the_others():
+    bad = 'title: "unterminated\n'
+    batch = parse_drafts(ONE + "\n---\n" + bad + "\n---\n" + THREE)
+    assert [d.parsed.title for d in batch.drafts] == ["One", "Three"]
+    assert len(batch.errors) == 1
+    assert batch.errors[0].startswith("document 2:")
+
+
+def test_bad_backslash_escape_in_one_document_does_not_lose_the_others():
+    bad = 'title: "bad \\q escape"\n'
+    batch = parse_drafts(ONE + "\n---\n" + bad + "\n---\n" + THREE)
+    assert [d.parsed.title for d in batch.drafts] == ["One", "Three"]
+    assert len(batch.errors) == 1
+    assert batch.errors[0].startswith("document 2:")
