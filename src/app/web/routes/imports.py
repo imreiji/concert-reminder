@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import PendingDraft
+from app.db.models import PendingDraft, Round
 from app.db.service import (
     create_pending_drafts,
     discard_pending_draft,
@@ -59,6 +59,7 @@ from app.fetching import FetchFailed, HostNotAllowed, check_host, fetch_html
 from app.web.auth import SessionUser, require_editor
 from app.web.forms import form_url, require_variants
 from app.web.routes.concerts import (
+    RoundRequiresError,
     all_venue_tags,
     build_day,
     build_round,
@@ -66,6 +67,7 @@ from app.web.routes.concerts import (
     generate_event_id,
     parse_round_legs,
     resolve_day_venue_tags,
+    resolve_round_requires,
     validate_event_id,
 )
 
@@ -720,6 +722,8 @@ async def import_commit(
     round_url: list[str] = Form(default=[]),
     round_notes: list[str] = Form(default=[]),
     round_legs: list[str] = Form(default=[]),
+    round_key: list[str] = Form(default=[]),
+    round_requires: list[str] = Form(default=[]),
     # Set only when this commit is triaging a PendingDraft row (the preview
     # renders it as a hidden field -- see _draft_preview_response). Absent for
     # every other caller: the URL-scrape path, a single fresh /draft paste,
@@ -899,24 +903,60 @@ async def import_commit(
     # contract posts only round_label plus its times.
     round_label_zh = round_label_zh + [""] * (len(round_label) - len(round_label_zh))
     round_notes = round_notes + [""] * (len(round_label) - len(round_notes))
+    # round_key/round_requires are newer still, and NOT end-padded like the
+    # display-text arrays just above: they follow round_legs' rule instead
+    # (padded only on whole-array omission -- an older client with no
+    # required-item picker -- while a partial array is left alone so the
+    # strict zip below raises rather than sliding a token onto the wrong row).
+    if not round_key:
+        round_key = [""] * len(round_label)
+    if not round_requires:
+        round_requires = [""] * len(round_label)
+    # (round object, its submitted kind, its client key, its raw requires
+    # token) for every created round -- resolved into required_item_round_id
+    # AFTER the flush below hands the new rounds their ids, same post-flush
+    # ordering create_concert uses. Every round here is new (import_commit
+    # never edits an existing concert), so unlike create_concert's edit-aware
+    # sibling this needs no id-token branch -- every round_requires value is
+    # necessarily a round_key.
+    round_jobs: list[tuple[Round, RoundKind, str, str]] = []
     for row_no, (
         label, label_en, label_zh, kind, opens_at, closes_at, results_at, payment_at,
-        r_url, notes_, legs
+        r_url, notes_, legs, key, req
     ) in enumerate(zip(
         round_label, round_label_en, round_label_zh, round_kind, round_opens_at,
         round_closes_at, round_results_at, round_payment_at, round_url, round_notes,
-        round_legs, strict=True,
+        round_legs, round_key, round_requires, strict=True,
     ), start=1):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue  # a blank trailing row from the repeatable UI
         require_variants(f"Round {row_no} label", label, label_en, label_zh)
-        session.add(build_round(
+        round_ = build_round(
             concert.id, label, kind, opens_at, closes_at, results_at, payment_at, r_url,
             applies_to=parse_round_legs(legs, valid_day_ids, key_to_day_id),
             label_en=label_en, notes=notes_, label_zh=label_zh,
-        ))
+        )
+        session.add(round_)
         await record_round_label_phrase(session, label, label_en, label_zh)
+        round_jobs.append((round_, kind, key, req))
+
+    await session.flush()  # new rounds now have ids, needed to resolve requires
+    key_to_round_id: dict[str, int] = {}
+    for round_, _k, key, _r in round_jobs:
+        if key.strip():
+            key_to_round_id.setdefault(key.strip(), round_.id)
+    kinds_by_id = {round_.id: kind for round_, kind, _k, _r in round_jobs}
+    for round_, _kind, _key, req in round_jobs:
+        try:
+            round_.required_item_round_id = resolve_round_requires(
+                req, key_to_round_id, kinds_by_id, round_.id
+            )
+        except RoundRequiresError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Round {round_.label!r}: required-item link {exc}",
+            ) from exc
 
     await session.flush()
     # The concert-level tag attach's notify-and-apply pipeline, run HERE and not

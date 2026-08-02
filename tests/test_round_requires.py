@@ -394,6 +394,73 @@ async def test_edit_drops_preserved_link_when_target_deleted(client):
     assert by_label["Lottery"].required_item_round_id is None
 
 
+async def test_import_commit_binds_requires_by_round_key(client):
+    # Same two-round shape as test_create_concert_binds_requires_by_round_key,
+    # but through /concerts/import/commit -- all rounds are new here too, so
+    # round_key/round_requires wiring is identical, just via the import route.
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "Import Requires Test", "title_en": "Import Requires Test",
+            "title_zh": "Import Requires Test", "event_id": "import-requires-test",
+            "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
+            "day_starts_at": ["2099-06-01T18:00"],
+            "round_label": ["Goods sale", "Lottery"],
+            "round_label_en": ["Goods sale", "Lottery"],
+            "round_label_zh": ["Goods sale", "Lottery"],
+            "round_kind": ["goods_sale", "lottery_round"],
+            "round_opens_at": ["2099-06-01T00:00", "2099-06-01T00:00"],
+            "round_closes_at": ["2099-06-15T23:59", "2099-06-15T23:59"],
+            "round_results_at": ["", ""],
+            "round_payment_at": ["", ""],
+            "round_url": ["", ""],
+            "round_notes": ["", ""],
+            "round_key": ["g1", "x2"],
+            "round_requires": ["", "g1"],
+        },
+    )
+    assert r.status_code == 303, r.text
+
+    async with client.db() as s:
+        concert = (await s.execute(
+            select(Concert).where(Concert.event_id == "import-requires-test")
+        )).scalar_one()
+        rounds = (await s.execute(
+            select(Round).where(Round.concert_id == concert.id)
+        )).scalars().all()
+    goods = next(r for r in rounds if r.label == "Goods sale")
+    lottery = next(r for r in rounds if r.label == "Lottery")
+    assert lottery.required_item_round_id == goods.id
+
+
+def test_import_commit_422_on_wrong_kind_target(client):
+    # round_requires names the OTHER lottery round -> 422, nothing persisted.
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(
+        "/concerts/import/commit",
+        data={
+            "title": "Import Bad Requires", "title_en": "Import Bad Requires",
+            "title_zh": "Import Bad Requires", "event_id": "import-bad-requires",
+            "day_label": ["Day 1"], "day_label_en": ["Day 1"], "day_label_zh": ["Day 1"],
+            "day_starts_at": ["2099-06-01T18:00"],
+            "round_label": ["L1", "L2"],
+            "round_label_en": ["L1", "L2"],
+            "round_label_zh": ["L1", "L2"],
+            "round_kind": ["lottery_round", "lottery_round"],
+            "round_opens_at": ["2099-06-01T00:00", "2099-06-01T00:00"],
+            "round_closes_at": ["2099-06-15T23:59", "2099-06-15T23:59"],
+            "round_results_at": ["", ""],
+            "round_payment_at": ["", ""],
+            "round_url": ["", ""],
+            "round_notes": ["", ""],
+            "round_key": ["k1", "k2"],
+            "round_requires": ["", "k1"],  # L2 requires L1, a LOTTERY_ROUND
+        },
+    )
+    assert r.status_code == 422, r.text
+
+
 async def test_edit_422_when_posted_target_rekinded(client):
     # Explicitly post round_requires pointing at the goods round, but this
     # same submit re-kinds it from goods_sale to lottery_round -> 422.
