@@ -721,9 +721,14 @@ leave the filled preview on screen. That removes a copy-paste and a tab hunt.
 
 Ranked #1 on merit rather than by removal: it is what makes a feature that
 shipped today actually pay off, and without it every lead costs the same manual
-research it always did. Note the honest caveat -- its value is in the specifics
-of what real leads look like, so it is worth writing AFTER a few production
-sweeps rather than before, and the first version should expect revision.
+research it always did.
+
+**The caveat this entry carried -- write it AFTER a few production sweeps, since
+its value lives in the specifics -- is DISCHARGED as of 2026-08-01.** The first
+full sweep produced 443 open leads and they were read end to end;
+`docs/discovery-lead-taxonomy-2026-08-01.md` is the result and is now this
+entry's real input. What follows replaces the design sketch above, because the
+data contradicted its central assumption.
 
 **Changed 2026-08-01 by the character-tags build, and displaced to #2 by the
 reformat above.** An im@s lead is no longer the same shape as a Love Live one,
@@ -748,6 +753,52 @@ and the skill has to know the difference:
   produces leads like any artist's -- and because leads are keyed on the
   Eventernote event id, a show listed on both her page and her seiyuu's yields
   ONE lead, not two.
+
+**Rewritten 2026-08-01 by the first real sweep (443 leads).** The entry above
+describes ONE research pass -- find the ticket page, extract the rounds, group
+the legs. That cannot be the whole skill, and the reasons are not stylistic:
+
+- **Volume.** 443 leads at two minutes each is over thirteen hours. Research has
+  to run on what SURVIVES filtering, never on the queue.
+- **There is no reject path anywhere in this entry.** Roughly half the queue
+  should never become a concert: a 発売記念お渡し会 has no lottery and no
+  deadline, and a 餅まき at a department store has no ticket at all. The app
+  already knows this -- `DiscoveredEvent`'s docstring says a lead reports
+  existence and nothing more, and `dismissed_at` is the outcome -- but the skill
+  as sketched has no vocabulary for reaching it.
+
+So the shape is at least THREE passes, cheapest first: collapse by title stem
+(mechanical, no network, the single largest reduction available -- 443 leads is
+roughly 120-150 distinct productions, because a nine-performance run is nine
+leads); classify and dismiss (title-driven, still no network); then research the
+remainder. Only the third pass needs a ticket page.
+
+One trap the collapse must not fall into: two DIFFERENT mechanisms produce
+repeated titles. 学園アイドルマスター LIVE TOUR is one concert with eight legs,
+while 『Liella!と結ぶプロジェクト』お渡し会 is eleven events because each member
+got her own slot at one venue on one day. Grouping purely on title stem gets the
+first right and the second wrong.
+
+Two things the taxonomy surfaced that are NOT this skill's work, recorded here
+so they are not rediscovered inside it:
+
+- **A/B casts have nowhere to live** (ミュージカル信長 runs 公演(A) and 公演(B)
+  the same day at the same venue with different casts). Per-leg outcome truth is
+  per performance, and here the performance's identity is the CAST, not the
+  time, so a user who won an (A) ticket cannot say which one they hold. A real
+  model gap needing its own design pass -- do not let the skill paper over it
+  with label conventions.
+- **A dismissal records no reason.** `DiscoveredEvent` carries `dismissed_at`
+  and nothing beside it, so triaging 250 leads as "release event" evaporates the
+  judgment the moment it is made. A reason column turns triage into training
+  data and makes the classifier measurable against recorded human decisions
+  rather than left as a guess.
+
+And one decision worth taking BEFORE the skill rather than during it: a per-tag
+"concerts only" preference would cut this queue by about a third on its own, by
+suppressing the 朗読劇/ミュージカル class for artists whose stage work is not
+followed. Writing a skill that assumes every lead gets human triage presumes the
+answer.
 
 ### 2. Minute-level reminder offsets
 
