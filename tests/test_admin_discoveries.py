@@ -722,6 +722,40 @@ async def test_a_venue_offers_no_button(client):
     assert f"/admin/discoveries/sweep/{tag_id}" not in _tags_dialog(client, tag_id)
 
 
+# ── Dismissal reasons ────────────────────────────────────────────────────
+
+
+async def test_dismiss_reason_defaults_to_null_and_takes_a_taxonomy_value(db):
+    """NULL is a real state: a lead dismissed before reasons existed. It is
+    never backfilled, exactly as subscriptions and leg opt-outs are not."""
+    from app.domain.types import DismissReason
+
+    async with db() as s:
+        s.add(DiscoveredEvent(
+            eventernote_event_id="1", title="t", event_date=dt.date(2026, 9, 1),
+        ))
+        await s.commit()
+        row = (await s.execute(select(DiscoveredEvent))).scalar_one()
+        assert row.dismiss_reason is None
+
+        row.dismiss_reason = DismissReason.RELEASE
+        await s.commit()
+        assert (await s.execute(select(DiscoveredEvent))).scalar_one().dismiss_reason == "release"
+
+
+def test_dismiss_reason_covers_every_taxonomy_class():
+    """Eight values, one per class in docs/discovery-lead-taxonomy-2026-08-01.md
+    plus `other`. LIVE is present deliberately: a real concert you do not want to
+    track is a dismissal, and without a value for it every such lead lands in
+    `other` and destroys the agreement rate this column exists to measure."""
+    from app.domain.types import DismissReason
+
+    assert {r.value for r in DismissReason} == {
+        "live", "stage", "release", "talk",
+        "festival", "fanmeet", "free", "other",
+    }
+
+
 async def test_the_button_never_nests_inside_the_edit_form(client):
     """A <form> inside a <form> is invalid HTML and silently breaks the outer
     one's submission -- so this button is a sibling, like Delete. Asserted by

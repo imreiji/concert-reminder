@@ -833,6 +833,13 @@ class DiscoveredEvent(Base):
     # A lead is OPEN when all three of these are NULL.
     announced_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     dismissed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # WHY it was dismissed -- a DismissReason value. Nullable, and NULL is a
+    # real state rather than missing data: it means "dismissed before reasons
+    # existed". Never backfilled, for the reason ConcertSubscription and
+    # LegOptOut are not -- these rows hold explicit human judgments only, and
+    # inventing one would put a guess into the very column that exists to
+    # measure guesses.
+    dismiss_reason: Mapped[str | None] = mapped_column(String(20))
     concert_id: Mapped[int | None] = mapped_column(
         ForeignKey("concerts.id", ondelete="SET NULL")
     )
