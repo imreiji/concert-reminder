@@ -235,3 +235,199 @@ async def test_create_concert_422_on_wrong_kind_target(client):
             select(Concert).where(Concert.event_id == "bad-requires")
         )
         assert result.scalar_one_or_none() is None
+
+
+# ── edit_concert wiring (HTTP) ────────────────────────────────────────────
+#
+# Same client/login_as/db trio as the create_concert tests above --
+# test_round_requires.py has no client_editor fixture; login_as(client, ...)
+# is how every test in this file signs in as an editor.
+
+
+def _create_goods_and_lottery(client, event_id: str) -> tuple[int, int]:
+    """Seeds one concert with a GOODS_SALE round and a LOTTERY_ROUND that
+    requires it (bound by round_key, exactly like
+    test_create_concert_binds_requires_by_round_key). Returns (goods_id,
+    lottery_id) for the edit-page tests below to re-post by round_id."""
+    r = client.post(
+        "/concerts",
+        data={
+            "title_en": "Requires Edit", "title_zh": "Requires Edit",
+            "title": "Requires Edit", "event_id": event_id,
+            "round_label": ["Goods sale", "Lottery"],
+            "round_label_en": ["Goods sale", "Lottery"],
+            "round_label_zh": ["Goods sale", "Lottery"],
+            "round_kind": ["goods_sale", "lottery_round"],
+            "round_opens_at": ["2099-06-01T00:00", "2099-06-01T00:00"],
+            "round_closes_at": ["2099-06-15T23:59", "2099-06-15T23:59"],
+            "round_results_at": ["", ""],
+            "round_payment_at": ["", ""],
+            "round_url": ["", ""],
+            "round_notes": ["", ""],
+            "round_legs": ["", ""],
+            "round_key": ["g1", "x2"],
+            "round_requires": ["", "g1"],
+        },
+    )
+    assert r.status_code == 303, r.text
+    return event_id
+
+
+async def _rounds_by_label(client, event_id: str) -> dict[str, Round]:
+    async with client.db() as s:
+        concert = (await s.execute(
+            select(Concert).where(Concert.event_id == event_id)
+        )).scalar_one()
+        rounds = (await s.execute(
+            select(Round).where(Round.concert_id == concert.id)
+        )).scalars().all()
+    return {r.label: r for r in rounds}
+
+
+async def test_edit_preserves_requires_when_field_omitted(client):
+    # Seed via create (same shape as test_create_concert_binds_requires_by_
+    # round_key). Then POST an edit whose form omits round_key/round_requires
+    # entirely (an old browser) -- both existing rounds are re-posted by id
+    # with their other fields unchanged. Assert the link survives.
+    login_as(client, EDITOR_ID, "reiji")
+    _create_goods_and_lottery(client, "requires-edit-omit")
+    by_label = await _rounds_by_label(client, "requires-edit-omit")
+    goods, lottery = by_label["Goods sale"], by_label["Lottery"]
+    assert lottery.required_item_round_id == goods.id
+
+    r = client.post(
+        "/concerts/requires-edit-omit/edit",
+        data={
+            "title": "Requires Edit", "event_id": "requires-edit-omit",
+            "round_id": [str(goods.id), str(lottery.id)],
+            "round_label": ["Goods sale", "Lottery"],
+            "round_label_en": ["Goods sale", "Lottery"],
+            "round_label_zh": ["Goods sale", "Lottery"],
+            "round_kind": ["goods_sale", "lottery_round"],
+            "round_opens_at": ["2099-06-01T00:00", "2099-06-01T00:00"],
+            "round_closes_at": ["2099-06-15T23:59", "2099-06-15T23:59"],
+            "round_results_at": ["", ""],
+            "round_payment_at": ["", ""],
+            "round_url": ["", ""],
+            "round_notes": ["", ""],
+            "round_legs": ["", ""],
+            # round_key / round_requires deliberately absent.
+        },
+    )
+    assert r.status_code == 303, r.text
+
+    by_label = await _rounds_by_label(client, "requires-edit-omit")
+    assert by_label["Lottery"].required_item_round_id == goods.id
+
+
+async def test_edit_clears_requires_on_empty_value(client):
+    # POST an edit with round_requires=["", ""] -- present, not omitted --
+    # so the lottery row's own blank token clears its link instead of being
+    # read back from the existing row.
+    login_as(client, EDITOR_ID, "reiji")
+    _create_goods_and_lottery(client, "requires-edit-clear")
+    by_label = await _rounds_by_label(client, "requires-edit-clear")
+    goods, lottery = by_label["Goods sale"], by_label["Lottery"]
+    assert lottery.required_item_round_id == goods.id
+
+    r = client.post(
+        "/concerts/requires-edit-clear/edit",
+        data={
+            "title": "Requires Edit", "event_id": "requires-edit-clear",
+            "round_id": [str(goods.id), str(lottery.id)],
+            "round_label": ["Goods sale", "Lottery"],
+            "round_label_en": ["Goods sale", "Lottery"],
+            "round_label_zh": ["Goods sale", "Lottery"],
+            "round_kind": ["goods_sale", "lottery_round"],
+            "round_opens_at": ["2099-06-01T00:00", "2099-06-01T00:00"],
+            "round_closes_at": ["2099-06-15T23:59", "2099-06-15T23:59"],
+            "round_results_at": ["", ""],
+            "round_payment_at": ["", ""],
+            "round_url": ["", ""],
+            "round_notes": ["", ""],
+            "round_legs": ["", ""],
+            "round_requires": ["", ""],
+        },
+    )
+    assert r.status_code == 303, r.text
+
+    by_label = await _rounds_by_label(client, "requires-edit-clear")
+    assert by_label["Lottery"].required_item_round_id is None
+
+
+async def test_edit_drops_preserved_link_when_target_deleted(client):
+    # Omit round_requires (preserved=True for both surviving rows) AND drop
+    # the goods round's row from the submit entirely -- the same as an
+    # editor deleting it. The preserved link resolves against surviving
+    # rounds only, fails, and drops to None -- 303, never a 422 for a value
+    # the submitter never sent.
+    login_as(client, EDITOR_ID, "reiji")
+    _create_goods_and_lottery(client, "requires-edit-deleted")
+    by_label = await _rounds_by_label(client, "requires-edit-deleted")
+    goods, lottery = by_label["Goods sale"], by_label["Lottery"]
+    assert lottery.required_item_round_id == goods.id
+
+    r = client.post(
+        "/concerts/requires-edit-deleted/edit",
+        data={
+            "title": "Requires Edit", "event_id": "requires-edit-deleted",
+            # Only the lottery round is re-posted -- goods is gone.
+            "round_id": [str(lottery.id)],
+            "round_label": ["Lottery"],
+            "round_label_en": ["Lottery"],
+            "round_label_zh": ["Lottery"],
+            "round_kind": ["lottery_round"],
+            "round_opens_at": ["2099-06-01T00:00"],
+            "round_closes_at": ["2099-06-15T23:59"],
+            "round_results_at": [""],
+            "round_payment_at": [""],
+            "round_url": [""],
+            "round_notes": [""],
+            "round_legs": [""],
+            # round_key / round_requires deliberately absent.
+        },
+    )
+    assert r.status_code == 303, r.text
+
+    by_label = await _rounds_by_label(client, "requires-edit-deleted")
+    assert "Goods sale" not in by_label  # deleted, as submitted
+    assert by_label["Lottery"].required_item_round_id is None
+
+
+async def test_edit_422_when_posted_target_rekinded(client):
+    # Explicitly post round_requires pointing at the goods round, but this
+    # same submit re-kinds it from goods_sale to lottery_round -> 422.
+    login_as(client, EDITOR_ID, "reiji")
+    _create_goods_and_lottery(client, "requires-edit-rekind")
+    by_label = await _rounds_by_label(client, "requires-edit-rekind")
+    goods, lottery = by_label["Goods sale"], by_label["Lottery"]
+    assert lottery.required_item_round_id == goods.id
+
+    r = client.post(
+        "/concerts/requires-edit-rekind/edit",
+        data={
+            "title": "Requires Edit", "event_id": "requires-edit-rekind",
+            "round_id": [str(goods.id), str(lottery.id)],
+            "round_label": ["Goods sale", "Lottery"],
+            "round_label_en": ["Goods sale", "Lottery"],
+            "round_label_zh": ["Goods sale", "Lottery"],
+            # The goods round is re-kinded away from an item-sale kind here.
+            "round_kind": ["lottery_round", "lottery_round"],
+            "round_opens_at": ["2099-06-01T00:00", "2099-06-01T00:00"],
+            "round_closes_at": ["2099-06-15T23:59", "2099-06-15T23:59"],
+            "round_results_at": ["", ""],
+            "round_payment_at": ["", ""],
+            "round_url": ["", ""],
+            "round_notes": ["", ""],
+            "round_legs": ["", ""],
+            # Explicitly posted (present, non-omitted array) -- the lottery
+            # row's token names the now-re-kinded goods round by real id.
+            "round_requires": ["", str(goods.id)],
+        },
+    )
+    assert r.status_code == 422, r.text
+
+    by_label = await _rounds_by_label(client, "requires-edit-rekind")
+    # Nothing committed -- both rounds keep their pre-submit state.
+    assert by_label["Goods sale"].kind is RoundKind.GOODS_SALE
+    assert by_label["Lottery"].required_item_round_id == goods.id
