@@ -71,6 +71,7 @@ from app.domain.types import (
     BroadcastMode,
     DeliveryOutcome,
     DeliverySource,
+    DismissReason,
     LegResult,
     LotteryOutcome,
     RoundKind,
@@ -7080,14 +7081,24 @@ async def open_leads(session: AsyncSession) -> list[DiscoveredEvent]:
     )).scalars())
 
 
-async def dismiss_lead(session: AsyncSession, lead_id: int, now: datetime) -> bool:
-    """Kill a lead for good. False when there was nothing to dismiss (an
-    unknown id, or one already dismissed) so a caller can 404 rather than
-    report a write that did not happen."""
+async def dismiss_lead(
+    session: AsyncSession, lead_id: int, now: datetime, reason: DismissReason
+) -> bool:
+    """Kill a lead for good, recording which taxonomy class it was.
+
+    False when there was nothing to dismiss (an unknown id, or one already
+    dismissed) so a caller can 404 rather than report a write that did not
+    happen.
+
+    `reason` is required rather than defaulted on purpose: a column added after
+    the fact that quietly accepts a default is how the concert draft silently
+    shipped without characters, and there is exactly one production caller.
+    """
     row = await session.get(DiscoveredEvent, lead_id)
     if row is None or row.dismissed_at is not None:
         return False
     row.dismissed_at = now
+    row.dismiss_reason = reason
     await session.flush()
     return True
 

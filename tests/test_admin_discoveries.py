@@ -333,7 +333,8 @@ async def test_dismissing_removes_it_from_the_list(client):
     await _seed(client)
     login_as(client, ADMIN_ID, "reiji")
     lead_id = await _lead_id(client)
-    assert client.post(f"/admin/discoveries/{lead_id}/dismiss").status_code == 303
+    r = client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": "other"})
+    assert r.status_code == 303
     assert "Anniversary Day 2" not in client.get("/admin/discoveries").text
     async with client.db() as s:
         row = (await s.execute(select(DiscoveredEvent))).scalar_one()
@@ -342,7 +343,8 @@ async def test_dismissing_removes_it_from_the_list(client):
 
 async def test_dismissing_an_unknown_lead_is_a_404(client):
     login_as(client, ADMIN_ID, "reiji")
-    assert client.post("/admin/discoveries/999/dismiss").status_code == 404
+    r = client.post("/admin/discoveries/999/dismiss", data={"reason": "other"})
+    assert r.status_code == 404
 
 
 async def test_dismissing_twice_is_a_404(client):
@@ -351,8 +353,9 @@ async def test_dismissing_twice_is_a_404(client):
     await _seed(client)
     login_as(client, ADMIN_ID, "reiji")
     lead_id = await _lead_id(client)
-    client.post(f"/admin/discoveries/{lead_id}/dismiss")
-    assert client.post(f"/admin/discoveries/{lead_id}/dismiss").status_code == 404
+    client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": "other"})
+    r = client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": "other"})
+    assert r.status_code == 404
 
 
 # ── The admin index ──────────────────────────────────────────────────────
@@ -754,6 +757,42 @@ def test_dismiss_reason_covers_every_taxonomy_class():
         "live", "stage", "release", "talk",
         "festival", "fanmeet", "free", "other",
     }
+
+
+async def test_dismissing_records_the_reason(client):
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    lead_id = await _lead_id(client)
+    r = client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": "release"})
+    assert r.status_code == 303
+    async with client.db() as s:
+        row = await s.get(DiscoveredEvent, lead_id)
+        assert row.dismissed_at is not None
+        assert row.dismiss_reason == "release"
+
+
+async def test_an_unknown_reason_is_422_and_writes_nothing(client):
+    """The value reaches an enum, so a hand-posted body cannot invent a class
+    and pollute the very column that exists to be counted."""
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    lead_id = await _lead_id(client)
+    r = client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": "nonsense"})
+    assert r.status_code == 422
+    async with client.db() as s:
+        row = await s.get(DiscoveredEvent, lead_id)
+        assert row.dismissed_at is None, "a refused reason must not dismiss"
+        assert row.dismiss_reason is None
+
+
+async def test_a_missing_reason_is_422(client):
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    lead_id = await _lead_id(client)
+    r = client.post(f"/admin/discoveries/{lead_id}/dismiss", data={})
+    assert r.status_code == 422
+    async with client.db() as s:
+        assert (await s.get(DiscoveredEvent, lead_id)).dismissed_at is None
 
 
 async def test_the_button_never_nests_inside_the_edit_form(client):
