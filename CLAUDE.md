@@ -261,6 +261,32 @@ only when both of their ends are attached -- have shipped since).
   hints, never dropped). The producer is normally an agent following
   `.claude/skills/add-concert/SKILL.md`, whose example draft is pinned to
   the parser by a test. import_commit stays the only write path.
+  A THIRD producer takes MANY drafts at once: `POST /concerts/import/batch`
+  splits a multi-document paste (`---` separated, plain YAML, no wrapper key)
+  and persists each document verbatim as a `PendingDraft` row, which
+  `/concerts/import/pending` then walks one preview at a time. It is
+  deliberately NOT all-or-nothing -- `domain/yaml_import.py`'s `parse_drafts`
+  names the documents that failed and keeps the rest, because at fifty
+  concerts one typo must not cost the other forty-nine. Boundaries come from
+  `yaml.scan()` rather than `text.split("---")` (a `---` inside a block scalar
+  would cut a draft in half) and rather than `safe_load_all`/`compose_all`
+  (both abort their generator on the FIRST bad document, silently losing every
+  one after it); a paste that breaks the scanner itself falls back to a
+  line-based split, so a scanner-level typo costs one oddly-split fragment
+  instead of the batch. `PendingDraft` is the ONE place this app keeps step
+  state, and the reason is that it is not step state: it is a work batch of
+  fifty-to-a-hundred concerts each needing a human-read preview, which is not
+  one sitting, and a hidden form field would lose it to a closed tab. A
+  resubmitted pending commit (back button, refresh) answers 409 rather than
+  minting a second concert -- agent drafts carry no `event_id`, so
+  `generate_event_id` would de-dupe to `alpha-2` instead of colliding, and
+  nothing would link the duplicate.
+  **Starlette hard-caps every `Form(...)` field at 1MB**, whatever an
+  app-level constant says, so `MAX_BATCH_CHARS` is 300k rather than the
+  millions a paste of a hundred drafts might suggest. This applies to EVERY
+  form field in the codebase, not just this route -- any future large-paste
+  feature hits the same wall, and hits it as an opaque failure well before
+  its own limit.
   Reminder-rule add/delete lives in
   `routes/reminders.py` (split out of `concerts.py`; renders via
   `concerts.render_rules_fragment`), and the `/me/timezone*` routes live in
