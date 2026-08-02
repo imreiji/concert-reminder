@@ -434,7 +434,7 @@ async def test_import_commit_binds_requires_by_round_key(client):
     assert lottery.required_item_round_id == goods.id
 
 
-def test_import_commit_422_on_wrong_kind_target(client):
+async def test_import_commit_422_on_wrong_kind_target(client):
     # round_requires names the OTHER lottery round -> 422, nothing persisted.
     login_as(client, EDITOR_ID, "reiji")
     r = client.post(
@@ -459,6 +459,12 @@ def test_import_commit_422_on_wrong_kind_target(client):
         },
     )
     assert r.status_code == 422, r.text
+
+    async with client.db() as s:
+        result = await s.execute(
+            select(Concert).where(Concert.event_id == "import-bad-requires")
+        )
+        assert result.scalar_one_or_none() is None
 
 
 async def test_edit_422_when_posted_target_rekinded(client):
