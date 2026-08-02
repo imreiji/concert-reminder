@@ -850,12 +850,9 @@ kept as the one real branch.
 entry by name to say the new kind is deliberately cosmetic and adds zero
 behaviour branches -- so the thing this entry exists to prevent (a kind added
 in the belief that a kind means something) did not happen, which is the whole
-return on having logged it. What DID change is arithmetic: the cosmetic set is
-ten rows rather than nine, so the table this entry proposes got one row bigger
-and its argument marginally stronger. Not re-ranked: a persisted enum still
-churns for zero user-visible benefit, and the taxonomy has now been touched
-twice (2026-07-18, 2026-08-02), which is an argument for leaving it alone
-rather than for tidying it a third time.
+return on having logged it. The only other change is arithmetic: the label/emoji
+table this entry proposes would hold ten rows rather than nine. Rank unchanged,
+for the reasons already given above.
 
 Ranked here -- below the user-facing entries above, above the pure-plumbing
 ones -- because it is the highest-impact item still standing once the trilingual
@@ -953,7 +950,18 @@ this entry's single pass, not its own task. Both gaps are now also named in
 CLAUDE.md's demo inventory, so the next person meets them where they look for
 the reference rather than only here.
 
-Grew a THIRD of the same kind on 2026-08-02 (goods-sale rounds): the editor
+Grew a THIRD of the same kind on 2026-08-01 (character tags, their seiyuu and
+subunits): the split pill (`.mchip`, a character and her seiyuu rendered as one
+two-halved element) and the subunit rail (`.pcluster.sub` on the concert page,
+`.grow2.sub` on the Tags page) are new components with no frame in any demo.
+Four pill mockups were built and shown to the owner during that design, but they
+lived in the spec discussion rather than in `dekimasen-demo.html`, so the design
+source of truth does not carry the shape that won -- which is worse than a gap,
+because the next person finds four rejected shapes and no record of the choice.
+Same resolution as the `.signin-note` and the error pages: fold it into this
+entry's single polish pass, not its own task.
+
+Grew a FOURTH of the same kind on 2026-08-02 (goods-sale rounds): the editor
 round card's "Requires item from" select row, and the concert page's
 "🛍️ Requires: {label}" / "Needed for: {labels}" lines. Neither exists in any
 demo frame -- `dekimasen-demo.html`'s round card predates the select and its

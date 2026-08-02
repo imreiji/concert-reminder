@@ -786,6 +786,11 @@ async def test_concert_page_drops_sale_ends_once_the_sale_has_closed(client):
     by_label = await _rounds_by_label(client, "requires-page-closed")
     async with client.db() as s:
         goods = await s.get(Round, by_label["Tour merch preorder"].id)
+        # Both ends moved into the past, not just the close: a sale that
+        # opened in 2099 and closed in 2020 is impossible, and a fixture that
+        # only holds together because nothing currently reads `opens_at_utc`
+        # is a proxy waiting to happen.
+        goods.opens_at_utc = datetime(2019, 12, 1, tzinfo=UTC)
         goods.closes_at_utc = datetime(2020, 1, 1, tzinfo=UTC)
         await s.commit()
 
