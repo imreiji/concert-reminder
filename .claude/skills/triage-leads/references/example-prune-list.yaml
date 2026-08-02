@@ -1,0 +1,38 @@
+# Example prune list for the triage-leads skill -- what /admin/discoveries/prune
+# expects pasted into its textarea. Parsed by app.domain.prune_list.parse_prune_list.
+#
+# A mapping of DismissReason value -> a list of EVENTERNOTE EVENT ids (the
+# number in https://www.eventernote.com/events/<id>). NEVER the internal
+# DiscoveredEvent id -- the DM's copy block and /admin/discoveries only ever
+# show the Eventernote id, so that is the only id an agent classifying this
+# queue can write down. See docs/discovery-lead-taxonomy-2026-08-01.md for
+# what each class means and the 2026-08-02 scope ruling for which classes get
+# dismissed at all.
+#
+# Every id and title below is a REAL lead -- read off
+# tests/fixtures/eventernote_actor_events.html, the actual scraped HTML of a
+# real actor's Eventernote page -- not invented for this example. A trailing
+# `#` comment names each one so a human reviewing this file before pasting it
+# can tell what they are about to PERMANENTLY dismiss; parse_prune_list
+# ignores the comments entirely.
+#
+# `talk` never appears here on purpose: the 2026-08-02 scope ruling keeps
+# radio/talk/番組イベント leads in the queue to be catalogued, not dismissed.
+dismiss:
+  # Class C -- release event / お渡し会 / 撮影会・サイン会. No lottery: you buy
+  # the product or the slot and it ships with a date already fixed, so the app
+  # has nothing to remind anyone about.
+  release:
+    - 466171   # 『Liella!と結ぶプロジェクト』ミニアルバム発売記念お渡し会 ゲーマーズ回 Liyuu(唐 可可 役) -- venue "!_東京都内某所", the class-C signal from the taxonomy doc
+    - 485391   # 2026年CICF × AGF广州动漫游戏盛典・Liyuu专场见面会&签名会 -- an autograph session, no lottery
+  # Class F -- fan meeting. FC lotteries are common here, but these two are
+  # plain paid meet-and-greet slots with no round to track.
+  fanmeet:
+    - 485912   # 2026 Liyuu「余夏微甜」成都见面会【夜晚场】
+    - 485909   # 2026 Liyuu「余夏微甜」成都见面会【下午场】
+  # Class E -- festival. The concert is the festival bill, not the one artist
+  # whose tag surfaced it, and its own ticketing (day passes, blocks) is a
+  # different shape from every other class -- not something to catalogue
+  # under a single artist's tag.
+  festival:
+    - 466544   # LuckyFes'26 DAY2
