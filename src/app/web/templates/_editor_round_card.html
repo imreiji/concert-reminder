@@ -23,14 +23,23 @@
       leg_value, leg_selected applies-to chips: whole value + selected set
       with_qualifiers         emit the upgrade-qualifier box (edit/new yes,
                               import no -- import has no saved rounds to qualify)
-      qual_value, qual_selected, self_id, kind_value  qualifier-box state -#}
+      qual_value, qual_selected, self_id, kind_value  qualifier-box state
+      round_key               the requires-select's own referenceable key --
+                              a saved round's id, or a same-submit key minted
+                              by _requires_select_script.html for a new row
+      requires_value          the currently-bound target's id/round_key
+      requires_options        [(val, label), ...] item-kind rounds already on
+                              this concert (edit page only; new/import build
+                              their options client-side) -#}
 {% macro round_card(round_id="", label="", label_en="", label_zh="",
                     kind=none, opens="", closes="", results="", payment="",
                     url="", notes="", leg_value="", leg_selected=none,
                     with_qualifiers=True, qual_value="", qual_selected=none,
-                    self_id=none, kind_value="") %}
+                    self_id=none, kind_value="",
+                    round_key="", requires_value="", requires_options=none) %}
 <div class="redit" data-variant-scope>
   <input type="hidden" name="round_id" value="{{ round_id }}">
+  <input type="hidden" name="round_key" value="{{ round_key }}">
   <div class="cardtop">
     <input class="cardname" name="round_label" required maxlength="200" placeholder="1次先行抽選"
            value="{{ label }}" data-variant-group="round_label" data-variant-slot="ja"
@@ -60,6 +69,23 @@
   {% if with_qualifiers %}
   {% with value = qual_value, selected = qual_selected, self_id = self_id, kind_value = kind_value %}{% include "_round_qualifier_chips.html" %}{% endwith %}
   {% endif %}
+  {#- The "requires item" select: one target round (an ELIGIBILITY_ITEM_SALE
+      or GOODS_SALE round on this concert) or nothing. Value is the target's
+      id (saved round) or round_key (same-submit round); resolve_round_requires
+      is the server half. Hidden (never removed -- a hidden div still submits
+      its fields) while no item-kind round exists; _requires_select_script.html
+      keeps options and visibility current as rows change. -#}
+  {% set _ropts = requires_options or [] %}
+  <div class="redit-requires" data-requires-box{% if not _ropts and not requires_value %} hidden{% endif %}>
+    <label class="dim tiny">{{ _("Requires item from") }}
+      <select name="round_requires" data-none-label="{{ _('No item needed') }}">
+        <option value="">{{ _("No item needed") }}</option>
+        {% for val, lbl in _ropts %}{% if (val | string) != (round_id | string) %}
+        <option value="{{ val }}"{% if (val | string) == (requires_value | string) %} selected{% endif %}>{{ lbl }}</option>
+        {% endif %}{% endfor %}
+      </select>
+    </label>
+  </div>
   <div class="redit-times">
     <label>{{ _("Apply opens (JST)") }} <input type="datetime-local" name="round_opens_at" value="{{ opens }}"></label>
     <label>{{ _("Apply deadline (JST)") }} <input type="datetime-local" name="round_closes_at" value="{{ closes }}"></label>

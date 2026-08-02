@@ -504,3 +504,30 @@ async def test_edit_422_when_posted_target_rekinded(client):
     # Nothing committed -- both rounds keep their pre-submit state.
     assert by_label["Goods sale"].kind is RoundKind.GOODS_SALE
     assert by_label["Lottery"].required_item_round_id == goods.id
+
+
+# ── Editor UI render tests (Task 6) ───────────────────────────────────────
+#
+# test_round_requires.py has no client_editor fixture -- login_as(client, ...)
+# is how every test in this file signs in as an editor.
+
+
+async def test_edit_page_renders_requires_select(client):
+    login_as(client, EDITOR_ID, "reiji")
+    _create_goods_and_lottery(client, "requires-edit-render")
+
+    r = client.get("/concerts/requires-edit-render/edit")
+    assert r.status_code == 200
+    assert 'name="round_requires"' in r.text
+    # The goods round's label appears inside a <select selected> option.
+    assert '>Goods sale</option>' in r.text
+    assert 'selected>Goods sale</option>' in r.text
+
+
+async def test_new_page_renders_requires_field(client):
+    login_as(client, EDITOR_ID, "reiji")
+
+    r = client.get("/concerts/new")
+    assert r.status_code == 200
+    assert 'name="round_requires"' in r.text
+    assert 'name="round_key"' in r.text

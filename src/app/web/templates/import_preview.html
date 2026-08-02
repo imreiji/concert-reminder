@@ -111,7 +111,10 @@
     {#- No qualifier chips here (with_qualifiers=False): a parsed import has no
         saved rounds a nested UPGRADE round could qualify against. Parsed rounds
         carry no leg info, so nothing is pre-selected unless a draft supplied
-        leg_keys_selected. -#}
+        leg_keys_selected.
+        round_key/requires_value are literal '' for now -- ParsedRound carries
+        no round_key/requires_key yet; Task 7 adds them and flips these two
+        literals to r.round_key/r.requires_key. -#}
     {% for r in parsed.rounds %}
     {{ round_card(
         label=r.label, label_en=r.label_en or '', label_zh=r.label_zh or '',
@@ -120,7 +123,8 @@
         results=fmt(r.results_at_jst), payment=fmt(r.payment_at_jst),
         url=r.url or '', notes=r.notes or '',
         leg_value=r.leg_keys, leg_selected=r.leg_keys_selected or none,
-        with_qualifiers=False) }}
+        with_qualifiers=False,
+        round_key='', requires_value='') }}
     {% else %}
     <p class="dim tiny" data-no-rounds>{{ _("No rounds yet — add the first one below.") }}</p>
     {% endfor %}
@@ -226,4 +230,5 @@
   {{ round_card(with_qualifiers=False) }}
 </template>
 {% include "_leg_chips_script.html" %}
+{% include "_requires_select_script.html" %}
 {% endblock %}
