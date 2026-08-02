@@ -248,19 +248,30 @@ async def test_create_concert_422_on_wrong_kind_target(client):
 # is how every test in this file signs in as an editor.
 
 
-def _create_goods_and_lottery(client, event_id: str) -> tuple[int, int]:
+def _create_goods_and_lottery(
+    client,
+    event_id: str,
+    *,
+    goods_label: str = "Goods sale",
+    lottery_label: str = "Lottery",
+) -> tuple[int, int]:
     """Seeds one concert with a GOODS_SALE round and a LOTTERY_ROUND that
     requires it (bound by round_key, exactly like
     test_create_concert_binds_requires_by_round_key). Returns (goods_id,
-    lottery_id) for the edit-page tests below to re-post by round_id."""
+    lottery_id) for the edit-page tests below to re-post by round_id.
+
+    The labels are overridable because "Goods sale" is ALSO the GOODS_SALE
+    kind's own display label: a render test asserting that string proves
+    nothing about the requires line, since the kind label puts it on the page
+    regardless."""
     r = client.post(
         "/concerts",
         data={
             "title_en": "Requires Edit", "title_zh": "Requires Edit",
             "title": "Requires Edit", "event_id": event_id,
-            "round_label": ["Goods sale", "Lottery"],
-            "round_label_en": ["Goods sale", "Lottery"],
-            "round_label_zh": ["Goods sale", "Lottery"],
+            "round_label": [goods_label, lottery_label],
+            "round_label_en": [goods_label, lottery_label],
+            "round_label_zh": [goods_label, lottery_label],
             "round_kind": ["goods_sale", "lottery_round"],
             "round_opens_at": ["2099-06-01T00:00", "2099-06-01T00:00"],
             "round_closes_at": ["2099-06-15T23:59", "2099-06-15T23:59"],
@@ -743,13 +754,45 @@ async def test_requires_close_time_hidden_once_sale_over(session):
 
 
 async def test_concert_page_renders_requires_line(client):
+    """Both directions of the link, rendered. The labels are deliberately NOT
+    "Goods sale"/"Lottery": those are the two kinds' own display labels, so a
+    page that had dropped the requires line entirely would still contain them
+    and the assertion would pass for the wrong reason."""
     login_as(client, EDITOR_ID, "reiji")
-    _create_goods_and_lottery(client, "requires-page-render")
+    _create_goods_and_lottery(
+        client, "requires-page-render",
+        goods_label="Tour merch preorder", lottery_label="Fastest presale draw",
+    )
 
     r = client.get("/concerts/requires-page-render")
     assert r.status_code == 200
-    assert "Requires:" in r.text
-    assert "Goods sale" in r.text
+    # Forward line, on the round that needs the item.
+    assert "Requires: Tour merch preorder" in r.text
+    # The sale is still open (it closes in 2099), so its close time rides
+    # along -- the actionable half of the line.
+    assert "sale ends" in r.text
+    # Reverse line, on the item sale itself.
+    assert "Needed for: Fastest presale draw" in r.text
+
+
+async def test_concert_page_drops_sale_ends_once_the_sale_has_closed(client):
+    """Same page, sale in the past: the label stays (what you needed) and the
+    close time goes (a closed sale's deadline is history, not an action)."""
+    login_as(client, EDITOR_ID, "reiji")
+    _create_goods_and_lottery(
+        client, "requires-page-closed",
+        goods_label="Tour merch preorder", lottery_label="Fastest presale draw",
+    )
+    by_label = await _rounds_by_label(client, "requires-page-closed")
+    async with client.db() as s:
+        goods = await s.get(Round, by_label["Tour merch preorder"].id)
+        goods.closes_at_utc = datetime(2020, 1, 1, tzinfo=UTC)
+        await s.commit()
+
+    r = client.get("/concerts/requires-page-closed")
+    assert r.status_code == 200
+    assert "Requires: Tour merch preorder" in r.text
+    assert "sale ends" not in r.text
 
 
 # ── DueReminder.requires_label / requires_closes_at_utc (Task 9) ──────────

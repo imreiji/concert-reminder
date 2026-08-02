@@ -13,7 +13,7 @@ import pytest
 from app.db.models import Tag, TagKind
 from app.db.service import match_tag_ids_by_name
 from app.domain.draft import ParsedConcert, ParsedDay, ParsedRound
-from app.domain.types import ConcertKind, RoundKind
+from app.domain.types import ITEM_SALE_KINDS, ConcertKind, RoundKind
 from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml
 from app.domain.yaml_import import DraftError, parse_draft, parse_drafts, split_documents
 
@@ -374,6 +374,15 @@ def test_skill_example_draft_parses_clean():
     assert p.days and p.rounds
     assert all(d.venue_name for d in p.days)
     assert all(r.label_en and r.label_zh for r in p.rounds)
+    # The example TEACHES the requires: vocabulary, so it must actually
+    # resolve: exactly one round names another round IN THE SAME draft, and
+    # the round it names is an item sale. An example whose link silently
+    # dangles teaches agents to emit a label the preview will warn about.
+    linked = [r for r in p.rounds if r.requires_label]
+    assert len(linked) == 1
+    (target,) = [r for r in p.rounds if r.label == linked[0].requires_label]
+    assert target.kind in ITEM_SALE_KINDS
+    assert target is not linked[0]
 
 
 # -- Multi-document paste (split_documents / parse_drafts) -----------------

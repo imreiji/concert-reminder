@@ -66,6 +66,7 @@ you find actual application windows.
   - 一般発売 that is itself a lottery -> `general_sale`
   - 配信 / streaming tickets -> `stream_ticket_sale`
   - overseas hotel+ticket packages -> `tour_package`
+  - グッズ販売 / 物販 (a merch/goods pre-order or sale window) -> `goods_sale`
   - アップグレード (needs an existing ticket) -> do NOT emit; upgrade rounds
     have qualifier semantics the import path doesn't carry -- note it in
     `notes` for the user to add by hand.
@@ -77,6 +78,14 @@ you find actual application windows.
 - `applies_to`: the exact `label` strings of the performances a round
   covers. Empty list = whole event. A round selling 全公演 or with no
   per-leg distinction gets `[]`.
+- `requires:` (optional) -- the ja `label` of another round IN THIS DRAFT
+  (an `eligibility_item_sale` or `goods_sale` round) whose item is needed
+  to enter this round. Example: a 最速先行 whose serial code comes from the
+  CD sale names that CD-sale round's label here. It names a LABEL, the same
+  way `applies_to` names legs -- never an id. A label that matches no round,
+  matches this same round, or matches one of any other kind shows up as a
+  visible warning at paste time and the link is simply dropped, so guessing
+  costs nothing.
 
 ## 4. Trilingual rules (the app enforces these at submit)
 

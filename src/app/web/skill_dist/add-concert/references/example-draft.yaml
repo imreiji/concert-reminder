@@ -35,6 +35,18 @@ performances:
     starts_at_jst: 2026-11-08 17:00
     eventernote_event_id: "465359"
 rounds:
+  # The item sale itself. The lottery below names this round's ja label under
+  # `requires:` -- that is how a draft says "you cannot enter that round
+  # without the thing sold here". Only an eligibility_item_sale or a
+  # goods_sale round is a valid target.
+  - label: シリアル対象CD発売
+    label_en: Serial-code CD release
+    label_zh: 附带序列号CD发售
+    kind: eligibility_item_sale
+    applies_to: []
+    apply_opens_jst: 2026-07-25 10:00
+    apply_closes_jst: 2026-08-14 23:59
+    notes: 初回限定盤に最速先行シリアルを封入。
   - label: 最速先行抽選（CD封入シリアル）
     label_en: Earliest advance lottery (CD serial code)
     label_zh: 最速先行抽选（CD附带序列号）
@@ -45,6 +57,7 @@ rounds:
     results_jst: 2026-08-22 15:00
     payment_deadline_jst: 2026-08-25 23:00
     url: https://eplus.jp/hasunosora-6th/
+    requires: シリアル対象CD発売
     notes: 1次シリアル先行。CD初回限定盤に封入。
   - label: 一般発売（先着）
     label_en: General sale (first come, first served)
