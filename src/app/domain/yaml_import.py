@@ -24,6 +24,7 @@ domain/draft.py). yaml.safe_load ONLY -- a draft is pasted text from
 outside the trust boundary.
 """
 
+from dataclasses import dataclass, field
 from datetime import date, datetime
 
 import yaml
@@ -302,3 +303,124 @@ def parse_draft(text: str) -> ParsedConcert:
         ),
         artist_handles=_names(handles.get("artists"), "series_handles.artists", warnings),
     )
+
+
+# -- Multi-document paste ---------------------------------------------------
+#
+# An agent researching discovery leads can hand back many drafts in one
+# paste, `---`-separated the way a YAML stream already allows. `parse_draft`
+# above stays untouched -- it only ever sees ONE document -- and everything
+# below is a layer that splits a paste into documents and runs it per
+# document, so one bad document costs nothing but itself.
+
+
+@dataclass(frozen=True)
+class ParsedDraft:
+    """One document out of a multi-document paste, alongside its own parse.
+
+    `text` is the document's exact source slice, kept verbatim (not
+    re-serialized) so a later re-parse -- the preview page, after the batch
+    has been stored -- reproduces `parsed` exactly, the same way pasting that
+    one document alone would have. Storing only `parsed` would freeze
+    today's parser against tomorrow's; storing only `text` would mean
+    reparsing eagerly here for nothing.
+    """
+
+    text: str
+    parsed: ParsedConcert
+
+
+@dataclass(frozen=True)
+class DraftBatch:
+    """The result of parsing a multi-document paste.
+
+    `drafts` holds every document that parsed; `errors` holds one message
+    per document that raised `DraftError`, each prefixed with that
+    document's 1-based position in the paste -- with fifty documents in a
+    paste, "a draft failed" says nothing, "document 37" says everything.
+    A document is never dropped silently: it lands in exactly one of the
+    two tuples, except an empty document (pure formatting -- a trailing
+    separator, a blank stanza), which `split_documents` already discards
+    before either tuple is built.
+    """
+
+    drafts: tuple[ParsedDraft, ...] = field(default_factory=tuple)
+    errors: tuple[str, ...] = field(default_factory=tuple)
+
+
+def split_documents(text: str) -> list[str]:
+    """Split a `---`-separated paste into per-document source text.
+
+    Deliberately NOT `text.split("---")`: a `---` inside a quoted scalar or
+    a block scalar (`notes: |` / `notes: >`) is ordinary content, not a
+    document boundary, and Japanese concert notes pasted as free text are
+    exactly the kind of thing that contains one -- a naive split would cut
+    that document in half.
+
+    Instead this uses `yaml.scan` (PyYAML's lexer) to find real
+    `DocumentStartToken`s and slices the ORIGINAL text between them, so each
+    returned string is the exact source for one document -- including
+    whichever leading `---` line it had, which `yaml.safe_load` accepts
+    without complaint. Scanning, not `compose_all`/`safe_load_all`: both of
+    those walk the WHOLE stream in one pass and raise on the first bad
+    document, which would silently discard every document after it -- the
+    opposite of what this function exists for. Scanning is lexical (it
+    tracks indentation, quoting and flow context to find token boundaries,
+    but never validates that the tokens form a well-formed document), so it
+    keeps finding every later boundary even when an earlier document is
+    broken enough that `parse_draft` will go on to reject it -- verified
+    against PyYAML directly: an unclosed `[` mid-document does not stop the
+    scanner from finding the `---` after it, only the later parse.
+    Malformed enough to break even the SCANNER (not just the parser) is the
+    one case this can't isolate; that failure is rare enough (scanning
+    tolerated an unclosed flow sequence in testing) that the whole text is
+    handed to `parse_draft` as one document, which reports the real error
+    instead of this function raising one of its own.
+
+    Empty documents -- a trailing separator, a stray blank `---\n---\n` --
+    are dropped: they're formatting, not a document with nothing in it.
+    """
+    try:
+        tokens = yaml.scan(text, Loader=yaml.SafeLoader)
+        starts = [0] + [
+            tok.start_mark.index for tok in tokens if isinstance(tok, yaml.DocumentStartToken)
+        ]
+    except yaml.YAMLError:
+        # The rare document broken enough to defeat the scanner itself, not
+        # just the parser -- see the docstring. One un-splittable chunk,
+        # handed whole to parse_draft, beats raising here and losing the
+        # entire paste.
+        starts = [0]
+    starts = sorted(set(starts))
+    boundaries = starts + [len(text)]
+    # boundaries[1:] is deliberately one element shorter -- this pairs each
+    # start with the next (a sliding window), not two equal-length sequences.
+    chunks = [text[a:b] for a, b in zip(boundaries, boundaries[1:], strict=False)]
+    return [chunk for chunk in chunks if chunk.strip() and chunk.strip() != "---"]
+
+
+def parse_drafts(text: str) -> DraftBatch:
+    """Split a paste into documents and run `parse_draft` over each.
+
+    One malformed document must not cost the others -- at fifty concerts a
+    typo in document 2 cannot lose documents 1 and 3, so a `DraftError` is
+    caught per document and turned into an entry in `errors` rather than
+    propagating. An empty paste (or one that is nothing but separators) is
+    reported as an error too, not as a quietly empty, "successful" batch --
+    silence there would read as "nothing to import" instead of "you pasted
+    the wrong thing".
+    """
+    documents = split_documents(text)
+    if not documents:
+        return DraftBatch(errors=("the paste is empty -- there's nothing to import",))
+
+    drafts: list[ParsedDraft] = []
+    errors: list[str] = []
+    for i, document in enumerate(documents, start=1):
+        try:
+            parsed = parse_draft(document)
+        except DraftError as exc:
+            errors.append(f"document {i}: {exc}")
+            continue
+        drafts.append(ParsedDraft(text=document, parsed=parsed))
+    return DraftBatch(drafts=tuple(drafts), errors=tuple(errors))

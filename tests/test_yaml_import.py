@@ -14,7 +14,7 @@ from app.db.service import match_tag_ids_by_name
 from app.domain.draft import ParsedConcert, ParsedDay, ParsedRound
 from app.domain.types import ConcertKind, RoundKind
 from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml
-from app.domain.yaml_import import DraftError, parse_draft
+from app.domain.yaml_import import DraftError, parse_draft, parse_drafts, split_documents
 
 
 def test_extended_fields_default_empty():
@@ -359,3 +359,87 @@ def test_skill_example_draft_parses_clean():
     assert p.days and p.rounds
     assert all(d.venue_name for d in p.days)
     assert all(r.label_en and r.label_zh for r in p.rounds)
+
+
+# -- Multi-document paste (split_documents / parse_drafts) -----------------
+
+ONE = "title: One\n"
+TWO = "title: Two\n"
+THREE = "title: Three\n"
+
+
+def test_three_documents_parse_into_three_drafts():
+    batch = parse_drafts(ONE + "\n---\n" + TWO + "\n---\n" + THREE)
+    assert len(batch.drafts) == 3
+    assert batch.errors == ()
+    assert [d.parsed.title for d in batch.drafts] == ["One", "Two", "Three"]
+
+
+def test_one_bad_document_does_not_lose_the_others():
+    """The whole point at fifty concerts: a typo in draft 2 must not cost
+    drafts 1 and 3."""
+    batch = parse_drafts(ONE + "\n---\n" + "title: [unclosed\n" + "\n---\n" + THREE)
+    assert len(batch.drafts) == 2
+    assert len(batch.errors) == 1
+    assert "2" in batch.errors[0], "the error must say WHICH document failed"
+
+
+def test_a_single_document_still_works():
+    """A file with no --- separator is a batch of one, so one paste box can
+    serve both cases and nobody has to know which they have."""
+    assert len(parse_drafts(ONE).drafts) == 1
+
+
+def test_each_draft_keeps_its_own_text_verbatim():
+    """The row stores the document, not the parse, so a later preview re-parses
+    it exactly as if it had been pasted alone."""
+    batch = parse_drafts(ONE + "\n---\n" + TWO)
+    assert batch.drafts[0].text.strip().startswith(ONE.strip()[:20])
+    assert "---" not in batch.drafts[0].text
+
+
+def test_empty_documents_are_skipped_not_errors():
+    """Trailing separators and blank stanzas are formatting, not mistakes --
+    `a\n---\n` is one draft, and a stray `---` at the end must not report a
+    phantom failure."""
+    batch = parse_drafts(ONE + "\n---\n\n---\n" + TWO)
+    assert len(batch.drafts) == 2
+    assert batch.errors == ()
+
+
+def test_a_wholly_empty_paste_is_an_error_not_an_empty_batch():
+    for text in ("", "   \n", "---\n---\n"):
+        batch = parse_drafts(text)
+        assert batch.drafts == ()
+        assert batch.errors, "an empty paste must say so, not report success"
+
+
+def test_safe_load_all_only():
+    """A YAML tag that would construct a Python object must not."""
+    batch = parse_drafts("!!python/object/apply:os.system ['echo hi']\n")
+    assert batch.drafts == ()
+    assert batch.errors
+
+
+def test_triple_dash_inside_a_block_scalar_does_not_split_the_document():
+    """The subtle case this whole module exists for: a `---` that is part of
+    a Japanese free-text note (a literal block, `notes: |`) must not be
+    mistaken for a document boundary, or the note gets cut in half and the
+    second half either becomes a bogus extra document or breaks the first
+    document's YAML outright."""
+    text = (
+        "title: One\n"
+        "notes: |\n"
+        "  line one\n"
+        "  ---\n"
+        "  line two\n"
+        "---\n"
+        "title: Two\n"
+    )
+    docs = split_documents(text)
+    assert len(docs) == 2
+    batch = parse_drafts(text)
+    assert len(batch.drafts) == 2
+    assert batch.errors == ()
+    assert batch.drafts[0].parsed.notes == "line one\n---\nline two"
+    assert batch.drafts[1].parsed.title == "Two"
