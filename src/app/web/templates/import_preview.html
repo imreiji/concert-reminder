@@ -44,6 +44,11 @@
       Details fold below (it was a hidden field). Commit is a separate request,
       so it still round-trips through the client -- re-validated server-side on
       POST via form_url like any other field (invariant 7 / SSRF re-check). -#}
+  {#- Set only when this preview is a triage row pulled off the pending list
+      (import_pending_detail) -- absent for a fresh /preview or /draft render.
+      import_commit reads it to stamp the row and send the editor back to the
+      pending list instead of the new concert. -#}
+  {% if pending_id %}<input type="hidden" name="pending_id" value="{{ pending_id }}">{% endif %}
 
   <div class="ebar">
     <label class="grow">{{ _("Title (JP)") }} <input class="title-input" name="title" required

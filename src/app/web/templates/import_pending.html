@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ _("pending drafts") }} — dekimasen.app{% endblock %}
+{% block content %}
+
+<div class="lede">
+  <h1>{{ _("Pending drafts") }}</h1>
+  <p>{% trans %}Every document from a multi-draft paste that hasn't been reviewed yet. Open one to see its
+    full preview, edit anything, and create the event -- or discard it if it isn't worth tracking.{% endtrans %}</p>
+</div>
+
+{% if rows %}
+<div class="row-list" style="margin-top:1.5rem; max-width:52rem">
+  {% for r in rows %}
+  <div class="subrow">
+    <span class="nm3">{{ r.row.title or _("(untitled)") }}</span>
+    <span class="cnt">
+      {% if r.unreadable %}
+      {{ _("couldn't be re-read") }}
+      {% else %}
+      {% trans n=r.leg_count %}{{ n }} leg{% pluralize %}{{ n }} legs{% endtrans %}
+      &middot; {% trans n=r.round_count %}{{ n }} round{% pluralize %}{{ n }} rounds{% endtrans %}
+      {% if r.unmatched_count %}
+      &middot; {% trans n=r.unmatched_count %}{{ n }} tag not matched{% pluralize %}{{ n }} tags not matched{% endtrans %}
+      {% endif %}
+      {% endif %}
+    </span>
+    <span class="sw">
+      <a class="act" href="/concerts/import/pending/{{ r.row.id }}">{{ _("Review") }}</a>
+      <form method="post" action="/concerts/import/pending/{{ r.row.id }}/discard" style="display:contents">
+        <button class="act no" type="submit">{{ _("Discard") }}</button>
+      </form>
+    </span>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="clock" style="display:block; margin-top:1.5rem">
+  {{ _("Nothing pending -- every draft you pasted has been reviewed.") }}</p>
+{% endif %}
+
+<p class="clock" style="display:block; margin-top:1.5rem">
+  {% trans %}Have more to add? <a class="more" href="/concerts/import">Paste another batch</a>.{% endtrans %}</p>
+{% endblock %}

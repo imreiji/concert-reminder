@@ -15,6 +15,19 @@
 </div>
 {% endif %}
 
+{% if batch_errors %}
+<div class="warnlist" style="margin-top:1.25rem; max-width:42rem">
+  <div class="banner warn">
+    <span>&#9888;</span>
+    <span>{% trans created=batch_created, failed=batch_errors | length %}{{ created }} draft(s) were added to your pending list; {{ failed }} document(s) couldn't be read and were skipped:{% endtrans %}</span>
+  </div>
+  {% for e in batch_errors %}
+  <div class="banner warn"><span>&#9888;</span><span>{{ e }}</span></div>
+  {% endfor %}
+  <p class="clock" style="display:block">{% trans %}Fix the document(s) named above and paste them again -- everything else in the batch is already on your <a href="/concerts/import/pending">pending list</a>.{% endtrans %}</p>
+</div>
+{% endif %}
+
 <form class="stack" method="post" action="/concerts/import/preview"
       style="max-width:42rem; margin-top:1.75rem; display:grid; gap:1rem">
   <label class="fld"><span>{{ _("ramen.events URL") }}</span>
@@ -45,6 +58,22 @@
 
 <p class="clock" style="display:block; margin-top:1rem">
   {% trans %}Drafting with an agent elsewhere? <a class="more" href="/concerts/import/skill.zip">Download the add-concert skill</a> (zip).{% endtrans %}</p>
+
+<div class="section-head" style="max-width:42rem; margin-top:2.25rem">
+  <h2>{{ _("Or paste many drafts at once") }}</h2>
+  <p class="dim tiny">{% trans %}A stream of <code>---</code>-separated documents -- one paste for a whole
+    research session. Each document that parses becomes its own row on your
+    <a href="/concerts/import/pending">pending list</a>, reviewed and created one preview at a time. A
+    malformed document never costs the others -- it's named back to you here instead.{% endtrans %}</p>
+</div>
+
+<form class="stack" method="post" action="/concerts/import/batch"
+      style="max-width:42rem; margin-top:1rem; display:grid; gap:1rem">
+  <label class="fld"><span>{{ _("Draft YAML (many documents)") }}</span>
+    <textarea name="draft" rows="10" required
+              placeholder="title: …&#10;performances:&#10;  - label: Day 1&#10;---&#10;title: …"></textarea></label>
+  <div><button class="btn" type="submit">{{ _("Add to pending list") }}</button></div>
+</form>
 
 <p class="clock" style="display:block; margin-top:1.5rem">
   {% trans %}No ramen.events page? <a class="more" href="/">Create the event manually</a> instead.{% endtrans %}

@@ -1,14 +1,22 @@
-"""Import a concert draft from a ramen.events URL.
+"""Import a concert draft from a ramen.events URL, or from a pasted YAML draft.
 
-  GET  /concerts/import           paste-a-URL form
-  POST /concerts/import/preview   fetch + parse only -- nothing touches the DB
-  POST /concerts/import/commit    the only route that writes; same field
-                                   shape and validation as manual creation
-                                   (create_concert_row / build_day / build_round
-                                   in concerts.py), just called in a loop.
+  GET  /concerts/import                  paste-a-URL / paste-a-draft form
+  POST /concerts/import/preview          fetch + parse a URL -- nothing touches the DB
+  POST /concerts/import/draft            parse ONE pasted document -- same, no DB write
+  POST /concerts/import/batch            parse MANY '---'-separated documents, persist
+                                          each as a PendingDraft work-batch row
+  GET  /concerts/import/pending          the triage list of that editor's own rows
+  GET  /concerts/import/pending/{id}     re-parse one row, render the SAME preview
+  POST /concerts/import/pending/{id}/discard   an editor's "not this one"
+  POST /concerts/import/commit           the only route that writes; same field
+                                          shape and validation as manual creation
+                                          (create_concert_row / build_day / build_round
+                                          in concerts.py), just called in a loop.
 
 Nothing is ever auto-saved: preview always renders an editable draft, and
-only the editor's final submit on that draft writes anything.
+only the editor's final submit on that draft writes anything -- true for a
+single pasted draft and for one pulled off the pending list alike, since both
+paths end at the same `import_commit`.
 """
 
 import asyncio
@@ -16,6 +24,8 @@ import io
 import logging
 import zipfile
 from collections import namedtuple
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -23,12 +33,17 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models import PendingDraft
 from app.db.service import (
+    create_pending_drafts,
+    discard_pending_draft,
     handle_newly_tagged,
+    mark_pending_committed,
     match_tag_ids_by_name,
     match_tag_ids_by_slug,
     match_venue_tag_id,
     match_venue_tag_id_by_slug,
+    pending_drafts,
     record_round_label_phrase,
     round_label_phrases,
     sync_concert,
@@ -36,9 +51,10 @@ from app.db.service import (
     tag_picker_context,
 )
 from app.db.session import get_session
+from app.domain.draft import ParsedConcert
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import ConcertKind, RoundKind
-from app.domain.yaml_import import DraftError, parse_draft
+from app.domain.yaml_import import DraftError, parse_draft, parse_drafts
 from app.fetching import FetchFailed, HostNotAllowed, check_host, fetch_html
 from app.web.auth import SessionUser, require_editor
 from app.web.forms import form_url, require_variants
@@ -132,6 +148,49 @@ def _preview_legs(parsed) -> list[_PreviewLeg]:
         _PreviewLeg(id=f"d{i}", label=d.label, venue_tag=None, starts_at_utc=None)
         for i, d in enumerate(parsed.days)
     ]
+
+
+def _resolve_series_tags(
+    parsed: ParsedConcert, picker: dict
+) -> tuple[dict[str, list[str]], list[dict]]:
+    """Franchise/group/character/artist NAMES (or HANDLES, when the draft
+    carries `series_handles`) -> picker pre-selection, plus the names that
+    matched nothing.
+
+    Shared by `_draft_preview_response` (which needs the pre-selection to
+    render the picker) and the pending list (which only needs the count of
+    the second return value) -- one place deciding what "unmatched" means, so
+    the two surfaces can never quietly disagree on it. A missing-handle
+    warning is appended onto `parsed.warnings` in place, exactly as it was
+    before this was split out.
+    """
+    initial_selected: dict[str, list[str]] = {}
+    unmatched_tags: list[dict] = []
+    for kind_name, names, handles in (
+        ("franchise", parsed.franchise_names, parsed.franchise_handles),
+        ("group", parsed.group_names, parsed.group_handles),
+        ("character", parsed.character_names, parsed.character_handles),
+        ("artist", parsed.artist_names, parsed.artist_handles),
+    ):
+        pool = picker["by_kind"].get(kind_name, [])
+        # THE RULE, in one sentence: if series_handles names this kind it is
+        # AUTHORITATIVE and the name list is ignored outright; otherwise names
+        # resolve exactly as they always have. See parse_draft's own docstring
+        # for why there is no per-entry fallback.
+        if handles:
+            ids, missing = match_tag_ids_by_slug(handles, pool)
+            if missing:
+                parsed.warnings.append(
+                    f"series_handles.{kind_name}s: {', '.join(missing)} not in the "
+                    f"catalogue -- import tags.yaml first, or pick them by hand. "
+                    f"The name list was NOT used as a fallback."
+                )
+        else:
+            ids, missing = match_tag_ids_by_name(names, pool)
+        if ids:
+            initial_selected[kind_name] = [str(i) for i in ids]
+        unmatched_tags.extend({"name": name, "kind": kind_name} for name in missing)
+    return initial_selected, unmatched_tags
 
 
 @router.get("", response_class=HTMLResponse)
@@ -228,42 +287,30 @@ async def import_preview(
             # One chip target per parsed day, keyed by day_key -- the round
             # cards render their leg chips from this via _round_leg_chips.html.
             "legs": _preview_legs(parsed),
+            # The URL-scrape path has no pending-draft workflow -- only a
+            # pasted draft can be part of a multi-draft batch.
+            "pending_id": None,
         },
     )
 
 
-@router.post("/draft", response_class=HTMLResponse)
-async def import_draft(
+async def _draft_preview_response(
     request: Request,
-    user: SessionUser = Depends(require_editor),
-    session: AsyncSession = Depends(get_session),
-    draft: str = Form(...),
-):
-    """Paste an agent-authored YAML draft, get the SAME preview the URL path
-    renders -- fully prefilled. Renders only; import_commit stays the one
-    write path, and every commit-boundary gate (variants rule, form_url,
-    venue rollup) applies to this data exactly as to typed data.
+    user: SessionUser,
+    session: AsyncSession,
+    parsed: ParsedConcert,
+    pending_id: int | None = None,
+) -> HTMLResponse:
+    """Build the `import_preview.html` render for an already-parsed draft.
 
-    Tag and venue NAMES resolve to ids here, at the route boundary, the same
-    place the URL path matches its scraped venue name -- the draft never
-    carries database ids.
+    Shared by `import_draft` (a fresh single-document paste) and
+    `import_pending_detail` (re-triaging a stored `PendingDraft` row) so the
+    two can never drift on how a parsed draft becomes a preview -- there used
+    to be only one caller, and this is that caller's body, unchanged, minus
+    the parsing itself (each caller gets `parsed` its own way) and plus
+    `pending_id`, which rides through as a hidden field on the preview form so
+    `import_commit` knows which row to stamp on a successful commit.
     """
-
-    def form_error(message: str):
-        return templates.TemplateResponse(
-            request,
-            "import_form.html",
-            # lang_next_url: POST-only render, same reason as import_preview.
-            {"user": user, "error": message, "lang_next_url": "/concerts/import"},
-        )
-
-    if len(draft) > MAX_DRAFT_CHARS:
-        return form_error("draft too large -- pastes are capped at 200k characters")
-    try:
-        parsed = parse_draft(draft)
-    except DraftError as e:
-        return form_error(str(e))
-
     picker = await tag_picker_context(session)
     venue_tags = await all_venue_tags(session)
 
@@ -278,46 +325,9 @@ async def import_draft(
         )
 
     # Tag names -> picker pre-selection. Unmatched names surface in the Tags
-    # fold as per-name "create this tag" chips rather than vanishing -- each
-    # carries its kind (franchise/group/character/artist) so the quick-create
-    # dialog can pre-select the right kind. Structured (name, kind) pairs, not a
-    # flat name list: the kind is what the chip and the dialog both need.
-    initial_selected: dict[str, list[str]] = {}
-    unmatched_tags: list[dict] = []
-    for kind_name, names, handles in (
-        ("franchise", parsed.franchise_names, parsed.franchise_handles),
-        ("group", parsed.group_names, parsed.group_handles),
-        # A draft that names characters prefills the character row like any
-        # other. The picker adds `character_excluded` on top for a group's
-        # characters; a draft has no group expansion to prune, so it supplies
-        # only the positive list.
-        ("character", parsed.character_names, parsed.character_handles),
-        ("artist", parsed.artist_names, parsed.artist_handles),
-    ):
-        pool = picker["by_kind"].get(kind_name, [])
-        # THE RULE, in one sentence: if series_handles names this kind it is
-        # AUTHORITATIVE and the name list is ignored outright; otherwise names
-        # resolve exactly as they always have.
-        #
-        # No per-entry fallback, deliberately. A handle identifies exactly one
-        # tag, while a name is documented first-tag-wins and -- now that names
-        # may repeat -- a guess. Falling back to the name for a handle that is
-        # not here yet would quietly reintroduce that guess, which is the
-        # failure this whole arc removed. A missing handle means "import
-        # tags.yaml first", so it surfaces as unmatched and the editor decides.
-        if handles:
-            ids, missing = match_tag_ids_by_slug(handles, pool)
-            if missing:
-                parsed.warnings.append(
-                    f"series_handles.{kind_name}s: {', '.join(missing)} not in the "
-                    f"catalogue -- import tags.yaml first, or pick them by hand. "
-                    f"The name list was NOT used as a fallback."
-                )
-        else:
-            ids, missing = match_tag_ids_by_name(names, pool)
-        if ids:
-            initial_selected[kind_name] = [str(i) for i in ids]
-        unmatched_tags.extend({"name": name, "kind": kind_name} for name in missing)
+    # fold as per-name "create this tag" chips rather than vanishing -- see
+    # _resolve_series_tags.
+    initial_selected, unmatched_tags = _resolve_series_tags(parsed, picker)
 
     # applies_to leg labels -> the preview's day_key scheme ("d0", "d1", ...),
     # first row claiming a duplicate label keeps it (same rule as
@@ -366,8 +376,226 @@ async def import_draft(
             "matched_venue_tag_id": None,
             "legs": _preview_legs(parsed),
             "unmatched_tags": unmatched_tags,
+            # None for a fresh paste (import_draft never sets it): the commit
+            # form then carries no pending_id field at all, and import_commit
+            # falls through to its unset-pending_id behaviour exactly as
+            # before this feature existed.
+            "pending_id": pending_id,
         },
     )
+
+
+@router.post("/draft", response_class=HTMLResponse)
+async def import_draft(
+    request: Request,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+    draft: str = Form(...),
+):
+    """Paste an agent-authored YAML draft, get the SAME preview the URL path
+    renders -- fully prefilled. Renders only; import_commit stays the one
+    write path, and every commit-boundary gate (variants rule, form_url,
+    venue rollup) applies to this data exactly as to typed data.
+
+    Tag and venue NAMES resolve to ids here, at the route boundary, the same
+    place the URL path matches its scraped venue name -- the draft never
+    carries database ids.
+    """
+    if len(draft) > MAX_DRAFT_CHARS:
+        return templates.TemplateResponse(
+            request,
+            "import_form.html",
+            # lang_next_url: POST-only render, same reason as import_preview.
+            {
+                "user": user,
+                "error": "draft too large -- pastes are capped at 200k characters",
+                "lang_next_url": "/concerts/import",
+            },
+        )
+    try:
+        parsed = parse_draft(draft)
+    except DraftError as e:
+        return templates.TemplateResponse(
+            request,
+            "import_form.html",
+            {"user": user, "error": str(e), "lang_next_url": "/concerts/import"},
+        )
+    return await _draft_preview_response(request, user, session, parsed)
+
+
+@dataclass(frozen=True)
+class PendingRow:
+    """One row of the pending-drafts list: the stored row, plus the
+    triage-worthy summary a fresh re-parse of its own `draft_text` yields."""
+
+    row: PendingDraft
+    leg_count: int
+    round_count: int
+    unmatched_count: int
+    # True only if draft_text no longer parses at all -- can't happen from a
+    # row this feature created (create_pending_drafts only ever stores a
+    # document that already parsed once), but a future parser change must not
+    # 500 the whole list over one stale row.
+    unreadable: bool = False
+
+
+@router.post("/batch", response_class=HTMLResponse)
+async def import_batch(
+    request: Request,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+    draft: str = Form(...),
+):
+    """Paste MANY '---'-separated YAML documents at once. One `PendingDraft`
+    row is persisted per document that parses; `/draft` above stays the
+    single-document path everything else (the preview, the skill zip, its own
+    tests) already builds on.
+
+    Deliberately NOT all-or-nothing. `parse_drafts` (domain/yaml_import.py)
+    already isolates one bad document from the rest of the same paste, and
+    `create_pending_drafts` (db/service.py) already persists every document
+    that DID parse and ignores the ones that didn't -- Task 1 and Task 2's
+    whole point was that a typo in document 37 of 50 must not cost the other
+    49. Re-imposing an all-or-nothing gate HERE, by refusing to create any row
+    unless every document parsed, would undo that one layer up, which is
+    exactly the gap Task 2's report flagged: a caller that silently drops
+    `batch.errors` reintroduces the "one bad document loses everything"
+    failure by omission, just one route higher than where Task 1 fixed it. So
+    this route always creates rows for what parsed, and ALWAYS reports what
+    didn't, by document number, on the very form the editor pasted into --
+    nothing here is allowed to vanish silently.
+    """
+    if len(draft) > MAX_DRAFT_CHARS:
+        return templates.TemplateResponse(
+            request,
+            "import_form.html",
+            {
+                "user": user,
+                "error": "draft too large -- pastes are capped at 200k characters",
+                "lang_next_url": "/concerts/import",
+            },
+        )
+    batch = parse_drafts(draft)
+    rows = await create_pending_drafts(session, batch, user.id)
+    await session.commit()
+    if batch.errors:
+        return templates.TemplateResponse(
+            request,
+            "import_form.html",
+            {
+                "user": user,
+                "batch_errors": batch.errors,
+                "batch_created": len(rows),
+                "lang_next_url": "/concerts/import",
+            },
+        )
+    return RedirectResponse("/concerts/import/pending", status_code=303)
+
+
+@router.get("/pending", response_class=HTMLResponse)
+async def import_pending_list(
+    request: Request,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+):
+    """The still-open rows from the caller's OWN batch pastes -- scoped by
+    `pending_drafts` itself (never committed, never discarded, `created_by`
+    filtered), so two editors triaging their own batches at once naturally
+    see only their own.
+
+    Each row is re-parsed from its own stored `draft_text` purely to show a
+    triage-worthy summary (legs / rounds / unmatched series tags) -- re-parsing
+    per row rather than caching counts at paste time means the counts always
+    reflect the CURRENT parser and the CURRENT catalogue (a tag created since
+    the paste now counts as matched), at the cost of one parse and one tag
+    comparison per row, which is cheap next to the query already paid to list
+    them.
+    """
+    rows = await pending_drafts(session, user.id)
+    picker = await tag_picker_context(session)
+    pending_rows: list[PendingRow] = []
+    for row in rows:
+        try:
+            parsed = parse_draft(row.draft_text)
+        except DraftError:
+            pending_rows.append(PendingRow(
+                row=row, leg_count=0, round_count=0, unmatched_count=0, unreadable=True,
+            ))
+            continue
+        _selected, unmatched = _resolve_series_tags(parsed, picker)
+        pending_rows.append(PendingRow(
+            row=row,
+            leg_count=len(parsed.days),
+            round_count=len(parsed.rounds),
+            unmatched_count=len(unmatched),
+        ))
+    return templates.TemplateResponse(
+        request, "import_pending.html", {"user": user, "rows": pending_rows}
+    )
+
+
+async def _own_open_pending(
+    session: AsyncSession, pending_id: int, user: SessionUser
+) -> PendingDraft | None:
+    """The one row `pending_id` names, or None when it doesn't exist, belongs
+    to somebody else, or has already been resolved (committed/discarded) --
+    three reasons to answer the same way. Ownership 404s rather than 403s
+    (invariant 5: don't confirm to a caller that another editor's id exists).
+    """
+    row = await session.get(PendingDraft, pending_id)
+    if row is None or row.created_by != user.id:
+        return None
+    if row.committed_at is not None or row.discarded_at is not None:
+        return None
+    return row
+
+
+@router.get("/pending/{pending_id}", response_class=HTMLResponse)
+async def import_pending_detail(
+    request: Request,
+    pending_id: int,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+):
+    """Re-parse one pending row's `draft_text` and render the SAME preview a
+    fresh paste renders, through the SAME `_draft_preview_response` -- the
+    whole point of a pending row is that triaging it later is indistinguishable
+    from having just pasted it, except the preview now carries `pending_id` so
+    the commit at the bottom stamps this row and returns to the list instead
+    of the concert page.
+    """
+    row = await _own_open_pending(session, pending_id, user)
+    if row is None:
+        raise HTTPException(status_code=404)
+    try:
+        parsed = parse_draft(row.draft_text)
+    except DraftError as e:
+        # Can't currently happen (this row's text already parsed once, at
+        # paste time) -- but a future parser change must render the ordinary
+        # form-error path rather than 500 on a row nobody can now fix.
+        return templates.TemplateResponse(
+            request,
+            "import_form.html",
+            {"user": user, "error": str(e), "lang_next_url": "/concerts/import"},
+        )
+    return await _draft_preview_response(request, user, session, parsed, pending_id=row.id)
+
+
+@router.post("/pending/{pending_id}/discard")
+async def import_pending_discard(
+    pending_id: int,
+    user: SessionUser = Depends(require_editor),
+    session: AsyncSession = Depends(get_session),
+):
+    """An editor's "not this one" on a triage row: stamp `discarded_at`, back
+    to the list. 404s exactly like the GET above rather than silently no-op'ing
+    on an id that belongs to someone else."""
+    row = await _own_open_pending(session, pending_id, user)
+    if row is None:
+        raise HTTPException(status_code=404)
+    await discard_pending_draft(session, pending_id, datetime.now(UTC))
+    await session.commit()
+    return RedirectResponse("/concerts/import/pending", status_code=303)
 
 
 SKILL_DIST_DIR = Path(__file__).resolve().parents[1] / "skill_dist" / "add-concert"
@@ -447,6 +675,12 @@ async def import_commit(
     round_url: list[str] = Form(default=[]),
     round_notes: list[str] = Form(default=[]),
     round_legs: list[str] = Form(default=[]),
+    # Set only when this commit is triaging a PendingDraft row (the preview
+    # renders it as a hidden field -- see _draft_preview_response). Absent for
+    # every other caller: the URL-scrape path, a single fresh /draft paste,
+    # and every existing test of this route, all of which must behave exactly
+    # as they did before this feature existed.
+    pending_id: int | None = Form(None),
 ):
     """Same validation as manual entry (build_day/build_round), just looped
     -- create_concert_row + add_day + add_round combined into one commit.
@@ -462,7 +696,13 @@ async def import_commit(
     `day_key` that the round's `round_legs` value references, resolved to real
     ids through key_to_day_id after the days flush. Upgrade qualifiers are not
     part of import -- the parser never produces an UPGRADE round -- so this
-    route does not collect round_qualifiers."""
+    route does not collect round_qualifiers.
+
+    `pending_id` set means this commit is triaging a stored PendingDraft: on
+    success the row is stamped committed (mark_pending_committed) and the
+    redirect goes to the pending LIST rather than the new concert, so the next
+    draft in the batch is one click away instead of a trip back through
+    /concerts/import. Unset, this route behaves exactly as it always has."""
     # _check_host pinned the *fetch* to ramen.events, but this value reached
     # the browser as a hidden field on the preview form and came back on this
     # request, so it is client-supplied like any other field. Validated before
@@ -648,5 +888,21 @@ async def import_commit(
     newly_venues = await sync_concert_venue_tags(session, concert.id)
     await handle_newly_tagged(session, concert, newly_venues)
     await sync_concert(session, concert.id)
+    # Stamp the pending row (if any) in the SAME transaction as the concert it
+    # produced, so the two can never disagree after a crash between them.
+    # Ownership-checked here rather than trusted from the hidden field: the
+    # only legitimate source of a pending_id is this editor's own
+    # _draft_preview_response render, but the field still rode through the
+    # browser like any other, and a foreign or already-resolved id must not
+    # silently mark someone else's row -- it is treated as if pending_id had
+    # never been sent, which is the closest thing to "ignore it" available
+    # once the concert has already been created.
+    pending_row = None
+    if pending_id is not None:
+        pending_row = await _own_open_pending(session, pending_id, user)
+    if pending_row is not None:
+        await mark_pending_committed(session, pending_row.id, concert.id, datetime.now(UTC))
     await session.commit()
+    if pending_row is not None:
+        return RedirectResponse("/concerts/import/pending", status_code=303)
     return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)
