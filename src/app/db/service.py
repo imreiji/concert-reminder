@@ -58,6 +58,7 @@ from app.db.models import (
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.digest import DeliveryFact, build_digest
 from app.domain.eventernote import ActorEvent
+from app.domain.prune_list import PruneList
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.slugs import tag_slug_base
@@ -7116,6 +7117,91 @@ async def dismiss_lead(
     row.dismiss_reason = reason
     await session.flush()
     return True
+
+
+@dataclass(frozen=True)
+class PlannedDismissal:
+    """One lead a prune list names, carrying the FILE's own reason for it --
+    not necessarily what the row ends up holding. For `to_dismiss` this
+    reason is exactly what apply_prune will write; for `already` it is only
+    what the file asked for, since apply_prune leaves an already-dismissed
+    row's own reason untouched (see apply_prune)."""
+
+    lead_id: int
+    event_id: str
+    title: str
+    event_date: date
+    reason: DismissReason
+
+
+@dataclass(frozen=True)
+class PrunePlan:
+    """What a prune list WOULD do, before any of it is written.
+
+    Three buckets, all worth showing a human before they approve anything:
+    - to_dismiss: an open lead this file would dismiss.
+    - unknown: an event_id matching no DiscoveredEvent row at all -- usually
+      a stale file (a mistyped id, or a lead that no longer exists).
+    - already: a lead this file names that is already dismissed -- usually a
+      re-paste of an earlier file. apply_prune leaves these rows exactly as
+      it found them.
+    """
+
+    to_dismiss: tuple[PlannedDismissal, ...]
+    unknown: tuple[str, ...]
+    already: tuple[PlannedDismissal, ...]
+
+
+async def plan_prune(session: AsyncSession, prune: PruneList) -> PrunePlan:
+    """Join a parsed prune list against the catalogue -- ONE query however
+    many entries the file names (`eventernote_event_id IN (...)`), not a
+    query per entry: 300 entries must not be 300 round trips.
+
+    Sorts every entry into exactly one of PrunePlan's three buckets and
+    writes NOTHING -- looking is not doing, and this plan is rendered before
+    a human has agreed to any of it.
+    """
+    ids = [entry.event_id for entry in prune.entries]
+    rows = (await session.execute(
+        select(DiscoveredEvent).where(DiscoveredEvent.eventernote_event_id.in_(ids))
+    )).scalars()
+    by_event_id = {row.eventernote_event_id: row for row in rows}
+
+    to_dismiss: list[PlannedDismissal] = []
+    unknown: list[str] = []
+    already: list[PlannedDismissal] = []
+
+    for entry in prune.entries:
+        row = by_event_id.get(entry.event_id)
+        if row is None:
+            unknown.append(entry.event_id)
+            continue
+        planned = PlannedDismissal(
+            lead_id=row.id, event_id=entry.event_id, title=row.title,
+            event_date=row.event_date, reason=entry.reason,
+        )
+        (already if row.dismissed_at is not None else to_dismiss).append(planned)
+
+    return PrunePlan(
+        to_dismiss=tuple(to_dismiss), unknown=tuple(unknown), already=tuple(already),
+    )
+
+
+async def apply_prune(session: AsyncSession, plan: PrunePlan, now: datetime) -> int:
+    """Write a plan built from a FRESH parse -- one dismiss_lead call per
+    lead in `to_dismiss` (never a bulk UPDATE; dismiss_lead is the single
+    writer), returning how many rows were actually written.
+
+    Does not re-derive the plan and does not touch `unknown`/`already` at
+    all: plan_prune already sorted those out, and dismiss_lead itself refuses
+    an already-dismissed row, so even a stale plan racing a second apply
+    cannot re-stamp one.
+    """
+    written = 0
+    for planned in plan.to_dismiss:
+        if await dismiss_lead(session, planned.lead_id, now, planned.reason):
+            written += 1
+    return written
 
 
 async def mark_leads_announced(

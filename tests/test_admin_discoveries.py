@@ -13,9 +13,11 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.db.models import Base, Concert, ConcertDay, DiscoveredEvent, DiscoveryState, Tag
+from app.db.service import apply_prune, plan_prune
 from app.db.session import get_session
 from app.discovery import DiscoveryFetchError
-from app.domain.types import TagKind
+from app.domain.prune_list import PruneEntry, PruneList
+from app.domain.types import DismissReason, TagKind
 from app.web import auth
 from app.web.app import create_app
 from app.web.routes import discoveries
@@ -88,6 +90,17 @@ async def _seed(client, **overrides):
 async def _lead_id(client):
     async with client.db() as s:
         return (await s.execute(select(DiscoveredEvent))).scalar_one().id
+
+
+async def _lead_by_event_id(client, eventernote_event_id):
+    """Look a seeded row up by its EXTERNAL id, for tests that seed more than
+    one lead and so cannot use `_lead_id`'s scalar_one()."""
+    async with client.db() as s:
+        return (await s.execute(
+            select(DiscoveredEvent).where(
+                DiscoveredEvent.eventernote_event_id == eventernote_event_id
+            )
+        )).scalar_one()
 
 
 # ── Access ───────────────────────────────────────────────────────────────
@@ -918,3 +931,138 @@ async def test_the_button_never_nests_inside_the_edit_form(client):
     edit_close = dialog.find("</form>", edit_open)
     sweep = dialog.find(f"/admin/discoveries/sweep/{tag_id}")
     assert -1 < edit_open < edit_close < sweep, "the sweep form starts after the edit form ends"
+
+
+# ── The plan builder (plan_prune / apply_prune) ─────────────────────────────
+
+
+async def test_the_plan_sorts_leads_into_dismiss_unknown_and_already(client):
+    """Three buckets, all shown. An unknown id is usually a stale file and an
+    already-dismissed lead is usually a re-paste -- both are worth seeing, and
+    neither should stop the rest."""
+    await _seed(client, eventernote_event_id="111")
+    await _seed(
+        client, eventernote_event_id="222",
+        dismissed_at=NOW, dismiss_reason=DismissReason.FREE,
+    )
+    prune = PruneList(
+        entries=(
+            PruneEntry(event_id="111", reason=DismissReason.STAGE),
+            PruneEntry(event_id="222", reason=DismissReason.RELEASE),
+            PruneEntry(event_id="999", reason=DismissReason.OTHER),
+        ),
+        warnings=(),
+    )
+    async with client.db() as s:
+        plan = await plan_prune(s, prune)
+
+    assert [d.event_id for d in plan.to_dismiss] == ["111"]
+    assert [d.event_id for d in plan.already] == ["222"]
+    assert plan.unknown == ("999",)
+
+
+async def test_planning_writes_nothing(client):
+    """Rendering a plan must leave the queue exactly as it found it. If
+    plan_prune ever grew a write, this is the test that must fail."""
+    await _seed(client, eventernote_event_id="111")
+    prune = PruneList(
+        entries=(PruneEntry(event_id="111", reason=DismissReason.STAGE),),
+        warnings=(),
+    )
+    async with client.db() as s:
+        await plan_prune(s, prune)
+        # No commit, no flush of a write -- but even a session that DID flush
+        # a stray write would show it here, in the very same session.
+        assert (await s.execute(select(DiscoveredEvent))).scalar_one().dismissed_at is None
+
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is None
+    assert lead.dismiss_reason is None
+
+
+async def test_apply_dismisses_with_each_lead_s_own_reason(client):
+    """Two leads under different reasons in one file -- each row gets exactly
+    the reason its own entry named, not the other's."""
+    await _seed(client, eventernote_event_id="111")
+    await _seed(client, eventernote_event_id="222")
+    prune = PruneList(
+        entries=(
+            PruneEntry(event_id="111", reason=DismissReason.STAGE),
+            PruneEntry(event_id="222", reason=DismissReason.RELEASE),
+        ),
+        warnings=(),
+    )
+    async with client.db() as s:
+        plan = await plan_prune(s, prune)
+        written = await apply_prune(s, plan, NOW)
+        await s.commit()
+    assert written == 2
+
+    reasons = {
+        eid: (await _lead_by_event_id(client, eid)).dismiss_reason
+        for eid in ("111", "222")
+    }
+    assert reasons == {"111": "stage", "222": "release"}
+
+
+async def test_apply_skips_the_already_dismissed_without_restamping(client):
+    """dismiss_lead already returns False for these. The original reason and
+    timestamp must survive -- a re-paste is not a re-decision. Asserting only
+    "it's still dismissed" would pass even against an implementation that
+    overwrites both fields with the file's new say-so; both must be pinned to
+    their ORIGINAL values."""
+    original_ts = datetime(2026, 7, 1, 0, 0, tzinfo=UTC)
+    await _seed(
+        client, eventernote_event_id="111",
+        dismissed_at=original_ts, dismiss_reason=DismissReason.FREE,
+    )
+    prune = PruneList(
+        entries=(PruneEntry(event_id="111", reason=DismissReason.STAGE),),
+        warnings=(),
+    )
+    async with client.db() as s:
+        plan = await plan_prune(s, prune)
+        written = await apply_prune(s, plan, NOW)
+        await s.commit()
+    assert written == 0
+
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at == original_ts
+    assert lead.dismiss_reason == "free"
+
+
+async def test_planning_a_batch_does_not_issue_a_query_per_entry(client):
+    """The property: planning a 20-entry file does not issue 20 SELECTs.
+    Mirrors the statement-count style pinned for my_deadline_blocks in
+    tests/test_service.py."""
+    async with client.db() as s:
+        for n in range(20):
+            s.add(DiscoveredEvent(
+                eventernote_event_id=f"5{n:03d}", title=f"Show {n}",
+                event_date=dt.date(2026, 11, 1) + dt.timedelta(days=n),
+                first_seen_at=NOW, last_seen_at=NOW,
+            ))
+        await s.commit()
+
+    prune = PruneList(
+        entries=tuple(
+            PruneEntry(event_id=f"5{n:03d}", reason=DismissReason.OTHER)
+            for n in range(20)
+        ),
+        warnings=(),
+    )
+
+    queries: list[str] = []
+
+    def _count(conn, cursor, statement, parameters, context, executemany):
+        queries.append(statement)
+
+    async with client.db() as s:
+        event.listen(s.bind.sync_engine, "before_cursor_execute", _count)
+        try:
+            plan = await plan_prune(s, prune)
+        finally:
+            event.remove(s.bind.sync_engine, "before_cursor_execute", _count)
+
+    assert len(plan.to_dismiss) == 20
+    assert len(queries) == 1, f"plan_prune ran {len(queries)} queries for 20 entries"
