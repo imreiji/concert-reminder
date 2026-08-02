@@ -1,32 +1,85 @@
+{% extends "base.html" %}
 {#- Admin surface: English-only and NOT wrapped in _(), like admin_discoveries
     and admin_import_tags. Only the Preferences LINK to this page is
     translated. Same shape as admin_import_tags.html on purpose: paste, plan,
     apply -- reusing existing classes (`banner warn`, `edgecard`, `dim`, `act
-    no`), inventing no new styling. -#}
-{% extends "base.html" %}
+    no`), inventing no new styling.
+
+    `plan` and `report` are mutually exclusive, like admin_import_tags.html's
+    `plan`/`report`: the preview route renders `plan` (a live, submittable
+    proposal); the apply route renders `report` (a snapshot of what already
+    happened, with no submit button over ids that are now stale). Never pass
+    both from the route. -#}
 {% block title %}Prune discovery leads — dekimasen.app{% endblock %}
 {% block content %}
+{% macro dismissal_list(items) %}
+<ul class="dim">
+  {% for d in items %}
+  <li>{{ d.title }} — {{ d.event_date.strftime('%Y-%m-%d') }}
+    {%- if artist_names.get(d.first_seen_via_tag_id) %} ({{ artist_names[d.first_seen_via_tag_id] }}){% endif -%}
+    : file says <b>{{ dismiss_reason_labels[d.reason] }}</b>, already dismissed as
+    {% if d.stored_reason %}<b>{{ dismiss_reason_labels[d.stored_reason] }}</b>{% else %}<b>unknown (predates this column)</b>{% endif %}
+    {%- if d.stored_reason and d.stored_reason != d.reason %} — <b>disagreement</b>{% endif %}.</li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+{% macro catalogued_list(items) %}
+<ul class="dim">
+  {% for d in items %}
+  <li>{{ d.title }} — {{ d.event_date.strftime('%Y-%m-%d') }}
+    {%- if artist_names.get(d.first_seen_via_tag_id) %} ({{ artist_names[d.first_seen_via_tag_id] }}){% endif -%}
+    : file says <b>{{ dismiss_reason_labels[d.reason] }}</b>, but this is already a tracked concert.</li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+{% macro warnings_banner(warnings) %}
+{% if warnings %}
+<div class="banner warn">
+  <span>⚠</span>
+  <span><b>{{ warnings | length }} warning(s) from the file itself.</b>
+    <ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul></span>
+</div>
+{% endif %}
+{% endmacro %}
+
 <div class="lede">
   <h1>Prune discovery leads</h1>
   <p class="dim">Paste an agent's classification of the open
     <a href="/admin/discoveries">discoveries</a> queue — a <code>dismiss:</code>
     mapping of reason to a list of Eventernote event ids. Every surviving entry
-    becomes a <b>permanent</b> dismissal; nothing here un-dismisses.</p>
+    becomes a <b>permanent</b> dismissal; nothing here un-dismisses. To exclude
+    a single misclassified lead, remove its id from the pasted list below and
+    preview again — there is no separate per-row "skip" control.</p>
 </div>
 
 {% if error %}
 <p class="banner dgr"><span>⚠</span> <span><b>That file could not be read.</b> {{ error }}</span></p>
 {% endif %}
 
-{% if applied is not none %}
+{% if report %}
 <div class="edgecard ok">
-  <p><b>Dismissed {{ applied }} lead{{ '' if applied == 1 else 's' }}.</b>
-    {% if plan.already %}{{ plan.already | length }} were already dismissed and left untouched.{% endif %}
-    {% if plan.unknown %}{{ plan.unknown | length }} id(s) matched no open lead and were skipped.{% endif %}</p>
+  <p><b>Dismissed {{ report.dismissed }} lead{{ '' if report.dismissed == 1 else 's' }}.</b>
+    {% if report.already %}{{ report.already | length }} were already dismissed and left untouched.{% endif %}
+    {% if report.catalogued %}{{ report.catalogued | length }} are now tracked concerts and were skipped.{% endif %}
+    {% if report.unknown %}{{ report.unknown | length }} id(s) matched no open lead and were skipped.{% endif %}</p>
 </div>
+{{ warnings_banner(report.warnings) }}
+{% if report.catalogued %}
+<h2>Now catalogued</h2>
+{{ catalogued_list(report.catalogued) }}
+{% endif %}
+{% if report.already %}
+<h2>Already dismissed</h2>
+{{ dismissal_list(report.already) }}
+{% endif %}
+{% if report.unknown %}
+<h2>Not in the queue</h2>
+<p class="dim">{% for eid in report.unknown %}<code>{{ eid }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% endif %}
 {% endif %}
 
 {% if plan %}
+{{ warnings_banner(plan.warnings) }}
 <form method="post" action="/admin/discoveries/prune/apply" class="stack wide">
   <input type="hidden" name="text" value="{{ text }}">
 
@@ -38,6 +91,7 @@
     <ul>
       {% for d in group %}
       <li>{{ d.title }} — {{ d.event_date.strftime('%Y-%m-%d') }}
+        {%- if artist_names.get(d.first_seen_via_tag_id) %} ({{ artist_names[d.first_seen_via_tag_id] }}){% endif %}
         (<a href="https://www.eventernote.com/events/{{ d.event_id }}"
             target="_blank" rel="noopener">{{ d.event_id }}</a>)</li>
       {% endfor %}
@@ -61,6 +115,20 @@
   <p class="dim">Every id in the file matched an open lead.</p>
   {% endif %}
 
+  <h2>Now catalogued</h2>
+  {% if plan.catalogued %}
+  <div class="banner warn">
+    <span>⚠</span>
+    <span><b>{{ plan.catalogued | length }} lead(s) are now tracked concerts.</b>
+      The file predates that; dismissing would tag a real concert record
+      rather than a lead, so these are skipped whatever reason the file gives
+      them.</span>
+  </div>
+  {{ catalogued_list(plan.catalogued) }}
+  {% else %}
+  <p class="dim">Nothing in the file is a tracked concert already.</p>
+  {% endif %}
+
   <h2>Already dismissed</h2>
   {% if plan.already %}
   <div class="banner warn">
@@ -69,14 +137,7 @@
       Left exactly as they are — applying never re-stamps a dismissed row, so
       the ORIGINAL reason and timestamp survive, not this file's.</span>
   </div>
-  <ul class="dim">
-    {% for d in plan.already %}
-    <li>{{ d.title }} — {{ d.event_date.strftime('%Y-%m-%d') }}: file says
-      <b>{{ dismiss_reason_labels[d.reason] }}</b>, already dismissed as
-      {% if d.stored_reason %}<b>{{ dismiss_reason_labels[d.stored_reason] }}</b>{% else %}<b>unknown (predates this column)</b>{% endif %}
-      {%- if d.stored_reason and d.stored_reason != d.reason %} — <b>disagreement</b>{% endif %}.</li>
-    {% endfor %}
-  </ul>
+  {{ dismissal_list(plan.already) }}
   {% else %}
   <p class="dim">Nothing in the file was already dismissed.</p>
   {% endif %}

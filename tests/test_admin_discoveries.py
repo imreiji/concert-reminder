@@ -970,6 +970,36 @@ async def test_the_plan_sorts_leads_into_dismiss_unknown_and_already(client):
     assert plan.to_dismiss[0].stored_reason is None
 
 
+async def test_a_lead_already_bound_to_a_concert_is_not_dismissed(client):
+    """`open_leads` filters `concert_id IS NULL` -- a lead that became a
+    concert between classification and apply must not silently fall into
+    `to_dismiss`: dismissing it would stamp a `dismiss_reason` on a row the
+    catalogue already has, polluting `dismissed_reason_counts`, which exists
+    to score the classifier against real human judgments, not against a
+    stale file. It must land in its OWN bucket (`catalogued`), not `already`
+    either -- a catalogued lead was never dismissed at all, so folding it
+    into `already` would misreport what actually happened to it."""
+    await _seed(client, eventernote_event_id="111")
+    async with client.db() as s:
+        concert = Concert(title="t", event_id="c1")
+        s.add(concert)
+        await s.flush()
+        lead = (await s.execute(select(DiscoveredEvent))).scalar_one()
+        lead.concert_id = concert.id
+        await s.commit()
+
+    prune = PruneList(
+        entries=(PruneEntry(event_id="111", reason=DismissReason.STAGE),),
+        warnings=(),
+    )
+    async with client.db() as s:
+        plan = await plan_prune(s, prune)
+
+    assert plan.to_dismiss == ()
+    assert plan.already == ()
+    assert [d.event_id for d in plan.catalogued] == ["111"]
+
+
 async def test_planning_writes_nothing(client):
     """Rendering a plan must leave the queue exactly as it found it. If
     plan_prune ever grew a write, this is the test that must fail."""
@@ -1126,16 +1156,37 @@ async def test_signed_out_cannot_reach_the_prune_page(client):
     assert client.post("/admin/discoveries/prune/apply", data={"text": ""}).status_code == 303
 
 
-async def test_the_plan_page_shows_all_three_buckets(client):
+async def test_the_plan_page_shows_all_four_buckets(client):
     """One file naming an open lead, an already-dismissed lead (under a
-    DIFFERENT reason than it is stored under) and an id matching nothing at
-    all -- all three buckets must render, and the already-dismissed lead must
-    show BOTH what the file says and what is actually stored, since that
-    disagreement is the whole point of the stored_reason column."""
+    DIFFERENT reason than it is stored under), a lead that has since become a
+    concert, and an id matching nothing at all -- all four buckets must
+    render, and the already-dismissed lead must show BOTH what the file says
+    and what is actually stored, since that disagreement is the whole point
+    of the stored_reason column.
+
+    The "999" assertion is deliberately NOT a bare substring check: the
+    pasted text is echoed twice elsewhere on this page (the hidden `text`
+    input and the bottom textarea both contain the raw YAML, ids included),
+    so `"999" in body` would pass even if the "Not in the queue" section
+    rendered nothing at all -- confirmed by mutation, deleting that section's
+    `<h2>` entirely and re-running this test still left it green before this
+    fix. Asserting the rendered `<code>999</code>` fragment only comes from
+    that section's own loop, never from the raw pasted text, so it actually
+    proves the section renders."""
     await _seed(client, eventernote_event_id="111", title="Open Lead")
     await _seed(
         client, eventernote_event_id="222", title="Already Gone",
         dismissed_at=NOW, dismiss_reason=DismissReason.FREE,
+    )
+    async with client.db() as s:
+        concert = Concert(title="t", event_id="c1")
+        s.add(concert)
+        await s.flush()
+        concert_id = concert.id
+        await s.commit()
+    await _seed(
+        client, eventernote_event_id="333", title="Now A Concert",
+        concert_id=concert_id,
     )
     login_as(client, ADMIN_ID, "reiji")
     text = (
@@ -1145,20 +1196,46 @@ async def test_the_plan_page_shows_all_three_buckets(client):
         "  release:\n"
         "    - '222'\n"
         "    - '999'\n"
+        "  live:\n"
+        "    - '333'\n"
     )
     body = client.post("/admin/discoveries/prune", data={"text": text}).text
     assert "Open Lead" in body
     assert "Already Gone" in body
-    assert "999" in body
+    assert "Now A Concert" in body
+    assert "<code>999</code>" in body, \
+        "the unknown-id fragment, not merely '999' anywhere on the page"
+    assert "1 id(s) match no open lead" in body, "the section's own prose, not just the id"
+    assert "1 lead(s) are now tracked concerts" in body, "the catalogued section's own prose"
     assert "Release event" in body, "what the file asked for, for the already-dismissed lead"
     assert "No ticket at all" in body, "what the row actually holds -- the disagreement"
 
-    # Previewing writes nothing.
+    # Previewing writes nothing, for any of the four buckets.
     lead = await _lead_by_event_id(client, "111")
     assert lead.dismissed_at is None
     lead = await _lead_by_event_id(client, "222")
     assert lead.dismissed_at is not None and lead.dismiss_reason == "free", \
         "the already-dismissed row's own reason must survive a mere preview"
+    lead = await _lead_by_event_id(client, "333")
+    assert lead.dismissed_at is None, "a catalogued lead must never be dismissed"
+
+
+async def test_the_unknown_bucket_prose_is_not_vacuously_satisfied_by_the_pasted_text(client):
+    """The regression test for the mutation the review caught: this asserts
+    the SAME "<code>999</code>" fragment `test_the_plan_page_shows_all_four_
+    buckets` does, but isolates it from every other bucket so a future
+    change cannot accidentally satisfy it from some other section's markup.
+    A file naming ONLY an unknown id renders no `to_dismiss`, `already` or
+    `catalogued` content at all -- if the fragment still appeared here, it
+    could only be coming from the "Not in the queue" section itself, or from
+    the raw pasted text echoed in the hidden input/textarea. The `<code>`
+    wrapper rules out the latter: neither echo wraps the id in a `<code>`
+    tag."""
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  other:\n    - '999'\n"
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert "<code>999</code>" in body
+    assert "1 id(s) match no open lead" in body
 
 
 async def test_previewing_writes_nothing(client):
@@ -1207,6 +1284,90 @@ async def test_apply_dismisses_and_reports(client):
     lead = await _lead_by_event_id(client, "111")
     assert lead.dismissed_at is not None
     assert lead.dismiss_reason == "stage"
+
+
+async def test_apply_does_not_reoffer_a_stale_plan(client):
+    """After applying, the page must not re-render the PLAN it just acted
+    on: the plan's lead ids are now gone, but the plan form still carried a
+    live submit button pointed at /admin/discoveries/prune/apply. Pressing it
+    again would re-apply against a stale plan and report "Dismissed 0
+    leads", which reads exactly like the first press silently failed --
+    when dismissal is PERMANENT and irreversible, that false signal is worse
+    than useless. /admin/import/tags/apply avoids this by rendering
+    `report=` instead of `plan=`; this route must do the same."""
+    await _seed(client, eventernote_event_id="111", title="Lead A")
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n"
+    body = client.post("/admin/discoveries/prune/apply", data={"text": text}).text
+    assert "Dismissed 1 lead" in body
+    assert 'action="/admin/discoveries/prune/apply"' not in body, \
+        "no submit button may point back at apply once this page has already applied"
+    assert "Will dismiss" not in body, "the stale plan heading must not reappear"
+
+
+async def test_the_plan_page_shows_parser_warnings(client):
+    """`parse_prune_list`'s one warning -- an id listed twice under the same
+    reason -- is the tell of a sloppy agent file and must not be silently
+    dropped between parsing and rendering, the same way admin_import_tags.html
+    surfaces its own parser's warnings."""
+    await _seed(client, eventernote_event_id="111")
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n    - '111'\n"
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert "listed twice under" in body
+    assert "duplicate ignored" in body
+
+
+async def test_a_prune_list_over_the_size_cap_is_refused(client):
+    """Mirrors admin.py's tags.yaml cap: a paste this large is either a
+    mistake or something worth a second look, not something this route
+    should try to parse. 443 real leads is roughly 6KB, so the cap is not
+    documented on the page itself -- nobody legitimate is expected to hit
+    it, and a number nobody can reach is just noise in the copy."""
+    await _seed(client, eventernote_event_id="111")
+    login_as(client, ADMIN_ID, "reiji")
+    huge = "dismiss:\n  stage:\n" + ("    # padding\n" * 40_000)
+    assert len(huge) > 200_000
+
+    r = client.post("/admin/discoveries/prune", data={"text": huge})
+    assert r.status_code == 200
+    assert "too large" in r.text
+
+    r = client.post("/admin/discoveries/prune/apply", data={"text": huge})
+    assert r.status_code == 200
+    assert "too large" in r.text
+
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is None
+
+
+async def test_the_plan_page_shows_the_surfacing_artist_tag(client):
+    """The single highest-value addition for making a batch of 300
+    dismissals reviewable: which artist's Eventernote page surfaced each
+    lead, the same information /admin/discoveries itself shows via
+    `_artist_names`. Present across all three real-row buckets, not only
+    `to_dismiss`."""
+    async with client.db() as s:
+        tag = Tag(name="Liella!", kind=TagKind.GROUP, slug="liella")
+        s.add(tag)
+        await s.flush()
+        tag_id = tag.id
+        await s.commit()
+    await _seed(client, eventernote_event_id="111", first_seen_via_tag_id=tag_id)
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n"
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert "Liella!" in body
+
+
+async def test_the_plan_page_explains_how_to_exclude_a_lead(client):
+    """The only way to keep a single misclassified lead out of the batch is
+    to remove its id from the pasted file and preview again -- nothing else
+    on the page offers a per-row skip, so the copy has to say so."""
+    await _seed(client, eventernote_event_id="111")
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries/prune").text
+    assert "remove its id from the pasted list" in body
 
 
 async def test_apply_reparses_and_ignores_injected_ids(client):

@@ -47,6 +47,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import DiscoveredEvent, Tag
 from app.db.service import (
+    PlannedDismissal,
+    PruneReport,
     apply_prune,
     discovery_status,
     dismiss_lead,
@@ -90,13 +92,21 @@ class LeadRow:
     maybe_held: bool
 
 
-async def _artist_names(session: AsyncSession, leads: list[DiscoveredEvent]) -> dict[int, str]:
+async def _artist_names(
+    session: AsyncSession, leads: "list[DiscoveredEvent] | list[PlannedDismissal]"
+) -> dict[int, str]:
     """Tag id -> name for the tags that surfaced these leads.
 
     ONE query for the whole page rather than a `session.get` per row: a
     first-sweep backlog is hundreds of leads long, and this is a plain lookup
     (the same shape as admin.py's broadcast_status counting its pending rows),
     not business logic that belongs in db/service.py.
+
+    Reused by the prune surface below over `PlannedDismissal` rows rather than
+    `DiscoveredEvent` rows -- both carry a `first_seen_via_tag_id` attribute,
+    and duck typing this rather than writing a second near-identical query is
+    exactly what keeps the prune routes' own query count at one lookup for the
+    whole page instead of two.
     """
     ids = {lead.first_seen_via_tag_id for lead in leads if lead.first_seen_via_tag_id}
     if not ids:
@@ -300,7 +310,7 @@ async def dismiss(
 # that classification, per lead, before any of it becomes permanent.
 
 
-def _prune_page(request, user, text, *, plan=None, applied=None, error=None):
+def _prune_page(request, user, text, *, plan=None, report=None, error=None, artist_names=None):
     return templates.TemplateResponse(
         request,
         "admin_prune.html",
@@ -308,8 +318,9 @@ def _prune_page(request, user, text, *, plan=None, applied=None, error=None):
             "user": user,
             "text": text,
             "plan": plan,
-            "applied": applied,
+            "report": report,
             "error": error,
+            "artist_names": artist_names or {},
             "dismiss_reason_labels": DISMISS_REASON_LABELS,
         },
     )
@@ -327,6 +338,13 @@ async def _prune_plan_or_error(session, text):
         return None, str(exc)
     plan = await plan_prune(session, parsed)
     return plan, None
+
+
+def _prune_rows(plan) -> list[PlannedDismissal]:
+    """Every lead across the three buckets that carry a real row (NOT
+    `unknown`, which is bare ids with no DiscoveredEvent behind them), for one
+    batched artist-name lookup that has to cover all of them at once."""
+    return [*plan.to_dismiss, *plan.already, *plan.catalogued]
 
 
 @router.get("/admin/discoveries/prune", response_class=HTMLResponse)
@@ -353,7 +371,8 @@ async def prune_preview(
     """Show what the file WOULD dismiss. Writes nothing -- looking is not
     doing, and every entry here is about to become a permanent dismissal."""
     plan, error = await _prune_plan_or_error(session, text)
-    return _prune_page(request, user, text, plan=plan, error=error)
+    names = await _artist_names(session, _prune_rows(plan)) if plan else {}
+    return _prune_page(request, user, text, plan=plan, error=error, artist_names=names)
 
 
 @router.post("/admin/discoveries/prune/apply", response_class=HTMLResponse)
@@ -384,10 +403,24 @@ async def prune_apply(
     One transaction: a file that raises leaves nothing behind. `apply_prune`
     only flushes per lead, never commits, so the commit here is what makes
     the batch durable.
+
+    Renders a `report=`, deliberately NOT the `plan=` the preview route
+    above renders -- following /admin/import/tags/apply, which passes
+    `report=` and not `plan=` for the same reason. Re-rendering the plan here
+    would show "Will dismiss -- N leads" with a still-submittable button over
+    lead ids that no longer need dismissing; pressing it again would apply
+    against a stale plan and report "Dismissed 0 leads", which reads exactly
+    like the first press silently failed rather than like it already
+    succeeded.
     """
     plan, error = await _prune_plan_or_error(session, text)
     if error:
         return _prune_page(request, user, text, error=error)
     written = await apply_prune(session, plan, datetime.now(UTC))
     await session.commit()
-    return _prune_page(request, user, text, plan=plan, applied=written)
+    report = PruneReport(
+        dismissed=written, unknown=plan.unknown, already=plan.already,
+        catalogued=plan.catalogued, warnings=plan.warnings,
+    )
+    names = await _artist_names(session, [*plan.already, *plan.catalogued])
+    return _prune_page(request, user, text, report=report, artist_names=names)
