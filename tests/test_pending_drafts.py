@@ -9,13 +9,14 @@ outlive the request that created them so a closed tab never loses the batch.
 from datetime import UTC, datetime
 
 import pytest_asyncio
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.db.models import Base, Concert, PendingDraft, User
 from app.db.service import (
     create_pending_drafts,
+    delete_user,
     discard_pending_draft,
     mark_pending_committed,
     pending_drafts,
@@ -181,3 +182,29 @@ async def test_deleting_the_concert_leaves_the_row_with_concert_id_null(db):
 
         assert row is not None, "deleting the concert must not delete the pending draft"
         assert row.concert_id is None
+
+
+async def test_deleting_the_user_removes_their_pending_drafts(db):
+    """Self-serve erasure (invariant 5, POST /me/delete -> service.delete_user)
+    is a bare `session.delete(user)` relying entirely on ondelete= clauses to
+    do the right thing. A pending draft is the pasting editor's own
+    un-actioned working text -- personal data, not shared catalogue -- so it
+    must go with them the way reminder_rules/web_sessions/etc. do, rather than
+    dangle or block the delete outright.
+
+    Requires PRAGMA foreign_keys=ON: without it SQLite enforces no FK action
+    at all, `created_by` would happily reference a deleted user, and this
+    test would pass for the wrong reason -- the exact trap the fixture rule
+    exists for.
+    """
+    async with db() as s:
+        await _seed_user(s, USER_A)
+        rows = await create_pending_drafts(s, _batch("A", "B"), USER_A)
+        row_ids = [r.id for r in rows]
+
+        assert await delete_user(s, USER_A) is True
+
+        remaining = await s.execute(
+            select(PendingDraft).where(PendingDraft.id.in_(row_ids))
+        )
+        assert remaining.scalars().all() == []

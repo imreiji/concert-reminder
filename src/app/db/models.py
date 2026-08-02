@@ -929,7 +929,14 @@ class PendingDraft(Base):
     # Parsed out at paste time so the list renders without re-parsing every
     # row on every page load.
     title: Mapped[str] = mapped_column(String(300), default="")
-    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.discord_id"))
+    # CASCADE, not SET NULL: a pending draft is the pasting editor's own
+    # un-actioned working text, personal data by delete_user's own rule, not
+    # the shared catalogue Concert.created_by protects. Erasing the person
+    # removes their unfinished drafts; the concert_id SET NULL below already
+    # keeps any concert they DID produce standing on its own.
+    created_by: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
     # A row is DONE when either of these is set. Nothing cleans up: a
     # committed row is the only trace linking a draft to the concert it

@@ -26,7 +26,7 @@ def upgrade() -> None:
     sa.Column('concert_id', sa.Integer(), nullable=True),
     sa.Column('discarded_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['concert_id'], ['concerts.id'], name=op.f('fk_pending_drafts_concert_id_concerts'), ondelete='SET NULL'),
-    sa.ForeignKeyConstraint(['created_by'], ['users.discord_id'], name=op.f('fk_pending_drafts_created_by_users')),
+    sa.ForeignKeyConstraint(['created_by'], ['users.discord_id'], name=op.f('fk_pending_drafts_created_by_users'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_pending_drafts'))
     )
     # ### end Alembic commands ###
