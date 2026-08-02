@@ -58,6 +58,7 @@ from app.db.models import (
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.digest import DeliveryFact, build_digest
 from app.domain.eventernote import ActorEvent
+from app.domain.prune_list import PruneList
 from app.domain.rehearsal import expected_buttons
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
 from app.domain.slugs import tag_slug_base
@@ -7116,6 +7117,166 @@ async def dismiss_lead(
     row.dismiss_reason = reason
     await session.flush()
     return True
+
+
+@dataclass(frozen=True)
+class PlannedDismissal:
+    """One lead a prune list names.
+
+    `reason` is the FILE's own say-so -- not necessarily what the row ends up
+    holding. For `to_dismiss` it is exactly what apply_prune will write; for
+    `already` it is only what the file asked for, since apply_prune leaves an
+    already-dismissed row's own reason untouched (see apply_prune).
+
+    `stored_reason` is what the row ALREADY carries (None if it predates the
+    column, or if the lead isn't dismissed yet). For `already` this is the
+    truth a screen owes a human: "file says stage, already dismissed as
+    release" is the disagreement the `dismiss_reason` column exists to make
+    measurable, and dropping it here would throw that away at the one place
+    it is visible before nothing happens.
+
+    `first_seen_via_tag_id` rides along purely for display -- the artist tag
+    that surfaced the lead, the same column /admin/discoveries reads via its
+    own `_artist_names` helper. Copying it here costs no extra query (the row
+    is already fully loaded in plan_prune), and a screen asking a human to
+    approve 300 permanent dismissals is far more reviewable with "which
+    artist" on every line than without it. Defaulted so the several
+    hand-built PrunePlan/PlannedDismissal fixtures in this file's own test
+    suite, written before this field existed, still construct."""
+
+    lead_id: int
+    event_id: str
+    title: str
+    event_date: date
+    reason: DismissReason
+    stored_reason: DismissReason | None
+    first_seen_via_tag_id: int | None = None
+
+
+@dataclass(frozen=True)
+class PrunePlan:
+    """What a prune list WOULD do, before any of it is written.
+
+    Four buckets, all worth showing a human before they approve anything:
+    - to_dismiss: an open lead this file would dismiss.
+    - unknown: an event_id matching no DiscoveredEvent row at all -- usually
+      a stale file (a mistyped id, or a lead that no longer exists).
+    - already: a lead this file names that is already dismissed -- usually a
+      re-paste of an earlier file. apply_prune leaves these rows exactly as
+      it found them.
+    - catalogued: a lead this file names that has since become a concert
+      (`concert_id` set) -- the file predates that, and dismissing it would
+      stamp a `dismiss_reason` on a row the catalogue already has, polluting
+      `dismissed_reason_counts` (the classifier scorecard the column exists
+      for) with a judgment about something that is no longer an open lead at
+      all. Checked BEFORE `dismissed_at`: a lead that is somehow both
+      catalogued and dismissed is reported as catalogued, since "this is now
+      a real concert" is the more useful thing to tell the operator.
+      `open_leads` (the main /admin/discoveries listing) already excludes
+      these two ways -- `concert_id IS NULL` and `dismissed_at IS NULL` -- so
+      this mirrors that same pair of exits rather than inventing a third.
+
+    `warnings` carries `PruneList.warnings` forward (currently just "listed
+    twice under the same reason") so the one tell of a sloppy agent file is
+    not silently dropped between parsing and rendering. Defaulted to `()` for
+    the same fixture-compatibility reason `PlannedDismissal.first_seen_via_
+    tag_id` is.
+    """
+
+    to_dismiss: tuple[PlannedDismissal, ...]
+    unknown: tuple[str, ...]
+    already: tuple[PlannedDismissal, ...]
+    catalogued: tuple[PlannedDismissal, ...] = ()
+    warnings: tuple[str, ...] = ()
+
+
+async def plan_prune(session: AsyncSession, prune: PruneList) -> PrunePlan:
+    """Join a parsed prune list against the catalogue -- ONE query however
+    many entries the file names (`eventernote_event_id IN (...)`), not a
+    query per entry: 300 entries must not be 300 round trips.
+
+    Sorts every entry into exactly one of PrunePlan's four buckets and
+    writes NOTHING -- looking is not doing, and this plan is rendered before
+    a human has agreed to any of it.
+    """
+    ids = [entry.event_id for entry in prune.entries]
+    rows = (await session.execute(
+        select(DiscoveredEvent).where(DiscoveredEvent.eventernote_event_id.in_(ids))
+    )).scalars()
+    by_event_id = {row.eventernote_event_id: row for row in rows}
+
+    to_dismiss: list[PlannedDismissal] = []
+    unknown: list[str] = []
+    already: list[PlannedDismissal] = []
+    catalogued: list[PlannedDismissal] = []
+
+    for entry in prune.entries:
+        row = by_event_id.get(entry.event_id)
+        if row is None:
+            unknown.append(entry.event_id)
+            continue
+        planned = PlannedDismissal(
+            lead_id=row.id, event_id=entry.event_id, title=row.title,
+            event_date=row.event_date, reason=entry.reason,
+            stored_reason=(
+                DismissReason(row.dismiss_reason) if row.dismiss_reason else None
+            ),
+            first_seen_via_tag_id=row.first_seen_via_tag_id,
+        )
+        if row.concert_id is not None:
+            catalogued.append(planned)
+        elif row.dismissed_at is not None:
+            already.append(planned)
+        else:
+            to_dismiss.append(planned)
+
+    return PrunePlan(
+        to_dismiss=tuple(to_dismiss), unknown=tuple(unknown), already=tuple(already),
+        catalogued=tuple(catalogued), warnings=tuple(prune.warnings),
+    )
+
+
+async def apply_prune(session: AsyncSession, plan: PrunePlan, now: datetime) -> int:
+    """Write a plan built from a FRESH parse -- one dismiss_lead call per
+    lead in `to_dismiss` (never a bulk UPDATE; dismiss_lead is the single
+    writer), returning how many rows were actually written.
+
+    Does not re-derive the plan and does not touch `unknown`/`already`/
+    `catalogued` at all: plan_prune already sorted those out, and dismiss_lead
+    itself refuses an already-dismissed row, so even a stale plan racing a
+    second apply cannot re-stamp one.
+
+    FLUSHES per dismiss_lead call, never commits -- the caller owns the
+    transaction and its outcome. That means a raise partway through the loop
+    (an unexpected DB error, say) rolls the WHOLE batch back via the caller's
+    session rather than leaving some leads dismissed and others not: nothing
+    here durably survives until the caller commits.
+    """
+    written = 0
+    for planned in plan.to_dismiss:
+        if await dismiss_lead(session, planned.lead_id, now, planned.reason):
+            written += 1
+    return written
+
+
+@dataclass(frozen=True)
+class PruneReport:
+    """What POST /admin/discoveries/prune/apply actually did -- a SNAPSHOT,
+    not a plan, and deliberately a different type from PrunePlan (mirrors
+    TagImportReport vs. tags_diff's ImportPlan in routes/admin.py, for the
+    same reason: rendering the PLAN again after applying would show a
+    submit button over lead ids that are now gone, and a second press would
+    report "Dismissed 0 leads" -- reading exactly like the first press
+    silently failed, when in fact it worked. `to_dismiss` deliberately has
+    no counterpart here; `unknown`/`already`/`catalogued`/`warnings` carry
+    forward for display since they are informational rather than
+    actionable."""
+
+    dismissed: int
+    unknown: tuple[str, ...]
+    already: tuple[PlannedDismissal, ...]
+    catalogued: tuple[PlannedDismissal, ...]
+    warnings: tuple[str, ...]
 
 
 async def mark_leads_announced(

@@ -168,6 +168,9 @@
     The same block the daily DM carries, with every open lead in it rather
     than the DM's first ten. Paste it to an agent with the add-concert skill.
     {%- if hinted %} {{ hinted }} of these are marked above as possibly already held.{% endif %}
+    Once the agent hands back its classification, paste it at
+    <a href="/admin/discoveries/prune">Prune leads</a> to review and dismiss
+    the batch.
   </p>
   {#- Invariant 7: the text goes in a data- attribute and the handler reads it
       via dataset. Interpolating it into the onclick would be an injection --

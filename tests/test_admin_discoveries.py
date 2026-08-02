@@ -13,9 +13,11 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.db.models import Base, Concert, ConcertDay, DiscoveredEvent, DiscoveryState, Tag
+from app.db.service import PlannedDismissal, PrunePlan, apply_prune, plan_prune
 from app.db.session import get_session
 from app.discovery import DiscoveryFetchError
-from app.domain.types import TagKind
+from app.domain.prune_list import PruneEntry, PruneList
+from app.domain.types import DismissReason, TagKind
 from app.web import auth
 from app.web.app import create_app
 from app.web.routes import discoveries
@@ -88,6 +90,17 @@ async def _seed(client, **overrides):
 async def _lead_id(client):
     async with client.db() as s:
         return (await s.execute(select(DiscoveredEvent))).scalar_one().id
+
+
+async def _lead_by_event_id(client, eventernote_event_id):
+    """Look a seeded row up by its EXTERNAL id, for tests that seed more than
+    one lead and so cannot use `_lead_id`'s scalar_one()."""
+    async with client.db() as s:
+        return (await s.execute(
+            select(DiscoveredEvent).where(
+                DiscoveredEvent.eventernote_event_id == eventernote_event_id
+            )
+        )).scalar_one()
 
 
 # ── Access ───────────────────────────────────────────────────────────────
@@ -918,3 +931,499 @@ async def test_the_button_never_nests_inside_the_edit_form(client):
     edit_close = dialog.find("</form>", edit_open)
     sweep = dialog.find(f"/admin/discoveries/sweep/{tag_id}")
     assert -1 < edit_open < edit_close < sweep, "the sweep form starts after the edit form ends"
+
+
+# ── The plan builder (plan_prune / apply_prune) ─────────────────────────────
+
+
+async def test_the_plan_sorts_leads_into_dismiss_unknown_and_already(client):
+    """Three buckets, all shown. An unknown id is usually a stale file and an
+    already-dismissed lead is usually a re-paste -- both are worth seeing, and
+    neither should stop the rest."""
+    await _seed(client, eventernote_event_id="111")
+    await _seed(
+        client, eventernote_event_id="222",
+        dismissed_at=NOW, dismiss_reason=DismissReason.FREE,
+    )
+    prune = PruneList(
+        entries=(
+            PruneEntry(event_id="111", reason=DismissReason.STAGE),
+            PruneEntry(event_id="222", reason=DismissReason.RELEASE),
+            PruneEntry(event_id="999", reason=DismissReason.OTHER),
+        ),
+        warnings=(),
+    )
+    async with client.db() as s:
+        plan = await plan_prune(s, prune)
+
+    assert [d.event_id for d in plan.to_dismiss] == ["111"]
+    assert [d.event_id for d in plan.already] == ["222"]
+    assert plan.unknown == ("999",)
+
+    # `already` carries BOTH reasons: what the file asked for, and what the
+    # row already holds -- the disagreement is the whole point of showing
+    # this bucket at all ("file says release, already dismissed as free").
+    stuck = plan.already[0]
+    assert stuck.reason == DismissReason.RELEASE
+    assert stuck.stored_reason == DismissReason.FREE
+    # A not-yet-dismissed lead has nothing stored yet.
+    assert plan.to_dismiss[0].stored_reason is None
+
+
+async def test_a_lead_already_bound_to_a_concert_is_not_dismissed(client):
+    """`open_leads` filters `concert_id IS NULL` -- a lead that became a
+    concert between classification and apply must not silently fall into
+    `to_dismiss`: dismissing it would stamp a `dismiss_reason` on a row the
+    catalogue already has, polluting `dismissed_reason_counts`, which exists
+    to score the classifier against real human judgments, not against a
+    stale file. It must land in its OWN bucket (`catalogued`), not `already`
+    either -- a catalogued lead was never dismissed at all, so folding it
+    into `already` would misreport what actually happened to it."""
+    await _seed(client, eventernote_event_id="111")
+    async with client.db() as s:
+        concert = Concert(title="t", event_id="c1")
+        s.add(concert)
+        await s.flush()
+        lead = (await s.execute(select(DiscoveredEvent))).scalar_one()
+        lead.concert_id = concert.id
+        await s.commit()
+
+    prune = PruneList(
+        entries=(PruneEntry(event_id="111", reason=DismissReason.STAGE),),
+        warnings=(),
+    )
+    async with client.db() as s:
+        plan = await plan_prune(s, prune)
+
+    assert plan.to_dismiss == ()
+    assert plan.already == ()
+    assert [d.event_id for d in plan.catalogued] == ["111"]
+
+
+async def test_planning_writes_nothing(client):
+    """Rendering a plan must leave the queue exactly as it found it. If
+    plan_prune ever grew a write, this is the test that must fail."""
+    await _seed(client, eventernote_event_id="111")
+    prune = PruneList(
+        entries=(PruneEntry(event_id="111", reason=DismissReason.STAGE),),
+        warnings=(),
+    )
+    async with client.db() as s:
+        await plan_prune(s, prune)
+        # No commit, no flush of a write -- but even a session that DID flush
+        # a stray write would show it here, in the very same session.
+        assert (await s.execute(select(DiscoveredEvent))).scalar_one().dismissed_at is None
+
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is None
+    assert lead.dismiss_reason is None
+
+
+async def test_apply_dismisses_with_each_lead_s_own_reason(client):
+    """Two leads under different reasons in one file -- each row gets exactly
+    the reason its own entry named, not the other's."""
+    await _seed(client, eventernote_event_id="111")
+    await _seed(client, eventernote_event_id="222")
+    prune = PruneList(
+        entries=(
+            PruneEntry(event_id="111", reason=DismissReason.STAGE),
+            PruneEntry(event_id="222", reason=DismissReason.RELEASE),
+        ),
+        warnings=(),
+    )
+    async with client.db() as s:
+        plan = await plan_prune(s, prune)
+        written = await apply_prune(s, plan, NOW)
+        await s.commit()
+    assert written == 2
+
+    reasons = {
+        eid: (await _lead_by_event_id(client, eid)).dismiss_reason
+        for eid in ("111", "222")
+    }
+    assert reasons == {"111": "stage", "222": "release"}
+
+
+async def test_apply_skips_the_already_dismissed_without_restamping(client):
+    """The stale-plan race apply_prune's own docstring claims to guard: a plan
+    gets built, someone dismisses the lead in the meantime, and apply runs
+    against the now-stale plan. plan_prune would sort an already-dismissed
+    lead into `already` and apply_prune's loop only ever walks `to_dismiss`
+    -- so going through plan_prune here would never touch the loop this test
+    is supposed to be pinning; it would only exercise dismiss_lead's own
+    early return, one call removed. This builds the PrunePlan BY HAND with
+    the already-dismissed lead placed directly in `to_dismiss`, which is
+    exactly what a stale plan looks like, and is what actually drives
+    apply_prune's `for planned in plan.to_dismiss` loop over this lead.
+
+    The original reason and timestamp must survive -- a re-paste (or a race)
+    is not a re-decision. Asserting only "it's still dismissed" would pass
+    even against an implementation that overwrites both fields with the
+    file's new say-so; both must be pinned to their ORIGINAL values.
+
+    Confirmed by mutation: with dismiss_lead's `row.dismissed_at is not None`
+    guard deleted, this test fails (apply_prune re-stamps the lead as
+    "stage"), where the earlier plan_prune-routed version of this test passed
+    even with that guard gone."""
+    original_ts = datetime(2026, 7, 1, 0, 0, tzinfo=UTC)
+    await _seed(
+        client, eventernote_event_id="111",
+        dismissed_at=original_ts, dismiss_reason=DismissReason.FREE,
+    )
+    lead = await _lead_by_event_id(client, "111")
+    plan = PrunePlan(
+        to_dismiss=(
+            PlannedDismissal(
+                lead_id=lead.id, event_id="111", title=lead.title,
+                event_date=lead.event_date, reason=DismissReason.STAGE,
+                stored_reason=DismissReason.FREE,
+            ),
+        ),
+        unknown=(),
+        already=(),
+    )
+    async with client.db() as s:
+        written = await apply_prune(s, plan, NOW)
+        await s.commit()
+    assert written == 0
+
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at == original_ts
+    assert lead.dismiss_reason == "free"
+
+
+async def test_the_discoveries_page_links_the_prune_surface(client):
+    """The link lives beside the copy block, which only renders when there is
+    at least one open lead."""
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    assert "/admin/discoveries/prune" in client.get("/admin/discoveries").text
+
+
+async def test_planning_a_batch_does_not_issue_a_query_per_entry(client):
+    """The property: planning a 20-entry file does not issue 20 SELECTs.
+    Mirrors the statement-count style pinned for my_deadline_blocks in
+    tests/test_service.py."""
+    async with client.db() as s:
+        for n in range(20):
+            s.add(DiscoveredEvent(
+                eventernote_event_id=f"5{n:03d}", title=f"Show {n}",
+                event_date=dt.date(2026, 11, 1) + dt.timedelta(days=n),
+                first_seen_at=NOW, last_seen_at=NOW,
+            ))
+        await s.commit()
+
+    prune = PruneList(
+        entries=tuple(
+            PruneEntry(event_id=f"5{n:03d}", reason=DismissReason.OTHER)
+            for n in range(20)
+        ),
+        warnings=(),
+    )
+
+    queries: list[str] = []
+
+    def _count(conn, cursor, statement, parameters, context, executemany):
+        queries.append(statement)
+
+    async with client.db() as s:
+        event.listen(s.bind.sync_engine, "before_cursor_execute", _count)
+        try:
+            plan = await plan_prune(s, prune)
+        finally:
+            event.remove(s.bind.sync_engine, "before_cursor_execute", _count)
+
+    assert len(plan.to_dismiss) == 20
+    assert len(queries) == 1, f"plan_prune ran {len(queries)} queries for 20 entries"
+
+
+# ── The prune surface: paste, plan, apply ───────────────────────────────────
+
+
+async def test_an_editor_cannot_reach_the_prune_page(client):
+    """Signed in and unauthorized IS an error (invariant 5), and the write half
+    is guarded too -- a page that only hides a form is not access control."""
+    login_as(client, EDITOR_ID, "editor")
+    assert client.get("/admin/discoveries/prune").status_code == 403
+    assert client.post("/admin/discoveries/prune", data={"text": ""}).status_code == 403
+    assert client.post("/admin/discoveries/prune/apply", data={"text": ""}).status_code == 403
+
+
+async def test_signed_out_cannot_reach_the_prune_page(client):
+    """Being signed out is not an error (invariant 5) -- and still no write."""
+    assert client.get("/admin/discoveries/prune").status_code == 303
+    assert client.post("/admin/discoveries/prune", data={"text": ""}).status_code == 303
+    assert client.post("/admin/discoveries/prune/apply", data={"text": ""}).status_code == 303
+
+
+async def test_the_plan_page_shows_all_four_buckets(client):
+    """One file naming an open lead, an already-dismissed lead (under a
+    DIFFERENT reason than it is stored under), a lead that has since become a
+    concert, and an id matching nothing at all -- all four buckets must
+    render, and the already-dismissed lead must show BOTH what the file says
+    and what is actually stored, since that disagreement is the whole point
+    of the stored_reason column.
+
+    The "999" assertion is deliberately NOT a bare substring check: the
+    pasted text is echoed twice elsewhere on this page (the hidden `text`
+    input and the bottom textarea both contain the raw YAML, ids included),
+    so `"999" in body` would pass even if the "Not in the queue" section
+    rendered nothing at all -- confirmed by mutation, deleting that section's
+    `<h2>` entirely and re-running this test still left it green before this
+    fix. Asserting the rendered `<code>999</code>` fragment only comes from
+    that section's own loop, never from the raw pasted text, so it actually
+    proves the section renders."""
+    await _seed(client, eventernote_event_id="111", title="Open Lead")
+    await _seed(
+        client, eventernote_event_id="222", title="Already Gone",
+        dismissed_at=NOW, dismiss_reason=DismissReason.FREE,
+    )
+    async with client.db() as s:
+        concert = Concert(title="t", event_id="c1")
+        s.add(concert)
+        await s.flush()
+        concert_id = concert.id
+        await s.commit()
+    await _seed(
+        client, eventernote_event_id="333", title="Now A Concert",
+        concert_id=concert_id,
+    )
+    login_as(client, ADMIN_ID, "reiji")
+    text = (
+        "dismiss:\n"
+        "  stage:\n"
+        "    - '111'\n"
+        "  release:\n"
+        "    - '222'\n"
+        "    - '999'\n"
+        "  live:\n"
+        "    - '333'\n"
+    )
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert "Open Lead" in body
+    assert "Already Gone" in body
+    assert "Now A Concert" in body
+    assert "<code>999</code>" in body, \
+        "the unknown-id fragment, not merely '999' anywhere on the page"
+    assert "1 id(s) match no open lead" in body, "the section's own prose, not just the id"
+    assert "1 lead(s) are now tracked concerts" in body, "the catalogued section's own prose"
+    assert "Release event" in body, "what the file asked for, for the already-dismissed lead"
+    assert "No ticket at all" in body, "what the row actually holds -- the disagreement"
+
+    # Previewing writes nothing, for any of the four buckets.
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is None
+    lead = await _lead_by_event_id(client, "222")
+    assert lead.dismissed_at is not None and lead.dismiss_reason == "free", \
+        "the already-dismissed row's own reason must survive a mere preview"
+    lead = await _lead_by_event_id(client, "333")
+    assert lead.dismissed_at is None, "a catalogued lead must never be dismissed"
+
+
+async def test_the_unknown_bucket_prose_is_not_vacuously_satisfied_by_the_pasted_text(client):
+    """The regression test for the mutation the review caught: this asserts
+    the SAME "<code>999</code>" fragment `test_the_plan_page_shows_all_four_
+    buckets` does, but isolates it from every other bucket so a future
+    change cannot accidentally satisfy it from some other section's markup.
+    A file naming ONLY an unknown id renders no `to_dismiss`, `already` or
+    `catalogued` content at all -- if the fragment still appeared here, it
+    could only be coming from the "Not in the queue" section itself, or from
+    the raw pasted text echoed in the hidden input/textarea. The `<code>`
+    wrapper rules out the latter: neither echo wraps the id in a `<code>`
+    tag."""
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  other:\n    - '999'\n"
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert "<code>999</code>" in body
+    assert "1 id(s) match no open lead" in body
+
+
+async def test_previewing_writes_nothing(client):
+    """The whole point of plan-before-apply. Post to the PLAN route and assert
+    the lead is untouched."""
+    await _seed(client, eventernote_event_id="111")
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n"
+    r = client.post("/admin/discoveries/prune", data={"text": text})
+    assert r.status_code == 200
+    assert "Anniversary Day 2" in r.text
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is None
+    assert lead.dismiss_reason is None
+
+
+async def test_a_bad_file_shows_the_error_and_writes_nothing(client):
+    """Both the plan route and the apply route must refuse an unparseable
+    file the same way _plan_or_error does for tags.yaml -- render the error,
+    write nothing."""
+    await _seed(client, eventernote_event_id="111")
+    login_as(client, ADMIN_ID, "reiji")
+    bad = "dismiss: [unterminated"
+
+    r = client.post("/admin/discoveries/prune", data={"text": bad})
+    assert r.status_code == 200
+    assert "could not be read" in r.text
+
+    r = client.post("/admin/discoveries/prune/apply", data={"text": bad})
+    assert r.status_code == 200
+    assert "could not be read" in r.text
+
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is None
+
+
+async def test_apply_dismisses_and_reports(client):
+    """The straightforward success path: the reported count and the actual
+    write agree."""
+    await _seed(client, eventernote_event_id="111", title="Lead A")
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n"
+    r = client.post("/admin/discoveries/prune/apply", data={"text": text})
+    assert r.status_code == 200
+    assert "Dismissed 1 lead" in r.text
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is not None
+    assert lead.dismiss_reason == "stage"
+
+
+async def test_apply_does_not_reoffer_a_stale_plan(client):
+    """After applying, the page must not re-render the PLAN it just acted
+    on: the plan's lead ids are now gone, but the plan form still carried a
+    live submit button pointed at /admin/discoveries/prune/apply. Pressing it
+    again would re-apply against a stale plan and report "Dismissed 0
+    leads", which reads exactly like the first press silently failed --
+    when dismissal is PERMANENT and irreversible, that false signal is worse
+    than useless. /admin/import/tags/apply avoids this by rendering
+    `report=` instead of `plan=`; this route must do the same."""
+    await _seed(client, eventernote_event_id="111", title="Lead A")
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n"
+    body = client.post("/admin/discoveries/prune/apply", data={"text": text}).text
+    assert "Dismissed 1 lead" in body
+    assert 'action="/admin/discoveries/prune/apply"' not in body, \
+        "no submit button may point back at apply once this page has already applied"
+    assert "Will dismiss" not in body, "the stale plan heading must not reappear"
+
+
+async def test_the_plan_page_shows_parser_warnings(client):
+    """`parse_prune_list`'s one warning -- an id listed twice under the same
+    reason -- is the tell of a sloppy agent file and must not be silently
+    dropped between parsing and rendering, the same way admin_import_tags.html
+    surfaces its own parser's warnings."""
+    await _seed(client, eventernote_event_id="111")
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n    - '111'\n"
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert "listed twice under" in body
+    assert "duplicate ignored" in body
+
+
+async def test_a_prune_list_over_the_size_cap_is_refused(client):
+    """Mirrors admin.py's tags.yaml cap: a paste this large is either a
+    mistake or something worth a second look, not something this route
+    should try to parse. 443 real leads is roughly 6KB, so the cap is not
+    documented on the page itself -- nobody legitimate is expected to hit
+    it, and a number nobody can reach is just noise in the copy."""
+    await _seed(client, eventernote_event_id="111")
+    login_as(client, ADMIN_ID, "reiji")
+    huge = "dismiss:\n  stage:\n" + ("    # padding\n" * 40_000)
+    assert len(huge) > 200_000
+
+    r = client.post("/admin/discoveries/prune", data={"text": huge})
+    assert r.status_code == 200
+    assert "too large" in r.text
+
+    r = client.post("/admin/discoveries/prune/apply", data={"text": huge})
+    assert r.status_code == 200
+    assert "too large" in r.text
+
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is None
+
+
+async def test_the_plan_page_shows_the_surfacing_artist_tag(client):
+    """The single highest-value addition for making a batch of 300
+    dismissals reviewable: which artist's Eventernote page surfaced each
+    lead, the same information /admin/discoveries itself shows via
+    `_artist_names`. Present across all three real-row buckets, not only
+    `to_dismiss`."""
+    async with client.db() as s:
+        tag = Tag(name="Liella!", kind=TagKind.GROUP, slug="liella")
+        s.add(tag)
+        await s.flush()
+        tag_id = tag.id
+        await s.commit()
+    await _seed(client, eventernote_event_id="111", first_seen_via_tag_id=tag_id)
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n"
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert "Liella!" in body
+
+
+async def test_the_plan_page_explains_how_to_exclude_a_lead(client):
+    """The only way to keep a single misclassified lead out of the batch is
+    to remove its id from the pasted file and preview again -- nothing else
+    on the page offers a per-row skip, so the copy has to say so."""
+    await _seed(client, eventernote_event_id="111")
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries/prune").text
+    assert "remove its id from the pasted list" in body
+
+
+async def test_apply_reparses_and_ignores_injected_ids(client):
+    """The browser sends the FILE back, never a list of ids -- this is the
+    property that makes the apply route safe to expose at all, so the test
+    has to attack every plausible way a forged post could smuggle a second
+    lead in, in ONE request:
+
+    - `lead_id`, `event_id`, `dismiss`, `reason` -- plausible field names a
+      naive implementation might read directly to decide what to dismiss.
+      prune_apply reads none of them; only the bound `text` parameter is
+      ever touched.
+    - a REPEATED `text` field -- the forged occurrence goes FIRST and the
+      real file naming lead A goes LAST. FastAPI resolves a scalar `Form`
+      field via Starlette's `ImmutableMultiDict`, which is built from a dict
+      comprehension that keeps the LAST value for a repeated key -- so an
+      attacker trying to sneak an extra `text` occurrence past whichever one
+      the server actually binds would place theirs first, hoping either
+      order is read, or that both get merged. Ordering it this way means the
+      test would catch a route that (a) bound the FIRST occurrence instead
+      of the last, (b) read `request.form().getlist("text")` and looped over
+      every value, or (c) concatenated them -- any of which would dismiss
+      lead B, which the file itself never named.
+
+    This is genuinely adversarial rather than vacuous specifically because
+    of that ordering choice: a version of this test with the real text
+    first and the forged one last would still pass today (nothing reads the
+    other fields at all), but would NOT catch bug (a) above, since the
+    winning `text` would happen to be the real one by accident of order
+    rather than because the route re-parses correctly. Placing the legitimate
+    file LAST forces the assertion to depend on the actual binding rule, not
+    on which one a test author happened to type first.
+    """
+    await _seed(client, eventernote_event_id="111", title="Lead A")
+    await _seed(client, eventernote_event_id="222", title="Lead B")
+    lead_b_id = (await _lead_by_event_id(client, "222")).id
+    login_as(client, ADMIN_ID, "reiji")
+
+    forged_text = "dismiss:\n  live:\n    - '222'\n"
+    real_text = "dismiss:\n  stage:\n    - '111'\n"
+    # httpx's `data=` is a Mapping, not a list of pairs -- a repeated form key
+    # is expressed by mapping it to a LIST, which `encode_urlencoded_data`
+    # expands into one key=value pair per item, in list order. So `text` maps
+    # to [forged, real] to put two `text` fields on the wire in that order.
+    data = {
+        "lead_id": str(lead_b_id),
+        "event_id": "222",
+        "dismiss": "222",
+        "reason": "other",
+        "text": [forged_text, real_text],
+    }
+    r = client.post("/admin/discoveries/prune/apply", data=data)
+    assert r.status_code == 200
+
+    lead_a = await _lead_by_event_id(client, "111")
+    lead_b = await _lead_by_event_id(client, "222")
+    assert lead_a.dismissed_at is not None, "the file's own entry was applied"
+    assert lead_a.dismiss_reason == "stage"
+    assert lead_b.dismissed_at is None, "no other field may select a lead to dismiss"
