@@ -224,3 +224,24 @@ class DismissReason(enum.StrEnum):
     FANMEET = "fanmeet"     # ファンミーティング / バースデーイベント
     FREE = "free"           # No ticket at all -- 餅まき, 盆踊り, 駅長就任式
     OTHER = "other"         # Anything the taxonomy does not name yet
+
+
+# Sentence-case labels for /admin/discoveries' dismiss control -- the enum's
+# own values (`live`, `free`, ...) are the taxonomy's internal vocabulary, not
+# something a reader who has not read the taxonomy doc can parse on sight.
+#
+# NOT wrapped in N_() or gettext: /admin/discoveries is English-only and
+# deliberately outside the translated surface, like /admin/deliveries -- an
+# operational page only admins see should not cost msgids in three languages.
+# A module-level dict keyed by the enum, beside it, the way LABEL_BY_ROUND_KIND
+# sits beside RoundKind.
+DISMISS_REASON_LABELS: dict[DismissReason, str] = {
+    DismissReason.LIVE: "Live show, not tracking",
+    DismissReason.STAGE: "Stage play or reading",
+    DismissReason.RELEASE: "Release event",
+    DismissReason.TALK: "Talk or radio show",
+    DismissReason.FESTIVAL: "Festival",
+    DismissReason.FANMEET: "Fan meeting",
+    DismissReason.FREE: "No ticket at all",
+    DismissReason.OTHER: "Other",
+}

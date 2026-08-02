@@ -137,15 +137,16 @@
         <td class="nw">{{ r.lead.announced_at.strftime('%Y-%m-%d') if r.lead.announced_at else 'Not yet' }}</td>
         <td class="r">
           <form method="post" action="/admin/discoveries/{{ r.lead.id }}/dismiss">
-            {# One submit per class: the reason IS the dismissal, so a separate
-               select plus a confirm button would be two controls for one act. #}
-            <div class="reasons">
+            {# A select plus one submit, not a button per class: at the
+               documented 443-lead queue, eight buttons per row was ~3,500
+               buttons and as many tab stops before the copy block below the
+               table ever got a turn. Plain markup, no JS required. #}
+            <select name="reason" aria-label="Dismissal reason">
               {% for reason in dismiss_reasons %}
-              <button class="act no" type="submit" name="reason" value="{{ reason.value }}">
-                {{ reason.value }}
-              </button>
+              <option value="{{ reason.value }}">{{ dismiss_reason_labels[reason] }}</option>
               {% endfor %}
-            </div>
+            </select>
+            <button class="act no" type="submit">Dismiss lead</button>
           </form>
         </td>
       </tr>

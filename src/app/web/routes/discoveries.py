@@ -50,7 +50,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.discovery import sweep_one_tag
 from app.domain.discovery_message import Lead, build_discovery_dm
-from app.domain.types import DismissReason
+from app.domain.types import DISMISS_REASON_LABELS, DismissReason
 from app.web.auth import SessionUser, require_admin
 
 router = APIRouter()
@@ -183,6 +183,7 @@ async def discoveries(
             "swept_new": max(new, 0),
             "reason_counts": await dismissed_reason_counts(session),
             "dismiss_reasons": list(DismissReason),
+            "dismiss_reason_labels": DISMISS_REASON_LABELS,
         },
     )
 

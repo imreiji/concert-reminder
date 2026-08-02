@@ -681,6 +681,14 @@ to its own honest one: it is worth writing after a few real sweeps, since
 its value lives in the specifics of what production leads actually look
 like. Entries renumbered 1-10 across both removals.
 
+**A second pass the same day.** Branch `dismissal-reason` shipped the one
+thing #1 (below) had just finished naming as NOT this skill's work: a
+`dismiss_reason` column, so triaging the 443-lead backlog stops evaporating
+the moment each lead is waved off. Nothing here is removed from Proposed --
+that bullet was a paragraph inside #1, not a numbered entry of its own -- so
+this pass only rewrites that bullet to point at what shipped and files the
+new Shipped entry below. No renumbering.
+
 
 ## Proposed (highest impact first)
 
@@ -788,11 +796,13 @@ so they are not rediscovered inside it:
   time, so a user who won an (A) ticket cannot say which one they hold. A real
   model gap needing its own design pass -- do not let the skill paper over it
   with label conventions.
-- **A dismissal records no reason.** `DiscoveredEvent` carries `dismissed_at`
-  and nothing beside it, so triaging 250 leads as "release event" evaporates the
-  judgment the moment it is made. A reason column turns triage into training
-  data and makes the classifier measurable against recorded human decisions
-  rather than left as a guess.
+- **A dismissal now records why, shipped 2026-08-01** (see Shipped). Its eight
+  values are the classes this same read named -- live/stage/release/talk/
+  festival/fanmeet/free/other -- so triaging the backlog is training data from
+  the first dismissal onward, rather than a judgment that evaporates the
+  moment it is made. What it does NOT do, and is still this skill's work:
+  nothing about the column does the triaging itself, and a classifier scored
+  against the recorded reasons still has to be built.
 
 And one decision worth taking BEFORE the skill rather than during it: a per-tag
 "concerts only" preference would cut this queue by about a third on its own, by
@@ -1075,6 +1085,35 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Discovery dismissal records a reason (2026-08-01)
+
+Branch `dismissal-reason`. `DiscoveredEvent.dismiss_reason` is a nullable
+`DismissReason` column -- NULL means dismissed before the column existed and
+is never backfilled, the same rule subscriptions and leg opt-outs already
+follow. Its eight values are the taxonomy `docs/discovery-lead-taxonomy-
+2026-08-01.md` named reading all 443 open leads end to end, LIVE and FANMEET
+included on purpose: a real concert or fan meeting you choose not to track is
+still a dismissal, and without a value for it every one of those would land
+in `other` and wreck the agreement rate the column exists to measure.
+
+`POST /admin/discoveries/{id}/dismiss` takes `reason` as the typed enum at
+the route boundary (`Annotated[DismissReason, Form()]`), so a hand-posted
+value outside the eight is a 422 before anything is written -- this column's
+whole value is that every row in it is a real human judgment. `db/service.py`'s
+`dismissed_reason_counts` excludes NULL rows rather than bucketing them as
+`other`, for the same reason, and the page renders its "Dismissed so far"
+paragraph only when that dict is non-empty -- an all-NULL history says
+nothing, rather than a paragraph naming zero of every class.
+
+The row's control is one `<select name="reason">` plus one "Dismiss lead"
+submit, not a button per class: at the queue's documented 443-lead size,
+eight buttons per row would have been roughly 3,500 buttons and as many tab
+stops standing between the table and the copy block beneath it, and it still
+works with JavaScript off. Labels render from `DISMISS_REASON_LABELS`
+(`domain/types.py`), sentence case beside the enum, since raw values like
+`live` and `free` read as internal shorthand to anyone who has not read the
+taxonomy doc.
 
 ### A character bucket in the concert draft vocabulary (2026-08-01)
 

@@ -942,11 +942,6 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
    timezone step: the same three `.act` buttons as the header switcher, laid
    out inline to match the timezone row beside it. */
 .langrow { display: flex; gap: .4rem; flex-wrap: wrap; }
-
-/* admin_discoveries.html's one-button-per-taxonomy-class dismiss form: same
-   `.act.no` buttons as everywhere else, just wrapped so eight of them fit a
-   table cell without stretching the row. */
-.reasons { display: flex; gap: .3rem; flex-wrap: wrap; justify-content: flex-end; }
 .langrow form { display: contents; }
 .done { font-size: .72rem; font-weight: 700; color: var(--ok); letter-spacing: .03em; }
 
