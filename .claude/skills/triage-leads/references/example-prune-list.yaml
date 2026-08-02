@@ -24,10 +24,13 @@ dismiss:
   # has nothing to remind anyone about.
   release:
     - 466171   # 『Liella!と結ぶプロジェクト』ミニアルバム発売記念お渡し会 ゲーマーズ回 Liyuu(唐 可可 役) -- venue "!_東京都内某所", the class-C signal from the taxonomy doc
-    - 485391   # 2026年CICF × AGF广州动漫游戏盛典・Liyuu专场见面会&签名会 -- an autograph session, no lottery
-  # Class F -- fan meeting. FC lotteries are common here, but these two are
-  # plain paid meet-and-greet slots with no round to track.
+  # Class F -- fan meeting. FC lotteries are common here, but these three are
+  # plain paid meet-and-greet (见面会) slots with no product or release tied to
+  # them and no round to track -- 485391's "&签名会" (autograph) half does not
+  # move it into `release` above, since there is still no product purchase
+  # gating the slot, just a meet-and-greet with a signature added on.
   fanmeet:
+    - 485391   # 2026年CICF × AGF广州动漫游戏盛典・Liyuu专场见面会&签名会
     - 485912   # 2026 Liyuu「余夏微甜」成都见面会【夜晚场】
     - 485909   # 2026 Liyuu「余夏微甜」成都见面会【下午场】
   # Class E -- festival. The concert is the festival bill, not the one artist
