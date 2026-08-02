@@ -1220,6 +1220,28 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
    as a class, never an inline style -- inline wins over media queries too, so
    an inline copy is a row the phone collapse can never reach. */
 .subrow.two { grid-template-columns: 1fr auto; }
+
+/* The pending-drafts triage list (import_pending.html): flexbox rather than
+   `.subrow`'s fixed-width grid, deliberately. `.subrow`'s 9rem count column
+   was tuned for a short, fixed two-clause phrase ("N events · N upcoming");
+   this row's summary can carry up to three clauses ("N legs · N rounds · N
+   tags not matched"), open-ended by locale and content in a way no single
+   guessed width can be trusted for -- and this file's own rule is to measure
+   a real viewport before reasoning about one, or make the layout robust
+   enough that measuring is unnecessary. `flex-wrap` is the robust choice:
+   the title+count block and the action buttons share a row while they fit,
+   and the buttons drop to their own line below when they don't -- for any
+   content length, in any language, with no magic number to get wrong twice. */
+.prow {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1rem;
+  padding: .6rem .1rem; border-bottom: 1px solid var(--line);
+}
+.prow:first-of-type { border-top: 1px solid var(--line); }
+.prow-main { flex: 1 1 16rem; min-width: 0; display: flex; flex-direction: column; gap: .15rem; }
+.prow .nm3 { font-weight: 600; }
+.prow .cnt { font-size: .8125rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+.prow .sw { display: flex; gap: .35rem; flex: 0 0 auto; }
+
 .swb {
   font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: .03em;
   padding: .22rem .5rem; border-radius: 3px; cursor: pointer;

@@ -41,6 +41,7 @@ from app.db.models import (
     LegOptOut,
     Notification,
     OpsCheckState,
+    PendingDraft,
     PresetItem,
     ReminderPreset,
     ReminderQueue,
@@ -81,6 +82,7 @@ from app.domain.types import (
 )
 from app.domain.upgrades import is_upgrade_eligible
 from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml
+from app.domain.yaml_import import DraftBatch
 from app.i18n import N_, get_locale, gettext_in, loc_field
 from app.i18n import gettext as _
 
@@ -7115,6 +7117,79 @@ async def dismiss_lead(
         return False
     row.dismissed_at = now
     row.dismiss_reason = reason
+    await session.flush()
+    return True
+
+
+# ── Pending drafts (multi-draft triage) ───────────────────────────────────
+#
+# See PendingDraft's own docstring for why this is a work batch and not the
+# step state this app otherwise avoids: an agent can hand back fifty to a
+# hundred parsed drafts in one paste, and reading each one's preview is not
+# one sitting.
+
+
+async def create_pending_drafts(
+    session: AsyncSession, batch: DraftBatch, created_by: int
+) -> list[PendingDraft]:
+    """Persist every parsed document of a paste as its own triage row.
+
+    One row per `ParsedDraft`, carrying that document's own verbatim text and
+    its already-parsed title. `batch.errors` never reaches here -- there is
+    no preview to triage for a document that failed to parse at all.
+    """
+    rows = [
+        PendingDraft(draft_text=draft.text, title=draft.parsed.title, created_by=created_by)
+        for draft in batch.drafts
+    ]
+    session.add_all(rows)
+    await session.flush()
+    return rows
+
+
+async def pending_drafts(session: AsyncSession, user_id: int) -> list[PendingDraft]:
+    """The still-open rows from `user_id`'s own pastes -- neither committed
+    nor discarded. Scoped to the pasting user: two editors triaging their own
+    batches at once is the expected case, not an exotic one."""
+    rows = await session.execute(
+        select(PendingDraft)
+        .where(
+            PendingDraft.created_by == user_id,
+            PendingDraft.committed_at.is_(None),
+            PendingDraft.discarded_at.is_(None),
+        )
+        .order_by(PendingDraft.id)
+    )
+    return list(rows.scalars())
+
+
+async def mark_pending_committed(
+    session: AsyncSession, pending_id: int, concert_id: int, now: datetime
+) -> bool:
+    """Stamp a row committed once its preview has produced a real concert.
+
+    False, without re-stamping, when the row is unknown or already committed
+    -- the same double-submit rule `dismiss_lead` follows, so a duplicated
+    request can never silently rewrite which concert a draft claims to have
+    produced.
+    """
+    row = await session.get(PendingDraft, pending_id)
+    if row is None or row.committed_at is not None:
+        return False
+    row.committed_at = now
+    row.concert_id = concert_id
+    await session.flush()
+    return True
+
+
+async def discard_pending_draft(session: AsyncSession, pending_id: int, now: datetime) -> bool:
+    """Stamp a row discarded -- an editor's "not this one", read past the
+    preview. False when the row is unknown or already resolved either way,
+    for the same double-submit reason as `mark_pending_committed`."""
+    row = await session.get(PendingDraft, pending_id)
+    if row is None or row.committed_at is not None or row.discarded_at is not None:
+        return False
+    row.discarded_at = now
     await session.flush()
     return True
 

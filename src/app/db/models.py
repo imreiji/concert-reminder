@@ -903,6 +903,54 @@ class DiscoveryState(Base):
     sweep_requested_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
+class PendingDraft(Base):
+    """One document out of a multi-draft paste, held until an editor triages it.
+
+    This is deliberately NOT step state, and that is a distinction this app
+    otherwise takes seriously -- /setup holds none, because every screen there
+    re-derives current DB truth, which is what makes it tamper-safe and
+    re-runnable. A pending draft is different: it is a WORK BATCH. An agent can
+    hand back fifty to a hundred concert drafts in one paste, and reading each
+    one's preview and deciding commit-or-discard is not one sitting -- it is
+    triaged a few at a time across several logins. A hidden form field or an
+    in-memory list would lose the whole batch the moment the tab closes, and
+    re-pasting a hundred drafts by hand is exactly the tedium this feature
+    exists to remove. So the batch is a real row per document, outliving the
+    request that created it.
+    """
+
+    __tablename__ = "pending_drafts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # The single YAML document, VERBATIM. Not the parse: a row outlives a
+    # deploy, and storing the parsed shape would freeze today's parser
+    # against tomorrow's.
+    draft_text: Mapped[str] = mapped_column(Text)
+    # Parsed out at paste time so the list renders without re-parsing every
+    # row on every page load.
+    title: Mapped[str] = mapped_column(String(300), default="")
+    # CASCADE, not SET NULL: a pending draft is the pasting editor's own
+    # un-actioned working text, personal data by delete_user's own rule, not
+    # the shared catalogue Concert.created_by protects. Erasing the person
+    # removes their unfinished drafts; the concert_id SET NULL below already
+    # keeps any concert they DID produce standing on its own.
+    created_by: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    # A row is DONE when either of these is set. Nothing cleans up: a
+    # committed row is the only trace linking a draft to the concert it
+    # produced.
+    committed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # SET NULL, not CASCADE: deleting the concert it produced must not take
+    # the record of where it came from with it (same reasoning as
+    # ConcertDay.venue_tag_id).
+    concert_id: Mapped[int | None] = mapped_column(
+        ForeignKey("concerts.id", ondelete="SET NULL")
+    )
+    discarded_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
 class OpsCheckState(Base):
     """Last confirmed result per operational check, so alerting survives
     restarts. In-memory state would re-announce every problem on every deploy.
