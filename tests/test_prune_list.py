@@ -72,3 +72,39 @@ def test_duplicate_id_under_the_SAME_reason_is_deduped_with_a_warning():
     got = parse_prune_list("dismiss:\n  stage:\n    - 7\n    - 7\n")
     assert len(got.entries) == 1
     assert any("7" in w for w in got.warnings)
+
+
+def test_a_block_of_all_empty_lists_is_an_error_not_a_no_op():
+    """The empty-block check must assert on the FINAL entry count, not on
+    whether the `dismiss:` mapping itself is falsy -- a block whose reason
+    keys each map to an empty list is truthy (a non-empty dict) but still
+    parses to zero dismissals, which the module's own docstring says is
+    almost always a mistake."""
+    with pytest.raises(PruneListError):
+        parse_prune_list("dismiss:\n  stage: []\n  release: []\n")
+
+
+@pytest.mark.parametrize("item", ["null", "{a: 1}", "[1, 2]", "true", "false"])
+def test_non_scalar_or_boolean_ids_are_rejected(item):
+    """A null/mapping/list/bool id would otherwise become a garbage string
+    (str(None) -> "None", str(True) -> "True") that is accepted as real and
+    matches no eventernote_event_id -- looking exactly like a stale file
+    rather than a malformed one. bool is a subclass of int in Python, so
+    `true`/`false` must be excluded deliberately rather than slipping
+    through an isinstance(x, int) check."""
+    with pytest.raises(PruneListError):
+        parse_prune_list(f"dismiss:\n  stage:\n    - {item}\n")
+
+
+def test_a_repeated_reason_key_is_an_error_not_a_silent_drop():
+    """yaml.safe_load resolves a repeated mapping key to its LAST occurrence
+    only -- the first list would vanish with no error and no warning, which
+    for a file whose every entry becomes a permanent dismissal is the worst
+    available outcome."""
+    with pytest.raises(PruneListError):
+        parse_prune_list("dismiss:\n  stage:\n    - 1\n  stage:\n    - 2\n")
+
+
+def test_a_repeated_top_level_key_is_an_error_not_a_silent_drop():
+    with pytest.raises(PruneListError):
+        parse_prune_list("dismiss:\n  stage:\n    - 1\ndismiss:\n  release:\n    - 2\n")
