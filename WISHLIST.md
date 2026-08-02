@@ -690,6 +690,22 @@ this pass only rewrites that bullet to point at what shipped and files the
 new Shipped entry below. No renumbering.
 
 
+**The 2026-08-02 scope ruling (owner).** Only two of the taxonomy's seven lead
+classes get catalogued: **ticketed concerts/tours** and **radio/talk/番組イベント**.
+Everything else is a dismissal. This is the largest simplification the discovery
+arc has had, and it lands on #1 rather than on any entry of its own: the classify
+pass stops being "sort into seven buckets and weigh each" and becomes a binary
+keep-or-dismiss with the reason recorded. Roughly a third of the 443 leads
+survive it, and the title-stem collapse takes that third to something on the
+order of fifty productions.
+
+Two entries are FILED by the ruling rather than shipped: the classes now out of
+scope (#8) and the A/B cast gap (#9), which is descoped by consequence -- it
+exists only inside stage runs, and ミュージカル信長 is the sole production in all
+443 leads that has it. Free public appearances go to Rejected instead of
+Proposed: no ticket exists, so there is no deadline to remind anyone about, and
+that is not a gap to be closed later.
+
 ## Proposed (highest impact first)
 
 
@@ -803,6 +819,24 @@ so they are not rediscovered inside it:
   moment it is made. What it does NOT do, and is still this skill's work:
   nothing about the column does the triaging itself, and a classifier scored
   against the recorded reasons still has to be built.
+
+**Narrowed 2026-08-02 by the owner's scope ruling, and this is the change that
+makes the skill buildable.** Only TICKETED CONCERTS/TOURS and RADIO/TALK/番組
+イベント get catalogued. Every other class -- stage runs, release events,
+festivals, fan meetings, free appearances -- is a dismissal.
+
+That collapses the hardest part of the design. The classify pass was going to
+need a judgment per class about whether and how to catalogue it; it is now a
+binary, and the dismissal side is already built (the `dismiss_reason` column
+shipped the day before, with a value per class). What survives is roughly a
+third of 443, and the title-stem collapse takes that to something like fifty
+productions -- a queue a person can actually work through.
+
+It also settles the open question below in the affirmative and for free: with
+stage runs out of scope, the per-tag "concerts only" preference is no longer
+needed to cut the queue, because the classifier does it for every tag at once.
+Keep the entry for the day someone follows an artist whose talk shows they do
+not want, which the ruling does not cover.
 
 And one decision worth taking BEFORE the skill rather than during it: a per-tag
 "concerts only" preference would cut this queue by about a third on its own, by
@@ -993,7 +1027,57 @@ this entry's single pass, not its own task. Both gaps are now also named in
 CLAUDE.md's demo inventory, so the next person meets them where they look for
 the reference rather than only here.
 
-### 8. Discover sort in the content head, plus the catalogue-count note
+### 8. The event classes outside concerts and talk shows
+
+Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
+2026-08-02, filed by the scope ruling rather than proposed on merit.
+
+`docs/discovery-lead-taxonomy-2026-08-01.md` sorted 443 real leads into seven
+classes. Two are catalogued; these are the rest, kept here so that reopening one
+is a decision rather than a rediscovery. They are NOT uniform, and lumping them
+into one "support more event types" task would hide that:
+
+- **Fan meetings and birthday events need NO code at all.** FC lotteries are the
+  app's core case; 伊達さゆり Fan Meeting Tour is a two-city, four-leg concert in
+  every respect that matters. This is purely a decision about what belongs in
+  the catalogue, which is why it is in this entry rather than being work.
+- **Festivals fit, awkwardly.** TIF, @JAM EXPO, ANIMAX MUSIX. The concert is the
+  festival, not the artist, so one bill carries dozens of performers and the
+  lead arrives via whichever one is followed. Ticketing is its own shape (day
+  tickets, two-day passes). Catalogueable today; the tag-attachment question is
+  genuinely different from every other class.
+- **Stage runs need the A/B cast gap closed first** (#9) and stress the leg
+  count -- スクールアイドルミュージカル is thirteen performances across eight days.
+  Every surface that renders legs was built against two-to-four.
+- **Release events may not be expressible at all.** 発売記念 / お渡し会 / 特典会
+  have no lottery and no deadline: you buy the product and the slot comes with
+  it. Cataloguing them would need a purchase-window concept the app does not
+  have and has never needed. This is the one where "we decided not to" and "we
+  cannot" are close together.
+
+### 9. A/B casts have nowhere to live
+
+Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
+Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
+
+ミュージカル信長 runs `9月19日17:30公演(A)` and `9月19日12:30公演(B)` -- same day,
+same venue, different cast. Nothing in the schema carries that. The two would
+become legs distinguished only by their free-text labels, which RENDERS fine and
+breaks the thing that matters: `RoundOutcomeDay` is per performance, and here a
+performance's identity is the CAST rather than the time, so a user holding an (A)
+ticket cannot say which one they hold.
+
+**Descoped, not solved.** It exists only inside stage runs, and stage runs are
+out of scope -- ミュージカル信長 is the sole production among all 443 leads with a
+cast split, which is also why this was worth checking rather than assuming.
+Ranked low for exactly that reason and for no other: it is a real gap, and if
+stage runs ever come back (#8) this is their prerequisite.
+
+Do not let a triage skill paper over it with a label convention in the meantime.
+A convention that encodes cast in free text would look like support and would
+still leave the outcome unrecordable, which is worse than the honest gap.
+
+### 10. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1019,7 +1103,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 9. Name the destination on the sign-in bounce
+### 11. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1041,7 +1125,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 10. Nothing caps the discovery review path
+### 12. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -3268,6 +3352,22 @@ tracking) plus a synchronous `POST /me/test-dm` diagnostic route and
 "Send test DM" button on the preferences page.
 
 ## Rejected
+
+### Catalogue free public appearances (rejected 2026-08-02)
+
+餅まき at a department store, a 1日駅長就任式 at JR山口駅, アニソン盆踊り at
+神田明神, a トークショー at 松山競輪場. The 2026-08-01 taxonomy read found a
+steady trickle of these among the 443 leads.
+
+Rejected as a permanent class rather than deferred to #8, and the distinction is
+the point: the others are things we decided not to do yet, while this one has
+nothing for the app to say. **There is no ticket, so there is no deadline, so
+there is no reminder.** A concert row for one would carry no round, arm no rule,
+and announce nothing -- the same shape as a concert whose every leg is cancelled,
+which the app already goes out of its way to keep silent.
+
+`DismissReason.FREE` exists so waving one off is one click and stays counted.
+That is the whole support this class should ever have.
 
 ### Per-rung cancelled marking on a dead board card (rejected 2026-07-28)
 

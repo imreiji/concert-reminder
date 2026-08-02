@@ -14,6 +14,43 @@ against the queue that exists rather than the one we imagined.
 classifier at the end of this file produces real numbers, and where it disagrees
 with a figure here, it wins.
 
+## Scope ruling (owner, 2026-08-02)
+
+**Two classes get catalogued: A (ticketed concert/tour) and D (radio/talk/番組
+イベント). Every other class is a dismissal.**
+
+This is recorded here rather than only in WISHLIST because it changes how this
+document should be read. The seven classes below were written as a survey of
+what exists; five of them are now a description of what gets waved off, and the
+`DismissReason` value beside each is the button you press.
+
+| Class | Ruling | Reason value |
+|---|---|---|
+| A. Ticketed concert / tour | **Catalogue** | — |
+| D. Radio / talk / 番組イベント | **Catalogue** | — |
+| B. Multi-performance stage run | Dismiss | `stage` |
+| C. Release event / お渡し会 | Dismiss | `release` |
+| E. Festival | Dismiss | `festival` |
+| F. Fan meeting / birthday | Dismiss | `fanmeet` |
+| G. Free public appearance | Dismiss, permanently | `free` |
+| A real live not worth tracking | Dismiss | `live` |
+
+Three consequences worth stating, because each removes work the sections below
+still describe as open:
+
+- **The classify pass is binary.** It no longer needs a judgment per class about
+  whether and how to catalogue it. Keep A and D; dismiss the rest with a reason.
+- **A/B casts is descoped by consequence.** The gap named below exists only
+  inside class B, and ミュージカル信長 is the sole production among all 443 leads
+  that has a cast split. It is filed at WISHLIST #9, not solved.
+- **The per-tag "concerts only" preference is no longer needed to cut the
+  queue.** The classifier now does that for every tag at once. It survives as an
+  entry only for the narrower case the ruling does not cover -- an artist whose
+  talk shows a particular user does not want.
+
+Roughly a third of the 443 survive the ruling, and the title-stem collapse below
+takes that third to something on the order of fifty productions.
+
 ## The headline: 443 leads is not 443 things
 
 The single most useful property of this queue is that a large fraction of it is
