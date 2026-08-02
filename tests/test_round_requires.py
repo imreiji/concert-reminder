@@ -613,6 +613,64 @@ async def test_draft_preview_warns_on_unmatched_requires(client):
     assert "&#39;ノーグッズ&#39;" in r.text  # Jinja-escaped repr() quotes
 
 
+async def test_draft_preview_self_reference_warns_and_drops_selection(client):
+    # An item-kind round whose requires: names ITSELF by label -- there is no
+    # OTHER round with that label, so this must warn (the generic "no other
+    # round labelled" message: self-reference is not a distinct warning
+    # branch, same as before this fix) and select nothing. Also exercises
+    # the round_key self-exclusion fix: this round's own option (r0) must
+    # not even be OFFERED in its own card's <select>, let alone selected.
+    login_as(client, EDITOR_ID, "reiji")
+    draft = (
+        "title: Requires Draft Test\n"
+        "rounds:\n"
+        "  - label: グッズ販売\n"
+        "    kind: goods_sale\n"
+        "    requires: グッズ販売\n"
+    )
+    r = client.post("/concerts/import/draft", data={"draft": draft})
+    assert r.status_code == 200
+    assert "no other round labelled" in r.text
+    assert "&#39;グッズ販売&#39;" in r.text
+    # r0 is the only round on the page, so ANY "<option value="r0"" would
+    # have to be this round listing itself -- there must be none.
+    assert '<option value="r0"' not in r.text
+
+
+async def test_draft_preview_warns_on_non_item_target(client):
+    # requires: names a label that IS a round in this draft, but that round
+    # (最速先行, r0) is a LOTTERY_ROUND, not an item/goods-sale kind -- the
+    # select never offers a non-item round as a target (server- or
+    # client-side), so this must get its own warning distinct from "no such
+    # round", reusing resolve_round_requires' "is not an item or goods sale"
+    # wording, and select nothing. A real item round (グッズ販売, r2) is also
+    # in this draft so requires_options is non-empty -- proving the drop is
+    # a deliberate refusal, not just an empty options list with nothing to
+    # select in the first place.
+    login_as(client, EDITOR_ID, "reiji")
+    draft = (
+        "title: Requires Draft Test\n"
+        "rounds:\n"
+        "  - label: 最速先行\n"
+        "    kind: lottery_round\n"
+        "  - label: 二次先行\n"
+        "    kind: lottery_round\n"
+        "    requires: 最速先行\n"
+        "  - label: グッズ販売\n"
+        "    kind: goods_sale\n"
+    )
+    r = client.post("/concerts/import/draft", data={"draft": draft})
+    assert r.status_code == 200
+    assert "is not an item or goods sale" in r.text
+    assert "&#39;最速先行&#39;" in r.text
+    assert "no other round labelled" not in r.text
+    # The real item round (r2) is offered as an option somewhere on the
+    # page, but never pre-selected -- the rejected link left every round's
+    # requires_key unresolved.
+    assert 'value="r2"' in r.text
+    assert '<option value="r2" selected>' not in r.text
+
+
 async def test_export_round_trip_keeps_requires(client):
     # Create a linked concert (same shape _create_goods_and_lottery seeds for
     # the create/edit tests above), fetch its YAML export, and re-parse it --

@@ -395,24 +395,47 @@ async def _draft_preview_response(
         r.leg_keys = " ".join(keys)
         r.leg_keys_selected = set(keys)
 
-    # requires -> the preview's round_key scheme ("r0", "r1", ...), the same
-    # label-claiming rule as legs: first round with a duplicate label keeps it.
-    round_label_to_key: dict[str, str] = {}
+    # requires -> the preview's round_key scheme ("r0", "r1", ...). round_key
+    # is stamped on EVERY round (it is a row's own identity, needed whatever
+    # its kind), but only an item/goods-sale round is a valid REQUIRES
+    # TARGET -- resolve_round_requires (concerts.py) enforces the same kind
+    # check at commit time, and the select this feeds is filtered to
+    # ITEM_SALE_KINDS both server- and client-side, so a resolution the
+    # select could never actually offer must not be handed out here.
     for i, r in enumerate(parsed.rounds):
         r.round_key = f"r{i}"
-        round_label_to_key.setdefault(r.label.strip(), f"r{i}")
+    # First round with a duplicate label keeps it, same rule as legs -- but
+    # split by kind: only an item-kind round's label is a resolvable target,
+    # while a non-item round's label is tracked separately so a requires:
+    # naming one gets its OWN warning instead of the generic "no such round"
+    # message (they are two different mistakes for an editor to fix).
+    item_label_to_key: dict[str, str] = {}
+    other_label_to_kind: dict[str, RoundKind] = {}
+    for r in parsed.rounds:
+        label = r.label.strip()
+        if r.kind in ITEM_SALE_KINDS:
+            item_label_to_key.setdefault(label, r.round_key)
+        else:
+            other_label_to_kind.setdefault(label, r.kind)
     for r in parsed.rounds:
         if not r.requires_label:
             continue
-        key = round_label_to_key.get(r.requires_label.strip())
-        if key is None or key == r.round_key:
+        lbl = r.requires_label.strip()
+        key = item_label_to_key.get(lbl)
+        if key is not None and key != r.round_key:
+            r.requires_key = key
+        elif lbl in other_label_to_kind:
+            parsed.warnings.append(
+                f"round {r.label!r}: {lbl!r} points at a round that is not "
+                "an item or goods sale -- that item link was dropped, pick "
+                "it by hand"
+            )
+        else:
             parsed.warnings.append(
                 f"round {r.label!r}: no other round labelled "
                 f"{r.requires_label!r} -- that item link was dropped, "
                 "pick it by hand"
             )
-        else:
-            r.requires_key = key
 
     return templates.TemplateResponse(
         request,

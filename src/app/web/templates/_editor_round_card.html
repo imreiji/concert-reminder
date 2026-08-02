@@ -80,7 +80,11 @@
     <label class="dim tiny">{{ _("Requires item from") }}
       <select name="round_requires" data-none-label="{{ _('No item needed') }}">
         <option value="">{{ _("No item needed") }}</option>
-        {% for val, lbl in _ropts %}{% if (val | string) != (round_id | string) %}
+        {#- Excludes both round_id (the saved-row identity, edit page) and
+            round_key (the same-submit identity, import preview -- round_id
+            is always "" there, so without this a round listed itself as its
+            own requires target). -#}
+        {% for val, lbl in _ropts %}{% if (val | string) != (round_id | string) and (val | string) != (round_key | string) %}
         <option value="{{ val }}"{% if (val | string) == (requires_value | string) %} selected{% endif %}>{{ lbl }}</option>
         {% endif %}{% endfor %}
       </select>

@@ -198,6 +198,13 @@ def test_preview_shows_new_round_kind_labels(client):
     r = client.post("/concerts/import/preview", data={"url": GRADUATION_URL})
     assert "First come, first served" in r.text
     assert "Overseas tour package" in r.text
+    # The requires-item select renders on the ramen-URL path too (Task 7):
+    # a scrape never produces a requires-link, so requires_options is empty
+    # and the box is hidden, but the <select> itself must still be present
+    # and the page must not break just because this route passes no
+    # requires_options context of its own.
+    assert 'name="round_requires"' in r.text
+    assert 'data-requires-box hidden' in r.text
 
 
 def test_preview_of_event_with_no_rounds_shows_warning(client):
