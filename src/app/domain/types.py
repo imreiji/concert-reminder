@@ -38,11 +38,27 @@ class RoundKind(enum.StrEnum):
     # ticket bundle sold via its own lottery, structurally separate from
     # the eplus serial-code system. Not guaranteed to exist per concert.
     TOUR_PACKAGE = "tour_package"
+    # A merch/goods pre-order window (グッズ販売 / 物販). Cosmetic like the
+    # nine above it -- only UPGRADE carries behavior -- but it is one of the
+    # two kinds a round's required_item_round_id may point at (an item whose
+    # purchase is what qualifies you for a lottery round; 抽選券付き goods
+    # exist, which is why this kind joins ELIGIBILITY_ITEM_SALE there).
+    GOODS_SALE = "goods_sale"
     # A second, nested campaign that only holders of a qualifying round's
     # ticket may enter (e.g. an upgrade lottery for premium seats open only
     # to people who already secured a ticket in an earlier round).
     UPGRADE = "upgrade"
     OTHER = "other"                                  # future franchise inventions
+
+
+# The kinds a round's `required_item_round_id` may target: the serial-code
+# CD/BD sale and the goods sale (抽選券付き goods exist). ONE table, here in
+# the pure vocabulary, because three write paths validate it (create, edit,
+# import commit) and the requires <select>'s client script mirrors it -- two
+# copies drifting is how a file stops being able to express a link at all.
+ITEM_SALE_KINDS: frozenset["RoundKind"] = frozenset({
+    RoundKind.ELIGIBILITY_ITEM_SALE, RoundKind.GOODS_SALE,
+})
 
 
 class ConcertKind(enum.StrEnum):

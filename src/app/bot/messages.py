@@ -24,6 +24,7 @@ KIND_EMOJI = {
     "payment_deadline": "💴",
     "fcfs_sale": "🏁",
     "tour_package": "✈️",
+    "goods_sale": "🛍️",
     "upgrade": "⬆️",
     "other": "📌",
 }

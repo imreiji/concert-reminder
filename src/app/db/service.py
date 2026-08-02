@@ -1572,6 +1572,7 @@ LABEL_BY_ROUND_KIND: dict[RoundKind, str] = {
     RoundKind.PAYMENT_DEADLINE: N_("Payment deadline"),
     RoundKind.FCFS_SALE: N_("First come, first served"),
     RoundKind.TOUR_PACKAGE: N_("Overseas tour package"),
+    RoundKind.GOODS_SALE: N_("Goods sale"),
     RoundKind.UPGRADE: N_("Upgrade round"),
     RoundKind.OTHER: N_("Other"),
 }
