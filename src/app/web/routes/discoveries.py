@@ -4,6 +4,13 @@
   POST /admin/discoveries/sweep              ask the scheduler to sweep now
   POST /admin/discoveries/sweep/{tag_id}     read ONE artist's page, inline
   POST /admin/discoveries/{lead_id}/dismiss  wave one off for good
+  GET  /admin/discoveries/prune              paste an agent's prune list
+  POST /admin/discoveries/prune              show the plan -- writes nothing
+  POST /admin/discoveries/prune/apply        re-parse, re-plan, apply, commit
+
+The prune trio mirrors /admin/import/tags (routes/admin.py) exactly: paste,
+plan, apply, and apply RE-PARSES from the pasted text rather than trusting
+anything else the form carries -- see prune_apply's docstring.
 
 The per-tag sweep lives HERE rather than in routes/tags.py even though its
 button is on the Tags page: a router registers whole, so putting an admin-only
@@ -40,18 +47,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import DiscoveredEvent, Tag
 from app.db.service import (
+    apply_prune,
     discovery_status,
     dismiss_lead,
     dismissed_reason_counts,
     leads_matching_existing_legs,
     open_leads,
+    plan_prune,
     request_sweep,
 )
 from app.db.session import get_session
 from app.discovery import sweep_one_tag
 from app.domain.discovery_message import Lead, build_discovery_dm
+from app.domain.prune_list import PruneListError, parse_prune_list
 from app.domain.types import DISMISS_REASON_LABELS, DismissReason
 from app.web.auth import SessionUser, require_admin
+from app.web.routes.imports import MAX_DRAFT_CHARS
 
 router = APIRouter()
 
@@ -275,3 +286,108 @@ async def dismiss(
         raise HTTPException(status_code=404, detail="no such lead")
     await session.commit()
     return RedirectResponse("/admin/discoveries", status_code=303)
+
+
+# ── The prune list: paste, plan, apply ──────────────────────────────────────
+#
+# Mirrors /admin/import/tags (routes/admin.py's import_tags_form/_preview/
+# _apply) exactly, down to the docstring habits -- one paste box, a plan
+# rendered before anything is written, and an apply that re-derives the plan
+# from the pasted text rather than the browser's say-so. An agent classifies
+# the open /admin/discoveries queue offline (following the taxonomy in
+# docs/discovery-lead-taxonomy-2026-08-01.md) and hands back a
+# `dismiss: {reason: [event_id, ...]}` file; this is where a human reviews
+# that classification, per lead, before any of it becomes permanent.
+
+
+def _prune_page(request, user, text, *, plan=None, applied=None, error=None):
+    return templates.TemplateResponse(
+        request,
+        "admin_prune.html",
+        {
+            "user": user,
+            "text": text,
+            "plan": plan,
+            "applied": applied,
+            "error": error,
+            "dismiss_reason_labels": DISMISS_REASON_LABELS,
+        },
+    )
+
+
+async def _prune_plan_or_error(session, text):
+    """(plan, error). Shared by the preview and apply routes so they cannot
+    disagree about what a bad file is -- the same split admin.py's
+    `_plan_or_error` uses for tags.yaml."""
+    if len(text) > MAX_DRAFT_CHARS:
+        return None, "that file is too large -- pastes are capped at 200k characters"
+    try:
+        parsed = parse_prune_list(text)
+    except PruneListError as exc:
+        return None, str(exc)
+    plan = await plan_prune(session, parsed)
+    return plan, None
+
+
+@router.get("/admin/discoveries/prune", response_class=HTMLResponse)
+async def prune_form(
+    request: Request,
+    user: SessionUser = Depends(require_admin),
+):
+    """Paste an agent-authored prune list -- the classification of the open
+    discovery queue, in the vocabulary domain/prune_list.py parses.
+
+    Admin-only, English-only and NOT wrapped in _(), like every other
+    discovery route.
+    """
+    return _prune_page(request, user, "")
+
+
+@router.post("/admin/discoveries/prune", response_class=HTMLResponse)
+async def prune_preview(
+    request: Request,
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+    text: str = Form(""),
+):
+    """Show what the file WOULD dismiss. Writes nothing -- looking is not
+    doing, and every entry here is about to become a permanent dismissal."""
+    plan, error = await _prune_plan_or_error(session, text)
+    return _prune_page(request, user, text, plan=plan, error=error)
+
+
+@router.post("/admin/discoveries/prune/apply", response_class=HTMLResponse)
+async def prune_apply(
+    request: Request,
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+    text: str = Form(""),
+):
+    """Commit the plan -- built from a FRESH parse of `text`, never from
+    anything else the posted form carries.
+
+    Unlike /admin/import/tags/apply, which reads operator CHOICES back out of
+    the form (mine/theirs, add/remove member -- decisions with no meaning
+    outside a plan that was already rendered), this route needs no choices at
+    all: a prune list names exactly what to dismiss and under which reason,
+    so there is nothing left for the browser to decide. That means the ONLY
+    thing this route trusts from the request is `text` itself, re-parsed and
+    re-planned exactly as the preview route above did -- a lead id, an event
+    id or a reason typed anywhere else in the form (a forged extra field, a
+    stale hidden input) is never read, so a forged post cannot make this
+    route dismiss anything the pasted file does not itself name. A conflict
+    that vanished since the preview -- the lead got dismissed by someone else
+    in the meantime -- simply is not re-applied: `apply_prune` walks only
+    `plan.to_dismiss`, and `dismiss_lead` itself refuses an already-dismissed
+    row.
+
+    One transaction: a file that raises leaves nothing behind. `apply_prune`
+    only flushes per lead, never commits, so the commit here is what makes
+    the batch durable.
+    """
+    plan, error = await _prune_plan_or_error(session, text)
+    if error:
+        return _prune_page(request, user, text, error=error)
+    written = await apply_prune(session, plan, datetime.now(UTC))
+    await session.commit()
+    return _prune_page(request, user, text, plan=plan, applied=written)

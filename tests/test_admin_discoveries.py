@@ -1062,6 +1062,14 @@ async def test_apply_skips_the_already_dismissed_without_restamping(client):
     assert lead.dismiss_reason == "free"
 
 
+async def test_the_discoveries_page_links_the_prune_surface(client):
+    """The link lives beside the copy block, which only renders when there is
+    at least one open lead."""
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    assert "/admin/discoveries/prune" in client.get("/admin/discoveries").text
+
+
 async def test_planning_a_batch_does_not_issue_a_query_per_entry(client):
     """The property: planning a 20-entry file does not issue 20 SELECTs.
     Mirrors the statement-count style pinned for my_deadline_blocks in
@@ -1097,3 +1105,164 @@ async def test_planning_a_batch_does_not_issue_a_query_per_entry(client):
 
     assert len(plan.to_dismiss) == 20
     assert len(queries) == 1, f"plan_prune ran {len(queries)} queries for 20 entries"
+
+
+# ── The prune surface: paste, plan, apply ───────────────────────────────────
+
+
+async def test_an_editor_cannot_reach_the_prune_page(client):
+    """Signed in and unauthorized IS an error (invariant 5), and the write half
+    is guarded too -- a page that only hides a form is not access control."""
+    login_as(client, EDITOR_ID, "editor")
+    assert client.get("/admin/discoveries/prune").status_code == 403
+    assert client.post("/admin/discoveries/prune", data={"text": ""}).status_code == 403
+    assert client.post("/admin/discoveries/prune/apply", data={"text": ""}).status_code == 403
+
+
+async def test_signed_out_cannot_reach_the_prune_page(client):
+    """Being signed out is not an error (invariant 5) -- and still no write."""
+    assert client.get("/admin/discoveries/prune").status_code == 303
+    assert client.post("/admin/discoveries/prune", data={"text": ""}).status_code == 303
+    assert client.post("/admin/discoveries/prune/apply", data={"text": ""}).status_code == 303
+
+
+async def test_the_plan_page_shows_all_three_buckets(client):
+    """One file naming an open lead, an already-dismissed lead (under a
+    DIFFERENT reason than it is stored under) and an id matching nothing at
+    all -- all three buckets must render, and the already-dismissed lead must
+    show BOTH what the file says and what is actually stored, since that
+    disagreement is the whole point of the stored_reason column."""
+    await _seed(client, eventernote_event_id="111", title="Open Lead")
+    await _seed(
+        client, eventernote_event_id="222", title="Already Gone",
+        dismissed_at=NOW, dismiss_reason=DismissReason.FREE,
+    )
+    login_as(client, ADMIN_ID, "reiji")
+    text = (
+        "dismiss:\n"
+        "  stage:\n"
+        "    - '111'\n"
+        "  release:\n"
+        "    - '222'\n"
+        "    - '999'\n"
+    )
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert "Open Lead" in body
+    assert "Already Gone" in body
+    assert "999" in body
+    assert "Release event" in body, "what the file asked for, for the already-dismissed lead"
+    assert "No ticket at all" in body, "what the row actually holds -- the disagreement"
+
+    # Previewing writes nothing.
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is None
+    lead = await _lead_by_event_id(client, "222")
+    assert lead.dismissed_at is not None and lead.dismiss_reason == "free", \
+        "the already-dismissed row's own reason must survive a mere preview"
+
+
+async def test_previewing_writes_nothing(client):
+    """The whole point of plan-before-apply. Post to the PLAN route and assert
+    the lead is untouched."""
+    await _seed(client, eventernote_event_id="111")
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n"
+    r = client.post("/admin/discoveries/prune", data={"text": text})
+    assert r.status_code == 200
+    assert "Anniversary Day 2" in r.text
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is None
+    assert lead.dismiss_reason is None
+
+
+async def test_a_bad_file_shows_the_error_and_writes_nothing(client):
+    """Both the plan route and the apply route must refuse an unparseable
+    file the same way _plan_or_error does for tags.yaml -- render the error,
+    write nothing."""
+    await _seed(client, eventernote_event_id="111")
+    login_as(client, ADMIN_ID, "reiji")
+    bad = "dismiss: [unterminated"
+
+    r = client.post("/admin/discoveries/prune", data={"text": bad})
+    assert r.status_code == 200
+    assert "could not be read" in r.text
+
+    r = client.post("/admin/discoveries/prune/apply", data={"text": bad})
+    assert r.status_code == 200
+    assert "could not be read" in r.text
+
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is None
+
+
+async def test_apply_dismisses_and_reports(client):
+    """The straightforward success path: the reported count and the actual
+    write agree."""
+    await _seed(client, eventernote_event_id="111", title="Lead A")
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n"
+    r = client.post("/admin/discoveries/prune/apply", data={"text": text})
+    assert r.status_code == 200
+    assert "Dismissed 1 lead" in r.text
+    lead = await _lead_by_event_id(client, "111")
+    assert lead.dismissed_at is not None
+    assert lead.dismiss_reason == "stage"
+
+
+async def test_apply_reparses_and_ignores_injected_ids(client):
+    """The browser sends the FILE back, never a list of ids -- this is the
+    property that makes the apply route safe to expose at all, so the test
+    has to attack every plausible way a forged post could smuggle a second
+    lead in, in ONE request:
+
+    - `lead_id`, `event_id`, `dismiss`, `reason` -- plausible field names a
+      naive implementation might read directly to decide what to dismiss.
+      prune_apply reads none of them; only the bound `text` parameter is
+      ever touched.
+    - a REPEATED `text` field -- the forged occurrence goes FIRST and the
+      real file naming lead A goes LAST. FastAPI resolves a scalar `Form`
+      field via Starlette's `ImmutableMultiDict`, which is built from a dict
+      comprehension that keeps the LAST value for a repeated key -- so an
+      attacker trying to sneak an extra `text` occurrence past whichever one
+      the server actually binds would place theirs first, hoping either
+      order is read, or that both get merged. Ordering it this way means the
+      test would catch a route that (a) bound the FIRST occurrence instead
+      of the last, (b) read `request.form().getlist("text")` and looped over
+      every value, or (c) concatenated them -- any of which would dismiss
+      lead B, which the file itself never named.
+
+    This is genuinely adversarial rather than vacuous specifically because
+    of that ordering choice: a version of this test with the real text
+    first and the forged one last would still pass today (nothing reads the
+    other fields at all), but would NOT catch bug (a) above, since the
+    winning `text` would happen to be the real one by accident of order
+    rather than because the route re-parses correctly. Placing the legitimate
+    file LAST forces the assertion to depend on the actual binding rule, not
+    on which one a test author happened to type first.
+    """
+    await _seed(client, eventernote_event_id="111", title="Lead A")
+    await _seed(client, eventernote_event_id="222", title="Lead B")
+    lead_b_id = (await _lead_by_event_id(client, "222")).id
+    login_as(client, ADMIN_ID, "reiji")
+
+    forged_text = "dismiss:\n  live:\n    - '222'\n"
+    real_text = "dismiss:\n  stage:\n    - '111'\n"
+    # httpx's `data=` is a Mapping, not a list of pairs -- a repeated form key
+    # is expressed by mapping it to a LIST, which `encode_urlencoded_data`
+    # expands into one key=value pair per item, in list order. So `text` maps
+    # to [forged, real] to put two `text` fields on the wire in that order.
+    data = {
+        "lead_id": str(lead_b_id),
+        "event_id": "222",
+        "dismiss": "222",
+        "reason": "other",
+        "text": [forged_text, real_text],
+    }
+    r = client.post("/admin/discoveries/prune/apply", data=data)
+    assert r.status_code == 200
+
+    lead_a = await _lead_by_event_id(client, "111")
+    lead_b = await _lead_by_event_id(client, "222")
+    assert lead_a.dismissed_at is not None, "the file's own entry was applied"
+    assert lead_a.dismiss_reason == "stage"
+    assert lead_b.dismissed_at is None, "no other field may select a lead to dismiss"

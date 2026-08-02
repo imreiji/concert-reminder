@@ -1,0 +1,96 @@
+{#- Admin surface: English-only and NOT wrapped in _(), like admin_discoveries
+    and admin_import_tags. Only the Preferences LINK to this page is
+    translated. Same shape as admin_import_tags.html on purpose: paste, plan,
+    apply -- reusing existing classes (`banner warn`, `edgecard`, `dim`, `act
+    no`), inventing no new styling. -#}
+{% extends "base.html" %}
+{% block title %}Prune discovery leads — dekimasen.app{% endblock %}
+{% block content %}
+<div class="lede">
+  <h1>Prune discovery leads</h1>
+  <p class="dim">Paste an agent's classification of the open
+    <a href="/admin/discoveries">discoveries</a> queue — a <code>dismiss:</code>
+    mapping of reason to a list of Eventernote event ids. Every surviving entry
+    becomes a <b>permanent</b> dismissal; nothing here un-dismisses.</p>
+</div>
+
+{% if error %}
+<p class="banner dgr"><span>⚠</span> <span><b>That file could not be read.</b> {{ error }}</span></p>
+{% endif %}
+
+{% if applied is not none %}
+<div class="edgecard ok">
+  <p><b>Dismissed {{ applied }} lead{{ '' if applied == 1 else 's' }}.</b>
+    {% if plan.already %}{{ plan.already | length }} were already dismissed and left untouched.{% endif %}
+    {% if plan.unknown %}{{ plan.unknown | length }} id(s) matched no open lead and were skipped.{% endif %}</p>
+</div>
+{% endif %}
+
+{% if plan %}
+<form method="post" action="/admin/discoveries/prune/apply" class="stack wide">
+  <input type="hidden" name="text" value="{{ text }}">
+
+  <h2>Will dismiss</h2>
+  {% if plan.to_dismiss %}
+  {% for reason, group in plan.to_dismiss | groupby("reason") %}
+  <div class="edgecard dg">
+    <p><b>{{ dismiss_reason_labels[reason] }}</b> — {{ group | length }} lead{{ '' if group | length == 1 else 's' }}</p>
+    <ul>
+      {% for d in group %}
+      <li>{{ d.title }} — {{ d.event_date.strftime('%Y-%m-%d') }}
+        (<a href="https://www.eventernote.com/events/{{ d.event_id }}"
+            target="_blank" rel="noopener">{{ d.event_id }}</a>)</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+  {% else %}
+  <p class="dim">Nothing new to dismiss.</p>
+  {% endif %}
+
+  <h2>Not in the queue</h2>
+  {% if plan.unknown %}
+  <div class="banner warn">
+    <span>⚠</span>
+    <span><b>{{ plan.unknown | length }} id(s) match no open lead.</b> Usually a
+      stale file — a mistyped id, or a lead the catalogue no longer carries.
+      Skipped; nothing to do about these.</span>
+  </div>
+  <p class="dim">{% for eid in plan.unknown %}<code>{{ eid }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  {% else %}
+  <p class="dim">Every id in the file matched an open lead.</p>
+  {% endif %}
+
+  <h2>Already dismissed</h2>
+  {% if plan.already %}
+  <div class="banner warn">
+    <span>⚠</span>
+    <span><b>{{ plan.already | length }} lead(s) are already dismissed.</b>
+      Left exactly as they are — applying never re-stamps a dismissed row, so
+      the ORIGINAL reason and timestamp survive, not this file's.</span>
+  </div>
+  <ul class="dim">
+    {% for d in plan.already %}
+    <li>{{ d.title }} — {{ d.event_date.strftime('%Y-%m-%d') }}: file says
+      <b>{{ dismiss_reason_labels[d.reason] }}</b>, already dismissed as
+      {% if d.stored_reason %}<b>{{ dismiss_reason_labels[d.stored_reason] }}</b>{% else %}<b>unknown (predates this column)</b>{% endif %}
+      {%- if d.stored_reason and d.stored_reason != d.reason %} — <b>disagreement</b>{% endif %}.</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="dim">Nothing in the file was already dismissed.</p>
+  {% endif %}
+
+  {% if plan.to_dismiss %}
+  <p><button class="act no" type="submit">Dismiss {{ plan.to_dismiss | length }} lead{{ '' if plan.to_dismiss | length == 1 else 's' }}</button></p>
+  {% endif %}
+</form>
+{% endif %}
+
+<form method="post" action="/admin/discoveries/prune" class="stack wide">
+  <label class="fld"><span>Prune list</span>
+    <textarea name="text" rows="18" spellcheck="false"
+              placeholder="dismiss:&#10;  stage: ['481833']&#10;  live: ['464372']">{{ text or "" }}</textarea></label>
+  <button type="submit">Preview</button>
+</form>
+{% endblock %}
