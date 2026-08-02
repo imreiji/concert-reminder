@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-02 18:33-0300\n"
+"POT-Creation-Date: 2026-08-02 18:48-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -15,21 +15,21 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/messages.py:33
-#: src/app/bot/views.py:221 src/app/db/service.py:1559
+#: src/app/bot/views.py:221 src/app/db/service.py:1593
 msgid "opens"
 msgstr "受付開始"
 
 #: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:34
-#: src/app/bot/views.py:223 src/app/db/service.py:1560
+#: src/app/bot/views.py:223 src/app/db/service.py:1594
 msgid "closes"
 msgstr "締切"
 
-#: src/app/bot/messages.py:35 src/app/db/service.py:1561
+#: src/app/bot/messages.py:35 src/app/db/service.py:1595
 msgid "results announced"
 msgstr "当落発表"
 
 #: src/app/bot/messages.py:36 src/app/bot/views.py:228
-#: src/app/db/service.py:1562 src/app/web/templates/setup.html:155
+#: src/app/db/service.py:1596 src/app/web/templates/setup.html:155
 msgid "payment due"
 msgstr "入金締切"
 
@@ -64,7 +64,7 @@ msgid "{unit} ago"
 msgstr "{unit}前"
 
 #: src/app/bot/messages.py:77 src/app/bot/messages.py:185
-#: src/app/db/service.py:1563 src/app/web/templates/tags.html:481
+#: src/app/db/service.py:1597 src/app/web/templates/tags.html:481
 msgid "event"
 msgstr "イベント"
 
@@ -77,7 +77,7 @@ msgid "First deadline"
 msgstr "最初の締切"
 
 #: src/app/bot/messages.py:122 src/app/bot/messages.py:159
-#: src/app/bot/messages.py:205
+#: src/app/bot/messages.py:214
 msgid "Open on dekimasen.app"
 msgstr "dekimasen.appで開く"
 
@@ -92,11 +92,20 @@ msgstr "この公演は中止になりました。すべての公演が行われ
 msgid "A performance you had a reminder for was cancelled, and it's been cleared."
 msgstr "リマインダーを設定していた公演が中止になったため、関連するリマインダーを解除しました。"
 
-#: src/app/bot/messages.py:202
+#: src/app/bot/messages.py:200
+#, python-brace-format
+msgid "Requires: {name}"
+msgstr "要購入: {name}"
+
+#: src/app/bot/messages.py:203 src/app/web/templates/_round_rows.html:102
+msgid "sale ends"
+msgstr "販売終了"
+
+#: src/app/bot/messages.py:211
 msgid "Apply here"
 msgstr "こちらから申し込む"
 
-#: src/app/bot/messages.py:202
+#: src/app/bot/messages.py:211
 msgid "Ticket page"
 msgstr "チケットページ"
 
@@ -433,138 +442,138 @@ msgstr "後"
 msgid "same-day"
 msgstr "当日"
 
-#: src/app/db/service.py:1567
+#: src/app/db/service.py:1601
 msgid "Lottery round"
 msgstr "抽選受付"
 
-#: src/app/db/service.py:1568
+#: src/app/db/service.py:1602
 msgid "Eligibility item sale"
 msgstr "対象商品販売"
 
-#: src/app/db/service.py:1569
+#: src/app/db/service.py:1603
 msgid "Stream ticket sale"
 msgstr "配信チケット販売"
 
-#: src/app/db/service.py:1570
+#: src/app/db/service.py:1604
 msgid "General sale"
 msgstr "一般販売"
 
-#: src/app/db/service.py:1571
+#: src/app/db/service.py:1605
 msgid "Result announcement"
 msgstr "当落発表"
 
-#: src/app/db/service.py:1572
+#: src/app/db/service.py:1606
 msgid "Payment deadline"
 msgstr "入金締切"
 
-#: src/app/db/service.py:1573
+#: src/app/db/service.py:1607
 msgid "First come, first served"
 msgstr "先着"
 
-#: src/app/db/service.py:1574
+#: src/app/db/service.py:1608
 msgid "Overseas tour package"
 msgstr "海外向けツアーパッケージ"
 
-#: src/app/db/service.py:1575
+#: src/app/db/service.py:1609
 msgid "Goods sale"
 msgstr "グッズ販売"
 
-#: src/app/db/service.py:1576
+#: src/app/db/service.py:1610
 msgid "Upgrade round"
 msgstr "アップグレード抽選"
 
-#: src/app/db/service.py:1577
+#: src/app/db/service.py:1611
 msgid "Other"
 msgstr "その他"
 
-#: src/app/db/service.py:2544 src/app/db/service.py:2690
-#: src/app/db/service.py:6300 src/app/web/templates/_board.html:73
+#: src/app/db/service.py:2578 src/app/db/service.py:2724
+#: src/app/db/service.py:6334 src/app/web/templates/_board.html:73
 #: src/app/web/templates/discover.html:79 src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "複数"
 
-#: src/app/db/service.py:3733
+#: src/app/db/service.py:3767
 #, python-brace-format
 msgid "{n}d"
 msgstr "{n}日"
 
-#: src/app/db/service.py:3735
+#: src/app/db/service.py:3769
 #, python-brace-format
 msgid "{n}h"
 msgstr "{n}時間"
 
-#: src/app/db/service.py:3736
+#: src/app/db/service.py:3770
 #, python-brace-format
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/service.py:3833
+#: src/app/db/service.py:3867
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "アップグレード当選 — {day}までに入金"
 
-#: src/app/db/service.py:3834
+#: src/app/db/service.py:3868
 msgid "Upgrade won — payment due"
 msgstr "アップグレード当選 — 入金締切"
 
-#: src/app/db/service.py:3853
+#: src/app/db/service.py:3887
 msgid "Upgrade · Applied"
 msgstr "アップグレード・申込済み"
 
-#: src/app/db/service.py:3856
+#: src/app/db/service.py:3890
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "アップグレード・{n}後に締切"
 
-#: src/app/db/service.py:3859
+#: src/app/db/service.py:3893
 msgid "Upgrade · Open now"
 msgstr "アップグレード・受付中"
 
-#: src/app/db/service.py:3865 src/app/web/templates/_board.html:23
+#: src/app/db/service.py:3899 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:35
 #: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "確保済み"
 
-#: src/app/db/service.py:3876
+#: src/app/db/service.py:3910
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "当選 — {day}までに入金"
 
-#: src/app/db/service.py:3877
+#: src/app/db/service.py:3911
 msgid "Won — payment due"
 msgstr "当選 — 入金締切"
 
-#: src/app/db/service.py:3886
+#: src/app/db/service.py:3920
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind}・申込済み"
 
-#: src/app/db/service.py:3906
+#: src/app/db/service.py:3940
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind}・{n}後に締切"
 
-#: src/app/db/service.py:3911
+#: src/app/db/service.py:3945
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind}・受付中"
 
-#: src/app/db/service.py:3917
+#: src/app/db/service.py:3951
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind}・{n}後に受付開始"
 
-#: src/app/db/service.py:3924
+#: src/app/db/service.py:3958
 msgid "All rounds closed"
 msgstr "すべての受付が終了"
 
-#: src/app/db/service.py:5919
+#: src/app/db/service.py:5953
 msgid "From dekimasen.app"
 msgstr "dekimasen.app より"
 
-#: src/app/db/service.py:6552 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:6586 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
 #: src/app/web/templates/concert_new.html:35
@@ -574,7 +583,7 @@ msgstr "dekimasen.app より"
 msgid "Title"
 msgstr "タイトル"
 
-#: src/app/db/service.py:6556 src/app/web/templates/concert_edit.html:116
+#: src/app/db/service.py:6590 src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:118
 #: src/app/web/templates/concert_edit.html:131
 #: src/app/web/templates/concert_edit.html:136
@@ -587,17 +596,17 @@ msgstr "タイトル"
 msgid "Notes"
 msgstr "メモ"
 
-#: src/app/db/service.py:6562
+#: src/app/db/service.py:6596
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "公演{n}の名称"
 
-#: src/app/db/service.py:6567
+#: src/app/db/service.py:6601
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "受付{n}の名称"
 
-#: src/app/db/service.py:6576 src/app/web/templates/_tag_create_dialog.html:44
+#: src/app/db/service.py:6610 src/app/web/templates/_tag_create_dialog.html:44
 #: src/app/web/templates/_tag_create_dialog.html:46
 #: src/app/web/templates/_tag_create_dialog.html:48
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -612,7 +621,7 @@ msgstr "受付{n}の名称"
 msgid "Name"
 msgstr "名前"
 
-#: src/app/db/service.py:6581
+#: src/app/db/service.py:6615
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -1188,10 +1197,6 @@ msgstr "追加したばかりの受付は、保存後にここで選択できる
 #, python-format
 msgid "Requires: %(name)s"
 msgstr "要購入: %(name)s"
-
-#: src/app/web/templates/_round_rows.html:102
-msgid "sale ends"
-msgstr "販売終了"
 
 #: src/app/web/templates/_round_rows.html:103
 #, python-format

@@ -398,6 +398,43 @@ def test_build_reminder_message_keeps_button_for_ordinary_http_url():
     assert "https://example.com/apply" in urls
 
 
+def test_reminder_embed_carries_requires_line():
+    """A CLOSES reminder on a round that requires an item sale gets an extra
+    "Requires: <label>" line, with the sale's own close time appended while
+    it's still open -- the same open-gate rule RoundRow's display carries."""
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.CLOSES, fire_at_utc=dt(6, 22),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25),
+        requires_label="グッズ販売", requires_closes_at_utc=dt(6, 20),
+    )
+    embed, _view = build_reminder_message(item)
+    assert "Requires:" in embed.description
+    assert "グッズ販売" in embed.description
+    assert "sale ends" in embed.description
+
+
+def test_reminder_embed_drops_requires_close_time_once_sale_over():
+    item = DueReminder(
+        queue_id=1, discord_id=42, user_timezone="America/Moncton",
+        concert_title="Hasunosora 5th", anchor=Anchor.CLOSES, fire_at_utc=dt(6, 22),
+        round_id=7, round_label="最速先行 Round 1", round_kind="lottery_round",
+        anchor_time_utc=dt(6, 25),
+        requires_label="グッズ販売", requires_closes_at_utc=None,
+    )
+    embed, _view = build_reminder_message(item)
+    assert "Requires:" in embed.description
+    assert "グッズ販売" in embed.description
+    assert "sale ends" not in embed.description
+
+
+def test_reminder_embed_has_no_requires_line_when_round_names_no_dependency():
+    item = _closes_item_3_days_out()
+    embed, _view = build_reminder_message(item)
+    assert "Requires:" not in embed.description
+
+
 def test_build_reminder_message_other_anchors_keep_plain_snooze():
     item = DueReminder(
         queue_id=1, discord_id=42, user_timezone="America/Moncton",

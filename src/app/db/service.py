@@ -1368,6 +1368,11 @@ class DueReminder:
     # a one-leg round has nothing to disambiguate. Empty for every other row.
     # bot/messages.py turns a non-empty tuple into per-day result buttons.
     covered_days: tuple[tuple[int, str], ...] = ()
+    # The item-sale round this round requires, when it names one: label in
+    # the RECIPIENT's language, close time only while that sale is still
+    # open (same rule as RoundRow -- a closed sale's time is history).
+    requires_label: str | None = None
+    requires_closes_at_utc: datetime | None = None
 
 
 async def due_reminders(
@@ -1408,6 +1413,22 @@ async def due_reminders(
         d.id: d for d in
         (await session.execute(select(ConcertDay).where(ConcertDay.id.in_(day_ids)))).scalars()
     } if day_ids else {}
+    # The item-sale rounds the batch's rounds point at but didn't already
+    # load themselves -- one extra bounded SELECT, keeping the fixed-round-
+    # trip property (a batch of any size still costs the same number of
+    # queries, never one per row).
+    required_ids = {
+        r.required_item_round_id
+        for r in rounds.values()
+        if r.required_item_round_id is not None
+    } - set(rounds)
+    required_rounds: dict[int, Round] = dict(rounds)
+    if required_ids:
+        required_rounds.update({
+            r.id: r for r in (await session.execute(
+                select(Round).where(Round.id.in_(required_ids))
+            )).scalars()
+        })
     concert_ids = {r.concert_id for r in rounds.values()} | {d.concert_id for d in days.values()}
     concerts = {
         c.id: c for c in
@@ -1460,6 +1481,11 @@ async def due_reminders(
         concert = concerts.get(parent.concert_id) if parent else None
         if user is None or concert is None:
             continue  # orphaned row; cascades should prevent this, but never crash the loop
+        req = (
+            required_rounds.get(round_.required_item_round_id)
+            if round_ and round_.required_item_round_id is not None
+            else None
+        )
         out.append(
             DueReminder(
                 queue_id=row.id,
@@ -1494,6 +1520,14 @@ async def due_reminders(
                     (d.id, loc_field(d, "label", user.language))
                     for d in legs_by_round.get(row.round_id, ())
                 ) if row.anchor is Anchor.RESULTS else (),
+                requires_label=(
+                    loc_field(req, "label", user.language) if req else None
+                ),
+                requires_closes_at_utc=(
+                    req.closes_at_utc
+                    if req and req.closes_at_utc and req.closes_at_utc > now
+                    else None
+                ),
             )
         )
     return out

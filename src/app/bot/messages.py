@@ -196,6 +196,15 @@ def build_reminder_message(item: DueReminder) -> tuple:
     else:
         embed.description = f"**{subject}**"
 
+    if item.requires_label:
+        line = "🛍️ " + _("Requires: {name}").format(name=item.requires_label)
+        if item.requires_closes_at_utc is not None:
+            line += " — {} {}".format(
+                _("sale ends"),
+                fmt_dual(item.requires_closes_at_utc, item.user_timezone, get_locale()),
+            )
+        embed.description = f"{embed.description}\n{line}"
+
     view = discord.ui.View(timeout=None)
     ticket_url = safe_button_url(item.url)
     if ticket_url:

@@ -13,12 +13,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Concert, Round
-from app.db.service import concert_round_rows, ensure_user
+from app.db.models import Base, Concert, ReminderRule, Round, User
+from app.db.service import concert_round_rows, due_reminders, ensure_user, sync_rule
 from app.db.session import get_session
 from app.domain.ingest import _guess_kind
-from app.domain.types import ITEM_SALE_KINDS, RoundKind
+from app.domain.types import ITEM_SALE_KINDS, Anchor, RoundKind
 from app.domain.yaml_import import parse_draft
+from app.i18n import reset_catalog_cache, set_locale
 from app.web import auth
 from app.web.app import create_app
 from app.web.routes.concerts import RoundRequiresError, resolve_round_requires
@@ -749,3 +750,56 @@ async def test_concert_page_renders_requires_line(client):
     assert r.status_code == 200
     assert "Requires:" in r.text
     assert "Goods sale" in r.text
+
+
+# ── DueReminder.requires_label / requires_closes_at_utc (Task 9) ──────────
+
+
+async def test_due_reminder_carries_requires(session):
+    """Linked rounds + a rule whose queue row is due on the lottery round:
+    due_reminders() must carry the goods round's label in the RECIPIENT's
+    language -- not the ambient locale, which is set to something else here
+    on purpose -- and its close time only while that sale is still open."""
+    await ensure_user(session, 42, "reiji")
+    user = await session.get(User, 42)
+    user.language = "en"
+    await session.flush()
+
+    concert = Concert(title="Requires DM", event_id="requires-dm-test", created_by=42)
+    session.add(concert)
+    await session.flush()
+    goods_closes = NOW + timedelta(days=10)
+    goods = Round(
+        concert_id=concert.id, kind=RoundKind.GOODS_SALE, label="グッズ",
+        label_en="Goods sale", closes_at_utc=goods_closes,
+    )
+    session.add(goods)
+    await session.flush()
+    lottery = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="最速先行",
+        required_item_round_id=goods.id, closes_at_utc=NOW + timedelta(hours=1),
+    )
+    session.add(lottery)
+    await session.flush()
+    rule = ReminderRule(
+        user_id=42, round_id=lottery.id, anchor=Anchor.CLOSES, offset_days=0
+    )
+    session.add(rule)
+    await session.flush()
+    await sync_rule(session, rule, NOW)
+
+    set_locale("ja")  # ambient locale deliberately NOT the recipient's language
+    try:
+        (due,) = await due_reminders(session, NOW + timedelta(hours=1))
+    finally:
+        set_locale("en")
+        reset_catalog_cache()
+    assert due.requires_label == "Goods sale"
+    assert due.requires_closes_at_utc == goods_closes
+
+    # Once the goods sale itself has closed, the time drops -- a closed
+    # sale's deadline is history, not something to act on -- but the label
+    # (what you needed) stays.
+    (due_after,) = await due_reminders(session, goods_closes + timedelta(days=1))
+    assert due_after.requires_label == "Goods sale"
+    assert due_after.requires_closes_at_utc is None
