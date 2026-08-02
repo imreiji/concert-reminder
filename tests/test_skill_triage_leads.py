@@ -71,3 +71,36 @@ def test_example_batch_shows_a_multi_leg_concert():
     it."""
     batch = parse_drafts((SKILL / "example-batch.yaml").read_text(encoding="utf-8"))
     assert any(len(d.parsed.days) >= 2 for d in batch.drafts)
+
+
+def test_skill_exists_and_has_frontmatter():
+    text = pathlib.Path(".claude/skills/triage-leads/SKILL.md").read_text(encoding="utf-8")
+    assert text.startswith("---\n")
+    assert "name: triage-leads" in text
+
+
+def test_the_skill_names_both_destinations():
+    """An agent that produces the files but cannot say where they go has not
+    closed the loop."""
+    text = pathlib.Path(".claude/skills/triage-leads/SKILL.md").read_text(encoding="utf-8")
+    assert "/admin/discoveries/prune" in text
+    assert "/concerts/import" in text
+
+
+def test_the_skill_delegates_drafts_to_add_concert():
+    """It must not restate the draft schema -- that one is owned by
+    add-concert and pinned to the parser by its own test."""
+    text = pathlib.Path(".claude/skills/triage-leads/SKILL.md").read_text(encoding="utf-8")
+    assert "add-concert" in text
+
+
+def test_the_skill_states_the_scope_ruling():
+    text = pathlib.Path(".claude/skills/triage-leads/SKILL.md").read_text(encoding="utf-8")
+    assert "番組イベント" in text
+
+
+def test_the_skill_warns_about_the_collapse_trap():
+    """The per-member split is the mistake most likely to produce a wrong
+    import, and it is not guessable."""
+    text = pathlib.Path(".claude/skills/triage-leads/SKILL.md").read_text(encoding="utf-8")
+    assert "お渡し会" in text

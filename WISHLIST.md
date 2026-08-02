@@ -706,145 +706,23 @@ exists only inside stage runs, and ミュージカル信長 is the sole producti
 Proposed: no ticket exists, so there is no deadline to remind anyone about, and
 that is not a gap to be closed later.
 
+
+**The 2026-08-02 triage build** ships #1 in three phases and empties the entry
+that led this list all day. Phase 1 takes a pasted prune list and dismisses in
+bulk (plan first, apply second, four buckets shown); phase 2 takes many concert
+drafts in ONE paste and walks them one reviewed preview at a time; phase 3 is
+the skill that produces both files. Entries renumbered 1-11.
+
+The re-rank moves nothing on merit. What is worth recording is that the two
+entries the scope ruling filed the previous day -- the out-of-scope classes and
+the A/B cast gap -- are unchanged by this build and stay where the ruling put
+them: the skill dismisses those classes, which is exactly what the ruling asked
+for, and dismissing them is not the same as supporting them later.
+
 ## Proposed (highest impact first)
 
 
-### 1. The scrape-to-agent workflow: a `triage-leads` skill
-
-Impact: high - effort: small-to-medium. Raised: 2026-07-31 (owner, immediately
-after the manual sweep button merged: "then we can start building the actual
-scrape -> agent workflow").
-
-Discovery now produces leads and a manual button to produce them on demand. What
-it does NOT do is close the loop: a lead becomes a tracked concert only when
-somebody finds the official ticket page, extracts the rounds, groups the legs and
-writes the trilingual titles. That half is deliberately agent work -- eventernote
-carries no ticket information at all, so no amount of scraping can supply it --
-and it is currently improvised fresh in each session.
-
-**The durable form is a skill, not a schedule.** `.claude/skills/triage-leads/`,
-invoked with the DM's copy block (or the page's) pasted as arguments. A file, so
-it survives sessions, gets reviewed in PRs, and sharpens as the real leads teach
-what they look like. It should CALL the existing `add-concert` skill for the
-draft itself rather than duplicate it -- that one already owns the schema and is
-pinned to the parser by a test.
-
-Two things worth settling in its design rather than during it:
-
-- **Grouping is the judgment the app deliberately refuses.** One eventernote
-  event is one LEG; a tour is one concert with several. The DM's copy block
-  already carries the instruction, but the skill is where the heuristics live
-  (title stem, adjacent dates, same venue).
-- **The commit stays manual.** `import_commit` is the only write path into
-  `concerts` and a lead must never bypass it. The goal is fewer steps, not an
-  agent writing to the catalogue unattended.
-
-A second, cheaper shortening is available and needs no skill: after building a
-draft, drive the owner's signed-in browser to `/concerts/import`, paste it, and
-leave the filled preview on screen. That removes a copy-paste and a tab hunt.
-
-Ranked #1 on merit rather than by removal: it is what makes a feature that
-shipped today actually pay off, and without it every lead costs the same manual
-research it always did.
-
-**The caveat this entry carried -- write it AFTER a few production sweeps, since
-its value lives in the specifics -- is DISCHARGED as of 2026-08-01.** The first
-full sweep produced 443 open leads and they were read end to end;
-`docs/discovery-lead-taxonomy-2026-08-01.md` is the result and is now this
-entry's real input. What follows replaces the design sketch above, because the
-data contradicted its central assumption.
-
-**Changed 2026-08-01 by the character-tags build, and displaced to #2 by the
-reformat above.** An im@s lead is no longer the same shape as a Love Live one,
-and the skill has to know the difference:
-
-- **The draft must name the CHARACTER, not the seiyuu.** 如月千早 is who the bill
-  credits; attaching her attaches 今井麻美 automatically, and doing it the other
-  way round attaches nothing (the reverse chain deliberately does not exist).
-  Whichever way the lead's page names the performer, the skill must resolve it
-  to the character before writing the draft.
-- **The draft CAN name her, as of the same day.** `series.characters` and
-  `series_handles.characters` ride the draft vocabulary, the preview pre-selects
-  the character row from either, and an unmatched name becomes a create chip
-  carrying `character` as its kind. So the skill writes her into the draft like
-  any other credit -- no "tick her on the preview afterwards" step, which is what
-  this entry said it would have to say when it was filed that morning.
-- **The reformat (#1) is a prerequisite in practice**, not merely a nicety: with
-  no character tags in the catalogue there is nothing for a lead to resolve to,
-  and the skill would encode a workflow it cannot run.
-- One thing that needs NO work: a character tag carries its own
-  `eventernote_url` and the daily sweep walks it unchanged, so her actor page
-  produces leads like any artist's -- and because leads are keyed on the
-  Eventernote event id, a show listed on both her page and her seiyuu's yields
-  ONE lead, not two.
-
-**Rewritten 2026-08-01 by the first real sweep (443 leads).** The entry above
-describes ONE research pass -- find the ticket page, extract the rounds, group
-the legs. That cannot be the whole skill, and the reasons are not stylistic:
-
-- **Volume.** 443 leads at two minutes each is over thirteen hours. Research has
-  to run on what SURVIVES filtering, never on the queue.
-- **There is no reject path anywhere in this entry.** Roughly half the queue
-  should never become a concert: a 発売記念お渡し会 has no lottery and no
-  deadline, and a 餅まき at a department store has no ticket at all. The app
-  already knows this -- `DiscoveredEvent`'s docstring says a lead reports
-  existence and nothing more, and `dismissed_at` is the outcome -- but the skill
-  as sketched has no vocabulary for reaching it.
-
-So the shape is at least THREE passes, cheapest first: collapse by title stem
-(mechanical, no network, the single largest reduction available -- 443 leads is
-roughly 120-150 distinct productions, because a nine-performance run is nine
-leads); classify and dismiss (title-driven, still no network); then research the
-remainder. Only the third pass needs a ticket page.
-
-One trap the collapse must not fall into: two DIFFERENT mechanisms produce
-repeated titles. 学園アイドルマスター LIVE TOUR is one concert with eight legs,
-while 『Liella!と結ぶプロジェクト』お渡し会 is eleven events because each member
-got her own slot at one venue on one day. Grouping purely on title stem gets the
-first right and the second wrong.
-
-Two things the taxonomy surfaced that are NOT this skill's work, recorded here
-so they are not rediscovered inside it:
-
-- **A/B casts have nowhere to live** (ミュージカル信長 runs 公演(A) and 公演(B)
-  the same day at the same venue with different casts). Per-leg outcome truth is
-  per performance, and here the performance's identity is the CAST, not the
-  time, so a user who won an (A) ticket cannot say which one they hold. A real
-  model gap needing its own design pass -- do not let the skill paper over it
-  with label conventions.
-- **A dismissal now records why, shipped 2026-08-01** (see Shipped). Its eight
-  values are the classes this same read named -- live/stage/release/talk/
-  festival/fanmeet/free/other -- so triaging the backlog is training data from
-  the first dismissal onward, rather than a judgment that evaporates the
-  moment it is made. What it does NOT do, and is still this skill's work:
-  nothing about the column does the triaging itself, and a classifier scored
-  against the recorded reasons still has to be built.
-
-**Narrowed 2026-08-02 by the owner's scope ruling, and this is the change that
-makes the skill buildable.** Only TICKETED CONCERTS/TOURS and RADIO/TALK/番組
-イベント get catalogued. Every other class -- stage runs, release events,
-festivals, fan meetings, free appearances -- is a dismissal.
-
-That collapses the hardest part of the design. The classify pass was going to
-need a judgment per class about whether and how to catalogue it; it is now a
-binary, and the dismissal side is already built (the `dismiss_reason` column
-shipped the day before, with a value per class). What survives is roughly a
-third of 443, and the title-stem collapse takes that to something like fifty
-productions -- a queue a person can actually work through.
-
-It also settles the open question below in the affirmative and for free: with
-stage runs out of scope, the per-tag "concerts only" preference is no longer
-needed to cut the queue, because the classifier does it for every tag at once.
-Keep the entry for the day someone follows an artist whose talk shows they do
-not want, which the ruling does not cover.
-
-And one decision worth taking BEFORE the skill rather than during it: a per-tag
-"concerts only" preference would cut this queue by about a third on its own, by
-suppressing the 朗読劇/ミュージカル class for artists whose stage work is not
-followed. Writing a skill that assumes every lead gets human triage presumes the
-answer.
-
-### 2. Minute-level reminder offsets
+### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -895,7 +773,7 @@ scheduler tick and an admin page, and touches neither `PresetItem` nor the
 sentence builders. Worth saying plainly, since this entry has now been displaced
 five passes running without once being judged less valuable.
 
-### 3. Franchise-aware round-label suggestions
+### 2. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -916,7 +794,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 4. Nine of ten `RoundKind` members are purely cosmetic
+### 3. Nine of ten `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -939,7 +817,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 5. PWA / installability
+### 4. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -959,7 +837,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 6. In-app LLM extraction behind the same draft seam
+### 5. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -988,7 +866,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 7. Minor demo-parity cosmetics
+### 6. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1027,7 +905,7 @@ this entry's single pass, not its own task. Both gaps are now also named in
 CLAUDE.md's demo inventory, so the next person meets them where they look for
 the reference rather than only here.
 
-### 8. The event classes outside concerts and talk shows
+### 7. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1055,7 +933,7 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 9. A/B casts have nowhere to live
+### 8. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1077,7 +955,7 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 10. Discover sort in the content head, plus the catalogue-count note
+### 9. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1103,7 +981,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 11. Name the destination on the sign-in bounce
+### 10. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1125,7 +1003,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 12. Nothing caps the discovery review path
+### 11. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1169,6 +1047,77 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### The triage arc: prune in bulk, import in bulk, and the skill (2026-08-02)
+
+443 open leads, and the loop did not close: a lead became a tracked concert only
+when somebody found the ticket page, extracted the rounds, grouped the legs and
+wrote the trilingual titles. The owner's flow was the other way round from how
+this entry had imagined it -- **he does not prune by hand; the agent classifies
+everything and he imports the decision.**
+
+**Phase 1, prune by imported list.** A YAML file mapping `DismissReason` to
+Eventernote event ids -- never internal lead ids, because the copy block an agent
+reads only ever shows `/events/486243`. Three routes mirroring
+`/admin/import/tags`: paste, plan, apply, with `/apply` RE-PARSING from the text
+so nothing the browser sends can name a lead the file did not. Four buckets are
+shown and none swallowed: will-dismiss, not-in-queue, already-dismissed, and
+already-a-concert.
+
+The parser RAISES where the concert-draft parser warns, and the asymmetry is the
+reason: an applied entry is a permanent dismissal with no un-dismiss anywhere in
+the app, while a rejected file costs one re-paste. So an unknown reason key, a
+duplicate id across two reasons, a non-scalar id, a zero-dismissal file and a
+REPEATED YAML KEY all refuse the file -- that last one because `safe_load`
+silently resolves a repeated key to its last occurrence and drops the earlier
+list, which here would silently lose leads.
+
+**Phase 2, many drafts from one paste.** Several YAML documents separated by
+`---`; no new format, `parse_draft` untouched. Both obvious splitting strategies
+are wrong and were rejected with evidence: `text.split("---")` cuts a draft in
+half when a `---` sits inside a block scalar, and `safe_load_all`/`compose_all`
+ABORT their generator on the first bad document, silently losing every one
+after it. Boundaries come from `yaml.scan()`, which tolerates a parser error;
+a scanner-level failure falls back to a line split, so the worst case is one
+oddly-split fragment rather than a lost batch.
+
+`PendingDraft` is the ONE place this app keeps step state, and the reason it is
+not a contradiction: it is a work BATCH, not flow state -- fifty to a hundred
+concerts each needing a human-read preview, which is not one sitting, and a
+hidden form field would lose it to a closed tab. Every concert still passes one
+reviewed preview; this removed the copy-paste, never the review, and
+`import_commit` stays the only write path into `concerts`.
+
+**Phase 3, the skill.** `.claude/skills/triage-leads/`, three passes cheapest
+first -- collapse by title stem, classify against the scope ruling, then research
+only the survivors. It delegates drafting to `add-concert` rather than restating
+its schema, and both its example files are pinned to the real parsers by test,
+the same guarantee `add-concert`'s example has.
+
+**The collapse finding is what made the arc tractable.** 443 leads is not 443
+things: a nine-performance run is nine leads, so grouping by title stem gives
+roughly 120-150 productions, and the scope ruling takes that to about fifty. Two
+DIFFERENT mechanisms produce repeated titles and want opposite treatment, which
+is the trap the skill names outright: 学園アイドルマスター LIVE TOUR is one concert
+with eight legs, while 『Liella!と結ぶプロジェクト』お渡し会 is eleven events because
+each member got her own slot at one venue on one day.
+
+Four defects review caught that would have shipped, all found by mutating or
+measuring rather than reading: a lead already bound to a concert would have been
+dismissed and had a reason stamped on it; a double-commit silently minted a
+SECOND concert (`alpha`, `alpha-2`), and the test that should have caught it was
+written against a draft shape agents never produce, since they emit no
+`event_id`; `PendingDraft.created_by` was the only `users.discord_id` FK in the
+model file without an `ondelete=`, which would have broken self-serve erasure
+(invariant 5); and the batch EXAMPLE claimed its dates were real when every round
+time in it was invented -- teaching material that would have taught an agent to
+present a fabricated deadline as sourced fact, which is the worst thing this arc
+could produce.
+
+One finding outlives the feature: **Starlette hard-caps every `Form(...)` field
+at 1MB**, whatever an app-level constant says. It is in CLAUDE.md because it
+applies to every form field in the codebase and bites as an opaque failure well
+before any of them.
 
 ### Discovery dismissal records a reason (2026-08-01)
 
