@@ -1,0 +1,145 @@
+# Example batch for the triage-leads skill -- what /concerts/import/draft
+# expects pasted into its textarea, once a batch of leads survives the prune
+# pass. Parsed by app.domain.yaml_import.parse_drafts: a plain YAML stream,
+# `---`-separated, no wrapper key. Each document is exactly one
+# .claude/skills/add-concert draft, and each must be COMPLETE on its own --
+# a document is stored verbatim in a PendingDraft row and re-parsed later at
+# review time, so nothing here may depend on its neighbours.
+#
+# CONCERT IDENTITY below -- every Eventernote id, title, venue, and
+# performance date/time on both drafts -- is real, read off
+# tests/fixtures/eventernote_actor_events.html, not invented, so this teaches
+# the shapes that actually occur in the discovery queue rather than a shape
+# that looks plausible.
+#
+# ROUND DATA is a different matter and is NOT real: Eventernote carries no
+# ticket or lottery information at all (see app/discovery.py's own
+# docstring), so every `rounds:` block below -- opens/closes/results/payment
+# times, `organizer:`, and every ticketing `url:` -- is an invented
+# PLACEHOLDER shaped like a real one. Each `rounds:` block below repeats this
+# warning next to itself; replace every one of those values from the
+# concert's actual official ticket page before running import_commit. A
+# fabricated apply_closes_jst that reaches a real user is a reminder for a
+# deadline that does not exist -- the one outcome this whole skill exists to
+# avoid.
+
+# Draft 1: a genuine multi-leg tour (the collapse rule's easy case). Two
+# Eventernote leads -- Day.1 (id 464371) and Day.2 (id 464372) -- are the
+# SAME two-night stand at one venue, so they become ONE concert with TWO
+# legs, not two concerts. This is the taxonomy doc's own class-A example
+# ("LoveLive! Series 15th Anniversary ラブライブ！フェス（バンテリンドーム）").
+title: LoveLive! Series 15th Anniversary ラブライブ！フェス
+title_en: LoveLive! Series 15th Anniversary Live Fes
+title_zh: LoveLive! Series 15周年纪念演唱会
+kind: concert
+organizer: ラブライブ！プロジェクト
+categories: anime song
+series:
+  franchises: [Love Live!]
+  groups: [μ's, Aqours, Liella!]
+  artists: [Liyuu(黎獄)]
+performers: [Liyuu(黎獄)]
+eventernote_url: https://www.eventernote.com/events/464371
+official_url: https://www.lovelive-anime.jp/15th/
+source_url: https://www.lovelive-anime.jp/15th/live/
+performances:
+  - label: Day 1
+    label_en: Day 1
+    label_zh: 第1天
+    venue: バンテリンドーム ナゴヤ
+    city: 名古屋
+    doors_jst: 2026-11-14 14:30
+    starts_at_jst: 2026-11-14 16:30
+    eventernote_event_id: "464371"
+  - label: Day 2
+    label_en: Day 2
+    label_zh: 第2天
+    venue: バンテリンドーム ナゴヤ
+    city: 名古屋
+    doors_jst: 2026-11-15 13:30
+    starts_at_jst: 2026-11-15 15:30
+    eventernote_event_id: "464372"
+# PLACEHOLDER round data below, and the `organizer:` above -- Eventernote
+# carries no ticket/lottery information, so every round time, url and label
+# here (and the organizer name above) is invented to be schema-shaped, not
+# sourced. Replace all of it from the tour's real ticket page before
+# committing. The three rounds also show why a tour is not
+# concert-wide rounds repeated per leg: the first two apply to the whole
+# tour (`applies_to: [Day 1, Day 2]` / `[]` meaning "every leg"), but the
+# third is bound to ONE leg only (`applies_to: [Day 2]`) -- a real tour's
+# actual difficulty, since presale windows differ per city/date and a round
+# naming every leg would be wrong the moment one leg's window diverges.
+rounds:
+  - label: 最速先行抽選（FC会員先行）
+    label_en: Earliest advance lottery (fan club presale)
+    label_zh: 最速先行抽选（歌迷会先行）
+    kind: lottery_round
+    applies_to: [Day 1, Day 2]
+    apply_opens_jst: 2026-08-10 12:00
+    apply_closes_jst: 2026-08-24 23:59
+    results_jst: 2026-09-01 15:00
+    payment_deadline_jst: 2026-09-05 23:00
+    url: https://eplus.jp/lovelive-15th/
+    notes: FC会員限定の最速先行抽選。
+  - label: 一般発売（先着）
+    label_en: General sale (first come, first served)
+    label_zh: 一般发售（先到先得）
+    kind: fcfs_sale
+    applies_to: []
+    apply_opens_jst: 2026-10-18 12:00
+    url: https://eplus.jp/lovelive-15th/
+  - label: 配信チケット（Day 2のみ）
+    label_en: Stream ticket (Day 2 only)
+    label_zh: 直播门票（仅第2天）
+    kind: stream_ticket_sale
+    applies_to: [Day 2]
+    apply_opens_jst: 2026-10-25 12:00
+    apply_closes_jst: 2026-11-15 18:00
+    url: https://eplus.jp/lovelive-15th-stream/
+    notes: Day 2のみ配信あり。Day 1は会場限定。
+notes: 全席指定・入場整理番号あり。
+notes_en: All seats reserved; entry order numbers apply.
+notes_zh: 全部为指定席，附入场顺序号。
+---
+# Draft 2: a single-leg talk/radio show (class D -- catalogued by the
+# 2026-08-02 scope ruling, same as a concert). It also demonstrates the
+# OTHER collapse: Eventernote lists this as two leads -- 第1部 (id 481671)
+# and 第2部 (id 483251), same date and venue -- but a per-part split is not a
+# tour's legs, it is one event recorded once (see the taxonomy doc's
+# headline finding). This draft carries a single performance covering both
+# parts and says so in its notes, rather than becoming two legs.
+title: 「Liyuuのはつらじ にゅ！〜1周年記念パーティー〜」
+title_en: "Liyuu's Hatsu-Raji Nyu! -- 1st Anniversary Party"
+title_zh: 「Liyuu的初次广播 にゅ！～1周年纪念派对～」
+kind: talk
+organizer: LOFT PROJECT
+categories: radio talk event
+series:
+  artists: [Liyuu(黎獄)]
+performers: [Liyuu(黎獄)]
+eventernote_url: https://www.eventernote.com/events/481671
+official_url: https://www.loft-prj.co.jp/schedule/nine/
+performances:
+  - label: 第1部・第2部
+    label_en: Part 1 & Part 2
+    label_zh: 第1部・第2部
+    venue: LOFT9 Shibuya
+    city: 渋谷
+    starts_at_jst: 2026-08-30 18:30
+    eventernote_event_id: "481671"
+# PLACEHOLDER round data below, and the `organizer:` above -- same as
+# draft 1's, Eventernote carries no ticket/lottery information, so this
+# round's time and url (and the organizer name above) are invented to be
+# schema-shaped, not sourced. Replace all of it from the venue's real ticket
+# page before committing.
+rounds:
+  - label: 一般発売（先着）
+    label_en: General sale (first come, first served)
+    label_zh: 一般发售（先到先得）
+    kind: fcfs_sale
+    applies_to: []
+    apply_opens_jst: 2026-08-01 12:00
+    url: https://www.loft-prj.co.jp/schedule/nine/
+notes: 第1部（18:30開演）・第2部（20:30開演）を1公演として記録。Eventernoteでは第1部(481671)と第2部(483251)の2件に分かれて掲載されている。
+notes_en: Recorded as one performance covering both Part 1 (18:30) and Part 2 (20:30). Eventernote lists these as two separate leads (481671 and 483251) -- the per-part-split pattern from the discovery taxonomy, which collapses to one event rather than two legs.
+notes_zh: 作为一场演出记录，涵盖第1部（18:30开演）和第2部（20:30开演）。Eventernote将其列为两条独立线索（481671和483251）。
