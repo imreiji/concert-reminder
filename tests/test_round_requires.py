@@ -515,13 +515,27 @@ async def test_edit_422_when_posted_target_rekinded(client):
 async def test_edit_page_renders_requires_select(client):
     login_as(client, EDITOR_ID, "reiji")
     _create_goods_and_lottery(client, "requires-edit-render")
+    by_label = await _rounds_by_label(client, "requires-edit-render")
+    goods, lottery = by_label["Goods sale"], by_label["Lottery"]
 
     r = client.get("/concerts/requires-edit-render/edit")
     assert r.status_code == 200
     assert 'name="round_requires"' in r.text
+    # The load-bearing arg: round_key renders each SAVED row's real id, not
+    # blank -- if this regresses, keyOf() mints "nk1" client-side, the
+    # server-rendered selection silently resets, and the next save drops an
+    # existing requires-link with no error anywhere.
+    assert f'name="round_key" value="{goods.id}"' in r.text
+    assert f'name="round_key" value="{lottery.id}"' in r.text
     # The goods round's label appears inside a <select selected> option.
-    assert '>Goods sale</option>' in r.text
     assert 'selected>Goods sale</option>' in r.text
+    # An item-sale round exists on this concert, so neither RENDERED row's
+    # requires box is hidden (the blank <template> clone at the bottom is
+    # hidden regardless, so scope the check to before it).
+    rendered_rows = r.text.split('<template id="round-row-template">')[0]
+    assert 'data-requires-box hidden' not in rendered_rows
+    # The client script actually shipped on this page.
+    assert 'ITEM_KINDS = ["eligibility_item_sale", "goods_sale"]' in r.text
 
 
 async def test_new_page_renders_requires_field(client):
@@ -531,3 +545,19 @@ async def test_new_page_renders_requires_field(client):
     assert r.status_code == 200
     assert 'name="round_requires"' in r.text
     assert 'name="round_key"' in r.text
+    # No item-sale round exists on a brand-new concert, so the box starts
+    # hidden (contrast the edit-page test above, seeded with a goods round).
+    assert 'data-requires-box hidden' in r.text
+    # The client script actually shipped on this page.
+    assert 'ITEM_KINDS = ["eligibility_item_sale", "goods_sale"]' in r.text
+
+
+async def test_import_preview_renders_requires_script(client):
+    # A minimal pasted draft (title is the only required key) is enough to
+    # render import_preview.html and confirm the script include made it onto
+    # this third surface too.
+    login_as(client, EDITOR_ID, "reiji")
+
+    r = client.post("/concerts/import/draft", data={"draft": "title: Requires Script Test"})
+    assert r.status_code == 200
+    assert 'ITEM_KINDS = ["eligibility_item_sale", "goods_sale"]' in r.text
