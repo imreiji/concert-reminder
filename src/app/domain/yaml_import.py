@@ -416,6 +416,33 @@ def _split_on_dash_lines(text: str) -> list[str]:
     return chunks
 
 
+def _is_blank_document(chunk: str) -> bool:
+    """True for a chunk that carries no real YAML content -- pure formatting
+    (comments, blank lines) that happens to sit before, between, or after
+    real documents rather than being one itself.
+
+    `yaml.safe_load` returns `None` for such a chunk (a lone comment parses
+    to nothing). A chunk that FAILS to parse is deliberately NOT blank --
+    that is a real, malformed document, and it must still surface as its own
+    numbered error via `parse_draft` rather than being silently swallowed
+    here, so a genuine YAMLError is caught and treated as "not blank."
+
+    This is what keeps a header comment above the first `---` (`# 12 drafts
+    from the sweep`, a plausible thing for a research-summarizing agent to
+    write) from becoming a phantom "document 1" -- `_split_on_scan_boundaries`
+    unconditionally seeds a boundary at index 0, so the text before the
+    first real `---` marker is always its own chunk whether or not anything
+    is actually there. Without this check that chunk parsed to `None`,
+    reached `parse_draft`, and raised "a draft is a YAML mapping ... this
+    isn't one" -- one spurious error, and every REAL document's number
+    shifted by one right along with it.
+    """
+    try:
+        return yaml.safe_load(chunk) is None
+    except yaml.YAMLError:
+        return False
+
+
 def split_documents(text: str) -> list[str]:
     """Split a `---`-separated paste into per-document source text.
 
@@ -441,16 +468,20 @@ def split_documents(text: str) -> list[str]:
     named error and nothing else is lost.
 
     Every chunk has its own leading `---` marker line dropped (see
-    `_drop_leading_marker_line`), and empty documents -- a trailing
-    separator, a stray blank `---\n---\n` -- are dropped entirely: both are
-    formatting, not a document with nothing in it.
+    `_drop_leading_marker_line`), and a chunk that is pure formatting --
+    whitespace, a stray `---\n---\n` separator, or (`_is_blank_document`) a
+    comment with no actual content -- is dropped entirely: none of those are
+    a document with nothing in it, they are the absence of one.
     """
     try:
         chunks = _split_on_scan_boundaries(text)
     except yaml.YAMLError:
         chunks = _split_on_dash_lines(text)
     chunks = [_drop_leading_marker_line(chunk) for chunk in chunks]
-    return [chunk for chunk in chunks if chunk.strip() and chunk.strip() != "---"]
+    return [
+        chunk for chunk in chunks
+        if chunk.strip() and chunk.strip() != "---" and not _is_blank_document(chunk)
+    ]
 
 
 def parse_drafts(text: str) -> DraftBatch:

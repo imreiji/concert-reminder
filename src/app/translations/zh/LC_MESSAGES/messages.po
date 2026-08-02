@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-02 10:52-0300\n"
+"POT-Creation-Date: 2026-08-02 11:25-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -2352,18 +2352,23 @@ msgid ""
 "here instead."
 msgstr ""
 "由「---」分隔的多份文档 -- 一次粘贴整个调研成果。每份能解析的文档都会成为你<a "
-"href=\"/concerts/import/pending\">待处理列表</a>中的一行，逐一预览确认后再创建。"
-"格式错误的文档不会影响其他文档 -- 只会在这里被指出。"
+"href=\"/concerts/import/pending\">待处理列表</a>中的一行，逐一预览确认后再创建。格式错误的文档不会影响其他文档"
+" -- 只会在这里被指出。"
 
 #: src/app/web/templates/import_form.html:72
 msgid "Draft YAML (many documents)"
 msgstr "草稿 YAML（多份文档）"
 
 #: src/app/web/templates/import_form.html:75
+#, python-format
+msgid "Up to %(n)s characters -- room for several hundred typical drafts."
+msgstr "最多 %(n)s 个字符 -- 足够容纳数百份典型草稿。"
+
+#: src/app/web/templates/import_form.html:76
 msgid "Add to pending list"
 msgstr "加入待处理列表"
 
-#: src/app/web/templates/import_form.html:79
+#: src/app/web/templates/import_form.html:80
 msgid ""
 "No ramen.events page? <a class=\"more\" href=\"/\">Create the event "
 "manually</a> instead."
@@ -2383,9 +2388,7 @@ msgid ""
 "Open one to see its\n"
 "    full preview, edit anything, and create the event -- or discard it if"
 " it isn't worth tracking."
-msgstr ""
-"多份草稿粘贴中尚未确认的每一份文档。打开即可查看完整预览、编辑内容并创建活动 -- "
-"如果不值得追踪，也可以直接丢弃。"
+msgstr "多份草稿粘贴中尚未确认的每一份文档。打开即可查看完整预览、编辑内容并创建活动 -- 如果不值得追踪，也可以直接丢弃。"
 
 #: src/app/web/templates/import_pending.html:15
 msgid "(untitled)"
@@ -2429,8 +2432,7 @@ msgstr "没有待处理的草稿 -- 你粘贴的内容都已确认。"
 msgid ""
 "Have more to add? <a class=\"more\" href=\"/concerts/import\">Paste "
 "another batch</a>."
-msgstr ""
-"还有更多要添加？<a class=\"more\" href=\"/concerts/import\">再粘贴一批</a>。"
+msgstr "还有更多要添加？<a class=\"more\" href=\"/concerts/import\">再粘贴一批</a>。"
 
 #: src/app/web/templates/import_preview.html:2
 msgid "review import"

@@ -79,6 +79,31 @@ FETCH_TIMEOUT = 10.0
 MAX_RESPONSE_BYTES = 2_000_000
 MAX_REDIRECTS = 5
 MAX_DRAFT_CHARS = 200_000
+# A separate, larger ceiling for /batch: a realistic agent-authored draft
+# runs roughly 1,900 characters, and the owner has explicitly said a
+# research sweep "could be 100 events" -- a hundred of those is already
+# ~190,000 characters, right up against MAX_DRAFT_CHARS. Worse than being
+# merely tight, exceeding either cap rejects the WHOLE paste with no
+# partial credit, which is the exact opposite of this feature's governing
+# rule (one bad document must cost nothing but itself). This constant is
+# deliberately its own name, not a multiplied MAX_DRAFT_CHARS, so the
+# single-document path's cap can never drift by editing this one.
+#
+# NOT the 2,000,000 that would otherwise match MAX_RESPONSE_BYTES's
+# precedent above -- measured directly (never reasoned about): FastAPI's
+# `Form(...)` calls Starlette's `Request.form()` with no arguments, which
+# hard-caps EVERY form field at `max_part_size` = 1,048,576 BYTES (1MB),
+# with no override reachable through the public `Form()` API. A paste past
+# that wall never even reaches this route -- Starlette itself answers a bare
+# `{"detail": "Field exceeded maximum size of 1024KB."}` 400, which is a
+# worse version of exactly the failure this constant exists to prevent
+# (a whole paste lost with no partial credit and no per-document detail).
+# This app's drafts are trilingual, so CJK content -- 3 bytes per character
+# in UTF-8 -- is the realistic worst case, not the exception: 300,000
+# characters is only 900,000 bytes even if EVERY character were CJK, safely
+# under the 1,048,576-byte wall, while still covering ~157 drafts at the
+# realistic 1,900-character size -- past the owner's "100" with real margin.
+MAX_BATCH_CHARS = 300_000
 
 
 def _check_host(url: str) -> None:
@@ -129,6 +154,19 @@ async def fetch_ramen_html(url: str, transport: httpx.AsyncBaseTransport | None 
 
 def _fmt(dt) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M") if dt else ""
+
+
+def _import_form_context(user: SessionUser, **extra) -> dict:
+    """The context every render of `import_form.html` needs -- a plain GET
+    and several error/partial-failure re-renders alike -- built by ONE
+    function so a future error path can't forget `max_batch_chars_display`
+    (the persistent hint under the batch paste box) and show a blank number
+    where the cap belongs."""
+    return {
+        "user": user,
+        "max_batch_chars_display": f"{MAX_BATCH_CHARS:,}",
+        **extra,
+    }
 
 
 # A parsed day has no id yet, so each round's leg chips reference it by a
@@ -200,7 +238,7 @@ async def import_form(
     error: str = "",
 ):
     return templates.TemplateResponse(
-        request, "import_form.html", {"user": user, "error": error}
+        request, "import_form.html", _import_form_context(user, error=error)
     )
 
 
@@ -226,7 +264,7 @@ async def import_preview(
             # lang_next_url: this render is served from POST-only /preview,
             # so the header language chip must send its 303 somewhere
             # GET-able -- the import form we're re-rendering anyway.
-            {"user": user, "error": detail, "lang_next_url": "/concerts/import"},
+            _import_form_context(user, error=detail, lang_next_url="/concerts/import"),
         )
 
     picker = await tag_picker_context(session)
@@ -406,11 +444,11 @@ async def import_draft(
             request,
             "import_form.html",
             # lang_next_url: POST-only render, same reason as import_preview.
-            {
-                "user": user,
-                "error": "draft too large -- pastes are capped at 200k characters",
-                "lang_next_url": "/concerts/import",
-            },
+            _import_form_context(
+                user,
+                error="draft too large -- pastes are capped at 200k characters",
+                lang_next_url="/concerts/import",
+            ),
         )
     try:
         parsed = parse_draft(draft)
@@ -418,7 +456,7 @@ async def import_draft(
         return templates.TemplateResponse(
             request,
             "import_form.html",
-            {"user": user, "error": str(e), "lang_next_url": "/concerts/import"},
+            _import_form_context(user, error=str(e), lang_next_url="/concerts/import"),
         )
     return await _draft_preview_response(request, user, session, parsed)
 
@@ -465,15 +503,22 @@ async def import_batch(
     didn't, by document number, on the very form the editor pasted into --
     nothing here is allowed to vanish silently.
     """
-    if len(draft) > MAX_DRAFT_CHARS:
+    # Its own cap, not MAX_DRAFT_CHARS -- see MAX_BATCH_CHARS's own comment.
+    # A hundred realistic drafts already presses against the single-document
+    # limit, and exceeding either cap rejects the WHOLE paste with no partial
+    # credit, the exact opposite of this route's governing rule.
+    if len(draft) > MAX_BATCH_CHARS:
         return templates.TemplateResponse(
             request,
             "import_form.html",
-            {
-                "user": user,
-                "error": "draft too large -- pastes are capped at 200k characters",
-                "lang_next_url": "/concerts/import",
-            },
+            _import_form_context(
+                user,
+                error=(
+                    f"draft too large -- batch pastes are capped at "
+                    f"{MAX_BATCH_CHARS:,} characters, split it into two pastes"
+                ),
+                lang_next_url="/concerts/import",
+            ),
         )
     batch = parse_drafts(draft)
     rows = await create_pending_drafts(session, batch, user.id)
@@ -482,12 +527,12 @@ async def import_batch(
         return templates.TemplateResponse(
             request,
             "import_form.html",
-            {
-                "user": user,
-                "batch_errors": batch.errors,
-                "batch_created": len(rows),
-                "lang_next_url": "/concerts/import",
-            },
+            _import_form_context(
+                user,
+                batch_errors=batch.errors,
+                batch_created=len(rows),
+                lang_next_url="/concerts/import",
+            ),
         )
     return RedirectResponse("/concerts/import/pending", status_code=303)
 
@@ -576,7 +621,7 @@ async def import_pending_detail(
         return templates.TemplateResponse(
             request,
             "import_form.html",
-            {"user": user, "error": str(e), "lang_next_url": "/concerts/import"},
+            _import_form_context(user, error=str(e), lang_next_url="/concerts/import"),
         )
     return await _draft_preview_response(request, user, session, parsed, pending_id=row.id)
 
@@ -893,16 +938,30 @@ async def import_commit(
     # Ownership-checked here rather than trusted from the hidden field: the
     # only legitimate source of a pending_id is this editor's own
     # _draft_preview_response render, but the field still rode through the
-    # browser like any other, and a foreign or already-resolved id must not
-    # silently mark someone else's row -- it is treated as if pending_id had
-    # never been sent, which is the closest thing to "ignore it" available
-    # once the concert has already been created.
-    pending_row = None
+    # browser like any other, and a foreign or already-resolved id must
+    # refuse the commit outright (see the 409 branch below) rather than
+    # silently fall through to an ordinary create -- that fallthrough used
+    # to be this route's behavior, and it is exactly what let a resubmit of
+    # an already-committed preview mint a silent second concert.
     if pending_id is not None:
         pending_row = await _own_open_pending(session, pending_id, user)
-    if pending_row is not None:
+        if pending_row is None:
+            # Already committed, already discarded, or not this editor's row
+            # -- refuse the WHOLE commit rather than silently falling through
+            # to an ordinary create. Falling through is exactly what let a
+            # back-button resubmit of an already-reviewed, already-committed
+            # preview mint a silent SECOND concert: an agent draft carries no
+            # event_id (see the add-concert skill's own example), so the
+            # resubmit never collides on event_id -- generate_event_id just
+            # de-dupes ("alpha", "alpha-2") -- and nothing else was watching.
+            # The concert above is only FLUSHED, never committed, so raising
+            # here (before session.commit()) discards it: FastAPI's
+            # get_session dependency closes this AsyncSession on an
+            # unhandled exception, and closing an uncommitted session rolls
+            # back everything flushed within it.
+            raise HTTPException(status_code=409)
         await mark_pending_committed(session, pending_row.id, concert.id, datetime.now(UTC))
-    await session.commit()
-    if pending_row is not None:
+        await session.commit()
         return RedirectResponse("/concerts/import/pending", status_code=303)
+    await session.commit()
     return RedirectResponse(f"/concerts/{concert.event_id}", status_code=303)

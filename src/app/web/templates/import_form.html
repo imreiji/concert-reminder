@@ -72,6 +72,7 @@
   <label class="fld"><span>{{ _("Draft YAML (many documents)") }}</span>
     <textarea name="draft" rows="10" required
               placeholder="title: …&#10;performances:&#10;  - label: Day 1&#10;---&#10;title: …"></textarea></label>
+  <p class="dim tiny">{% trans n=max_batch_chars_display %}Up to {{ n }} characters -- room for several hundred typical drafts.{% endtrans %}</p>
   <div><button class="btn" type="submit">{{ _("Add to pending list") }}</button></div>
 </form>
 

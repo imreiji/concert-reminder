@@ -333,6 +333,54 @@ async def test_a_bad_document_does_not_stop_the_good_ones(client, db):
     assert sorted(row.title for row in rows) == ["Good One", "Good Two"]
 
 
+# ── /batch's own, much larger character cap ────────────────────────────────
+#
+# A realistic agent-authored draft runs roughly 1,900 characters and the
+# owner has said a sweep "could be 100 events" -- a hundred of those already
+# presses against the single-document path's MAX_DRAFT_CHARS (200k). /batch
+# needs real headroom above that, as its own named constant so the
+# single-document cap can never drift by editing this one.
+
+
+async def test_batch_accepts_a_paste_larger_than_the_single_document_cap(client, db):
+    """Proves MAX_BATCH_CHARS is a real, separate, LARGER ceiling -- not
+    merely a renamed copy of MAX_DRAFT_CHARS. A padded comment inflates the
+    size without adding a document (see the leading-comment-is-blank fix),
+    so this exercises the byte budget alone."""
+    from app.web.routes import imports as imports_module
+
+    padding = "#" + "x" * (imports_module.MAX_DRAFT_CHARS + 1) + "\n"
+    assert len(padding) > imports_module.MAX_DRAFT_CHARS  # bigger than /draft's own cap
+    batch = padding + "---\n" + ALPHA_DRAFT
+    login_as(client, EDITOR_A, "a")
+    r = client.post("/concerts/import/batch", data={"draft": batch})
+    assert r.status_code == 303, r.text
+
+    async with db() as s:
+        rows = (await s.execute(select(PendingDraft))).scalars().all()
+    assert [row.title for row in rows] == ["Alpha"]
+
+
+def test_batch_still_rejects_a_paste_over_its_own_cap(client):
+    from app.web.routes import imports as imports_module
+
+    oversized = "title: X\n" + "#" * (imports_module.MAX_BATCH_CHARS + 1)
+    login_as(client, EDITOR_A, "a")
+    r = client.post("/concerts/import/batch", data={"draft": oversized})
+    assert r.status_code == 200
+    assert f"{imports_module.MAX_BATCH_CHARS:,}" in r.text
+
+
+def test_the_batch_form_names_its_own_cap(client):
+    """The brief's own rule: hitting the cap must never be a surprise --
+    the number is shown up front, not only in the rejection message."""
+    from app.web.routes import imports as imports_module
+
+    login_as(client, EDITOR_A, "a")
+    r = client.get("/concerts/import")
+    assert f"{imports_module.MAX_BATCH_CHARS:,}" in r.text
+
+
 # ── GET /pending ─────────────────────────────────────────────────────────
 
 
@@ -455,31 +503,42 @@ async def test_committing_stamps_the_row_with_its_concert(client, db):
 
 
 async def test_the_same_draft_committed_twice_does_not_make_two_concerts(client, db):
-    """event_id is unique and already answers 409; pin that it still fires
-    through the pending path rather than being bypassed by it."""
+    """The realistic shape: an agent draft carries NO event_id (see
+    .claude/skills/add-concert/references/example-draft.yaml, which has none
+    at the top level either) -- so a resubmit does NOT collide on event_id
+    and reach the pre-existing 409 that way. `generate_event_id` de-dupes
+    ("alpha", "alpha-2"), which is exactly how a back-button resubmit of an
+    already-reviewed, already-committed preview used to mint a silent SECOND
+    concert. The guard that must fire here is pending_id's own state check
+    -- the row is already committed, so the second attempt must be refused
+    outright, not quietly treated as a fresh, unpended commit."""
     login_as(client, EDITOR_A, "a")
     client.post("/concerts/import/batch", data={"draft": ALPHA_DRAFT})
     row = await _sole_pending_row(db)
 
-    data = {
-        "title": "Alpha", "title_en": "Alpha", "title_zh": "Alpha",
-        "event_id": "alpha-live", "pending_id": str(row.id),
-    }
+    # No event_id: the realistic shape.
+    data = {"title": "Alpha", "title_en": "Alpha", "title_zh": "Alpha", "pending_id": str(row.id)}
     first = client.post("/concerts/import/commit", data=data)
     assert first.status_code == 303
+    assert first.headers["location"] == "/concerts/import/pending"
 
+    # Same request again -- a back-button resubmit or a page refresh on the
+    # same reviewed preview, still carrying the now-already-committed row's id.
     second = client.post("/concerts/import/commit", data=data)
     assert second.status_code == 409
 
     async with db() as s:
         concerts = (await s.execute(select(Concert))).scalars().all()
-    assert len(concerts) == 1
+    assert len(concerts) == 1, (
+        f"expected exactly one concert, got {[c.event_id for c in concerts]}"
+    )
 
 
-async def test_committing_a_foreign_pending_id_does_not_stamp_someone_elses_row(client, db):
-    """A tampered hidden field must not let one editor mark another editor's
-    triage row committed -- the ownership check in import_commit treats a
-    foreign or missing id as though pending_id had never been sent."""
+async def test_committing_a_foreign_pending_id_is_refused(client, db):
+    """A tampered hidden field must not let one editor commit against another
+    editor's triage row -- treated the same as an already-resolved row
+    (issue: silently falling through to an ordinary commit is exactly the
+    shape that let a resubmit mint a second concert)."""
     login_as(client, EDITOR_A, "a")
     client.post("/concerts/import/batch", data={"draft": ALPHA_DRAFT})
 
@@ -488,10 +547,13 @@ async def test_committing_a_foreign_pending_id_does_not_stamp_someone_elses_row(
         "title": "Bravo", "title_en": "Bravo", "title_zh": "Bravo",
         "pending_id": "1",  # Editor A's row
     })
-    assert r.status_code == 303
-    assert r.headers["location"] != "/concerts/import/pending"
+    assert r.status_code == 409
 
     async with db() as s:
         row = await s.get(PendingDraft, 1)
         assert row.committed_at is None
         assert row.concert_id is None
+        # The whole commit is refused -- Bravo must not have been created
+        # either, even though its own fields were otherwise valid.
+        concerts = (await s.execute(select(Concert))).scalars().all()
+    assert concerts == []

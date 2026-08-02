@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-02 10:52-0300\n"
+"POT-Creation-Date: 2026-08-02 11:25-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -2350,18 +2350,23 @@ msgid ""
 "here instead."
 msgstr ""
 "「---」で区切られた複数のドキュメントの連続 -- リサーチセッションまるごとを一度に貼り付けられます。解析できた各ドキュメントは<a "
-"href=\"/concerts/import/pending\">保留リスト</a>に1行として追加され、1件ずつプレビューを確認して作成できます。"
-"壊れたドキュメントがあっても他のドキュメントには影響しません -- ここに名前が表示されるだけです。"
+"href=\"/concerts/import/pending\">保留リスト</a>に1行として追加され、1件ずつプレビューを確認して作成できます。壊れたドキュメントがあっても他のドキュメントには影響しません"
+" -- ここに名前が表示されるだけです。"
 
 #: src/app/web/templates/import_form.html:72
 msgid "Draft YAML (many documents)"
 msgstr "下書き YAML（複数ドキュメント）"
 
 #: src/app/web/templates/import_form.html:75
+#, python-format
+msgid "Up to %(n)s characters -- room for several hundred typical drafts."
+msgstr "最大%(n)s文字まで -- 一般的な下書き数百件分の余裕があります。"
+
+#: src/app/web/templates/import_form.html:76
 msgid "Add to pending list"
 msgstr "保留リストに追加"
 
-#: src/app/web/templates/import_form.html:79
+#: src/app/web/templates/import_form.html:80
 msgid ""
 "No ramen.events page? <a class=\"more\" href=\"/\">Create the event "
 "manually</a> instead."
@@ -2429,8 +2434,7 @@ msgstr "保留中の下書きはありません -- 貼り付けたものはす�
 msgid ""
 "Have more to add? <a class=\"more\" href=\"/concerts/import\">Paste "
 "another batch</a>."
-msgstr ""
-"他にも追加しますか？<a class=\"more\" href=\"/concerts/import\">別のバッチを貼り付け</a>。"
+msgstr "他にも追加しますか？<a class=\"more\" href=\"/concerts/import\">別のバッチを貼り付け</a>。"
 
 #: src/app/web/templates/import_preview.html:2
 msgid "review import"

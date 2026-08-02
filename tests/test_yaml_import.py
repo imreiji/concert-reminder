@@ -419,6 +419,31 @@ def test_empty_documents_are_skipped_not_errors():
     assert batch.errors == ()
 
 
+def test_a_leading_comment_does_not_become_a_phantom_document():
+    """`_split_on_scan_boundaries` always seeds a boundary at index 0, so a
+    header comment above the first `---` -- a plausible thing for an agent
+    summarizing a research sweep to write ("# 12 drafts from the sweep") --
+    used to become its own chunk that parsed to `None` and raised as
+    "document 1", shifting every REAL document's number by one right along
+    with it. A comment-only chunk must be dropped as pure formatting, the
+    same as a blank stanza, not reported as a failure."""
+    text = "# 12 drafts from the sweep\n---\n" + ONE + "\n---\n" + TWO
+    batch = parse_drafts(text)
+    assert batch.errors == (), (
+        f"a header comment must not become a phantom document: {batch.errors}"
+    )
+    assert [d.parsed.title for d in batch.drafts] == ["One", "Two"]
+
+
+def test_a_comment_only_document_between_two_real_ones_is_dropped_not_reported():
+    """The same drop applies mid-stream, not just at the very start -- a
+    comment used as a separator note is formatting wherever it sits."""
+    text = ONE + "\n---\n# just a note\n---\n" + TWO
+    batch = parse_drafts(text)
+    assert batch.errors == ()
+    assert [d.parsed.title for d in batch.drafts] == ["One", "Two"]
+
+
 def test_a_wholly_empty_paste_is_an_error_not_an_empty_batch():
     for text in ("", "   \n", "---\n---\n"):
         batch = parse_drafts(text)
