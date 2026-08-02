@@ -3,6 +3,8 @@ ITEM_SALE_KINDS, ingest keyword mapping, and label/emoji coverage. Also
 covers Round.required_item_round_id, the self-FK an item-sale round's
 dependents point at (SET NULL on the target's delete)."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -12,7 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.db.models import Base, Concert, Round
-from app.db.service import ensure_user
+from app.db.service import concert_round_rows, ensure_user
 from app.db.session import get_session
 from app.domain.ingest import _guess_kind
 from app.domain.types import ITEM_SALE_KINDS, RoundKind
@@ -684,3 +686,66 @@ async def test_export_round_trip_keeps_requires(client):
     parsed = parse_draft(r.text)
     lottery = next(rr for rr in parsed.rounds if rr.label == "Lottery")
     assert lottery.requires_label == "Goods sale"
+
+
+# ── Concert page requires/needed-for lines (Task 8) ───────────────────────
+
+NOW = datetime(2026, 6, 1, tzinfo=UTC)
+
+
+async def _seed_goods_and_lottery_rows(session, *, goods_closes: datetime | None):
+    """One concert, no legs (falls into concert_round_rows' dateless list):
+    a GOODS_SALE round and a LOTTERY_ROUND that requires it."""
+    await ensure_user(session, 42, "reiji")
+    concert = Concert(title="Requires Rows", event_id="requires-rows-test", created_by=42)
+    session.add(concert)
+    await session.flush()
+    goods = Round(
+        concert_id=concert.id, kind=RoundKind.GOODS_SALE, label="グッズ販売",
+        closes_at_utc=goods_closes,
+    )
+    session.add(goods)
+    await session.flush()
+    lottery = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="最速先行",
+        required_item_round_id=goods.id,
+    )
+    session.add(lottery)
+    await session.flush()
+    await session.commit()
+    return concert, goods, lottery
+
+
+async def test_round_rows_carry_requires_and_needed_for(session):
+    concert, goods, lottery = await _seed_goods_and_lottery_rows(
+        session, goods_closes=NOW + timedelta(days=10),
+    )
+    _legs, fallback = await concert_round_rows(session, 42, concert, now=NOW)
+
+    goods_row = next(row for row in fallback if row.round_.id == goods.id)
+    lottery_row = next(row for row in fallback if row.round_.id == lottery.id)
+
+    assert lottery_row.requires_label == goods.label
+    assert lottery_row.requires_closes_at_utc == goods.closes_at_utc
+    assert goods_row.needed_for_labels == (lottery.label,)
+
+
+async def test_requires_close_time_hidden_once_sale_over(session):
+    concert, goods, lottery = await _seed_goods_and_lottery_rows(
+        session, goods_closes=NOW - timedelta(days=1),
+    )
+    _legs, fallback = await concert_round_rows(session, 42, concert, now=NOW)
+
+    lottery_row = next(row for row in fallback if row.round_.id == lottery.id)
+    assert lottery_row.requires_label == goods.label
+    assert lottery_row.requires_closes_at_utc is None
+
+
+async def test_concert_page_renders_requires_line(client):
+    login_as(client, EDITOR_ID, "reiji")
+    _create_goods_and_lottery(client, "requires-page-render")
+
+    r = client.get("/concerts/requires-page-render")
+    assert r.status_code == 200
+    assert "Requires:" in r.text
+    assert "Goods sale" in r.text

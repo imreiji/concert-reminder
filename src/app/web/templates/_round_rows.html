@@ -99,6 +99,8 @@
       {% endif %}
     {% endfor %}
     {% if r.notes %}<span class="more">{{ r.notes }}</span>{% endif %}
+    {% if row.requires_label %}<span class="more">🛍️ {% trans name=row.requires_label %}Requires: {{ name }}{% endtrans %}{% if row.requires_closes_at_utc %}{% set ql = dual_lines(row.requires_closes_at_utc, tz) %} — {{ _("sale ends") }} {{ ql[0] }} · {{ ql[1] }}{% endif %}</span>{% endif %}
+    {% if row.needed_for_labels %}<span class="more">{% trans names=row.needed_for_labels | join(", ") %}Needed for: {{ names }}{% endtrans %}</span>{% endif %}
   </span>
   <span class="acts">
     {% if not past and row.primary_at_utc %}<a class="ics" href="/rounds/{{ r.id }}/ics" title="{{ _('Add to calendar') }}">📅</a>{% endif %}

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-02 17:31-0300\n"
+"POT-Creation-Date: 2026-08-02 18:33-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -310,7 +310,7 @@ msgstr "落選 — {day}"
 msgid "Not going — {day}"
 msgstr "不参加 — {day}"
 
-#: src/app/bot/views.py:738 src/app/web/templates/_round_rows.html:210
+#: src/app/bot/views.py:738 src/app/web/templates/_round_rows.html:212
 msgid "Not going"
 msgstr "不参加"
 
@@ -478,93 +478,93 @@ msgid "Other"
 msgstr "その他"
 
 #: src/app/db/service.py:2544 src/app/db/service.py:2690
-#: src/app/db/service.py:6262 src/app/web/templates/_board.html:73
+#: src/app/db/service.py:6300 src/app/web/templates/_board.html:73
 #: src/app/web/templates/discover.html:79 src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "複数"
 
-#: src/app/db/service.py:3703
+#: src/app/db/service.py:3733
 #, python-brace-format
 msgid "{n}d"
 msgstr "{n}日"
 
-#: src/app/db/service.py:3705
+#: src/app/db/service.py:3735
 #, python-brace-format
 msgid "{n}h"
 msgstr "{n}時間"
 
-#: src/app/db/service.py:3706
+#: src/app/db/service.py:3736
 #, python-brace-format
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/service.py:3803
+#: src/app/db/service.py:3833
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "アップグレード当選 — {day}までに入金"
 
-#: src/app/db/service.py:3804
+#: src/app/db/service.py:3834
 msgid "Upgrade won — payment due"
 msgstr "アップグレード当選 — 入金締切"
 
-#: src/app/db/service.py:3823
+#: src/app/db/service.py:3853
 msgid "Upgrade · Applied"
 msgstr "アップグレード・申込済み"
 
-#: src/app/db/service.py:3826
+#: src/app/db/service.py:3856
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "アップグレード・{n}後に締切"
 
-#: src/app/db/service.py:3829
+#: src/app/db/service.py:3859
 msgid "Upgrade · Open now"
 msgstr "アップグレード・受付中"
 
-#: src/app/db/service.py:3835 src/app/web/templates/_board.html:23
+#: src/app/db/service.py:3865 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:35
 #: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "確保済み"
 
-#: src/app/db/service.py:3846
+#: src/app/db/service.py:3876
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "当選 — {day}までに入金"
 
-#: src/app/db/service.py:3847
+#: src/app/db/service.py:3877
 msgid "Won — payment due"
 msgstr "当選 — 入金締切"
 
-#: src/app/db/service.py:3856
+#: src/app/db/service.py:3886
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind}・申込済み"
 
-#: src/app/db/service.py:3876
+#: src/app/db/service.py:3906
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind}・{n}後に締切"
 
-#: src/app/db/service.py:3881
+#: src/app/db/service.py:3911
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind}・受付中"
 
-#: src/app/db/service.py:3887
+#: src/app/db/service.py:3917
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind}・{n}後に受付開始"
 
-#: src/app/db/service.py:3894
+#: src/app/db/service.py:3924
 msgid "All rounds closed"
 msgstr "すべての受付が終了"
 
-#: src/app/db/service.py:5881
+#: src/app/db/service.py:5919
 msgid "From dekimasen.app"
 msgstr "dekimasen.app より"
 
-#: src/app/db/service.py:6514 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:6552 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
 #: src/app/web/templates/concert_new.html:35
@@ -574,7 +574,7 @@ msgstr "dekimasen.app より"
 msgid "Title"
 msgstr "タイトル"
 
-#: src/app/db/service.py:6518 src/app/web/templates/concert_edit.html:116
+#: src/app/db/service.py:6556 src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:118
 #: src/app/web/templates/concert_edit.html:131
 #: src/app/web/templates/concert_edit.html:136
@@ -582,22 +582,22 @@ msgstr "タイトル"
 #: src/app/web/templates/concert_new.html:91
 #: src/app/web/templates/concert_new.html:103
 #: src/app/web/templates/concert_new.html:108
-#: src/app/web/templates/import_preview.html:181
-#: src/app/web/templates/import_preview.html:183
+#: src/app/web/templates/import_preview.html:182
+#: src/app/web/templates/import_preview.html:184
 msgid "Notes"
 msgstr "メモ"
 
-#: src/app/db/service.py:6524
+#: src/app/db/service.py:6562
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "公演{n}の名称"
 
-#: src/app/db/service.py:6529
+#: src/app/db/service.py:6567
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "受付{n}の名称"
 
-#: src/app/db/service.py:6538 src/app/web/templates/_tag_create_dialog.html:44
+#: src/app/db/service.py:6576 src/app/web/templates/_tag_create_dialog.html:44
 #: src/app/web/templates/_tag_create_dialog.html:46
 #: src/app/web/templates/_tag_create_dialog.html:48
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -612,7 +612,7 @@ msgstr "受付{n}の名称"
 msgid "Name"
 msgstr "名前"
 
-#: src/app/db/service.py:6543
+#: src/app/db/service.py:6581
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -817,13 +817,13 @@ msgstr "受付中"
 
 #: src/app/web/templates/_board.html:89
 #: src/app/web/templates/_editor_leg_card.html:55
-#: src/app/web/templates/_round_rows.html:210
+#: src/app/web/templates/_round_rows.html:212
 msgid "Cancelled"
 msgstr "中止"
 
 #: src/app/web/templates/_board.html:115
 #: src/app/web/templates/_deadline_rows.html:115
-#: src/app/web/templates/_round_rows.html:175
+#: src/app/web/templates/_round_rows.html:177
 #, python-format
 msgid "+%(count)s more round"
 msgid_plural "+%(count)s more rounds"
@@ -1011,27 +1011,27 @@ msgstr "応募に必要な商品"
 msgid "No item needed"
 msgstr "商品の購入は不要"
 
-#: src/app/web/templates/_editor_round_card.html:90
+#: src/app/web/templates/_editor_round_card.html:94
 msgid "Apply opens (JST)"
 msgstr "申込受付開始（JST）"
 
-#: src/app/web/templates/_editor_round_card.html:91
+#: src/app/web/templates/_editor_round_card.html:95
 msgid "Apply deadline (JST)"
 msgstr "申込締切（JST）"
 
-#: src/app/web/templates/_editor_round_card.html:92
+#: src/app/web/templates/_editor_round_card.html:96
 msgid "Results (JST)"
 msgstr "当落発表（JST）"
 
-#: src/app/web/templates/_editor_round_card.html:93
+#: src/app/web/templates/_editor_round_card.html:97
 msgid "Payment deadline (JST)"
 msgstr "入金締切（JST）"
 
-#: src/app/web/templates/_editor_round_card.html:96
+#: src/app/web/templates/_editor_round_card.html:100
 msgid "Apply URL (optional)"
 msgstr "申込URL（任意）"
 
-#: src/app/web/templates/_editor_round_card.html:97
+#: src/app/web/templates/_editor_round_card.html:101
 msgid "Notes (optional)"
 msgstr "メモ（任意）"
 
@@ -1184,45 +1184,59 @@ msgid ""
 "    after you save."
 msgstr "追加したばかりの受付は、保存後にここで選択できるようになります。"
 
-#: src/app/web/templates/_round_rows.html:104
+#: src/app/web/templates/_round_rows.html:102
+#, python-format
+msgid "Requires: %(name)s"
+msgstr "要購入: %(name)s"
+
+#: src/app/web/templates/_round_rows.html:102
+msgid "sale ends"
+msgstr "販売終了"
+
+#: src/app/web/templates/_round_rows.html:103
+#, python-format
+msgid "Needed for: %(names)s"
+msgstr "対象ラウンド: %(names)s"
+
+#: src/app/web/templates/_round_rows.html:106
 msgid "Add to calendar"
 msgstr "カレンダーに追加"
 
-#: src/app/web/templates/_round_rows.html:105
+#: src/app/web/templates/_round_rows.html:107
 msgid "Round page"
 msgstr "受付ページ"
 
-#: src/app/web/templates/_round_rows.html:111
+#: src/app/web/templates/_round_rows.html:113
 #, python-format
 msgid "Requires a ticket from: %(names)s"
 msgstr "必要なチケット：%(names)s"
 
-#: src/app/web/templates/_round_rows.html:111
+#: src/app/web/templates/_round_rows.html:113
 msgid "Requires a ticket from an earlier round"
 msgstr "以前の受付で取得したチケットが必要"
 
-#: src/app/web/templates/_round_rows.html:212
+#: src/app/web/templates/_round_rows.html:214
 #, python-format
 msgid "doors %(when)s"
 msgstr "開場：%(when)s"
 
-#: src/app/web/templates/_round_rows.html:227
+#: src/app/web/templates/_round_rows.html:229
 msgid "Going again"
 msgstr "また参加する"
 
-#: src/app/web/templates/_round_rows.html:227
+#: src/app/web/templates/_round_rows.html:229
 msgid "Not going to this day"
 msgstr "この公演には参加しない"
 
-#: src/app/web/templates/_round_rows.html:231
+#: src/app/web/templates/_round_rows.html:233
 msgid "No rounds yet for this leg."
 msgstr "この公演の受付はまだありません。"
 
-#: src/app/web/templates/_round_rows.html:248
+#: src/app/web/templates/_round_rows.html:250
 msgid "Rounds"
 msgstr "受付"
 
-#: src/app/web/templates/_round_rows.html:254
+#: src/app/web/templates/_round_rows.html:256
 msgid "No performances yet."
 msgstr "公演はまだありません。"
 
@@ -1503,7 +1517,7 @@ msgstr "探す"
 #: src/app/web/templates/concert_detail.html:48
 #: src/app/web/templates/concert_edit.html:142
 #: src/app/web/templates/concert_new.html:114
-#: src/app/web/templates/import_preview.html:192
+#: src/app/web/templates/import_preview.html:193
 #: src/app/web/templates/tags.html:7
 msgid "Tags"
 msgstr "タグ"
@@ -1694,7 +1708,7 @@ msgstr "タイトル（日本語）"
 
 #: src/app/web/templates/concert_edit.html:41
 #: src/app/web/templates/concert_new.html:36
-#: src/app/web/templates/import_preview.html:171
+#: src/app/web/templates/import_preview.html:172
 msgid "Event ID"
 msgstr "イベントID"
 
@@ -1727,7 +1741,7 @@ msgstr[0] "%(count)s件の受付"
 
 #: src/app/web/templates/concert_edit.html:63
 #: src/app/web/templates/concert_new.html:64
-#: src/app/web/templates/import_preview.html:134
+#: src/app/web/templates/import_preview.html:135
 msgid "Add a round"
 msgstr "受付を追加"
 
@@ -1754,7 +1768,7 @@ msgstr "公演はまだありません。上のフォームから最初の公演
 
 #: src/app/web/templates/concert_edit.html:105
 #: src/app/web/templates/concert_new.html:72
-#: src/app/web/templates/import_preview.html:143
+#: src/app/web/templates/import_preview.html:144
 msgid "Details and links"
 msgstr "詳細とリンク"
 
@@ -1764,38 +1778,38 @@ msgstr "まだ何も設定されていません"
 
 #: src/app/web/templates/concert_edit.html:109
 #: src/app/web/templates/concert_new.html:76
-#: src/app/web/templates/import_preview.html:157
+#: src/app/web/templates/import_preview.html:158
 msgid "Artist / organizer"
 msgstr "アーティスト／主催"
 
 #: src/app/web/templates/concert_edit.html:110
 #: src/app/web/templates/concert_new.html:83
-#: src/app/web/templates/import_preview.html:159
+#: src/app/web/templates/import_preview.html:160
 msgid "Categories (comma-sep)"
 msgstr "カテゴリー（カンマ区切り）"
 
 #: src/app/web/templates/concert_edit.html:111
 #: src/app/web/templates/concert_new.html:84
-#: src/app/web/templates/import_preview.html:161
+#: src/app/web/templates/import_preview.html:162
 #: src/app/web/templates/tags.html:130 src/app/web/templates/tags.html:435
 msgid "eventernote URL"
 msgstr "eventernote URL"
 
 #: src/app/web/templates/concert_edit.html:112
 #: src/app/web/templates/concert_new.html:85
-#: src/app/web/templates/import_preview.html:163
+#: src/app/web/templates/import_preview.html:164
 msgid "Official URL"
 msgstr "公式URL"
 
 #: src/app/web/templates/concert_edit.html:113
 #: src/app/web/templates/concert_new.html:86
-#: src/app/web/templates/import_preview.html:165
+#: src/app/web/templates/import_preview.html:166
 msgid "Source URL"
 msgstr "ソースURL"
 
 #: src/app/web/templates/concert_edit.html:115
 #: src/app/web/templates/concert_new.html:88
-#: src/app/web/templates/import_preview.html:174
+#: src/app/web/templates/import_preview.html:175
 msgid "Performers (one per line)"
 msgstr "出演者（1行に1名）"
 
@@ -1930,17 +1944,17 @@ msgid "Optional — title EN, organizer, kind, categories, links, performers, no
 msgstr "任意：英語タイトル（EN）、主催、種別、カテゴリー、リンク、出演者、メモ"
 
 #: src/app/web/templates/concert_new.html:76
-#: src/app/web/templates/import_preview.html:158
+#: src/app/web/templates/import_preview.html:159
 msgid "non-series acts, etc."
 msgstr "シリーズ外の出演者など"
 
 #: src/app/web/templates/concert_new.html:83
-#: src/app/web/templates/import_preview.html:160
+#: src/app/web/templates/import_preview.html:161
 msgid "event, tour"
 msgstr "イベント、ツアー"
 
 #: src/app/web/templates/concert_new.html:86
-#: src/app/web/templates/import_preview.html:166
+#: src/app/web/templates/import_preview.html:167
 msgid "where this was sourced from"
 msgstr "情報の出典"
 
@@ -1949,7 +1963,7 @@ msgid "Franchise, group, artists, venue — optional"
 msgstr "フランチャイズ、グループ、アーティスト、会場（任意）"
 
 #: src/app/web/templates/concert_new.html:121
-#: src/app/web/templates/import_preview.html:213
+#: src/app/web/templates/import_preview.html:214
 msgid "Create event"
 msgstr "イベントを作成"
 
@@ -2507,39 +2521,39 @@ msgid ""
 "      for a whole-event round. Times are JST."
 msgstr "受付ごとに対象日を選択してください。イベント全体を対象にする場合は、何も選択しないでください。時刻はJSTです。"
 
-#: src/app/web/templates/import_preview.html:129
+#: src/app/web/templates/import_preview.html:130
 msgid "No rounds yet — add the first one below."
 msgstr "受付はまだありません。下から最初の受付を追加してください。"
 
-#: src/app/web/templates/import_preview.html:144
+#: src/app/web/templates/import_preview.html:145
 msgid "Optional — title and notes in each language, organizer, source URL"
 msgstr "任意：各言語のタイトルとメモ、主催、ソースURL"
 
-#: src/app/web/templates/import_preview.html:151
+#: src/app/web/templates/import_preview.html:152
 msgid "Title (EN)"
 msgstr "タイトル（EN）"
 
-#: src/app/web/templates/import_preview.html:154
+#: src/app/web/templates/import_preview.html:155
 msgid "Title (中文)"
 msgstr "タイトル（中文）"
 
-#: src/app/web/templates/import_preview.html:172
+#: src/app/web/templates/import_preview.html:173
 msgid "auto-generated from the English title"
 msgstr "英語タイトルから自動生成"
 
-#: src/app/web/templates/import_preview.html:184
+#: src/app/web/templates/import_preview.html:185
 msgid "Notes (EN)"
 msgstr "メモ（EN）"
 
-#: src/app/web/templates/import_preview.html:186
+#: src/app/web/templates/import_preview.html:187
 msgid "Notes (中文)"
 msgstr "メモ（中文）"
 
-#: src/app/web/templates/import_preview.html:193
+#: src/app/web/templates/import_preview.html:194
 msgid "Franchise, group, artists, venue — imported and editable"
 msgstr "フランチャイズ、グループ、アーティスト、会場（読み込み済み・編集可能）"
 
-#: src/app/web/templates/import_preview.html:205
+#: src/app/web/templates/import_preview.html:206
 msgid "No tag yet:"
 msgstr "まだタグがありません:"
 

@@ -3065,6 +3065,15 @@ class RoundRow:
     # An eligible viewer (and a signed-out one) sees the normal capture row.
     upgrade_locked: bool = False
     qualifier_labels: tuple[str, ...] = ()
+    # The item-sale round this round requires (display only): its
+    # viewer-locale label, and its close time WHILE that sale is still open
+    # (the actionable half -- "you still need to buy this, sale ends 6/15";
+    # a closed sale's time is history and is dropped here, not in the
+    # template, because round timing is not presentation).
+    requires_label: str | None = None
+    requires_closes_at_utc: datetime | None = None
+    # The reverse line on an item-sale round: the rounds that require it.
+    needed_for_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -3208,6 +3217,15 @@ async def concert_round_rows(
     # variant here (concert page = web request).
     label_by_id = {r.id: loc_field(r, "label", locale) for r in rounds}
 
+    rounds_by_id = {r.id: r for r in rounds}
+    # round id -> labels of the rounds that require its item, insertion order.
+    needed_for: dict[int, list[str]] = {}
+    for r in rounds:
+        if r.required_item_round_id in rounds_by_id:
+            needed_for.setdefault(r.required_item_round_id, []).append(
+                label_by_id[r.id]
+            )
+
     day_ids = {d.id for d in days}
     live_leg_ids = {d.id for d in days if not d.cancelled}
     # Asked ONCE for the whole concert, then carried on every row: the show
@@ -3237,6 +3255,9 @@ async def concert_round_rows(
             session, user_id, r, outcome, now, days, locale
         )
         anchor, at_utc = _primary_anchor(r, now)
+        requires_target = (
+            rounds_by_id.get(r.required_item_round_id) if r.required_item_round_id else None
+        )
         row = RoundRow(
             round_=r, outcome=outcome,
             can_capture=can_capture, can_report_result=can_report_result,
@@ -3248,6 +3269,15 @@ async def concert_round_rows(
             qualifier_labels=tuple(
                 label_by_id[q] for q in qualifiers_by_round.get(r.id, []) if q in label_by_id
             ),
+            requires_label=label_by_id[requires_target.id] if requires_target else None,
+            requires_closes_at_utc=(
+                requires_target.closes_at_utc
+                if requires_target
+                and requires_target.closes_at_utc
+                and requires_target.closes_at_utc > now
+                else None
+            ),
+            needed_for_labels=tuple(needed_for.get(r.id, ())),
         )
         if not days:
             dateless.append(row)
