@@ -795,6 +795,45 @@ async def test_a_missing_reason_is_422(client):
         assert (await s.get(DiscoveredEvent, lead_id)).dismissed_at is None
 
 
+async def test_the_page_offers_a_reason_per_taxonomy_class(client):
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    for value in ("live", "stage", "release", "talk",
+                  "festival", "fanmeet", "free", "other"):
+        assert f'value="{value}"' in body, f"no way to dismiss as {value}"
+
+
+async def test_dismissed_counts_are_shown_so_the_column_is_readable(client):
+    """open_leads hides dismissed rows, so without this the reason is
+    write-only and nothing can ever be scored against it."""
+    await _seed(client, eventernote_event_id="1001")
+    await _seed(client, eventernote_event_id="1002")
+    await _seed(client, eventernote_event_id="1003")
+    login_as(client, ADMIN_ID, "reiji")
+    async with client.db() as s:
+        ids = (await s.execute(select(DiscoveredEvent.id))).scalars().all()
+    for lead_id, reason in zip(ids, ("release", "release", "stage"), strict=True):
+        client.post(f"/admin/discoveries/{lead_id}/dismiss", data={"reason": reason})
+    body = client.get("/admin/discoveries").text
+    assert "2 release" in body
+    assert "1 stage" in body
+
+
+async def test_counts_ignore_pre_reason_dismissals(client):
+    """A NULL reason is a real state -- dismissed before reasons existed -- and
+    must not be counted as `other`, which would invent a judgment nobody made."""
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    lead_id = await _lead_id(client)
+    async with client.db() as s:
+        row = await s.get(DiscoveredEvent, lead_id)
+        row.dismissed_at = datetime.now(UTC)
+        await s.commit()
+    body = client.get("/admin/discoveries").text
+    assert "other" not in body.split("Dismissed so far")[-1][:200]
+
+
 async def test_the_button_never_nests_inside_the_edit_form(client):
     """A <form> inside a <form> is invalid HTML and silently breaks the outer
     one's submission -- so this button is a sibling, like Delete. Asserted by

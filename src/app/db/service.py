@@ -7081,6 +7081,21 @@ async def open_leads(session: AsyncSession) -> list[DiscoveredEvent]:
     )).scalars())
 
 
+async def dismissed_reason_counts(session: AsyncSession) -> dict[str, int]:
+    """How many leads were dismissed as each taxonomy class.
+
+    Rows with a NULL reason are EXCLUDED rather than bucketed as `other`: they
+    predate the column, and folding them in would invent a human judgment in
+    the one place whose value is that every entry is a real one.
+    """
+    rows = await session.execute(
+        select(DiscoveredEvent.dismiss_reason, func.count())
+        .where(DiscoveredEvent.dismiss_reason.is_not(None))
+        .group_by(DiscoveredEvent.dismiss_reason)
+    )
+    return {reason: n for reason, n in rows.all()}
+
+
 async def dismiss_lead(
     session: AsyncSession, lead_id: int, now: datetime, reason: DismissReason
 ) -> bool:

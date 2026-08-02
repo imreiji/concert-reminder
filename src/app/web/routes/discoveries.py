@@ -42,6 +42,7 @@ from app.db.models import DiscoveredEvent, Tag
 from app.db.service import (
     discovery_status,
     dismiss_lead,
+    dismissed_reason_counts,
     leads_matching_existing_legs,
     open_leads,
     request_sweep,
@@ -180,6 +181,8 @@ async def discoveries(
             # compares literals anyway, so this is belt and braces.
             "swept": swept if swept in SWEPT_CODES else None,
             "swept_new": max(new, 0),
+            "reason_counts": await dismissed_reason_counts(session),
+            "dismiss_reasons": list(DismissReason),
         },
     )
 
