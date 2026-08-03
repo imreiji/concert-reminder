@@ -375,7 +375,7 @@ async def test_the_sweep_stops_when_its_wall_clock_budget_runs_out(db, monkeypat
         assert report.fetched == 1, "the second artist's check landed past the deadline"
         assert len(pages) == 1, "nothing past the budget was even asked for"
         ids = {
-            row.eventernote_event_id
+            row.source_event_id
             for row in (await s.execute(select(DiscoveredEvent))).scalars()
         }
         assert ids == {"8000"}, "only the artist inside the budget was recorded"
@@ -715,7 +715,7 @@ async def test_a_one_tag_sweep_records_leads(db):
         await s.commit()
         assert report.status == "ok" and report.new_leads == 1
         row = (await s.execute(select(DiscoveredEvent))).scalar_one()
-        assert row.eventernote_event_id == "464372"
+        assert row.source_event_id == "464372"
         assert row.first_seen_via_tag_id == tag.id
 
 

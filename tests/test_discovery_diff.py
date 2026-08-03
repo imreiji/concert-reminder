@@ -49,7 +49,7 @@ async def test_a_new_event_becomes_an_open_lead(db):
     async with db() as s:
         fresh = await record_discovered(s, [(_ev(), None)], NOW)
         await s.commit()
-        assert [r.eventernote_event_id for r in fresh] == ["1"]
+        assert [r.source_event_id for r in fresh] == ["1"]
         assert len(await open_leads(s)) == 1
 
 
@@ -161,7 +161,7 @@ async def test_binding_a_lead_leaves_an_unrelated_one_open(db):
     async with db() as s:
         fresh = await record_discovered(s, [(_ev(), None), (_ev(event_id="2"), None)], NOW)
         await s.commit()
-        other_id = [row.id for row in fresh if row.eventernote_event_id == "2"][0]
+        other_id = [row.id for row in fresh if row.source_event_id == "2"][0]
 
         s.add(Concert(title="t", event_id="c1"))
         await s.flush()
@@ -224,7 +224,7 @@ async def test_a_leg_whose_utc_instant_is_a_different_jst_day_is_no_hint(db):
         )
         await s.commit()
         hinted = await leads_matching_existing_legs(s, fresh)
-        by_id = {r.eventernote_event_id: r.id for r in fresh}
+        by_id = {r.source_event_id: r.id for r in fresh}
         assert hinted == {by_id["15"]}
 
 

@@ -126,7 +126,7 @@ def _to_lead(row: LeadRow) -> Lead:
     is identical in the DM and here.
     """
     return Lead(
-        event_id=row.lead.eventernote_event_id,
+        event_id=row.lead.source_event_id,
         title=row.lead.title,
         date=row.lead.event_date,
         venue=row.lead.venue,

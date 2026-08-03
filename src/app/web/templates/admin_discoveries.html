@@ -121,7 +121,7 @@
       {% for r in rows %}
       <tr>
         <td>
-          <a href="https://www.eventernote.com/events/{{ r.lead.eventernote_event_id }}"
+          <a href="https://www.eventernote.com/events/{{ r.lead.source_event_id }}"
              target="_blank" rel="noopener">{{ r.lead.title }}</a>
           {% if r.maybe_held %}
           {#- The hint, never a suppression: two shows on one day at one venue

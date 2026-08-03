@@ -812,14 +812,14 @@ class ReminderQueue(Base):
 
 
 class DiscoveredEvent(Base):
-    """A performance Eventernote lists that the catalogue may not have.
+    """A performance some source lists that the catalogue may not have.
 
-    A LEAD, not a concert: Eventernote carries no ticket information at all, so
+    A LEAD, not a concert: the sources carry no ticket information at all, so
     this can say "this exists and you are not tracking it" and nothing more.
     Rounds come from the official ticket page, via an agent following the
     add-concert skill. Nothing here ever writes to `concerts`.
 
-    Keyed on the Eventernote event id, one row per EVENT rather than per
+    Keyed on the source's own event id, one row per EVENT rather than per
     artist: the LoveLive 15th anniversary concert lists nine catalogue tags as
     performers, and a per-artist key would announce it nine times.
     """
@@ -827,7 +827,18 @@ class DiscoveredEvent(Base):
     __tablename__ = "discovered_events"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    eventernote_event_id: Mapped[str] = mapped_column(String(20), unique=True)
+    # The lead's external identity. Eventernote rows keep their bare numeric
+    # event id; calendar rows store "<feed key>:<VEVENT UID>". The prefix
+    # guarantees no cross-source collision, so the single-column UNIQUE stays.
+    source_event_id: Mapped[str] = mapped_column(String(200), unique=True)
+    # Which pipeline surfaced it: "eventernote", or a CalendarFeed.key.
+    # Explicit rather than derived from the id prefix so queries and display
+    # never parse ids.
+    source: Mapped[str] = mapped_column(String(40), default="eventernote")
+    # True when the source feed's dates are APPLICATION DEADLINES (the imas
+    # ticket calendar), not performance dates -- the review page and the DM
+    # must say 申込締切, or the person triaging reads a deadline as a show.
+    date_is_deadline: Mapped[bool] = mapped_column(default=False)
     title: Mapped[str] = mapped_column(String(300))
     # A plain Date, NOT a UTCDateTime: the source gives a calendar day with no
     # time, and inventing midnight would put a fake deadline-shaped value into a

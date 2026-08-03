@@ -7042,11 +7042,11 @@ async def _bind_leads_to_concerts(
         return
     rows = (await session.execute(
         select(DiscoveredEvent)
-        .where(DiscoveredEvent.eventernote_event_id.in_(list(held)))
+        .where(DiscoveredEvent.source_event_id.in_(list(held)))
     )).scalars()
     changed = False
     for row in rows:
-        concert_id = held[row.eventernote_event_id]
+        concert_id = held[row.source_event_id]
         if row.concert_id != concert_id:
             row.concert_id = concert_id
             changed = True
@@ -7097,9 +7097,9 @@ async def record_discovered(
     # Branches 2 and 3, one query. Dismissed and announced leads are rows in
     # this same table, so the lookup a repeat sighting needs answers all three.
     existing = {
-        row.eventernote_event_id: row for row in (await session.execute(
+        row.source_event_id: row for row in (await session.execute(
             select(DiscoveredEvent)
-            .where(DiscoveredEvent.eventernote_event_id.in_(remaining))
+            .where(DiscoveredEvent.source_event_id.in_(remaining))
         )).scalars()
     }
 
@@ -7115,7 +7115,7 @@ async def record_discovered(
             row.last_seen_at = now
             continue
         row = DiscoveredEvent(
-            eventernote_event_id=actor_event.event_id,
+            source_event_id=actor_event.event_id,
             title=actor_event.title,
             event_date=actor_event.date,
             venue=actor_event.venue,
@@ -7340,7 +7340,7 @@ class PrunePlan:
 
 async def plan_prune(session: AsyncSession, prune: PruneList) -> PrunePlan:
     """Join a parsed prune list against the catalogue -- ONE query however
-    many entries the file names (`eventernote_event_id IN (...)`), not a
+    many entries the file names (`source_event_id IN (...)`), not a
     query per entry: 300 entries must not be 300 round trips.
 
     Sorts every entry into exactly one of PrunePlan's four buckets and
@@ -7349,9 +7349,9 @@ async def plan_prune(session: AsyncSession, prune: PruneList) -> PrunePlan:
     """
     ids = [entry.event_id for entry in prune.entries]
     rows = (await session.execute(
-        select(DiscoveredEvent).where(DiscoveredEvent.eventernote_event_id.in_(ids))
+        select(DiscoveredEvent).where(DiscoveredEvent.source_event_id.in_(ids))
     )).scalars()
-    by_event_id = {row.eventernote_event_id: row for row in rows}
+    by_event_id = {row.source_event_id: row for row in rows}
 
     to_dismiss: list[PlannedDismissal] = []
     unknown: list[str] = []

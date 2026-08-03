@@ -21,7 +21,7 @@ dismiss:
 
 
 def test_ids_are_strings_even_when_yaml_reads_them_as_ints():
-    """`- 481833` is an int to YAML, and eventernote_event_id is a String
+    """`- 481833` is an int to YAML, and source_event_id is a String
     column. Comparing int to str silently matches nothing, which would look
     like a stale file rather than a bug."""
     got = parse_prune_list("dismiss:\n  free:\n    - 481300\n")
@@ -88,7 +88,7 @@ def test_a_block_of_all_empty_lists_is_an_error_not_a_no_op():
 def test_non_scalar_or_boolean_ids_are_rejected(item):
     """A null/mapping/list/bool id would otherwise become a garbage string
     (str(None) -> "None", str(True) -> "True") that is accepted as real and
-    matches no eventernote_event_id -- looking exactly like a stale file
+    matches no source_event_id -- looking exactly like a stale file
     rather than a malformed one. bool is a subclass of int in Python, so
     `true`/`false` must be excluded deliberately rather than slipping
     through an isinstance(x, int) check."""

@@ -412,7 +412,7 @@ async def _record_and_announce(
 def _lead(row: DiscoveredEvent, artists: dict[int, str], *, maybe_held: bool) -> Lead:
     """A stored row adapted to the pure message layer's plain dataclass."""
     return Lead(
-        event_id=row.eventernote_event_id,
+        event_id=row.source_event_id,
         title=row.title,
         date=row.event_date,
         venue=row.venue,
