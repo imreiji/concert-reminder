@@ -754,6 +754,40 @@ extraction) is unchanged and still budget-blocked, though the draft vocabulary i
 would emit into gained one optional key. #1, #2, #4, #8, #9, #10 and #11 are
 untouched in every respect.
 
+
+**The 2026-08-03 calendar-discovery build** is the third in three days that was
+never a Proposed entry, and it came from an owner CONCERN rather than an owner
+request: partway through planning the ~90-tag im@s/LL character-and-seiyuu
+expansion he asked what that would do to the daily sweep, and the honest answer
+was "hundreds of extra third-party fetches a day". Investigating a cheaper source
+found one, so the sweep learned to read public `.ics` feeds and characters left
+the daily rotation. Logged in Shipped like the goods-sale, triage and mobile
+builds before it; nothing moved up FROM Proposed.
+
+**Its revision pass ADDS two entries and re-reads a third, which is the whole of
+the movement.** New #11 (the calendar roster's blind spots) and new #13 (nothing
+notices a feed going quiet) are both consequences of what shipped -- gaps the
+build MEASURED and chose not to close, which is exactly the kind of thing this
+file exists to keep out of a report nobody reads again. The former #11 (nothing
+caps the discovery review path) becomes #12 by that insertion, never on merit,
+and it got the re-read its subject matter demanded: **calendar leads add volume
+to the unbounded page, and the entry is unchanged anyway** -- see the note added
+inside it, which records the arithmetic rather than leaving the next reader to
+redo it. Nothing else in Proposed goes near feeds, the sweep or the discovery
+surfaces; #1-#10 were re-read and are untouched in every respect. The pass also
+cleared a bookkeeping debt it did not create: the two cross-references between
+the out-of-scope event classes and the A/B cast gap had pointed one entry too
+low since an earlier renumber, and are name-based now, the same fix the
+sign-in-bounce pointer got after being bumped five times.
+
+**And the operation this build was reprioritized in front of is now unblocked.**
+The 765PRO / Shiny Colors / Love Live tag expansion waits on nothing: the load
+objection that stopped it is answered, the sweep no longer grows with the
+character count, and the expansion is CATALOGUE work through the tags import,
+not code. It is deliberately not an entry here -- this file tracks features, and
+that is the owner's next named operation, done through surfaces that already
+shipped.
+
 ## Proposed (highest impact first)
 
 
@@ -992,7 +1026,8 @@ into one "support more event types" task would hide that:
   lead arrives via whichever one is followed. Ticketing is its own shape (day
   tickets, two-day passes). Catalogueable today; the tag-attachment question is
   genuinely different from every other class.
-- **Stage runs need the A/B cast gap closed first** (#9) and stress the leg
+- **Stage runs need the A/B cast gap closed first** (the A/B casts entry
+  directly below) and stress the leg
   count -- スクールアイドルミュージカル is thirteen performances across eight days.
   Every surface that renders legs was built against two-to-four.
 - **Release events may not be expressible at all.** 発売記念 / お渡し会 / 特典会
@@ -1017,7 +1052,8 @@ ticket cannot say which one they hold.
 out of scope -- ミュージカル信長 is the sole production among all 443 leads with a
 cast split, which is also why this was worth checking rather than assuming.
 Ranked low for exactly that reason and for no other: it is a real gap, and if
-stage runs ever come back (#8) this is their prerequisite.
+stage runs ever come back (the out-of-scope event classes entry directly above)
+this is their prerequisite.
 
 Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
@@ -1071,7 +1107,48 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 11. Nothing caps the discovery review path
+### 11. The calendar roster's blind spots
+
+Impact: low-medium - effort: one half is trivial, the other is a design change.
+Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
+than proposed on merit.
+
+`include_prefixes` matches with `str.startswith`, and the live probe of all nine
+feeds found two things that rule cannot reach. They are recorded together
+because they are the same sentence -- "the roster sees fewer rounds than the
+feeds carry" -- and apart because the fixes have nothing in common.
+
+- **The LL-Fans MAIN calendar's ticket rows are simply not read.** The roster
+  takes that feed as an EVENT source (`dates_are="event"`, performance
+  prefixes), because that is what it mostly is -- but it also carries the
+  series-wide rows the per-group subs cannot: フェス-scale campaigns belonging to
+  no single group, plus a scatter of 先行 and 一般発売. A SECOND roster entry
+  (`ll-main-tix`, the same URL, `dates_are="deadline"`, `TICKET_PREFIXES`)
+  closes that with DATA ONLY -- no logic, no migration, no test beyond the
+  roster's own. One feed read twice under two `dates_are` is not a hack; it is
+  what per-feed date semantics buys you, and it is the cheapest coverage this
+  app can currently add. The reason it did not ship inside the build is that
+  its value is unmeasured: nobody has yet seen a real フェス lead go missing.
+- **Promoter-named rounds are unreachable by prefix, and always will be.**
+  Every ticket agency names its own round -- ll-liella alone produced 24
+  distinct heads in twelve months (オフィシャル5次先行, Liella! CLUB先行,
+  ファミリーマート先行, いち早プレリザーブ先行) and ll-musical's round rows are
+  ALL promoter-named (イープラス / チケットぴあ / ローソンチケット). A name list rots
+  the week a new agency appears, so `TICKET_PREFIXES` deliberately holds only
+  the generic, stable Japanese ticketing terms. Fixing it properly means a
+  `contains`/regex matcher, and that drags a real design change behind it: a
+  per-ENTRY deadline flag, since a feed matched by content is no longer a feed
+  whose every row means the same thing, and the per-FEED `dates_are` cannot
+  express that. Logged, not built.
+
+**The accepted argument for living with both is that a missed round is not a
+missed concert**: a campaign is already a lead through its FIRST round (最速先行
+/ 一般発売 are generic and caught), and triage verifies every round against the
+official page anyway. Raise this if a real campaign is ever found that the
+roster saw nothing of at all -- that is the failure this entry is watching for,
+not "we saw three of its four rounds".
+
+### 12. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1097,6 +1174,59 @@ USER impact and this one's is nil -- the same argument that kept the rehearsal
 harness low until it was ranked on a borrowed claim. Raise it if the first
 production sweep actually produces a page somebody has to fight.
 
+Re-read 2026-08-03 against calendar discovery, which adds a second producer to
+the page this entry is about, and **unchanged in rank** -- the arithmetic is
+recorded here so nobody has to redo it. The new leads are BOUNDED in a way the
+Eventernote ones are not: nine feeds, filtered to ticket and performance rows,
+each capped by its own forward window, against 86 actor pages whose first sweep
+emits every future event they list. Against a first-day case already measured in
+the hundreds of rows, the feeds are a rounding error. What genuinely changed is
+smaller and worth saying: the page's rows are no longer homogeneous (a calendar
+row has no Eventernote link and may carry a `申込締切` date), so whatever paging
+or truncation eventually lands here must not assume every row is the same shape
+or that the copy block can be reconstructed from ids alone. The one HALF of the
+fix this entry already calls cheap -- emitting `copy_text` once instead of twice
+-- is unaffected by any of it and is still the thing to do first.
+
+### 13. Nothing notices a calendar feed going quiet
+
+Impact: nil for users, real for the catalogue - effort: small. Raised:
+2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
+out of scope and this is that decision, written down where it can be revisited).
+
+A feed that stops being maintained does not fail. It fetches 200, parses clean,
+and simply stops carrying future rows -- so the sweep reports success forever
+and the franchise it covered quietly goes dark. The precedent is not
+hypothetical: imas-db's previous main event calendar shut down in 2025-03, which
+is exactly why the design doc calls volunteer feeds a first-line source rather
+than a guarantee. Today the only signal is the failed-fetch count in the digest
+line, and silence is not a failure.
+
+**There is already one live case to check.** `imas-tix` -- the im@s half of the
+whole feature -- served ZERO future rows when it was probed on 2026-08-03, and
+was kept anyway on liveness evidence rather than dropped: DTSTAMP was that day,
+its newest LAST-MODIFIED was the day before, and July alone carried seven
+entries. A DEADLINE calendar empties its own forward window by construction --
+every entry is a date that passes -- so an empty morning is a lull, not rot, and
+dropping it on a one-day sample would have deleted half the feature. That
+reasoning is sound and it is also unfalsifiable by inspection, so it comes with a
+date: **re-check around 2026-09-03. If it is still empty, that is rot, and the
+entry to open is this one.** No ticket exists for the re-check anywhere else;
+this paragraph is it.
+
+The cheap version is a per-feed "last future row seen" line on
+`/admin/discoveries` -- no alerting, no thresholds, just the number that makes
+silence visible. Anything more (a stale-feed ops alert) is over-built for nine
+feeds one person maintains.
+
+One measurement to take at the same time, recorded here rather than in a report:
+the nine feeds are parsed SYNCHRONOUSLY on the shared asyncio loop, and the
+largest is 1.41 MB and grows weekly. `heartbeat.beat()` per feed keeps
+`/healthz` honest about the FETCHES, but a pure-Python parse holds the loop for
+its whole duration and nothing beats inside one. Fine at today's sizes and
+measured as such; if the tick ever visibly blocks, the parse is the first place
+to look and a thread offload is the obvious answer.
+
 (The former "`/admin/discoveries` row height wants a real viewport" entry
 (2026-07-31) was closed the same day by measuring it -- see its Shipped entry.
 The measurement moved the answer: the hint banner was not the cause.)
@@ -1115,6 +1245,93 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Calendar-feed discovery, and characters leave the daily sweep (2026-08-03)
+
+Branch `calendar-discovery`, seven tasks, migration `d446e6c0a3e6`. Spec
+`docs/superpowers/specs/2026-08-02-calendar-discovery-design.md`, plan
+`docs/superpowers/plans/2026-08-02-calendar-discovery.md`. Never a Proposed
+entry: it exists because the owner asked what the ~90-tag im@s/LL character and
+seiyuu expansion would do to the daily sweep, and the answer was bad enough to
+reprioritize -- every tag with an `eventernote_url` joined the sweep, so the
+expansion meant hundreds of extra daily fetches at a third party for pages the
+app was reading one artist at a time.
+
+**The investigation is the durable half, so it is recorded before the code.**
+Two obvious sources were evaluated and REJECTED: `ll-fans.jp/data/event` and
+`imas-db.jp/song/event/` are retrospective SETLIST ARCHIVES -- their own
+descriptions say 過去, and imas-db's newest entry on 2026-08-02 was July 26.
+They document shows after they happen, and discovery needs events before their
+deadlines close. Eventernote's own `/users/ical` was checked too and fails for a
+different reason: it exports events a USER marked attending, so it can confirm
+what you already know and can never discover. What the same search DID find is
+that both fan communities already publish forward-looking Google Calendars of
+exactly the right thing -- maruamyu's アイマス関連イベント チケット申込期限 feed,
+and the LL-Fans calendar family. Those are the find, and all three archives
+remain good RESEARCH references for the add-concert drafting step, which needs
+no code. (Recorded here so the next person searching for a cheaper source finds
+the three dead ends already walked.)
+
+**Nine feeds, each probed live before inclusion**, and the verdicts live in
+`app/calendars.py`'s own header block rather than in a plan file nobody opens.
+The probe corrected the plan twice: LL-Fans publishes EIGHT calendars, not the
+four the plan knew about, and the main feed the plan called stale is not (1764
+VEVENTs to 2027-03, 49 of them future) -- so nothing was dropped for staleness.
+The site's own division of labour turned out to be load-bearing: the main
+calendar carries EVENTS and the per-group subs carry 申込期限, which is why
+`dates_are` is per FEED and why the subs and the main are separate roster
+entries rather than one mixed feed. It also found the separator is an ASCII
+`": "` and not the full-width `：` the plan guessed, which matters because
+`ライブ映像無料公開:` is a real summary a bare `ライブ` prefix would swallow.
+
+**`imas-tix` was kept with zero future rows**, deliberately and against the
+build's own stated drop rule. A deadline calendar empties its forward window by
+construction, the feed was demonstrably alive (DTSTAMP that day, July carrying
+seven entries), and applying "no future VEVENTs means drop" literally would have
+deleted the im@s half of the feature on a one-day sample. That judgment is the
+one thing here that could be wrong, so it ships with a re-check date rather than
+a shrug -- see the feed-silence entry in Proposed, which owns it.
+
+**The migration was the dangerous step and was hand-written for it.**
+`eventernote_event_id` became `source_event_id` (widened to 200): autogenerate
+reads a rename as drop + add, which would have destroyed every existing lead's
+external id -- the one column the whole discovery diff keys on -- so the
+revision uses `alter_column(new_column_name=...)` and the test asserts the DATA
+survives, not merely that the schema changed. Calendar rows namespace their ids
+(`"<feed key>:<UID>"`) so one UNIQUE column serves both sources; `source` is
+stored EXPLICITLY rather than parsed back out of the id; `date_is_deadline`
+rides alongside because the imas feed's DTSTART is an application deadline, and
+rendering it as a performance date would mislead precisely the person triaging
+it. Both new columns carry server defaults, so every pre-existing row reads back
+as the Eventernote lead it is.
+
+**One sweep, one digest, and characters leave the rotation.** The calendar pass
+runs first (cheap, bounded), pours into the same `record_discovered` call and
+the same single DM as the actor loop, and a feed that fails is counted and
+skipped without costing the artists behind it. It sits OUTSIDE the actor budget,
+so the tick's worst case is the sum of both phases -- written down in
+`discovery.py`, because a feed roster that grows must never starve the rotation
+in front of which it runs. And the daily tag query now excludes CHARACTER tags,
+**reversing a documented decision** (CLAUDE.md said the sweep was kind-blind):
+a character's `eventernote_url` is her seiyuu's actor page, reading it daily for
+an expanding catalogue is the cost this build exists to avoid, and the manual
+per-tag button stays unfiltered because one fetch the owner asked for is not a
+daily cost.
+
+The parser is hand-rolled (`domain/ics_read.py`), warnings over failures like
+every parser in this repo, and keeps only the DATE half of a DTSTART -- a lead's
+date is a pointer, and inventing a midnight instant would put a deadline-shaped
+fake into an aware-UTC schema. `申込締切` renders as an ADDITIVE prefix on the
+date in all three surfaces (the DM digest, `/admin/discoveries`, the prune plan)
+and never reorders the line, because `triage-leads` parses that block by field
+position -- the skill's own doc was updated in the same branch to know both id
+shapes and to say plainly that a fan-maintained deadline is still a pointer to
+verify, not a round to copy.
+
+Nothing here creates a concert. `import_commit` remains the only write path, and
+that was reaffirmed rather than tested: a calendar entry is exactly as much
+evidence as an Eventernote row, which is "this exists", and the no-invented-
+deadlines rule is the reason the whole discovery arc has stayed read-only.
 
 ### Goods-sale rounds, and the item a round requires (2026-08-02)
 

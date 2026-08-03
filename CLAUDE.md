@@ -159,7 +159,22 @@ only when both of their ends are attached -- have shipped since).
   final prose truncation floor, because past Discord's real cap discord.py
   raises and the WHOLE DM is lost rather than trimmed. `build_discovery_dm` takes
   `budget=None` for `/admin/discoveries`, which has no character limit and is
-  where the DM's "+N more" points.
+  where the DM's "+N more" points. Its `Lead.deadline` renders as an ADDITIVE
+  `申込締切 ` prefix on the date and never reorders the line, because the
+  `triage-leads` skill reads the copy block by field position; `Lead.source`
+  gates the Eventernote LINK, since a calendar lead has no page behind it.
+  `ics_read.py` is the RFC 5545 half of calendar discovery -- text in,
+  `IcsEvent` rows out, no httpx, exactly as `eventernote.py` takes HTML.
+  Hand-rolled rather than a new dependency (the feeds are Google Calendar
+  exports and the app wants four fields per VEVENT), warnings over failures
+  like every parser here: a VEVENT missing UID/SUMMARY/DTSTART is skipped and
+  COUNTED, and only a body with no `BEGIN:VEVENT` structure at all raises
+  `IcsError` -- so a feed that rots degrades to "found nothing" on the status
+  line instead of crashing a scheduler tick every day. **It keeps only the
+  DATE half of a DTSTART**: inventing a midnight instant would put a
+  deadline-shaped fake into an aware-UTC schema (invariant 1), and a lead's
+  date is a pointer, not a deadline -- which is also why the ≤1-day skew of a
+  UTC-suffixed stamp at the JST boundary is accepted rather than corrected.
 - `src/app/db/` — models, session, and `service.py` (all business logic that
   touches the DB; discord-free so it's testable).
 - **Venues live on the LEG, as a tag.** `ConcertDay.venue_tag_id` (FK ->
@@ -336,11 +351,21 @@ only when both of their ends are attached -- have shipped since).
   skip). The redirect hook is built PER CALL so it closes over that caller's
   host — a module-level hook pinned to one host is the obvious extraction bug
   and is exactly what a shared guard must not have.
-- `src/app/discovery.py` — the Eventernote fetch and the daily sweep. Sits
-  ABOVE `db/` like `ops.py`: it imports `domain/` and `db.service`, and nothing
-  in `db/` imports it. The sweep itself is KIND-BLIND — it walks every tag with
-  an `eventernote_url`, characters included, which is what makes 如月千早's own
-  actor page free to read. The EDITOR side is not: `EVENTERNOTE_KINDS`
+- `src/app/discovery.py` — the discovery sweep: the Eventernote fetch, and
+  since 2026-08-02 a calendar-feed pass in front of it. Sits ABOVE `db/` like
+  `ops.py`: it imports `domain/`, `app/calendars.py` and `db.service`, and
+  nothing in `db/` imports it. **The daily sweep SKIPS CHARACTER tags**
+  (`Tag.kind != TagKind.CHARACTER` in `run_sweep`'s tag query) — a reversal of
+  the kind-blind rule this file used to state, made on LOAD grounds (owner
+  ruling, 2026-08-02): a character's `eventernote_url` is her seiyuu's own
+  actor page, and the owner's ~90-tag im@s/LL expansion would have added
+  hundreds of daily third-party fetches for pages whose events are franchise
+  events the calendar feeds now cover. The URL stays storable and rendered (it
+  is still the right link for a character), and `sweep_one_tag` — the manual
+  per-tag button — deliberately does NOT filter: one fetch the owner asked for
+  is not a daily cost. Don't re-widen the daily query to "every tag with a
+  URL"; that is the thing that was undone. The EDITOR side is unaffected and
+  keeps CHARACTER: `EVENTERNOTE_KINDS`
   (`domain/types.py`) is the one table saying which kinds' dialogs render the
   field AND which submits `edit_tag` may write it from, and the two must never
   become two lists. FastAPI folds an empty form value into an optional field's
@@ -351,7 +376,13 @@ only when both of their ends are attached -- have shipped since).
   future prefix of each page, hands the whole sweep's events to
   `record_discovered` in ONE call (its event-id key is what stops the LoveLive
   15th, listed by nine catalogue tags, being reported nine times), and queues
-  ONE `Notification` — never a DM of its own (invariant 4). Fetches are
+  ONE `Notification` — never a DM of its own (invariant 4). **The calendar
+  pass runs FIRST and pours into that same call and that same digest**: two
+  pipelines, one `seen` list, one DM, and a feed that fails to fetch or parse
+  is counted and skipped without ever costing the Eventernote half. It is
+  outside the actor budget on purpose, so the worst-case tick is the SUM of
+  both phases (spelled out at the top of `discovery.py`) — a feed roster that
+  grows must never starve the artist rotation behind it. Fetches are
   SEQUENTIAL with a 1s pause; 86 parallel requests at a third party is how an
   IP gets blocked. Gated by `settings.discovery_enabled` (default False, same
   shape as `rehearsal_enabled`), which is also what keeps tests and dev runs
@@ -371,6 +402,30 @@ only when both of their ends are attached -- have shipped since).
     production a sweep that dies leaves `discovery_due` true and re-runs 86
     fetches every 60 seconds forever. Any future "record that we ran" written in
     a `finally` on the scheduler's session has the same hole.
+- `src/app/calendars.py` — WHICH public `.ics` feeds discovery reads, and what
+  counts as a lead in each. Same layer as `discovery.py`/`ops.py` (imports
+  `domain/` and `db.service`; nothing in `db/` imports it), and it must NOT
+  import `app.discovery` — the sweep imports THIS, so the reverse would close
+  a cycle, which is why the User-Agent string is spelled out here rather than
+  borrowed. The roster is CODE-LEVEL CONFIG, not a table or an env var: it
+  changes rarely, changing it is an edit+deploy exactly like the admin
+  whitelist, and `dates_are`/`include_prefixes` are typed fields no env CSV
+  expresses. **`dates_are` is per FEED, and that is what keeps stored dates
+  honest** — the LL-Fans main calendar carries performance dates while its
+  per-group subs carry 申込期限, so they are separate roster entries rather
+  than one feed with mixed semantics; mixing them would file a deadline as a
+  show date, which is the exact mistake `date_is_deadline` exists to prevent.
+  `include_prefixes` matches with `str.startswith` and empty means "take every
+  VEVENT" (right for the single-purpose imas feed); a SUMMARY the list does
+  not want is DROPPED and NOT counted as skipped, because skipped means
+  UNREADABLE and folding a working filter into it would make a healthy feed
+  read as a rotting one. The nine-feed launch roster was fetched and parsed
+  one by one before inclusion and the verdicts — including why an
+  empty-but-alive feed was KEPT, and the accepted promoter-named-round gap —
+  are in the module's own probe block. Update it there when the roster
+  changes; a roster nobody can audit is how a dead feed survives.
+  Leads are namespaced (`"<feed key>:<UID>"`), which is what lets one UNIQUE
+  column hold both sources.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
 - `routes/welcome.py` -- the five-step welcome wizard, rebuilt on the design
   system and flowing seamlessly into `/setup` (`POST /welcome/advance`
@@ -413,7 +468,7 @@ only when both of their ends are attached -- have shipped since).
   route is absent from production entirely. Don't read either as licence for a
   third. Operator setup (second Discord app, test server, the redirect URI
   that bites) is `docs/local-dev-bot.md`.
-- `routes/discoveries.py` — the Eventernote discovery review surface
+- `routes/discoveries.py` — the discovery review surface
   (`GET /admin/discoveries`, `POST /admin/discoveries/{id}/dismiss`), admin-only,
   linked from Preferences with the other admin pages. Its own module rather than
   a section of `admin.py` for the same reason `rehearsal.py` is: a router
@@ -421,8 +476,10 @@ only when both of their ends are attached -- have shipped since).
   delivery log, the broadcast and the catalogue round-trip. English-only and NOT
   wrapped in `_()`, like `/admin/deliveries`; only the Preferences LINK is
   translated. **It writes exactly one column, `dismissed_at`** — it never creates
-  a concert, because Eventernote carries no ticket information at all, so a lead
-  can say "this exists and you are not tracking it" and nothing more. Turning one
+  a concert, because neither source carries a verified round: Eventernote has no
+  ticket information at all, and a fan-maintained calendar entry is a POINTER a
+  human still checks against the official page. A lead says "this exists and you
+  are not tracking it" and nothing more. Turning one
   into a concert stays with an agent following `.claude/skills/add-concert`,
   which is what the page's copy block (the same `build_discovery_dm`, with
   `budget=None`) is for. `import_commit` remains the only write path into
@@ -437,7 +494,22 @@ only when both of their ends are attached -- have shipped since).
   question: populated by the import path going forward, so "do I already have
   this?" is an id lookup rather than a guess about Japanese titles that vary in
   spacing, brackets and 〜 marks. It is not backfilled, so that branch gains
-  coverage over time rather than arriving complete.
+  coverage over time rather than arriving complete. It keeps its
+  Eventernote-specific NAME on purpose — a calendar lead never exact-matches a
+  leg, it only ever gets the date+venue hint, and only when the VEVENT carried
+  a LOCATION.
+  **A lead's id column is `DiscoveredEvent.source_event_id`** (migration
+  `d446e6c0a3e6` renamed it from `eventernote_event_id` and widened it):
+  Eventernote rows keep their bare numeric ids, calendar rows carry a
+  namespaced `"<feed key>:<UID>"`, and the prefix is what lets the single
+  UNIQUE column serve both without a cross-source collision. Two sibling
+  columns say the rest — `source` (`"eventernote"` or a `CalendarFeed.key`,
+  stored EXPLICITLY rather than parsed back out of the id, so nothing has to
+  split a string to know where a row came from) and `date_is_deadline`, which
+  is why this page and the DM render such rows as `申込締切 {date}`: the imas
+  feed's DTSTART is an application deadline, and showing it as a performance
+  date would mislead exactly the person triaging it. Both server-default to
+  the pre-calendar behaviour, so every pre-existing row reads back correct.
 - Concert edit history: `db/service.py`'s `snapshot_concert`/
   `record_concert_edit`/`concert_audit_log`, backing the `ConcertAudit`
   table (`db/models.py`). Deliberately lightweight — only the concert's own

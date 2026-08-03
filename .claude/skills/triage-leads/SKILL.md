@@ -1,12 +1,14 @@
 ---
 name: triage-leads
-description: Turn a batch of dekimasen.app Eventernote discovery leads (the sweep's DM copy block, or /admin/discoveries' paste block) into a prune list and a multi-concert import batch. Use when the owner pastes discovery leads, asks to "triage leads", "process the discovery queue", "clear the backlog", or "prune the discoveries".
+description: Turn a batch of dekimasen.app discovery leads (the sweep's DM copy block, or /admin/discoveries' paste block -- Eventernote pages and fan-maintained calendar feeds both) into a prune list and a multi-concert import batch. Use when the owner pastes discovery leads, asks to "triage leads", "process the discovery queue", "clear the backlog", or "prune the discoveries".
 ---
 
 # Triage discovery leads
 
-The Eventernote sweep finds events the catalogue may lack and calls them
-*leads*. A lead is not a concert -- it says only "this exists and you are not
+The daily discovery sweep finds events the catalogue may lack and calls them
+*leads*. It reads two kinds of source -- Eventernote actor pages, and a
+handful of fan-maintained public calendars -- and both arrive in the same
+paste. A lead is not a concert -- it says only "this exists and you are not
 tracking it". Closing the loop from lead to tracked concert has meant a human
 reading every one, one at a time, at over 400 open leads. This skill does the
 first two-thirds of that reading (no ticket page needed) and hands the
@@ -26,6 +28,14 @@ a date, a venue, and a cast -- never an application window, a result date, a
 price, or an organizer. Every round time in a survivor's draft (Pass 3) must
 come from that production's own official ticket page, or it must not exist.
 
+**A calendar lead is not the exception it looks like.** Some feeds are ticket
+calendars, so a lead can arrive already saying `申込締切 2026-09-15` -- and
+that is still a fan-maintained POINTER, not a verified round. It has no time
+of day, no round name you can trust, and no way to tell a first lottery from
+a fourth. Copying it into `apply_closes_jst` would be inventing a deadline
+with an extra step. Confirm it on the official page like any other round, or
+leave the round out.
+
 A fabricated `apply_closes_jst` that reaches `import_commit` sends a real
 user a real reminder for a deadline that was never real. That is worse than
 importing nothing: the app's entire promise is that a deadline it names is
@@ -38,10 +48,31 @@ from a guess, a typical pattern, or "what these usually look like."
 Your input is pasted text -- the sweep's DM copy block, or the fenced block
 `/admin/discoveries` renders -- never a login. You cannot open the Tags page
 or the discoveries page yourself; everything you know about a lead is in the
-paste. Each line names an Eventernote event id, a date, and a venue; the
-prose half above it (when present) adds a title and an artist. The event id
-is the only id you will ever see -- `DiscoveredEvent.id` is internal and
-never appears in what you're given.
+paste. Each line names an id, a date, and a venue, in that order; the prose
+half above it (when present) adds a title and a source heading. That id is
+the only id you will ever see -- `DiscoveredEvent.id` is internal and never
+appears in what you're given.
+
+**Two shapes of id, and a mixed batch is normal.** A line from an Eventernote
+actor page carries its event URL (`https://www.eventernote.com/events/486243`)
+and the number in it is the event id. A line from a calendar feed carries a
+namespaced id instead -- `<feed key>:<UID>`, like
+`ll-liella:abc123def@google.com` -- because there is no Eventernote page
+behind it and nothing to link to. Its prose heading is the feed's label
+("LL-Fans Liella!", "imas 申込期限") where an Eventernote lead's is the artist
+whose page surfaced it. **Both go into the prune list VERBATIM**, exactly as
+the paste spelled them, quoted if YAML needs it: the parser takes any string
+and the app matches on the whole value, so trimming a namespace or "tidying" a
+URL into a bare number turns a real dismissal into an id that matches nothing.
+
+**A date prefixed `申込締切` IS THE APPLICATION DEADLINE, not the show date.**
+Some feeds are ticket calendars, so their entry says when applications close
+and says nothing at all about when the performance is. Never file such a date
+as a leg's date -- a lead like `申込締切 2026-09-15` may well be for a concert
+in December. Both the show dates and the real round times come from Pass 3's
+research; this line only tells you a campaign exists and is closing. A plain
+date with no prefix is a performance date, as before. (The prefix is additive
+-- the rest of the line keeps its field order, so parse it the same way.)
 
 Work in three passes, cheapest first, and stop at the end of each one to
 produce its file before starting the next -- Pass 3 is the only one that
@@ -51,13 +82,21 @@ cut the queue down.
 ## 1. Collapse by title stem (no network)
 
 The largest single reduction available, and the trap that makes it worth its
-own pass: **two different mechanisms produce a repeated title, and they want
-opposite treatment.**
+own pass: **several different mechanisms produce a repeated title, and they
+want opposite treatment.**
 
 | Pattern | Example | What it becomes |
 |---|---|---|
 | A tour or a multi-day run at different times/venues | 学園アイドルマスター LIVE TOUR -標- (4 cities, 8 leads) | ONE concert, one leg per date/venue |
 | A per-member or per-part split at ONE venue on ONE day | 『Liella!と結ぶプロジェクト』お渡し会 (11 leads, one per member) | ONE event (or none, if Pass 2 dismisses it) -- never 11 legs |
+| Successive ROUNDS of one campaign, from a ticket calendar (`申込締切` lines) | 最速先行 / オフィシャル2次先行 / 一般発売 of the same live, 3 leads | ONE production -- and those are its rounds, not its legs |
+
+The third row is the calendar feeds' own shape and is the newest: a ticket
+calendar lists one entry per round, so a single campaign arrives as a small
+run of deadline lines whose titles share a stem and whose dates are days or
+weeks apart. Merge them into one production. Do NOT read them as legs (they
+are the same performance sold three times) and do not carry their dates into
+Pass 3 as round times -- see the calendar rider at the top of this file.
 
 The test: do the repeated leads differ by *when/where the audience goes*, or
 only by *which member's individual slot it is*? The first is legs of a tour;
@@ -114,9 +153,10 @@ again later.
 Write every dismissal to a prune list in the format
 `.claude/skills/triage-leads/references/example-prune-list.yaml` shows --
 read it first, copy its shape exactly. It is a YAML mapping of
-`DismissReason` value to a list of Eventernote event ids (never internal
-lead ids), one entry per RAW lead that production covered (a collapsed
-8-leg tour that gets dismissed still lists all 8 ids). It is parsed by
+`DismissReason` value to a list of lead ids written exactly as the paste
+gave them (an Eventernote event id, or a namespaced calendar id -- never
+internal lead ids; see section 0), one entry per RAW lead that production
+covered (a collapsed 8-leg tour that gets dismissed still lists all 8 ids). It is parsed by
 `app.domain.prune_list.parse_prune_list` and pinned to it by
 `tests/test_skill_triage_leads.py`.
 
@@ -130,6 +170,11 @@ would only let this skill drift out of sync with the parser add-concert is
 already pinned to. Feed it what you collected: the production's title, its
 merged leg list from Pass 1, the artist(s), and the eventernote URLs for
 each leg (`https://www.eventernote.com/events/<id>`) as its per-leg source.
+A calendar-sourced production has no such URL to hand over -- give
+`add-concert` the title, the feed's franchise and whatever the deadline
+lines said, and let it find the official page from there. It is the weaker
+starting point of the two, which is a reason to be more careful about the
+rounds it comes back with, never a reason to fill them in yourself.
 
 Work in small batches -- five to ten productions at a time -- rather than
 researching the whole survivor list before emitting anything. Each
