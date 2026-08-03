@@ -13,7 +13,12 @@ and the re-upgrade.
 `discovered_events` post-dates the NAMING_CONVENTION (it was created whole by
 `48cd59cae5d7` with named constraints), so batch-mode reflection needs no
 legacy-DDL fixture the way test_migration_legacy_anonymous_constraints.py's
-siblings do -- and this migration calls no drop_constraint anyway.
+siblings do. That is also what makes the migration's second half legal: it
+DOES call drop_constraint -- dropping and recreating the UNIQUE so its name
+follows the column across the rename -- which is the permitted case, since
+reflection can find a NAMED constraint. Dropping by literal name assumes a DB
+built by this migration chain, which production and the scratch DB below both
+are.
 """
 
 import sqlite3

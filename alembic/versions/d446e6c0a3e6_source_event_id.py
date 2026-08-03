@@ -22,7 +22,7 @@ def upgrade() -> None:
     #
     # `discovered_events` was created whole by 48cd59cae5d7 with NAMED
     # constraints, so batch-mode reflection needs no naming_convention
-    # treatment here; nothing below calls drop_constraint.
+    # treatment here.
     with op.batch_alter_table('discovered_events', schema=None) as batch_op:
         batch_op.alter_column(
             'eventernote_event_id',
@@ -56,6 +56,10 @@ def upgrade() -> None:
     # Safe to drop by name here precisely because this table post-dates the
     # convention: 48cd59cae5d7 created it with named constraints, so reflection
     # finds this one. A legacy table would need the naming_convention= fixture.
+    # The literal name assumes a DB built by THIS migration chain -- true of
+    # production and of the migration test's scratch DB, which are the only
+    # things that run migrations at all (a metadata-built test DB never gets
+    # here, which is exactly why the divergence above stays invisible).
     with op.batch_alter_table('discovered_events', schema=None) as batch_op:
         batch_op.drop_constraint(
             'uq_discovered_events_eventernote_event_id', type_='unique'
