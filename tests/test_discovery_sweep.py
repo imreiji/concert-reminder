@@ -775,6 +775,28 @@ async def test_one_digest_covers_both_calendar_and_actor_leads(db, monkeypatch):
         assert len(notes) == 1
 
 
+async def test_the_digest_shows_the_feed_label_and_deadline_marker(db, monkeypatch):
+    """`_lead` (Task 6) must resolve a calendar row's group under its FEED's
+    own label -- never a blank artist, since a feed is not a subscription --
+    and mark a deadline-dated row so 申込締切 reaches the actual DM body, not
+    just the pure formatter's own tests."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.CALENDAR_FEEDS", (TEST_FEED,))
+    async with db() as s:
+        s.add(User(discord_id=42, username="reiji"))
+        await s.commit()
+
+        async def fake_feed_fetch(url):
+            return ICS_ONE_EVENT
+
+        await run_sweep(s, NOW, fetcher=_never_called, feed_fetcher=fake_feed_fetch)
+        await s.commit()
+
+        note = (await s.execute(select(Notification))).scalar_one()
+        assert "Test Feed" in note.body, "TEST_FEED's own label, not a blank artist"
+        assert "申込締切" in note.body, "TEST_FEED is dates_are='deadline'"
+
+
 async def test_a_failing_feed_does_not_abort_other_feeds_or_the_actor_half(db, monkeypatch):
     monkeypatch.setattr(settings, "admin_whitelist", "42")
     bad_feed = CalendarFeed(

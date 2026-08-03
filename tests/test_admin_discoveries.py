@@ -11,6 +11,7 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.calendars import CalendarFeed
 from app.config import settings
 from app.db.models import Base, Concert, ConcertDay, DiscoveredEvent, DiscoveryState, Tag
 from app.db.service import PlannedDismissal, PrunePlan, apply_prune, plan_prune
@@ -217,6 +218,60 @@ async def test_an_announced_lead_says_when_it_was_announced(client):
     await _seed(client, announced_at=datetime(2026, 8, 3, 9, 0, tzinfo=UTC))
     login_as(client, ADMIN_ID, "reiji")
     assert "2026-08-03" in client.get("/admin/discoveries").text
+
+
+async def test_a_calendar_deadline_lead_renders_the_marker_and_feed_label(client):
+    """A calendar row's date is an APPLICATION DEADLINE for a deadline feed --
+    it must render 申込締切, and its "via" cell must show the FEED's own
+    label rather than a blank artist name (a feed is not a subscription, so
+    `first_seen_via_tag_id` is NULL for these rows)."""
+    client.monkeypatch.setattr(discoveries, "CALENDAR_FEEDS", (
+        CalendarFeed(
+            key="test-feed", label="Test Feed",
+            url="https://calendar.google.com/x.ics", dates_are="deadline",
+        ),
+    ))
+    await _seed(
+        client, source_event_id="test-feed:abc123", source="test-feed",
+        date_is_deadline=True, title="Deadline Show",
+        event_date=dt.date(2026, 11, 20),
+    )
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "申込締切" in body
+    assert "Test Feed" in body
+    assert "Deadline Show" in body
+
+
+async def test_a_calendar_lead_with_an_unknown_feed_key_falls_back_to_the_raw_key(client):
+    """The feed table is code-level config and can shrink -- a lead whose
+    feed was later removed must still show SOMETHING in the via cell rather
+    than a blank, so it falls back to the raw source key."""
+    client.monkeypatch.setattr(discoveries, "CALENDAR_FEEDS", ())
+    await _seed(client, source_event_id="gone-feed:xyz", source="gone-feed")
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "gone-feed" in body
+
+
+async def test_a_calendar_lead_renders_no_eventernote_link(client):
+    """A calendar lead has no Eventernote page -- its source_event_id is a
+    namespaced "<feed key>:<uid>", not an Eventernote numeric id, and a link
+    built from it would resolve nowhere real."""
+    await _seed(client, source_event_id="test-feed:abc123", source="test-feed")
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "https://www.eventernote.com/events/test-feed:abc123" not in body
+
+
+async def test_an_eventernote_lead_still_links_and_renders_as_before(client):
+    """Pins the pre-existing shape: an Eventernote row's link and plain date
+    must not change now that calendar rows share this table."""
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert 'href="https://www.eventernote.com/events/464372"' in body
+    assert "申込締切" not in body
 
 
 async def test_a_lead_never_announced_says_so(client):

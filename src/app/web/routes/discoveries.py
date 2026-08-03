@@ -45,6 +45,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.calendars import CALENDAR_FEEDS
 from app.db.models import DiscoveredEvent, Tag
 from app.db.service import (
     PlannedDismissal,
@@ -115,6 +116,15 @@ async def _artist_names(
     return {tag_id: name for tag_id, name in rows}
 
 
+def _feed_label(source: str) -> str:
+    """A calendar feed's own label -- falling back to the raw key for a feed
+    later removed from config. Near-twin of app/discovery.py's own
+    `_feed_label`, deliberately not shared for the same reason `_to_lead`
+    below isn't: this one has no reason to import the sweep module, and a
+    handful of feeds makes a second three-line lookup cheaper than a cycle."""
+    return next((f.label for f in CALENDAR_FEEDS if f.key == source), source)
+
+
 def _to_lead(row: LeadRow) -> Lead:
     """A stored row adapted to the pure message layer's plain dataclass.
 
@@ -132,6 +142,8 @@ def _to_lead(row: LeadRow) -> Lead:
         venue=row.lead.venue,
         artist=row.artist,
         maybe_held=row.maybe_held,
+        deadline=row.lead.date_is_deadline,
+        source=row.lead.source,
     )
 
 
@@ -167,7 +179,14 @@ async def discoveries(
     rows = [
         LeadRow(
             lead=lead,
-            artist=names.get(lead.first_seen_via_tag_id or 0, ""),
+            # A calendar lead names no tag at all (a feed is not a
+            # subscription) -- it shows its FEED's own label in the same
+            # slot instead, exactly as the DM digest groups it.
+            artist=(
+                names.get(lead.first_seen_via_tag_id or 0, "")
+                if lead.source == "eventernote"
+                else _feed_label(lead.source)
+            ),
             maybe_held=lead.id in hinted,
         )
         for lead in leads

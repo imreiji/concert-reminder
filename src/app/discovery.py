@@ -471,16 +471,33 @@ async def _record_and_announce(
             report.announced = len(fresh)
 
 
+def _feed_label(source: str) -> str:
+    """A calendar feed's own label, for the digest's grouping slot -- falling
+    back to the raw key for a feed later removed from config (2026-08-02
+    design doc Sec 1). Looked up against the LIVE `CALENDAR_FEEDS` name
+    (never a dict frozen at import) so tests can still monkeypatch it."""
+    return next((f.label for f in CALENDAR_FEEDS if f.key == source), source)
+
+
 def _lead(row: DiscoveredEvent, artists: dict[int, str], *, maybe_held: bool) -> Lead:
     """A stored row adapted to the pure message layer's plain dataclass."""
+    if row.source == "eventernote":
+        # The tag that surfaced it, this sweep. A fresh row always came from a
+        # tag read in this pass, so the lookup only misses if the tag was
+        # deleted mid-sweep; an unnamed artist beats a KeyError in a DM path.
+        artist = artists.get(row.first_seen_via_tag_id or 0, "")
+    else:
+        # A calendar lead names no tag at all (a feed is not a subscription,
+        # app/calendars.py's feed_leads sets tag_id=None) -- it groups under
+        # its FEED's own label instead, in the exact same slot.
+        artist = _feed_label(row.source)
     return Lead(
         event_id=row.source_event_id,
         title=row.title,
         date=row.event_date,
         venue=row.venue,
-        # The tag that surfaced it, this sweep. A fresh row always came from a
-        # tag read in this pass, so the lookup only misses if the tag was
-        # deleted mid-sweep; an unnamed artist beats a KeyError in a DM path.
-        artist=artists.get(row.first_seen_via_tag_id or 0, ""),
+        artist=artist,
         maybe_held=maybe_held,
+        deadline=row.date_is_deadline,
+        source=row.source,
     )
