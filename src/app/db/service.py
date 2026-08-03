@@ -7310,7 +7310,16 @@ class PlannedDismissal:
     approve 300 permanent dismissals is far more reviewable with "which
     artist" on every line than without it. Defaulted so the several
     hand-built PrunePlan/PlannedDismissal fixtures in this file's own test
-    suite, written before this field existed, still construct."""
+    suite, written before this field existed, still construct.
+
+    `source`/`date_is_deadline` mirror the same two `DiscoveredEvent` columns
+    the review page (/admin/discoveries) and the DM digest already read --
+    the prune plan is a third surface over the same rows, and a calendar
+    lead here has no Eventernote page either: the template must gate its
+    events link on `source == "eventernote"` exactly as admin_discoveries.html
+    does, and the FEED's own label belongs where the artist name goes when
+    there is no `first_seen_via_tag_id` to look up. Both defaulted for the
+    same fixture-compatibility reason as `first_seen_via_tag_id`."""
 
     lead_id: int
     event_id: str
@@ -7319,6 +7328,8 @@ class PlannedDismissal:
     reason: DismissReason
     stored_reason: DismissReason | None
     first_seen_via_tag_id: int | None = None
+    source: str = "eventernote"
+    date_is_deadline: bool = False
 
 
 @dataclass(frozen=True)
@@ -7390,6 +7401,7 @@ async def plan_prune(session: AsyncSession, prune: PruneList) -> PrunePlan:
                 DismissReason(row.dismiss_reason) if row.dismiss_reason else None
             ),
             first_seen_via_tag_id=row.first_seen_via_tag_id,
+            source=row.source, date_is_deadline=row.date_is_deadline,
         )
         if row.concert_id is not None:
             catalogued.append(planned)

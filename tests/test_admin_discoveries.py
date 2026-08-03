@@ -1415,6 +1415,44 @@ async def test_the_plan_page_shows_the_surfacing_artist_tag(client):
     assert "Liella!" in body
 
 
+async def test_a_calendar_lead_in_the_plan_shows_the_marker_and_feed_label_with_no_link(client):
+    """The prune plan's "Will dismiss" section is a THIRD surface over the
+    same DiscoveredEvent rows admin_discoveries.html and the DM digest
+    render -- it must not build a broken Eventernote link from a calendar
+    lead's namespaced "<feed key>:<uid>" id, and must show the feed's own
+    label (there is no tag to look up) plus the 申込締切 marker on a
+    deadline-dated row."""
+    client.monkeypatch.setattr(discoveries, "CALENDAR_FEEDS", (
+        CalendarFeed(
+            key="test-feed", label="Test Feed",
+            url="https://calendar.google.com/x.ics", dates_are="deadline",
+        ),
+    ))
+    await _seed(
+        client, source_event_id="test-feed:abc123", source="test-feed",
+        date_is_deadline=True, title="Calendar Lead",
+    )
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - 'test-feed:abc123'\n"
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert "Calendar Lead" in body
+    assert "申込締切" in body
+    assert "Test Feed" in body
+    assert "https://www.eventernote.com/events/test-feed:abc123" not in body
+
+
+async def test_an_eventernote_lead_in_the_plan_renders_as_before(client):
+    """Pins the pre-existing shape: an Eventernote lead's "Will dismiss" row
+    must keep its real link and carry no deadline marker, now that a
+    calendar lead can appear in the very same plan."""
+    await _seed(client, source_event_id="111", title="Lead A")
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n"
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert 'href="https://www.eventernote.com/events/111"' in body
+    assert "申込締切" not in body
+
+
 async def test_the_plan_page_explains_how_to_exclude_a_lead(client):
     """The only way to keep a single misclassified lead out of the batch is
     to remove its id from the pasted file and preview again -- nothing else

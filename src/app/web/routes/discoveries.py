@@ -340,6 +340,14 @@ def _prune_page(request, user, text, *, plan=None, report=None, error=None, arti
             "report": report,
             "error": error,
             "artist_names": artist_names or {},
+            # A calendar lead has no artist tag to look up in `artist_names`
+            # (a feed is not a subscription) -- the template shows the FEED's
+            # own label there instead, falling back to the raw key via
+            # `.get(source, source)` for a feed later removed from config,
+            # exactly like admin_discoveries.html's `_feed_label`. Read fresh
+            # off the live `CALENDAR_FEEDS` name (not a dict frozen at
+            # import) so tests can still monkeypatch it.
+            "feed_labels": {f.key: f.label for f in CALENDAR_FEEDS},
             "dismiss_reason_labels": DISMISS_REASON_LABELS,
         },
     )

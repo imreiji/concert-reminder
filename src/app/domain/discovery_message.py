@@ -141,7 +141,10 @@ def _prose_and_block(leads: Sequence[Lead], total: int) -> tuple[str, list[str]]
     message per size and measure it, rather than trimming one half against a
     prose half that was already fixed.
     """
-    head = [f"**{total} new lead{'s' if total != 1 else ''} from your artists**", ""]
+    head = [
+        f"**{total} new lead{'s' if total != 1 else ''} from your artists and feeds**",
+        "",
+    ]
     by_artist: dict[str, list[Lead]] = {}
     for lead in leads:
         by_artist.setdefault(lead.artist, []).append(lead)
