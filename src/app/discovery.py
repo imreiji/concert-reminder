@@ -68,12 +68,23 @@ SWEEP_DELAY_SECONDS = 1.0
 # half of the list, every day, forever, and since a Tag id is creation order
 # that starves exactly the artists added most recently.
 #
-# THE BOUND IS NOT THE BUDGET ALONE. The check happens between artists, so the
-# worst case is one full budget plus the pause and fetch already in flight:
-# SWEEP_BUDGET_SECONDS + SWEEP_DELAY_SECONDS + FETCH_DEADLINE_SECONDS, ~271s.
-# That last term is why FETCH_DEADLINE_SECONDS exists at all -- without a TOTAL
-# per-fetch deadline the final fetch is unbounded, and "the sweep is bounded"
-# would be a comment rather than a fact.
+# THE BOUND IS NOT THE BUDGET ALONE, and since the calendar pass (Task 5) the
+# bound is TWO-PHASE, not one number. The check happens between artists, so
+# the actor phase's worst case is one full budget plus the pause and fetch
+# already in flight: SWEEP_BUDGET_SECONDS + SWEEP_DELAY_SECONDS +
+# FETCH_DEADLINE_SECONDS, ~271s. That last term is why FETCH_DEADLINE_SECONDS
+# exists at all -- without a TOTAL per-fetch deadline the final fetch is
+# unbounded, and "the sweep is bounded" would be a comment rather than a fact.
+#
+# The calendar pass in run_sweep runs BEFORE `deadline` below is even
+# computed -- deliberately OUTSIDE this budget, not a slice of it, because a
+# feed roster that grows must never starve the actor budget it sits in front
+# of (a starved actor phase reads fewer artists every day; a starved feed
+# phase just delays that day's feeds, which are cheap and few). Its own
+# structural worst case is the same shape, over CALENDAR_FEEDS instead of
+# tags: len(CALENDAR_FEEDS) x (FETCH_DEADLINE_SECONDS + SWEEP_DELAY_SECONDS),
+# ~279s at 9 feeds. So the sweep's real total worst case is the SUM of both
+# phases, ~550s, not the ~271s of the actor phase alone.
 #
 # Moving the sweep off the tick entirely is still the right end state and is
 # logged as such.

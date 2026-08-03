@@ -871,6 +871,18 @@ async def test_feed_failures_do_not_touch_the_actor_cursor(db, monkeypatch):
         assert state.sweep_cursor_tag_id is None, "a full actor pass still clears the cursor"
 
 
+def test_feed_fetcher_defaults_to_the_real_fetch():
+    """Every test above blanks CALENDAR_FEEDS, so none of them ever call
+    `feed_fetcher` through its default -- nothing else would catch
+    `run_sweep`'s `feed_fetcher` parameter silently defaulting to the wrong
+    callable."""
+    import inspect
+
+    from app.calendars import fetch_feed
+
+    assert inspect.signature(run_sweep).parameters["feed_fetcher"].default is fetch_feed
+
+
 # ── One artist, inline ────────────────────────────────────────────────────
 #
 # The narrow sweep behind the Tags page's "Check eventernote now" button. What
