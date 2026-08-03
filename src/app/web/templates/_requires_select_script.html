@@ -1,0 +1,67 @@
+{#- The requires select's client half: keep every card's option list equal to
+    the CURRENT set of item-kind rounds (kind in eligibility_item_sale /
+    goods_sale), minus the card itself, as rows are added, removed, re-kinded
+    and re-labelled. Assigns a round_key to any row that lacks one (template
+    clones), so a brand-new item round is referenceable in the same submit --
+    the round twin of the leg chips' day_key. Delegated listeners only, never
+    inline on* (round labels are user text -- invariant 7). Mirrors
+    ITEM_SALE_KINDS (domain/types.py); change both together. -#}
+<script>
+  (function () {
+    const rounds = document.getElementById("round-rows");
+    if (!rounds) return;
+    const ITEM_KINDS = ["eligibility_item_sale", "goods_sale"];
+    let seq = 0;
+
+    function keyOf(row) {
+      const keyInput = row.querySelector('input[name="round_key"]');
+      if (!keyInput) return null;
+      if (!keyInput.value) {
+        const id = row.querySelector('input[name="round_id"]')?.value;
+        keyInput.value = id || "nk" + (++seq);
+      }
+      return keyInput.value;
+    }
+
+    function rebuild() {
+      const all = Array.from(rounds.querySelectorAll(".redit"));
+      const items = all
+        .map((row) => ({
+          key: keyOf(row),
+          kind: row.querySelector('select[name="round_kind"]')?.value,
+          label: row.querySelector('input[name="round_label"]')?.value.trim(),
+        }))
+        .filter((it) => it.key && ITEM_KINDS.includes(it.kind));
+      for (const row of all) {
+        const box = row.querySelector("[data-requires-box]");
+        const select = row.querySelector('select[name="round_requires"]');
+        if (!box || !select) continue;
+        const own = keyOf(row);
+        const current = select.value;
+        const options = items.filter((it) => it.key !== own);
+        box.hidden = options.length === 0 && !current;
+        select.textContent = "";
+        const none = document.createElement("option");
+        none.value = "";
+        none.textContent = select.dataset.noneLabel || "";
+        select.appendChild(none);
+        for (const it of options) {
+          const opt = document.createElement("option");
+          opt.value = it.key;
+          opt.textContent = it.label || it.key;
+          select.appendChild(opt);
+        }
+        select.value = options.some((it) => it.key === current) ? current : "";
+      }
+    }
+
+    rounds.addEventListener("change", (e) => {
+      if (e.target.closest('select[name="round_kind"]')) rebuild();
+    });
+    rounds.addEventListener("focusout", (e) => {
+      if (e.target.closest('input[name="round_label"]')) rebuild();
+    });
+    new MutationObserver(rebuild).observe(rounds, { childList: true });
+    rebuild();
+  })();
+</script>

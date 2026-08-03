@@ -57,6 +57,12 @@ class ParsedRound:
     applies_to_labels: list[str] = field(default_factory=list)
     leg_keys: str = ""                                  # route-resolved
     leg_keys_selected: set[str] = field(default_factory=set)  # route-resolved
+    # Another round IN THIS DRAFT whose item this round requires, by ja label
+    # (the same way applies_to names legs). Parser-filled; the two keys below
+    # are route-resolved like leg_keys.
+    requires_label: str | None = None
+    round_key: str = ""                                 # route-resolved
+    requires_key: str = ""                              # route-resolved
 
 
 @dataclass

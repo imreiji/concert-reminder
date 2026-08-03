@@ -77,7 +77,14 @@ from app.db.service import (
 )
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
-from app.domain.types import Anchor, ConcertKind, LotteryOutcome, RoundKind, TagKind
+from app.domain.types import (
+    ITEM_SALE_KINDS,
+    Anchor,
+    ConcertKind,
+    LotteryOutcome,
+    RoundKind,
+    TagKind,
+)
 from app.i18n import get_locale, loc_field
 from app.web.auth import SessionUser, require_editor, require_user
 from app.web.forms import form_url, require_variants
@@ -389,6 +396,49 @@ def parse_round_qualifiers(
             continue
         ids.append(rid)
     return ids
+
+
+class RoundRequiresError(Exception):
+    """A round_requires token naming a missing round, a non-item-sale round,
+    or the round itself. The message finishes the sentence "Round X's
+    required-item link ..." -- routes wrap it into a 422."""
+
+
+def resolve_round_requires(
+    token: str,
+    key_to_round_id: dict[str, int],
+    kinds_by_id: dict[int, RoundKind],
+    self_id: int,
+) -> int | None:
+    """One round row's "Requires item from" selection: ONE token (a Round id
+    for a saved round, a `round_key` for one created in this same submit),
+    resolved to the id of a round surviving THIS submit.
+
+    Same one-field-per-row encoding as round_legs/round_qualifiers, same
+    post-flush resolution as key_to_day_id -- but STRICT where those are
+    tolerant: an unresolvable selection raises rather than silently dropping,
+    because this is a single deliberate <select> choice, not a chip set, and
+    "your link didn't save" with no error is the silent failure the spec
+    forbids. `kinds_by_id` holds every surviving round's SUBMITTED kind, so a
+    target re-kinded off the item kinds in the same save is caught, and a
+    cross-concert id fails the same membership test for free. Empty -> None.
+    """
+    token = token.strip()
+    if not token:
+        return None
+    if token.isdigit() and int(token) in kinds_by_id:
+        rid = int(token)
+    elif token in key_to_round_id:
+        rid = key_to_round_id[token]
+    else:
+        raise RoundRequiresError("names a round that is not on this concert")
+    if rid == self_id:
+        raise RoundRequiresError("a round cannot require itself")
+    if kinds_by_id[rid] not in ITEM_SALE_KINDS:
+        raise RoundRequiresError(
+            "points at a round that is not an item or goods sale"
+        )
+    return rid
 
 
 # Separators an editor might put between a group name and the rest of a
@@ -703,6 +753,8 @@ async def create_concert(
     round_notes: list[str] = Form(default=[]),
     round_legs: list[str] = Form(default=[]),
     round_qualifiers: list[str] = Form(default=[]),
+    round_key: list[str] = Form(default=[]),
+    round_requires: list[str] = Form(default=[]),
 ):
     """The rich all-in-one submit: concert + tags, then every performance
     and round row, created together in one transaction -- same
@@ -814,18 +866,23 @@ async def create_concert(
         round_legs = [""] * len(round_label)
     if not round_qualifiers:
         round_qualifiers = [""] * len(round_label)
-    # (round object, its submitted kind, its raw qualifier value) for every
-    # created round, reconciled into round_qualifiers rows AFTER the flush
-    # below hands the new rounds their ids -- the same post-flush ordering
-    # edit_concert uses so a same-submit qualifier reference resolves.
-    qual_jobs: list[tuple[Round, RoundKind, str]] = []
+    if not round_key:
+        round_key = [""] * len(round_label)
+    if not round_requires:
+        round_requires = [""] * len(round_label)
+    # (round object, its submitted kind, its raw qualifier value, its client
+    # key, its raw requires-token) for every created round, reconciled into
+    # round_qualifiers rows and required_item_round_id AFTER the flush below
+    # hands the new rounds their ids -- the same post-flush ordering
+    # edit_concert uses so a same-submit qualifier/requires reference resolves.
+    round_jobs: list[tuple[Round, RoundKind, str, str, str]] = []
     for row_no, (
         label, label_en, label_zh, kind_, opens_at, closes_at, results_at, payment_at, url,
-        notes_, legs, quals
+        notes_, legs, quals, key, req
     ) in enumerate(zip(
         round_label, round_label_en, round_label_zh, round_kind, round_opens_at,
         round_closes_at, round_results_at, round_payment_at, round_url, round_notes,
-        round_legs, round_qualifiers, strict=True,
+        round_legs, round_qualifiers, round_key, round_requires, strict=True,
     ), start=1):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
@@ -838,14 +895,28 @@ async def create_concert(
         )
         session.add(round_)
         await record_round_label_phrase(session, label, label_en, label_zh)
-        qual_jobs.append((round_, kind_, quals))
+        round_jobs.append((round_, kind_, quals, key, req))
 
     await session.flush()  # new rounds now have ids, needed by parse_round_qualifiers
     # valid_round_ids is every round created this submit, so an upgrade round
     # can qualify off another one made in the same save (its id exists after
     # the flush) while a reference to a non-existent round is dropped.
-    valid_round_ids = {r.id for r, _, _ in qual_jobs}
-    for round_, kind_, quals in qual_jobs:
+    valid_round_ids = {r.id for r, _, _, _, _ in round_jobs}
+    key_to_round_id: dict[str, int] = {}
+    for round_, _k, _q, key, _r in round_jobs:
+        if key.strip():
+            key_to_round_id.setdefault(key.strip(), round_.id)
+    kinds_by_id = {round_.id: kind_ for round_, kind_, _q, _k, _r in round_jobs}
+    for round_, kind_, quals, _key, req in round_jobs:
+        try:
+            round_.required_item_round_id = resolve_round_requires(
+                req, key_to_round_id, kinds_by_id, round_.id
+            )
+        except RoundRequiresError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Round {round_.label!r}: required-item link {exc}",
+            ) from exc
         if kind_ is RoundKind.UPGRADE:
             for q_id in parse_round_qualifiers(quals, valid_round_ids, round_.id):
                 session.add(
@@ -1280,6 +1351,16 @@ async def edit_concert_form(
             # Chip options for the "Qualifies" row: every already-saved round
             # (each row excludes itself in the template).
             "saved_rounds": list(concert.rounds),
+            # Options for the "Requires item from" <select> (Task 6): every
+            # already-saved item/goods-sale round on this concert, value=id
+            # so the template's own resolution matches resolve_round_requires'
+            # digit branch. ja label only -- the select is a single line, not
+            # a trilingual chip.
+            "requires_options": [
+                (str(r.id), r.label)
+                for r in concert.rounds
+                if r.kind in ITEM_SALE_KINDS
+            ],
             "tag_summary": tag_summary,
             # What this record is still missing, in the viewer's language --
             # informational only (this route's POST twin never blocks on it).
@@ -1338,6 +1419,8 @@ async def edit_concert(
     round_notes: list[str] = Form(default=[]),
     round_legs: list[str] = Form(default=[]),
     round_qualifiers: list[str] = Form(default=[]),
+    round_key: list[str] = Form(default=[]),
+    round_requires: list[str] = Form(default=[]),
 ):
     """Atomic update: scalars assigned directly; tags/days/rounds
     RECONCILED (not blindly recreated) against what's submitted, so rows
@@ -1531,10 +1614,12 @@ async def edit_concert(
     # not the lazy relationship) so a wholly-omitted round_qualifiers array can
     # preserve it -- the same absent-field rule as round_legs below.
     existing_qualifiers = await _qualifiers_by_upgrade_round(session, list(existing_rounds))
-    # (round object, its submitted kind, its raw qualifier value) for every
-    # surviving round, reconciled into round_qualifiers rows AFTER the flush
-    # below hands new rounds their ids.
-    qual_jobs: list[tuple[Round, RoundKind, str]] = []
+    # (round object, its submitted kind, its raw qualifier value, its client
+    # key, its raw requires-token, whether that token was PRESERVED rather
+    # than submitted) for every surviving round, reconciled into
+    # round_qualifiers rows and required_item_round_id AFTER the flush below
+    # hands new rounds their ids.
+    qual_jobs: list[tuple[Round, RoundKind, str, str, str, bool]] = []
     # round_qualifiers is padded/omitted exactly like round_legs (see below):
     # a whole-array omission preserves each round's existing qualifiers; a
     # partial array is left alone so the strict zip raises rather than sliding
@@ -1558,19 +1643,37 @@ async def edit_concert(
     legs_omitted = not round_legs
     if legs_omitted:
         round_legs = [""] * len(round_label)
+    # round_requires/round_key are newer still. A submitter that omits
+    # round_requires ENTIRELY (an old browser) means "nothing to say" about
+    # any round's required-item link -- read back below, per surviving row,
+    # the same way legs_omitted/quals_omitted already are. round_key carries
+    # no such preserve semantics of its own (it only ever names a row created
+    # THIS same submit), so it is padded whenever omitted with no further
+    # meaning attached.
+    requires_omitted = not round_requires
+    if requires_omitted:
+        round_requires = [""] * len(round_label)
+    if not round_key:
+        round_key = [""] * len(round_label)
     for (
         rid, label, label_en, label_zh, kind_, opens_at, closes_at, results_at, payment_at,
-        url, notes_, legs, quals
+        url, notes_, legs, quals, key, req
     ) in zip(
         round_id, round_label, round_label_en, round_label_zh, round_kind, round_opens_at,
         round_closes_at, round_results_at, round_payment_at, round_url, round_notes,
-        round_legs, round_qualifiers, strict=True,
+        round_legs, round_qualifiers, round_key, round_requires, strict=True,
     ):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue
         rid = rid.strip()
         existing = existing_rounds.get(int(rid)) if rid.isdigit() else None
+        # Read before apply_round_fields mutates the row below -- it doesn't
+        # touch this column, but read it at the top of the row body for
+        # clarity, alongside the legs/quals preserve checks it mirrors.
+        preserved = requires_omitted and existing is not None
+        if preserved:
+            req = str(existing.required_item_round_id or "")
         if legs_omitted and existing is not None:
             # Fed back through parse_round_legs rather than assigned straight
             # across, so an id whose leg THIS submit deleted still drops --
@@ -1594,7 +1697,7 @@ async def edit_concert(
             )
             session.add(round_)
         await record_round_label_phrase(session, label, label_en, label_zh)
-        qual_jobs.append((round_, kind_, quals))
+        qual_jobs.append((round_, kind_, quals, key, req, preserved))
     for rid, round_ in existing_rounds.items():
         if rid not in kept_round_ids:
             await session.delete(round_)
@@ -1610,8 +1713,17 @@ async def edit_concert(
     # this submit gets its id here but is never itself a qualifier -- the chips
     # only ever offered already-saved rounds. Clean-slate delete-then-insert
     # keeps this idempotent and drops qualifiers when a kind flips off UPGRADE.
-    valid_round_ids = {r.id for r, _, _ in qual_jobs}
-    for round_, kind_, quals in qual_jobs:
+    valid_round_ids = {r.id for r, _, _, _, _, _ in qual_jobs}
+    # Same post-flush resolution as create_concert's round_jobs loop: a
+    # round_requires token may name either a saved round's real id or a
+    # `round_key` from a row created THIS submit, so both maps are built from
+    # the same surviving qual_jobs list.
+    key_to_round_id: dict[str, int] = {}
+    for round_, _k, _q, key, _r, _p in qual_jobs:
+        if key.strip():
+            key_to_round_id.setdefault(key.strip(), round_.id)
+    kinds_by_id = {round_.id: kind_ for round_, kind_, _q, _k, _r, _p in qual_jobs}
+    for round_, kind_, quals, _key, req, preserved in qual_jobs:
         await session.execute(
             delete(RoundQualifier).where(RoundQualifier.upgrade_round_id == round_.id)
         )
@@ -1620,6 +1732,22 @@ async def edit_concert(
                 session.add(
                     RoundQualifier(upgrade_round_id=round_.id, qualifying_round_id=q_id)
                 )
+        try:
+            round_.required_item_round_id = resolve_round_requires(
+                req, key_to_round_id, kinds_by_id, round_.id
+            )
+        except RoundRequiresError as exc:
+            if preserved:
+                # The submitter never sent this value -- the target was
+                # deleted or re-kinded by this same save. Preserving must not
+                # preserve a dangling reference (parse_round_legs' rule), and
+                # there is nobody to 422 at.
+                round_.required_item_round_id = None
+            else:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Round {round_.label!r}: required-item link {exc}",
+                ) from exc
     await session.flush()
 
     if newly_cancelled_day_ids:

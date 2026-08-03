@@ -45,6 +45,7 @@ def test_concert_to_yaml_full_shape():
                 opens_at_utc=dt(6, 10), closes_at_utc=dt(6, 25),
                 results_at_utc=dt(7, 1), payment_deadline_at_utc=dt(7, 8),
                 url="https://example.com/ticket", notes="CD-code lottery",
+                requires_label="グッズ販売",
             ),
         ],
         notes="Some notes",
@@ -113,6 +114,7 @@ def test_concert_to_yaml_full_shape():
     assert round_["payment_deadline_jst"] == "2026-07-08 21:00"
     assert round_["url"] == "https://example.com/ticket"
     assert round_["notes"] == "CD-code lottery"
+    assert round_["requires"] == "グッズ販売"
 
 
 def test_concert_to_yaml_handles_missing_optional_fields():
@@ -138,6 +140,7 @@ def test_concert_to_yaml_handles_missing_optional_fields():
     assert round_["apply_opens_jst"] is None
     assert round_["url"] is None
     assert round_["notes"] is None
+    assert round_["requires"] is None
     assert data["notes"] is None
 
 

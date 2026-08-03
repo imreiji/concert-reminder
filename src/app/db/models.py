@@ -410,6 +410,18 @@ class Round(Base):
     results_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     payment_deadline_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     applies_to: Mapped[list | None] = mapped_column(JSON)  # optional concert_day ids
+    # The item-sale round (ELIGIBILITY_ITEM_SALE or GOODS_SALE -- see
+    # ITEM_SALE_KINDS) whose item this round requires: "you may enter 最速先行
+    # only with the serial code from this CD sale". Display-only for now; a
+    # per-user "I bought it" capture would hang off this FK later. SET NULL,
+    # never CASCADE, for ConcertDay.venue_tag_id's reason: deleting the item
+    # round degrades this round to "no requirement", it must not delete it.
+    # Deliberately NO relationship: every reader already has the concert's
+    # rounds loaded, and a lazy load during async rendering is a
+    # MissingGreenlet 500 this project has shipped before.
+    required_item_round_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rounds.id", ondelete="SET NULL"), index=True
+    )
     url: Mapped[str | None] = mapped_column(String(500))
     notes: Mapped[str | None] = mapped_column(Text)
 

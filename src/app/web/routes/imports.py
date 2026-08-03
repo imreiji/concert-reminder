@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import PendingDraft
+from app.db.models import PendingDraft, Round
 from app.db.service import (
     create_pending_drafts,
     discard_pending_draft,
@@ -53,12 +53,13 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.draft import ParsedConcert
 from app.domain.ingest import IngestError, parse_ramen_event
-from app.domain.types import ConcertKind, RoundKind
+from app.domain.types import ITEM_SALE_KINDS, ConcertKind, RoundKind
 from app.domain.yaml_import import DraftError, parse_draft, parse_drafts
 from app.fetching import FetchFailed, HostNotAllowed, check_host, fetch_html
 from app.web.auth import SessionUser, require_editor
 from app.web.forms import form_url, require_variants
 from app.web.routes.concerts import (
+    RoundRequiresError,
     all_venue_tags,
     build_day,
     build_round,
@@ -66,6 +67,7 @@ from app.web.routes.concerts import (
     generate_event_id,
     parse_round_legs,
     resolve_day_venue_tags,
+    resolve_round_requires,
     validate_event_id,
 )
 
@@ -322,6 +324,12 @@ async def import_preview(
             # No name->tag resolution on the URL path, so nothing unmatched to
             # offer a create chip for -- the draft path below is the producer.
             "unmatched_tags": [],
+            # The ramen.events parse never produces a requires-link -- see
+            # ParsedRound.requires_label, parser-filled only by yaml_import --
+            # so there is nothing to offer in the requires <select>. Passed
+            # explicitly (never left to Jinja Undefined) so the template never
+            # sees an undefined name.
+            "requires_options": [],
             # One chip target per parsed day, keyed by day_key -- the round
             # cards render their leg chips from this via _round_leg_chips.html.
             "legs": _preview_legs(parsed),
@@ -387,6 +395,48 @@ async def _draft_preview_response(
         r.leg_keys = " ".join(keys)
         r.leg_keys_selected = set(keys)
 
+    # requires -> the preview's round_key scheme ("r0", "r1", ...). round_key
+    # is stamped on EVERY round (it is a row's own identity, needed whatever
+    # its kind), but only an item/goods-sale round is a valid REQUIRES
+    # TARGET -- resolve_round_requires (concerts.py) enforces the same kind
+    # check at commit time, and the select this feeds is filtered to
+    # ITEM_SALE_KINDS both server- and client-side, so a resolution the
+    # select could never actually offer must not be handed out here.
+    for i, r in enumerate(parsed.rounds):
+        r.round_key = f"r{i}"
+    # First round with a duplicate label keeps it, same rule as legs -- but
+    # split by kind: only an item-kind round's label is a resolvable target,
+    # while a non-item round's label is tracked separately so a requires:
+    # naming one gets its OWN warning instead of the generic "no such round"
+    # message (they are two different mistakes for an editor to fix).
+    item_label_to_key: dict[str, str] = {}
+    other_label_to_kind: dict[str, RoundKind] = {}
+    for r in parsed.rounds:
+        label = r.label.strip()
+        if r.kind in ITEM_SALE_KINDS:
+            item_label_to_key.setdefault(label, r.round_key)
+        else:
+            other_label_to_kind.setdefault(label, r.kind)
+    for r in parsed.rounds:
+        if not r.requires_label:
+            continue
+        lbl = r.requires_label.strip()
+        key = item_label_to_key.get(lbl)
+        if key is not None and key != r.round_key:
+            r.requires_key = key
+        elif lbl in other_label_to_kind:
+            parsed.warnings.append(
+                f"round {r.label!r}: {lbl!r} points at a round that is not "
+                "an item or goods sale -- that item link was dropped, pick "
+                "it by hand"
+            )
+        else:
+            parsed.warnings.append(
+                f"round {r.label!r}: no other round labelled "
+                f"{r.requires_label!r} -- that item link was dropped, "
+                "pick it by hand"
+            )
+
     return templates.TemplateResponse(
         request,
         "import_preview.html",
@@ -414,6 +464,14 @@ async def _draft_preview_response(
             "matched_venue_tag_id": None,
             "legs": _preview_legs(parsed),
             "unmatched_tags": unmatched_tags,
+            # Options for the "Requires item from" <select> (Task 6/7): every
+            # item/goods-sale round IN THIS DRAFT, keyed by the preview's own
+            # round_key scheme -- there is no saved round yet to key by id.
+            "requires_options": [
+                (r.round_key, r.label)
+                for r in parsed.rounds
+                if r.kind in ITEM_SALE_KINDS
+            ],
             # None for a fresh paste (import_draft never sets it): the commit
             # form then carries no pending_id field at all, and import_commit
             # falls through to its unset-pending_id behaviour exactly as
@@ -720,6 +778,8 @@ async def import_commit(
     round_url: list[str] = Form(default=[]),
     round_notes: list[str] = Form(default=[]),
     round_legs: list[str] = Form(default=[]),
+    round_key: list[str] = Form(default=[]),
+    round_requires: list[str] = Form(default=[]),
     # Set only when this commit is triaging a PendingDraft row (the preview
     # renders it as a hidden field -- see _draft_preview_response). Absent for
     # every other caller: the URL-scrape path, a single fresh /draft paste,
@@ -899,24 +959,60 @@ async def import_commit(
     # contract posts only round_label plus its times.
     round_label_zh = round_label_zh + [""] * (len(round_label) - len(round_label_zh))
     round_notes = round_notes + [""] * (len(round_label) - len(round_notes))
+    # round_key/round_requires are newer still, and NOT end-padded like the
+    # display-text arrays just above: they follow round_legs' rule instead
+    # (padded only on whole-array omission -- an older client with no
+    # required-item picker -- while a partial array is left alone so the
+    # strict zip below raises rather than sliding a token onto the wrong row).
+    if not round_key:
+        round_key = [""] * len(round_label)
+    if not round_requires:
+        round_requires = [""] * len(round_label)
+    # (round object, its submitted kind, its client key, its raw requires
+    # token) for every created round -- resolved into required_item_round_id
+    # AFTER the flush below hands the new rounds their ids, same post-flush
+    # ordering create_concert uses. Every round here is new (import_commit
+    # never edits an existing concert), so unlike create_concert's edit-aware
+    # sibling this needs no id-token branch -- every round_requires value is
+    # necessarily a round_key.
+    round_jobs: list[tuple[Round, RoundKind, str, str]] = []
     for row_no, (
         label, label_en, label_zh, kind, opens_at, closes_at, results_at, payment_at,
-        r_url, notes_, legs
+        r_url, notes_, legs, key, req
     ) in enumerate(zip(
         round_label, round_label_en, round_label_zh, round_kind, round_opens_at,
         round_closes_at, round_results_at, round_payment_at, round_url, round_notes,
-        round_legs, strict=True,
+        round_legs, round_key, round_requires, strict=True,
     ), start=1):
         if not any([label.strip(), opens_at.strip(), closes_at.strip(),
                     results_at.strip(), payment_at.strip()]):
             continue  # a blank trailing row from the repeatable UI
         require_variants(f"Round {row_no} label", label, label_en, label_zh)
-        session.add(build_round(
+        round_ = build_round(
             concert.id, label, kind, opens_at, closes_at, results_at, payment_at, r_url,
             applies_to=parse_round_legs(legs, valid_day_ids, key_to_day_id),
             label_en=label_en, notes=notes_, label_zh=label_zh,
-        ))
+        )
+        session.add(round_)
         await record_round_label_phrase(session, label, label_en, label_zh)
+        round_jobs.append((round_, kind, key, req))
+
+    await session.flush()  # new rounds now have ids, needed to resolve requires
+    key_to_round_id: dict[str, int] = {}
+    for round_, _k, key, _r in round_jobs:
+        if key.strip():
+            key_to_round_id.setdefault(key.strip(), round_.id)
+    kinds_by_id = {round_.id: kind for round_, kind, _k, _r in round_jobs}
+    for round_, _kind, _key, req in round_jobs:
+        try:
+            round_.required_item_round_id = resolve_round_requires(
+                req, key_to_round_id, kinds_by_id, round_.id
+            )
+        except RoundRequiresError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Round {round_.label!r}: required-item link {exc}",
+            ) from exc
 
     await session.flush()
     # The concert-level tag attach's notify-and-apply pipeline, run HERE and not

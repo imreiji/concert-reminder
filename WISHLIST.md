@@ -719,6 +719,41 @@ the A/B cast gap -- are unchanged by this build and stay where the ruling put
 them: the skill dismisses those classes, which is exactly what the ruling asked
 for, and dismissing them is not the same as supporting them later.
 
+
+**A second 2026-08-02 build**, hours after the triage arc: goods-sale rounds and
+the item-requirement link (branch `goods-sale-rounds`, migration
+`f846bca262ad`, ten tasks). The owner asked for both in one breath -- a merch
+window should stop masquerading as a General sale, and a 最速先行 should be able
+to say the serial code comes from that CD -- so it was never a Proposed entry
+and nothing moved up FROM Proposed. It is logged in Shipped like the character
+build, the delivery feed and the mobile retrofit before it.
+
+**The re-rank moves nothing on merit, and this pass verified that rather than
+assuming it**: the build lives in the round model, the three editor surfaces,
+the concert page and the DM embed, and no Proposed entry goes near any of them.
+Two entries change anyway, neither in rank. **#3 (the cosmetic `RoundKind`
+members) is corrected**: it counted nine of ten and there are now ten of eleven,
+which is arithmetic rather than judgment -- but the correction is worth the edit
+because the entry's own prediction was under test. It exists to stop someone
+adding a kind in the belief that a kind means something, and the design spec for
+this one cites it by name to say the opposite, so the entry did its job and the
+table it proposes simply got a row longer. **#6 (minor demo-parity cosmetics)
+GREW for the fourth time**: the round card's "Requires item from" select and the
+concert page's Requires / Needed-for lines are new components with no frame in
+any demo, and CLAUDE.md's rule says a deliberate design move should update the
+demo so it stays the reference. Same resolution as the split pill and the
+`.signin-note` -- fold it into that entry's single pass, not its own task.
+
+Everything else was re-read against what shipped and is unchanged. #7 (the event
+classes outside concerts and talk shows) is the one that reads as adjacent and
+is not: a `goods_sale` ROUND is a deadline on a concert somebody already tracks,
+while the dismissed release-events class is a standalone 発売記念 / お渡し会 with
+no ticket and no lottery. The new kind does not reopen it, and the spec says so
+explicitly so nobody reads the label as a change of scope. #5 (in-app LLM
+extraction) is unchanged and still budget-blocked, though the draft vocabulary it
+would emit into gained one optional key. #1, #2, #4, #8, #9, #10 and #11 are
+untouched in every respect.
+
 ## Proposed (highest impact first)
 
 
@@ -794,20 +829,30 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 3. Nine of ten `RoundKind` members are purely cosmetic
+### 3. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
+Counts updated 2026-08-02, when the eleventh member shipped.
 
 Exactly one `RoundKind` member carries behaviour: `UPGRADE`, which drives the
 eligibility gate, the suppression exemption, the auto-arm guards, the board
-column rank and the capture gating (invariant 2). The other nine differ from
+column rank and the capture gating (invariant 2). The other ten differ from
 each other in a label string and an emoji and nothing else -- `LOTTERY`,
 `FCFS_SALE` and `TOUR_PACKAGE` take identical paths through the planner, the
-queue and every read surface. That is worth knowing before anyone adds a tenth
-kind expecting it to mean something, and it is an argument for collapsing the
-cosmetic nine into data (a label/emoji table) with `UPGRADE` kept as the one
-real branch.
+queue and every read surface. That is worth knowing before anyone adds a
+further kind expecting it to mean something, and it is an argument for
+collapsing the cosmetic ten into data (a label/emoji table) with `UPGRADE`
+kept as the one real branch.
+
+**The prediction in that last sentence was tested on 2026-08-02 and held.**
+`GOODS_SALE` shipped as the eleventh member, and its design spec cites this
+entry by name to say the new kind is deliberately cosmetic and adds zero
+behaviour branches -- so the thing this entry exists to prevent (a kind added
+in the belief that a kind means something) did not happen, which is the whole
+return on having logged it. The only other change is arithmetic: the label/emoji
+table this entry proposes would hold ten rows rather than nine. Rank unchanged,
+for the reasons already given above.
 
 Ranked here -- below the user-facing entries above, above the pure-plumbing
 ones -- because it is the highest-impact item still standing once the trilingual
@@ -904,6 +949,29 @@ resolution though -- one frame per code in `dekimasen-demo.html`, folded into
 this entry's single pass, not its own task. Both gaps are now also named in
 CLAUDE.md's demo inventory, so the next person meets them where they look for
 the reference rather than only here.
+
+Grew a THIRD of the same kind on 2026-08-01 (character tags, their seiyuu and
+subunits): the split pill (`.mchip`, a character and her seiyuu rendered as one
+two-halved element) and the subunit rail (`.pcluster.sub` on the concert page,
+`.grow2.sub` on the Tags page) are new components with no frame in any demo.
+Four pill mockups were built and shown to the owner during that design, but they
+lived in the spec discussion rather than in `dekimasen-demo.html`, so the design
+source of truth does not carry the shape that won -- which is worse than a gap,
+because the next person finds four rejected shapes and no record of the choice.
+Same resolution as the `.signin-note` and the error pages: fold it into this
+entry's single polish pass, not its own task.
+
+Grew a FOURTH of the same kind on 2026-08-02 (goods-sale rounds): the editor
+round card's "Requires item from" select row, and the concert page's
+"🛍️ Requires: {label}" / "Needed for: {labels}" lines. Neither exists in any
+demo frame -- `dekimasen-demo.html`'s round card predates the select and its
+concert page predates both lines -- and the select is the more interesting
+omission, because it is the first control on a card that HIDES ITSELF when no
+item-sale round exists, which is a state a static frame has to decide how to
+show. Same resolution as the split pill and the `.signin-note` before it: fold
+it into this entry's single pass rather than spawning a task. Rank unchanged --
+this entry has now grown four times without once being worth doing on its own,
+which is itself the argument for keeping it as one batched pass.
 
 ### 7. The event classes outside concerts and talk shows
 
@@ -1047,6 +1115,74 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Goods-sale rounds, and the item a round requires (2026-08-02)
+
+Branch `goods-sale-rounds`, ten tasks, migration `f846bca262ad`. Never a Proposed
+entry: the owner raised both halves in one breath, and they are one feature only
+because the second needs the first to have anything worth pointing at. A merch
+window had been going in as a mislabelled General sale, and nothing anywhere
+could say that 最速先行 is unenterable without the CD sold two weeks earlier --
+which is the single most common shape in Japanese ticketing and was invisible in
+an app built for exactly that market.
+
+**`RoundKind.GOODS_SALE` is deliberately cosmetic** ("Goods sale", 🛍️, both
+catalogues, グッズ / 物販 / goods in the ramen.events heuristics). It adds no
+behaviour branch, and the spec says so by citing the standing WISHLIST entry
+about the nine -- now ten -- cosmetic kinds. A CD/BD sale that exists to hand out
+serial codes STAYS `eligibility_item_sale`; the goods kind is for merch whose
+point is the merch, and both are legal requires-targets because 抽選券付き goods
+exist.
+
+**Display-only was the owner's choice, option 1 of 3**, and the entry records it
+so the ceiling is a decision rather than an omission. No per-user "I bought it"
+capture and no suppression keyed on the link: that is the recorded LATER layer,
+and it would hang off this FK exactly the way per-leg outcomes layered onto round
+outcomes. A free-text "requires" note was rejected in the same conversation --
+it cannot render the item sale's own deadline, and gives a future capture feature
+nothing to key on. Storage is a single nullable self-FK
+(`Round.required_item_round_id`, `ON DELETE SET NULL`, indexed), not a
+qualifier-set join table mirroring UPGRADE's: no real campaign asks for two
+serial codes, and several lottery rounds pointing at one CD sale falls out of an
+FK for free. YAGNI, stated as such.
+
+One validator, `resolve_round_requires`, is shared by all three write boundaries
+(create, edit, import commit) -- same concert, kind in `ITEM_SALE_KINDS`, never
+itself. It is ONE function for the reason `EVENTERNOTE_KINDS` is one table: three
+copies of a rule drift, and here a drifted copy would let a venue-shaped mistake
+render as a requirement. A POSTED bad target is a 422; a PRESERVED one (the whole
+array omitted by an older client) that no longer resolves drops silently, because
+422ing a value the submitter never sent is undebuggable from a browser -- the
+same asymmetry `parse_round_legs` already draws.
+
+**Same-submit references bind by `round_key`, not by array position**, which is
+the one place the implementation deviates from its own spec and is recorded here
+as a decision. The spec said "position in the submitted arrays" while itself
+citing the `day_key` mechanism; keys survive a row being re-ordered or removed
+between render and submit, and positions do not. The edit page renders each
+saved row's REAL id as its key, which is load-bearing in a way one test pins
+explicitly: let that regress and the client script mints a fresh key, the
+server-rendered selection resets, and the next save drops an existing link with
+no error anywhere.
+
+The draft vocabulary gained an optional per-round `requires:` naming another
+round in the same draft by its ja label -- both halves at once, per the
+`tags_yaml` lesson, so `export.zip` stays a faithful backup and the add-concert
+skill can author the link. It names a LABEL like `applies_to` names legs, never
+an id, and the preview splits its two failure modes into two different warnings
+(no such round vs a round of the wrong kind) because they are two different
+mistakes for an editor to fix. The skill's example draft now carries the link
+itself, and the test that pins the example to the parser asserts the link
+actually resolves -- teaching material that emits a label the preview would warn
+about is worse than teaching material that omits the feature.
+
+Two small things worth keeping. The reverse line shipped as "Needed for:" rather
+than the spec's "Feeds:", which reads as a fact about the item rather than as
+jargon. And the requiring round's line carries the item sale's close time only
+while that sale is still OPEN -- the actionable half ("you still need this, and
+it stops being buyable on the 15th") -- resolved in `concert_round_rows` and
+`due_reminders` rather than in the template, because round timing is not
+presentation.
 
 ### The triage arc: prune in bulk, import in bulk, and the skill (2026-08-02)
 

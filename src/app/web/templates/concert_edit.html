@@ -76,7 +76,9 @@
         url=r.url or '', notes=r.notes or '',
         leg_value=leg_value, leg_selected=leg_ids,
         with_qualifiers=True, qual_value=qual_value, qual_selected=qual_ids,
-        self_id=r.id, kind_value=r.kind.value) }}
+        self_id=r.id, kind_value=r.kind.value,
+        round_key=r.id, requires_value=r.required_item_round_id or '',
+        requires_options=requires_options) }}
     {% else %}
     <p class="dim tiny" data-no-rounds>{{ _("No rounds yet — add the first one above.") }}</p>
     {% endfor %}
@@ -209,4 +211,5 @@
 </template>
 {% include "_leg_chips_script.html" %}
 {% include "_qualifier_chips_script.html" %}
+{% include "_requires_select_script.html" %}
 {% endblock %}

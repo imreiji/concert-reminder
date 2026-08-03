@@ -1368,6 +1368,11 @@ class DueReminder:
     # a one-leg round has nothing to disambiguate. Empty for every other row.
     # bot/messages.py turns a non-empty tuple into per-day result buttons.
     covered_days: tuple[tuple[int, str], ...] = ()
+    # The item-sale round this round requires, when it names one: label in
+    # the RECIPIENT's language, close time only while that sale is still
+    # open (same rule as RoundRow -- a closed sale's time is history).
+    requires_label: str | None = None
+    requires_closes_at_utc: datetime | None = None
 
 
 async def due_reminders(
@@ -1408,6 +1413,22 @@ async def due_reminders(
         d.id: d for d in
         (await session.execute(select(ConcertDay).where(ConcertDay.id.in_(day_ids)))).scalars()
     } if day_ids else {}
+    # The item-sale rounds the batch's rounds point at but didn't already
+    # load themselves -- one extra bounded SELECT, keeping the fixed-round-
+    # trip property (a batch of any size still costs the same number of
+    # queries, never one per row).
+    required_ids = {
+        r.required_item_round_id
+        for r in rounds.values()
+        if r.required_item_round_id is not None
+    } - set(rounds)
+    required_rounds: dict[int, Round] = dict(rounds)
+    if required_ids:
+        required_rounds.update({
+            r.id: r for r in (await session.execute(
+                select(Round).where(Round.id.in_(required_ids))
+            )).scalars()
+        })
     concert_ids = {r.concert_id for r in rounds.values()} | {d.concert_id for d in days.values()}
     concerts = {
         c.id: c for c in
@@ -1460,6 +1481,11 @@ async def due_reminders(
         concert = concerts.get(parent.concert_id) if parent else None
         if user is None or concert is None:
             continue  # orphaned row; cascades should prevent this, but never crash the loop
+        req = (
+            required_rounds.get(round_.required_item_round_id)
+            if round_ and round_.required_item_round_id is not None
+            else None
+        )
         out.append(
             DueReminder(
                 queue_id=row.id,
@@ -1494,6 +1520,14 @@ async def due_reminders(
                     (d.id, loc_field(d, "label", user.language))
                     for d in legs_by_round.get(row.round_id, ())
                 ) if row.anchor is Anchor.RESULTS else (),
+                requires_label=(
+                    loc_field(req, "label", user.language) if req else None
+                ),
+                requires_closes_at_utc=(
+                    req.closes_at_utc
+                    if req and req.closes_at_utc and req.closes_at_utc > now
+                    else None
+                ),
             )
         )
     return out
@@ -1572,6 +1606,7 @@ LABEL_BY_ROUND_KIND: dict[RoundKind, str] = {
     RoundKind.PAYMENT_DEADLINE: N_("Payment deadline"),
     RoundKind.FCFS_SALE: N_("First come, first served"),
     RoundKind.TOUR_PACKAGE: N_("Overseas tour package"),
+    RoundKind.GOODS_SALE: N_("Goods sale"),
     RoundKind.UPGRADE: N_("Upgrade round"),
     RoundKind.OTHER: N_("Other"),
 }
@@ -3064,6 +3099,15 @@ class RoundRow:
     # An eligible viewer (and a signed-out one) sees the normal capture row.
     upgrade_locked: bool = False
     qualifier_labels: tuple[str, ...] = ()
+    # The item-sale round this round requires (display only): its
+    # viewer-locale label, and its close time WHILE that sale is still open
+    # (the actionable half -- "you still need to buy this, sale ends 6/15";
+    # a closed sale's time is history and is dropped here, not in the
+    # template, because round timing is not presentation).
+    requires_label: str | None = None
+    requires_closes_at_utc: datetime | None = None
+    # The reverse line on an item-sale round: the rounds that require it.
+    needed_for_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -3207,6 +3251,15 @@ async def concert_round_rows(
     # variant here (concert page = web request).
     label_by_id = {r.id: loc_field(r, "label", locale) for r in rounds}
 
+    rounds_by_id = {r.id: r for r in rounds}
+    # round id -> labels of the rounds that require its item, insertion order.
+    needed_for: dict[int, list[str]] = {}
+    for r in rounds:
+        if r.required_item_round_id in rounds_by_id:
+            needed_for.setdefault(r.required_item_round_id, []).append(
+                label_by_id[r.id]
+            )
+
     day_ids = {d.id for d in days}
     live_leg_ids = {d.id for d in days if not d.cancelled}
     # Asked ONCE for the whole concert, then carried on every row: the show
@@ -3236,6 +3289,9 @@ async def concert_round_rows(
             session, user_id, r, outcome, now, days, locale
         )
         anchor, at_utc = _primary_anchor(r, now)
+        requires_target = (
+            rounds_by_id.get(r.required_item_round_id) if r.required_item_round_id else None
+        )
         row = RoundRow(
             round_=r, outcome=outcome,
             can_capture=can_capture, can_report_result=can_report_result,
@@ -3247,6 +3303,15 @@ async def concert_round_rows(
             qualifier_labels=tuple(
                 label_by_id[q] for q in qualifiers_by_round.get(r.id, []) if q in label_by_id
             ),
+            requires_label=label_by_id[requires_target.id] if requires_target else None,
+            requires_closes_at_utc=(
+                requires_target.closes_at_utc
+                if requires_target
+                and requires_target.closes_at_utc
+                and requires_target.closes_at_utc > now
+                else None
+            ),
+            needed_for_labels=tuple(needed_for.get(r.id, ())),
         )
         if not days:
             dateless.append(row)
@@ -4282,6 +4347,10 @@ async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
         )
         for d in days
     ]
+    # ja label of every round on this concert, keyed by id -- so the export
+    # can name a requires-link by LABEL (a restore has no ids to reuse) the
+    # same way applies_to already names a leg by label.
+    round_labels_by_id = {r.id: r.label for r in concert.rounds}
     yaml_rounds = [
         YamlRound(
             label=r.label, label_en=r.label_en, label_zh=r.label_zh, kind=r.kind.value,
@@ -4289,6 +4358,10 @@ async def concert_export_yaml(session: AsyncSession, concert: Concert) -> str:
             opens_at_utc=r.opens_at_utc, closes_at_utc=r.closes_at_utc,
             results_at_utc=r.results_at_utc, payment_deadline_at_utc=r.payment_deadline_at_utc,
             url=r.url, notes=r.notes,
+            requires_label=(
+                round_labels_by_id.get(r.required_item_round_id)
+                if r.required_item_round_id else None
+            ),
         )
         for r in concert.rounds
     ]
