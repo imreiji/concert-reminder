@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.models import DiscoveredEvent, Notification, Tag, User
 from app.db.service import (
+    DiscoveredInput,
     discovery_status,
     ensure_user,
     leads_matching_existing_legs,
@@ -32,7 +33,6 @@ from app.db.service import (
 from app.domain.discovery_message import Lead, build_discovery_dm
 from app.domain.eventernote import (
     HOST,
-    ActorEvent,
     actor_events_url,
     actor_id_from_url,
     future_events,
@@ -166,7 +166,7 @@ async def run_sweep(
     # Accumulated across ALL artists and handed to record_discovered in ONE
     # call: it batches its queries, and its event-id key deduplicates an event
     # that nine artist tags all list.
-    seen: list[tuple[ActorEvent, int | None]] = []
+    seen: list[DiscoveredInput] = []
     artist_by_tag_id: dict[int, str] = {}
     fetched_any = False
 
@@ -243,7 +243,7 @@ async def run_sweep(
             log.info("discovery: %d unreadable row(s) on %s", page.skipped, url)
         artist_by_tag_id[tag.id] = tag.name
         for actor_event in events:
-            seen.append((actor_event, tag.id))
+            seen.append(DiscoveredInput(event=actor_event, tag_id=tag.id))
 
     if not report.budget_exhausted:
         # The loop ran to the end, so every artist was visited and there is no
@@ -362,13 +362,17 @@ async def sweep_one_tag(
 
     if page.skipped:
         log.info("discovery: %d unreadable row(s) on %s", page.skipped, url)
-    fresh = await record_discovered(session, [(event, tag.id) for event in events], now)
+    fresh = await record_discovered(
+        session,
+        [DiscoveredInput(event=event, tag_id=tag.id) for event in events],
+        now,
+    )
     return TagSweepReport(status="ok", new_leads=len(fresh))
 
 
 async def _record_and_announce(
     session: AsyncSession,
-    seen: list[tuple[ActorEvent, int | None]],
+    seen: list[DiscoveredInput],
     artist_by_tag_id: dict[int, str],
     now: datetime,
     report: SweepReport,
