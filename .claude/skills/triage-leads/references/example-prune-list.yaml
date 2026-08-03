@@ -1,11 +1,14 @@
 # Example prune list for the triage-leads skill -- what /admin/discoveries/prune
 # expects pasted into its textarea. Parsed by app.domain.prune_list.parse_prune_list.
 #
-# A mapping of DismissReason value -> a list of EVENTERNOTE EVENT ids (the
-# number in https://www.eventernote.com/events/<id>). NEVER the internal
-# DiscoveredEvent id -- the DM's copy block and /admin/discoveries only ever
-# show the Eventernote id, so that is the only id an agent classifying this
-# queue can write down. See docs/discovery-lead-taxonomy-2026-08-01.md for
+# A mapping of DismissReason value -> a list of LEAD ids exactly as the paste
+# spelled them. For an Eventernote lead that is the number in
+# https://www.eventernote.com/events/<id>; for a calendar-feed lead it is the
+# namespaced "<feed key>:<UID>" the copy block prints instead (quote it -- it
+# is not a number). NEVER the internal DiscoveredEvent id -- the DM's copy
+# block and /admin/discoveries only ever show the source id, so that is the
+# only id an agent classifying this queue can write down. Every example below
+# happens to be an Eventernote lead; a mixed file is normal. See docs/discovery-lead-taxonomy-2026-08-01.md for
 # what each class means and the 2026-08-02 scope ruling for which classes get
 # dismissed at all.
 #

@@ -279,3 +279,74 @@ def test_no_leads_produces_no_message():
     """Silence is the correct output for a quiet day: a daily 'nothing found'
     trains the reader to ignore the channel."""
     assert build_discovery_dm([], total=0) == ""
+
+
+# ── Calendar leads: the deadline marker and the feed-label grouping ────────
+
+
+def _calendar_lead(n=1, source="ll-main", artist="LL-Fans メイン", deadline=False):
+    return Lead(
+        event_id=f"{source}:uid{n}",
+        title=f"Calendar Show {n}",
+        date=dt.date(2026, 11, n),
+        venue="Zepp Haneda",
+        artist=artist,
+        maybe_held=False,
+        deadline=deadline,
+        source=source,
+    )
+
+
+def test_a_deadline_lead_carries_the_marker_in_both_halves():
+    """申込締切 is ADDITIVE on the date -- both the readable prose line and the
+    copyable block line must carry it, or a triage agent reading only one half
+    reads a deadline as a performance date."""
+    lead = _calendar_lead(deadline=True)
+    body = build_discovery_dm([lead], total=1)
+    prose, block = body.split("```")[0], body.split("```")[1]
+    assert "申込締切" in prose
+    assert "申込締切" in block
+
+
+def test_a_non_deadline_calendar_lead_carries_no_marker():
+    """The control: a plain event-dated calendar lead (e.g. LL-Fans' main
+    feed) must not be marked as a deadline it is not."""
+    lead = _calendar_lead(deadline=False)
+    body = build_discovery_dm([lead], total=1)
+    assert "申込締切" not in body
+
+
+def test_a_calendar_lead_groups_under_its_feed_label():
+    """`_lead` resolves a calendar row's display source into the SAME
+    grouping slot an Eventernote lead's artist name uses -- so the digest
+    should show a feed-labelled group beside an artist-labelled one with no
+    renderer changes beyond the marker."""
+    leads = [
+        _lead(1, artist="Liyuu"),
+        _calendar_lead(2, artist="LL-Fans メイン"),
+    ]
+    body = build_discovery_dm(leads, total=2)
+    assert "**Liyuu**" in body
+    assert "**LL-Fans メイン**" in body
+
+
+def test_a_calendar_lead_never_builds_an_eventernote_link():
+    """A calendar lead's event_id is a namespaced "<feed key>:<uid>", not an
+    Eventernote numeric id -- EVENT_URL.format(event_id=...) on it would build
+    a URL that resolves nowhere real. Neither half may build one."""
+    lead = _calendar_lead()
+    body = build_discovery_dm([lead], total=1)
+    assert "eventernote.com" not in body
+    block = body.split("```")[1]
+    # The id itself must still be present in the block -- just bare, not
+    # wrapped in a broken Eventernote URL.
+    assert lead.event_id in block
+
+
+def test_an_eventernote_lead_still_links_as_before():
+    """The control for the fix above: an ordinary Eventernote-sourced lead
+    (the default `source`) must keep building its real link."""
+    lead = _lead()
+    body = build_discovery_dm([lead], total=1)
+    block = body.split("```")[1]
+    assert f"{_EVENT_PREFIX}{lead.event_id}" in block

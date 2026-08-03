@@ -38,6 +38,18 @@ class Lead:
     venue: str
     artist: str
     maybe_held: bool
+    # True when `date` is an APPLICATION DEADLINE, not a performance date (the
+    # imas ticket calendar and the LL-Fans deadline subs -- see
+    # DiscoveredEvent.date_is_deadline). Rendered as an ADDITIVE "申込締切 "
+    # prefix on the date, never a reordering, in both the prose line and the
+    # copy-block line -- the triage skill parses the block by field position.
+    deadline: bool = False
+    # Which pipeline surfaced this lead: "eventernote", or a CalendarFeed.key.
+    # A calendar lead has no Eventernote page to link -- EVENT_URL is an
+    # Eventernote path, and a calendar lead's event_id is a namespaced
+    # "<feed key>:<uid>", not an Eventernote numeric id -- so both halves
+    # below must gate the link/URL on this rather than building one blindly.
+    source: str = "eventernote"
 
 
 def _clip(text: str, n: int) -> str:
@@ -129,7 +141,10 @@ def _prose_and_block(leads: Sequence[Lead], total: int) -> tuple[str, list[str]]
     message per size and measure it, rather than trimming one half against a
     prose half that was already fixed.
     """
-    head = [f"**{total} new lead{'s' if total != 1 else ''} from your artists**", ""]
+    head = [
+        f"**{total} new lead{'s' if total != 1 else ''} from your artists and feeds**",
+        "",
+    ]
     by_artist: dict[str, list[Lead]] = {}
     for lead in leads:
         by_artist.setdefault(lead.artist, []).append(lead)
@@ -137,23 +152,31 @@ def _prose_and_block(leads: Sequence[Lead], total: int) -> tuple[str, list[str]]
     for artist, group in by_artist.items():
         head.append(f"**{_clip(artist, MAX_ARTIST_CHARS)}**")
         for lead in group:
-            url = EVENT_URL.format(event_id=lead.event_id)
             hint = " *(you may already have this)*" if lead.maybe_held else ""
             title = _clip(lead.title, MAX_TITLE_CHARS)
             venue = _clip(lead.venue, MAX_VENUE_CHARS)
-            head.append(
-                f"· [{title}]({url}) — {lead.date:%d %b}, {venue}{hint}"
-            )
+            date_str = f"{'申込締切 ' if lead.deadline else ''}{lead.date:%d %b}"
+            if lead.source == "eventernote":
+                url = EVENT_URL.format(event_id=lead.event_id)
+                head.append(f"· [{title}]({url}) — {date_str}, {venue}{hint}")
+            else:
+                # No page to link -- see Lead.source's docstring.
+                head.append(f"· {title} — {date_str}, {venue}{hint}")
         head.append("")
 
     if total > len(leads):
         head.append(f"+{total - len(leads)} more — {REVIEW_URL}")
         head.append("")
 
-    block_lines = [
-        f"{EVENT_URL.format(event_id=lead.event_id)}  {lead.date:%Y-%m-%d}  {lead.venue}"
-        for lead in leads
-    ]
+    block_lines = []
+    for lead in leads:
+        date_str = f"{'申込締切 ' if lead.deadline else ''}{lead.date:%Y-%m-%d}"
+        location = (
+            EVENT_URL.format(event_id=lead.event_id)
+            if lead.source == "eventernote"
+            else lead.event_id
+        )
+        block_lines.append(f"{location}  {date_str}  {lead.venue}")
     return "\n".join(head), block_lines
 
 

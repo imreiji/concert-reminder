@@ -45,6 +45,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.calendars import CALENDAR_FEEDS
 from app.db.models import DiscoveredEvent, Tag
 from app.db.service import (
     PlannedDismissal,
@@ -115,6 +116,15 @@ async def _artist_names(
     return {tag_id: name for tag_id, name in rows}
 
 
+def _feed_label(source: str) -> str:
+    """A calendar feed's own label -- falling back to the raw key for a feed
+    later removed from config. Near-twin of app/discovery.py's own
+    `_feed_label`, deliberately not shared for the same reason `_to_lead`
+    below isn't: this one has no reason to import the sweep module, and a
+    handful of feeds makes a second three-line lookup cheaper than a cycle."""
+    return next((f.label for f in CALENDAR_FEEDS if f.key == source), source)
+
+
 def _to_lead(row: LeadRow) -> Lead:
     """A stored row adapted to the pure message layer's plain dataclass.
 
@@ -126,12 +136,14 @@ def _to_lead(row: LeadRow) -> Lead:
     is identical in the DM and here.
     """
     return Lead(
-        event_id=row.lead.eventernote_event_id,
+        event_id=row.lead.source_event_id,
         title=row.lead.title,
         date=row.lead.event_date,
         venue=row.lead.venue,
         artist=row.artist,
         maybe_held=row.maybe_held,
+        deadline=row.lead.date_is_deadline,
+        source=row.lead.source,
     )
 
 
@@ -167,7 +179,14 @@ async def discoveries(
     rows = [
         LeadRow(
             lead=lead,
-            artist=names.get(lead.first_seen_via_tag_id or 0, ""),
+            # A calendar lead names no tag at all (a feed is not a
+            # subscription) -- it shows its FEED's own label in the same
+            # slot instead, exactly as the DM digest groups it.
+            artist=(
+                names.get(lead.first_seen_via_tag_id or 0, "")
+                if lead.source == "eventernote"
+                else _feed_label(lead.source)
+            ),
             maybe_held=lead.id in hinted,
         )
         for lead in leads
@@ -321,6 +340,14 @@ def _prune_page(request, user, text, *, plan=None, report=None, error=None, arti
             "report": report,
             "error": error,
             "artist_names": artist_names or {},
+            # A calendar lead has no artist tag to look up in `artist_names`
+            # (a feed is not a subscription) -- the template shows the FEED's
+            # own label there instead, falling back to the raw key via
+            # `.get(source, source)` for a feed later removed from config,
+            # exactly like admin_discoveries.html's `_feed_label`. Read fresh
+            # off the live `CALENDAR_FEEDS` name (not a dict frozen at
+            # import) so tests can still monkeypatch it.
+            "feed_labels": {f.key: f.label for f in CALENDAR_FEEDS},
             "dismiss_reason_labels": DISMISS_REASON_LABELS,
         },
     )

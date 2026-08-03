@@ -10,10 +10,14 @@ that classified a batch of /admin/discoveries leads. Parsing goes through
 and for a file whose every entry becomes a permanent dismissal, a silently
 dropped block is the worst available outcome.
 
-It keys on the Eventernote event id (the external id the discovery copy
-block's URLs expose) because that is the only id a human or agent writing
-this file ever sees -- DiscoveredEvent.id is an internal primary key the
-file never carries.
+It keys on a lead's `source_event_id` -- a bare Eventernote event id, or a
+namespaced "<feed key>:<UID>" for a calendar-feed lead -- because that is the
+only external id a human or agent writing this file ever sees: the discovery
+copy block exposes it (as the number in an /events/ URL, or verbatim where
+there is no page to link), and DiscoveredEvent.id is an internal primary key
+the file never carries. The id is compared WHOLE and this module reads no
+structure out of it, which is what lets a second source join without touching
+the parser.
 
 Unlike yaml_import.py's parse_draft, which prefers a warning and a skipped
 row so a slightly-off draft still renders something to fix, this module
@@ -118,14 +122,14 @@ def parse_prune_list(text: str) -> PruneList:
             # Python, so `- true`/`- false` would otherwise slip through an
             # isinstance(x, int) check. Anything else (null, a mapping, a
             # list) would str() into a garbage id ("None", "{'a': 1}") that
-            # is accepted as real and matches no eventernote_event_id --
+            # is accepted as real and matches no source_event_id --
             # looking exactly like a stale file rather than a malformed one.
             if isinstance(raw_id, bool) or not isinstance(raw_id, (str, int)):
                 raise PruneListError(
                     f"dismiss.{reason_key}: {raw_id!r} isn't a usable id "
                     "(expected a string or number)"
                 )
-            # str(), never int -- eventernote_event_id is a String column,
+            # str(), never int -- source_event_id is a String column,
             # and `- 481833` reads back from YAML as an int. Comparing int
             # to str would silently match nothing downstream.
             event_id = str(raw_id).strip()

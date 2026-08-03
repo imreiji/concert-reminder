@@ -7042,11 +7042,11 @@ async def _bind_leads_to_concerts(
         return
     rows = (await session.execute(
         select(DiscoveredEvent)
-        .where(DiscoveredEvent.eventernote_event_id.in_(list(held)))
+        .where(DiscoveredEvent.source_event_id.in_(list(held)))
     )).scalars()
     changed = False
     for row in rows:
-        concert_id = held[row.eventernote_event_id]
+        concert_id = held[row.source_event_id]
         if row.concert_id != concert_id:
             row.concert_id = concert_id
             changed = True
@@ -7054,19 +7054,37 @@ async def _bind_leads_to_concerts(
         await session.flush()
 
 
+@dataclass(frozen=True)
+class DiscoveredInput:
+    """One sighting of one event, whichever pipeline saw it.
+
+    `record_discovered`'s input contract, the way `NoticeContext` is for
+    notices -- kept beside the function it feeds rather than in `domain/`,
+    since it names nothing domain-pure beyond `ActorEvent`.
+    """
+
+    event: ActorEvent
+    # The surfacing tag, Eventernote only -- a calendar feed carries no tag.
+    tag_id: int | None = None
+    # Which pipeline produced it: "eventernote", or a CalendarFeed.key.
+    source: str = "eventernote"
+    # True when `event.date` is an application deadline, not a performance
+    # date (the imas ticket calendar) -- see DiscoveredEvent.date_is_deadline.
+    date_is_deadline: bool = False
+
+
 async def record_discovered(
     session: AsyncSession,
-    events: Sequence[tuple[ActorEvent, int | None]],
+    events: Sequence[DiscoveredInput],
     now: datetime,
 ) -> list[DiscoveredEvent]:
-    """Upsert one row per Eventernote event id; return only the FRESH rows.
+    """Upsert one row per source event id; return only the FRESH rows.
 
-    The int beside each event is the tag that surfaced it, recorded only on
-    first sight. A sweep passes ~86 artists' worth of events in one call, so
-    this is two queries total regardless of size -- one to find the ids legs
-    already hold, one to load the DiscoveredEvent rows for the rest -- never
-    a query per event. A third runs only when a leg holds one of the incoming
-    ids, to close those leads (`_bind_leads_to_concerts`); still batched, still
+    A sweep passes ~86 artists' worth of events in one call, so this is two
+    queries total regardless of size -- one to find the ids legs already
+    hold, one to load the DiscoveredEvent rows for the rest -- never a query
+    per event. A third runs only when a leg holds one of the incoming ids,
+    to close those leads (`_bind_leads_to_concerts`); still batched, still
     independent of how many events arrived.
     """
     if not events:
@@ -7074,9 +7092,9 @@ async def record_discovered(
 
     # One event surfaced by nine artist tags arrives here nine times; the
     # first sighting wins, which is what first_seen_via_tag_id means.
-    incoming: dict[str, tuple[ActorEvent, int | None]] = {}
-    for actor_event, tag_id in events:
-        incoming.setdefault(actor_event.event_id, (actor_event, tag_id))
+    incoming: dict[str, DiscoveredInput] = {}
+    for di in events:
+        incoming.setdefault(di.event.event_id, di)
 
     # Branch 1, one query. These are dropped entirely and never stored: a leg
     # carrying the id is the catalogue saying it already has this. The CONCERT
@@ -7097,15 +7115,15 @@ async def record_discovered(
     # Branches 2 and 3, one query. Dismissed and announced leads are rows in
     # this same table, so the lookup a repeat sighting needs answers all three.
     existing = {
-        row.eventernote_event_id: row for row in (await session.execute(
+        row.source_event_id: row for row in (await session.execute(
             select(DiscoveredEvent)
-            .where(DiscoveredEvent.eventernote_event_id.in_(remaining))
+            .where(DiscoveredEvent.source_event_id.in_(remaining))
         )).scalars()
     }
 
     fresh: list[DiscoveredEvent] = []
     for event_id in remaining:
-        actor_event, tag_id = incoming[event_id]
+        di = incoming[event_id]
         row = existing.get(event_id)
         if row is not None:
             # Seen again. Nothing else is touched: re-writing the title or the
@@ -7115,11 +7133,13 @@ async def record_discovered(
             row.last_seen_at = now
             continue
         row = DiscoveredEvent(
-            eventernote_event_id=actor_event.event_id,
-            title=actor_event.title,
-            event_date=actor_event.date,
-            venue=actor_event.venue,
-            first_seen_via_tag_id=tag_id,
+            source_event_id=di.event.event_id,
+            title=di.event.title,
+            event_date=di.event.date,
+            venue=di.event.venue,
+            first_seen_via_tag_id=di.tag_id,
+            source=di.source,
+            date_is_deadline=di.date_is_deadline,
             first_seen_at=now,
             last_seen_at=now,
         )
@@ -7290,7 +7310,16 @@ class PlannedDismissal:
     approve 300 permanent dismissals is far more reviewable with "which
     artist" on every line than without it. Defaulted so the several
     hand-built PrunePlan/PlannedDismissal fixtures in this file's own test
-    suite, written before this field existed, still construct."""
+    suite, written before this field existed, still construct.
+
+    `source`/`date_is_deadline` mirror the same two `DiscoveredEvent` columns
+    the review page (/admin/discoveries) and the DM digest already read --
+    the prune plan is a third surface over the same rows, and a calendar
+    lead here has no Eventernote page either: the template must gate its
+    events link on `source == "eventernote"` exactly as admin_discoveries.html
+    does, and the FEED's own label belongs where the artist name goes when
+    there is no `first_seen_via_tag_id` to look up. Both defaulted for the
+    same fixture-compatibility reason as `first_seen_via_tag_id`."""
 
     lead_id: int
     event_id: str
@@ -7299,6 +7328,8 @@ class PlannedDismissal:
     reason: DismissReason
     stored_reason: DismissReason | None
     first_seen_via_tag_id: int | None = None
+    source: str = "eventernote"
+    date_is_deadline: bool = False
 
 
 @dataclass(frozen=True)
@@ -7340,7 +7371,7 @@ class PrunePlan:
 
 async def plan_prune(session: AsyncSession, prune: PruneList) -> PrunePlan:
     """Join a parsed prune list against the catalogue -- ONE query however
-    many entries the file names (`eventernote_event_id IN (...)`), not a
+    many entries the file names (`source_event_id IN (...)`), not a
     query per entry: 300 entries must not be 300 round trips.
 
     Sorts every entry into exactly one of PrunePlan's four buckets and
@@ -7349,9 +7380,9 @@ async def plan_prune(session: AsyncSession, prune: PruneList) -> PrunePlan:
     """
     ids = [entry.event_id for entry in prune.entries]
     rows = (await session.execute(
-        select(DiscoveredEvent).where(DiscoveredEvent.eventernote_event_id.in_(ids))
+        select(DiscoveredEvent).where(DiscoveredEvent.source_event_id.in_(ids))
     )).scalars()
-    by_event_id = {row.eventernote_event_id: row for row in rows}
+    by_event_id = {row.source_event_id: row for row in rows}
 
     to_dismiss: list[PlannedDismissal] = []
     unknown: list[str] = []
@@ -7370,6 +7401,7 @@ async def plan_prune(session: AsyncSession, prune: PruneList) -> PrunePlan:
                 DismissReason(row.dismiss_reason) if row.dismiss_reason else None
             ),
             first_seen_via_tag_id=row.first_seen_via_tag_id,
+            source=row.source, date_is_deadline=row.date_is_deadline,
         )
         if row.concert_id is not None:
             catalogued.append(planned)

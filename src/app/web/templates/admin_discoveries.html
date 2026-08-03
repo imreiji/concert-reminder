@@ -71,9 +71,9 @@
 {% elif last_failed %}
 <div class="banner warn">
   Last sweep {{ last_run_at.strftime('%Y-%m-%d %H:%M') }} UTC:
-  {{ last_fetched }} fetched, {{ last_failed }} failed. Those artists got no
-  coverage — a redesigned page or a blocked address looks exactly like a quiet
-  day without this line.
+  {{ last_fetched }} fetched, {{ last_failed }} failed. Those sources got no
+  coverage — a redesigned page, a dead calendar feed or a blocked address
+  looks exactly like a quiet day without this line.
 </div>
 {% else %}
 <p class="dim">
@@ -121,8 +121,16 @@
       {% for r in rows %}
       <tr>
         <td>
-          <a href="https://www.eventernote.com/events/{{ r.lead.eventernote_event_id }}"
+          {#- A calendar lead has no Eventernote page to link -- its
+              source_event_id is a namespaced "<feed key>:<uid>", not an
+              Eventernote numeric id, so a link built from it would resolve
+              nowhere real. -#}
+          {% if r.lead.source == "eventernote" %}
+          <a href="https://www.eventernote.com/events/{{ r.lead.source_event_id }}"
              target="_blank" rel="noopener">{{ r.lead.title }}</a>
+          {% else %}
+          {{ r.lead.title }}
+          {% endif %}
           {% if r.maybe_held %}
           {#- The hint, never a suppression: two shows on one day at one venue
               is the normal shape of a Japanese concert day, so this can only
@@ -131,7 +139,13 @@
           <div class="banner warn">May already have this — same date and venue as a leg you hold.</div>
           {% endif %}
         </td>
-        <td class="nw">{{ r.lead.event_date.strftime('%Y-%m-%d') }}</td>
+        <td class="nw">
+          {#- 申込締切 is ADDITIVE, prefixed on the date -- a deadline-dated
+              calendar row (the imas ticket calendar, LL-Fans deadline subs)
+              is not a performance date, and rendering it bare would read as
+              a show date to the person triaging. -#}
+          {% if r.lead.date_is_deadline %}申込締切 {% endif %}{{ r.lead.event_date.strftime('%Y-%m-%d') }}
+        </td>
         <td>{{ r.lead.venue or '—' }}</td>
         <td>{{ r.artist or '—' }}</td>
         <td class="nw">{{ r.lead.announced_at.strftime('%Y-%m-%d') if r.lead.announced_at else 'Not yet' }}</td>

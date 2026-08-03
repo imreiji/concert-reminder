@@ -11,6 +11,7 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.calendars import CalendarFeed
 from app.config import settings
 from app.db.models import Base, Concert, ConcertDay, DiscoveredEvent, DiscoveryState, Tag
 from app.db.service import PlannedDismissal, PrunePlan, apply_prune, plan_prune
@@ -77,7 +78,7 @@ def login_as(client, discord_id, name):
 
 async def _seed(client, **overrides):
     fields = dict(
-        eventernote_event_id="464372", title="Anniversary Day 2",
+        source_event_id="464372", title="Anniversary Day 2",
         event_date=dt.date(2026, 11, 15), venue="Zepp Haneda",
         first_seen_at=NOW, last_seen_at=NOW,
     )
@@ -92,13 +93,13 @@ async def _lead_id(client):
         return (await s.execute(select(DiscoveredEvent))).scalar_one().id
 
 
-async def _lead_by_event_id(client, eventernote_event_id):
+async def _lead_by_event_id(client, source_event_id):
     """Look a seeded row up by its EXTERNAL id, for tests that seed more than
     one lead and so cannot use `_lead_id`'s scalar_one()."""
     async with client.db() as s:
         return (await s.execute(
             select(DiscoveredEvent).where(
-                DiscoveredEvent.eventernote_event_id == eventernote_event_id
+                DiscoveredEvent.source_event_id == source_event_id
             )
         )).scalar_one()
 
@@ -219,6 +220,60 @@ async def test_an_announced_lead_says_when_it_was_announced(client):
     assert "2026-08-03" in client.get("/admin/discoveries").text
 
 
+async def test_a_calendar_deadline_lead_renders_the_marker_and_feed_label(client):
+    """A calendar row's date is an APPLICATION DEADLINE for a deadline feed --
+    it must render 申込締切, and its "via" cell must show the FEED's own
+    label rather than a blank artist name (a feed is not a subscription, so
+    `first_seen_via_tag_id` is NULL for these rows)."""
+    client.monkeypatch.setattr(discoveries, "CALENDAR_FEEDS", (
+        CalendarFeed(
+            key="test-feed", label="Test Feed",
+            url="https://calendar.google.com/x.ics", dates_are="deadline",
+        ),
+    ))
+    await _seed(
+        client, source_event_id="test-feed:abc123", source="test-feed",
+        date_is_deadline=True, title="Deadline Show",
+        event_date=dt.date(2026, 11, 20),
+    )
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "申込締切" in body
+    assert "Test Feed" in body
+    assert "Deadline Show" in body
+
+
+async def test_a_calendar_lead_with_an_unknown_feed_key_falls_back_to_the_raw_key(client):
+    """The feed table is code-level config and can shrink -- a lead whose
+    feed was later removed must still show SOMETHING in the via cell rather
+    than a blank, so it falls back to the raw source key."""
+    client.monkeypatch.setattr(discoveries, "CALENDAR_FEEDS", ())
+    await _seed(client, source_event_id="gone-feed:xyz", source="gone-feed")
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "gone-feed" in body
+
+
+async def test_a_calendar_lead_renders_no_eventernote_link(client):
+    """A calendar lead has no Eventernote page -- its source_event_id is a
+    namespaced "<feed key>:<uid>", not an Eventernote numeric id, and a link
+    built from it would resolve nowhere real."""
+    await _seed(client, source_event_id="test-feed:abc123", source="test-feed")
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "https://www.eventernote.com/events/test-feed:abc123" not in body
+
+
+async def test_an_eventernote_lead_still_links_and_renders_as_before(client):
+    """Pins the pre-existing shape: an Eventernote row's link and plain date
+    must not change now that calendar rows share this table."""
+    await _seed(client)
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert 'href="https://www.eventernote.com/events/464372"' in body
+    assert "申込締切" not in body
+
+
 async def test_a_lead_never_announced_says_so(client):
     """The control: the date above comes from the column, not from the page
     printing a timestamp regardless."""
@@ -314,7 +369,7 @@ async def test_the_copy_block_holds_every_lead(client):
     async with client.db() as s:
         for n in range(14):
             s.add(DiscoveredEvent(
-                eventernote_event_id=f"90{n:02d}", title=f"Show {n}",
+                source_event_id=f"90{n:02d}", title=f"Show {n}",
                 event_date=dt.date(2026, 11, 1) + dt.timedelta(days=n),
                 venue="Zepp Haneda", first_seen_at=NOW, last_seen_at=NOW,
             ))
@@ -556,7 +611,7 @@ async def test_the_admin_sweeps_one_tag_inline(client):
     assert r.status_code == 303
     assert r.headers["location"] == "/admin/discoveries?swept=ok&new=1"
     rows = await _leads(client)
-    assert len(rows) == 1 and rows[0].eventernote_event_id == "464372"
+    assert len(rows) == 1 and rows[0].source_event_id == "464372"
 
 
 async def test_a_swept_tag_lands_on_the_page_that_shows_its_leads(client):
@@ -749,7 +804,7 @@ async def test_dismiss_reason_defaults_to_null_and_takes_a_taxonomy_value(db):
 
     async with db() as s:
         s.add(DiscoveredEvent(
-            eventernote_event_id="1", title="t", event_date=dt.date(2026, 9, 1),
+            source_event_id="1", title="t", event_date=dt.date(2026, 9, 1),
         ))
         await s.commit()
         row = (await s.execute(select(DiscoveredEvent))).scalar_one()
@@ -861,9 +916,9 @@ async def test_dismissing_uses_the_field_name_the_page_actually_renders(client):
 async def test_dismissed_counts_are_shown_so_the_column_is_readable(client):
     """open_leads hides dismissed rows, so without this the reason is
     write-only and nothing can ever be scored against it."""
-    await _seed(client, eventernote_event_id="1001")
-    await _seed(client, eventernote_event_id="1002")
-    await _seed(client, eventernote_event_id="1003")
+    await _seed(client, source_event_id="1001")
+    await _seed(client, source_event_id="1002")
+    await _seed(client, source_event_id="1003")
     login_as(client, ADMIN_ID, "reiji")
     async with client.db() as s:
         ids = (await s.execute(select(DiscoveredEvent.id))).scalars().all()
@@ -900,8 +955,8 @@ async def test_counts_ignore_a_pre_reason_dismissal_mixed_with_a_reasoned_one(cl
     comparing None < "talk" while trying to order the keys: a 500 on the
     page, not merely a wrong number. A single NULL row has nothing to sort
     against, which is exactly why that case alone is not enough."""
-    await _seed(client, eventernote_event_id="2001")
-    await _seed(client, eventernote_event_id="2002")
+    await _seed(client, source_event_id="2001")
+    await _seed(client, source_event_id="2002")
     login_as(client, ADMIN_ID, "reiji")
     async with client.db() as s:
         ids = (await s.execute(select(DiscoveredEvent.id))).scalars().all()
@@ -940,9 +995,9 @@ async def test_the_plan_sorts_leads_into_dismiss_unknown_and_already(client):
     """Three buckets, all shown. An unknown id is usually a stale file and an
     already-dismissed lead is usually a re-paste -- both are worth seeing, and
     neither should stop the rest."""
-    await _seed(client, eventernote_event_id="111")
+    await _seed(client, source_event_id="111")
     await _seed(
-        client, eventernote_event_id="222",
+        client, source_event_id="222",
         dismissed_at=NOW, dismiss_reason=DismissReason.FREE,
     )
     prune = PruneList(
@@ -979,7 +1034,7 @@ async def test_a_lead_already_bound_to_a_concert_is_not_dismissed(client):
     stale file. It must land in its OWN bucket (`catalogued`), not `already`
     either -- a catalogued lead was never dismissed at all, so folding it
     into `already` would misreport what actually happened to it."""
-    await _seed(client, eventernote_event_id="111")
+    await _seed(client, source_event_id="111")
     async with client.db() as s:
         concert = Concert(title="t", event_id="c1")
         s.add(concert)
@@ -1003,7 +1058,7 @@ async def test_a_lead_already_bound_to_a_concert_is_not_dismissed(client):
 async def test_planning_writes_nothing(client):
     """Rendering a plan must leave the queue exactly as it found it. If
     plan_prune ever grew a write, this is the test that must fail."""
-    await _seed(client, eventernote_event_id="111")
+    await _seed(client, source_event_id="111")
     prune = PruneList(
         entries=(PruneEntry(event_id="111", reason=DismissReason.STAGE),),
         warnings=(),
@@ -1022,8 +1077,8 @@ async def test_planning_writes_nothing(client):
 async def test_apply_dismisses_with_each_lead_s_own_reason(client):
     """Two leads under different reasons in one file -- each row gets exactly
     the reason its own entry named, not the other's."""
-    await _seed(client, eventernote_event_id="111")
-    await _seed(client, eventernote_event_id="222")
+    await _seed(client, source_event_id="111")
+    await _seed(client, source_event_id="222")
     prune = PruneList(
         entries=(
             PruneEntry(event_id="111", reason=DismissReason.STAGE),
@@ -1067,7 +1122,7 @@ async def test_apply_skips_the_already_dismissed_without_restamping(client):
     even with that guard gone."""
     original_ts = datetime(2026, 7, 1, 0, 0, tzinfo=UTC)
     await _seed(
-        client, eventernote_event_id="111",
+        client, source_event_id="111",
         dismissed_at=original_ts, dismiss_reason=DismissReason.FREE,
     )
     lead = await _lead_by_event_id(client, "111")
@@ -1107,7 +1162,7 @@ async def test_planning_a_batch_does_not_issue_a_query_per_entry(client):
     async with client.db() as s:
         for n in range(20):
             s.add(DiscoveredEvent(
-                eventernote_event_id=f"5{n:03d}", title=f"Show {n}",
+                source_event_id=f"5{n:03d}", title=f"Show {n}",
                 event_date=dt.date(2026, 11, 1) + dt.timedelta(days=n),
                 first_seen_at=NOW, last_seen_at=NOW,
             ))
@@ -1173,9 +1228,9 @@ async def test_the_plan_page_shows_all_four_buckets(client):
     fix. Asserting the rendered `<code>999</code>` fragment only comes from
     that section's own loop, never from the raw pasted text, so it actually
     proves the section renders."""
-    await _seed(client, eventernote_event_id="111", title="Open Lead")
+    await _seed(client, source_event_id="111", title="Open Lead")
     await _seed(
-        client, eventernote_event_id="222", title="Already Gone",
+        client, source_event_id="222", title="Already Gone",
         dismissed_at=NOW, dismiss_reason=DismissReason.FREE,
     )
     async with client.db() as s:
@@ -1185,7 +1240,7 @@ async def test_the_plan_page_shows_all_four_buckets(client):
         concert_id = concert.id
         await s.commit()
     await _seed(
-        client, eventernote_event_id="333", title="Now A Concert",
+        client, source_event_id="333", title="Now A Concert",
         concert_id=concert_id,
     )
     login_as(client, ADMIN_ID, "reiji")
@@ -1241,7 +1296,7 @@ async def test_the_unknown_bucket_prose_is_not_vacuously_satisfied_by_the_pasted
 async def test_previewing_writes_nothing(client):
     """The whole point of plan-before-apply. Post to the PLAN route and assert
     the lead is untouched."""
-    await _seed(client, eventernote_event_id="111")
+    await _seed(client, source_event_id="111")
     login_as(client, ADMIN_ID, "reiji")
     text = "dismiss:\n  stage:\n    - '111'\n"
     r = client.post("/admin/discoveries/prune", data={"text": text})
@@ -1256,7 +1311,7 @@ async def test_a_bad_file_shows_the_error_and_writes_nothing(client):
     """Both the plan route and the apply route must refuse an unparseable
     file the same way _plan_or_error does for tags.yaml -- render the error,
     write nothing."""
-    await _seed(client, eventernote_event_id="111")
+    await _seed(client, source_event_id="111")
     login_as(client, ADMIN_ID, "reiji")
     bad = "dismiss: [unterminated"
 
@@ -1275,7 +1330,7 @@ async def test_a_bad_file_shows_the_error_and_writes_nothing(client):
 async def test_apply_dismisses_and_reports(client):
     """The straightforward success path: the reported count and the actual
     write agree."""
-    await _seed(client, eventernote_event_id="111", title="Lead A")
+    await _seed(client, source_event_id="111", title="Lead A")
     login_as(client, ADMIN_ID, "reiji")
     text = "dismiss:\n  stage:\n    - '111'\n"
     r = client.post("/admin/discoveries/prune/apply", data={"text": text})
@@ -1295,7 +1350,7 @@ async def test_apply_does_not_reoffer_a_stale_plan(client):
     when dismissal is PERMANENT and irreversible, that false signal is worse
     than useless. /admin/import/tags/apply avoids this by rendering
     `report=` instead of `plan=`; this route must do the same."""
-    await _seed(client, eventernote_event_id="111", title="Lead A")
+    await _seed(client, source_event_id="111", title="Lead A")
     login_as(client, ADMIN_ID, "reiji")
     text = "dismiss:\n  stage:\n    - '111'\n"
     body = client.post("/admin/discoveries/prune/apply", data={"text": text}).text
@@ -1310,7 +1365,7 @@ async def test_the_plan_page_shows_parser_warnings(client):
     reason -- is the tell of a sloppy agent file and must not be silently
     dropped between parsing and rendering, the same way admin_import_tags.html
     surfaces its own parser's warnings."""
-    await _seed(client, eventernote_event_id="111")
+    await _seed(client, source_event_id="111")
     login_as(client, ADMIN_ID, "reiji")
     text = "dismiss:\n  stage:\n    - '111'\n    - '111'\n"
     body = client.post("/admin/discoveries/prune", data={"text": text}).text
@@ -1324,7 +1379,7 @@ async def test_a_prune_list_over_the_size_cap_is_refused(client):
     should try to parse. 443 real leads is roughly 6KB, so the cap is not
     documented on the page itself -- nobody legitimate is expected to hit
     it, and a number nobody can reach is just noise in the copy."""
-    await _seed(client, eventernote_event_id="111")
+    await _seed(client, source_event_id="111")
     login_as(client, ADMIN_ID, "reiji")
     huge = "dismiss:\n  stage:\n" + ("    # padding\n" * 40_000)
     assert len(huge) > 200_000
@@ -1353,18 +1408,56 @@ async def test_the_plan_page_shows_the_surfacing_artist_tag(client):
         await s.flush()
         tag_id = tag.id
         await s.commit()
-    await _seed(client, eventernote_event_id="111", first_seen_via_tag_id=tag_id)
+    await _seed(client, source_event_id="111", first_seen_via_tag_id=tag_id)
     login_as(client, ADMIN_ID, "reiji")
     text = "dismiss:\n  stage:\n    - '111'\n"
     body = client.post("/admin/discoveries/prune", data={"text": text}).text
     assert "Liella!" in body
 
 
+async def test_a_calendar_lead_in_the_plan_shows_the_marker_and_feed_label_with_no_link(client):
+    """The prune plan's "Will dismiss" section is a THIRD surface over the
+    same DiscoveredEvent rows admin_discoveries.html and the DM digest
+    render -- it must not build a broken Eventernote link from a calendar
+    lead's namespaced "<feed key>:<uid>" id, and must show the feed's own
+    label (there is no tag to look up) plus the 申込締切 marker on a
+    deadline-dated row."""
+    client.monkeypatch.setattr(discoveries, "CALENDAR_FEEDS", (
+        CalendarFeed(
+            key="test-feed", label="Test Feed",
+            url="https://calendar.google.com/x.ics", dates_are="deadline",
+        ),
+    ))
+    await _seed(
+        client, source_event_id="test-feed:abc123", source="test-feed",
+        date_is_deadline=True, title="Calendar Lead",
+    )
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - 'test-feed:abc123'\n"
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert "Calendar Lead" in body
+    assert "申込締切" in body
+    assert "Test Feed" in body
+    assert "https://www.eventernote.com/events/test-feed:abc123" not in body
+
+
+async def test_an_eventernote_lead_in_the_plan_renders_as_before(client):
+    """Pins the pre-existing shape: an Eventernote lead's "Will dismiss" row
+    must keep its real link and carry no deadline marker, now that a
+    calendar lead can appear in the very same plan."""
+    await _seed(client, source_event_id="111", title="Lead A")
+    login_as(client, ADMIN_ID, "reiji")
+    text = "dismiss:\n  stage:\n    - '111'\n"
+    body = client.post("/admin/discoveries/prune", data={"text": text}).text
+    assert 'href="https://www.eventernote.com/events/111"' in body
+    assert "申込締切" not in body
+
+
 async def test_the_plan_page_explains_how_to_exclude_a_lead(client):
     """The only way to keep a single misclassified lead out of the batch is
     to remove its id from the pasted file and preview again -- nothing else
     on the page offers a per-row skip, so the copy has to say so."""
-    await _seed(client, eventernote_event_id="111")
+    await _seed(client, source_event_id="111")
     login_as(client, ADMIN_ID, "reiji")
     body = client.get("/admin/discoveries/prune").text
     assert "remove its id from the pasted list" in body
@@ -1401,8 +1494,8 @@ async def test_apply_reparses_and_ignores_injected_ids(client):
     file LAST forces the assertion to depend on the actual binding rule, not
     on which one a test author happened to type first.
     """
-    await _seed(client, eventernote_event_id="111", title="Lead A")
-    await _seed(client, eventernote_event_id="222", title="Lead B")
+    await _seed(client, source_event_id="111", title="Lead A")
+    await _seed(client, source_event_id="222", title="Lead B")
     lead_b_id = (await _lead_by_event_id(client, "222")).id
     login_as(client, ADMIN_ID, "reiji")
 

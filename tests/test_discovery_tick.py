@@ -16,6 +16,16 @@ from app.db.models import Base, DiscoveryState, Notification, User
 from app.discovery import SweepReport
 
 
+@pytest.fixture(autouse=True)
+def _no_calendar_feeds(monkeypatch):
+    """This file is about the scheduler hook (the flag, the daily clock, the
+    manual request), not the calendar pass -- that behavior is pinned in
+    test_discovery_sweep.py. A few tests here call the REAL run_sweep (not the
+    `_recorder` stub below) against an empty tag table; without this they would
+    also walk the real CALENDAR_FEEDS roster and hit the network guard."""
+    monkeypatch.setattr("app.discovery.CALENDAR_FEEDS", ())
+
+
 class FakeUser:
     def __init__(self):
         self.sent = []

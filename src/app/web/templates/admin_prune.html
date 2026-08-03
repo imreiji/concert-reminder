@@ -12,11 +12,23 @@
     both from the route. -#}
 {% block title %}Prune discovery leads — dekimasen.app{% endblock %}
 {% block content %}
+{#- `d.source`/`d.date_is_deadline` mirror the same DiscoveredEvent columns
+    admin_discoveries.html reads: a calendar lead has no artist tag to show
+    (a feed is not a subscription, so `first_seen_via_tag_id` is NULL) and no
+    Eventernote page either, so it shows its FEED's own label where the
+    artist name would go (falling back to the raw source key for a feed
+    later removed from config), and 申込締切 is prefixed on a deadline-dated
+    row -- both are additive and leave an Eventernote lead's rendering
+    byte-identical to before. -#}
 {% macro dismissal_list(items) %}
 <ul class="dim">
   {% for d in items %}
-  <li>{{ d.title }} — {{ d.event_date.strftime('%Y-%m-%d') }}
-    {%- if artist_names.get(d.first_seen_via_tag_id) %} ({{ artist_names[d.first_seen_via_tag_id] }}){% endif -%}
+  <li>{{ d.title }} — {% if d.date_is_deadline %}申込締切 {% endif %}{{ d.event_date.strftime('%Y-%m-%d') }}
+    {%- if d.source == "eventernote" -%}
+      {% if artist_names.get(d.first_seen_via_tag_id) %} ({{ artist_names[d.first_seen_via_tag_id] }}){% endif %}
+    {%- else -%}
+      {{ " (" }}{{ feed_labels.get(d.source, d.source) }}{{ ")" }}
+    {%- endif -%}
     : file says <b>{{ dismiss_reason_labels[d.reason] }}</b>, already dismissed as
     {% if d.stored_reason %}<b>{{ dismiss_reason_labels[d.stored_reason] }}</b>{% else %}<b>unknown (predates this column)</b>{% endif %}
     {%- if d.stored_reason and d.stored_reason != d.reason %} — <b>disagreement</b>{% endif %}.</li>
@@ -26,8 +38,12 @@
 {% macro catalogued_list(items) %}
 <ul class="dim">
   {% for d in items %}
-  <li>{{ d.title }} — {{ d.event_date.strftime('%Y-%m-%d') }}
-    {%- if artist_names.get(d.first_seen_via_tag_id) %} ({{ artist_names[d.first_seen_via_tag_id] }}){% endif -%}
+  <li>{{ d.title }} — {% if d.date_is_deadline %}申込締切 {% endif %}{{ d.event_date.strftime('%Y-%m-%d') }}
+    {%- if d.source == "eventernote" -%}
+      {% if artist_names.get(d.first_seen_via_tag_id) %} ({{ artist_names[d.first_seen_via_tag_id] }}){% endif %}
+    {%- else -%}
+      {{ " (" }}{{ feed_labels.get(d.source, d.source) }}{{ ")" }}
+    {%- endif -%}
     : file says <b>{{ dismiss_reason_labels[d.reason] }}</b>, but this is already a tracked concert.</li>
   {% endfor %}
 </ul>
@@ -46,7 +62,9 @@
   <h1>Prune discovery leads</h1>
   <p class="dim">Paste an agent's classification of the open
     <a href="/admin/discoveries">discoveries</a> queue — a <code>dismiss:</code>
-    mapping of reason to a list of Eventernote event ids. Every surviving entry
+    mapping of reason to a list of lead ids: Eventernote event ids, or
+    namespaced calendar ids like <code>ll-liella:abc123@google.com</code>,
+    exactly as the copy block above shows them. Every surviving entry
     becomes a <b>permanent</b> dismissal; nothing here un-dismisses. To exclude
     a single misclassified lead, remove its id from the pasted list below and
     preview again — there is no separate per-row "skip" control.</p>
@@ -90,10 +108,16 @@
     <p><b>{{ dismiss_reason_labels[reason] }}</b> — {{ group | length }} lead{{ '' if group | length == 1 else 's' }}</p>
     <ul>
       {% for d in group %}
-      <li>{{ d.title }} — {{ d.event_date.strftime('%Y-%m-%d') }}
+      <li>{{ d.title }} — {% if d.date_is_deadline %}申込締切 {% endif %}{{ d.event_date.strftime('%Y-%m-%d') }}
         {%- if artist_names.get(d.first_seen_via_tag_id) %} ({{ artist_names[d.first_seen_via_tag_id] }}){% endif %}
+        {%- if d.source == "eventernote" %}
         (<a href="https://www.eventernote.com/events/{{ d.event_id }}"
-            target="_blank" rel="noopener">{{ d.event_id }}</a>)</li>
+            target="_blank" rel="noopener">{{ d.event_id }}</a>)
+        {%- else %}
+        {#- No Eventernote page to link -- d.event_id is a namespaced
+            "<feed key>:<uid>", not an Eventernote numeric id. -#}
+        ({{ feed_labels.get(d.source, d.source) }}: {{ d.event_id }})
+        {%- endif %}</li>
       {% endfor %}
     </ul>
   </div>

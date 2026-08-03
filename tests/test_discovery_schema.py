@@ -32,7 +32,7 @@ async def db():
 async def test_a_lead_round_trips(db):
     async with db() as s:
         s.add(DiscoveredEvent(
-            eventernote_event_id="464372",
+            source_event_id="464372",
             title="ラブライブ！フェス Day.2",
             event_date=dt.date(2026, 11, 15),
             venue="バンテリンドーム ナゴヤ",
@@ -50,12 +50,12 @@ async def test_the_event_id_is_unique(db):
     as performers, and without this the maintainer hears about it nine times."""
     async with db() as s:
         s.add(DiscoveredEvent(
-            eventernote_event_id="1", title="a", event_date=dt.date(2026, 1, 1), venue=""
+            source_event_id="1", title="a", event_date=dt.date(2026, 1, 1), venue=""
         ))
         await s.commit()
     async with db() as s:
         s.add(DiscoveredEvent(
-            eventernote_event_id="1", title="b", event_date=dt.date(2026, 1, 2), venue=""
+            source_event_id="1", title="b", event_date=dt.date(2026, 1, 2), venue=""
         ))
         with pytest.raises(IntegrityError):
             await s.commit()
@@ -67,7 +67,7 @@ async def test_event_date_is_a_plain_date_not_a_datetime(db):
     UTC instant (invariant 1)."""
     async with db() as s:
         s.add(DiscoveredEvent(
-            eventernote_event_id="2", title="a", event_date=dt.date(2026, 3, 4), venue=""
+            source_event_id="2", title="a", event_date=dt.date(2026, 3, 4), venue=""
         ))
         await s.commit()
         row = (await s.execute(select(DiscoveredEvent))).scalar_one()
