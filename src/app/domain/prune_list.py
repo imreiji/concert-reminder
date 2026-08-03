@@ -10,10 +10,14 @@ that classified a batch of /admin/discoveries leads. Parsing goes through
 and for a file whose every entry becomes a permanent dismissal, a silently
 dropped block is the worst available outcome.
 
-It keys on the Eventernote event id (the external id the discovery copy
-block's URLs expose) because that is the only id a human or agent writing
-this file ever sees -- DiscoveredEvent.id is an internal primary key the
-file never carries.
+It keys on a lead's `source_event_id` -- a bare Eventernote event id, or a
+namespaced "<feed key>:<UID>" for a calendar-feed lead -- because that is the
+only external id a human or agent writing this file ever sees: the discovery
+copy block exposes it (as the number in an /events/ URL, or verbatim where
+there is no page to link), and DiscoveredEvent.id is an internal primary key
+the file never carries. The id is compared WHOLE and this module reads no
+structure out of it, which is what lets a second source join without touching
+the parser.
 
 Unlike yaml_import.py's parse_draft, which prefers a warning and a skipped
 row so a slightly-off draft still renders something to fix, this module

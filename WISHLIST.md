@@ -778,7 +778,11 @@ surfaces; #1-#10 were re-read and are untouched in every respect. The pass also
 cleared a bookkeeping debt it did not create: the two cross-references between
 the out-of-scope event classes and the A/B cast gap had pointed one entry too
 low since an earlier renumber, and are name-based now, the same fix the
-sign-in-bounce pointer got after being bumped five times.
+sign-in-bounce pointer got after being bumped five times. And #11 was drafted
+low-medium and re-rated `low` on review, which is what places it BELOW the `low`
+band above rather than inside it: the higher rating rested on "a user could miss
+a deadline", while the entry's own argument is that a missed round is not a
+missed concert -- so its position is a decision, not a slip.
 
 **And the operation this build was reprioritized in front of is now unblocked.**
 The 765PRO / Shiny Colors / Love Live tag expansion waits on nothing: the load
@@ -1109,7 +1113,7 @@ five chances to get it wrong for no gain.)
 
 ### 11. The calendar roster's blind spots
 
-Impact: low-medium - effort: one half is trivial, the other is a design change.
+Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
 than proposed on merit.
 
@@ -1147,6 +1151,13 @@ missed concert**: a campaign is already a lead through its FIRST round (最速�
 official page anyway. Raise this if a real campaign is ever found that the
 roster saw nothing of at all -- that is the failure this entry is watching for,
 not "we saw three of its four rounds".
+
+**Rated `low` rather than low-medium, which is why it sits below the `low`
+entries above and not among them.** It was drafted low-medium on the strength of
+"a user could miss a deadline", and that is the same claim the paragraph above
+refutes: the campaign is already a lead, so what is lost is a second pointer to
+something already visible, not the concert. A rating that contradicts its own
+entry is worse than a cautious one, and this list orders by USER impact.
 
 ### 12. Nothing caps the discovery review path
 
