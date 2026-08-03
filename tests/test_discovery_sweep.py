@@ -10,6 +10,7 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.calendars import CalendarFeed, CalendarFetchError
 from app.config import settings
 from app.db.models import (
     Base,
@@ -34,6 +35,37 @@ from app.domain.types import TagKind
 from app.scheduler import heartbeat
 
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=UTC)
+
+# A single test feed, standing in for the real CALENDAR_FEEDS roster (config,
+# not logic -- app/calendars.py). `dates_are="deadline"` so the flag on the
+# recorded row is worth asserting on.
+TEST_FEED = CalendarFeed(
+    key="test-feed",
+    label="Test Feed",
+    url="https://calendar.google.com/calendar/ical/test/public/basic.ics",
+    dates_are="deadline",
+)
+
+ICS_ONE_EVENT = (
+    "BEGIN:VCALENDAR\n"
+    "BEGIN:VEVENT\n"
+    "UID:abc123\n"
+    "SUMMARY:Some Ticket Round\n"
+    "DTSTART;VALUE=DATE:20261115\n"
+    "END:VEVENT\n"
+    "END:VCALENDAR\n"
+)
+
+
+@pytest.fixture(autouse=True)
+def _no_calendar_feeds_by_default(monkeypatch):
+    """Every OTHER test in this file pins actor-sweep behavior that predates
+    the calendar pass; defaulting CALENDAR_FEEDS to empty here means none of
+    them need a second stub fetcher or start asserting on calendar-shaped
+    side effects. The calendar-pass tests below override this themselves via
+    monkeypatch.setattr("app.discovery.CALENDAR_FEEDS", ...) -- same
+    monkeypatch instance, last write wins."""
+    monkeypatch.setattr("app.discovery.CALENDAR_FEEDS", ())
 PAGE = """
 <html><body>
 <li><a href="/events/464372">Anniversary Day 2</a>
@@ -684,6 +716,159 @@ async def test_a_stamp_with_no_report_still_clears_the_request(db):
         await stamp_discovery_run(s, NOW)
         await s.commit()
         assert not await sweep_requested(s)
+
+
+# ── The calendar pass, and the character rule (Task 5) ───────────────────────
+#
+# The calendar half rides the same seen/record_discovered/one-digest pipeline
+# as the actor loop above; these pin that the two halves genuinely share it,
+# that one feed's failure costs nothing else, and that the actor query no
+# longer reads a CHARACTER tag's own eventernote page (2026-08-02 owner
+# ruling -- see docs/superpowers/specs/2026-08-02-calendar-discovery-design.md
+# Sec 5), while the manual per-tag button (sweep_one_tag) still does.
+
+
+async def test_calendar_pass_records_leads_with_source_and_deadline_flag(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.CALENDAR_FEEDS", (TEST_FEED,))
+    async with db() as s:
+        s.add(User(discord_id=42, username="reiji"))
+        await s.commit()
+
+        async def fake_feed_fetch(url):
+            return ICS_ONE_EVENT
+
+        report = await run_sweep(
+            s, NOW, fetcher=_never_called, feed_fetcher=fake_feed_fetch
+        )
+        await s.commit()
+
+        assert report.fetched == 1 and report.new_leads == 1
+        row = (await s.execute(select(DiscoveredEvent))).scalar_one()
+        assert row.source_event_id == "test-feed:abc123", "namespaced by feed key"
+        assert row.source == "test-feed"
+        assert row.date_is_deadline is True
+
+
+async def test_one_digest_covers_both_calendar_and_actor_leads(db, monkeypatch):
+    """Both halves feed the same `seen` list and the same
+    _record_and_announce call -- one sweep, one message, whichever pipeline
+    found what."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.CALENDAR_FEEDS", (TEST_FEED,))
+    async with db() as s:
+        await _seed(s)
+
+        async def fake_feed_fetch(url):
+            return ICS_ONE_EVENT
+
+        async def fake_actor_fetch(url, transport=None):
+            return PAGE
+
+        report = await run_sweep(
+            s, NOW, fetcher=fake_actor_fetch, feed_fetcher=fake_feed_fetch
+        )
+        await s.commit()
+
+        assert report.new_leads == 2, "one calendar lead, one actor lead"
+        notes = (await s.execute(select(Notification))).scalars().all()
+        assert len(notes) == 1
+
+
+async def test_a_failing_feed_does_not_abort_other_feeds_or_the_actor_half(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    bad_feed = CalendarFeed(
+        key="bad-feed", label="Bad", url="https://calendar.google.com/bad.ics",
+        dates_are="deadline",
+    )
+    good_feed = CalendarFeed(
+        key="good-feed", label="Good", url="https://calendar.google.com/good.ics",
+        dates_are="deadline",
+    )
+    monkeypatch.setattr("app.discovery.CALENDAR_FEEDS", (bad_feed, good_feed))
+    async with db() as s:
+        await _seed(s)  # one artist tag + the admin user
+
+        async def flaky_feed(url):
+            if "bad" in url:
+                raise CalendarFetchError("boom")
+            return ICS_ONE_EVENT
+
+        async def fake_actor_fetch(url, transport=None):
+            return PAGE
+
+        report = await run_sweep(
+            s, NOW, fetcher=fake_actor_fetch, feed_fetcher=flaky_feed
+        )
+        await s.commit()
+
+        assert report.failed == 1, "only the bad feed"
+        assert report.fetched == 2, "the good feed, plus the one artist"
+        assert report.new_leads == 2, "one lead from the good feed, one from the artist"
+
+
+async def test_run_sweep_excludes_character_tags_but_sweep_one_tag_does_not(db, monkeypatch):
+    """A CHARACTER tag's eventernote_url belongs to the seiyuu who plays her --
+    the daily sweep must not read it. The manual per-tag button is consent to
+    read that one page on demand and must stay unfiltered."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    async with db() as s:
+        s.add(User(discord_id=42, username="reiji"))
+        artist = Tag(
+            name="Liyuu", kind=TagKind.ARTIST, slug="liyuu",
+            eventernote_url="https://www.eventernote.com/actors/Liyuu/34637",
+        )
+        character = Tag(
+            name="Kotori", kind=TagKind.CHARACTER, slug="kotori",
+            eventernote_url="https://www.eventernote.com/actors/Kotori/99999",
+        )
+        s.add_all([artist, character])
+        await s.commit()
+
+        asked_urls: list[str] = []
+
+        async def fetch(url, transport=None):
+            asked_urls.append(url)
+            return PAGE
+
+        await run_sweep(s, NOW, fetcher=fetch)
+        await s.commit()
+        assert any("Liyuu" in u for u in asked_urls), "the ARTIST tag was fetched"
+        assert not any("Kotori" in u for u in asked_urls), (
+            "run_sweep must not read a CHARACTER tag's own eventernote page"
+        )
+
+        asked_urls.clear()
+        report = await sweep_one_tag(s, character, NOW, fetcher=fetch)
+        assert report.status == "ok"
+        assert any("Kotori" in u for u in asked_urls), (
+            "the manual per-tag button is consent, and must still fetch her page"
+        )
+
+
+async def test_feed_failures_do_not_touch_the_actor_cursor(db, monkeypatch):
+    """The cursor (`set_sweep_cursor`) is actor-list progress only -- a
+    calendar feed failing must not perturb it, and the actor loop must still
+    run to completion."""
+    monkeypatch.setattr(settings, "admin_whitelist", "42")
+    monkeypatch.setattr("app.discovery.SWEEP_DELAY_SECONDS", 0)
+    monkeypatch.setattr("app.discovery.monotonic", lambda: 0.0)
+    monkeypatch.setattr("app.discovery.CALENDAR_FEEDS", (TEST_FEED,))
+
+    async with db() as s:
+        await _three_tags(s)
+
+        async def failing_feed(url):
+            raise CalendarFetchError("boom")
+
+        asked, fetch = _order_recorder()
+        report = await run_sweep(s, NOW, fetcher=fetch, feed_fetcher=failing_feed)
+        await s.commit()
+
+        assert report.failed == 1, "only the feed failed"
+        assert asked == [0, 1, 2], "the actor loop ran to completion, untouched"
+        state = await s.get(DiscoveryState, 1)
+        assert state.sweep_cursor_tag_id is None, "a full actor pass still clears the cursor"
 
 
 # ── One artist, inline ────────────────────────────────────────────────────

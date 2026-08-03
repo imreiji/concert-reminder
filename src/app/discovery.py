@@ -18,6 +18,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.calendars import CALENDAR_FEEDS, feed_leads, fetch_feed
 from app.config import settings
 from app.db.models import DiscoveredEvent, Notification, Tag, User
 from app.db.service import (
@@ -39,6 +40,7 @@ from app.domain.eventernote import (
     parse_actor_events,
 )
 from app.domain.timezones import utc_to_jst
+from app.domain.types import TagKind
 from app.fetching import FetchError, fetch_html
 from app.scheduler import heartbeat
 
@@ -124,10 +126,27 @@ async def run_sweep(
     now: datetime,
     *,
     fetcher: Callable[[str], Awaitable[str]] = fetch_actor_events,
+    feed_fetcher: Callable[[str], Awaitable[str]] = fetch_feed,
 ) -> SweepReport:
-    """Walk every artist page, record what the catalogue is missing, queue ONE DM.
+    """Read every calendar feed, then walk every artist page, record what the
+    catalogue is missing, queue ONE DM.
 
-    `fetcher` is injected so tests never touch the network.
+    `fetcher` and `feed_fetcher` are injected so tests never touch the
+    network -- one per pipeline, since they read different hosts under
+    different fetch functions (see app/calendars.py).
+
+    Two pipelines, one digest: calendar leads and actor-page leads both land
+    in the same `seen` list and pass through `_record_and_announce` together,
+    so a maintainer gets one DM whichever source found something.
+
+    The actor query excludes CHARACTER tags (owner ruling, 2026-08-02; see
+    docs/superpowers/specs/2026-08-02-calendar-discovery-design.md Sec 5): a
+    character's `eventernote_url` is her seiyuu's own actor page, and that
+    page is exactly the one the calendar feeds above cannot replace -- but
+    reading it DAILY for every character in an expanding catalogue is the load
+    this reversal exists to avoid. The URL stays storable and rendered, and
+    the manual per-tag button (`sweep_one_tag`) stays unfiltered -- one
+    deliberate fetch is not a daily cost.
 
     NEVER sends a DM itself (invariant 4): it adds a `Notification` row and the
     scheduler's existing drain delivers it. `kind="discovery"` with
@@ -140,8 +159,44 @@ async def run_sweep(
     """
     report = SweepReport()
     tags = list((await session.execute(
-        select(Tag).where(Tag.eventernote_url.is_not(None)).order_by(Tag.id)
+        select(Tag)
+        .where(Tag.eventernote_url.is_not(None))
+        # See the docstring above: a CHARACTER's page belongs to her seiyuu,
+        # and the daily sweep must not read it. `sweep_one_tag` (the manual
+        # per-tag button) deliberately does NOT carry this filter.
+        .where(Tag.kind != TagKind.CHARACTER)
+        .order_by(Tag.id)
     )).scalars())
+
+    today_jst = utc_to_jst(now).date()
+    # Accumulated across ALL artists AND every calendar feed, handed to
+    # record_discovered in ONE call: it batches its queries, and its event-id
+    # key deduplicates an event that nine artist tags all list.
+    seen: list[DiscoveredInput] = []
+    artist_by_tag_id: dict[int, str] = {}
+    fetched_any = False
+
+    # Calendar feeds first: cheap (a handful of bounded fetches), and their
+    # leads ride the same record-and-announce as the actor pages below --
+    # one sweep, one digest. A failing feed is counted and skipped; no
+    # cursor/budget machinery at this size (spec §4).
+    for feed in CALENDAR_FEEDS:
+        heartbeat.beat()
+        if fetched_any:
+            await asyncio.sleep(SWEEP_DELAY_SECONDS)
+        fetched_any = True
+        try:
+            async with asyncio.timeout(FETCH_DEADLINE_SECONDS):
+                body = await feed_fetcher(feed.url)
+            leads, skipped = feed_leads(feed, body, today_jst)
+        except Exception:
+            log.exception("discovery: could not read feed %s", feed.key)
+            report.failed += 1
+            continue
+        report.fetched += 1
+        if skipped:
+            log.info("discovery: %d unreadable VEVENT(s) on %s", skipped, feed.key)
+        seen.extend(leads)
 
     # Where the last sweep stopped. The budget cannot reach the whole list at
     # the shipped constants, so a sweep that always started at tags[0] would
@@ -161,14 +216,6 @@ async def run_sweep(
     # Unchanged unless this sweep gets somewhere: a run that dies before the
     # loop must not silently rewind the list to the head.
     next_cursor = cursor
-
-    today_jst = utc_to_jst(now).date()
-    # Accumulated across ALL artists and handed to record_discovered in ONE
-    # call: it batches its queries, and its event-id key deduplicates an event
-    # that nine artist tags all list.
-    seen: list[DiscoveredInput] = []
-    artist_by_tag_id: dict[int, str] = {}
-    fetched_any = False
 
     deadline = monotonic() + SWEEP_BUDGET_SECONDS
 
