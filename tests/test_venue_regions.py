@@ -1,5 +1,5 @@
 """Venue tags (region + location link), the round table's past-marking,
-.ics export, and the sidebar's region filter.
+and the sidebar's region filter.
 
 The pure-function helper (region_sidebar_links) is exercised directly
 against plain constructed ORM objects, no DB needed.
@@ -60,7 +60,7 @@ def test_region_sidebar_links_toggle_selects_and_deselects_whole_group():
     assert "tag=" not in kanto_active["href"]  # deselect link drops both ids
 
 
-# ── HTTP-level: tag edit, .ics export, region filter, past-marking ───────
+# ── HTTP-level: tag edit, region filter, past-marking ─────────────────────
 
 
 @pytest_asyncio.fixture()
@@ -138,34 +138,7 @@ async def test_create_tag_accepts_region_and_location_url(client):
     assert tag.location_url == "https://maps.example/osaka-jo"
 
 
-async def test_round_ics_downloads_valid_vevent_for_future_round(client):
-    login_as(client, EDITOR_ID, "reiji")
-    client.post(
-        "/concerts",
-        data={"title_en": "C", "title_zh": "C",
-            "title": "C", "event_id": "c",
-            "round_label": ["R1"], "round_kind": ["lottery_round"],
-            "round_opens_at": [""], "round_closes_at": ["2099-06-25T23:59"],
-            "round_results_at": [""], "round_payment_at": [""],
-            "round_label_en": ["R1"],
-            "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
-        },
-    )
-    r = client.get("/rounds/1/ics")
-    assert r.status_code == 200
-    assert r.headers["content-type"].startswith("text/calendar")
-    assert "attachment" in r.headers["content-disposition"]
-    assert "BEGIN:VEVENT" in r.text
-    assert "SUMMARY:C — R1" in r.text
-    assert "DTSTART:20990625T145900Z" in r.text  # 2099-06-25 23:59 JST -> UTC
-
-
-async def test_round_ics_requires_login(client):
-    client.post("/concerts", data={"title_en": "C", "title_zh": "C", "title": "C"})
-    assert client.get("/rounds/1/ics").status_code == 303
-
-
-async def test_past_round_has_no_ics_link_and_is_marked_past(client):
+async def test_past_round_is_marked_past(client):
     login_as(client, EDITOR_ID, "reiji")
     client.post(
         "/concerts",
@@ -184,8 +157,6 @@ async def test_past_round_has_no_ics_link_and_is_marked_past(client):
     )
     r = client.get("/concerts/c")
     assert r.status_code == 200
-    assert "/rounds/2/ics" in r.text  # future round: exportable
-    assert "/rounds/1/ics" not in r.text  # past round: no export link
     assert 'rnd2 past' in r.text  # the round row, dimmed rather than hidden
 
 

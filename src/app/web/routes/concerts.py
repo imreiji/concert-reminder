@@ -1886,42 +1886,6 @@ async def delete_concert(
 # ── Rounds ───────────────────────────────────────────────────────────────
 
 
-@router.get("/rounds/{round_id}/ics")
-async def round_ics(
-    round_id: int,
-    user: SessionUser = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    """One .ics per round, keyed to whichever timestamp is most relevant:
-    closes -> opens -> results -> payment, first one set. Matches the
-    reference site's one-icon-per-row pattern rather than exporting all 4
-    possible deadlines separately."""
-    from app.domain.ics_export import build_ics
-    from app.domain.yaml_export import slugify
-
-    round_ = await session.get(Round, round_id)
-    if round_ is None:
-        raise HTTPException(status_code=404)
-    at_utc = (
-        round_.closes_at_utc or round_.opens_at_utc
-        or round_.results_at_utc or round_.payment_deadline_at_utc
-    )
-    if at_utc is None:
-        raise HTTPException(status_code=422, detail="round has no timestamps to export")
-    concert = await get_concert(session, round_.concert_id)
-    text = build_ics(
-        f"{concert.title} — {round_.label}", at_utc,
-        url=round_.url, description=round_.notes,
-    )
-    return Response(
-        content=text,
-        media_type="text/calendar",
-        headers={
-            "Content-Disposition": f'attachment; filename="{slugify(round_.label)}.ics"'
-        },
-    )
-
-
 # ── Round-label phrases ────────────────────────────────────────────────────
 
 

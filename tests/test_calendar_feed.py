@@ -178,6 +178,14 @@ def test_preferences_shows_generate_then_active_state(client):
     assert "won't be shown again" not in r.text
 
 
+def test_per_round_ics_download_is_gone(client):
+    """Ruling 2026-08-04: the download buttons are REPLACED by the feed. A
+    file is a snapshot that rots when a deadline moves; the feed re-plans."""
+    login_as(client, EDITOR_ID, "reiji")
+    create_tracked_round(client, "2099-06-25T23:59", event_id="gone")
+    assert client.get("/rounds/1/ics").status_code == 404
+
+
 def test_preferences_shows_one_time_reveal_right_after_generating(client):
     login_as(client, EDITOR_ID, "reiji")
     r = client.post("/me/calendar-feed")
