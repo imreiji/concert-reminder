@@ -1,5 +1,6 @@
-"""First-run guided setup: a five-step wizard offered once at first login
-(see auth.py's callback -- a brand-new row redirects here instead of /).
+"""First-run guided setup: a five-step wizard offered until completed
+(see auth.py's callback -- a login with welcomed_at still NULL redirects
+here instead of /).
 Each step reuses an existing action's route verbatim; this file only
 sequences them.
 
@@ -225,6 +226,10 @@ async def advance(
 ):
     db_user = await ensure_user(session, user.id, user.username)
     db_user.onboarding_step = min(db_user.onboarding_step + 1, TOTAL_STEPS)
+    if db_user.onboarding_step >= TOTAL_STEPS and db_user.welcomed_at is None:
+        # Crossing into done is the moment the wizard completes; the OAuth
+        # callback keys the /welcome redirect off this stamp.
+        db_user.welcomed_at = datetime.now(UTC)
     await session.commit()
     # Crossing into done hands off to the first-run capture flow -- the reveal
     # at /setup/ready is the wizard's payoff. Earlier advances stay on the
@@ -241,5 +246,9 @@ async def skip_all(
 ):
     db_user = await ensure_user(session, user.id, user.username)
     db_user.onboarding_step = TOTAL_STEPS
+    if db_user.welcomed_at is None:
+        # Skipping IS finishing: the wizard was offered and answered, so the
+        # callback must stop sending this account back here.
+        db_user.welcomed_at = datetime.now(UTC)
     await session.commit()
     return RedirectResponse("/", status_code=303)

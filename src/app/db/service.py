@@ -151,8 +151,11 @@ async def delete_user(session: AsyncSession, discord_id: int) -> bool:
     one person leaving must not delete community content everyone else
     depends on. Requires PRAGMA foreign_keys=ON, which production sets.
 
-    No route or UI calls this: erasure is a manual, owner-initiated
-    operation for now.
+    POST /me/delete (web/routes/preferences.py) calls this, scoped to the
+    caller behind require_user and a heavy client-side confirmation; it
+    also remains available as a manual owner operation. A re-created row
+    after erasure starts with welcomed_at NULL, so the next login is
+    onboarded afresh -- by design, not accident.
     """
     user = await session.get(User, discord_id)
     if user is None:

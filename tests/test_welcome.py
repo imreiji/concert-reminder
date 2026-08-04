@@ -72,6 +72,12 @@ async def _onboarding_step(client, discord_id: int) -> int:
         return user.onboarding_step
 
 
+async def _welcomed_at(client, discord_id: int):
+    async with client.db() as s:
+        user = await s.get(User, discord_id)
+        return user.welcomed_at
+
+
 def test_welcome_requires_login(client):
     assert client.get("/welcome").status_code == 303
 
@@ -123,6 +129,26 @@ def test_final_advance_hands_off_to_setup(client):
     r = client.post("/welcome/advance")  # 4 -> 5 (done)
     assert r.status_code == 303
     assert r.headers["location"] == "/setup"
+
+
+async def test_advancing_past_the_last_step_stamps_welcomed_at(client):
+    """Finishing the wizard is what the OAuth callback reads to stop sending
+    this account back here, so crossing into done must leave the stamp."""
+    login_as(client, FAN_ID, "fan")
+    assert await _welcomed_at(client, FAN_ID) is None  # mid-wizard: still owed
+    for _ in range(5):
+        client.post("/welcome/advance")  # 0 -> 5 (done)
+    stamped = await _welcomed_at(client, FAN_ID)
+    assert stamped is not None
+    assert stamped.tzinfo is not None  # invariant 1: aware UTC only
+
+
+async def test_skip_all_stamps_welcomed_at(client):
+    """Skipping IS finishing -- the wizard was offered and answered, so it
+    must not be re-offered on the next login."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/skip-all")
+    assert await _welcomed_at(client, FAN_ID) is not None
 
 
 def test_earlier_advances_stay_on_welcome(client):

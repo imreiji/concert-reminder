@@ -14,6 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.db.models import Base, User, WebSession
+from app.db.service import delete_user, ensure_user
 from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
@@ -105,12 +106,43 @@ def test_callback_redirects_new_user_to_welcome(client):
     assert r.headers["location"] == "/welcome"
 
 
-def test_callback_redirects_returning_user_to_index(client):
+def test_callback_redirects_welcomed_user_to_index(client):
+    """The returning-user test, made honest: a row alone is not onboarding,
+    so this user has to actually finish the wizard before / is right."""
     do_login(client)  # first login: creates the row
+    client.post("/welcome/skip-all")  # ... and finishes onboarding
     r = client.get("/auth/login")
     state = r.headers["location"].split("state=")[1].split("&")[0]
     r = client.get(f"/auth/callback?code=good-code&state={state}")
     assert r.headers["location"] == "/"
+
+
+async def test_bot_first_user_is_still_sent_to_the_wizard(client):
+    """The bot's ensure_user creates a bare row; that row's owner has never
+    seen onboarding, and 'a row exists' must not read as 'was onboarded'."""
+    async with client.db() as s:
+        await ensure_user(s, 42, "reiji")  # exactly what a slash command does
+        await s.commit()
+    assert _login_with_next(client) == "/welcome"  # their first WEB login
+
+
+def test_returning_unwelcomed_user_is_sent_back_to_the_wizard(client):
+    """Logging in twice without finishing the wizard lands on /welcome twice --
+    an unfinished onboarding is unfinished, not 'seen it, too late'."""
+    do_login(client)
+    client.get("/auth/logout")
+    assert _login_with_next(client) == "/welcome"
+
+
+async def test_deleted_then_recreated_user_is_rewizarded(client):
+    """The original repro: erase the account, log in again, get onboarded
+    afresh -- the re-created row is a stranger, whatever its discord id."""
+    do_login(client)
+    client.post("/welcome/skip-all")
+    async with client.db() as s:
+        assert await delete_user(s, 42) is True
+        await s.commit()
+    assert _login_with_next(client) == "/welcome"
 
 
 # ── DB-backed sessions ───────────────────────────────────────────────────
@@ -220,7 +252,8 @@ def _login_with_next(client, query: str = "") -> str:
 
 def test_next_round_trips_through_oauth_to_the_original_page(client):
     """The whole point: bounced off /preferences, signed in, land there."""
-    do_login(client)  # account now exists -- see the new-user test below
+    do_login(client)  # account exists AND is onboarded -- otherwise the
+    client.post("/welcome/skip-all")  # wizard wins over next, as it should
     client.get("/auth/logout")
     assert _login_with_next(client, "?next=%2Fpreferences") == "/preferences"
 
@@ -235,6 +268,7 @@ def test_hostile_next_is_dropped_at_login(client):
     """safe_next runs on the way IN, so nothing off-origin ever reaches the
     session -- and the callback re-checks on the way out anyway."""
     do_login(client)
+    client.post("/welcome/skip-all")  # else the wizard, not next, decides
     client.get("/auth/logout")
     assert _login_with_next(client, "?next=https%3A%2F%2Fevil.com%2Fphish") == "/"
 
@@ -243,6 +277,7 @@ def test_abandoned_next_does_not_outlive_its_login(client):
     """Start a login with a destination, abandon it, start a clean one: the
     stale destination must not be waiting in the session."""
     do_login(client)
+    client.post("/welcome/skip-all")  # else the wizard, not next, decides
     client.get("/auth/logout")
     client.get("/auth/login?next=%2Fpreferences")  # abandoned
     assert _login_with_next(client) == "/"
