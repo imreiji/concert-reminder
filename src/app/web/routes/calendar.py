@@ -19,11 +19,26 @@ from app.db.service import (
 )
 from app.db.session import get_session
 from app.domain.ics_export import CANONICAL_ANCHOR_QUALIFIERS, build_calendar
+from app.domain.urls import safe_next
 from app.web.auth import SessionUser, require_user
 
 router = APIRouter()
 
 _ALLOWED_NEXT = {"/preferences", "/welcome"}
+
+
+def _allowed_next(raw: str) -> str:
+    """Where the mint may bounce back to. safe_next FIRST (the standing
+    open-redirect guard: same-origin path or None), then an allowlist of
+    shapes rather than of literal paths -- the concert page is the third
+    surface that mints, and hardcoding every concert is not a list anyone
+    maintains. Anything else falls back to /preferences, as always."""
+    path = safe_next(raw)
+    if path is None:
+        return "/preferences"
+    if path in _ALLOWED_NEXT or path.startswith("/concerts/"):
+        return path
+    return "/preferences"
 
 
 @router.post("/me/calendar-feed")
@@ -36,7 +51,7 @@ async def create_calendar_feed(
     (only the hash is stored, so the old raw token stops matching)."""
     token = await generate_calendar_token(session, user.id)
     await session.commit()
-    destination = next_url if next_url in _ALLOWED_NEXT else "/preferences"
+    destination = _allowed_next(next_url)
     return RedirectResponse(f"{destination}?feed_token={token}", status_code=303)
 
 

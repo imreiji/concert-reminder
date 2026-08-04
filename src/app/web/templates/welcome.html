@@ -434,18 +434,15 @@
 {% if step == 4 %}
 <div class="lede">
   <h1>{{ _("Get your calendar feed") }}</h1>
-  <p>{% trans %}Add this feed to your phone or calendar app to keep your reminder deadlines updated. It gives you a backup to Discord DMs.{% endtrans %}</p>
+  <p>{% trans %}One link your calendar app subscribes to: every show you follow, and the deadlines that still need you. A backup to Discord DMs.{% endtrans %}</p>
 </div>
 
 {% if feed_url %}
+{#- The partial supplies its own "ready" headline -- kept as the single body
+    here rather than duplicating it under a separate ✓ line, so this stays
+    byte-identical to Preferences and the concert dialog (Task 5). -#}
 <div class="edgecard ok feedbox">
-  <div class="fl">{% trans %}✓ Your feed link is ready — save it now, it won't be shown again.{% endtrans %}</div>
-  <code>{{ feed_url }}</code>
-  <div class="frow">
-    <button type="button" class="btn quiet" data-copy="{{ feed_url }}"
-            onclick="navigator.clipboard.writeText(this.dataset.copy)">{{ _("Copy link") }}</button>
-    <span class="remnote">{{ _("Add it in Google Calendar, Apple Calendar, or Outlook.") }}</span>
-  </div>
+  {% include "_feed_links.html" %}
 </div>
 {% elif has_calendar_feed %}
 <p class="remnote" style="margin-top:1.25rem">{{ _("Your feed is active.") }}</p>

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-04 09:14-0300\n"
+"POT-Creation-Date: 2026-08-04 09:56-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -322,7 +322,7 @@ msgstr "落選 — {day}"
 msgid "Not going — {day}"
 msgstr "不参加 — {day}"
 
-#: src/app/bot/views.py:738 src/app/web/templates/_round_rows.html:212
+#: src/app/bot/views.py:738 src/app/web/templates/_round_rows.html:211
 msgid "Not going"
 msgstr "不参加"
 
@@ -357,7 +357,7 @@ msgstr "**{name}**はEDITOR_WHITELISTで管理されています。変更する�
 msgid "**{name}** is no longer an editor."
 msgstr "**{name}** はエディターではなくなりました。"
 
-#: src/app/bot/cogs/admin.py:87 src/app/web/templates/preferences.html:428
+#: src/app/bot/cogs/admin.py:87 src/app/web/templates/preferences.html:423
 msgid "No editors yet."
 msgstr "エディターはまだいません。"
 
@@ -833,13 +833,13 @@ msgstr "受付中"
 
 #: src/app/web/templates/_board.html:89
 #: src/app/web/templates/_editor_leg_card.html:55
-#: src/app/web/templates/_round_rows.html:212
+#: src/app/web/templates/_round_rows.html:211
 msgid "Cancelled"
 msgstr "中止"
 
 #: src/app/web/templates/_board.html:115
 #: src/app/web/templates/_deadline_rows.html:115
-#: src/app/web/templates/_round_rows.html:177
+#: src/app/web/templates/_round_rows.html:176
 #, python-format
 msgid "+%(count)s more round"
 msgid_plural "+%(count)s more rounds"
@@ -1051,6 +1051,26 @@ msgstr "申込URL（任意）"
 msgid "Notes (optional)"
 msgstr "メモ（任意）"
 
+#: src/app/web/templates/_feed_links.html:7
+msgid "Your feed link is ready — save it now, it won't be shown again."
+msgstr "フィードリンクを作成しました。今すぐ保存してください。この画面には再表示されません。"
+
+#: src/app/web/templates/_feed_links.html:9
+msgid "Open in calendar app"
+msgstr "カレンダーアプリで開く"
+
+#: src/app/web/templates/_feed_links.html:11
+msgid "Copy link"
+msgstr "リンクをコピー"
+
+#: src/app/web/templates/_feed_links.html:14
+msgid ""
+"Google Calendar: Settings &rarr; Add calendar &rarr; From URL.\n"
+"        Apple Calendar: File &rarr; New Calendar Subscription."
+msgstr ""
+"Googleカレンダー：設定 &rarr; カレンダーを追加 &rarr; URLで追加。Appleカレンダー：ファイル &rarr; "
+"新規照会カレンダー。"
+
 #: src/app/web/templates/_following_toggle.html:37
 msgid "This event is cancelled, so no reminders will be sent."
 msgstr "この公演は中止になりました。通知は送信されません。"
@@ -1086,7 +1106,7 @@ msgstr "このイベントのフォローをやめますか？"
 #: src/app/web/templates/_following_toggle.html:59
 #: src/app/web/templates/_result_capture_dialog.html:25
 #: src/app/web/templates/home.html:289
-#: src/app/web/templates/preferences.html:398
+#: src/app/web/templates/preferences.html:393
 msgid "Close"
 msgstr "閉じる"
 
@@ -1211,44 +1231,40 @@ msgid "Needed for: %(names)s"
 msgstr "対象ラウンド: %(names)s"
 
 #: src/app/web/templates/_round_rows.html:106
-msgid "Add to calendar"
-msgstr "カレンダーに追加"
-
-#: src/app/web/templates/_round_rows.html:107
 msgid "Round page"
 msgstr "受付ページ"
 
-#: src/app/web/templates/_round_rows.html:113
+#: src/app/web/templates/_round_rows.html:112
 #, python-format
 msgid "Requires a ticket from: %(names)s"
 msgstr "必要なチケット：%(names)s"
 
-#: src/app/web/templates/_round_rows.html:113
+#: src/app/web/templates/_round_rows.html:112
 msgid "Requires a ticket from an earlier round"
 msgstr "以前の受付で取得したチケットが必要"
 
-#: src/app/web/templates/_round_rows.html:214
+#: src/app/web/templates/_round_rows.html:213
 #, python-format
 msgid "doors %(when)s"
 msgstr "開場：%(when)s"
 
-#: src/app/web/templates/_round_rows.html:229
+#: src/app/web/templates/_round_rows.html:228
 msgid "Going again"
 msgstr "また参加する"
 
-#: src/app/web/templates/_round_rows.html:229
+#: src/app/web/templates/_round_rows.html:228
 msgid "Not going to this day"
 msgstr "この公演には参加しない"
 
-#: src/app/web/templates/_round_rows.html:233
+#: src/app/web/templates/_round_rows.html:232
 msgid "No rounds yet for this leg."
 msgstr "この公演の受付はまだありません。"
 
-#: src/app/web/templates/_round_rows.html:250
+#: src/app/web/templates/_round_rows.html:249
 msgid "Rounds"
 msgstr "受付"
 
-#: src/app/web/templates/_round_rows.html:256
+#: src/app/web/templates/_round_rows.html:255
 msgid "No performances yet."
 msgstr "公演はまだありません。"
 
@@ -1282,7 +1298,7 @@ msgstr "DM &middot; 上記すべての受付に適用"
 
 #: src/app/web/templates/_rules.html:22
 #: src/app/web/templates/preferences.html:220
-#: src/app/web/templates/preferences.html:424
+#: src/app/web/templates/preferences.html:419
 msgid "Remove"
 msgstr "削除"
 
@@ -2589,12 +2605,12 @@ msgid "Delivery"
 msgstr "配信"
 
 #: src/app/web/templates/preferences.html:20
-#: src/app/web/templates/preferences.html:366
+#: src/app/web/templates/preferences.html:361
 msgid "Account"
 msgstr "アカウント"
 
 #: src/app/web/templates/preferences.html:21
-#: src/app/web/templates/preferences.html:414
+#: src/app/web/templates/preferences.html:409
 msgid "Editors"
 msgstr "エディター"
 
@@ -2897,195 +2913,178 @@ msgid "Calendar feed active"
 msgstr "カレンダーフィードが有効"
 
 #: src/app/web/templates/preferences.html:335
-msgid "Subscribe by URL in Google or Apple Calendar."
-msgstr "GoogleまたはAppleカレンダーでURLを登録してください。"
+msgid "Your shows and the deadlines that still need you, always current."
+msgstr "フォロー中の公演と、まだ対応が必要な締切を常に最新で。"
 
 #: src/app/web/templates/preferences.html:337
 msgid "No calendar feed"
 msgstr "カレンダーフィードなし"
 
-#: src/app/web/templates/preferences.html:343
-msgid "Your feed link is ready — save it now, it won't be shown again."
-msgstr "フィードリンクを作成しました。今すぐ保存してください。この画面には再表示されません。"
-
-#: src/app/web/templates/preferences.html:346
-#: src/app/web/templates/welcome.html:446
-msgid "Copy link"
-msgstr "リンクをコピー"
-
-#: src/app/web/templates/preferences.html:347
-msgid ""
-"Google Calendar: Settings &rarr; Add calendar &rarr; From URL.\n"
-"        Apple Calendar: File &rarr; New Calendar Subscription."
-msgstr ""
-"Googleカレンダー：設定 &rarr; カレンダーを追加 &rarr; URLで追加。Appleカレンダー：ファイル &rarr; "
-"新規照会カレンダー。"
-
-#: src/app/web/templates/preferences.html:353
+#: src/app/web/templates/preferences.html:348
 msgid ""
 "Your current feed link will stop working. Add the new link to your "
 "calendar app."
 msgstr "現在のフィードリンクは使えなくなります。新しいリンクをカレンダーアプリに追加してください。"
 
-#: src/app/web/templates/preferences.html:354
+#: src/app/web/templates/preferences.html:349
 msgid "Generate a new one"
 msgstr "新しく生成する"
 
-#: src/app/web/templates/preferences.html:357
-#: src/app/web/templates/welcome.html:455
+#: src/app/web/templates/preferences.html:352
+#: src/app/web/templates/welcome.html:452
 msgid "Generate feed link"
 msgstr "フィードリンクを生成"
 
-#: src/app/web/templates/preferences.html:360
+#: src/app/web/templates/preferences.html:355
 msgid ""
 "Creating a new link makes the old one stop working right away. Anyone "
 "using the old link will stop getting updates."
 msgstr "新しいリンクを作成すると、古いリンクはすぐに使えなくなります。古いリンクを使っている人には更新が届かなくなります。"
 
-#: src/app/web/templates/preferences.html:367
+#: src/app/web/templates/preferences.html:362
 #, python-format
 msgid "Signed in with Discord as <b>%(username)s</b>."
 msgstr "Discordで<b>%(username)s</b>としてサインイン中。"
 
-#: src/app/web/templates/preferences.html:374
+#: src/app/web/templates/preferences.html:369
 msgid "Re-run first-time setup"
 msgstr "初回セットアップを再実行"
 
-#: src/app/web/templates/preferences.html:375
+#: src/app/web/templates/preferences.html:370
 msgid ""
 "Review your events again. Turn off any you are not going to, and mark the"
 " rounds you have already applied to. Your current choices stay selected."
 msgstr "イベントをもう一度確認します。参加しないイベントはオフにし、申込済みの受付を記録できます。現在の選択内容はそのまま引き継がれます。"
 
-#: src/app/web/templates/preferences.html:377
+#: src/app/web/templates/preferences.html:372
 msgid "Run setup"
 msgstr "セットアップを実行"
 
-#: src/app/web/templates/preferences.html:388
-#: src/app/web/templates/preferences.html:405
+#: src/app/web/templates/preferences.html:383
+#: src/app/web/templates/preferences.html:400
 msgid "Delete my account"
 msgstr "アカウントを削除"
 
-#: src/app/web/templates/preferences.html:389
+#: src/app/web/templates/preferences.html:384
 msgid ""
 "Your reminders, subscriptions, and settings are deleted. Events and tags "
 "you created stay, but your name is removed from them."
 msgstr "リマインダー、フォロー、設定は削除されます。作成したイベントとタグは残りますが、作成者名は削除されます。"
 
-#: src/app/web/templates/preferences.html:393
+#: src/app/web/templates/preferences.html:388
 msgid "Delete account"
 msgstr "アカウントを削除"
 
-#: src/app/web/templates/preferences.html:397
+#: src/app/web/templates/preferences.html:392
 msgid "Delete your account?"
 msgstr "アカウントを削除しますか？"
 
-#: src/app/web/templates/preferences.html:400
+#: src/app/web/templates/preferences.html:395
 msgid ""
 "Your reminders, subscriptions, and settings will be deleted. Events and "
 "tags you created will stay, but your name will be removed from them. You "
 "cannot undo this."
 msgstr "リマインダー、フォロー、設定は削除されます。作成したイベントとタグは残りますが、作成者名は削除されます。この操作は元に戻せません。"
 
-#: src/app/web/templates/preferences.html:403
+#: src/app/web/templates/preferences.html:398
 msgid "Keep my account"
 msgstr "アカウントを削除しない"
 
-#: src/app/web/templates/preferences.html:414
-#: src/app/web/templates/preferences.html:441
+#: src/app/web/templates/preferences.html:409
+#: src/app/web/templates/preferences.html:436
 msgid "admin only"
 msgstr "管理者のみ"
 
-#: src/app/web/templates/preferences.html:415
+#: src/app/web/templates/preferences.html:410
 msgid ""
 "These Discord users can create and edit events, rounds, and tags. Editors"
 " listed in <code>EDITOR_WHITELIST</code> must be changed in "
 "<code>.env</code>."
 msgstr "これらのDiscordユーザーは、イベント、受付、タグを作成・編集できます。<code>EDITOR_WHITELIST</code>に登録されているエディターは、<code>.env</code>で変更してください。"
 
-#: src/app/web/templates/preferences.html:421
+#: src/app/web/templates/preferences.html:416
 msgid "from env"
 msgstr "環境変数から"
 
-#: src/app/web/templates/preferences.html:423
+#: src/app/web/templates/preferences.html:418
 msgid "cannot be removed here"
 msgstr "ここでは削除できません"
 
-#: src/app/web/templates/preferences.html:424
+#: src/app/web/templates/preferences.html:419
 msgid "Remove editor"
 msgstr "エディターを削除"
 
-#: src/app/web/templates/preferences.html:431
+#: src/app/web/templates/preferences.html:426
 msgid "Some editors are set on the server and cannot be removed here."
 msgstr "一部のエディターはサーバー側で設定されているため、ここから削除できません。"
 
-#: src/app/web/templates/preferences.html:433
+#: src/app/web/templates/preferences.html:428
 msgid "Discord user ID"
 msgstr "DiscordユーザーID"
 
-#: src/app/web/templates/preferences.html:434
+#: src/app/web/templates/preferences.html:429
 msgid "Add an editor"
 msgstr "エディターを追加"
 
-#: src/app/web/templates/preferences.html:441
+#: src/app/web/templates/preferences.html:436
 msgid "Admin tools"
 msgstr "管理ツール"
 
-#: src/app/web/templates/preferences.html:442
+#: src/app/web/templates/preferences.html:437
 msgid ""
 "Operational pages. They are not linked from the site navigation, so this "
 "is where to find them."
 msgstr "運用向けのページです。サイトのナビゲーションからはリンクされていないため、ここから開いてください。"
 
-#: src/app/web/templates/preferences.html:444
+#: src/app/web/templates/preferences.html:439
 msgid "Deliveries"
 msgstr "配信履歴"
 
-#: src/app/web/templates/preferences.html:445
+#: src/app/web/templates/preferences.html:440
 msgid "Every DM the scheduler attempted, and recent failures."
 msgstr "スケジューラーが送信を試みたすべてのDMと、最近の失敗。"
 
-#: src/app/web/templates/preferences.html:448
+#: src/app/web/templates/preferences.html:443
 msgid "Discoveries"
 msgstr "新着候補"
 
-#: src/app/web/templates/preferences.html:449
+#: src/app/web/templates/preferences.html:444
 msgid ""
 "Performances your artists' Eventernote pages list that the catalogue does"
 " not have."
 msgstr "登録アーティストのEventernoteページに載っていて、カタログにまだない公演。"
 
-#: src/app/web/templates/preferences.html:452
+#: src/app/web/templates/preferences.html:447
 msgid "Broadcast"
 msgstr "一斉送信"
 
-#: src/app/web/templates/preferences.html:453
+#: src/app/web/templates/preferences.html:448
 msgid "Message a chosen set of users. Held two minutes so it can be cancelled."
 msgstr "選んだユーザーにメッセージを送ります。2分間保留されるので取り消せます。"
 
-#: src/app/web/templates/preferences.html:456
+#: src/app/web/templates/preferences.html:451
 msgid "Export catalogue"
 msgstr "カタログをエクスポート"
 
-#: src/app/web/templates/preferences.html:457
+#: src/app/web/templates/preferences.html:452
 msgid "Every concert and tag as YAML, zipped. No personal data."
 msgstr "すべてのイベントとタグをYAMLでZIP出力します。個人データは含まれません。"
 
-#: src/app/web/templates/preferences.html:460
+#: src/app/web/templates/preferences.html:455
 msgid "Import tags"
 msgstr "タグをインポート"
 
-#: src/app/web/templates/preferences.html:461
+#: src/app/web/templates/preferences.html:456
 msgid ""
 "Restore a tags.yaml from a catalogue export. Existing tags are skipped, "
 "never overwritten."
 msgstr "カタログエクスポートの tags.yaml を復元します。既存のタグはスキップされ、上書きされません。"
 
-#: src/app/web/templates/preferences.html:468
+#: src/app/web/templates/preferences.html:463
 msgid "Rehearsal"
 msgstr "リハーサル"
 
-#: src/app/web/templates/preferences.html:469
+#: src/app/web/templates/preferences.html:464
 msgid ""
 "Local harness: seed a concert, pull its reminders forward, send any DM "
 "shape."
@@ -4142,29 +4141,21 @@ msgstr "カレンダーフィードを取得"
 
 #: src/app/web/templates/welcome.html:437
 msgid ""
-"Add this feed to your phone or calendar app to keep your reminder "
-"deadlines updated. It gives you a backup to Discord DMs."
+"One link your calendar app subscribes to: every show you follow, and the "
+"deadlines that still need you. A backup to Discord DMs."
 msgstr ""
-"このフィードをスマートフォンやカレンダーアプリに追加すると、リマインダーを設定した締切が自動更新されます。Discord "
-"DMの予備としても使えます。"
+"カレンダーアプリに1つのリンクを登録するだけ。フォロー中の公演と、まだ対応が必要な締切がすべて入ります。Discord "
+"DMのバックアップにも。"
 
-#: src/app/web/templates/welcome.html:442
-msgid "✓ Your feed link is ready — save it now, it won't be shown again."
-msgstr "✓ フィードリンクを作成しました。今すぐ保存してください。この画面には再表示されません。"
-
-#: src/app/web/templates/welcome.html:447
-msgid "Add it in Google Calendar, Apple Calendar, or Outlook."
-msgstr "Googleカレンダー、Appleカレンダー、またはOutlookに追加してください。"
-
-#: src/app/web/templates/welcome.html:451
+#: src/app/web/templates/welcome.html:448
 msgid "Your feed is active."
 msgstr "フィードは有効です。"
 
-#: src/app/web/templates/welcome.html:461
+#: src/app/web/templates/welcome.html:458
 msgid "You're ready. Next, choose which events you plan to attend."
 msgstr "準備完了です。次に、参加予定のイベントを選びます。"
 
-#: src/app/web/templates/welcome.html:462
+#: src/app/web/templates/welcome.html:459
 msgid "Continue to my events"
 msgstr "イベントの選択へ"
 
@@ -4197,4 +4188,16 @@ msgstr "イベントの選択へ"
 
 #~ msgid "No upcoming deadlines on your reminders. `/remindme` to add one."
 #~ msgstr "今後の締切にリマインダーは設定されていません。`/remindme`で追加できます。"
+
+#~ msgid "Add to calendar"
+#~ msgstr "カレンダーに追加"
+
+#~ msgid "Subscribe by URL in Google or Apple Calendar."
+#~ msgstr "GoogleまたはAppleカレンダーでURLを登録してください。"
+
+#~ msgid "✓ Your feed link is ready — save it now, it won't be shown again."
+#~ msgstr "✓ フィードリンクを作成しました。今すぐ保存してください。この画面には再表示されません。"
+
+#~ msgid "Add it in Google Calendar, Apple Calendar, or Outlook."
+#~ msgstr "Googleカレンダー、Appleカレンダー、またはOutlookに追加してください。"
 

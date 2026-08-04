@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-04 09:14-0300\n"
+"POT-Creation-Date: 2026-08-04 09:56-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -322,7 +322,7 @@ msgstr "落选 — {day}"
 msgid "Not going — {day}"
 msgstr "不参加 — {day}"
 
-#: src/app/bot/views.py:738 src/app/web/templates/_round_rows.html:212
+#: src/app/bot/views.py:738 src/app/web/templates/_round_rows.html:211
 msgid "Not going"
 msgstr "不参加"
 
@@ -357,7 +357,7 @@ msgstr "**{name}** 由 EDITOR_WHITELIST 管理。请编辑 `.env` 进行更改�
 msgid "**{name}** is no longer an editor."
 msgstr "**{name}** 已不再是编辑者。"
 
-#: src/app/bot/cogs/admin.py:87 src/app/web/templates/preferences.html:428
+#: src/app/bot/cogs/admin.py:87 src/app/web/templates/preferences.html:423
 msgid "No editors yet."
 msgstr "还没有编辑者。"
 
@@ -833,13 +833,13 @@ msgstr "开放中"
 
 #: src/app/web/templates/_board.html:89
 #: src/app/web/templates/_editor_leg_card.html:55
-#: src/app/web/templates/_round_rows.html:212
+#: src/app/web/templates/_round_rows.html:211
 msgid "Cancelled"
 msgstr "已取消"
 
 #: src/app/web/templates/_board.html:115
 #: src/app/web/templates/_deadline_rows.html:115
-#: src/app/web/templates/_round_rows.html:177
+#: src/app/web/templates/_round_rows.html:176
 #, python-format
 msgid "+%(count)s more round"
 msgid_plural "+%(count)s more rounds"
@@ -1051,6 +1051,24 @@ msgstr "申请链接（可选）"
 msgid "Notes (optional)"
 msgstr "备注（可选）"
 
+#: src/app/web/templates/_feed_links.html:7
+msgid "Your feed link is ready — save it now, it won't be shown again."
+msgstr "订阅链接已就绪 — 请立即保存，它不会再次显示。"
+
+#: src/app/web/templates/_feed_links.html:9
+msgid "Open in calendar app"
+msgstr "在日历应用中打开"
+
+#: src/app/web/templates/_feed_links.html:11
+msgid "Copy link"
+msgstr "复制链接"
+
+#: src/app/web/templates/_feed_links.html:14
+msgid ""
+"Google Calendar: Settings &rarr; Add calendar &rarr; From URL.\n"
+"        Apple Calendar: File &rarr; New Calendar Subscription."
+msgstr "Google 日历：设置 &rarr; 添加日历 &rarr; 通过网址。Apple 日历：文件 &rarr; 新建日历订阅。"
+
 #: src/app/web/templates/_following_toggle.html:37
 msgid "This event is cancelled, so no reminders will be sent."
 msgstr "本次活动已取消，不会发送任何提醒。"
@@ -1086,7 +1104,7 @@ msgstr "不再关注此活动吗？"
 #: src/app/web/templates/_following_toggle.html:59
 #: src/app/web/templates/_result_capture_dialog.html:25
 #: src/app/web/templates/home.html:289
-#: src/app/web/templates/preferences.html:398
+#: src/app/web/templates/preferences.html:393
 msgid "Close"
 msgstr "关闭"
 
@@ -1211,44 +1229,40 @@ msgid "Needed for: %(names)s"
 msgstr "适用轮次：%(names)s"
 
 #: src/app/web/templates/_round_rows.html:106
-msgid "Add to calendar"
-msgstr "添加到日历"
-
-#: src/app/web/templates/_round_rows.html:107
 msgid "Round page"
 msgstr "轮次页面"
 
-#: src/app/web/templates/_round_rows.html:113
+#: src/app/web/templates/_round_rows.html:112
 #, python-format
 msgid "Requires a ticket from: %(names)s"
 msgstr "需要持有以下轮次的门票：%(names)s"
 
-#: src/app/web/templates/_round_rows.html:113
+#: src/app/web/templates/_round_rows.html:112
 msgid "Requires a ticket from an earlier round"
 msgstr "需要持有前一轮次的门票"
 
-#: src/app/web/templates/_round_rows.html:214
+#: src/app/web/templates/_round_rows.html:213
 #, python-format
 msgid "doors %(when)s"
 msgstr "入场 %(when)s"
 
-#: src/app/web/templates/_round_rows.html:229
+#: src/app/web/templates/_round_rows.html:228
 msgid "Going again"
 msgstr "再次参加"
 
-#: src/app/web/templates/_round_rows.html:229
+#: src/app/web/templates/_round_rows.html:228
 msgid "Not going to this day"
 msgstr "不参加这一场"
 
-#: src/app/web/templates/_round_rows.html:233
+#: src/app/web/templates/_round_rows.html:232
 msgid "No rounds yet for this leg."
 msgstr "这个场次还没有轮次。"
 
-#: src/app/web/templates/_round_rows.html:250
+#: src/app/web/templates/_round_rows.html:249
 msgid "Rounds"
 msgstr "轮次"
 
-#: src/app/web/templates/_round_rows.html:256
+#: src/app/web/templates/_round_rows.html:255
 msgid "No performances yet."
 msgstr "还没有场次。"
 
@@ -1282,7 +1296,7 @@ msgstr "DM &middot; 适用于以上所有轮次"
 
 #: src/app/web/templates/_rules.html:22
 #: src/app/web/templates/preferences.html:220
-#: src/app/web/templates/preferences.html:424
+#: src/app/web/templates/preferences.html:419
 msgid "Remove"
 msgstr "删除"
 
@@ -2587,12 +2601,12 @@ msgid "Delivery"
 msgstr "通知方式"
 
 #: src/app/web/templates/preferences.html:20
-#: src/app/web/templates/preferences.html:366
+#: src/app/web/templates/preferences.html:361
 msgid "Account"
 msgstr "账户"
 
 #: src/app/web/templates/preferences.html:21
-#: src/app/web/templates/preferences.html:414
+#: src/app/web/templates/preferences.html:409
 msgid "Editors"
 msgstr "编辑者"
 
@@ -2897,104 +2911,89 @@ msgid "Calendar feed active"
 msgstr "日历订阅已启用"
 
 #: src/app/web/templates/preferences.html:335
-msgid "Subscribe by URL in Google or Apple Calendar."
-msgstr "在 Google 或 Apple 日历中通过 URL 订阅。"
+msgid "Your shows and the deadlines that still need you, always current."
+msgstr "你关注的演出和仍需处理的截止日期，始终保持最新。"
 
 #: src/app/web/templates/preferences.html:337
 msgid "No calendar feed"
 msgstr "无日历订阅"
 
-#: src/app/web/templates/preferences.html:343
-msgid "Your feed link is ready — save it now, it won't be shown again."
-msgstr "订阅链接已就绪 — 请立即保存，它不会再次显示。"
-
-#: src/app/web/templates/preferences.html:346
-#: src/app/web/templates/welcome.html:446
-msgid "Copy link"
-msgstr "复制链接"
-
-#: src/app/web/templates/preferences.html:347
-msgid ""
-"Google Calendar: Settings &rarr; Add calendar &rarr; From URL.\n"
-"        Apple Calendar: File &rarr; New Calendar Subscription."
-msgstr "Google 日历：设置 &rarr; 添加日历 &rarr; 通过网址。Apple 日历：文件 &rarr; 新建日历订阅。"
-
-#: src/app/web/templates/preferences.html:353
+#: src/app/web/templates/preferences.html:348
 msgid ""
 "Your current feed link will stop working. Add the new link to your "
 "calendar app."
 msgstr "当前的日历订阅链接将无法继续使用。请将新链接添加到你的日历应用中。"
 
-#: src/app/web/templates/preferences.html:354
+#: src/app/web/templates/preferences.html:349
 msgid "Generate a new one"
 msgstr "生成新链接"
 
-#: src/app/web/templates/preferences.html:357
-#: src/app/web/templates/welcome.html:455
+#: src/app/web/templates/preferences.html:352
+#: src/app/web/templates/welcome.html:452
 msgid "Generate feed link"
 msgstr "生成订阅链接"
 
-#: src/app/web/templates/preferences.html:360
+#: src/app/web/templates/preferences.html:355
 msgid ""
 "Creating a new link makes the old one stop working right away. Anyone "
 "using the old link will stop getting updates."
 msgstr "创建新链接后，旧链接会立即无法使用。仍在使用旧链接的人将不再收到更新。"
 
-#: src/app/web/templates/preferences.html:367
+#: src/app/web/templates/preferences.html:362
 #, python-format
 msgid "Signed in with Discord as <b>%(username)s</b>."
 msgstr "已通过 Discord 登录为 <b>%(username)s</b>。"
 
-#: src/app/web/templates/preferences.html:374
+#: src/app/web/templates/preferences.html:369
 msgid "Re-run first-time setup"
 msgstr "重新运行首次设置"
 
-#: src/app/web/templates/preferences.html:375
+#: src/app/web/templates/preferences.html:370
 msgid ""
 "Review your events again. Turn off any you are not going to, and mark the"
 " rounds you have already applied to. Your current choices stay selected."
 msgstr "再次检查你的活动。关闭不打算参加的活动，并标记已经申请的轮次。当前选择会保留。"
 
-#: src/app/web/templates/preferences.html:377
+#: src/app/web/templates/preferences.html:372
 msgid "Run setup"
 msgstr "开始设置"
 
-#: src/app/web/templates/preferences.html:388
-#: src/app/web/templates/preferences.html:405
+#: src/app/web/templates/preferences.html:383
+#: src/app/web/templates/preferences.html:400
 msgid "Delete my account"
 msgstr "删除我的账户"
 
-#: src/app/web/templates/preferences.html:389
+#: src/app/web/templates/preferences.html:384
 msgid ""
 "Your reminders, subscriptions, and settings are deleted. Events and tags "
 "you created stay, but your name is removed from them."
 msgstr "你的提醒、订阅和设置会被删除。你创建的活动和标签会保留，但会移除你的名字。"
 
-#: src/app/web/templates/preferences.html:393
+#: src/app/web/templates/preferences.html:388
 msgid "Delete account"
 msgstr "删除账户"
 
-#: src/app/web/templates/preferences.html:397
+#: src/app/web/templates/preferences.html:392
 msgid "Delete your account?"
 msgstr "确定删除你的账户吗？"
 
-#: src/app/web/templates/preferences.html:400
+#: src/app/web/templates/preferences.html:395
 msgid ""
 "Your reminders, subscriptions, and settings will be deleted. Events and "
 "tags you created will stay, but your name will be removed from them. You "
 "cannot undo this."
 msgstr "你的提醒、订阅和设置会被删除。你创建的活动和标签会保留，但会移除你的名字。删除后无法恢复。"
 
-#: src/app/web/templates/preferences.html:403
+#: src/app/web/templates/preferences.html:398
 msgid "Keep my account"
 msgstr "保留我的账户"
 
-#: src/app/web/templates/preferences.html:414
-#: src/app/web/templates/preferences.html:441
+#: src/app/web/templates/preferences.html:409
+#: src/app/web/templates/preferences.html:436
 msgid "admin only"
 msgstr "仅限管理员"
 
-#: src/app/web/templates/preferences.html:415
+#: src/app/web/templates/preferences.html:410
 msgid ""
 "These Discord users can create and edit events, rounds, and tags. Editors"
 " listed in <code>EDITOR_WHITELIST</code> must be changed in "
@@ -3003,89 +3002,89 @@ msgstr ""
 "这些 Discord 用户可以创建和编辑活动、轮次及标签。<code>EDITOR_WHITELIST</code> 中的编辑者必须在 "
 "<code>.env</code> 中更改。"
 
-#: src/app/web/templates/preferences.html:421
+#: src/app/web/templates/preferences.html:416
 msgid "from env"
 msgstr "来自环境变量"
 
-#: src/app/web/templates/preferences.html:423
+#: src/app/web/templates/preferences.html:418
 msgid "cannot be removed here"
 msgstr "无法在此移除"
 
-#: src/app/web/templates/preferences.html:424
+#: src/app/web/templates/preferences.html:419
 msgid "Remove editor"
 msgstr "移除编辑者"
 
-#: src/app/web/templates/preferences.html:431
+#: src/app/web/templates/preferences.html:426
 msgid "Some editors are set on the server and cannot be removed here."
 msgstr "部分编辑者由服务器设置，无法在这里移除。"
 
-#: src/app/web/templates/preferences.html:433
+#: src/app/web/templates/preferences.html:428
 msgid "Discord user ID"
 msgstr "Discord 用户 ID"
 
-#: src/app/web/templates/preferences.html:434
+#: src/app/web/templates/preferences.html:429
 msgid "Add an editor"
 msgstr "添加编辑者"
 
-#: src/app/web/templates/preferences.html:441
+#: src/app/web/templates/preferences.html:436
 msgid "Admin tools"
 msgstr "管理工具"
 
-#: src/app/web/templates/preferences.html:442
+#: src/app/web/templates/preferences.html:437
 msgid ""
 "Operational pages. They are not linked from the site navigation, so this "
 "is where to find them."
 msgstr "运维页面。站点导航中没有它们的链接，所以从这里进入。"
 
-#: src/app/web/templates/preferences.html:444
+#: src/app/web/templates/preferences.html:439
 msgid "Deliveries"
 msgstr "发送记录"
 
-#: src/app/web/templates/preferences.html:445
+#: src/app/web/templates/preferences.html:440
 msgid "Every DM the scheduler attempted, and recent failures."
 msgstr "调度器尝试发送的每一条 DM，以及最近的失败。"
 
-#: src/app/web/templates/preferences.html:448
+#: src/app/web/templates/preferences.html:443
 msgid "Discoveries"
 msgstr "新发现"
 
-#: src/app/web/templates/preferences.html:449
+#: src/app/web/templates/preferences.html:444
 msgid ""
 "Performances your artists' Eventernote pages list that the catalogue does"
 " not have."
 msgstr "你关注的艺人的 Eventernote 页面上列出、而目录中还没有的演出。"
 
-#: src/app/web/templates/preferences.html:452
+#: src/app/web/templates/preferences.html:447
 msgid "Broadcast"
 msgstr "群发"
 
-#: src/app/web/templates/preferences.html:453
+#: src/app/web/templates/preferences.html:448
 msgid "Message a chosen set of users. Held two minutes so it can be cancelled."
 msgstr "向选定的用户发送消息。会保留两分钟，以便取消。"
 
-#: src/app/web/templates/preferences.html:456
+#: src/app/web/templates/preferences.html:451
 msgid "Export catalogue"
 msgstr "导出目录"
 
-#: src/app/web/templates/preferences.html:457
+#: src/app/web/templates/preferences.html:452
 msgid "Every concert and tag as YAML, zipped. No personal data."
 msgstr "以 YAML 打包导出所有活动和标签。不含任何个人数据。"
 
-#: src/app/web/templates/preferences.html:460
+#: src/app/web/templates/preferences.html:455
 msgid "Import tags"
 msgstr "导入标签"
 
-#: src/app/web/templates/preferences.html:461
+#: src/app/web/templates/preferences.html:456
 msgid ""
 "Restore a tags.yaml from a catalogue export. Existing tags are skipped, "
 "never overwritten."
 msgstr "从目录导出文件恢复 tags.yaml。已存在的标签会被跳过，不会被覆盖。"
 
-#: src/app/web/templates/preferences.html:468
+#: src/app/web/templates/preferences.html:463
 msgid "Rehearsal"
 msgstr "彩排"
 
-#: src/app/web/templates/preferences.html:469
+#: src/app/web/templates/preferences.html:464
 msgid ""
 "Local harness: seed a concert, pull its reminders forward, send any DM "
 "shape."
@@ -4161,27 +4160,19 @@ msgstr "获取你的日历订阅"
 
 #: src/app/web/templates/welcome.html:437
 msgid ""
-"Add this feed to your phone or calendar app to keep your reminder "
-"deadlines updated. It gives you a backup to Discord DMs."
-msgstr "将此订阅添加到手机或日历应用后，你设置提醒的截止时间会自动更新。它也可以作为 Discord DM 的备用方式。"
+"One link your calendar app subscribes to: every show you follow, and the "
+"deadlines that still need you. A backup to Discord DMs."
+msgstr "日历应用只需订阅一个链接：你关注的所有演出，以及仍需处理的截止日期。也是 Discord 私信的后备。"
 
-#: src/app/web/templates/welcome.html:442
-msgid "✓ Your feed link is ready — save it now, it won't be shown again."
-msgstr "✓ 订阅链接已就绪 — 请立即保存，它不会再次显示。"
-
-#: src/app/web/templates/welcome.html:447
-msgid "Add it in Google Calendar, Apple Calendar, or Outlook."
-msgstr "请在 Google 日历、Apple 日历或 Outlook 中添加。"
-
-#: src/app/web/templates/welcome.html:451
+#: src/app/web/templates/welcome.html:448
 msgid "Your feed is active."
 msgstr "你的订阅已启用。"
 
-#: src/app/web/templates/welcome.html:461
+#: src/app/web/templates/welcome.html:458
 msgid "You're ready. Next, choose which events you plan to attend."
 msgstr "准备完成。接下来，请选择你计划参加的活动。"
 
-#: src/app/web/templates/welcome.html:462
+#: src/app/web/templates/welcome.html:459
 msgid "Continue to my events"
 msgstr "前往我的活动"
 
@@ -4212,4 +4203,16 @@ msgstr "前往我的活动"
 
 #~ msgid "No upcoming deadlines on your reminders. `/remindme` to add one."
 #~ msgstr "你的提醒中没有即将到来的截止时间。使用 `/remindme` 添加一个。"
+
+#~ msgid "Add to calendar"
+#~ msgstr "添加到日历"
+
+#~ msgid "Subscribe by URL in Google or Apple Calendar."
+#~ msgstr "在 Google 或 Apple 日历中通过 URL 订阅。"
+
+#~ msgid "✓ Your feed link is ready — save it now, it won't be shown again."
+#~ msgstr "✓ 订阅链接已就绪 — 请立即保存，它不会再次显示。"
+
+#~ msgid "Add it in Google Calendar, Apple Calendar, or Outlook."
+#~ msgstr "请在 Google 日历、Apple 日历或 Outlook 中添加。"
 

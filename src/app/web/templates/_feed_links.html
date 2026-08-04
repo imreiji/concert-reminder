@@ -1,0 +1,16 @@
+{#- The shown-once feed URL, rendered identically on its three surfaces
+    (Preferences, welcome step 4, the concert page's calendar dialog) so the
+    ergonomics cannot drift. The raw token appears exactly once -- only its
+    hash is stored (invariant 5) -- which is why every consumer gates this
+    include on feed_url being present. -#}
+<div class="feedlinks">
+  <div class="ruleline"><b>{{ _("Your feed link is ready — save it now, it won't be shown again.") }}</b></div>
+  <p class="inline" style="margin:.4rem 0 0">
+    <a class="btn" href="{{ feed_url | replace('https://', 'webcal://') | replace('http://', 'webcal://') }}">{{ _("Open in calendar app") }}</a>
+    <button type="button" class="act" data-copy="{{ feed_url }}"
+            onclick="navigator.clipboard.writeText(this.dataset.copy)">{{ _("Copy link") }}</button>
+  </p>
+  <p class="inline" style="margin:.4rem 0 0"><code class="feed-url">{{ feed_url }}</code></p>
+  <span class="clock">{% trans %}Google Calendar: Settings &rarr; Add calendar &rarr; From URL.
+        Apple Calendar: File &rarr; New Calendar Subscription.{% endtrans %}</span>
+</div>

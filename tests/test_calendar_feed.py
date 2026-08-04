@@ -113,6 +113,30 @@ def test_generate_feed_honors_next_param(client):
     assert r.headers["location"].startswith("/welcome?feed_token=")
 
 
+def test_generate_feed_honors_concert_page_next(client):
+    """The concert page (Task 5) is a third minting surface -- the allowlist
+    is a SHAPE (/concerts/ prefix), not a hardcoded set of every concert."""
+    login_as(client, EDITOR_ID, "reiji")
+    create_tracked_round(client, "2099-06-25T23:59", event_id="mine")
+    r = client.post("/me/calendar-feed", data={"next": "/concerts/mine"})
+    assert r.status_code == 303
+    assert r.headers["location"].startswith("/concerts/mine?feed_token=")
+
+
+def test_generate_feed_rejects_offsite_and_odd_next(client):
+    login_as(client, EDITOR_ID, "reiji")
+    for bad in ("https://evil.example/x", "/\\evil.example", "/admin", "//evil"):
+        r = client.post("/me/calendar-feed", data={"next": bad})
+        assert r.headers["location"].startswith("/preferences?feed_token="), bad
+
+
+def test_fresh_feed_url_shows_webcal_link_on_preferences(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/me/calendar-feed", data={"next": "/preferences"})
+    page = client.get(r.headers["location"])
+    assert "webcal://" in page.text
+
+
 def test_calendar_feed_returns_ics_with_tracked_deadlines(client):
     login_as(client, EDITOR_ID, "reiji")
     create_tracked_round(client, "2099-06-25T23:59")
