@@ -24,7 +24,14 @@ from app.db.models import (
     ReminderRule,
     Round,
 )
-from app.db.service import ensure_user, set_leg_opt_out, sync_rule, user_calendar_events
+from app.db.service import (
+    ensure_user,
+    my_deadline_blocks,
+    my_deadline_rows,
+    set_leg_opt_out,
+    sync_rule,
+    user_calendar_events,
+)
 from app.domain.types import Anchor, RoundKind
 
 USER = 42
@@ -306,3 +313,62 @@ async def test_calendar_feed_omits_opted_out_leg(session):
     labels = {e.label for e in await user_calendar_events(session, USER, now=NOW)}
     assert "Leg A" not in labels
     assert "Leg B" in labels
+
+
+async def test_home_drops_the_show_row_for_an_opted_out_leg(session):
+    """Coming up's EVENT_START rows (the show itself) skip a leg this reader
+    opted out of; the other leg's row survives."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    await make_day(session, concert, "Leg B")
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+
+    rows = await my_deadline_rows(session, USER, now=NOW, concert_ids={concert.id})
+    labels = {r.deadline.label for r in rows}
+    assert "Leg A" not in labels
+    assert "Leg B" in labels
+
+
+async def test_home_drops_a_round_whose_every_leg_is_opted_out(session):
+    """A single-leg round on an opted-out leg must not reach Up next / Coming
+    up with live capture buttons -- recording APPLIED there is irreversible."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    await make_round(session, concert, [a.id])
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+
+    rows = await my_deadline_rows(session, USER, now=NOW, concert_ids={concert.id})
+    assert all(r.deadline.round_id is None for r in rows)
+
+
+async def test_home_keeps_a_round_with_one_of_two_legs_opted_out(session):
+    """The partial case survives BY DESIGN, mirroring the cancellation rule."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    b = await make_day(session, concert, "Leg B")
+    round_ = await make_round(session, concert, [a.id, b.id])
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+
+    rows = await my_deadline_rows(session, USER, now=NOW, concert_ids={concert.id})
+    assert round_.id in {r.deadline.round_id for r in rows}
+
+
+async def test_home_blocks_vanish_when_everything_is_opted_out(session):
+    """Fully opted out of the only leg: no round row, no show row, so the
+    concert contributes no block at all -- Up next reads from these same
+    rows, so this is also what keeps it off Up next."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    await make_round(session, concert, [a.id])
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+
+    blocks = await my_deadline_blocks(session, USER, now=NOW, concert_ids={concert.id})
+    assert blocks == []

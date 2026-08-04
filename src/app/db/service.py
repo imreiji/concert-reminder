@@ -504,6 +504,20 @@ def _covered_from_secured(
     return covered_ids
 
 
+def _round_fully_opted_out(round_: Round, opted_out_day_ids: set[int]) -> bool:
+    """Invariant 8's round rule, as ONE predicate every surface consumes: a
+    round suppresses for a user only when it names specific legs (non-empty
+    applies_to) AND every one of them is opted out -- the per-user analogue of
+    is_round_cancelled's every-leg rule. Empty/None applies_to (the all-legs /
+    General convention) is tied to no specific leg, so no set of leg opt-outs
+    can cover it; raw applies_to on purpose, never the all-day-ids fallback,
+    precisely so that case falls through untouched. Partial opt-out survives
+    BY DESIGN, mirroring partial cancellation."""
+    return bool(round_.applies_to) and all(
+        d in opted_out_day_ids for d in round_.applies_to
+    )
+
+
 async def _apply_outcome_suppression(
     session: AsyncSession, user_id: int, rounds: list[Round], anchor: Anchor
 ) -> list[Round]:
@@ -613,7 +627,8 @@ async def _apply_outcome_suppression(
         # leaving empty applies_to alone. Uses raw applies_to, not the
         # all_day_ids fallback the outcome passes use, precisely so the
         # empty case falls through untouched.
-        if r.applies_to and all(d in opted_out_day_ids for d in r.applies_to):
+        # Leg opt-out: the one rule, see _round_fully_opted_out.
+        if _round_fully_opted_out(r, opted_out_day_ids):
             continue
         if r.kind is RoundKind.UPGRADE:
             # Exemption: skip the cross-round "secured elsewhere" pass (see
@@ -1662,6 +1677,10 @@ class UpcomingDeadline:
     # POST an outcome. Optional because EVENT_START rows are derived from a
     # ConcertDay and have no round at all -- there is nothing to record against.
     round_id: int | None = None
+    # Which ConcertDay an EVENT_START row came from, so a per-user caller
+    # (my_deadline_rows) can apply the reader's leg opt-outs. None for round
+    # rows -- those carry round_id instead.
+    day_id: int | None = None
 
 
 async def upcoming_deadlines(
@@ -1725,7 +1744,7 @@ async def upcoming_deadlines(
         out.append(UpcomingDeadline(
             concert_title=loc_field(concert, "title", locale),
             event_id=concert.event_id, label=loc_field(d, "label", locale),
-            anchor=Anchor.EVENT_START, at_utc=d.starts_at_utc,
+            anchor=Anchor.EVENT_START, at_utc=d.starts_at_utc, day_id=d.id,
         ))
 
     for r in rounds:
@@ -2492,6 +2511,16 @@ async def my_deadline_rows(
         )).scalars()
     }
 
+    # This reader's leg opt-outs across every concert on show -- ONE query.
+    # Two row shapes consult it below: an EVENT_START row suppresses when its
+    # own day is opted out, and a round row suppresses when the round's every
+    # named leg is (_round_fully_opted_out). Partial opt-outs survive, same
+    # as everywhere else.
+    opted_out_ids = await user_opted_out_day_ids(
+        session, user_id,
+        [day.id for c in concerts.values() for day in c.days],
+    )
+
     # Eligibility for any UPGRADE rounds among these deadline rows. A row for an
     # upgrade the viewer cannot enter is noise -- its capture buttons would be
     # false testimony -- so it is dropped below. Resolved in two BATCHED queries
@@ -2566,6 +2595,8 @@ async def my_deadline_rows(
     for d in deadlines:
         if d.round_id is not None and d.round_id in covered_ids:
             continue
+        if d.day_id is not None and d.day_id in opted_out_ids:
+            continue  # the show itself, on a leg this reader said they are skipping
         concert = concerts.get(d.event_id)
         live_days = sorted(
             (day for day in concert.days if not day.cancelled), key=lambda day: day.starts_at_utc
@@ -2575,6 +2606,8 @@ async def my_deadline_rows(
             for t in concert.tags if t.kind is TagKind.VENUE
         ] if concert else []
         round_ = rounds.get(d.round_id) if d.round_id is not None else None
+        if round_ is not None and _round_fully_opted_out(round_, opted_out_ids):
+            continue
         outcome = outcomes.get(d.round_id) if d.round_id is not None else None
         is_upgrade = round_ is not None and round_.kind is RoundKind.UPGRADE
         if is_upgrade and round_.id not in eligible_upgrade_ids:
