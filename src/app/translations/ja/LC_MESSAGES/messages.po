@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-04 09:56-0300\n"
+"POT-Creation-Date: 2026-08-04 10:21-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -1655,52 +1655,87 @@ msgstr "リンク"
 msgid "official site"
 msgstr "公式サイト"
 
-#: src/app/web/templates/concert_detail.html:80
+#: src/app/web/templates/concert_detail.html:75
+#: src/app/web/templates/welcome.html:8
+msgid "Calendar"
+msgstr "カレンダー"
+
+#: src/app/web/templates/concert_detail.html:82
 #: src/app/web/templates/concert_edit.html:22
 msgid "Edit event"
 msgstr "イベントを編集"
 
-#: src/app/web/templates/concert_detail.html:81
+#: src/app/web/templates/concert_detail.html:83
 msgid "Export YAML"
 msgstr "YAMLをエクスポート"
 
-#: src/app/web/templates/concert_detail.html:122
+#: src/app/web/templates/concert_detail.html:124
 msgid "No eventernote link yet"
 msgstr "eventernoteのリンクはまだありません"
 
-#: src/app/web/templates/concert_detail.html:127
+#: src/app/web/templates/concert_detail.html:129
 msgid "Performing"
 msgstr "出演"
 
-#: src/app/web/templates/concert_detail.html:129
+#: src/app/web/templates/concert_detail.html:131
 #: src/app/web/templates/tags.html:15
 #, python-format
 msgid "%(count)s performer"
 msgid_plural "%(count)s performers"
 msgstr[0] "%(count)s名の出演者"
 
-#: src/app/web/templates/concert_detail.html:140
+#: src/app/web/templates/concert_detail.html:142
 msgid "Subunit"
 msgstr "サブユニット"
 
-#: src/app/web/templates/concert_detail.html:166
+#: src/app/web/templates/concert_detail.html:168
 msgid "My reminders"
 msgstr "マイリマインダー"
 
-#: src/app/web/templates/concert_detail.html:172
+#: src/app/web/templates/concert_detail.html:174
 #, python-format
 msgid "Edit history (%(n)s)"
 msgstr "編集履歴（%(n)s）"
 
-#: src/app/web/templates/concert_detail.html:178
+#: src/app/web/templates/concert_detail.html:180
 #: src/app/web/templates/concert_edit.html:158
 msgid "Deleted user"
 msgstr "削除済みユーザー"
 
-#: src/app/web/templates/concert_detail.html:182
+#: src/app/web/templates/concert_detail.html:184
 #: src/app/web/templates/concert_edit.html:162
 msgid "(empty)"
 msgstr "（空）"
+
+#: src/app/web/templates/concert_detail.html:213
+msgid "Calendar feed"
+msgstr "カレンダーフィード"
+
+#: src/app/web/templates/concert_detail.html:220
+msgid ""
+"Your calendar feed is already on — this event's dates and deadlines are "
+"in it while you follow the event."
+msgstr "カレンダーフィードは有効です。このイベントをフォローしている間、公演日と締切はフィードに含まれています。"
+
+#: src/app/web/templates/concert_detail.html:221
+msgid ""
+"Lost the link? Generate a new one in Preferences — the old link stops "
+"working."
+msgstr "リンクを紛失した場合は、設定で新しく生成してください。古いリンクは無効になります。"
+
+#: src/app/web/templates/concert_detail.html:222
+msgid "Open Preferences"
+msgstr "設定を開く"
+
+#: src/app/web/templates/concert_detail.html:224
+msgid ""
+"One subscription link keeps your calendar current: every show you follow,"
+" and the deadlines that still need you."
+msgstr "1つの購読リンクでカレンダーが常に最新に。フォロー中の公演と、まだ対応が必要な締切がすべて入ります。"
+
+#: src/app/web/templates/concert_detail.html:227
+msgid "Turn on my calendar feed"
+msgstr "カレンダーフィードを有効にする"
 
 #: src/app/web/templates/concert_edit.html:2
 msgid "edit"
@@ -3903,10 +3938,6 @@ msgstr "要点：これはファンが作ったリマインダーツールで、
 msgid "welcome"
 msgstr "ようこそ"
 
-#: src/app/web/templates/welcome.html:8
-msgid "Calendar"
-msgstr "カレンダー"
-
 #: src/app/web/templates/welcome.html:13
 msgid "Skip setup entirely"
 msgstr "セットアップを省略"
@@ -4143,9 +4174,7 @@ msgstr "カレンダーフィードを取得"
 msgid ""
 "One link your calendar app subscribes to: every show you follow, and the "
 "deadlines that still need you. A backup to Discord DMs."
-msgstr ""
-"カレンダーアプリに1つのリンクを登録するだけ。フォロー中の公演と、まだ対応が必要な締切がすべて入ります。Discord "
-"DMのバックアップにも。"
+msgstr "カレンダーアプリに1つのリンクを登録するだけ。フォロー中の公演と、まだ対応が必要な締切がすべて入ります。Discord DMのバックアップにも。"
 
 #: src/app/web/templates/welcome.html:448
 msgid "Your feed is active."

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-04 09:56-0300\n"
+"POT-Creation-Date: 2026-08-04 10:21-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -1653,52 +1653,87 @@ msgstr "链接"
 msgid "official site"
 msgstr "官方网站"
 
-#: src/app/web/templates/concert_detail.html:80
+#: src/app/web/templates/concert_detail.html:75
+#: src/app/web/templates/welcome.html:8
+msgid "Calendar"
+msgstr "日历"
+
+#: src/app/web/templates/concert_detail.html:82
 #: src/app/web/templates/concert_edit.html:22
 msgid "Edit event"
 msgstr "编辑活动"
 
-#: src/app/web/templates/concert_detail.html:81
+#: src/app/web/templates/concert_detail.html:83
 msgid "Export YAML"
 msgstr "导出 YAML"
 
-#: src/app/web/templates/concert_detail.html:122
+#: src/app/web/templates/concert_detail.html:124
 msgid "No eventernote link yet"
 msgstr "暂无 eventernote 链接"
 
-#: src/app/web/templates/concert_detail.html:127
+#: src/app/web/templates/concert_detail.html:129
 msgid "Performing"
 msgstr "出演"
 
-#: src/app/web/templates/concert_detail.html:129
+#: src/app/web/templates/concert_detail.html:131
 #: src/app/web/templates/tags.html:15
 #, python-format
 msgid "%(count)s performer"
 msgid_plural "%(count)s performers"
 msgstr[0] "%(count)s 位出演者"
 
-#: src/app/web/templates/concert_detail.html:140
+#: src/app/web/templates/concert_detail.html:142
 msgid "Subunit"
 msgstr "子团体"
 
-#: src/app/web/templates/concert_detail.html:166
+#: src/app/web/templates/concert_detail.html:168
 msgid "My reminders"
 msgstr "我的提醒"
 
-#: src/app/web/templates/concert_detail.html:172
+#: src/app/web/templates/concert_detail.html:174
 #, python-format
 msgid "Edit history (%(n)s)"
 msgstr "编辑记录（%(n)s）"
 
-#: src/app/web/templates/concert_detail.html:178
+#: src/app/web/templates/concert_detail.html:180
 #: src/app/web/templates/concert_edit.html:158
 msgid "Deleted user"
 msgstr "已删除的用户"
 
-#: src/app/web/templates/concert_detail.html:182
+#: src/app/web/templates/concert_detail.html:184
 #: src/app/web/templates/concert_edit.html:162
 msgid "(empty)"
 msgstr "（空）"
+
+#: src/app/web/templates/concert_detail.html:213
+msgid "Calendar feed"
+msgstr "日历订阅"
+
+#: src/app/web/templates/concert_detail.html:220
+msgid ""
+"Your calendar feed is already on — this event's dates and deadlines are "
+"in it while you follow the event."
+msgstr "你的日历订阅已开启——只要你关注这个活动，它的演出日期和截止日期就都在里面。"
+
+#: src/app/web/templates/concert_detail.html:221
+msgid ""
+"Lost the link? Generate a new one in Preferences — the old link stops "
+"working."
+msgstr "链接丢了？在偏好设置里重新生成一个——旧链接会立即失效。"
+
+#: src/app/web/templates/concert_detail.html:222
+msgid "Open Preferences"
+msgstr "打开偏好设置"
+
+#: src/app/web/templates/concert_detail.html:224
+msgid ""
+"One subscription link keeps your calendar current: every show you follow,"
+" and the deadlines that still need you."
+msgstr "一个订阅链接让日历始终最新：你关注的所有演出，以及仍需处理的截止日期。"
+
+#: src/app/web/templates/concert_detail.html:227
+msgid "Turn on my calendar feed"
+msgstr "开启我的日历订阅"
 
 #: src/app/web/templates/concert_edit.html:2
 msgid "edit"
@@ -3921,10 +3956,6 @@ msgstr "简而言之：这是由粉丝制作的提醒工具，并非票务销售
 #: src/app/web/templates/welcome.html:2
 msgid "welcome"
 msgstr "欢迎"
-
-#: src/app/web/templates/welcome.html:8
-msgid "Calendar"
-msgstr "日历"
 
 #: src/app/web/templates/welcome.html:13
 msgid "Skip setup entirely"

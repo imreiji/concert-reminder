@@ -34,6 +34,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.db.models import (
     Concert,
     ConcertDay,
@@ -1135,11 +1136,16 @@ async def concert_detail(
     event_id: str,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
+    feed_token: str = "",
 ):
     concert = await get_concert_by_event_id(session, event_id)
     await session.refresh(concert, ["days", "rounds", "tags"])
     rules = await user_rules(session, user.id, concert.id)
     tz = await user_tz(session, user.id)
+    # user_tz above already fetched this row -- the identity map makes this
+    # second session.get a no-op DB-wise -- but it discards it, and the
+    # calendar dialog needs the flag itself.
+    db_user = await session.get(User, user.id)
     from app.web.routes.preferences import my_presets
 
     presets = await my_presets(session, user.id)
@@ -1180,6 +1186,14 @@ async def concert_detail(
          # answers with the rounds region alone, so the dialog does not
          # re-open over the answer the reader just gave.
          "pending_capture": pending_capture_row(rounds_ctx),
+         # The calendar dialog's two non-download states -- mirrors
+         # preferences.py:109/133/171 exactly, the feed's other two minting
+         # surfaces. feed_url is the one-time reveal for a token minted on
+         # THIS page (the mint route's `next` brought the visitor straight
+         # back here); has_calendar_feed alone is the honest "already on"
+         # copy on every later visit.
+         "has_calendar_feed": bool(db_user and db_user.calendar_token_hash),
+         "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
          # Both of these carry `concert_cancelled` -- the same `all_legs_cancelled`
          # answer over the same legs, one for the banner and one for the toggle
          # partial that re-renders on its own. rounds_ctx wins the merge; there is

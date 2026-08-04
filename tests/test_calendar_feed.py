@@ -217,3 +217,23 @@ def test_preferences_shows_one_time_reveal_right_after_generating(client):
     r = client.get(location)
     assert "won't be shown again" in r.text
     assert "/calendar/" in r.text and ".ics" in r.text
+
+
+def test_concert_page_offers_calendar_dialog_no_feed_state(client):
+    login_as(client, EDITOR_ID, "reiji")
+    create_tracked_round(client, "2099-06-25T23:59", event_id="dlg")
+    page = client.get("/concerts/dlg")
+    assert "Turn on my calendar feed" in page.text
+    assert 'name="next" value="/concerts/dlg"' in page.text
+
+
+def test_concert_page_calendar_dialog_shows_fresh_url_once(client):
+    login_as(client, EDITOR_ID, "reiji")
+    create_tracked_round(client, "2099-06-25T23:59", event_id="dlg2")
+    r = client.post("/me/calendar-feed", data={"next": "/concerts/dlg2"})
+    page = client.get(r.headers["location"])
+    assert "webcal://" in page.text
+    # And the has-feed state on the NEXT visit: no URL, honest copy instead.
+    page = client.get("/concerts/dlg2")
+    assert "webcal://" not in page.text
+    assert "already" in page.text.lower()
