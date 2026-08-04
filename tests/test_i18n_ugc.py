@@ -594,24 +594,14 @@ async def test_calendar_events_follow_the_locale_parameter_not_the_contextvar(
     """Sites H and I. The .ics route passes no locale and must stay canonical
     even under an ambient locale; the /mydeadlines cog passes the recipient's
     language explicitly and must get the variant. Substituting get_locale()
-    here would start localizing the calendar feed, which is not wanted."""
-    from app.db.models import ReminderQueue, ReminderRule
+    here would start localizing the calendar feed, which is not wanted.
+
+    The fixture's tag subscription is what puts the concert on the feed: since
+    the 2026-08-04 landscape rewrite it derives from tracked concerts, so the
+    reminder rule/queue rows this test used to seed no longer play any part."""
     from app.db.service import user_calendar_events
 
     user, concert, round_, day = await _label_fixture(session, event_id="cal")
-    rule = ReminderRule(
-        user_id=user.discord_id, concert_id=concert.id,
-        anchor=Anchor.CLOSES, offset_days=-1,
-    )
-    session.add(rule)
-    await session.flush()
-    session.add_all([
-        ReminderQueue(rule_id=rule.id, round_id=round_.id, anchor=Anchor.CLOSES,
-                      fire_at_utc=datetime(2030, 7, 31, 9, tzinfo=UTC)),
-        ReminderQueue(rule_id=rule.id, day_id=day.id, anchor=Anchor.EVENT_START,
-                      fire_at_utc=datetime(2030, 8, 31, 9, tzinfo=UTC)),
-    ])
-    await session.commit()
     now = datetime(2030, 6, 1, tzinfo=UTC)
 
     # ambient zh, but the .ics feed passes nothing -> canonical, unchanged

@@ -1,12 +1,31 @@
-"""Build a minimal single-VEVENT .ics file for a round deadline.
+"""Build a multi-VEVENT .ics calendar for a user's personal feed.
 
 Pure function: no I/O, no ORM imports -- same pattern as yaml_export.py.
-Callers (web routes) pass in a UTC-aware datetime and plain strings already
-pulled off the ORM row.
+Callers (the calendar feed route) pass in a list of (summary, at_utc, url,
+description) tuples, already resolved to plain strings and UTC-aware
+datetimes off the ORM rows. `build_calendar` replaced the old per-round
+single-VEVENT download (2026-08-04, ruling: replaced, not supplemented) --
+a downloaded file is a snapshot that rots the moment a deadline moves, while
+a subscribed feed re-plans on every fetch.
 """
 
 import re
 from datetime import UTC, datetime
+
+from app.domain.types import Anchor
+
+# Canonical qualifiers for a round's moments on the personal feed. Plain
+# data, NOT gettext: the feed renders canonical (a URL has no viewer), and
+# canonical text is by definition untranslated. Japanese ticketing terms
+# because Japanese is this catalogue's source of truth. EVENT_START is
+# deliberately absent -- a show date is its own summary and takes no
+# qualifier.
+CANONICAL_ANCHOR_QUALIFIERS = {
+    Anchor.OPENS: "受付開始",
+    Anchor.CLOSES: "申込締切",
+    Anchor.RESULTS: "当落発表",
+    Anchor.PAYMENT: "支払期限",
+}
 
 
 def _escape(text: str) -> str:
@@ -52,37 +71,14 @@ def _vevent_lines(
     return lines
 
 
-def build_ics(
-    summary: str,
-    at_utc: datetime,
-    url: str | None = None,
-    description: str | None = None,
-    now_utc: datetime | None = None,
-) -> str:
-    """`at_utc` (and `now_utc`, if given) must be aware UTC datetimes -- this
-    app never stores or compares naive ones. Renders a zero-duration VEVENT
-    at `at_utc` (deadlines are a point in time, not a span).
-    """
-    lines = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//dekimasen.app//concert-reminder//EN",
-        "CALSCALE:GREGORIAN",
-        *_vevent_lines(summary, at_utc, url, description, now_utc or at_utc),
-        "END:VCALENDAR",
-    ]
-    return "\r\n".join(lines) + "\r\n"
-
-
 def build_calendar(
     events: list[tuple[str, datetime, str | None, str | None]],
     now_utc: datetime | None = None,
 ) -> str:
     """Multiple VEVENTs in one VCALENDAR -- a subscribable personal feed
     rather than a one-off download. Each event is a (summary, at_utc, url,
-    description) tuple, same fields as build_ics's single-event form. Every
-    VEVENT shares one DTSTAMP (when this feed was generated), not each
-    event's own time.
+    description) tuple. Every VEVENT shares one DTSTAMP (when this feed was
+    generated), not each event's own time.
     """
     stamp = now_utc or datetime.now(UTC)
     lines = [

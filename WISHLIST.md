@@ -885,75 +885,52 @@ inside the entry. And **minute-level offsets returns to #2 by pure removal**,
 the day after its eighth displacement; the running record continues in its
 entry, unchanged in substance as it has been through all nine moves.
 
+**The 2026-08-04 calendar pass empties the #1 entry the same day it took the
+top spot** -- the SECOND same-day #1 ship this file has recorded in a single
+day, and both are in Shipped below. The morning's owner-raised calendar entry
+went to #1 on merit, was displaced hours later by the opt-out defect, inherited
+#1 again that night when the defect shipped, and shipped itself the next
+morning on one branch (`calendar-feed-story`, six tasks, spec
+`docs/superpowers/specs/2026-08-04-calendar-feed-story-design.md`). Filed and
+emptied inside a day, twice over: the file has not seen a day like it, and the
+useful lesson is not the speed but the shape both entries shared -- a diagnosis
+run before filing, so each entry arrived as a work order and the design
+discussion only had to settle rulings.
+
+It shipped as the entry decomposed itself, and **all four confirmed gaps came
+back with an answer rather than a partial**. Discoverability: a "📅 Calendar"
+dialog on the concert page, where calendar intent actually occurs, minting for
+a user who has never held a token and returning them to the concert they were
+reading. Content: the landscape ruling -- shows plus the deadlines that still
+need you, derived from standing rather than from reminder rules, which is what
+stops a sparse preset reading as a broken calendar. Token flow: `webcal://` and
+a copy button through one shared partial, entirely WITHIN invariant 5's
+shown-once shape, exactly as the entry prescribed ("that shape is NOT the thing
+to fix -- the friction to remove is around it"). And the buttons: deleted,
+route and builder with them, per the entry's own ruling. The one branch the
+entry flagged also fired and was handled on purpose: its inherited "the feed
+must never carry an opted-out leg" constraint held only while the feed read
+`reminder_queue`, and this build stopped sourcing from the queue -- so the
+opt-out filter was re-applied at the new derivation through the same shared
+helpers, which is precisely the "re-applied on purpose" case that paragraph
+named.
+
+The re-rank moves nothing on merit, and entries renumber 1-13 by the one
+removal. The build lived in one service function, one domain map, three
+templates and a deletion, so every remaining entry was re-read against it and
+stands as written. Two contacts are worth naming. **Minute-level offsets
+returns to #1 by pure removal** -- its fourth move in a single day, every one
+of them on 2026-08-04, and this build sharpens rather than weakens it: an FCFS
+round's OPENS moment is now on the calendar itself, which is the entry's own
+strongest case made visible; the record continues in its entry. And **the PWA
+entry gains one annotation, no rank change**: a subscribable feed is this app's
+second surface that works with the site closed, which is prior art its
+push-notification argument should now cite rather than a substitute for it.
+
 ## Proposed (highest impact first)
 
 
-### 1. The calendar story should be the feed, not per-round files
-
-Impact: medium-high (owner usage pain, four gaps behind one sentence) -
-effort: medium. Raised: 2026-08-04 (owner, living with the app; filed after a
-tree check and a four-way clarifying question, both recorded here).
-
-The concert page's calendar affordance is a per-round `.ics` DOWNLOAD
-(`web/routes/concerts.py`, one VEVENT per file) -- so keeping a calendar
-current means importing a new file per round, forever. Meanwhile the right
-mechanism already shipped in the phase-12 arc and is not the gap:
-`POST /me/calendar-feed` (Preferences, and welcome step 4) mints a token and
-`GET /calendar/{token}.ics` is a live subscription -- every FUTURE deadline
-the user's active reminder rules cover, straight out of `reminder_queue`
-(`user_calendar_events`), no cookie, token-as-credential per invariant 5's
-secret-link shape. The owner confirmed all four candidate gaps at once, which
-decomposes the entry into one ruling and three design questions:
-
-- **RULING (owner, 2026-08-04): the per-round download buttons are REPLACED
-  by a subscribe affordance**, not supplemented. A file is a snapshot that
-  rots the moment a deadline moves (invariant 2 re-plans the queue; the file
-  in somebody's calendar is not re-planned); the feed is the mechanism that
-  stays true. Whoever builds this should delete `build_ics`'s route with the
-  buttons, or record why not.
-- **Discoverability was total: the owner did not know the feed existed.** It
-  is minted only in Preferences and welcome step 4; the concert page -- the
-  place where calendar intent actually occurs -- never mentions it. The
-  replace-the-buttons ruling above mostly solves this by construction, but
-  the subscribe affordance must work for a user who has never minted a token
-  (mint-on-first-use, or route through Preferences without losing them).
-- **Content: reminder-rule-derived deadlines only, and that surprised the
-  owner.** A concert you track with a sparse preset yields a sparse calendar,
-  which reads as broken, not configured; and performance dates themselves
-  (the show you won a ticket to) appear only via an `event_start`-anchored
-  rule. What SHOULD the feed carry -- tracked concerts' show dates? secured
-  legs? every open round's close? -- is the open design question, and it
-  needs the owner's read of what he expected the first time he opened the
-  feed. Note `fmt`/locale is already settled: the feed deliberately renders
-  canonical (locale `None`) because a URL has no viewer; that ruling stands
-  whatever the content becomes.
-- **Flow: the token is shown exactly once, and recovery is regeneration.**
-  That shape is invariant 5's and is NOT the thing to fix -- only the hash is
-  stored, so "show me my URL again" is impossible by design, and any design
-  here must live within that (regenerate-and-show is the recovery, and it
-  invalidates the old URL). The friction to remove is around it: a
-  `webcal://` link / "open in calendar app" affordance instead of a bare URL
-  to copy, and copy-button ergonomics at mint time.
-
-**One constraint that used to flow down onto this entry is already paid for
-(2026-08-04).** The opt-out suppression entry above this one -- shipped the
-night it was filed, see Shipped -- closed with "whatever the feed turns out to
-carry, it must never carry an opted-out leg", and that is now enforced at the
-QUEUE rather than at the feed: `sync_rule` filters its DAY candidates by the
-reader's `LegOptOut` rows, and `user_calendar_events` reads the feed straight
-out of `reminder_queue`. So the constraint holds for the shipped feed today and
-is inherited for free by whatever content design answers the bullet above --
-UNLESS that design stops sourcing from the queue, which is the one branch where
-it would have to be re-applied on purpose.
-
-One terminology trap, recorded so nobody builds it: the owner said "caldav",
-but CalDAV the protocol is two-way calendar SYNC (a server your calendar app
-writes into), and nothing here needs it. The shipped feed is already the
-right protocol shape -- one-way `.ics` over HTTPS, what calendar apps call a
-subscription -- and `webcal://` is just that URL with a scheme that makes
-apps subscribe instead of import. This entry is UX and content, not protocol.
-
-### 2. Minute-level reminder offsets
+### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -1031,7 +1008,20 @@ migration; nothing near `PresetItem`, the offset form or the sentence
 builders) and untouched in every respect. Ninth move, ninth time the reading
 has not changed.
 
-### 3. Franchise-aware round-label suggestions
+Back at #1 the next morning by pure removal, when the calendar-feed entry that
+displaced it the day before shipped -- the TENTH move, the FOURTH inside a
+single day, and the end of the seventh displacement, which outlasted the eighth
+by a matter of hours. Re-read against what shipped and untouched in substance
+as always, but this build is the first in the run to touch this entry's own
+argument rather than merely its number: a no-outcome round's OPENS moment is
+now an event on the user's calendar feed, so an FCFS sale's opening is
+something a reader SEES without owning a reminder rule for it. That is the
+reinforcement the seventh-displacement note above predicted, made concrete --
+the visible moment is exactly the one a days-and-hours offset can only remind
+you about too early, so the case for minutes is sharper than it was, and this
+entry is the highest-impact user-facing gap still standing.
+
+### 2. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1052,7 +1042,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 4. Ten of eleven `RoundKind` members are purely cosmetic
+### 3. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1085,7 +1075,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 5. PWA / installability
+### 4. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -1105,7 +1095,20 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 6. In-app LLM extraction behind the same draft seam
+Annotated 2026-08-04 (calendar-feed story), rank unchanged either way: the
+subscription feed is now this app's SECOND surface that works with the site
+closed -- the Discord DM was the first -- and a phone that has subscribed to it
+already shows the user's shows and live deadlines in the OS calendar with no
+tab open and no install. That neither raises this entry (a calendar is not a
+notification, and none of the manifest/service-worker work got cheaper) nor
+lowers it, but the push-notification argument above should now cite it as prior
+art: the "DM-notification parity for phone users who don't want the Discord app
+open" case has to clear a bar the feed already meets for anything the user can
+read AHEAD of time, so what web push would actually buy is the interrupting
+half -- the moment itself -- and that is the case this entry should be argued
+on when someone picks it up.
+
+### 5. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -1134,7 +1137,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 7. Minor demo-parity cosmetics
+### 6. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1196,7 +1199,7 @@ it into this entry's single pass rather than spawning a task. Rank unchanged --
 this entry has now grown four times without once being worth doing on its own,
 which is itself the argument for keeping it as one batched pass.
 
-### 8. The event classes outside concerts and talk shows
+### 7. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1225,7 +1228,7 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 9. A/B casts have nowhere to live
+### 8. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1248,7 +1251,7 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 10. Discover sort in the content head, plus the catalogue-count note
+### 9. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1274,7 +1277,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 11. Name the destination on the sign-in bounce
+### 10. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1296,7 +1299,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 12. The calendar roster's blind spots
+### 11. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1344,7 +1347,7 @@ refutes: the campaign is already a lead, so what is lost is a second pointer to
 something already visible, not the concert. A rating that contradicts its own
 entry is worse than a cautious one, and this list orders by USER impact.
 
-### 13. Nothing caps the discovery review path
+### 12. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1384,7 +1387,7 @@ or that the copy block can be reconstructed from ids alone. The one HALF of the
 fix this entry already calls cheap -- emitting `copy_text` once instead of twice
 -- is unaffected by any of it and is still the thing to do first.
 
-### 14. Nothing notices a calendar feed going quiet
+### 13. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
@@ -1441,6 +1444,100 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### The calendar story becomes the feed (2026-08-04)
+
+Branch `calendar-feed-story`, six tasks, spec
+`docs/superpowers/specs/2026-08-04-calendar-feed-story-design.md`, plan
+`docs/superpowers/plans/2026-08-04-calendar-feed-story.md`. Raised by the owner
+that morning ("adding each event with a new calendar event file just sucks --
+let's make it a subscription link"), filed at #1 with all four candidate gaps
+confirmed, and shipped the following morning. No schema change, no migration.
+One terminology note carried over from the entry so it is not re-opened: the
+owner said "caldav", but CalDAV is two-way SYNC and nothing here needed it --
+the shipped feed was already the right protocol shape (one-way `.ics` over
+HTTPS) and `webcal://` is that same URL with a scheme that makes apps
+subscribe instead of import. This was UX and content, not protocol.
+
+**The content ruling is the substance, and it is a rewrite of one function.**
+`user_calendar_events` no longer reads `reminder_queue` at all. It derives the
+user's LANDSCAPE over their tracked concerts: every live leg's show date, plus
+each surviving round's next moments selected by that user's standing on it --
+no outcome gives the future `opens_at_utc` AND `closes_at_utc`, APPLIED gives
+`_result_moment` (results, falling back to the close), WON gives the payment
+deadline, and LOST / NOT_APPLIED / PAID give nothing, because a LOST round's
+auto-armed successor is an ordinary no-outcome round contributing its own
+opens and closes. Future-only throughout. The effect is that **reminder rules
+go back to meaning exactly one thing: when Discord DMs you** -- the surprise
+behind the entry was a sparse preset producing a sparse calendar, which reads
+as broken rather than configured, and that failure mode is gone by
+construction rather than by a bigger default preset.
+
+**No new suppression rule was invented anywhere.** Every exclusion routes
+through the helpers the other read surfaces already consume --
+`tracked_concert_ids`, `user_opted_out_day_ids` + `_round_fully_opted_out`
+(the pair the opt-out build had shipped hours earlier), `is_round_cancelled` /
+`all_legs_cancelled`, `covered_round_ids_by_concert`, and upgrade eligibility
+-- each one batched query. That is what paid the entry's own inherited
+constraint: "the feed must never carry an opted-out leg" held for free while
+the feed read the queue, and this build is precisely the branch that stopped
+sourcing from the queue, so the constraint was re-applied at the derivation on
+purpose, which the entry had named as the one case requiring it.
+
+**`CalendarEvent` gained a required `anchor`, because a no-outcome round now
+emits two events with the same summary.** "Opens" and "apply by" have to be
+distinguishable entries on somebody's phone, so the rendered summary carries a
+short qualifier -- and the split follows the standing locale contract exactly.
+The `.ics` feed stays CANONICAL (locale `None`: a URL has no viewer) and
+qualifies with the Japanese ticketing terms the domain already speaks, from
+`CANONICAL_ANCHOR_QUALIFIERS` in `domain/ics_export.py` -- a plain module-level
+map, deliberately NOT gettext, because canonical text is by definition
+untranslated. `/mydeadlines` passes the recipient's language as it always has
+and qualifies through `_()` msgids in both catalogues.
+
+**`/mydeadlines` inherits the landscape, and that is a deliberate behavior
+change to a shipped command.** The cog reads the same function, so its answer
+moves from rule-derived to standing-derived; accepted in design because one
+derivation is the point and "my deadlines" answering from actual standing is
+strictly more useful, with the cog's tests moving with it.
+
+**The per-round downloads were deleted whole, not deprecated**, per the
+entry's own ruling: the 📅 link in `_round_rows.html`, `GET /rounds/{id}/ics`,
+and `domain/ics_export.py`'s single-event `build_ics`. A file is a snapshot
+that rots the moment a deadline moves -- invariant 2 re-plans the queue and
+nothing re-plans a file in somebody's calendar app -- while the feed re-plans
+on every fetch. `build_calendar` and its VEVENT helpers stay (the feed renders
+through them); a 404 test pins the route's absence, and three tests in
+`test_venue_regions.py` that had been riding the deleted route were cleaned up
+with it.
+
+**The UX is one partial on three surfaces.** `_feed_links.html` renders a
+freshly minted URL identically for Preferences, welcome step 4, and the
+concert page's new "📅 Calendar" dialog -- a `webcal://` "Open in calendar
+app" link (the https URL with its scheme swapped), the URL in a copyable box,
+and a copy button -- replacing three hand-rolled copies so the ergonomics
+cannot drift. The dialog is server-rendered in three states (no feed yet, a
+feed already on, or the shown-once URL after a mint), is a regular action
+beside Edit/Export rather than a kebab item (the kebab stays
+destructive-only), and closes through base.html's global drag-safe handler
+like every other dialog. The mint route's `next` grew from a two-path
+hardcode to `_allowed_next`: `safe_next` FIRST (invariant 5's standing
+open-redirect guard, a same-origin path or None), then a shape allowlist --
+`/preferences`, `/welcome`, or a `/concerts/` prefix -- because the concert
+page is a third minting surface and hardcoding every concert is not a list
+anyone maintains. Everything else still falls back to `/preferences`.
+
+**Copy became true in all three languages.** Welcome step 4 and Preferences no
+longer describe the feed as a mirror of reminder rules; both now say what it
+is -- every show you follow, and the deadlines that still need you. Moved but
+unchanged msgids were kept byte-identical so their translations survived, and
+the msgids the deletions orphaned fell out of both catalogues as obsolete.
+
+Twelve new tests in `tests/test_calendar_landscape.py` (one per standing
+state, plus the exclusions, the future-only rule, the untracked case and the
+LOST-to-next-round handoff), a reworked `test_calendar_feed.py`, and the
+`test_ics_export.py` cases that survived `build_ics` ported to
+`build_calendar`. Full suite 2250 green.
 
 ### Per-leg opt-out suppression reaches every surface (2026-08-04)
 

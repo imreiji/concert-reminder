@@ -332,7 +332,7 @@
     <div class="statline">
       {% if has_calendar_feed or feed_url %}
       <span class="pill p-ok">{{ _("Calendar feed active") }}</span>
-      <span class="clock">{{ _("Subscribe by URL in Google or Apple Calendar.") }}</span>
+      <span class="clock">{{ _("Your shows and the deadlines that still need you, always current.") }}</span>
       {% else %}
       <span class="pill p-quiet">{{ _("No calendar feed") }}</span>
       {% endif %}
@@ -340,12 +340,7 @@
 
     {% if feed_url %}
     <div class="presetcard" style="margin-top:.8rem">
-      <div class="ruleline"><b>{{ _("Your feed link is ready — save it now, it won't be shown again.") }}</b></div>
-      <p class="inline" style="margin:0"><code class="feed-url">{{ feed_url }}</code>
-        <button type="button" class="act" data-copy="{{ feed_url }}"
-                onclick="navigator.clipboard.writeText(this.dataset.copy)">{{ _("Copy link") }}</button></p>
-      <span class="clock">{% trans %}Google Calendar: Settings &rarr; Add calendar &rarr; From URL.
-        Apple Calendar: File &rarr; New Calendar Subscription.{% endtrans %}</span>
+      {% include "_feed_links.html" %}
     </div>
     {% elif has_calendar_feed %}
     <form class="inline" method="post" action="/me/calendar-feed" style="margin-top:.6rem">

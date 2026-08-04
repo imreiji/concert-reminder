@@ -35,6 +35,7 @@ from app.db.service import (
     ensure_user,
     my_deadline_blocks,
     my_deadline_rows,
+    set_concert_subscription,
     set_leg_opt_out,
     setup_application_rows,
     setup_tallies,
@@ -42,7 +43,13 @@ from app.db.service import (
     user_calendar_events,
 )
 from app.domain.board import Column
-from app.domain.types import Anchor, LotteryOutcome, RoundKind, TagKind
+from app.domain.types import (
+    Anchor,
+    LotteryOutcome,
+    RoundKind,
+    SubscriptionState,
+    TagKind,
+)
 
 USER = 42
 OTHER = 99
@@ -308,11 +315,14 @@ async def test_day_row_suppression_is_per_user(session):
 
 
 async def test_calendar_feed_omits_opted_out_leg(session):
-    """The owner's original report was 'shows up on feed': the .ics feed reads
-    reminder_queue back out (user_calendar_events), so with the day row gone
-    the feed carries only the leg the reader is still going to."""
+    """The owner's original report was 'shows up on feed'. The .ics feed now
+    derives from standing over tracked concerts rather than reading
+    reminder_queue back out, so it skips the opted-out leg directly (the same
+    user_opted_out_day_ids every other surface asks) -- the claim is
+    unchanged, only the mechanism behind it is."""
     await ensure_user(session, USER, "reiji")
     concert = await make_concert(session)
+    await set_concert_subscription(session, USER, concert.id, SubscriptionState.SUBSCRIBED)
     a = await make_day(session, concert, "Leg A")
     await make_day(session, concert, "Leg B")
     rule = await make_event_rule(session, USER, concert)

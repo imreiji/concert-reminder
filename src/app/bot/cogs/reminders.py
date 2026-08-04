@@ -68,16 +68,20 @@ class Reminders(commands.Cog):
 
     # ── /mydeadlines ─────────────────────────────────────────────────
 
-    @app_commands.command(description="Your own next deadlines -- only reminders you have set")
+    @app_commands.command(description="Your own next deadlines -- everything you track")
     @app_commands.describe(count="How many to show (default 10)")
     async def mydeadlines(self, interaction: discord.Interaction, count: int = 10) -> None:
         """The personalized counterpart to /upcoming: that command lists
         every deadline in the next N days regardless of who's watching it;
-        this one lists only the concerts/rounds *this* user has an active
-        reminder rule on, sourced from the same reminder_queue-backed
-        user_calendar_events() the personal .ics feed uses -- same
-        real-deadline timestamps, not the reminder's lead-time-adjusted
-        fire time."""
+        this one answers from *this* user's own standing, sourced from the
+        same user_calendar_events() the personal .ics feed uses -- same real
+        moments, never a reminder's lead-time-adjusted fire time.
+
+        Since the 2026-08-04 landscape rewrite that source derives from the
+        user's TRACKED concerts (spec 2026-08-04, an accepted behavior
+        change), not from their reminder rules -- rules now mean when Discord
+        DMs you and nothing else, and this command's copy says "track", not
+        "reminders"."""
         count = max(1, min(count, 25))
         async with SessionMaker() as session:
             user = await ensure_user(session, interaction.user.id, interaction.user.name)
@@ -90,16 +94,25 @@ class Reminders(commands.Cog):
 
         if not events:
             await interaction.response.send_message(
-                _("No upcoming deadlines on your reminders. `/remindme` to add one."),
+                _("Nothing on your calendar yet — follow a tag or an event first."),
                 ephemeral=True,
             )
             return
 
         loc = get_locale()
-        lines = [
-            f"**{e.concert_title}** — {e.label}\n{fmt_dual(e.at_utc, tz, loc)}"
-            for e in events[:count]
-        ]
+        quals = {
+            Anchor.OPENS: _("opens"),
+            Anchor.CLOSES: _("apply by"),
+            Anchor.RESULTS: _("results announced"),
+            Anchor.PAYMENT: _("payment due"),
+        }
+        lines = []
+        for e in events[:count]:
+            qual = quals.get(e.anchor)
+            head = f"**{e.concert_title}** — {e.label}"
+            if qual:
+                head += f" · {qual}"
+            lines.append(f"{head}\n{fmt_dual(e.at_utc, tz, loc)}")
         embed = discord.Embed(
             title=_("Your upcoming deadlines"),
             description="\n\n".join(lines),

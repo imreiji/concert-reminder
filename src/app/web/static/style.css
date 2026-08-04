@@ -1714,13 +1714,6 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .feedbox {
   padding: .9rem 1rem; display: grid; gap: .5rem; max-width: 42rem; margin-top: 1.25rem;
 }
-.feedbox .fl { font-size: .8125rem; color: var(--ok); font-weight: 700; }
-.feedbox code {
-  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: .78rem;
-  background: var(--raise); border: 1px solid var(--line); border-radius: 3px;
-  padding: .45rem .55rem; word-break: break-all; color: var(--ink);
-}
-.feedbox .frow { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 
 /* ── Tablet band (701–1040px) ────────────────────────────────────────────
    Spec: docs/superpowers/specs/2026-07-24-tablet-band-design.md; visual

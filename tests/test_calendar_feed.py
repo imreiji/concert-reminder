@@ -75,19 +75,24 @@ def generate_feed_token(client) -> str:
     return match.group(1)
 
 
-def create_round_with_rule(client, closes_at: str, event_id: str = "c") -> None:
+def create_tracked_round(
+    client, closes_at: str, event_id: str = "c", opens_at: str = ""
+) -> None:
+    """A concert with one round, TRACKED by the caller. The feed derives from
+    standing over tracked concerts now, not from reminder rules -- so this
+    subscribes instead of adding a rule (which would change only DMs)."""
     client.post(
         "/concerts",
         data={"title_en": "C", "title_zh": "C",
             "title": "C", "event_id": event_id,
             "round_label": ["R1"], "round_kind": ["lottery_round"],
-            "round_opens_at": [""], "round_closes_at": [closes_at],
+            "round_opens_at": [opens_at], "round_closes_at": [closes_at],
             "round_results_at": [""], "round_payment_at": [""],
             "round_label_en": ["R1"],
             "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    client.post(f"/concerts/{event_id}/rules", data={"anchor": "closes", "days_before": 3})
+    client.post(f"/concerts/{event_id}/subscription", data={"state": "subscribed"})
 
 
 def test_generate_feed_requires_login(client):
@@ -108,22 +113,73 @@ def test_generate_feed_honors_next_param(client):
     assert r.headers["location"].startswith("/welcome?feed_token=")
 
 
-def test_calendar_feed_returns_ics_with_active_reminders(client):
+def test_generate_feed_honors_concert_page_next(client):
+    """The concert page (Task 5) is a third minting surface -- the allowlist
+    is a SHAPE (/concerts/ prefix), not a hardcoded set of every concert."""
     login_as(client, EDITOR_ID, "reiji")
-    create_round_with_rule(client, "2099-06-25T23:59")
+    create_tracked_round(client, "2099-06-25T23:59", event_id="mine")
+    r = client.post("/me/calendar-feed", data={"next": "/concerts/mine"})
+    assert r.status_code == 303
+    assert r.headers["location"].startswith("/concerts/mine?feed_token=")
+
+
+def test_generate_feed_rejects_offsite_and_odd_next(client):
+    login_as(client, EDITOR_ID, "reiji")
+    for bad in ("https://evil.example/x", "/\\evil.example", "/admin", "//evil"):
+        r = client.post("/me/calendar-feed", data={"next": bad})
+        assert r.headers["location"].startswith("/preferences?feed_token="), bad
+
+
+def test_generate_feed_strips_query_and_dotdot_from_next(client):
+    """The mint route appends ?feed_token= to the destination, so a query
+    in `next` would produce an unparseable double-query URL and silently
+    waste the one-time reveal; dot segments could normalize away from the
+    page that renders it."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/me/calendar-feed", data={"next": "/concerts/mine?x=1"})
+    assert r.headers["location"].startswith("/concerts/mine?feed_token=")
+    r = client.post("/me/calendar-feed", data={"next": "/concerts/../admin"})
+    assert r.headers["location"].startswith("/preferences?feed_token=")
+
+
+def test_fresh_feed_url_shows_webcal_link_on_preferences(client):
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/me/calendar-feed", data={"next": "/preferences"})
+    page = client.get(r.headers["location"])
+    assert "webcal://" in page.text
+
+
+def test_calendar_feed_returns_ics_with_tracked_deadlines(client):
+    login_as(client, EDITOR_ID, "reiji")
+    create_tracked_round(client, "2099-06-25T23:59")
     token = generate_feed_token(client)
 
     r = client.get(f"/calendar/{token}.ics")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/calendar")
     assert "BEGIN:VEVENT" in r.text
-    assert "SUMMARY:C — R1" in r.text
+    assert "SUMMARY:C — R1 · 申込締切" in r.text
     assert "DTSTART:20990625T145900Z" in r.text  # 2099-06-25 23:59 JST -> UTC
+
+
+def test_calendar_feed_qualifies_round_moments_canonically(client):
+    """A no-outcome round emits opens AND closes; the canonical qualifier is
+    what keeps the two apart on somebody's phone. Japanese on purpose: the
+    feed has no viewer, and Japanese is this catalogue's source of truth."""
+    login_as(client, EDITOR_ID, "reiji")
+    create_tracked_round(
+        client, "2099-06-25T23:59", opens_at="2099-06-10T10:00"
+    )
+    token = generate_feed_token(client)
+
+    r = client.get(f"/calendar/{token}.ics")
+    assert "SUMMARY:C — R1 · 受付開始" in r.text
+    assert "SUMMARY:C — R1 · 申込締切" in r.text
 
 
 def test_calendar_feed_excludes_past_deadlines(client):
     login_as(client, EDITOR_ID, "reiji")
-    create_round_with_rule(client, "2000-01-01T00:00")
+    create_tracked_round(client, "2000-01-01T00:00")
     token = generate_feed_token(client)
 
     r = client.get(f"/calendar/{token}.ics")
@@ -158,6 +214,14 @@ def test_preferences_shows_generate_then_active_state(client):
     assert "won't be shown again" not in r.text
 
 
+def test_per_round_ics_download_is_gone(client):
+    """Ruling 2026-08-04: the download buttons are REPLACED by the feed. A
+    file is a snapshot that rots when a deadline moves; the feed re-plans."""
+    login_as(client, EDITOR_ID, "reiji")
+    create_tracked_round(client, "2099-06-25T23:59", event_id="gone")
+    assert client.get("/rounds/1/ics").status_code == 404
+
+
 def test_preferences_shows_one_time_reveal_right_after_generating(client):
     login_as(client, EDITOR_ID, "reiji")
     r = client.post("/me/calendar-feed")
@@ -165,3 +229,23 @@ def test_preferences_shows_one_time_reveal_right_after_generating(client):
     r = client.get(location)
     assert "won't be shown again" in r.text
     assert "/calendar/" in r.text and ".ics" in r.text
+
+
+def test_concert_page_offers_calendar_dialog_no_feed_state(client):
+    login_as(client, EDITOR_ID, "reiji")
+    create_tracked_round(client, "2099-06-25T23:59", event_id="dlg")
+    page = client.get("/concerts/dlg")
+    assert "Turn on my calendar feed" in page.text
+    assert 'name="next" value="/concerts/dlg"' in page.text
+
+
+def test_concert_page_calendar_dialog_shows_fresh_url_once(client):
+    login_as(client, EDITOR_ID, "reiji")
+    create_tracked_round(client, "2099-06-25T23:59", event_id="dlg2")
+    r = client.post("/me/calendar-feed", data={"next": "/concerts/dlg2"})
+    page = client.get(r.headers["location"])
+    assert "webcal://" in page.text
+    # And the has-feed state on the NEXT visit: no URL, honest copy instead.
+    page = client.get("/concerts/dlg2")
+    assert "webcal://" not in page.text
+    assert "already" in page.text.lower()

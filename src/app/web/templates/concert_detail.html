@@ -71,7 +71,9 @@
         (the eventernote-links branch's territory). The button + its heavy
         WON/PAID confirmation live in _following_toggle.html; this page only
         places them. Visible to every signed-in reader, unlike the editor bar. -#}
-    <p class="bar2">{% include "_following_toggle.html" %}</p>
+    <p class="bar2">{% include "_following_toggle.html" %}
+      <button class="btn quiet" type="button" onclick="document.getElementById('caldlg').showModal()">📅 {{ _("Calendar") }}</button>
+    </p>
     {#- === end subscriptions branch ======================================== -#}
     {#- Editing is something you do to a SPECIFIC concert, so it belongs here
         rather than in the site nav -- and both controls are editor-only. -#}
@@ -189,6 +191,45 @@
   </details>
   {% endif %}
 </article>
+
+{#- The calendar dialog (Task 5): every signed-in reader's one-stop feed
+    control on this concert's page, same `.picker` anatomy as every other
+    dialog here (header with title + ×, no footer; backdrop-click and Esc
+    close come ONLY from base.html's global drag-safe handler -- no local
+    handler here, per the sweep test in test_theme_and_tokens.py).
+
+    Three states, same shape preferences.py/welcome step 4 already use:
+      - feed_url set     -> a token was just minted (the mint route's `next`
+                             brought the visitor straight back here) -- show
+                             the one-time reveal via the shared partial.
+      - has_calendar_feed -> a feed exists already, minted elsewhere; honest
+                             "already on" copy, no URL (it is never shown
+                             twice), pointing to Preferences to regenerate.
+      - neither           -> no feed yet; the mint form's `next` is THIS
+                             concert's own path, so the redirect lands right
+                             back in this dialog's fresh-token state. -#}
+<dialog id="caldlg" class="picker">
+  <div class="picker-head">
+    <h3>{{ _("Calendar feed") }}</h3>
+    <button class="x" type="button" onclick="this.closest('dialog').close()">×</button>
+  </div>
+  <div class="picker-body">
+    {% if feed_url %}
+      {% include "_feed_links.html" %}
+    {% elif has_calendar_feed %}
+      <p>{{ _("Your calendar feed is already on — this event's dates and deadlines are in it while you follow the event.") }}</p>
+      <p class="clock">{{ _("Lost the link? Generate a new one in Preferences — the old link stops working.") }}</p>
+      <p class="inline"><a class="act" href="/preferences#p-deliver">{{ _("Open Preferences") }}</a></p>
+    {% else %}
+      <p>{{ _("One subscription link keeps your calendar current: every show you follow, and the deadlines that still need you.") }}</p>
+      <form method="post" action="/me/calendar-feed">
+        <input type="hidden" name="next" value="/concerts/{{ concert.event_id }}">
+        <button class="btn" type="submit">{{ _("Turn on my calendar feed") }}</button>
+      </form>
+    {% endif %}
+  </div>
+</dialog>
+{% if feed_url %}<script>document.getElementById('caldlg').showModal()</script>{% endif %}
 
 {#- The catch-up dialog. Last in the document so the page underneath is fully
     rendered before it opens, and OUTSIDE the article because it is not part of

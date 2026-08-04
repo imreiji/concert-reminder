@@ -103,7 +103,6 @@
     {% if row.needed_for_labels %}<span class="more">{% trans names=row.needed_for_labels | join(", ") %}Needed for: {{ names }}{% endtrans %}</span>{% endif %}
   </span>
   <span class="acts">
-    {% if not past and row.primary_at_utc %}<a class="ics" href="/rounds/{{ r.id }}/ics" title="{{ _('Add to calendar') }}">📅</a>{% endif %}
     {% if r.url %}<a class="ics" href="{{ r.url }}" target="_blank" rel="noopener" title="{{ _('Round page') }}">🔗</a>{% endif %}
     {# An upgrade round the signed-in reader cannot enter shows what they need
        to hold, not capture buttons. `qualifier_labels` is user-controlled

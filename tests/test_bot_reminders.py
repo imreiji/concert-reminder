@@ -15,8 +15,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.bot.cogs import reminders as reminders_cog
 from app.db.models import Base, Concert, Round
-from app.db.service import due_reminders, ensure_user, sync_rule
-from app.domain.types import Anchor, RoundKind
+from app.db.service import (
+    due_reminders,
+    ensure_user,
+    set_concert_subscription,
+    sync_rule,
+)
+from app.domain.types import Anchor, RoundKind, SubscriptionState
 
 NOW = datetime(2099, 6, 1, tzinfo=UTC)
 
@@ -111,10 +116,13 @@ async def test_upcoming_localizes_round_label(db):
 async def test_mydeadlines_empty_state(db):
     interaction = FakeInteraction(42)
     await call_mydeadlines(interaction)
-    assert "No upcoming deadlines" in interaction.response.sent["args"][0]
+    assert "Nothing on your calendar yet" in interaction.response.sent["args"][0]
 
 
-async def test_mydeadlines_lists_only_this_users_reminders(db):
+async def test_mydeadlines_lists_only_this_users_landscape(db):
+    """The command answers from the caller's own standing (spec 2026-08-04),
+    so the isolation claim is unchanged but rests on tracking rather than on
+    rules: user 42 tracks this concert, user 777 does not."""
     async with db() as s:
         await ensure_user(s, 42, "reiji")
         concert = Concert(title="Hasunosora 5th", event_id="hasu-5th", created_by=42)
@@ -126,12 +134,7 @@ async def test_mydeadlines_lists_only_this_users_reminders(db):
         )
         s.add(round_)
         await s.flush()
-        from app.db.models import ReminderRule
-
-        rule = ReminderRule(user_id=42, round_id=round_.id, anchor=Anchor.CLOSES, offset_days=-3)
-        s.add(rule)
-        await s.flush()
-        await sync_rule(s, rule, NOW)
+        await set_concert_subscription(s, 42, concert.id, SubscriptionState.SUBSCRIBED)
         await s.commit()
 
     interaction = FakeInteraction(42)
@@ -139,13 +142,14 @@ async def test_mydeadlines_lists_only_this_users_reminders(db):
     embed = interaction.response.sent["kwargs"]["embed"]
     assert "Hasunosora 5th" in embed.description
     assert "R1" in embed.description
+    assert "apply by" in embed.description  # closes-moment qualifier, English catalogue
     assert interaction.response.sent["kwargs"]["ephemeral"] is True
 
-    # a different user with no rules of their own sees the empty state, not
-    # someone else's deadlines
+    # a different user tracking nothing sees the empty state, not someone
+    # else's deadlines
     other = FakeInteraction(777, "other")
     await call_mydeadlines(other)
-    assert "No upcoming deadlines" in other.response.sent["args"][0]
+    assert "Nothing on your calendar yet" in other.response.sent["args"][0]
 
 
 async def test_due_reminders_populates_user_language(db):
@@ -183,19 +187,16 @@ async def test_mydeadlines_respects_count_and_clamps_range(db):
         concert = Concert(title="C", event_id="c", created_by=42)
         s.add(concert)
         await s.flush()
-        from app.db.models import ReminderRule
-
         for i in range(3):
+            # closes only, so each no-outcome round contributes exactly one
+            # moment and the count under test is unambiguous.
             round_ = Round(
                 concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label=f"R{i}",
                 closes_at_utc=dt(6, 25 + i),
             )
             s.add(round_)
-            await s.flush()
-            rule = ReminderRule(user_id=42, round_id=round_.id, anchor=Anchor.CLOSES, offset_days=0)
-            s.add(rule)
-            await s.flush()
-            await sync_rule(s, rule, NOW)
+        await s.flush()
+        await set_concert_subscription(s, 42, concert.id, SubscriptionState.SUBSCRIBED)
         await s.commit()
 
     interaction = FakeInteraction(42)
