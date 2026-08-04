@@ -830,10 +830,141 @@ every live pointer in Proposed is name-based already, and the numeric ones
 inside the minute-level entry are dated records of earlier passes, left as
 written.
 
+The 2026-08-04 capture pass ADDS one owner-raised entry the day after the fix
+pass above, and it enters at **#1 on merit**: the owner, living with the app,
+named the per-round `.ics` download flow as the pain ("adding each event with
+a new calendar event file just sucks -- let's make it a subscription link").
+Filing followed the file's own discipline: the tree was checked first (a
+personal subscription feed already EXISTS, so the naive entry would have
+described a solved problem -- the Python-pinning failure mode), and the owner
+was then asked which of four candidate gaps actually bites. He ticked ALL
+FOUR, which is what makes this one entry rather than a cosmetic relink: the
+feed is undiscovered, its content is wrong for him, its token flow is
+friction, and the download buttons should be replaced outright. Every entry
+from the former #1 down shifts by insertion, never on merit -- and
+minute-level offsets is displaced for the SEVENTH time, one day after its
+shortest-ever return; the running record continues in its entry.
+
+The second 2026-08-04 capture pass, hours after the first, ADDS an
+owner-reported defect and enters it at **#1 on the correctness precedent** --
+the same one that ranked the onboarding skip and the dead-concert entry before
+it, sharpened here by an irreversible press: Home offers APPLIED, which
+`record_round_outcome` will not take back, on a round whose only leg the
+reader already said they are skipping. The diagnosis was run BEFORE filing
+(root cause verified against the tree, three surfaces named, the single-leg
+shape confirmed by the owner), so the entry is a work order rather than a
+symptom; the owner chose filing over a same-day fix. The calendar-story entry
+is displaced to #2 after hours at #1 -- by insertion on the precedent, not by
+any reassessment of its merit -- and minute-level offsets takes its EIGHTH
+displacement, to #3, without ever once being judged less valuable; the record
+continues in its entry.
+
 ## Proposed (highest impact first)
 
 
-### 1. Minute-level reminder offsets
+### 1. A leg you opted out of keeps showing up everywhere
+
+Impact: medium-high (correctness: the app keeps asking about -- and offers an
+irreversible press on -- a show the reader said they are skipping) - effort:
+small-to-medium (one rule, several surfaces, a test per surface). Raised:
+2026-08-04 (owner report, first as "shows up on feed", then Up next; the
+single-leg shape confirmed by him at filing). Root cause verified against the
+tree before writing this down.
+
+Per-leg opt-out suppression exists in exactly ONE place --
+`_apply_outcome_suppression`'s round pass -- and only the reminder planner
+(`sync_rule`) runs that. Everything else never consults `LegOptOut`:
+
+- **Queue day rows.** `sync_rule` filters its day candidates by
+  `not d.cancelled` alone (the `days =` line, `db/service.py`), so an
+  `event_start` rule plans show-start rows for legs the user opted out of.
+  Those rows are exactly what `user_calendar_events` reads back out of
+  `reminder_queue`, so they reach the calendar feed, the show-start DM and
+  `/mydeadlines`. The bitter half: `set_leg_opt_out`'s own invariant-8 resync
+  re-runs the same blind `sync_rule`, so the write that should clear the rows
+  is the one that faithfully re-plans them.
+- **Home's read path.** `my_upcoming_deadlines` / `my_deadline_rows` drop
+  covered rounds and ineligible upgrades but have NO LegOptOut pass, so a
+  single-leg round on an opted-out leg reaches Up next and Coming up with its
+  capture buttons live -- the dead-concert bug's shape at invariant-8 scale.
+  The only read-side place opt-outs matter today is inside the
+  secured-elsewhere subtraction, which activates only when the reader holds a
+  ticket on that concert.
+- **The board.** `board_cards` likewise never asks, so an open round on fully
+  opted-out legs is expected to keep a card in *Open now* (skimmed, not
+  pinned -- the fix's tests should settle it either way).
+
+The rule to apply is the one invariant 8 already states, applied uniformly: a
+round suppresses when its `applies_to` is non-empty and EVERY leg in it is
+opted out; a day-derived row suppresses when its own day is opted out. The
+partial case -- a two-leg round with one leg opted out -- survives BY DESIGN,
+mirroring the cancellation rule, and is explicitly not this entry: if that
+survival reads wrong in practice, the remedy is labeling (say which legs
+remain), never suppression. The per-surface fixes are mechanical; what earns
+the "medium" half of the effort is the sweep -- the `_wants_you` family and
+`discover_statuses` should be checked for the same blindness while someone is
+in there, and every surface owes a failing-first test (opt out, resync, assert
+the leg's rows are gone while the other leg's survive).
+
+One constraint flows DOWN from here: the calendar-story entry directly below
+is partly about what the feed should carry, and whatever the answer turns out
+to be, it must never carry an opted-out leg.
+
+### 2. The calendar story should be the feed, not per-round files
+
+Impact: medium-high (owner usage pain, four gaps behind one sentence) -
+effort: medium. Raised: 2026-08-04 (owner, living with the app; filed after a
+tree check and a four-way clarifying question, both recorded here).
+
+The concert page's calendar affordance is a per-round `.ics` DOWNLOAD
+(`web/routes/concerts.py`, one VEVENT per file) -- so keeping a calendar
+current means importing a new file per round, forever. Meanwhile the right
+mechanism already shipped in the phase-12 arc and is not the gap:
+`POST /me/calendar-feed` (Preferences, and welcome step 4) mints a token and
+`GET /calendar/{token}.ics` is a live subscription -- every FUTURE deadline
+the user's active reminder rules cover, straight out of `reminder_queue`
+(`user_calendar_events`), no cookie, token-as-credential per invariant 5's
+secret-link shape. The owner confirmed all four candidate gaps at once, which
+decomposes the entry into one ruling and three design questions:
+
+- **RULING (owner, 2026-08-04): the per-round download buttons are REPLACED
+  by a subscribe affordance**, not supplemented. A file is a snapshot that
+  rots the moment a deadline moves (invariant 2 re-plans the queue; the file
+  in somebody's calendar is not re-planned); the feed is the mechanism that
+  stays true. Whoever builds this should delete `build_ics`'s route with the
+  buttons, or record why not.
+- **Discoverability was total: the owner did not know the feed existed.** It
+  is minted only in Preferences and welcome step 4; the concert page -- the
+  place where calendar intent actually occurs -- never mentions it. The
+  replace-the-buttons ruling above mostly solves this by construction, but
+  the subscribe affordance must work for a user who has never minted a token
+  (mint-on-first-use, or route through Preferences without losing them).
+- **Content: reminder-rule-derived deadlines only, and that surprised the
+  owner.** A concert you track with a sparse preset yields a sparse calendar,
+  which reads as broken, not configured; and performance dates themselves
+  (the show you won a ticket to) appear only via an `event_start`-anchored
+  rule. What SHOULD the feed carry -- tracked concerts' show dates? secured
+  legs? every open round's close? -- is the open design question, and it
+  needs the owner's read of what he expected the first time he opened the
+  feed. Note `fmt`/locale is already settled: the feed deliberately renders
+  canonical (locale `None`) because a URL has no viewer; that ruling stands
+  whatever the content becomes.
+- **Flow: the token is shown exactly once, and recovery is regeneration.**
+  That shape is invariant 5's and is NOT the thing to fix -- only the hash is
+  stored, so "show me my URL again" is impossible by design, and any design
+  here must live within that (regenerate-and-show is the recovery, and it
+  invalidates the old URL). The friction to remove is around it: a
+  `webcal://` link / "open in calendar app" affordance instead of a bare URL
+  to copy, and copy-button ergonomics at mint time.
+
+One terminology trap, recorded so nobody builds it: the owner said "caldav",
+but CalDAV the protocol is two-way calendar SYNC (a server your calendar app
+writes into), and nothing here needs it. The shipped feed is already the
+right protocol shape -- one-way `.ics` over HTTPS, what calendar apps call a
+subscription -- and `webcal://` is just that URL with a scheme that makes
+apps subscribe instead of import. This entry is UX and content, not protocol.
+
+### 3. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -891,7 +1022,20 @@ the shortest displacement in this entry's history. Re-read against what shipped
 `<script>` blocks) and untouched in every respect. The number keeps moving; the
 reading has not changed once.
 
-### 2. Franchise-aware round-label suggestions
+Displaced to #2 on 2026-08-04 by the calendar-feed entry, the seventh
+displacement and the fastest yet -- one day at #1. By insertion on the new
+entry's merit (owner usage pain, four gaps at once), never on this one's:
+still untouched in substance, still never judged less valuable. One genuine
+point of contact worth naming rather than implying: FCFS sales are this
+entry's own strongest case, and a calendar rebuilt around the feed makes a
+"5 minutes before it opens" reminder MORE visible when it exists, not less --
+the two entries reinforce, they do not compete.
+
+Displaced to #3 hours later the same day by the opt-out suppression defect --
+the eighth displacement, and the first time this entry has moved twice in one
+day. Same verdict as the previous seven: position, never substance.
+
+### 4. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -912,7 +1056,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 3. Ten of eleven `RoundKind` members are purely cosmetic
+### 5. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -945,7 +1089,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 4. PWA / installability
+### 6. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -965,7 +1109,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 5. In-app LLM extraction behind the same draft seam
+### 7. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -994,7 +1138,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 6. Minor demo-parity cosmetics
+### 8. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1056,7 +1200,7 @@ it into this entry's single pass rather than spawning a task. Rank unchanged --
 this entry has now grown four times without once being worth doing on its own,
 which is itself the argument for keeping it as one batched pass.
 
-### 7. The event classes outside concerts and talk shows
+### 9. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1085,7 +1229,7 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 8. A/B casts have nowhere to live
+### 10. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1108,7 +1252,7 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 9. Discover sort in the content head, plus the catalogue-count note
+### 11. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1134,7 +1278,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 10. Name the destination on the sign-in bounce
+### 12. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1156,7 +1300,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 11. The calendar roster's blind spots
+### 13. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1204,7 +1348,7 @@ refutes: the campaign is already a lead, so what is lost is a second pointer to
 something already visible, not the concert. A rating that contradicts its own
 entry is worse than a cautious one, and this list orders by USER impact.
 
-### 12. Nothing caps the discovery review path
+### 14. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1244,7 +1388,7 @@ or that the copy block can be reconstructed from ids alone. The one HALF of the
 fix this entry already calls cheap -- emitting `copy_text` once instead of twice
 -- is unaffected by any of it and is still the thing to do first.
 
-### 13. Nothing notices a calendar feed going quiet
+### 15. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
