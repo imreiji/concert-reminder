@@ -792,10 +792,39 @@ not code. It is deliberately not an entry here -- this file tracks features, and
 that is the owner's next named operation, done through surfaces that already
 shipped.
 
+The 2026-08-03 capture pass ADDS two owner-reported defects without shipping
+anything, the day the first calendar-fed triage ran end to end (264 dismissals,
+an eight-draft import batch). Both were found by the owner using the app, not
+by a build's review. The onboarding skip enters at #1 on the correctness
+precedent (a first contact silently served wrong outranks every feature); the
+venue-dialog backdrop enters at #8 beside the polish family, unranked-in-anger
+because its symptom is not yet described. Every entry from the old #1 down
+shifts by insertion, never on merit.
+
 ## Proposed (highest impact first)
 
 
-### 1. Minute-level reminder offsets
+### 1. A bot-first user never sees onboarding
+
+Impact: medium-high (correctness at first contact) - effort: small. Raised:
+2026-08-03 (owner, after an admin `delete_user` + re-login skipped the wizard).
+
+`web/auth.py`'s callback decides "brand-new" by ROW ABSENCE
+(`db.get(User, id) is None`), but the bot's slash commands create bare rows for
+anyone who runs one (`ensure_user` in `bot/cogs/reminders.py`, three call
+sites). Anyone whose first contact is the BOT therefore logs into the web later
+as an "existing" user and never sees `/welcome` -- no tags, no preset, no
+timezone confirmation, silently. The deletion case that surfaced it is the
+same hole: a re-created row is indistinguishable from an onboarded one.
+
+The fix is one honest column: `User.welcomed_at`, stamped when the wizard
+completes, checked by the callback instead of row absence, backfilled as done
+for every existing row so nobody is re-wizarded. Workaround until then:
+`/welcome` works by URL. Related doc rot to fold in: `service.delete_user`'s
+docstring still claims "no route or UI calls this" -- `POST /me/delete` has
+called it since it shipped.
+
+### 2. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -846,7 +875,7 @@ scheduler tick and an admin page, and touches neither `PresetItem` nor the
 sentence builders. Worth saying plainly, since this entry has now been displaced
 five passes running without once being judged less valuable.
 
-### 2. Franchise-aware round-label suggestions
+### 3. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -867,7 +896,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 3. Ten of eleven `RoundKind` members are purely cosmetic
+### 4. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -900,7 +929,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 4. PWA / installability
+### 5. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -920,7 +949,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 5. In-app LLM extraction behind the same draft seam
+### 6. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -949,7 +978,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 6. Minor demo-parity cosmetics
+### 7. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1011,7 +1040,22 @@ it into this entry's single pass rather than spawning a task. Rank unchanged --
 this entry has now grown four times without once being worth doing on its own,
 which is itself the argument for keeping it as one batched pass.
 
-### 7. The event classes outside concerts and talk shows
+### 8. The add-venue dialog's backdrop is wrong
+
+Impact: low-medium (a defect in one editor flow) - effort: unknown until
+measured. Raised: 2026-08-03 (owner report, symptom not yet described).
+
+Something is off about the backdrop when the venue quick-create popup opens.
+The obvious suspect is innocent -- `_venue_create_dialog.html` IS
+`class="picker"` and `.picker::backdrop` IS styled -- so per the
+measure-don't-reason rule this waits for a real viewport, not a CSS read.
+Suspects to measure first: the dialog opens from INSIDE the editor form
+(possibly from within another open dialog -- stacking two backdrops), and the
+<=700px retrofit that turns every dialog into a bottom sheet. First step is
+one sentence from the owner: no dim, click-through, or won't-close -- and
+desktop or phone.
+
+### 9. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1040,7 +1084,7 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 8. A/B casts have nowhere to live
+### 10. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1063,7 +1107,7 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 9. Discover sort in the content head, plus the catalogue-count note
+### 11. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1089,7 +1133,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 10. Name the destination on the sign-in bounce
+### 12. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1111,7 +1155,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 11. The calendar roster's blind spots
+### 13. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1159,7 +1203,7 @@ refutes: the campaign is already a lead, so what is lost is a second pointer to
 something already visible, not the concert. A rating that contradicts its own
 entry is worse than a cautious one, and this list orders by USER impact.
 
-### 12. Nothing caps the discovery review path
+### 14. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1199,7 +1243,7 @@ or that the copy block can be reconstructed from ids alone. The one HALF of the
 fix this entry already calls cheap -- emitting `copy_text` once instead of twice
 -- is unaffected by any of it and is still the thing to do first.
 
-### 13. Nothing notices a calendar feed going quiet
+### 15. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
