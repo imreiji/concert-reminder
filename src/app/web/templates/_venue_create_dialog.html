@@ -76,11 +76,10 @@
       dlg.showModal();
     });
 
-    // Backdrop-click closes, exactly like .picker. Esc is the <dialog>
-    // default and needs no handler.
-    dlg.addEventListener("click", function (e) {
-      if (e.target === dlg) dlg.close();
-    });
+    // Backdrop-click is handled globally in base.html (drag-safe: press and
+    // release must both land on the backdrop); Esc is the <dialog> default.
+    // A local naive backdrop-close handler here is exactly the bug e23943d
+    // fixed -- it closes on a drag out of a field. Don't reintroduce one.
     dlg.querySelector("[data-venue-cancel]").addEventListener("click", () => dlg.close());
 
     // One handler for all three close paths (×, backdrop click, Esc) plus
