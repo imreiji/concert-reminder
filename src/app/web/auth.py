@@ -186,10 +186,13 @@ async def callback(
     request.session["sid"] = sid
     request.session["user"] = {"id": user_id, "username": username, "avatar": me.get("avatar")}
     log.info("login: %s (%s)", username, user_id)
-    # A brand-new account goes through the wizard no matter what asked for the
-    # login: someone who has not picked a single tag yet is not served by
-    # landing on the concert page that happened to bounce them here.
-    response = RedirectResponse("/welcome" if is_new_user else (destination or "/"))
+    # The wizard is owed to anyone it has never finished for -- which is
+    # welcomed_at IS NULL, not "row did not exist yet": the bot's slash
+    # commands ensure_user bare rows, and an admin delete_user + re-login
+    # re-creates one, so row absence never meant "was onboarded". Someone
+    # who has not picked a single tag is not served by landing on the page
+    # that bounced them here, so the wizard also wins over ?next=.
+    response = RedirectResponse("/welcome" if db_user.welcomed_at is None else (destination or "/"))
     # Set the cookie from the (possibly just-seeded, possibly pre-existing)
     # column so this browser now matches the account.
     response.set_cookie(

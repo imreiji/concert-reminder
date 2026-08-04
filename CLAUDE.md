@@ -898,8 +898,9 @@ deleting them.
    the network as scheme-relative `//evil.com`). `next` rides to Discord
    in OUR signed session cookie next to `oauth_state`, never as an OAuth
    query param, so it cannot return attacker-controlled; the callback
-   re-validates anyway, and a brand-new account still goes to `/welcome`
-   regardless. Templates link sign-in via the `login_url(request)` global,
+   re-validates anyway, and an account whose wizard was never finished
+   (`User.welcomed_at` NULL -- row existence proves nothing, the bot's
+   `ensure_user` mints bare rows) still goes to `/welcome` regardless. Templates link sign-in via the `login_url(request)` global,
    never a bare `/auth/login` -- miss one CTA and that button silently
    drops the destination the others keep.
    No separate CSRF token: mutating routes rely on `SameSite=Lax` cookies
@@ -1058,7 +1059,11 @@ deleting them.
   deadlines you must act by, not this.
 - Tag chips are the universal element; "+ Add x" buttons share the exact
   chip silhouette. Pickers are native <dialog> white cards: header (title +
-  ×), search, chip list; no footer; backdrop-click and Esc close.
+  ×), search, chip list; no footer; backdrop-click and Esc close --
+  backdrop-close comes ONLY from base.html's global drag-safe handler; never
+  add a local `e.target === dlg` click handler to a dialog (that shipped the
+  drag-out-closes-the-dialog bug twice; a sweep test in
+  `test_theme_and_tokens.py` now forbids it).
 - Editor leg/round cards render through the shared partials
   `_editor_leg_card.html`/`_editor_round_card.html` -- concert_new,
   concert_edit and import_preview (their loops AND `<template>` blocks) all

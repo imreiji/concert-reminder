@@ -242,6 +242,27 @@ def test_backdrop_close_requires_the_press_to_land_there_too(client):
     assert "e.target.close()" in html
 
 
+def test_no_template_hand_rolls_a_naive_backdrop_close():
+    """base.html's global backdrop-close guard is drag-safe: it closes a dialog
+    only when pointerdown and click agree on the target (see the test above).
+    A LOCAL `if (e.target === dlg) dlg.close()` handler on a dialog bypasses
+    that guard entirely -- a drag that starts in an input and releases on the
+    backdrop reports the dialog as the click target and closes it, discarding
+    what was typed. e23943d fixed this globally but two dialogs kept local
+    handlers and shipped the bug anyway; this sweep keeps a third from
+    reintroducing it. Rely on the global handler; do not hand-roll one.
+    """
+    tpl_dir = Path(__file__).resolve().parents[1] / "src" / "app" / "web" / "templates"
+    offenders = [
+        p.name for p in sorted(tpl_dir.glob("*.html"))
+        if "e.target === dlg" in p.read_text(encoding="utf-8")
+    ]
+    assert offenders == [], (
+        f"{offenders} hand-roll a backdrop-close click handler; delete it -- "
+        "base.html's global drag-safe handler already closes on backdrop click"
+    )
+
+
 def test_header_emits_theme_toggle_and_pill_nav(client):
     html = client.get("/").text
     assert "data-theme-toggle" in html, "theme toggle control must be in the header"

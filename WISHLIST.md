@@ -801,30 +801,39 @@ venue-dialog backdrop enters at #8 beside the polish family, unranked-in-anger
 because its symptom is not yet described. Every entry from the old #1 down
 shifts by insertion, never on merit.
 
+**The 2026-08-03 fix pass empties both of them the same day**, on one branch
+(`fix-onboarding-skip-and-dialog-drag`, three tasks, migration `aba3e97e4467`).
+They were batched for the reason the 2026-07-28 cleanup batch was: each is
+small, and neither was ever going to win a prioritisation against the other.
+The onboarding fix shipped exactly as its entry prescribed -- worth saying,
+given this file's Python-pinning embarrassment -- while the dialog entry was
+prescribed WRONG and knew it: it was filed unranked-in-anger pending one
+sentence from the owner, and that sentence ("dragging from inside of dialog to
+outside closes it", desktop) re-routed the diagnosis off the backdrop CSS the
+entry suspected and onto the close handler, where it was settled by code
+reading and git history with no viewport at all. Both Shipped entries below
+record their own halves of that.
+
+The re-rank moves nothing on merit, and entries renumber 1-13 by the two
+removals. **Minute-level reminder offsets returns to #1 by pure removal**, one
+pass after the capture entry displaced it -- the shortest displacement it has
+had, and the record is kept straight here for the same reason the previous five
+were: it has never once been judged less valuable, only moved. It is untouched
+in substance, and nothing else got cheaper either -- this pass lived in one
+column, the OAuth callback's redirect decision and two template `<script>`
+blocks, and no remaining entry goes near any of them. Two were re-read against
+what shipped and both stand: #6 (minor demo-parity cosmetics) did NOT grow, for
+the first time in four passes, because a build whose second half is a deletion
+adds no component a demo owes a frame for; and #12 (nothing caps the discovery
+review path) goes nowhere near either fix. No cross-reference needed bumping --
+every live pointer in Proposed is name-based already, and the numeric ones
+inside the minute-level entry are dated records of earlier passes, left as
+written.
+
 ## Proposed (highest impact first)
 
 
-### 1. A bot-first user never sees onboarding
-
-Impact: medium-high (correctness at first contact) - effort: small. Raised:
-2026-08-03 (owner, after an admin `delete_user` + re-login skipped the wizard).
-
-`web/auth.py`'s callback decides "brand-new" by ROW ABSENCE
-(`db.get(User, id) is None`), but the bot's slash commands create bare rows for
-anyone who runs one (`ensure_user` in `bot/cogs/reminders.py`, three call
-sites). Anyone whose first contact is the BOT therefore logs into the web later
-as an "existing" user and never sees `/welcome` -- no tags, no preset, no
-timezone confirmation, silently. The deletion case that surfaced it is the
-same hole: a re-created row is indistinguishable from an onboarded one.
-
-The fix is one honest column: `User.welcomed_at`, stamped when the wizard
-completes, checked by the callback instead of row absence, backfilled as done
-for every existing row so nobody is re-wizarded. Workaround until then:
-`/welcome` works by URL. Related doc rot to fold in: `service.delete_user`'s
-docstring still claims "no route or UI calls this" -- `POST /me/delete` has
-called it since it shipped.
-
-### 2. Minute-level reminder offsets
+### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -875,7 +884,14 @@ scheduler tick and an admin page, and touches neither `PresetItem` nor the
 sentence builders. Worth saying plainly, since this entry has now been displaced
 five passes running without once being judged less valuable.
 
-### 3. Franchise-aware round-label suggestions
+Back at #1 again on 2026-08-03 by pure removal, one pass after the
+onboarding-skip entry displaced it and one day after that entry was filed --
+the shortest displacement in this entry's history. Re-read against what shipped
+(one column on `User`, the OAuth callback's redirect decision, two template
+`<script>` blocks) and untouched in every respect. The number keeps moving; the
+reading has not changed once.
+
+### 2. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -896,7 +912,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 4. Ten of eleven `RoundKind` members are purely cosmetic
+### 3. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -929,7 +945,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 5. PWA / installability
+### 4. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -949,7 +965,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 6. In-app LLM extraction behind the same draft seam
+### 5. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -978,7 +994,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 7. Minor demo-parity cosmetics
+### 6. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1040,22 +1056,7 @@ it into this entry's single pass rather than spawning a task. Rank unchanged --
 this entry has now grown four times without once being worth doing on its own,
 which is itself the argument for keeping it as one batched pass.
 
-### 8. The add-venue dialog's backdrop is wrong
-
-Impact: low-medium (a defect in one editor flow) - effort: unknown until
-measured. Raised: 2026-08-03 (owner report, symptom not yet described).
-
-Something is off about the backdrop when the venue quick-create popup opens.
-The obvious suspect is innocent -- `_venue_create_dialog.html` IS
-`class="picker"` and `.picker::backdrop` IS styled -- so per the
-measure-don't-reason rule this waits for a real viewport, not a CSS read.
-Suspects to measure first: the dialog opens from INSIDE the editor form
-(possibly from within another open dialog -- stacking two backdrops), and the
-<=700px retrofit that turns every dialog into a bottom sheet. First step is
-one sentence from the owner: no dim, click-through, or won't-close -- and
-desktop or phone.
-
-### 9. The event classes outside concerts and talk shows
+### 7. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1084,7 +1085,7 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 10. A/B casts have nowhere to live
+### 8. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1107,7 +1108,7 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 11. Discover sort in the content head, plus the catalogue-count note
+### 9. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1133,7 +1134,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 12. Name the destination on the sign-in bounce
+### 10. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1155,7 +1156,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 13. The calendar roster's blind spots
+### 11. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1203,7 +1204,7 @@ refutes: the campaign is already a lead, so what is lost is a second pointer to
 something already visible, not the concert. A rating that contradicts its own
 entry is worse than a cautious one, and this list orders by USER impact.
 
-### 14. Nothing caps the discovery review path
+### 12. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1243,7 +1244,7 @@ or that the copy block can be reconstructed from ids alone. The one HALF of the
 fix this entry already calls cheap -- emitting `copy_text` once instead of twice
 -- is unaffected by any of it and is still the thing to do first.
 
-### 15. Nothing notices a calendar feed going quiet
+### 13. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
@@ -1300,6 +1301,85 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Onboarding is decided by `welcomed_at`, not by row existence (2026-08-03)
+
+Branch `fix-onboarding-skip-and-dialog-drag`, migration `aba3e97e4467`, plan
+`docs/superpowers/plans/2026-08-03-onboarding-skip-and-dialog-drag.md` (no spec
+-- the root causes were verified against the tree and written into the plan
+instead, which is the right shape for two bounded defects). Filed as #1 by the
+owner that morning after an admin `delete_user` + re-login walked him straight
+past the wizard. **It shipped exactly as the entry prescribed**, which is worth
+recording in a file that also carries the Python-pinning embarrassment: the
+entry named the column, the check and the backfill, and all three survived
+contact with the code.
+
+`User.welcomed_at` is aware UTC and NULL means the wizard has never finished.
+It is stamped at BOTH exits -- `advance()` crossing into done, and `skip_all()`
+-- and the OAuth callback keys the `/welcome` redirect off it instead of asking
+whether a `users` row existed a moment ago. The existing `onboarding_step`
+column could NOT answer this, and the reason is the same one that decides the
+backfill: its own migration set every pre-existing row to 0, so a real
+pre-wizard web user and a bare row the bot's `ensure_user` minted are
+indistinguishable by step. At migration time nothing can tell them apart
+either, so every existing row is grandfathered from `created_at` and nobody is
+re-wizarded.
+
+**One refinement the entry did not name, found in the callback rather than
+predicted.** `is_new_user` gated two things, not one: the redirect AND the
+language-cookie seeding. Only the redirect moved. The seeding stays keyed on
+row absence deliberately, because `users.language` cannot distinguish
+"defaulted to en" from "chose en" -- the moment before the row exists is the
+only safe moment to seed it, and a column about the wizard has nothing to say
+about that.
+
+**One deliberate behaviour change, stated so it is a decision rather than a
+surprise:** every login with `welcomed_at` NULL now goes to `/welcome`, not
+just the first. An unfinished onboarding is unfinished, and the exit is one
+click because skip-all renders on every wizard screen. Five new behaviour tests
+cover it, including the owner's original repro (`delete_user`, log in again,
+land on `/welcome`); four pre-existing `test_auth` tests were updated only by
+having the user finish the wizard between their two logins, which is what they
+always meant -- no assertion was weakened to make the change fit. The entry's
+doc-rot rider went in the same commit: `service.delete_user`'s docstring had
+claimed "no route or UI calls this" since before `POST /me/delete` shipped.
+
+### Dragging out of a quick-create dialog no longer closes it (2026-08-03)
+
+Same branch. Filed as #8 the same morning, unranked-in-anger and prescribed
+WRONG on purpose -- the entry said the symptom was undescribed, suspected the
+backdrop CSS or a stacking problem, and per the measure-don't-reason rule
+parked itself pending a real viewport. **The owner's one sentence re-routed the
+whole diagnosis, and that is the durable half of this entry.** "Dragging from
+inside of dialog to outside closes it", desktop, does not describe a backdrop
+that renders wrong; it describes an EVENT bug, and it was settled by reading
+two templates and one commit with no harness built at all. That is not an
+argument against the measure-don't-reason rule -- it is the step in front of
+it. One sentence of symptom is what tells you which kind of question you have,
+and the entry was right to refuse to guess before it had one.
+
+The root cause is the kind this file exists to catch. Commit `e23943d`
+(2026-07-30) had already fixed this exact bug GLOBALLY, with a drag-safe
+handler in `base.html` that closes a dialog only when the press and the release
+agree on the target -- and its commit message claimed it covered "every dialog
+in the app". It only touched `base.html`. Two dialogs carried their own LOCAL,
+naive backdrop-click handlers that predate it and fire regardless of the global
+guard, so the bug a commit message had documented as dead was still alive in
+exactly the two dialogs an editor types multilingual names into, discarding
+what was typed. A click's target is the nearest common ancestor of mousedown
+and mouseup, which is why selecting text in a field and releasing outside is
+indistinguishable, to a naive handler, from a real backdrop click.
+
+**The fix was deletion**: both local handlers replaced by a comment pointing at
+the global one, plus a sweep test in `tests/test_theme_and_tokens.py` that
+fails if any template ever hand-rolls one again. Two things worth keeping. The
+tag quick-create dialog had the identical bug though only the venue one was
+reported -- a report names a symptom, not a scope, and the second dialog was
+found by looking rather than by waiting for a second complaint. And the plan's
+own suggested replacement comment QUOTED the forbidden line verbatim, which
+would have made the new sweep test fail forever on the comment explaining why
+it exists; the implementing task caught it and reworded. A guard that forbids a
+string is tripped by anything containing that string, documentation included.
 
 ### Calendar-feed discovery, and characters leave the daily sweep (2026-08-03)
 

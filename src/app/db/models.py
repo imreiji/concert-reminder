@@ -111,9 +111,18 @@ class User(Base):
     # sitewide banner via auth.SessionUser.dm_blocked.
     dm_blocked_since: Mapped[datetime | None] = mapped_column(UTCDateTime)
     # First-run guided setup: 0-4 = the wizard step in progress, >=5 = done
-    # (finished naturally or skipped). Offered once at first login only --
-    # never re-derived from this value on any later login.
+    # (finished naturally or skipped). WHO is offered the wizard is never
+    # derived from this value -- welcomed_at below answers that.
     onboarding_step: Mapped[int] = mapped_column(default=0, server_default="0")
+    # NULL until the welcome wizard completes (advance past the last step, or
+    # skip-all). The OAuth callback checks THIS, not row absence, to decide who
+    # gets /welcome: the bot's ensure_user creates bare rows, so "row exists"
+    # never meant "was onboarded". onboarding_step cannot serve here -- its
+    # migration backfilled existing rows to 0, so a pre-wizard web user and a
+    # bot-first bare row do not reliably differ by step. Rows predating this
+    # column were therefore all backfilled as welcomed rather than guessed at:
+    # re-running the wizard at a long-standing user is the worse failure.
+    welcomed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 
     # passive_deletes: reminder_rules.user_id is NOT NULL with ondelete=CASCADE,
