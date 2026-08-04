@@ -1,6 +1,7 @@
-"""Personal calendar-feed subscription: every deadline the user has an
-active reminder for, as one subscribable .ics -- not a one-off download,
-a URL calendar apps poll on their own schedule.
+"""Personal calendar-feed subscription: every tracked concert's show dates
+plus the deadlines that still need the user, selected by their standing
+(see `user_calendar_events`), as one subscribable .ics -- not a one-off
+download, a URL calendar apps poll on their own schedule.
 
   POST /me/calendar-feed        (re)generate the feed token
   GET  /calendar/{token}.ics    the feed itself -- token-authenticated, no
@@ -32,9 +33,20 @@ def _allowed_next(raw: str) -> str:
     open-redirect guard: same-origin path or None), then an allowlist of
     shapes rather than of literal paths -- the concert page is the third
     surface that mints, and hardcoding every concert is not a list anyone
-    maintains. Anything else falls back to /preferences, as always."""
+    maintains. Anything else falls back to /preferences, as always.
+
+    The mint route appends `?feed_token=` to whatever this returns, so a
+    `next` carrying its own query would produce an unparseable
+    double-query URL and the one-time reveal would never render -- the
+    token still regenerates, silently wasting it. A `..` segment could
+    likewise normalize away from the page that renders the reveal. Both
+    are stripped/rejected here, after safe_next, so every caller gets a
+    clean single-query destination."""
     path = safe_next(raw)
     if path is None:
+        return "/preferences"
+    path = path.split("?", 1)[0]
+    if ".." in path:
         return "/preferences"
     if path in _ALLOWED_NEXT or path.startswith("/concerts/"):
         return path

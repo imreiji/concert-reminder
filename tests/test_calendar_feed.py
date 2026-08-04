@@ -130,6 +130,18 @@ def test_generate_feed_rejects_offsite_and_odd_next(client):
         assert r.headers["location"].startswith("/preferences?feed_token="), bad
 
 
+def test_generate_feed_strips_query_and_dotdot_from_next(client):
+    """The mint route appends ?feed_token= to the destination, so a query
+    in `next` would produce an unparseable double-query URL and silently
+    waste the one-time reveal; dot segments could normalize away from the
+    page that renders it."""
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post("/me/calendar-feed", data={"next": "/concerts/mine?x=1"})
+    assert r.headers["location"].startswith("/concerts/mine?feed_token=")
+    r = client.post("/me/calendar-feed", data={"next": "/concerts/../admin"})
+    assert r.headers["location"].startswith("/preferences?feed_token=")
+
+
 def test_fresh_feed_url_shows_webcal_link_on_preferences(client):
     login_as(client, EDITOR_ID, "reiji")
     r = client.post("/me/calendar-feed", data={"next": "/preferences"})

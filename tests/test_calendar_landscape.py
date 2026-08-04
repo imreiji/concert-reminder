@@ -176,6 +176,20 @@ async def test_fully_opted_out_round_contributes_nothing_partial_survives(sessio
     assert {e.label for e in events} == {"Both"}
 
 
+async def test_lost_round_hands_off_to_its_successor(session):
+    """A LOST round contributes nothing, and the next round -- an ordinary
+    no-outcome round -- contributes its own moments: the ladder stays
+    visible through the round that is actually next."""
+    concert = await make_tracked_concert(session)
+    r1 = await make_round(session, concert, "R1", opens=dt(5, 1), closes=dt(5, 20))
+    await make_round(session, concert, "R2", opens=dt(6, 10), closes=dt(6, 25))
+    await record_round_outcome(session, USER, r1.id, LotteryOutcome.LOST, now=NOW)
+
+    events = await user_calendar_events(session, USER, NOW)
+    assert moments(events, "R1") == set()
+    assert moments(events, "R2") == {(Anchor.OPENS, dt(6, 10)), (Anchor.CLOSES, dt(6, 25))}
+
+
 async def test_covered_round_contributes_nothing(session):
     """Leg secured through round A: round B selling the same leg is covered."""
     concert = await make_tracked_concert(session)
