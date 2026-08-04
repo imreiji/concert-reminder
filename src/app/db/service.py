@@ -589,12 +589,7 @@ async def _apply_outcome_suppression(
     # cancellation rule. Kept symmetric on purpose: a two-leg round with
     # only one leg opted out survives, exactly as a two-leg round with only
     # one leg cancelled survives.
-    opted_out_day_ids = set((await session.execute(
-        select(LegOptOut.concert_day_id).where(
-            LegOptOut.user_id == user_id,
-            LegOptOut.concert_day_id.in_(all_day_ids),
-        )
-    )).scalars()) if all_day_ids else set()
+    opted_out_day_ids = await user_opted_out_day_ids(session, user_id, all_day_ids)
 
     # Per-round contribution, so each round's own outcome can be excluded
     # when checking IT for cross-round suppression -- "secured elsewhere"
@@ -655,6 +650,25 @@ async def _concert_opted_out(session: AsyncSession, user_id: int, concert_id: in
         )
     )).scalar_one_or_none()
     return state is SubscriptionState.OPTED_OUT
+
+
+async def user_opted_out_day_ids(
+    session: AsyncSession, user_id: int, day_ids: Iterable[int]
+) -> set[int]:
+    """This user's LegOptOut rows among `day_ids`, as a set -- ONE query,
+    whatever the surface. Every read surface that asks "is this leg opted
+    out?" loads through here, so none of them can invent a second shape for
+    the question (the failure mode invariant 8's entry describes: the rule
+    existed in exactly one pass and every other surface never asked)."""
+    ids = sorted(day_ids)
+    if not ids:
+        return set()
+    return set((await session.execute(
+        select(LegOptOut.concert_day_id).where(
+            LegOptOut.user_id == user_id,
+            LegOptOut.concert_day_id.in_(ids),
+        )
+    )).scalars())
 
 
 async def record_round_outcome(
@@ -1131,7 +1145,21 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
             if all_legs_cancelled(all_days)
             else [r for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)]
         )
-        days = [_day_info(d) for d in all_days if not d.cancelled]
+        # Per-user leg opt-out, applied to DAY candidates exactly as the
+        # cancelled filter beside it: fewer candidates in, and the existing
+        # "no longer planned -> delete" pass clears any queued show-start
+        # rows. Without this, an event_start rule planned rows for legs the
+        # user said they are skipping -- and set_leg_opt_out's own resync
+        # re-planned them (the write that should clear the rows was the one
+        # that restored them). Round suppression is the separate
+        # _apply_outcome_suppression pass below; this is the day half.
+        opted_out_day_ids = await user_opted_out_day_ids(
+            session, rule.user_id, [d.id for d in all_days]
+        )
+        days = [
+            _day_info(d) for d in all_days
+            if not d.cancelled and d.id not in opted_out_day_ids
+        ]
 
     # A concert-level OPTED_OUT override prunes the whole concert for this
     # user: no rounds are live, so plan_for_rule yields nothing and the

@@ -24,7 +24,7 @@ from app.db.models import (
     ReminderRule,
     Round,
 )
-from app.db.service import ensure_user, set_leg_opt_out, sync_rule
+from app.db.service import ensure_user, set_leg_opt_out, sync_rule, user_calendar_events
 from app.domain.types import Anchor, RoundKind
 
 USER = 42
@@ -225,3 +225,84 @@ async def test_all_legs_opted_out_suppresses(session):
     await sync_rule(session, rule, NOW)
 
     assert await queue_rows(session, rule) == []
+
+
+async def make_event_rule(s, user: int, concert: Concert) -> ReminderRule:
+    """A concert-wide 'remind me at show start' rule -- what plans DAY rows."""
+    rule = ReminderRule(
+        user_id=user, concert_id=concert.id, anchor=Anchor.EVENT_START, offset_days=0
+    )
+    s.add(rule)
+    await s.flush()
+    return rule
+
+
+async def test_day_rows_not_planned_for_opted_out_leg(session):
+    """An event_start rule plans a show-start row per live leg -- but not for
+    a leg this user opted out of. The other leg's row survives (partial
+    opt-out never widens)."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    b = await make_day(session, concert, "Leg B")
+    rule = await make_event_rule(session, USER, concert)
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    await sync_rule(session, rule, NOW)
+
+    day_ids = {row.day_id for row in await queue_rows(session, rule)}
+    assert day_ids == {b.id}
+
+
+async def test_opting_out_clears_already_queued_day_rows(session):
+    """Invariant 8's write-owns-the-resync, now covering DAY rows: the queue is
+    a materialized outbox, so the set_leg_opt_out write itself must clear the
+    show-start row -- before this, its own resync faithfully re-planned it."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    b = await make_day(session, concert, "Leg B")
+    rule = await make_event_rule(session, USER, concert)
+    await sync_rule(session, rule, NOW)
+    assert {row.day_id for row in await queue_rows(session, rule)} == {a.id, b.id}
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    assert {row.day_id for row in await queue_rows(session, rule)} == {b.id}
+
+    await set_leg_opt_out(session, USER, a.id, False, now=NOW)
+    assert {row.day_id for row in await queue_rows(session, rule)} == {a.id, b.id}
+
+
+async def test_day_row_suppression_is_per_user(session):
+    """Another user who did not opt out keeps their show-start row."""
+    await ensure_user(session, USER, "reiji")
+    await ensure_user(session, OTHER, "other")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    mine = await make_event_rule(session, USER, concert)
+    theirs = await make_event_rule(session, OTHER, concert)
+
+    await set_leg_opt_out(session, USER, a.id, True)
+    await sync_rule(session, mine, NOW)
+    await sync_rule(session, theirs, NOW)
+
+    assert await queue_rows(session, mine) == []
+    assert {row.day_id for row in await queue_rows(session, theirs)} == {a.id}
+
+
+async def test_calendar_feed_omits_opted_out_leg(session):
+    """The owner's original report was 'shows up on feed': the .ics feed reads
+    reminder_queue back out (user_calendar_events), so with the day row gone
+    the feed carries only the leg the reader is still going to."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    await make_day(session, concert, "Leg B")
+    rule = await make_event_rule(session, USER, concert)
+    await sync_rule(session, rule, NOW)
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+
+    labels = {e.label for e in await user_calendar_events(session, USER, now=NOW)}
+    assert "Leg A" not in labels
+    assert "Leg B" in labels
