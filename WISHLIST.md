@@ -927,10 +927,83 @@ entry gains one annotation, no rank change**: a subscribable feed is this app's
 second surface that works with the site closed, which is prior art its
 push-notification argument should now cite rather than a substitute for it.
 
+**The 2026-08-04 late pass ADDS the crawler-trap capture at #1, hours after
+the calendar ship, on the day's third precedent: an outage outranks every
+feature.** Production was down for roughly half a day (first pool exhaustion
+11:49 UTC, recovery ~23:30) and the diagnosis was run live before filing, so
+the entry below is a work order with the incident's evidence inside it. The
+CURE is already deployed -- a Cloudflare Managed Challenge rule -- but it
+lives entirely outside this repository, which is exactly why the entry
+exists: the code-side hardening is what survives a dashboard wipe, and a
+guard nobody can see from the tree is a guard that gets lost. Every entry
+from the former #1 down shifts by insertion, never on merit; minute-level
+offsets takes the displacement below, its fifth move of this one day.
+
 ## Proposed (highest impact first)
 
 
-### 1. Minute-level reminder offsets
+### 1. Discover's filter links are an open crawler trap
+
+Impact: high (outage-class: it took production down for half a day) -
+effort: small (template attributes and a robots.txt route; no schema, no
+catalogue strings). Raised: 2026-08-04, filed the evening of the incident it
+caused, with the diagnosis run live during it.
+
+What happened, so nobody re-derives it: Meta's `meta-webindexer` (under four
+browser-disguised user agents) and `SemrushBot` began exhaustively walking
+Discover's tag-filter URLs at ~14:00 UTC on 2026-08-03 -- several requests
+per second, each a unique `?sort=…&tag=…&tag=…` combination, each a full
+server-side catalogue render. The 2026-08-03 605-tag expansion had just
+made that URL space effectively infinite. Twenty-one hours of that drained
+the $5 Lightsail's burst-credit bucket; from ~11:49 UTC on 2026-08-04 the
+hypervisor throttled the instance (64% steal time measured), every request
+crawled, SQLAlchemy's 15-connection pool saturated
+(`QueuePool limit of size 5 overflow 10 reached`, first at 11:49:13), and
+the site timed out for half a day. A reboot changed nothing -- credits do
+not reset, and the crawl kept coming. UptimeRobot stayed GREEN throughout:
+`/healthz` answered 200 `"ok":true` in 72 seconds, and a keyword monitor
+has no latency threshold -- an outage the health page itself survived.
+
+The trap's structure, which is deliberate design meeting the open web: the
+filter chips are real `<a href>` links so the page degrades without
+JavaScript (a rule worth keeping), JS users never follow them (clicks are
+intercepted and filtered client-side), but `history.replaceState` writes
+the filtered URL into the address bar so reload/bookmark/share DO issue
+real `?tag=` requests from real humans. That last fact is load-bearing for
+every remedy: a server-side or edge-side HARD BLOCK on `?tag=` requests
+breaks reload-of-a-filtered-view for signed-in users, which is why the
+deployed Cloudflare rule is a Managed Challenge (URI path `/discover` AND
+query contains `tag=`), not a block, and why any future code-side guard
+must keep that property.
+
+The code-side hardening this entry tracks, cheapest first:
+
+- **`rel="nofollow"` on every filter link** -- tag chips, sort, status,
+  clear, and the region toggles (both the server-rendered `href`s and the
+  three `<script>` sites that rewrite them). Both culprit bots respect
+  nofollow; the no-JS degradation is untouched.
+- **A `robots.txt` route** disallowing query-stringed `/discover` while
+  keeping the catalogue's real pages crawlable. The exact directive shape
+  (`Disallow: /discover?` vs a wildcard) is a build-time decision -- check
+  what the majority grammar actually supports rather than assuming.
+- **A one-line ops note**: the WAF rule and the (still unset) UptimeRobot
+  response-time alert both live in dashboards. `docs/deploy.md`'s runbook
+  should name them so a future re-setup re-creates them; that half is a
+  docs edit, not code.
+- Explicitly NOT tracked: caching or a cheap-render path for anonymous
+  filtered `/discover`. That is the heavyweight remedy, worth building only
+  if a challenge-passing crawler ever fires the trap again -- the two
+  layers above end the known case.
+
+Ranked #1 on the outage precedent -- the correctness family (a first
+contact silently served wrong, an irreversible press on a dead show) has
+always outranked features here, and half a day of the site being DOWN
+outranks all of it. The rank is honest about one thing: the OUTAGE is
+already mitigated at the edge, so what this entry buys is the repo-visible
+second layer, and if that reads as less urgent in a week, the right move is
+a re-rank with reasons, not silent decay.
+
+### 2. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -1021,7 +1094,12 @@ the visible moment is exactly the one a days-and-hours offset can only remind
 you about too early, so the case for minutes is sharper than it was, and this
 entry is the highest-impact user-facing gap still standing.
 
-### 2. Franchise-aware round-label suggestions
+Displaced to #2 again late the same evening by the crawler-trap capture --
+the eleventh move, the FIFTH inside this single day, and the first time the
+thing that outranked it was an outage rather than a feature or a defect.
+Same verdict as every move before it: position, never substance.
+
+### 3. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1042,7 +1120,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 3. Ten of eleven `RoundKind` members are purely cosmetic
+### 4. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1075,7 +1153,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 4. PWA / installability
+### 5. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -1108,7 +1186,7 @@ read AHEAD of time, so what web push would actually buy is the interrupting
 half -- the moment itself -- and that is the case this entry should be argued
 on when someone picks it up.
 
-### 5. In-app LLM extraction behind the same draft seam
+### 6. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -1137,7 +1215,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 6. Minor demo-parity cosmetics
+### 7. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1199,7 +1277,7 @@ it into this entry's single pass rather than spawning a task. Rank unchanged --
 this entry has now grown four times without once being worth doing on its own,
 which is itself the argument for keeping it as one batched pass.
 
-### 7. The event classes outside concerts and talk shows
+### 8. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1228,7 +1306,7 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 8. A/B casts have nowhere to live
+### 9. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1251,7 +1329,7 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 9. Discover sort in the content head, plus the catalogue-count note
+### 10. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1277,7 +1355,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 10. Name the destination on the sign-in bounce
+### 11. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1299,7 +1377,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 11. The calendar roster's blind spots
+### 12. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1347,7 +1425,7 @@ refutes: the campaign is already a lead, so what is lost is a second pointer to
 something already visible, not the concert. A rating that contradicts its own
 entry is worse than a cautious one, and this list orders by USER impact.
 
-### 12. Nothing caps the discovery review path
+### 13. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1387,7 +1465,7 @@ or that the copy block can be reconstructed from ids alone. The one HALF of the
 fix this entry already calls cheap -- emitting `copy_text` once instead of twice
 -- is unaffected by any of it and is still the thing to do first.
 
-### 13. Nothing notices a calendar feed going quiet
+### 14. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
