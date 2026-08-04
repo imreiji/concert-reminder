@@ -38,6 +38,7 @@ from app.db.service import (
     record_concert_edit,
     record_dm_outcome,
     reinstate_user_rules,
+    set_concert_subscription,
     set_editor,
     snapshot_concert,
     sync_concert,
@@ -51,6 +52,7 @@ from app.domain.types import (
     ConcertKind,
     LotteryOutcome,
     RoundKind,
+    SubscriptionState,
     TagKind,
 )
 
@@ -265,9 +267,12 @@ async def test_event_start_rule_targets_days(session):
 
 
 async def test_user_calendar_events_covers_rounds_and_days(session):
-    """The personal calendar feed shows each covered round/day's own real
-    deadline -- not the reminder rule's lead-time-adjusted fire_at."""
-    concert, round_, rule = await seed(session)  # concert-wide CLOSES rule -> round only
+    """The personal calendar feed shows each round/day's own real moment --
+    not any reminder rule's lead-time-adjusted fire_at. A tracked concert is
+    what puts it on the feed now; the rules below still exist and still drive
+    DMs, and deliberately change nothing here."""
+    concert, round_, rule = await seed(session)
+    await set_concert_subscription(session, 42, concert.id, SubscriptionState.SUBSCRIBED)
     await sync_rule(session, rule, NOW)
 
     day_rule = ReminderRule(
@@ -278,16 +283,26 @@ async def test_user_calendar_events_covers_rounds_and_days(session):
     await sync_rule(session, day_rule, NOW)
 
     events = await user_calendar_events(session, 42, NOW)
-    by_label = {e.label: e for e in events}
-    assert by_label["最速先行"].at_utc == dt(6, 25)  # the round's own close, not a lead time
-    assert by_label["最速先行"].concert_title == "Hasunosora 5th"
-    assert by_label["Day 1"].at_utc == dt(8, 1, 9)  # the day's own start, not the -7d fire time
+    at = {(e.label, e.anchor): e.at_utc for e in events}
+    # A no-outcome round contributes BOTH its live moments, each at its own
+    # real time -- the -3d rule's fire time appears nowhere.
+    assert at[("最速先行", Anchor.OPENS)] == dt(6, 10)
+    assert at[("最速先行", Anchor.CLOSES)] == dt(6, 25)
+    assert at[("Day 1", Anchor.EVENT_START)] == dt(8, 1, 9)  # not the -7d fire time
+    assert {e.concert_title for e in events} == {"Hasunosora 5th"}
 
 
 async def test_user_calendar_events_excludes_past_deadlines(session):
-    _, _, rule = await seed(session)
+    """Past moments are dropped. By dt(7, 1) both of the round's moments have
+    gone, so it contributes nothing -- while the still-future show date stays,
+    which is the landscape's whole point."""
+    concert, _, rule = await seed(session)
+    await set_concert_subscription(session, 42, concert.id, SubscriptionState.SUBSCRIBED)
     await sync_rule(session, rule, NOW)
-    assert await user_calendar_events(session, 42, dt(7, 1)) == []  # round already closed by then
+
+    events = await user_calendar_events(session, 42, dt(7, 1))
+    assert "最速先行" not in {e.label for e in events}  # opens and closes both past
+    assert {(e.label, e.at_utc) for e in events} == {("Day 1", dt(8, 1, 9))}
 
 
 # ── A round with all 4 timestamps: the actual point of this refactor ────

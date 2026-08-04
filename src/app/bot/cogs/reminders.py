@@ -73,11 +73,15 @@ class Reminders(commands.Cog):
     async def mydeadlines(self, interaction: discord.Interaction, count: int = 10) -> None:
         """The personalized counterpart to /upcoming: that command lists
         every deadline in the next N days regardless of who's watching it;
-        this one lists only the concerts/rounds *this* user has an active
-        reminder rule on, sourced from the same reminder_queue-backed
-        user_calendar_events() the personal .ics feed uses -- same
-        real-deadline timestamps, not the reminder's lead-time-adjusted
-        fire time."""
+        this one answers from *this* user's own standing, sourced from the
+        same user_calendar_events() the personal .ics feed uses -- same real
+        moments, never a reminder's lead-time-adjusted fire time.
+
+        Since the 2026-08-04 landscape rewrite that source derives from the
+        user's TRACKED concerts, not from their reminder rules (spec
+        2026-08-04, an accepted behavior change): rules now mean when Discord
+        DMs you and nothing else. The command's own user-facing copy still
+        says "reminders" and is corrected with the anchor qualifiers."""
         count = max(1, min(count, 25))
         async with SessionMaker() as session:
             user = await ensure_user(session, interaction.user.id, interaction.user.name)

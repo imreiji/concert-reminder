@@ -75,7 +75,10 @@ def generate_feed_token(client) -> str:
     return match.group(1)
 
 
-def create_round_with_rule(client, closes_at: str, event_id: str = "c") -> None:
+def create_tracked_round(client, closes_at: str, event_id: str = "c") -> None:
+    """A concert with one round, TRACKED by the caller. The feed derives from
+    standing over tracked concerts now, not from reminder rules -- so this
+    subscribes instead of adding a rule (which would change only DMs)."""
     client.post(
         "/concerts",
         data={"title_en": "C", "title_zh": "C",
@@ -87,7 +90,7 @@ def create_round_with_rule(client, closes_at: str, event_id: str = "c") -> None:
             "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    client.post(f"/concerts/{event_id}/rules", data={"anchor": "closes", "days_before": 3})
+    client.post(f"/concerts/{event_id}/subscription", data={"state": "subscribed"})
 
 
 def test_generate_feed_requires_login(client):
@@ -108,22 +111,24 @@ def test_generate_feed_honors_next_param(client):
     assert r.headers["location"].startswith("/welcome?feed_token=")
 
 
-def test_calendar_feed_returns_ics_with_active_reminders(client):
+def test_calendar_feed_returns_ics_with_tracked_deadlines(client):
     login_as(client, EDITOR_ID, "reiji")
-    create_round_with_rule(client, "2099-06-25T23:59")
+    create_tracked_round(client, "2099-06-25T23:59")
     token = generate_feed_token(client)
 
     r = client.get(f"/calendar/{token}.ics")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/calendar")
     assert "BEGIN:VEVENT" in r.text
-    assert "SUMMARY:C — R1" in r.text
+    # Substring, not the whole SUMMARY line: the anchor qualifier arrives in
+    # the next task and must not need this assertion rewritten twice.
+    assert "C — R1" in r.text
     assert "DTSTART:20990625T145900Z" in r.text  # 2099-06-25 23:59 JST -> UTC
 
 
 def test_calendar_feed_excludes_past_deadlines(client):
     login_as(client, EDITOR_ID, "reiji")
-    create_round_with_rule(client, "2000-01-01T00:00")
+    create_tracked_round(client, "2000-01-01T00:00")
     token = generate_feed_token(client)
 
     r = client.get(f"/calendar/{token}.ics")
