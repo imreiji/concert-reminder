@@ -18,7 +18,7 @@ from app.db.service import (
     user_calendar_events,
 )
 from app.db.session import get_session
-from app.domain.ics_export import build_calendar
+from app.domain.ics_export import CANONICAL_ANCHOR_QUALIFIERS, build_calendar
 from app.web.auth import SessionUser, require_user
 
 router = APIRouter()
@@ -53,7 +53,13 @@ async def calendar_feed(
     if user is None:
         raise HTTPException(status_code=404)
     events = await user_calendar_events(session, user.discord_id)
+
+    def _summary(e):
+        qual = CANONICAL_ANCHOR_QUALIFIERS.get(e.anchor)
+        base = f"{e.concert_title} — {e.label}"
+        return f"{base} · {qual}" if qual else base
+
     text = build_calendar([
-        (f"{e.concert_title} — {e.label}", e.at_utc, e.url, e.notes) for e in events
+        (_summary(e), e.at_utc, e.url, e.notes) for e in events
     ])
     return Response(content=text, media_type="text/calendar")

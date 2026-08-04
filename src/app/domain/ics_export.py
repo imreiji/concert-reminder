@@ -8,6 +8,21 @@ pulled off the ORM row.
 import re
 from datetime import UTC, datetime
 
+from app.domain.types import Anchor
+
+# Canonical qualifiers for a round's moments on the personal feed. Plain
+# data, NOT gettext: the feed renders canonical (a URL has no viewer), and
+# canonical text is by definition untranslated. Japanese ticketing terms
+# because Japanese is this catalogue's source of truth. EVENT_START is
+# deliberately absent -- a show date is its own summary and takes no
+# qualifier.
+CANONICAL_ANCHOR_QUALIFIERS = {
+    Anchor.OPENS: "受付開始",
+    Anchor.CLOSES: "申込締切",
+    Anchor.RESULTS: "当落発表",
+    Anchor.PAYMENT: "支払期限",
+}
+
 
 def _escape(text: str) -> str:
     """RFC 5545 TEXT escaping for the characters that matter to us."""

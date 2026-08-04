@@ -116,7 +116,7 @@ async def test_upcoming_localizes_round_label(db):
 async def test_mydeadlines_empty_state(db):
     interaction = FakeInteraction(42)
     await call_mydeadlines(interaction)
-    assert "No upcoming deadlines" in interaction.response.sent["args"][0]
+    assert "Nothing on your calendar yet" in interaction.response.sent["args"][0]
 
 
 async def test_mydeadlines_lists_only_this_users_landscape(db):
@@ -142,13 +142,14 @@ async def test_mydeadlines_lists_only_this_users_landscape(db):
     embed = interaction.response.sent["kwargs"]["embed"]
     assert "Hasunosora 5th" in embed.description
     assert "R1" in embed.description
+    assert "apply by" in embed.description  # closes-moment qualifier, English catalogue
     assert interaction.response.sent["kwargs"]["ephemeral"] is True
 
     # a different user tracking nothing sees the empty state, not someone
     # else's deadlines
     other = FakeInteraction(777, "other")
     await call_mydeadlines(other)
-    assert "No upcoming deadlines" in other.response.sent["args"][0]
+    assert "Nothing on your calendar yet" in other.response.sent["args"][0]
 
 
 async def test_due_reminders_populates_user_language(db):

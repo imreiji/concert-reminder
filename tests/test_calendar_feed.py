@@ -75,7 +75,9 @@ def generate_feed_token(client) -> str:
     return match.group(1)
 
 
-def create_tracked_round(client, closes_at: str, event_id: str = "c") -> None:
+def create_tracked_round(
+    client, closes_at: str, event_id: str = "c", opens_at: str = ""
+) -> None:
     """A concert with one round, TRACKED by the caller. The feed derives from
     standing over tracked concerts now, not from reminder rules -- so this
     subscribes instead of adding a rule (which would change only DMs)."""
@@ -84,7 +86,7 @@ def create_tracked_round(client, closes_at: str, event_id: str = "c") -> None:
         data={"title_en": "C", "title_zh": "C",
             "title": "C", "event_id": event_id,
             "round_label": ["R1"], "round_kind": ["lottery_round"],
-            "round_opens_at": [""], "round_closes_at": [closes_at],
+            "round_opens_at": [opens_at], "round_closes_at": [closes_at],
             "round_results_at": [""], "round_payment_at": [""],
             "round_label_en": ["R1"],
             "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
@@ -120,10 +122,23 @@ def test_calendar_feed_returns_ics_with_tracked_deadlines(client):
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/calendar")
     assert "BEGIN:VEVENT" in r.text
-    # Substring, not the whole SUMMARY line: the anchor qualifier arrives in
-    # the next task and must not need this assertion rewritten twice.
-    assert "C — R1" in r.text
+    assert "SUMMARY:C — R1 · 申込締切" in r.text
     assert "DTSTART:20990625T145900Z" in r.text  # 2099-06-25 23:59 JST -> UTC
+
+
+def test_calendar_feed_qualifies_round_moments_canonically(client):
+    """A no-outcome round emits opens AND closes; the canonical qualifier is
+    what keeps the two apart on somebody's phone. Japanese on purpose: the
+    feed has no viewer, and Japanese is this catalogue's source of truth."""
+    login_as(client, EDITOR_ID, "reiji")
+    create_tracked_round(
+        client, "2099-06-25T23:59", opens_at="2099-06-10T10:00"
+    )
+    token = generate_feed_token(client)
+
+    r = client.get(f"/calendar/{token}.ics")
+    assert "SUMMARY:C — R1 · 受付開始" in r.text
+    assert "SUMMARY:C — R1 · 申込締切" in r.text
 
 
 def test_calendar_feed_excludes_past_deadlines(client):
