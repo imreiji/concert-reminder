@@ -1041,7 +1041,7 @@ def pending_capture_row(ctx: dict) -> RoundRow | None:
         # ineligible viewer cannot have applied), but a modal asking how a
         # round went that this reader could not enter is the one failure worth
         # spending a clause to make impossible.
-        if row.round_.id in seen or row.covered or row.upgrade_locked:
+        if row.round_.id in seen or row.covered or row.opted_out or row.upgrade_locked:
             continue
         seen.add(row.round_.id)
         if row.capture_days or row.can_report_result:

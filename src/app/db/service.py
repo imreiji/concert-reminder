@@ -3188,6 +3188,14 @@ class RoundRow:
     requires_closes_at_utc: datetime | None = None
     # The reverse line on an item-sale round: the rounds that require it.
     needed_for_labels: tuple[str, ...] = ()
+    # Every leg this round names is opted out by this viewer (invariant 8's
+    # round rule, _round_fully_opted_out) -- a round-level fact, identical on
+    # each per-leg copy. It vetoes "Next for you" (_needs_you) and the
+    # catch-up dialog, and NOTHING else: the rows keep rendering with their
+    # gates open, because the concert page shows the whole campaign in
+    # context and is where you opt back in, and an opt-out never hides the
+    # record (a RoundOutcome survives it).
+    opted_out: bool = False
 
 
 @dataclass(frozen=True)
@@ -3288,6 +3296,11 @@ async def concert_round_rows(
     )).scalars())
     if not rounds and not days:
         return [], []
+
+    opted_out_day_ids = (
+        await user_opted_out_day_ids(session, user_id, [d.id for d in days])
+        if user_id is not None else set()
+    )
 
     outcomes: dict[int, LotteryOutcome] = {}
     # (round_id, day_id) -> this viewer's resolution of that leg. One query
@@ -3392,6 +3405,7 @@ async def concert_round_rows(
                 else None
             ),
             needed_for_labels=tuple(needed_for.get(r.id, ())),
+            opted_out=_round_fully_opted_out(r, opted_out_day_ids),
         )
         if not days:
             dateless.append(row)
@@ -3601,9 +3615,15 @@ def _needs_you(row: RoundRow, now: datetime) -> bool:
     its own -- a reader left APPLIED or WON satisfies `_wants_you` on standing
     alone -- and Home never meets this case either, since `upcoming_deadlines`
     drops a dead concert at the source (task 1).
+
+    An opted-out round wants nothing either: the reader said they are
+    skipping every leg it names.
     """
-    return not row.covered and not row.concert_cancelled and _wants_you(
-        row.outcome, row.can_capture, row.round_.closes_at_utc, now
+    return (
+        not row.covered
+        and not row.opted_out
+        and not row.concert_cancelled
+        and _wants_you(row.outcome, row.can_capture, row.round_.closes_at_utc, now)
     )
 
 

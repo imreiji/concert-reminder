@@ -25,7 +25,10 @@ from app.db.models import (
     Round,
 )
 from app.db.service import (
+    RoundRow,
     board_cards,
+    concert_next_moment,
+    concert_round_rows,
     ensure_user,
     my_deadline_blocks,
     my_deadline_rows,
@@ -34,7 +37,7 @@ from app.db.service import (
     user_calendar_events,
 )
 from app.domain.board import Column
-from app.domain.types import Anchor, RoundKind
+from app.domain.types import Anchor, LotteryOutcome, RoundKind
 
 USER = 42
 OTHER = 99
@@ -409,3 +412,56 @@ async def test_board_keeps_a_card_with_one_of_two_legs_opted_out(session):
     await set_leg_opt_out(session, USER, a.id, True, now=NOW)
     columns, _ = await board_cards(session, USER, now=NOW, concert_ids={concert.id})
     assert len(columns[Column.OPEN]) == 1
+
+
+async def test_next_for_you_skips_a_fully_opted_out_round(session):
+    """The concert page's 'Next for you' pick must not lead with a round on a
+    leg the reader said they are skipping. The row itself still renders (the
+    page shows the whole campaign, and it is where you opt back in)."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    await make_round(session, concert, [a.id])
+
+    groups, dateless = await concert_round_rows(session, USER, concert, now=NOW)
+    rows = [row for g in groups for row in g.rounds] + dateless
+    assert concert_next_moment(rows, now=NOW) is not None  # sanity: open round leads
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    groups, dateless = await concert_round_rows(session, USER, concert, now=NOW)
+    rows = [row for g in groups for row in g.rounds] + dateless
+    assert rows != []  # the row still renders under its leg
+    assert all(r.opted_out for r in rows)
+    assert concert_next_moment(rows, now=NOW) is None
+
+
+async def test_next_for_you_survives_a_partial_opt_out(session):
+    """One of two legs opted out: the round still wants you (you are still
+    going to the other night), so the pick stands."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    b = await make_day(session, concert, "Leg B")
+    await make_round(session, concert, [a.id, b.id])
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    groups, dateless = await concert_round_rows(session, USER, concert, now=NOW)
+    rows = [row for g in groups for row in g.rounds] + dateless
+    assert concert_next_moment(rows, now=NOW) is not None
+
+
+async def test_catch_up_dialog_skips_an_opted_out_round(session):
+    """pending_capture_row must not open the catch-up dialog for a round whose
+    every leg the reader opted out of -- 'how did this round go?' about a show
+    they are skipping is noise with an irreversible answer behind it."""
+    from app.web.routes.concerts import pending_capture_row
+
+    round_ = Round(
+        concert_id=1, kind=RoundKind.LOTTERY_ROUND, label="R1",
+        closes_at_utc=dt(5, 25), results_at_utc=dt(5, 26), applies_to=[1],
+    )
+    row = RoundRow(
+        round_=round_, outcome=LotteryOutcome.APPLIED,
+        can_capture=True, can_report_result=True, opted_out=True,
+    )
+    assert pending_capture_row({"leg_groups": [], "all_legs_rows": [row]}) is None
