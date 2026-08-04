@@ -452,6 +452,35 @@ only when both of their ends are attached -- have shipped since).
   the feed itself). The `.ics` route deliberately has NO `require_user` —
   calendar apps poll it directly with no cookies, so the token in the URL
   *is* the credential.
+  **The feed is the user's STANDING-AWARE LANDSCAPE, not a mirror of their
+  reminder rules** (ruling 2026-08-04). `user_calendar_events` reads no
+  `reminder_queue` at all: it derives every tracked concert's live show dates
+  plus each surviving round's next moments, selected by that user's outcome —
+  no outcome → future opens + closes, APPLIED → `_result_moment`, WON →
+  payment deadline, LOST/NOT_APPLIED/PAID → nothing (a LOST round's auto-armed
+  successor is an ordinary no-outcome round and carries the ladder on).
+  Future-only, and every exclusion goes through the shared per-user helpers
+  the other read surfaces use — no suppression rule is invented here.
+  **Reminder rules therefore mean exactly one thing: when Discord DMs you**;
+  a sparse preset used to read as a broken calendar, which is the bug this
+  replaced. `/mydeadlines` (`bot/cogs/reminders.py`) reads the SAME function,
+  so it inherits the landscape — a deliberate behavior change, one derivation.
+  `CalendarEvent.anchor` is required because a no-outcome round emits two
+  events with one summary: the feed qualifies canonically from
+  `CANONICAL_ANCHOR_QUALIFIERS` (`domain/ics_export.py` — 受付開始/申込締切/
+  当落発表/支払期限, plain data and deliberately NOT gettext, since canonical
+  text is by definition untranslated), while the cog qualifies through `_()`
+  in the recipient's language. The locale contract is unchanged: feed
+  canonical (`locale=None`), cog localized.
+  There is NO per-round `.ics` download any more — the 📅 link,
+  `GET /rounds/{id}/ics` and `build_ics` were deleted (a file is a snapshot
+  that rots the moment a deadline moves; the feed re-plans on every fetch).
+  `build_calendar` and its VEVENT helpers stay; a 404 test pins the absence.
+  A minted URL is shown through ONE partial, `_feed_links.html` (webcal://
+  link + copy button + the URL), consumed by Preferences, welcome step 4 and
+  the concert page's calendar dialog, so the ergonomics cannot drift; the
+  mint's `next` runs `safe_next` first, then an allowlist of SHAPES
+  (`/preferences`, `/welcome`, `/concerts/` prefix) — `_allowed_next`.
 - `routes/rehearsal.py` — the local rehearsal harness (`/admin/rehearsal`):
   seed one canonical concert, pull its reminders forward so the real 60s tick
   delivers them now, and send any DM shape in any language on demand. **Gated,
