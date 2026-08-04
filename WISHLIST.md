@@ -859,58 +859,36 @@ any reassessment of its merit -- and minute-level offsets takes its EIGHTH
 displacement, to #3, without ever once being judged less valuable; the record
 continues in its entry.
 
+**The 2026-08-04 fix pass empties that entry the same night it was filed**, on
+one branch (`leg-opt-out-surfaces`, seven tasks, data migration
+`db750444962a`). It shipped as the entry prescribed -- the entry's own sentence
+was "the rule to apply is the one invariant 8 already states, applied
+uniformly", and the build's whole shape is two shared helpers every surface
+consumes -- and it settled the one thing the entry deliberately left open (the
+board), by test rather than by argument: a fully-opted-out round leaves the
+live card, which mirrors cancellation exactly. The sweep clause's two
+check-don't-necessarily-change surfaces came back UNCHANGED with reasons, which
+is a result and is recorded in the Shipped entry rather than left for the next
+reader to re-derive.
+
+The re-rank moves nothing on merit, and entries renumber 1-14 by the one
+removal. This build lived in read-surface filters and one data migration, so
+**nothing else in Proposed got cheaper, changed shape, or moved on its own
+account** -- every remaining entry was re-read against what shipped and stands
+as written. Two contacts are worth naming rather than implying. **The
+calendar-story entry rises to #1 by pure removal**, and it inherits something
+concrete: the old #1's closing paragraph made "the feed must never carry an
+opted-out leg" a constraint flowing DOWN onto it, and that constraint is now
+enforced at the QUEUE (`sync_rule` plans no day rows for an opted-out leg), so
+whatever content the feed grows into gets it for free -- the note is added
+inside the entry. And **minute-level offsets returns to #2 by pure removal**,
+the day after its eighth displacement; the running record continues in its
+entry, unchanged in substance as it has been through all nine moves.
+
 ## Proposed (highest impact first)
 
 
-### 1. A leg you opted out of keeps showing up everywhere
-
-Impact: medium-high (correctness: the app keeps asking about -- and offers an
-irreversible press on -- a show the reader said they are skipping) - effort:
-small-to-medium (one rule, several surfaces, a test per surface). Raised:
-2026-08-04 (owner report, first as "shows up on feed", then Up next; the
-single-leg shape confirmed by him at filing). Root cause verified against the
-tree before writing this down.
-
-Per-leg opt-out suppression exists in exactly ONE place --
-`_apply_outcome_suppression`'s round pass -- and only the reminder planner
-(`sync_rule`) runs that. Everything else never consults `LegOptOut`:
-
-- **Queue day rows.** `sync_rule` filters its day candidates by
-  `not d.cancelled` alone (the `days =` line, `db/service.py`), so an
-  `event_start` rule plans show-start rows for legs the user opted out of.
-  Those rows are exactly what `user_calendar_events` reads back out of
-  `reminder_queue`, so they reach the calendar feed, the show-start DM and
-  `/mydeadlines`. The bitter half: `set_leg_opt_out`'s own invariant-8 resync
-  re-runs the same blind `sync_rule`, so the write that should clear the rows
-  is the one that faithfully re-plans them.
-- **Home's read path.** `my_upcoming_deadlines` / `my_deadline_rows` drop
-  covered rounds and ineligible upgrades but have NO LegOptOut pass, so a
-  single-leg round on an opted-out leg reaches Up next and Coming up with its
-  capture buttons live -- the dead-concert bug's shape at invariant-8 scale.
-  The only read-side place opt-outs matter today is inside the
-  secured-elsewhere subtraction, which activates only when the reader holds a
-  ticket on that concert.
-- **The board.** `board_cards` likewise never asks, so an open round on fully
-  opted-out legs is expected to keep a card in *Open now* (skimmed, not
-  pinned -- the fix's tests should settle it either way).
-
-The rule to apply is the one invariant 8 already states, applied uniformly: a
-round suppresses when its `applies_to` is non-empty and EVERY leg in it is
-opted out; a day-derived row suppresses when its own day is opted out. The
-partial case -- a two-leg round with one leg opted out -- survives BY DESIGN,
-mirroring the cancellation rule, and is explicitly not this entry: if that
-survival reads wrong in practice, the remedy is labeling (say which legs
-remain), never suppression. The per-surface fixes are mechanical; what earns
-the "medium" half of the effort is the sweep -- the `_wants_you` family and
-`discover_statuses` should be checked for the same blindness while someone is
-in there, and every surface owes a failing-first test (opt out, resync, assert
-the leg's rows are gone while the other leg's survive).
-
-One constraint flows DOWN from here: the calendar-story entry directly below
-is partly about what the feed should carry, and whatever the answer turns out
-to be, it must never carry an opted-out leg.
-
-### 2. The calendar story should be the feed, not per-round files
+### 1. The calendar story should be the feed, not per-round files
 
 Impact: medium-high (owner usage pain, four gaps behind one sentence) -
 effort: medium. Raised: 2026-08-04 (owner, living with the app; filed after a
@@ -957,6 +935,17 @@ decomposes the entry into one ruling and three design questions:
   `webcal://` link / "open in calendar app" affordance instead of a bare URL
   to copy, and copy-button ergonomics at mint time.
 
+**One constraint that used to flow down onto this entry is already paid for
+(2026-08-04).** The opt-out suppression entry above this one -- shipped the
+night it was filed, see Shipped -- closed with "whatever the feed turns out to
+carry, it must never carry an opted-out leg", and that is now enforced at the
+QUEUE rather than at the feed: `sync_rule` filters its DAY candidates by the
+reader's `LegOptOut` rows, and `user_calendar_events` reads the feed straight
+out of `reminder_queue`. So the constraint holds for the shipped feed today and
+is inherited for free by whatever content design answers the bullet above --
+UNLESS that design stops sourcing from the queue, which is the one branch where
+it would have to be re-applied on purpose.
+
 One terminology trap, recorded so nobody builds it: the owner said "caldav",
 but CalDAV the protocol is two-way calendar SYNC (a server your calendar app
 writes into), and nothing here needs it. The shipped feed is already the
@@ -964,7 +953,7 @@ right protocol shape -- one-way `.ics` over HTTPS, what calendar apps call a
 subscription -- and `webcal://` is just that URL with a scheme that makes
 apps subscribe instead of import. This entry is UX and content, not protocol.
 
-### 3. Minute-level reminder offsets
+### 2. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -1035,7 +1024,14 @@ Displaced to #3 hours later the same day by the opt-out suppression defect --
 the eighth displacement, and the first time this entry has moved twice in one
 day. Same verdict as the previous seven: position, never substance.
 
-### 4. Franchise-aware round-label suggestions
+Back to #2 the same night by pure removal, when that defect shipped -- three
+moves in one day, and the shortest displacement in this entry's history by a
+wide margin. Re-read against what shipped (read-surface filters and one data
+migration; nothing near `PresetItem`, the offset form or the sentence
+builders) and untouched in every respect. Ninth move, ninth time the reading
+has not changed.
+
+### 3. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1056,7 +1052,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 5. Ten of eleven `RoundKind` members are purely cosmetic
+### 4. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1089,7 +1085,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 6. PWA / installability
+### 5. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -1109,7 +1105,7 @@ raise this). Effort is medium: the manifest and icons are small, but a
 correct service worker (cache strategy, update flow, avoiding the classic
 "stale offline shell" trap) is not.
 
-### 7. In-app LLM extraction behind the same draft seam
+### 6. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -1138,7 +1134,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 8. Minor demo-parity cosmetics
+### 7. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1200,7 +1196,7 @@ it into this entry's single pass rather than spawning a task. Rank unchanged --
 this entry has now grown four times without once being worth doing on its own,
 which is itself the argument for keeping it as one batched pass.
 
-### 9. The event classes outside concerts and talk shows
+### 8. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1229,7 +1225,7 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 10. A/B casts have nowhere to live
+### 9. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1252,7 +1248,7 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 11. Discover sort in the content head, plus the catalogue-count note
+### 10. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1278,7 +1274,7 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 12. Name the destination on the sign-in bounce
+### 11. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1300,7 +1296,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 13. The calendar roster's blind spots
+### 12. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1348,7 +1344,7 @@ refutes: the campaign is already a lead, so what is lost is a second pointer to
 something already visible, not the concert. A rating that contradicts its own
 entry is worse than a cautious one, and this list orders by USER impact.
 
-### 14. Nothing caps the discovery review path
+### 13. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1388,7 +1384,7 @@ or that the copy block can be reconstructed from ids alone. The one HALF of the
 fix this entry already calls cheap -- emitting `copy_text` once instead of twice
 -- is unaffected by any of it and is still the thing to do first.
 
-### 15. Nothing notices a calendar feed going quiet
+### 14. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
@@ -1445,6 +1441,74 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Per-leg opt-out suppression reaches every surface (2026-08-04)
+
+Branch `leg-opt-out-surfaces`, seven tasks, data migration `db750444962a`, plan
+`docs/superpowers/plans/2026-08-04-leg-opt-out-surfaces.md` (no spec -- the
+root cause was verified against the tree before the entry was even filed, so
+the entry WAS the spec, and the plan carried the rest). Filed as #1 that
+evening on the correctness precedent, shipped the same night, which is the
+second time in two days a defect entry has lived for hours.
+
+**The shape is one rule and one loader, and that is the whole fix.**
+`_round_fully_opted_out(round_, opted_out_day_ids)` is invariant 8's round
+rule as a single predicate -- non-empty `applies_to`, every named leg opted out
+-- reading RAW `applies_to` so the empty/all-legs convention (a General round
+names no leg) can never be covered by any set of opt-outs. `user_opted_out_day_ids`
+is the one batched loader behind it. `_apply_outcome_suppression`, which used
+to hold the rule inline and privately, was refactored onto both rather than
+copied from: the entry's diagnosis was that the rule existed in exactly one
+pass and every other surface never asked, so leaving a second copy anywhere
+would have shipped the same bug with a longer fuse.
+
+The surfaces it now feeds: `sync_rule`'s DAY candidates (filtered beside the
+`cancelled` check, which is what removes show-start rows from `reminder_queue`
+and therefore from the `.ics` calendar feed, the show-start DM and
+`/mydeadlines` at once -- one filter, four symptoms); `my_deadline_rows` for
+both row shapes, fixing Up next and Coming up (`UpcomingDeadline` gained
+`day_id` so an EVENT_START row can say which leg it came from); `board_cards`'
+LIVE card set; the concert page's `_needs_you` veto and `pending_capture_row`
+skip, via a new `RoundRow.opted_out`; and `/setup`'s application rows and
+tallies.
+
+**The board question the entry left open was settled by test, not argument.**
+The entry said an open round on fully opted-out legs was "expected to keep a
+card in *Open now* -- skimmed, not pinned; the fix's tests should settle it
+either way". They settled it the other way: a fully-opted-out round leaves the
+live card entirely, and with nothing else placing the card, the card leaves the
+board -- the exact mirror of what a leg-cancelled round already does. The DEAD
+path deliberately keeps every round, because a dead card is standing-only: no
+actions, no countdown, nothing an opt-out could suppress.
+
+**Two surfaces were checked and deliberately NOT changed, which is a result.**
+`discover_statuses` stays blind on purpose: its event-state pill is a fact
+about the catalogue rather than about the viewer (a concert-level prune does
+not hide catalogue state either), and its standing half renders `RoundOutcome`
+records, which an opt-out never touches by invariant 8's own rule. `_wants_you`
+stays blind too -- the veto belongs in `_needs_you`, and Home's rows are
+filtered upstream, so the shared primitive stays as ignorant of opt-outs as it
+already is of coverage and cancellation. The concert page's row RENDERING and
+capture gates stay open for the same family of reason: the page shows the whole
+campaign in context, it is where you opt back in, and a record is never hidden.
+
+**The data migration exists because the queue is a materialized outbox.**
+Filtering `sync_rule` fixes what gets PLANNED; rows planned before the fix sit
+in `reminder_queue` until some unrelated write resyncs that rule, and the
+scheduler delivers them meanwhile -- which is the owner's own repro. Worse, the
+one write that should have cleared them was the one restoring them:
+`set_leg_opt_out`'s invariant-8 resync re-ran the same blind `sync_rule`.
+`db750444962a` deletes exactly the stale set (unsent, day-anchored, on a leg
+its rule's own user opted out of) and nothing else -- sent rows are history,
+and round-anchored rows were never stale because the round pass has run at
+write time since per-leg opt-outs shipped. Downgrade is a deliberate no-op:
+re-planning is always safe (invariant 2), so there is nothing to restore.
+
+Sixteen new tests in `tests/test_leg_opt_out_suppression.py` plus one migration
+test. The property that earns most of them is the PARTIAL case -- one leg of
+two opted out -- pinned separately on every surface, because it survives BY
+DESIGN (mirroring partial cancellation) and a filter written slightly too
+eagerly would have deleted it silently on any one of them.
 
 ### Onboarding is decided by `welcomed_at`, not by row existence (2026-08-03)
 
