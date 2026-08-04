@@ -973,8 +973,27 @@ deleting them.
    reminders only; it never deletes a `RoundOutcome`, so opting out of a won
    ticket forfeits the reminder, not the record (the UI gates that with a heavy
    confirmation naming the loss). Per-leg opt-out suppresses a round only when
-   EVERY leg in its `applies_to` is opted out -- the per-user analogue of the
-   every-leg cancellation rule, folded into `_apply_outcome_suppression`.
+   its `applies_to` is non-empty and EVERY leg in it is opted out -- the
+   per-user analogue of the every-leg cancellation rule. That is ONE predicate,
+   `_round_fully_opted_out`, over ONE batched loader,
+   `user_opted_out_day_ids` (both `db/service.py`): it started folded into
+   `_apply_outcome_suppression` alone, which is exactly why every other surface
+   never asked. Its consumers are the planner's round pass, `sync_rule`'s DAY
+   candidates (the day half -- without it an `event_start` rule planned
+   show-start rows that reached the queue, and through it the `.ics` feed, the
+   show-start DM and `/mydeadlines`), Home's `my_deadline_rows`, `board_cards`'
+   LIVE card set, the concert page's `_needs_you` veto and catch-up dialog
+   (via `RoundRow.opted_out`), and `/setup`'s rows and tallies. Three
+   deliberate NON-consumers, so nobody "fixes" them: Discover's pills (event
+   state is a fact about the catalogue, and the standing pill renders
+   `RoundOutcome` records, which an opt-out never touches), the concert
+   page's row rendering and capture gates (the page shows the whole campaign
+   and is where you opt back in), and that same page's settled-round fold --
+   `_split_leg_rounds` consumes `_wants_you`, not `_needs_you`, so an open
+   round on a fully opted-out leg stays UNFOLDED on its dimmed leg, on the
+   same reasoning: the page is where you opt back in and the fold is
+   presentation. Partial opt-out survives everywhere, exactly as partial
+   cancellation does.
 
 ## Migrations (SQLite gotchas — these have bitten before)
 

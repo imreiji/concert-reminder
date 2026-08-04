@@ -504,6 +504,20 @@ def _covered_from_secured(
     return covered_ids
 
 
+def _round_fully_opted_out(round_: Round, opted_out_day_ids: set[int]) -> bool:
+    """Invariant 8's round rule, as ONE predicate every surface consumes: a
+    round suppresses for a user only when it names specific legs (non-empty
+    applies_to) AND every one of them is opted out -- the per-user analogue of
+    is_round_cancelled's every-leg rule. Empty/None applies_to (the all-legs /
+    General convention) is tied to no specific leg, so no set of leg opt-outs
+    can cover it; raw applies_to on purpose, never the all-day-ids fallback,
+    precisely so that case falls through untouched. Partial opt-out survives
+    BY DESIGN, mirroring partial cancellation."""
+    return bool(round_.applies_to) and all(
+        d in opted_out_day_ids for d in round_.applies_to
+    )
+
+
 async def _apply_outcome_suppression(
     session: AsyncSession, user_id: int, rounds: list[Round], anchor: Anchor
 ) -> list[Round]:
@@ -589,12 +603,7 @@ async def _apply_outcome_suppression(
     # cancellation rule. Kept symmetric on purpose: a two-leg round with
     # only one leg opted out survives, exactly as a two-leg round with only
     # one leg cancelled survives.
-    opted_out_day_ids = set((await session.execute(
-        select(LegOptOut.concert_day_id).where(
-            LegOptOut.user_id == user_id,
-            LegOptOut.concert_day_id.in_(all_day_ids),
-        )
-    )).scalars()) if all_day_ids else set()
+    opted_out_day_ids = await user_opted_out_day_ids(session, user_id, all_day_ids)
 
     # Per-round contribution, so each round's own outcome can be excluded
     # when checking IT for cross-round suppression -- "secured elsewhere"
@@ -611,14 +620,8 @@ async def _apply_outcome_suppression(
 
     survivors = []
     for r in rounds:
-        # Leg opt-out: suppress only when the round names specific legs AND
-        # every one of them is opted out. An all-legs round (empty/None
-        # applies_to) is tied to no specific leg, so no set of leg opt-outs
-        # can cover it -- never suppressed, mirroring is_round_cancelled
-        # leaving empty applies_to alone. Uses raw applies_to, not the
-        # all_day_ids fallback the outcome passes use, precisely so the
-        # empty case falls through untouched.
-        if r.applies_to and all(d in opted_out_day_ids for d in r.applies_to):
+        # Leg opt-out: the one rule, see _round_fully_opted_out.
+        if _round_fully_opted_out(r, opted_out_day_ids):
             continue
         if r.kind is RoundKind.UPGRADE:
             # Exemption: skip the cross-round "secured elsewhere" pass (see
@@ -655,6 +658,25 @@ async def _concert_opted_out(session: AsyncSession, user_id: int, concert_id: in
         )
     )).scalar_one_or_none()
     return state is SubscriptionState.OPTED_OUT
+
+
+async def user_opted_out_day_ids(
+    session: AsyncSession, user_id: int, day_ids: Iterable[int]
+) -> set[int]:
+    """This user's LegOptOut rows among `day_ids`, as a set -- ONE query,
+    whatever the surface. Every read surface that asks "is this leg opted
+    out?" loads through here, so none of them can invent a second shape for
+    the question (the failure mode invariant 8's entry describes: the rule
+    existed in exactly one pass and every other surface never asked)."""
+    ids = sorted(day_ids)
+    if not ids:
+        return set()
+    return set((await session.execute(
+        select(LegOptOut.concert_day_id).where(
+            LegOptOut.user_id == user_id,
+            LegOptOut.concert_day_id.in_(ids),
+        )
+    )).scalars())
 
 
 async def record_round_outcome(
@@ -1131,7 +1153,21 @@ async def sync_rule(session: AsyncSession, rule: ReminderRule, now: datetime | N
             if all_legs_cancelled(all_days)
             else [r for r in all_rounds if not is_round_cancelled(r, cancelled_day_ids)]
         )
-        days = [_day_info(d) for d in all_days if not d.cancelled]
+        # Per-user leg opt-out, applied to DAY candidates exactly as the
+        # cancelled filter beside it: fewer candidates in, and the existing
+        # "no longer planned -> delete" pass clears any queued show-start
+        # rows. Without this, an event_start rule planned rows for legs the
+        # user said they are skipping -- and set_leg_opt_out's own resync
+        # re-planned them (the write that should clear the rows was the one
+        # that restored them). Round suppression is the separate
+        # _apply_outcome_suppression pass below; this is the day half.
+        opted_out_day_ids = await user_opted_out_day_ids(
+            session, rule.user_id, [d.id for d in all_days]
+        )
+        days = [
+            _day_info(d) for d in all_days
+            if not d.cancelled and d.id not in opted_out_day_ids
+        ]
 
     # A concert-level OPTED_OUT override prunes the whole concert for this
     # user: no rounds are live, so plan_for_rule yields nothing and the
@@ -1634,6 +1670,10 @@ class UpcomingDeadline:
     # POST an outcome. Optional because EVENT_START rows are derived from a
     # ConcertDay and have no round at all -- there is nothing to record against.
     round_id: int | None = None
+    # Which ConcertDay an EVENT_START row came from, so a per-user caller
+    # (my_deadline_rows) can apply the reader's leg opt-outs. None for round
+    # rows -- those carry round_id instead.
+    day_id: int | None = None
 
 
 async def upcoming_deadlines(
@@ -1697,7 +1737,7 @@ async def upcoming_deadlines(
         out.append(UpcomingDeadline(
             concert_title=loc_field(concert, "title", locale),
             event_id=concert.event_id, label=loc_field(d, "label", locale),
-            anchor=Anchor.EVENT_START, at_utc=d.starts_at_utc,
+            anchor=Anchor.EVENT_START, at_utc=d.starts_at_utc, day_id=d.id,
         ))
 
     for r in rounds:
@@ -2048,6 +2088,12 @@ async def board_cards(
         )).scalars()
     } if all_round_ids else {}
 
+    # This reader's leg opt-outs across the whole board, ONE query (the days
+    # are already eager-loaded). Consulted per concert below.
+    opted_out_day_ids = await user_opted_out_day_ids(
+        session, user_id, [d.id for c in concerts for d in c.days]
+    )
+
     for concert in concerts:
         # Every leg cancelled: the show is off. Three things follow, all of
         # them concert-level facts `is_round_cancelled` cannot see, and all
@@ -2063,7 +2109,17 @@ async def board_cards(
         # place a card by an outcome whose round is not on its ladder and the
         # card names a column nothing on it explains (see visible_rungs).
         card_rounds = list(concert.rounds) if dead else [
-            r for r in concert.rounds if not is_round_cancelled(r, cancelled_day_ids)
+            r for r in concert.rounds
+            if not is_round_cancelled(r, cancelled_day_ids)
+            # The per-user analogue of the line above (invariant 8): a round
+            # whose every named leg this reader opted out of neither opens the
+            # card, nor drives its countdown, nor contributes standing -- and
+            # with nothing else placing the card, the card leaves the board,
+            # exactly as a leg-cancelled round already behaves. The dead path
+            # deliberately keeps every round: a dead card is standing-only,
+            # offers no actions and counts down to nothing, so there is
+            # nothing for an opt-out to suppress there.
+            and not _round_fully_opted_out(r, opted_out_day_ids)
         ]
         # Ladder order: when a round opens, falling back to when it closes.
         # Rounds with neither timestamp sort last, in id order, rather than
@@ -2464,6 +2520,16 @@ async def my_deadline_rows(
         )).scalars()
     }
 
+    # This reader's leg opt-outs across every concert on show -- ONE query.
+    # Two row shapes consult it below: an EVENT_START row suppresses when its
+    # own day is opted out, and a round row suppresses when the round's every
+    # named leg is (_round_fully_opted_out). Partial opt-outs survive, same
+    # as everywhere else.
+    opted_out_ids = await user_opted_out_day_ids(
+        session, user_id,
+        [day.id for c in concerts.values() for day in c.days],
+    )
+
     # Eligibility for any UPGRADE rounds among these deadline rows. A row for an
     # upgrade the viewer cannot enter is noise -- its capture buttons would be
     # false testimony -- so it is dropped below. Resolved in two BATCHED queries
@@ -2538,6 +2604,8 @@ async def my_deadline_rows(
     for d in deadlines:
         if d.round_id is not None and d.round_id in covered_ids:
             continue
+        if d.day_id is not None and d.day_id in opted_out_ids:
+            continue  # the show itself, on a leg this reader said they are skipping
         concert = concerts.get(d.event_id)
         live_days = sorted(
             (day for day in concert.days if not day.cancelled), key=lambda day: day.starts_at_utc
@@ -2547,6 +2615,8 @@ async def my_deadline_rows(
             for t in concert.tags if t.kind is TagKind.VENUE
         ] if concert else []
         round_ = rounds.get(d.round_id) if d.round_id is not None else None
+        if round_ is not None and _round_fully_opted_out(round_, opted_out_ids):
+            continue
         outcome = outcomes.get(d.round_id) if d.round_id is not None else None
         is_upgrade = round_ is not None and round_.kind is RoundKind.UPGRADE
         if is_upgrade and round_.id not in eligible_upgrade_ids:
@@ -2906,6 +2976,14 @@ async def setup_application_rows(
     if not surviving:
         return []
 
+    # This reader's leg opt-outs across the surviving set, ONE query. A round
+    # whose every named leg is opted out is filtered below exactly as a
+    # cancelled or covered one: screen 2's answer (APPLIED) is irreversible,
+    # and this reader already said they are skipping that show.
+    opted_out_day_ids = await user_opted_out_day_ids(
+        session, user_id, [d.id for c in surviving for d in c.days]
+    )
+
     all_round_ids = [r.id for c in surviving for r in c.rounds]
     outcomes: dict[int, LotteryOutcome] = {
         o.round_id: o.outcome for o in (await session.execute(
@@ -2932,6 +3010,8 @@ async def setup_application_rows(
         for r in c.rounds:
             if is_round_cancelled(r, cancelled_day_ids):
                 continue
+            if _round_fully_opted_out(r, opted_out_day_ids):
+                continue
             if r.id in covered:
                 continue
             if not _round_asks_application(r, outcomes.get(r.id), now):
@@ -2955,6 +3035,12 @@ async def setup_tallies(
     concerts, opted_out = await _tracked_upcoming_concerts(session, user_id, now)
     surviving = [c for c in concerts if c.id not in opted_out]
 
+    # Same filter as setup_application_rows -- the reveal counts what screen
+    # 2 asks about.
+    opted_out_day_ids = await user_opted_out_day_ids(
+        session, user_id, [d.id for c in surviving for d in c.days]
+    )
+
     all_round_ids = [r.id for c in surviving for r in c.rounds]
     outcomes: dict[int, LotteryOutcome] = {
         o.round_id: o.outcome for o in (await session.execute(
@@ -2970,7 +3056,11 @@ async def setup_tallies(
     payment_candidates: list[tuple[datetime, Concert]] = []
     for c in surviving:
         cancelled_day_ids = {d.id for d in c.days if d.cancelled}
-        live_rounds = [r for r in c.rounds if not is_round_cancelled(r, cancelled_day_ids)]
+        live_rounds = [
+            r for r in c.rounds
+            if not is_round_cancelled(r, cancelled_day_ids)
+            and not _round_fully_opted_out(r, opted_out_day_ids)
+        ]
         for r in live_rounds:
             oc = outcomes.get(r.id)
             if oc is LotteryOutcome.APPLIED:
@@ -3111,6 +3201,14 @@ class RoundRow:
     requires_closes_at_utc: datetime | None = None
     # The reverse line on an item-sale round: the rounds that require it.
     needed_for_labels: tuple[str, ...] = ()
+    # Every leg this round names is opted out by this viewer (invariant 8's
+    # round rule, _round_fully_opted_out) -- a round-level fact, identical on
+    # each per-leg copy. It vetoes "Next for you" (_needs_you) and the
+    # catch-up dialog, and NOTHING else: the rows keep rendering with their
+    # gates open, because the concert page shows the whole campaign in
+    # context and is where you opt back in, and an opt-out never hides the
+    # record (a RoundOutcome survives it).
+    opted_out: bool = False
 
 
 @dataclass(frozen=True)
@@ -3211,6 +3309,11 @@ async def concert_round_rows(
     )).scalars())
     if not rounds and not days:
         return [], []
+
+    opted_out_day_ids = (
+        await user_opted_out_day_ids(session, user_id, [d.id for d in days])
+        if user_id is not None else set()
+    )
 
     outcomes: dict[int, LotteryOutcome] = {}
     # (round_id, day_id) -> this viewer's resolution of that leg. One query
@@ -3315,6 +3418,7 @@ async def concert_round_rows(
                 else None
             ),
             needed_for_labels=tuple(needed_for.get(r.id, ())),
+            opted_out=_round_fully_opted_out(r, opted_out_day_ids),
         )
         if not days:
             dateless.append(row)
@@ -3524,9 +3628,15 @@ def _needs_you(row: RoundRow, now: datetime) -> bool:
     its own -- a reader left APPLIED or WON satisfies `_wants_you` on standing
     alone -- and Home never meets this case either, since `upcoming_deadlines`
     drops a dead concert at the source (task 1).
+
+    An opted-out round wants nothing either: the reader said they are
+    skipping every leg it names.
     """
-    return not row.covered and not row.concert_cancelled and _wants_you(
-        row.outcome, row.can_capture, row.round_.closes_at_utc, now
+    return (
+        not row.covered
+        and not row.opted_out
+        and not row.concert_cancelled
+        and _wants_you(row.outcome, row.can_capture, row.round_.closes_at_utc, now)
     )
 
 
