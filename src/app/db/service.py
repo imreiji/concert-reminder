@@ -2095,6 +2095,12 @@ async def board_cards(
         )).scalars()
     } if all_round_ids else {}
 
+    # This reader's leg opt-outs across the whole board, ONE query (the days
+    # are already eager-loaded). Consulted per concert below.
+    opted_out_day_ids = await user_opted_out_day_ids(
+        session, user_id, [d.id for c in concerts for d in c.days]
+    )
+
     for concert in concerts:
         # Every leg cancelled: the show is off. Three things follow, all of
         # them concert-level facts `is_round_cancelled` cannot see, and all
@@ -2110,7 +2116,17 @@ async def board_cards(
         # place a card by an outcome whose round is not on its ladder and the
         # card names a column nothing on it explains (see visible_rungs).
         card_rounds = list(concert.rounds) if dead else [
-            r for r in concert.rounds if not is_round_cancelled(r, cancelled_day_ids)
+            r for r in concert.rounds
+            if not is_round_cancelled(r, cancelled_day_ids)
+            # The per-user analogue of the line above (invariant 8): a round
+            # whose every named leg this reader opted out of neither opens the
+            # card, nor drives its countdown, nor contributes standing -- and
+            # with nothing else placing the card, the card leaves the board,
+            # exactly as a leg-cancelled round already behaves. The dead path
+            # deliberately keeps every round: a dead card is standing-only,
+            # offers no actions and counts down to nothing, so there is
+            # nothing for an opt-out to suppress there.
+            and not _round_fully_opted_out(r, opted_out_day_ids)
         ]
         # Ladder order: when a round opens, falling back to when it closes.
         # Rounds with neither timestamp sort last, in id order, rather than

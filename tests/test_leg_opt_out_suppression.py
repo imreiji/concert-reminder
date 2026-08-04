@@ -25,6 +25,7 @@ from app.db.models import (
     Round,
 )
 from app.db.service import (
+    board_cards,
     ensure_user,
     my_deadline_blocks,
     my_deadline_rows,
@@ -32,6 +33,7 @@ from app.db.service import (
     sync_rule,
     user_calendar_events,
 )
+from app.domain.board import Column
 from app.domain.types import Anchor, RoundKind
 
 USER = 42
@@ -372,3 +374,38 @@ async def test_home_blocks_vanish_when_everything_is_opted_out(session):
 
     blocks = await my_deadline_blocks(session, USER, now=NOW, concert_ids={concert.id})
     assert blocks == []
+
+
+async def test_board_drops_an_open_card_whose_only_leg_is_opted_out(session):
+    """An open round on a fully opted-out leg must not keep a card in Open
+    now. With no standing left either, the card leaves the board -- the same
+    behavior a round cancelled by its legs already has."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    await make_round(session, concert, [a.id])  # closes 6/25: open at NOW
+
+    columns, open_total = await board_cards(
+        session, USER, now=NOW, concert_ids={concert.id}
+    )
+    assert len(columns[Column.OPEN]) == 1  # sanity: it was on the board
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    columns, open_total = await board_cards(
+        session, USER, now=NOW, concert_ids={concert.id}
+    )
+    assert columns[Column.OPEN] == []
+    assert open_total == 0
+
+
+async def test_board_keeps_a_card_with_one_of_two_legs_opted_out(session):
+    """Partial opt-out: the round survives, so the card stays in Open now."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    b = await make_day(session, concert, "Leg B")
+    await make_round(session, concert, [a.id, b.id])
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    columns, _ = await board_cards(session, USER, now=NOW, concert_ids={concert.id})
+    assert len(columns[Column.OPEN]) == 1
