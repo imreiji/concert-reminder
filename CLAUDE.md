@@ -986,10 +986,14 @@ deleting them.
    (via `RoundRow.opted_out`), and `/setup`'s rows and tallies. Three
    deliberate NON-consumers, so nobody "fixes" them: Discover's pills (event
    state is a fact about the catalogue, and the standing pill renders
-   `RoundOutcome` records, which an opt-out never touches), and the concert
+   `RoundOutcome` records, which an opt-out never touches), the concert
    page's row rendering and capture gates (the page shows the whole campaign
-   and is where you opt back in). Partial opt-out survives everywhere, exactly
-   as partial cancellation does.
+   and is where you opt back in), and that same page's settled-round fold --
+   `_split_leg_rounds` consumes `_wants_you`, not `_needs_you`, so an open
+   round on a fully opted-out leg stays UNFOLDED on its dimmed leg, on the
+   same reasoning: the page is where you opt back in and the fold is
+   presentation. Partial opt-out survives everywhere, exactly as partial
+   cancellation does.
 
 ## Migrations (SQLite gotchas — these have bitten before)
 

@@ -620,13 +620,6 @@ async def _apply_outcome_suppression(
 
     survivors = []
     for r in rounds:
-        # Leg opt-out: suppress only when the round names specific legs AND
-        # every one of them is opted out. An all-legs round (empty/None
-        # applies_to) is tied to no specific leg, so no set of leg opt-outs
-        # can cover it -- never suppressed, mirroring is_round_cancelled
-        # leaving empty applies_to alone. Uses raw applies_to, not the
-        # all_day_ids fallback the outcome passes use, precisely so the
-        # empty case falls through untouched.
         # Leg opt-out: the one rule, see _round_fully_opted_out.
         if _round_fully_opted_out(r, opted_out_day_ids):
             continue

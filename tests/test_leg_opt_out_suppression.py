@@ -528,3 +528,17 @@ async def test_setup_tallies_exclude_a_fully_opted_out_round(session):
     await set_leg_opt_out(session, USER, a.id, True, now=NOW)
     tallies = await setup_tallies(session, USER, NOW)
     assert tallies.next_deadline_utc is None
+
+
+async def test_round_fully_opted_out_predicate_ignores_all_legs_rounds():
+    """The predicate reads RAW applies_to: empty/None (the all-legs / General
+    convention) never suppresses, whatever the opt-out set holds."""
+    from app.db.service import _round_fully_opted_out
+
+    general = Round(concert_id=1, kind=RoundKind.LOTTERY_ROUND, label="G")
+    assert not _round_fully_opted_out(general, {1, 2, 3})
+    general.applies_to = []
+    assert not _round_fully_opted_out(general, {1, 2, 3})
+    general.applies_to = [2]
+    assert _round_fully_opted_out(general, {1, 2, 3})
+    assert not _round_fully_opted_out(general, {1, 3})

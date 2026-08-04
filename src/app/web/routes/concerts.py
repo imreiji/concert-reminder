@@ -38,7 +38,6 @@ from app.db.models import (
     Concert,
     ConcertDay,
     ConcertTag,
-    LegOptOut,
     ReminderRule,
     Round,
     RoundOutcome,
@@ -74,6 +73,7 @@ from app.db.service import (
     sync_concert_venue_tags,
     tag_picker_context,
     tracked_concert_ids,
+    user_opted_out_day_ids,
 )
 from app.db.session import get_session
 from app.domain.timezones import jst_to_utc
@@ -985,11 +985,7 @@ async def concert_rounds_context(
     # from the one GET /concerts/{event_id} rendered (same reasoning as the
     # outcome re-render).
     day_ids = [g.day.id for g in leg_groups]
-    opted_out_day_ids = set((await session.execute(
-        select(LegOptOut.concert_day_id).where(
-            LegOptOut.user_id == user_id, LegOptOut.concert_day_id.in_(day_ids)
-        )
-    )).scalars()) if day_ids else set()
+    opted_out_day_ids = await user_opted_out_day_ids(session, user_id, day_ids)
     return {
         "concert": concert,
         "now": now,
