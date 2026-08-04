@@ -20,9 +20,12 @@ from app.db.models import (
     Base,
     Concert,
     ConcertDay,
+    ConcertTag,
     ReminderQueue,
     ReminderRule,
     Round,
+    Tag,
+    TagSubscription,
 )
 from app.db.service import (
     RoundRow,
@@ -33,11 +36,13 @@ from app.db.service import (
     my_deadline_blocks,
     my_deadline_rows,
     set_leg_opt_out,
+    setup_application_rows,
+    setup_tallies,
     sync_rule,
     user_calendar_events,
 )
 from app.domain.board import Column
-from app.domain.types import Anchor, LotteryOutcome, RoundKind
+from app.domain.types import Anchor, LotteryOutcome, RoundKind, TagKind
 
 USER = 42
 OTHER = 99
@@ -465,3 +470,61 @@ async def test_catch_up_dialog_skips_an_opted_out_round(session):
         can_capture=True, can_report_result=True, opted_out=True,
     )
     assert pending_capture_row({"leg_groups": [], "all_legs_rows": [row]}) is None
+
+
+async def follow_concert(s, user: int, concert: Concert) -> None:
+    """Make `concert` tracked for `user` the way production does: a followed
+    tag attached to it (setup reads _tracked_upcoming_concerts)."""
+    tag = Tag(name="g", kind=TagKind.GROUP)
+    s.add(tag)
+    await s.flush()
+    s.add(ConcertTag(concert_id=concert.id, tag_id=tag.id))
+    s.add(TagSubscription(user_id=user, tag_id=tag.id))
+    await s.flush()
+
+
+async def test_setup_stops_asking_about_a_fully_opted_out_round(session):
+    """Screen 2 must not offer 'did you apply?' -- an irreversible APPLIED
+    behind it -- on a round whose every leg the reader opted out of."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    round_ = await make_round(session, concert, [a.id])
+    await follow_concert(session, USER, concert)
+
+    rows = await setup_application_rows(session, USER, NOW)
+    assert round_.id in {r.round_.id for r in rows}  # sanity: asked before
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    rows = await setup_application_rows(session, USER, NOW)
+    assert round_.id not in {r.round_.id for r in rows}
+
+
+async def test_setup_still_asks_on_a_partial_opt_out(session):
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    b = await make_day(session, concert, "Leg B")
+    round_ = await make_round(session, concert, [a.id, b.id])
+    await follow_concert(session, USER, concert)
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    rows = await setup_application_rows(session, USER, NOW)
+    assert round_.id in {r.round_.id for r in rows}
+
+
+async def test_setup_tallies_exclude_a_fully_opted_out_round(session):
+    """The reveal screen's numbers count the same round set screen 2 asks
+    about: a skipped show is not a deadline you are waiting on."""
+    await ensure_user(session, USER, "reiji")
+    concert = await make_concert(session)
+    a = await make_day(session, concert, "Leg A")
+    await make_round(session, concert, [a.id])
+    await follow_concert(session, USER, concert)
+
+    tallies = await setup_tallies(session, USER, NOW)
+    assert tallies.next_deadline_utc is not None  # sanity: counted before
+
+    await set_leg_opt_out(session, USER, a.id, True, now=NOW)
+    tallies = await setup_tallies(session, USER, NOW)
+    assert tallies.next_deadline_utc is None

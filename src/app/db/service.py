@@ -2983,6 +2983,14 @@ async def setup_application_rows(
     if not surviving:
         return []
 
+    # This reader's leg opt-outs across the surviving set, ONE query. A round
+    # whose every named leg is opted out is filtered below exactly as a
+    # cancelled or covered one: screen 2's answer (APPLIED) is irreversible,
+    # and this reader already said they are skipping that show.
+    opted_out_day_ids = await user_opted_out_day_ids(
+        session, user_id, [d.id for c in surviving for d in c.days]
+    )
+
     all_round_ids = [r.id for c in surviving for r in c.rounds]
     outcomes: dict[int, LotteryOutcome] = {
         o.round_id: o.outcome for o in (await session.execute(
@@ -3009,6 +3017,8 @@ async def setup_application_rows(
         for r in c.rounds:
             if is_round_cancelled(r, cancelled_day_ids):
                 continue
+            if _round_fully_opted_out(r, opted_out_day_ids):
+                continue
             if r.id in covered:
                 continue
             if not _round_asks_application(r, outcomes.get(r.id), now):
@@ -3032,6 +3042,12 @@ async def setup_tallies(
     concerts, opted_out = await _tracked_upcoming_concerts(session, user_id, now)
     surviving = [c for c in concerts if c.id not in opted_out]
 
+    # Same filter as setup_application_rows -- the reveal counts what screen
+    # 2 asks about.
+    opted_out_day_ids = await user_opted_out_day_ids(
+        session, user_id, [d.id for c in surviving for d in c.days]
+    )
+
     all_round_ids = [r.id for c in surviving for r in c.rounds]
     outcomes: dict[int, LotteryOutcome] = {
         o.round_id: o.outcome for o in (await session.execute(
@@ -3047,7 +3063,11 @@ async def setup_tallies(
     payment_candidates: list[tuple[datetime, Concert]] = []
     for c in surviving:
         cancelled_day_ids = {d.id for d in c.days if d.cancelled}
-        live_rounds = [r for r in c.rounds if not is_round_cancelled(r, cancelled_day_ids)]
+        live_rounds = [
+            r for r in c.rounds
+            if not is_round_cancelled(r, cancelled_day_ids)
+            and not _round_fully_opted_out(r, opted_out_day_ids)
+        ]
         for r in live_rounds:
             oc = outcomes.get(r.id)
             if oc is LotteryOutcome.APPLIED:
