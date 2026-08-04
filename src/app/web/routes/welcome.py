@@ -117,6 +117,18 @@ async def welcome(
 ):
     db_user = await ensure_user(session, user.id, user.username)
     if db_user.onboarding_step >= TOTAL_STEPS:
+        if db_user.welcomed_at is None:
+            # Done-but-unstamped is a real row, and one no UI can repair: a
+            # signup that finished the wizard between `alembic upgrade head`
+            # and the process restart did so under code that knew nothing of
+            # this column, and a rollback onto the new schema produces the
+            # shape wholesale. Both stamping paths (advance, skip-all) sit
+            # behind this very bounce, so without a stamp here the callback
+            # sends the account to /welcome on every login forever -- losing
+            # its ?next= each time, since the callback pops that first.
+            # welcomed_at stays the single authority; this only fills it in.
+            db_user.welcomed_at = datetime.now(UTC)
+            await session.commit()
         return RedirectResponse("/", status_code=303)
 
     step = db_user.onboarding_step

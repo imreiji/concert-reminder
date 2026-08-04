@@ -19,9 +19,12 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("welcomed_at", sa.DateTime(), nullable=True))
     # Backfill every existing row as already welcomed, from created_at:
     # copying a column the same TypeDecorator wrote sidesteps every datetime
-    # string-format question, and at migration time "existing row" cannot be
-    # split into onboarded-web-user vs bot-first bare row anyway (both are
-    # onboarding_step 0), so everyone is grandfathered as done.
+    # string-format question. At migration time an existing row cannot be
+    # RELIABLY split into onboarded-web-user vs bot-first bare row -- both are
+    # onboarding_step 0, and while a bot-first row has never had a web_sessions
+    # row, session rows are prunable, so their absence proves nothing. Guessing
+    # wrong would re-run the wizard at a long-standing user, which is the worse
+    # failure, so everyone is grandfathered as done.
     op.execute("UPDATE users SET welcomed_at = created_at")
 
 

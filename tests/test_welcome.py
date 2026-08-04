@@ -3,6 +3,8 @@ POST /welcome/advance, POST /welcome/skip-all). The new-user-redirect half
 that sends a brand-new login here lives in test_auth.py.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -56,14 +58,16 @@ def client(db, monkeypatch):
     return c
 
 
-def login_as(client, discord_id: int, name: str):
+def login_as(client, discord_id: int, name: str) -> str:
+    """Run the OAuth round-trip as this identity, returning where the
+    callback sent us (/welcome while onboarding is unfinished, else /)."""
     async def fake_identity(token):
         return {"id": str(discord_id), "username": name, "global_name": name, "avatar": None}
 
     client.monkeypatch.setattr(auth, "fetch_identity", fake_identity)
     r = client.get("/auth/login")
     state = r.headers["location"].split("state=")[1].split("&")[0]
-    client.get(f"/auth/callback?code=x&state={state}")
+    return client.get(f"/auth/callback?code=x&state={state}").headers["location"]
 
 
 async def _onboarding_step(client, discord_id: int) -> int:
@@ -140,7 +144,31 @@ async def test_advancing_past_the_last_step_stamps_welcomed_at(client):
         client.post("/welcome/advance")  # 0 -> 5 (done)
     stamped = await _welcomed_at(client, FAN_ID)
     assert stamped is not None
-    assert stamped.tzinfo is not None  # invariant 1: aware UTC only
+    # The stamp is the moment the wizard finished, not some inherited value
+    # (created_at, say, which the migration's backfill also writes here).
+    assert abs((datetime.now(UTC) - stamped).total_seconds()) < 60
+
+
+async def test_a_finished_but_unstamped_user_self_heals_on_welcome(client):
+    """The deploy-window row, and the shape a rollback produces wholesale: the
+    wizard was finished under code that did not know the column, so the step
+    says done while the stamp is missing. Nothing in the UI can reach the two
+    stamping paths from there -- GET /welcome bounces to / on the step alone,
+    and both of them live behind that bounce -- so the callback would send
+    this account to /welcome on every login, forever, discarding its ?next=
+    each time. The bounce itself has to close the gap."""
+    login_as(client, FAN_ID, "fan")
+    async with client.db() as s:  # exactly the row a mid-deploy signup leaves
+        user = await s.get(User, FAN_ID)
+        user.onboarding_step, user.welcomed_at = 5, None
+        await s.commit()
+
+    r = client.get("/welcome")
+    assert r.status_code == 303 and r.headers["location"] == "/"
+    assert await _welcomed_at(client, FAN_ID) is not None
+    # The property that actually matters: the login loop is broken.
+    client.get("/auth/logout")
+    assert login_as(client, FAN_ID, "fan") == "/"
 
 
 async def test_skip_all_stamps_welcomed_at(client):

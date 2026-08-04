@@ -119,7 +119,9 @@ class User(Base):
     # gets /welcome: the bot's ensure_user creates bare rows, so "row exists"
     # never meant "was onboarded". onboarding_step cannot serve here -- its
     # migration backfilled existing rows to 0, so a pre-wizard web user and a
-    # bot-first bare row are indistinguishable by step.
+    # bot-first bare row do not reliably differ by step. Rows predating this
+    # column were therefore all backfilled as welcomed rather than guessed at:
+    # re-running the wizard at a long-standing user is the worse failure.
     welcomed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
 

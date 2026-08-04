@@ -134,6 +134,28 @@ def test_returning_unwelcomed_user_is_sent_back_to_the_wizard(client):
     assert _login_with_next(client) == "/welcome"
 
 
+async def test_a_later_login_does_not_reseed_the_language_column(client):
+    """The redirect moved to welcomed_at, but seeding stayed keyed on row
+    absence, and that difference is deliberate: the column cannot tell
+    "defaulted to en" from "chose en", so only the moment before the row
+    exists is safe to write from a browser cookie."""
+    client.cookies.set("lang", "ja")
+    do_login(client)  # creation: the cookie seeds the column
+    async with client.db() as s:
+        assert (await s.get(User, 42)).language == "ja"
+
+    client.get("/auth/logout")
+    # Clear the jar first: the callback set its own lang cookie on the way
+    # out, and merely set()ing a second one leaves BOTH in the jar (different
+    # domains) -- the request then carries "lang=zh; lang=ja" and the server's
+    # own value wins, so this test would pass no matter what the route did.
+    client.cookies.clear()
+    client.cookies.set("lang", "zh")  # a different browser, or a stale cookie
+    do_login(client)
+    async with client.db() as s:
+        assert (await s.get(User, 42)).language == "ja"  # the account still rules
+
+
 async def test_deleted_then_recreated_user_is_rewizarded(client):
     """The original repro: erase the account, log in again, get onboarded
     afresh -- the re-created row is a stranger, whatever its discord id."""
@@ -252,8 +274,8 @@ def _login_with_next(client, query: str = "") -> str:
 
 def test_next_round_trips_through_oauth_to_the_original_page(client):
     """The whole point: bounced off /preferences, signed in, land there."""
-    do_login(client)  # account exists AND is onboarded -- otherwise the
-    client.post("/welcome/skip-all")  # wizard wins over next, as it should
+    do_login(client)  # the account exists
+    client.post("/welcome/skip-all")  # and is onboarded, so next beats the wizard
     client.get("/auth/logout")
     assert _login_with_next(client, "?next=%2Fpreferences") == "/preferences"
 
