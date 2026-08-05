@@ -10,6 +10,7 @@ The second half of the file exercises `app.triage.run_triage` with canned LLM
 replies and a canned page fetch, the way test_discovery_sweep.py exercises
 `run_sweep` with a canned actor page: no network, no key, no scheduler."""
 
+import logging
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -278,19 +279,24 @@ async def test_a_failing_draft_is_skipped_and_the_run_survives(db, monkeypatch):
         assert await service.pending_drafts(s, ADMIN_ID) == []
 
 
-async def test_an_unusable_classify_response_fails_the_run(db, monkeypatch):
+async def test_an_unusable_classify_response_fails_the_run(db, monkeypatch, caplog):
     monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
     async with db() as s:
         await ensure_user(s, ADMIN_ID, "admin")
         await _seed_leads(s)
         run = await service.request_triage(s, NOW, ADMIN_ID)
-        with pytest.raises(TriageResponseError):
-            await run_triage(s, run, NOW,
-                             fetcher=_fake_page,
-                             llm_chat=_llm(["not yaml at all: [["]))
+        with caplog.at_level(logging.ERROR, logger="app.triage"):
+            with pytest.raises(TriageResponseError):
+                await run_triage(s, run, NOW,
+                                 fetcher=_fake_page,
+                                 llm_chat=_llm(["not yaml at all: [["]))
         # The runner does NOT mark its own failure: the scheduler's handler does,
         # on a cleaned transaction (mark_triage_failed).
         assert run.status == "requested"
+        # Diagnosing the production incident needed the reply text itself,
+        # which the exception alone never carried.
+        [record] = caplog.records
+        assert "not yaml at all: [[" in record.getMessage()
 
 
 async def test_zero_open_leads_costs_no_llm_call(db, monkeypatch):

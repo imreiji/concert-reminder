@@ -49,8 +49,12 @@ async def chat(
 
     Raises `LlmError` before any network call when the API key or model is
     unset (misconfiguration named plainly), and after the call on any
-    transport error, non-200 status, or a body missing the expected
-    `choices[0].message.content` shape.
+    transport error, non-200 status, a body missing the expected
+    `choices[0].message.content` shape, a non-`"stop"` `finish_reason`
+    (the reply was truncated), or empty `content`. Thinking mode is
+    disabled in the request body (see `body` below) precisely so a
+    reasoning overrun cannot produce the truncated/empty case in the first
+    place; the check stays as a second line of defense.
 
     `transport` is test-only (httpx.MockTransport); production always uses
     httpx's default. One client is built per call, mirroring
@@ -70,6 +74,16 @@ async def chat(
         ],
         "temperature": 0.1,
         "stream": False,
+        # deepseek-v4-flash thinks by default, and thinking burns ~50k
+        # reasoning tokens on a 216-lead classify call -- ~90% of the call's
+        # cost -- with no visible output until it finishes. On 2026-08-05 a
+        # classify run's reasoning overran the output cap and came back with
+        # `content` empty, which is what produced the production
+        # TriageResponseError. `temperature` also has NO effect while
+        # thinking is enabled, per DeepSeek's docs, so the 0.1 above was
+        # inert until this was added. Unconditional: this client serves only
+        # the triage rubric calls, so there is no case where thinking helps.
+        "thinking": {"type": "disabled"},
     }
     headers = {"Authorization": f"Bearer {settings.deepseek_api_key}"}
 
@@ -92,12 +106,31 @@ async def chat(
 
     try:
         payload = response.json()
-        content = payload["choices"][0]["message"]["content"]
+        choice = payload["choices"][0]
+        content = choice["message"]["content"]
     except (KeyError, IndexError, TypeError, ValueError) as exc:
         # response.json() raises json.JSONDecodeError (a ValueError) on a
         # non-JSON or truncated 200 body; folding it in here keeps every
         # post-request failure surfacing as LlmError, per the docstring.
         raise LlmError("DeepSeek response missing choices[0].message.content") from exc
+
+    # The OpenAI-compatible schema permits `"content": null`; normalize it to
+    # "" so it lands in the empty-reply check below instead of raising
+    # AttributeError out of `.strip()`.
+    content = content or ""
+
+    # A capped reply comes back with a finish_reason other than "stop" (e.g.
+    # "length"), and 2026-08-05's incident showed that can leave `content`
+    # empty or partial -- which used to fail later and further away, as an
+    # opaque TriageResponseError out of the YAML parser. Check truncation
+    # first: an empty reply that was also truncated should report the more
+    # informative cause. A missing finish_reason key is accepted as-is
+    # (nothing to complain about).
+    finish_reason = choice.get("finish_reason")
+    if finish_reason is not None and finish_reason != "stop":
+        raise LlmError(f"DeepSeek reply truncated (finish_reason: {finish_reason})")
+    if not content.strip():
+        raise LlmError("DeepSeek reply was empty")
 
     usage = payload.get("usage") or {}
     return LlmReply(
