@@ -1,23 +1,45 @@
-"""TriageRun: a request queue of one, and the service CRUD around it.
+"""TriageRun: a request queue of one, the service CRUD around it, and the
+runner that drains it.
 
 Mirrors DiscoveryState's request/stamp shape (see test_discovery_sweep.py),
 but a triage run is a ROW per request rather than a single-row state table --
 each run keeps its own counts, so /admin/discoveries/triage can show a
-history rather than only "last run"."""
+history rather than only "last run".
 
-from datetime import UTC, datetime, timedelta
+The second half of the file exercises `app.triage.run_triage` with canned LLM
+replies and a canned page fetch, the way test_discovery_sweep.py exercises
+`run_sweep` with a canned actor page: no network, no key, no scheduler."""
 
+from datetime import UTC, date, datetime, timedelta
+
+import pytest
 import pytest_asyncio
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings
 from app.db import service
-from app.db.models import Base, PendingDraft, TriageRun
+from app.db.models import (
+    Base,
+    DiscoveredEvent,
+    Notification,
+    PendingDraft,
+    TriageRun,
+    User,
+)
 from app.db.service import ensure_user
+from app.domain.prune_list import parse_prune_list
+from app.domain.triage_prompts import TriageResponseError
+from app.llm import LlmReply
+from app.scheduler import heartbeat
+from app.triage import run_triage
 
 NOW = datetime(2026, 8, 5, 3, 0, tzinfo=UTC)
 ADMIN_ID = 900001
+# An admin id with no `users` row -- the Notification FK case run_triage has to
+# guard, exactly as run_sweep does.
+STRANGER_ADMIN_ID = 900002
 
 
 @pytest_asyncio.fixture()
@@ -85,3 +107,202 @@ async def test_pending_draft_texts_excludes_committed_and_discarded(db):
                            discarded_at=NOW))
         await s.flush()
         assert await service.pending_draft_texts(s) == ["open one"]
+
+
+# ── The runner (app/triage.py) ────────────────────────────────────────────
+#
+# Two canned replies stand in for the two prompts: one classify response over
+# the whole lead batch, then one draft response per surviving production.
+
+CLASSIFY_REPLY = """dismiss:
+  stage: ['481833']
+survivors:
+  - title: "学マス LIVE"
+    lead_ids: ['486243']
+    representative: '486243'
+  - title: "calendar only"
+    lead_ids: ['imas-tickets:x@google.com']
+    representative: null
+"""
+
+# Fenced, and carrying a round the model was told not to invent: `strip_rounds`
+# has to drop it whatever the model said, which is what the happy path pins.
+DRAFT_REPLY = """```yaml
+title: 学マス LIVE
+title_en: Gakumas Live
+title_zh: 学马斯演唱会
+rounds:
+  - label: 最速先行
+    apply_closes_jst: 2026-09-01 23:59
+performances:
+  - label: Day 1
+    venue: Zepp Haneda
+```"""
+
+
+def _llm(replies):
+    """A canned chat function: one reply per call, in order."""
+    calls = []
+
+    async def fake(system, user):
+        calls.append((system, user))
+        return LlmReply(text=replies[len(calls) - 1], tokens_in=100, tokens_out=50)
+
+    fake.calls = calls
+    return fake
+
+
+def _forbidden_llm():
+    """A chat function that fails the test if it is called at all."""
+
+    async def fake(system, user):
+        raise AssertionError("run_triage spent an LLM call it should not have")
+
+    return fake
+
+
+async def _fake_page(url, transport=None):
+    return "<html>学マス LIVE 2026-09-12 Zepp Haneda</html>"
+
+
+async def _seed_leads(s):
+    s.add(DiscoveredEvent(source_event_id="481833", title="朗読劇なにか",
+                          event_date=date(2026, 9, 1), venue="サンシャイン劇場"))
+    s.add(DiscoveredEvent(source_event_id="486243", title="学マス LIVE",
+                          event_date=date(2026, 9, 12), venue="Zepp Haneda"))
+    s.add(DiscoveredEvent(source_event_id="imas-tickets:x@google.com",
+                          source="imas-tickets", date_is_deadline=True,
+                          title="なにかの締切", event_date=date(2026, 9, 15), venue=""))
+    await s.flush()
+
+
+async def test_happy_path_stores_prune_and_creates_a_skeleton_draft(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        report = await run_triage(s, run, NOW,
+                                  fetcher=_fake_page,
+                                  llm_chat=_llm([CLASSIFY_REPLY, DRAFT_REPLY]))
+        assert run.status == "done"
+        assert run.finished_at == NOW
+        assert parse_prune_list(run.prune_yaml).entries[0].event_id == "481833"
+        assert report.leads_seen == 3
+        assert report.productions == 2
+        assert report.dismissals == 1
+        assert report.drafts == 1 and report.calendar_skipped == 1
+        assert run.drafts_created == 1 and run.calendar_skipped == 1
+        # Both phases billed: one classify call plus one draft call.
+        assert run.tokens_in == 200 and run.tokens_out == 100
+        drafts = await service.pending_drafts(s, ADMIN_ID)
+        assert len(drafts) == 1
+        assert "最速先行" not in drafts[0].draft_text          # THE safety pin
+        assert "apply_closes_jst" not in drafts[0].draft_text
+        assert "eventernote.com/events/486243" in drafts[0].draft_text
+        notes = (await s.execute(select(Notification))).scalars().all()
+        assert [n.kind for n in notes] == ["triage"]
+        assert notes[0].concert_id is None
+
+
+async def test_a_drafted_survivor_is_not_redrafted_next_press(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        first = await service.request_triage(s, NOW, ADMIN_ID)
+        first_report = await run_triage(s, first, NOW,
+                                        fetcher=_fake_page,
+                                        llm_chat=_llm([CLASSIFY_REPLY, DRAFT_REPLY]))
+        assert first_report.drafts == 1
+
+        later = NOW + timedelta(minutes=5)
+        second = await service.request_triage(s, later, ADMIN_ID)
+        assert second.id != first.id  # the first run is done, so this is a new row
+        # The same classify verdict, but the survivor's page URL is already in a
+        # still-open PendingDraft, so the draft phase never runs -- which is why
+        # only ONE reply is canned here.
+        second_report = await run_triage(s, second, later,
+                                         fetcher=_fake_page,
+                                         llm_chat=_llm([CLASSIFY_REPLY]))
+        assert second_report.drafts == 0
+        assert second_report.skipped == 1
+        assert len(await service.pending_drafts(s, ADMIN_ID)) == 1
+
+
+async def test_a_failing_draft_is_skipped_and_the_run_survives(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        report = await run_triage(s, run, NOW,
+                                  fetcher=_fake_page,
+                                  llm_chat=_llm([CLASSIFY_REPLY, "not yaml at all: [["]))
+        assert run.status == "done"
+        assert report.drafts == 0
+        assert report.skipped == 1
+        # The classify half still landed: one bad production costs only itself.
+        assert parse_prune_list(run.prune_yaml).entries[0].event_id == "481833"
+        assert await service.pending_drafts(s, ADMIN_ID) == []
+
+
+async def test_an_unusable_classify_response_fails_the_run(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        with pytest.raises(TriageResponseError):
+            await run_triage(s, run, NOW,
+                             fetcher=_fake_page,
+                             llm_chat=_llm(["not yaml at all: [["]))
+        # The runner does NOT mark its own failure: the scheduler's handler does,
+        # on a cleaned transaction (mark_triage_failed).
+        assert run.status == "requested"
+
+
+async def test_zero_open_leads_costs_no_llm_call(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        report = await run_triage(s, run, NOW,
+                                  fetcher=_fake_page, llm_chat=_forbidden_llm())
+        assert report.leads_seen == 0
+        assert run.status == "done"
+        assert run.leads_seen == 0 and run.tokens_in == 0
+        # Nothing happened, so nobody is told about it.
+        assert (await s.execute(select(Notification))).scalars().all() == []
+
+
+async def test_the_draft_loop_beats_the_heartbeat(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    beats = []
+    monkeypatch.setattr(heartbeat, "beat", lambda: beats.append(1))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        report = await run_triage(s, run, NOW,
+                                  fetcher=_fake_page,
+                                  llm_chat=_llm([CLASSIFY_REPLY, DRAFT_REPLY]))
+        # One beat per drafted survivor -- the calendar-only one fetches nothing.
+        assert report.drafts == 1
+        assert len(beats) == 1
+
+
+async def test_an_admin_who_never_signed_in_gets_a_user_row(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(STRANGER_ADMIN_ID))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")  # the requester, not the admin
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        await run_triage(s, run, NOW,
+                         fetcher=_fake_page,
+                         llm_chat=_llm([CLASSIFY_REPLY, DRAFT_REPLY]))
+        # Notification.user_id is an FK to users.discord_id, so the flush inside
+        # run_triage would raise IntegrityError without the ensure_user guard.
+        assert await s.get(User, STRANGER_ADMIN_ID) is not None
+        notes = (await s.execute(select(Notification))).scalars().all()
+        assert [n.user_id for n in notes] == [STRANGER_ADMIN_ID]
