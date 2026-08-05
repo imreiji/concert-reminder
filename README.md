@@ -161,3 +161,8 @@ Shipped since Phase 12 (no phase numbers assigned, tracked as feature PRs instea
 - [x] Tag handles — a tag is identified by a `slug`, not its name, so two performers can share a name and a venue can share one with a group; closed two live crashes where the routes' duplicate check and the column's UNIQUE disagreed
 - [x] Catalogue round-trip — an admin-only `export.zip` (every concert as a YAML draft, every tag with its handle, and a RESTORE.txt naming the order) plus a tags importer that skips what already exists; drafts now carry `event_id` and tag handles, so a restore keeps its URLs and binds to exactly the right tag. No personal data, by construction rather than by filter. The importer previews before it writes: blank fields are filled automatically, disagreements are shown with both values for you to resolve, and nothing is overwritten unseen
 - [x] Eventernote discovery — a daily sweep of every tag with an `eventernote_url` finds performances the catalogue does not have and DMs admins one digest ending in a paste-ready agent prompt; `/admin/discoveries` is the review surface, an imported leg remembers its source event id, and the whole subsystem is off unless `DISCOVERY_ENABLED`
+
+## License
+
+[AGPL-3.0-or-later](LICENSE). Run it, fork it, host it — but a hosted fork owes its users its source, modifications included.
+

@@ -49,8 +49,8 @@ tree. File:line pointers are as of commit `a9b98a0`.
 A Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets, payment deadlines). Live at
 https://dekimasen.app (AWS Lightsail Ubuntu 24.04 behind Cloudflare, Caddy
-reverse proxy). ~1222 tests. Owner (imreiji) is a pilot, technically
-comfortable but rusty; Windows PowerShell 5.1 (no `&&` — use `;`). He cares
+reverse proxy). ~1222 tests. Owner is technically comfortable but writes
+little code; Windows PowerShell 5.1 (no `&&` — use `;`). He cares
 about correct JST handling, tag semantics, and clean UI; when in doubt about UX,
 ask.
 

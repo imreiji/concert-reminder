@@ -22,3 +22,6 @@ messages.pot
 # Superpowers scratch: SDD ledgers, review packages, brainstorm mockups.
 # Session-local working state, never part of the repo.
 .superpowers/
+
+# local one-off scripts and working files (e.g. catalogue-authoring runs)
+scratchpad/

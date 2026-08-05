@@ -1392,8 +1392,8 @@ the server and in the owner's local copy.
 
 ## Owner context
 
-The owner (imreiji) is a pilot, comfortable technically but rusty at
-coding, on Windows PowerShell 5.1 (no `&&` chaining — use `;` or separate
+The owner is technically comfortable but writes little code day to day,
+and works on Windows PowerShell 5.1 (no `&&` chaining — use `;` or separate
 lines in any commands you give him). Explain the why behind non-obvious
 changes. He cares about: correct JST handling, the tag semantics above, and
 the UI staying clean — when in doubt about UX, ask, don't assume.
