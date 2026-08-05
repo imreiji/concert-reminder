@@ -47,7 +47,9 @@ from app.db.service import (
     leg_cancelled_context,
     mark_notification_sent,
     mark_sent,
+    mark_triage_failed,
     notice_context,
+    pending_triage_run,
     prune_delivery_log,
     queue_delivery_digest,
     record_deliveries,
@@ -60,6 +62,7 @@ from app.discovery import run_sweep
 from app.domain.types import DeliveryOutcome
 from app.ops import run_checks
 from app.scheduler import heartbeat
+from app.triage import run_triage
 
 log = logging.getLogger(__name__)
 
@@ -299,6 +302,46 @@ async def tick(bot) -> int:
                 await session.commit()
             except Exception:
                 log.exception("discovery: could not record the failed sweep")
+                await session.rollback()
+
+        # AI triage runs only when an admin pressed the button: a requested
+        # TriageRun row is both the request and the record. Its failure
+        # handler is stamp_discovery_run's two-halves pattern in row form --
+        # the rollback restores the row to "requested", so without the
+        # re-mark on the cleaned transaction a dead run re-fires 25 fetches
+        # and 26 LLM calls every 60 seconds forever.
+        #
+        # triage_run_id is captured the moment the row is fetched, NOT read
+        # off triage_run.id inside the except block: session.rollback()
+        # expires every attribute on every object touched in the transaction,
+        # PRIMARY KEY included (confirmed against this app's aiosqlite setup
+        # -- unlike some sync SQLAlchemy configurations, the id is not
+        # exempt), so `triage_run.id` after the rollback below raises
+        # MissingGreenlet instead of reading back a value.
+        triage_run = None
+        triage_run_id = None
+        try:
+            if settings.triage_enabled:
+                triage_run = await pending_triage_run(session)
+                if triage_run is not None:
+                    triage_run_id = triage_run.id
+            if triage_run is not None:
+                triage_report = await run_triage(session, triage_run, now)
+                await session.commit()
+                log.info(
+                    "triage run %d: %d leads, %d dismissals proposed, %d drafts, %d skipped",
+                    triage_run_id, triage_report.leads_seen, triage_report.dismissals,
+                    triage_report.drafts, triage_report.skipped,
+                )
+        except Exception:
+            log.exception("triage run failed; delivery was unaffected")
+            await session.rollback()
+            try:
+                if triage_run_id is not None:
+                    await mark_triage_failed(session, triage_run_id, now, "run failed; see logs")
+                    await session.commit()
+            except Exception:
+                log.exception("triage: could not record the failed run")
                 await session.rollback()
     return delivered
 
