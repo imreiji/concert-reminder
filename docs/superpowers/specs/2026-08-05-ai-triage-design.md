@@ -1,6 +1,19 @@
-# AI triage of discovery leads (DeepSeek V4 Flash) — design
+# AI triage of discovery leads (DeepSeek V4 Flash) — design (phase 1)
 
 Date: 2026-08-05. Status: approved by owner (this session), pre-implementation.
+
+**Phasing (owner, 2026-08-05):** this spec is PHASE 1 of the AI pipeline —
+classify + skeleton drafts, rounds never emitted. PHASE 2 is AI drafting
+FROM a skeleton draft: completing a pending skeleton into a full draft,
+rounds included. Phase 2 gets its own brainstorm and spec once phase 1 has
+shipped and been calibrated against real leads; its one hard design
+question is already known and recorded here so it is not rediscovered: how
+the official ticket page reaches the model. Owner-supplied (a URL or pasted
+page text on the pending-draft review) keeps the human vouching for the
+source and the fetch surface narrow; server-side search would mean an
+arbitrary-host fetch surface and puts an LLM's judgment where the app's
+"a deadline it names is real" promise lives. That choice is phase 2's to
+make, not this build's.
 
 ## Why now, and which wishlist entry this is
 
@@ -36,13 +49,15 @@ applies exactly as today.
 
 ## What it deliberately does NOT do
 
-- **No round extraction.** Pass 3 of the triage skill (round times from the
-  production's official ticket page) stays with the agent skills. Round
-  research needs web search plus arbitrary-host fetching, and it sits exactly
-  where an LLM hallucinating a deadline would break the app's core promise
-  ("a deadline it names is real"). Skeleton drafts are honest by
-  construction: rounds cannot be invented because rounds are not emitted —
-  and are stripped in code even if the model emits them anyway.
+- **No round extraction — in this phase.** Pass 3 of the triage skill
+  (round times from the production's official ticket page) stays with the
+  agent skills for now; it becomes PHASE 2 (see Phasing above), designed
+  separately. Round research needs the official page plus judgment, and it
+  sits exactly where an LLM hallucinating a deadline would break the app's
+  core promise ("a deadline it names is real"). Phase 1's skeleton drafts
+  are honest by construction: rounds cannot be invented because rounds are
+  not emitted — and are stripped in code even if the model emits them
+  anyway.
 - **No auto-apply.** The prune plan is proposed, never applied; drafts go to
   the pending queue, never to `concerts`. `import_commit` remains the only
   write path into `concerts` (unchanged), and lead dismissal still happens
