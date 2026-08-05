@@ -342,8 +342,8 @@ Key structural rules:
 
 ## Owner context
 
-The owner (imreiji) is a pilot, technically comfortable but rusty at coding,
-on Windows PowerShell 5.1 (no `&&` chaining — use `;` or separate lines in any
+The owner is technically comfortable but writes little code day to day, on
+Windows PowerShell 5.1 (no `&&` chaining — use `;` or separate lines in any
 commands you give him). Explain the why behind non-obvious changes. He cares
 about correct JST handling, the tag semantics above, and a clean UI — when in
 doubt about UX, ask, don't assume.
