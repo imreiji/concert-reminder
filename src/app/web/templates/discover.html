@@ -37,17 +37,17 @@
       <span class="af-label">{{ _("Filters") }}</span>
       {% for t in selected_tag_objs %}
       {% set rest = selected_tags | reject("equalto", t.id) | list %}
-      <a class="chip on" data-af-tag="{{ t.id }}"
+      <a class="chip on" data-af-tag="{{ t.id }}" rel="nofollow"
          href="/discover?{{ filter_query(sort, rest, status) }}"
          onclick="return removeTagFilter(event, this)">{{ loc(t, "name") }}<span class="x">×</span></a>
       {% endfor %}
       {% if status %}
-      <a class="chip on" data-af-status
+      <a class="chip on" data-af-status rel="nofollow"
          href="/discover?{{ filter_query(sort, selected_tags, "") }}"
          onclick="return clearStatusFilter(event)">{{ status_facet_labels[status] }}<span class="x">×</span></a>
       {% endif %}
       {% if selected_tags or status %}
-      <a class="af-clear" href="/discover?sort={{ sort }}"
+      <a class="af-clear" rel="nofollow" href="/discover?sort={{ sort }}"
          onclick="return clearAllFilters(event)">{{ _("Clear all") }}</a>
       {% endif %}
     </div>
@@ -170,7 +170,7 @@
       <h3>{{ _("Sort") }}</h3>
     <nav class="sorts discover-sorts">
       {% for key, label in sorts %}
-      <a data-sort="{{ key }}" href="/discover?{{ filter_query(key, selected_tags, status) }}"
+      <a data-sort="{{ key }}" rel="nofollow" href="/discover?{{ filter_query(key, selected_tags, status) }}"
          {% if sort == key or (key == "event" and sort not in ["added", "next"]) %}class="on"{% endif %}>{{ label }}</a>
       {% endfor %}
     </nav>
@@ -186,7 +186,7 @@
     <h3>{{ _("Round status") }}</h3>
     <nav class="sorts facets discover-sorts">
       {% for key, label in status_facets %}
-      <a data-status="{{ key }}"
+      <a data-status="{{ key }}" rel="nofollow"
          href="/discover?{{ filter_query(sort, selected_tags, '' if status == key else key) }}"
          onclick="return toggleStatusFilter(event, this)"
          {% if status == key %}class="on"{% endif %}>{{ label }} <span class="n">{{ status_counts.get(key, 0) }}</span></a>
@@ -200,7 +200,7 @@
       {%- set active = t.id in selected_tags -%}
       {%- set others = selected_tags | reject("equalto", t.id) | list -%}
       <a class="chip kind-{{ t.kind.value }} {% if active %}on{% endif %}" data-name="{{ t.name | lower }}"
-         data-tag-ids="{{ t.id }}" onclick="return toggleTagFilter(event, this)"
+         data-tag-ids="{{ t.id }}" onclick="return toggleTagFilter(event, this)" rel="nofollow"
          href="/discover?{{ filter_query(sort, (others if active else others + [t.id]), status) }}">{{ loc(t, "name") }}<span class="n">{{ tag_counts.get(t.id, 0) }}</span></a>
     {%- endmacro %}
     {% for section, kindname in [(_("Franchises"),"franchise"),(_("Groups"),"group"),(_("Artists"),"artist")] %}
@@ -219,13 +219,13 @@
         {% for r in region_links %}
         <a class="chip kind-venue {% if r.active %}on{% endif %}" data-name="{{ r.name | lower }}"
            data-tag-ids="{{ r.ids | join(',') }}" onclick="return toggleTagFilter(event, this)"
-           href="{{ r.href }}">{{ r.name }} <span class="dim">({{ r.count }})</span></a>
+           rel="nofollow" href="{{ r.href }}">{{ r.name }} <span class="dim">({{ r.count }})</span></a>
         {% endfor %}
       </div>
     </details>
     {% endif %}
     <p id="clear-filters" {% if not selected_tags %}style="display:none"{% endif %}>
-      <a class="dim" href="/discover?{{ filter_query(sort, [], status) }}"
+      <a class="dim" rel="nofollow" href="/discover?{{ filter_query(sort, [], status) }}"
          onclick="return clearTagFilters(event)">{{ _("Clear filters") }}</a>
     </p>
     {% if user %}<p><a class="btn quiet" href="/tags">{{ _("Manage tags") }}</a></p>{% endif %}
@@ -259,6 +259,10 @@
   // chip, a facet or typing a query just shows/hides tiles -- no server round
   // trip, no page reload. All three stay real <a href> links / a real GET
   // <form>, so they keep working, just slower, with JS disabled.
+  // All filter links additionally carry rel="nofollow" (server-rendered and
+  // created-here alike): the ?tag= URL space is combinatorial and crawling
+  // it took production down on 2026-08-04. updateLinks() only rewrites
+  // .href on existing anchors, so the server-set rel survives it.
   (function () {
     let currentQuery = new URLSearchParams(location.search).get("q") || "";
 
@@ -281,6 +285,7 @@
       a.className = cls;
       a.dataset[dataKey] = dataVal;
       a.href = href;
+      a.rel = "nofollow";
       a.appendChild(document.createTextNode(label));
       const x = document.createElement("span");
       x.className = "x";
@@ -314,6 +319,7 @@
         const clear = document.createElement("a");
         clear.className = "af-clear";
         clear.href = "/discover?sort=" + sort;
+        clear.rel = "nofollow";
         clear.textContent = AF_CLEAR;
         clear.onclick = function (e) { return clearAllFilters(e); };
         row.appendChild(clear);

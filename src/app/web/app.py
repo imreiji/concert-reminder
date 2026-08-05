@@ -10,7 +10,7 @@ from fastapi.exception_handlers import (
     request_validation_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
@@ -394,6 +394,18 @@ def create_app() -> FastAPI:
             "lang", language, max_age=i18n.LANG_COOKIE_MAX_AGE, samesite="lax", path="/",
         )
         return response
+
+    @app.get("/robots.txt", response_class=PlainTextResponse)
+    async def robots_txt() -> str:
+        # Discover's filter chips are real links over a combinatorial ?tag=
+        # URL space -- the open crawler trap that took production down on
+        # 2026-08-04 (WISHLIST has the incident; deploy.md the dashboard
+        # half). "Disallow: /discover?" is a literal prefix match against
+        # path-plus-query under both the 1994 grammar and RFC 9309 ('?' is
+        # not a metacharacter), so every query-stringed /discover URL is
+        # blocked while the bare catalogue page stays crawlable -- no
+        # wildcard support required of the crawler.
+        return "User-agent: *\nDisallow: /discover?\n"
 
     @app.get("/healthz")
     async def healthz(session: AsyncSession = Depends(get_session)) -> dict:

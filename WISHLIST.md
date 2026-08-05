@@ -939,71 +939,36 @@ guard nobody can see from the tree is a guard that gets lost. Every entry
 from the former #1 down shifts by insertion, never on merit; minute-level
 offsets takes the displacement below, its fifth move of this one day.
 
+**The 2026-08-04 hardening pass empties that entry the same night it was
+filed** -- the THIRD same-day #1 ship in this file's short run of them -- on
+one branch (`crawler-trap-hardening`, four tasks, no spec: the diagnosis had
+been run live during the outage, so the entry arrived as a work order and the
+build had only to execute it). All three code-side layers shipped in the
+entry's own cheapest-first order, and the one question it deliberately left
+open came back with an answer rather than a guess: the robots directive's
+shape. `?` is not a metacharacter under either the 1994 grammar or RFC 9309,
+and both match a `Disallow` value as a literal prefix against path-plus-query,
+so `Disallow: /discover?` blocks the whole combinatorial URL space while the
+bare catalogue page stays crawlable -- and requires no wildcard support of the
+crawler at all. The entry's "explicitly NOT tracked" line held: no caching or
+cheap-render path for anonymous filtered Discover was built, and it remains
+the heavyweight remedy reserved for a challenge-passing crawler firing the
+trap again.
+
+The re-rank moves nothing on merit, and entries renumber 1-13 by the one
+removal. The build lived in one template, one route and two runbook
+paragraphs, so every remaining entry was re-read against it and stands as
+written -- the one contact is the Discover-sort-in-the-content-head entry,
+which now carries a rider naming the `rel="nofollow"` a relocation must
+keep, exactly as its fsheet rider already does. **Minute-level offsets returns to #1 by pure
+removal**: its twelfth move, and its SIXTH inside this single day. The running
+record continues in its entry, where twelve moves have now produced twelve
+identical verdicts.
+
 ## Proposed (highest impact first)
 
 
-### 1. Discover's filter links are an open crawler trap
-
-Impact: high (outage-class: it took production down for half a day) -
-effort: small (template attributes and a robots.txt route; no schema, no
-catalogue strings). Raised: 2026-08-04, filed the evening of the incident it
-caused, with the diagnosis run live during it.
-
-What happened, so nobody re-derives it: Meta's `meta-webindexer` (under four
-browser-disguised user agents) and `SemrushBot` began exhaustively walking
-Discover's tag-filter URLs at ~14:00 UTC on 2026-08-03 -- several requests
-per second, each a unique `?sort=…&tag=…&tag=…` combination, each a full
-server-side catalogue render. The 2026-08-03 605-tag expansion had just
-made that URL space effectively infinite. Twenty-one hours of that drained
-the $5 Lightsail's burst-credit bucket; from ~11:49 UTC on 2026-08-04 the
-hypervisor throttled the instance (64% steal time measured), every request
-crawled, SQLAlchemy's 15-connection pool saturated
-(`QueuePool limit of size 5 overflow 10 reached`, first at 11:49:13), and
-the site timed out for half a day. A reboot changed nothing -- credits do
-not reset, and the crawl kept coming. UptimeRobot stayed GREEN throughout:
-`/healthz` answered 200 `"ok":true` in 72 seconds, and a keyword monitor
-has no latency threshold -- an outage the health page itself survived.
-
-The trap's structure, which is deliberate design meeting the open web: the
-filter chips are real `<a href>` links so the page degrades without
-JavaScript (a rule worth keeping), JS users never follow them (clicks are
-intercepted and filtered client-side), but `history.replaceState` writes
-the filtered URL into the address bar so reload/bookmark/share DO issue
-real `?tag=` requests from real humans. That last fact is load-bearing for
-every remedy: a server-side or edge-side HARD BLOCK on `?tag=` requests
-breaks reload-of-a-filtered-view for signed-in users, which is why the
-deployed Cloudflare rule is a Managed Challenge (URI path `/discover` AND
-query contains `tag=`), not a block, and why any future code-side guard
-must keep that property.
-
-The code-side hardening this entry tracks, cheapest first:
-
-- **`rel="nofollow"` on every filter link** -- tag chips, sort, status,
-  clear, and the region toggles (both the server-rendered `href`s and the
-  three `<script>` sites that rewrite them). Both culprit bots respect
-  nofollow; the no-JS degradation is untouched.
-- **A `robots.txt` route** disallowing query-stringed `/discover` while
-  keeping the catalogue's real pages crawlable. The exact directive shape
-  (`Disallow: /discover?` vs a wildcard) is a build-time decision -- check
-  what the majority grammar actually supports rather than assuming.
-- **A one-line ops note**: the WAF rule and the (still unset) UptimeRobot
-  response-time alert both live in dashboards. `docs/deploy.md`'s runbook
-  should name them so a future re-setup re-creates them; that half is a
-  docs edit, not code.
-- Explicitly NOT tracked: caching or a cheap-render path for anonymous
-  filtered `/discover`. That is the heavyweight remedy, worth building only
-  if a challenge-passing crawler ever fires the trap again -- the two
-  layers above end the known case.
-
-Ranked #1 on the outage precedent -- the correctness family (a first
-contact silently served wrong, an irreversible press on a dead show) has
-always outranked features here, and half a day of the site being DOWN
-outranks all of it. The rank is honest about one thing: the OUTAGE is
-already mitigated at the edge, so what this entry buys is the repo-visible
-second layer, and if that reads as less urgent in a week, the right move is
-a re-rank with reasons, not silent decay.
-
-### 2. Minute-level reminder offsets
+### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -1099,7 +1064,14 @@ the eleventh move, the FIFTH inside this single day, and the first time the
 thing that outranked it was an outage rather than a feature or a defect.
 Same verdict as every move before it: position, never substance.
 
-### 3. Franchise-aware round-label suggestions
+Back at #1 the same night by pure removal, when that capture shipped hours
+after it was filed -- the TWELFTH move and the SIXTH inside one day, which is
+the whole of this entry's 2026-08-04. Re-read against what shipped (link
+attributes in one template, a `/robots.txt` route, two runbook paragraphs) and
+untouched in every respect, as it has been through all twelve: position, never
+substance.
+
+### 2. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1120,7 +1092,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 4. Ten of eleven `RoundKind` members are purely cosmetic
+### 3. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1153,7 +1125,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 5. PWA / installability
+### 4. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -1186,7 +1158,7 @@ read AHEAD of time, so what web push would actually buy is the interrupting
 half -- the moment itself -- and that is the case this entry should be argued
 on when someone picks it up.
 
-### 6. In-app LLM extraction behind the same draft seam
+### 5. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -1215,7 +1187,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 7. Minor demo-parity cosmetics
+### 6. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1277,7 +1249,7 @@ it into this entry's single pass rather than spawning a task. Rank unchanged --
 this entry has now grown four times without once being worth doing on its own,
 which is itself the argument for keeping it as one batched pass.
 
-### 8. The event classes outside concerts and talk shows
+### 7. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1306,7 +1278,7 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 9. A/B casts have nowhere to live
+### 8. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1329,7 +1301,7 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 10. Discover sort in the content head, plus the catalogue-count note
+### 9. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1355,7 +1327,14 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
-### 11. Name the destination on the sign-in bounce
+Re-reviewed 2026-08-04 (crawler-trap hardening): Discover's sort links now
+carry `rel="nofollow"` (part of the ten-site sweep the outage's crawl-trap
+fix applied), so any future move of sort into the content head must keep
+that attribute on the rebuilt link too -- the sweep test in
+`tests/test_discover.py` will catch a drop, but it belongs here per this
+file's own discipline of naming every contact a shipped entry makes.
+
+### 10. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1377,7 +1356,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 12. The calendar roster's blind spots
+### 11. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1425,7 +1404,7 @@ refutes: the campaign is already a lead, so what is lost is a second pointer to
 something already visible, not the concert. A rating that contradicts its own
 entry is worse than a cautious one, and this list orders by USER impact.
 
-### 13. Nothing caps the discovery review path
+### 12. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1465,7 +1444,7 @@ or that the copy block can be reconstructed from ids alone. The one HALF of the
 fix this entry already calls cheap -- emitting `copy_text` once instead of twice
 -- is unaffected by any of it and is still the thing to do first.
 
-### 14. Nothing notices a calendar feed going quiet
+### 13. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
@@ -1522,6 +1501,77 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### The crawler trap, closed where the tree can see it (2026-08-04)
+
+Branch `crawler-trap-hardening`, four tasks, no spec and no design discussion --
+the diagnosis was run live during the outage itself, so the entry was already a
+work order and the build only had to execute its three build bullets in the
+order it listed them. Filed
+at #1 that evening on the outage precedent, emptied the same night. No schema
+change, no migration, no catalogue strings: the whole build is one template's
+link attributes, one route, and two runbook paragraphs.
+
+**`rel="nofollow"` on every Discover filter link, at ten sites.** Eight are
+server-rendered -- the active-tag chips and the active-status chip in the
+filter row, "Clear all", the sort links, the round-status facets, the tag-chip
+macro every franchise/group/artist chip renders through, the region toggles,
+and "Clear filters" -- and two are places the page's own script CREATES an
+anchor: the active-filter chip factory and the "Clear all" link it appends
+beside them, which set `.rel` at construction. Not one `href` changed, and
+that is the property the entry insisted on: the chips stay real links, so the
+page still degrades correctly without JavaScript, and a signed-in human who
+reloads, bookmarks or shares a filtered view still gets the view back. The one
+thing worth verifying rather than assuming was `updateLinks()`, which rewrites
+filter hrefs on every client-side filter change -- it only ever touches
+`.href` on anchors that already exist, so a server-set `rel` survives it. Two
+tests pin all of it, one sweeping every rendered `/discover?` anchor for the
+attribute so a NEW filter link cannot ship without it.
+
+**The `/robots.txt` route, and the shape question answered instead of
+guessed.** The entry deliberately left the directive's shape to build time
+("check what the majority grammar actually supports rather than assuming"),
+and the check came back clean in both directions: `?` is not a metacharacter
+in the original 1994 robots grammar OR in RFC 9309, and both specify a
+`Disallow` value as a literal PREFIX matched against the request's path plus
+query. So `Disallow: /discover?` blocks every query-stringed Discover URL --
+the entire combinatorial `?sort=…&tag=…&tag=…` space the 605-tag expansion had
+made effectively infinite -- while `/discover` itself, the catalogue page that
+genuinely should be indexed, stays crawlable. It also asks NOTHING of the
+crawler: the wildcard alternative the entry offered would have needed the
+`*`/`$` wildcard shape, which pre-RFC 9309 crawlers are not required to
+implement, and would have been the broader directive of the two. The route is a
+plain `PlainTextResponse` in `web/app.py` with that reasoning in a comment
+beside it, so nobody re-derives the grammar question next time, and its test
+pins both halves: the query-stringed space blocked, the bare page not.
+
+**The two dashboard mitigations are now named in the runbook**, which was the
+whole argument the entry was filed on -- the cure was already deployed and
+lived entirely outside this repository, and a guard nobody can see from the
+tree is a guard that gets lost. `docs/deploy.md` gained the Cloudflare WAF
+rule (Managed Challenge when URI path is `/discover` AND the query contains
+`tag=`, plus the AI-crawler blocking toggle) with the reason it is a CHALLENGE
+and not a block written next to it, since `history.replaceState` puts filtered
+URLs in the address bar and real humans therefore do issue `?tag=` requests.
+It also gained the response-time UptimeRobot monitor the incident proved was
+missing: the existing keyword monitor stayed GREEN for the entire half-day,
+because `/healthz` answered 200 `"ok":true` in 72 seconds and a keyword
+monitor has no latency threshold. Both entries say "dashboard-only, recreate
+on re-setup" in as many words.
+
+**Explicitly NOT built, per the entry's own line: caching or a cheap-render
+path for anonymous filtered `/discover`.** That stays the heavyweight remedy,
+and it is now reserved for exactly one trigger -- a challenge-passing crawler
+firing the trap again. The known case is ended by three layers that cost
+nothing to run: the edge challenge already live, plus these two in the repo,
+and both named culprits (`meta-webindexer` under four browser-disguised user
+agents, and `SemrushBot`) respect nofollow. Recording the non-build matters as
+much as recording the build here, because the next person to meet a slow
+Discover will reach for a cache first, and the reason not to is that nothing
+has yet shown the two cheap layers to be insufficient.
+
+Three new tests (two in `tests/test_discover.py`, one in `tests/test_web.py`).
+Full suite 2255 green.
 
 ### The calendar story becomes the feed (2026-08-04)
 
