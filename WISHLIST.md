@@ -975,6 +975,29 @@ accident. Filed at #1 on the correctness-family precedent; every other entry
 is pushed down by insertion, never on merit, and minute-level offsets takes
 its thirteenth displacement in the entry's own running record.
 
+The second 2026-08-05 pass is the first in this file whose ship EMPTIES NO
+ENTRY and yet reorders the list: AI triage phase 1 took the discovery-lead half
+of the in-app LLM extraction entry (old #6, now #7) and left the import-page
+half standing, so that entry is rewritten rather than moved to Shipped. Three
+things changed and all three are worth stating. **The budget block lifted** --
+the owner bought DeepSeek V4 Flash credits, which is the one condition that
+entry had been waiting on since 2026-07-22, so it is actionable for the first
+time; its rank is unchanged anyway (it moves 6 → 7 by the insertion below,
+never on merit), because unblocking is not impact. **Phase 2 is filed as a new
+entry at #3** (AI completion of a skeleton draft into a full draft, rounds
+included) on the owner's own two-phase framing, with its one hard design
+question -- how the official ticket page reaches the model -- recorded in the
+phase-1 spec rather than re-derived later. And the pass found ONE genuine
+interaction it would have been easy to miss: phase 1's drafts carry `rounds: []`
+by construction, so each one is another tracked concert with an empty ladder,
+which sharpens #1 (nothing re-checks a tracked concert for newly opened rounds)
+instead of relieving it -- annotated there, rank held. #14 (nothing caps the
+discovery review path) was re-read as the entry most likely to move on a
+review-volume change and held: triage dismisses nothing itself, so the page is
+the same size, and only the LIFETIME of a large backlog got shorter. Entries
+3-14 renumber to 4-15 by the one insertion; nothing moved on merit, and
+minute-level offsets holds #2 for once.
+
 ## Proposed (highest impact first)
 
 
@@ -1027,6 +1050,19 @@ right artist, got the 🆕 DM, and still misses the lottery because the round
 arrived after import. Unlike the crawler entry that briefly sat here, no
 edge mitigation stands behind this one; the only current defense is the
 owner remembering to re-check.
+
+Re-read the same day against AI triage phase 1 (Shipped below) and **held at
+#1, with its case strengthened rather than weakened**. Phase 1's skeleton
+drafts carry `rounds: []` BY CONSTRUCTION -- rounds are stripped in code
+whatever the model returns, which is the property that makes them honest -- so
+every draft it queues is one more tracked concert whose ladder is empty on
+purpose and will need re-checking later. That is not an argument against phase
+1 (the alternative is an invented deadline, which is worse than a missing one),
+it is an argument that the volume of the failure this entry describes now
+scales with how much the owner presses that button. The cheapest of the three
+shapes above -- the "quiet ladders" admin surface -- gets cheaper in the same
+motion, because a rounds-less concert originating from a skeleton draft is
+exactly what such a list would find first.
 
 ### 2. Minute-level reminder offsets
 
@@ -1138,7 +1174,43 @@ reminder fired at a slightly-wrong offset degrades, but a round the ladder
 never learned about fires nothing at all, and only one of those failures is
 silent. Same verdict as the twelve before it: position, never substance.
 
-### 3. Franchise-aware round-label suggestions
+### 3. AI completion of a skeleton draft (AI triage, phase 2)
+
+Impact: medium - effort: large, with one hard design question already
+identified. Raised: 2026-08-05 (owner, framing the AI-triage build as phase 1
+of two before that build started).
+
+Phase 1 (Shipped below) drafts a discovery lead into a SKELETON: trilingual
+titles and leg labels, legs, cast tags -- and `rounds: []`, always, stripped in
+code whatever the model returns. Phase 2 is the other half: completing one of
+those pending skeletons into a full draft, rounds included, so the deadlines an
+event actually has arrive without a human reading a ticket page and typing four
+timestamps per round. That is the expensive step of the whole pipeline and the
+only one phase 1 left untouched -- which is precisely why it was left: a round
+is a promise this app makes to a user ("a deadline it names is real"), and a
+hallucinated `apply_closes_jst` is the worst thing this system can produce.
+
+**The hard question is already recorded, in the phase-1 spec's Phasing note
+(`docs/superpowers/specs/2026-08-05-ai-triage-design.md`), so it is not
+rediscovered: how the official ticket page reaches the model.** Owner-supplied
+-- a URL or pasted page text on the pending-draft review -- keeps a human
+vouching for the source and keeps the fetch surface as narrow as it is today.
+Server-side search would mean an arbitrary-host fetch surface (`fetching.py` is
+host-pinned per caller by design) and would put a model's judgment where the
+app's core promise lives. Recorded, deliberately not decided here: it is phase
+2's brainstorm to make, and it wants phase 1's calibration verdict first.
+
+Ranked #3, below minute-level offsets on the effort tiebreak -- both read as
+medium impact, but that one is small and unblocked while this is large and
+gated on a calibration run that has not happened. Two adjacencies are worth
+naming rather than rediscovering. It shares a family with #1: that entry makes
+a missing round ladder VISIBLE on concerts already tracked, this one makes
+FILLING one cheap, and neither substitutes for the other. And phase 1 has, by
+design, made #1 slightly worse -- every skeleton it drafts is another concert
+whose ladder is empty on purpose -- which is an argument for #1's rank, not
+against phase 1.
+
+### 4. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1159,7 +1231,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 4. Ten of eleven `RoundKind` members are purely cosmetic
+### 5. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1192,7 +1264,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 5. PWA / installability
+### 6. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -1225,10 +1297,11 @@ read AHEAD of time, so what web push would actually buy is the interrupting
 half -- the moment itself -- and that is the case this entry should be argued
 on when someone picks it up.
 
-### 6. In-app LLM extraction behind the same draft seam
+### 7. In-app LLM extraction on the import page
 
-Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
-deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
+Impact: low-medium - effort: medium, and ACTIONABLE as of 2026-08-05 (the
+budget block lifted). Raised and deliberately deferred 2026-07-22 (owner: no
+budget for per-import API calls).
 
 The paste-a-draft seam (`POST /concerts/import/draft`) is producer-agnostic by
 design: an agent following the add-concert skill is today's producer, but a
@@ -1254,7 +1327,34 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 7. Minor demo-parity cosmetics
+**The budget block LIFTED on 2026-08-05**, which is the sentence this entry
+spent a fortnight waiting for: the owner bought DeepSeek V4 Flash credits
+(~$0.088/M in, ~$0.176/M out), and AI triage phase 1 shipped that day and spent
+them -- a `deepseek_api_key`, an `app/llm.py`, and a working precedent that an
+LLM's output can cross this app's existing parser boundaries rather than earn a
+new one. So the "NOT actionable until the budget question changes" rider above
+is retired; what is left here is genuinely buildable work.
+
+What is left is also SMALLER than the entry as written, because the owner chose
+a different first target and phase 1 took the discovery-lead half with it. This
+entry is now the IMPORT PAGE alone: paste an event page (or free text) into
+`/concerts/import` and get the same YAML draft an agent would have written,
+behind the identical `POST /concerts/import/draft` seam. The seam is unchanged
+by phase 1 and needed no change to serve it -- phase 1 writes `PendingDraft`
+rows through the batch path, which is the same queue and the same
+`import_commit` write path this would feed. Two things phase 1 proved that this
+build should simply reuse rather than re-decide: the model emits the app's own
+draft vocabulary and dies at `parse_drafts` when it is wrong, and rounds are
+stripped in code rather than trusted from a prompt (whether an import-page
+extraction may emit rounds is exactly the question #3 owns, and this entry
+should NOT answer it independently).
+
+Rank unchanged at low-medium impact apart from the renumber, and that is
+deliberate: unblocking is not impact. It stays below #3 because it automates a
+step the owner already has an agent for, on a page he visits deliberately, and
+below the user-facing entries above it for the reason it always was.
+
+### 8. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1316,7 +1416,7 @@ it into this entry's single pass rather than spawning a task. Rank unchanged --
 this entry has now grown four times without once being worth doing on its own,
 which is itself the argument for keeping it as one batched pass.
 
-### 8. The event classes outside concerts and talk shows
+### 9. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1345,7 +1445,7 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 9. A/B casts have nowhere to live
+### 10. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1368,7 +1468,7 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 10. Discover sort in the content head, plus the catalogue-count note
+### 11. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1401,7 +1501,7 @@ that attribute on the rebuilt link too -- the sweep test in
 `tests/test_discover.py` will catch a drop, but it belongs here per this
 file's own discipline of naming every contact a shipped entry makes.
 
-### 11. Name the destination on the sign-in bounce
+### 12. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1423,7 +1523,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 12. The calendar roster's blind spots
+### 13. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1471,7 +1571,7 @@ refutes: the campaign is already a lead, so what is lost is a second pointer to
 something already visible, not the concert. A rating that contradicts its own
 entry is worse than a cautious one, and this list orders by USER impact.
 
-### 13. Nothing caps the discovery review path
+### 14. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1511,7 +1611,24 @@ or that the copy block can be reconstructed from ids alone. The one HALF of the
 fix this entry already calls cheap -- emitting `copy_text` once instead of twice
 -- is unaffected by any of it and is still the thing to do first.
 
-### 14. Nothing notices a calendar feed going quiet
+Re-read 2026-08-05 against AI triage phase 1, the build most likely to have
+moved this entry, and **unchanged in rank** -- but the review-volume story it
+was filed on has genuinely changed shape, so the reasoning is recorded here
+rather than left to be redone. Triage does not shrink the page: it dismisses
+nothing itself, so every lead it proposes to prune is still rendered until the
+owner walks the plan/apply screen. What it changes is how LONG the largest
+backlog lives -- the 528-lead state that made this entry's 150KB estimate real
+is now a few button presses from resolved instead of an evening of agent work
+-- and how much the copy block matters, since the block exists to feed an agent
+and the classify half of that agent now runs server-side. The block is NOT
+obsolete (calendar-sourced survivors have no Eventernote page to draft from,
+and everything past the 25-draft cap still goes to the agent), so nothing here
+argues for deleting it. Two smaller facts for whoever picks this up: the page
+grew a status strip and a prefilled prune link, which are bounded and tiny
+beside the row list, and the cheap half of the fix -- emit `copy_text` once --
+is still untouched by all of it and is still first.
+
+### 15. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
@@ -1568,6 +1685,81 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### AI triage of discovery leads (phase 1) (2026-08-05)
+
+Branch `ai-triage`, seven tasks, spec
+`docs/superpowers/specs/2026-08-05-ai-triage-design.md`, plan
+`docs/superpowers/plans/2026-08-05-ai-triage.md`, migration `ff500647fa9c`
+(`triage_runs`). Not a Proposed entry in its own right: it is the
+discovery-lead half of the in-app LLM extraction entry (#7), unblocked the day
+the owner bought DeepSeek V4 Flash credits and pointed at a different first
+target than that entry had imagined. The import-page half stays Proposed and
+was rewritten in place rather than closed.
+
+**One button on `/admin/discoveries`, two phases, and neither one commits
+anything.** Classify: one DeepSeek call over every open lead collapses repeats
+into productions and rules keep-vs-dismiss against the 2026-08-02 scope ruling,
+emitting the prune-list YAML the paste box already reads. Draft: for up to
+`TRIAGE_DRAFT_CAP` (25) survivors, one Eventernote fetch and one call each
+author a SKELETON draft in the `add-concert` vocabulary -- trilingual titles and
+leg labels, legs, cast tags. The prune YAML is stored TEXT the owner still
+pastes through the existing plan → apply screen, which stays the only path to a
+dismissal; the drafts land as `PendingDraft` rows, so `import_commit` stays the
+only write path into `concerts`. The whole design rests on that: **the model
+speaks two formats this app already parses**, so bad model output dies at the
+same boundary a bad agent draft does and no second validation vocabulary exists
+to drift from the first.
+
+**`rounds: []`, and the prompt is not what guarantees it.** The draft prompt
+asks for an empty rounds list; `strip_rounds` then runs on every generated
+draft in code, whatever the model returned, pinned by a test asserting the
+property on the STORED text. Round research needs an official page plus
+judgment and sits exactly where a hallucination would break this app's core
+promise ("a deadline it names is real"), so it was carved out as phase 2 before
+implementation started rather than attempted and walked back -- see the new #3,
+which also carries phase 2's one known hard question so it is not rediscovered.
+
+**The request stamp IS the `TriageRun` row.** Unlike the sweep, which stamps
+the `DiscoveryState` singleton, triage wants per-run history, so the button
+inserts a `status="requested"` row and the tick picks up the oldest one -- and
+`stamp_discovery_run`'s two-halves rule then applies in ROW form: a rollback
+restores the row to `"requested"`, so `scheduler/loop.py` re-marks it failed and
+commits on the cleaned transaction, or a dead run re-fires 25 fetches and 26 LLM
+calls every 60 seconds forever. Implementation found one refinement worth more
+than the feature: **`session.rollback()` expires every attribute of every object
+in the transaction, PRIMARY KEY INCLUDED on this aiosqlite stack**, so reading
+`run.id` inside the failure handler raises `MissingGreenlet` instead of giving
+back an id. The id is captured before the run starts. Any future post-rollback
+bookkeeping keyed on a row has the same hole, which is why it is in CLAUDE.md
+beside the rule it varies.
+
+**Cost is bounded by construction, not by care.** One classify call per press
+whatever the queue's size, at most 25 fetch+draft pairs after it, fetches
+sequential with a 1s pause (25 parallel requests at a third party is how an IP
+gets blocked) and `heartbeat.beat()` per production so a minutes-long tick does
+not page the owner about a healthy app. `TRIAGE_ENABLED` gates the scheduler
+pickup exactly as `DISCOVERY_ENABLED` gates the sweep, `DEEPSEEK_MODEL` ships
+with NO default (hardcoding a guess at a third party's current alias starts
+billing a model nobody chose), and tokens in/out are recorded per run so spend
+is visible rather than inferred. The run queues ONE admin notice through the
+outbox (invariant 4), kind `"triage"`, deliberately NOT in
+`UNREPORTED_NOTE_KINDS` -- that set is for notices reporting ON deliveries, and
+this one reports on a model's proposals.
+
+**Prompt quality is not testable in CI and was not faked.** Tests use a fake
+LLM client and a fake fetch, so nothing touches the network; what they pin is
+the safety properties (rounds stripped, the gate, the pickup, the
+re-stamp-after-rollback path, per-production skip-and-count, the duplicate
+containment check, the rendered strip). Judgment is calibrated operationally
+instead, on the first real press, for cents -- with `deploy.md` carrying the
+guidance and the one ordering caveat the code makes: `open_leads` sorts
+`event_date DESC`, so on a backlog longer than the cap the FURTHEST-FUTURE
+productions are drafted first. If V4 Flash's Japanese-domain judgment
+disappoints, the fallback needs no code: stop at the prune plan and the
+classify half alone still cuts the queue by the largest factor.
+
+Full suite 2287 green.
 
 ### The crawler trap, closed where the tree can see it (2026-08-04)
 

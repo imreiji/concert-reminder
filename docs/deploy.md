@@ -92,6 +92,24 @@ data-request channel; set either, both, or neither (the page shows a neutral
 fallback), but they are the operator's real contact details and so live only
 here and in the local `.env`, never in the repo.
 
+**AI triage** (the button on `/admin/discoveries` that classifies the open
+discovery leads and drafts the survivors) needs three more keys, all absent by
+default:
+```
+DEEPSEEK_API_KEY=<your DeepSeek API key>
+DEEPSEEK_MODEL=<the exact V4 Flash model id>
+TRIAGE_ENABLED=true
+```
+`TRIAGE_ENABLED` gates the SCHEDULER PICKUP exactly as `DISCOVERY_ENABLED`
+gates the daily sweep - and unlike the sweep's button, a triage request is NOT
+honoured with the flag off. The row is written and simply never picked up, so a
+deploy that has not opted in cannot spend a key by accident (the button and its
+status strip are hidden there too). `DEEPSEEK_MODEL` deliberately has no
+default: hardcoding a guess at a third party's current alias would start
+billing a model nobody chose the moment the flag flipped. Both credentials live
+only here and in the owner's local `.env`, like every secret. Leave all three
+absent and the app runs exactly as before.
+
 **`REHEARSAL_ENABLED` must stay absent or false here.** It registers
 `/admin/rehearsal`, whose whole purpose is a "deliver every reminder now"
 button and a send-any-DM-shape catalogue. When the flag is off the router is
@@ -301,6 +319,42 @@ their DMs are closed (the app also banners them about it), and no row at all
 means the queue never planned it, which is a different bug in a different
 place. All three admin pages are linked from Preferences, admin-only, so none
 of them needs its URL remembered.
+
+### Calibrating the first AI-triage run
+
+The AI-triage deploy brings ONE migration, `ff500647fa9c`, and it is the
+easiest kind: a single `CREATE TABLE triage_runs` with nothing existing writing
+to it, so the standard block below covers it and it needs no entry in the
+non-standard list. Set the three keys, restart, and `/admin/discoveries` grows
+a triage button and a status strip.
+
+Then calibrate, because prompt quality is a judgment no test in CI can make.
+**One press is one capped batch** - one classify call over every open lead plus
+at most 25 fetch-and-draft pairs, roughly 7-8 minutes of scheduler tick and a
+cost measured in cents. The status strip flips to done when the run finishes;
+the run row carries the counts and the tokens it billed. Three things to check
+before pressing again, in this order:
+
+- **Read the prune plan critically BEFORE applying it.** "Review prune plan"
+  prefills the existing paste box from the run's stored YAML, and nothing has
+  been dismissed at that point - the plan → apply screen is still the only
+  thing that dismisses a lead, exactly as when an agent wrote the file. A
+  dismissal has no undo anywhere in the app, so this is the step that matters.
+- **Open `/concerts/import/pending` and read one skeleton draft.** Judge the
+  trilingual titles and leg labels; that is the quality question. Its `rounds`
+  list is empty by design and stays empty whatever the model returned - rounds
+  are stripped in code - so the draft is a starting point a human still
+  completes, not a finished event.
+- **Note which productions got drafted.** `open_leads` orders by
+  `event_date DESC`, so on a backlog longer than the 25-draft cap the
+  FURTHEST-FUTURE events are drafted first and the most imminent ones wait for
+  later presses. On a large backlog that is the opposite of urgency order:
+  press repeatedly to work through it, or triage the near-term leads by hand
+  rather than assuming the button reached them.
+
+If the judgment disappoints, the fallback needs no code and no config: stop at
+the prune plan and never press past it. The classify half alone is what cuts
+the queue by the largest factor.
 
 ## Updating (every deploy after the first)
 
