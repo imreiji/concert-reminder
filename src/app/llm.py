@@ -90,10 +90,13 @@ async def chat(
     if response.status_code != 200:
         raise LlmError(f"DeepSeek returned HTTP {response.status_code}")
 
-    payload = response.json()
     try:
+        payload = response.json()
         content = payload["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        # response.json() raises json.JSONDecodeError (a ValueError) on a
+        # non-JSON or truncated 200 body; folding it in here keeps every
+        # post-request failure surfacing as LlmError, per the docstring.
         raise LlmError("DeepSeek response missing choices[0].message.content") from exc
 
     usage = payload.get("usage") or {}

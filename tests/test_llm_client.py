@@ -47,3 +47,11 @@ async def test_http_error_and_bad_body_raise_llm_error(monkeypatch):
     with pytest.raises(LlmError):
         await chat("s", "u", transport=_transport(
             lambda r: httpx.Response(200, json={"choices": []})))
+
+
+async def test_malformed_json_body_raises_llm_error(monkeypatch):
+    monkeypatch.setattr(settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(settings, "deepseek_model", "m")
+    with pytest.raises(LlmError):
+        await chat("s", "u", transport=_transport(
+            lambda r: httpx.Response(200, text="not json")))
