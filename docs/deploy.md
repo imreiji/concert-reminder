@@ -142,6 +142,15 @@ was skipped.
 - **Lock the origin to Cloudflare**: edit the Lightsail firewall so 80/443
   accept only Cloudflare's IP ranges (https://www.cloudflare.com/ips/).
   Otherwise anyone who discovers the origin IP can bypass Cloudflare.
+- **Crawler-trap WAF rule** (dashboard-only -- recreate it on any Cloudflare
+  re-setup): Security -> WAF -> Custom rules -> Managed Challenge when
+  URI path equals `/discover` AND query string contains `tag=`. Challenge,
+  NOT block: Discover writes filtered URLs into the address bar via
+  `history.replaceState`, so real signed-in humans reload/bookmark/share
+  `?tag=` URLs and must be able to pass. Also enable Cloudflare's AI-crawler
+  blocking toggle. These are the edge half of the 2026-08-04 crawl-outage
+  remedy; the repo half (`rel="nofollow"` on Discover's filter links plus
+  the `/robots.txt` route) deploys with the app.
 - SSH: restrict port 22 to your home IP; key-only auth (Lightsail default).
 - Point a free uptime monitor (UptimeRobot) at `https://dekimasen.app/healthz`.
 - Backups: see the full section below.
@@ -258,6 +267,13 @@ UptimeRobot (free): Add monitor -> type **Keyword** -> URL
 `https://dekimasen.app/healthz` -> keyword `"ok":true` -> alert when keyword
 **not exists** -> interval 5 min. This alerts on full outages AND on a dead
 scheduler behind a live website.
+
+Add a SECOND UptimeRobot monitor with a response-time alert on
+`https://dekimasen.app/` (dashboard-only -- recreate it alongside the
+keyword monitor). The keyword monitor has no latency threshold: during the
+2026-08-04 crawler outage `/healthz` answered 200 `"ok":true` in 72
+seconds and the monitor stayed green for the entire half-day the site was
+unusable. A response-time alert is the one that would have fired.
 
 UptimeRobot is the ONLY thing that catches scheduler death. The in-process
 checks DM the admin whitelist on a confirmed change for `backup` and `disk`,
