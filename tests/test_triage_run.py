@@ -192,7 +192,17 @@ async def test_happy_path_stores_prune_and_creates_a_skeleton_draft(db, monkeypa
         assert report.productions == 2
         assert report.dismissals == 1
         assert report.drafts == 1 and report.calendar_skipped == 1
-        assert run.drafts_created == 1 and run.calendar_skipped == 1
+        # EVERY column _finish writes, asserted on the row rather than only on
+        # the report: setting an unmapped attribute on a mapped instance
+        # succeeds silently, so a typo'd column name here would never surface
+        # -- and Task 6's status strip renders dismissals_proposed and skipped.
+        assert run.started_at is not None
+        assert run.leads_seen == 3
+        assert run.productions == 2
+        assert run.dismissals_proposed == 1
+        assert run.drafts_created == 1
+        assert run.skipped == 0
+        assert run.calendar_skipped == 1
         # Both phases billed: one classify call plus one draft call.
         assert run.tokens_in == 200 and run.tokens_out == 100
         drafts = await service.pending_drafts(s, ADMIN_ID)
@@ -219,15 +229,21 @@ async def test_a_drafted_survivor_is_not_redrafted_next_press(db, monkeypatch):
         later = NOW + timedelta(minutes=5)
         second = await service.request_triage(s, later, ADMIN_ID)
         assert second.id != first.id  # the first run is done, so this is a new row
-        # The same classify verdict, but the survivor's page URL is already in a
-        # still-open PendingDraft, so the draft phase never runs -- which is why
-        # only ONE reply is canned here.
+        # A REAL draft reply is canned for the second run, deliberately: with
+        # only the classify reply available, a second call would raise
+        # IndexError inside the draft loop's `except Exception` and be counted
+        # as a skip -- so the whole trace would look identical whether
+        # containment worked or was deleted outright. Given a usable reply, a
+        # broken containment mints a second PendingDraft and fails below.
+        second_llm = _llm([CLASSIFY_REPLY, DRAFT_REPLY])
         second_report = await run_triage(s, second, later,
-                                         fetcher=_fake_page,
-                                         llm_chat=_llm([CLASSIFY_REPLY]))
+                                         fetcher=_fake_page, llm_chat=second_llm)
         assert second_report.drafts == 0
         assert second_report.skipped == 1
         assert len(await service.pending_drafts(s, ADMIN_ID)) == 1
+        # Classify only: the draft call is never spent on a production already
+        # sitting in the pending queue, which is the point of the check.
+        assert len(second_llm.calls) == 1
 
 
 async def test_a_failing_draft_is_skipped_and_the_run_survives(db, monkeypatch):
