@@ -44,6 +44,20 @@ class Settings(BaseSettings):
     # off, and so tests and dev runs never reach the network.
     discovery_enabled: bool = False
 
+    # Same shape as discovery_enabled: one config value switching the AI
+    # triage subsystem off. Default False so the feature ships switched off,
+    # and so tests and dev runs never reach the network or spend a real key.
+    triage_enabled: bool = False
+    # DeepSeek API credentials. Empty by default -- a blank key means the
+    # subsystem cannot run even if triage_enabled is somehow set, the same
+    # belt-and-suspenders shape discord_token gives bot_enabled.
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    # No default id: the owner picks the exact model, and hardcoding one here
+    # would silently start billing a model nobody chose the moment the flag
+    # flips on.
+    deepseek_model: str = ""
+
     # Access control: comma-separated Discord user IDs with edit rights
     editor_whitelist: str = ""
     # Access control: comma-separated Discord user IDs who can manage editors

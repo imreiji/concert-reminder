@@ -54,6 +54,7 @@ from app.db.models import (
     Tag,
     TagMember,
     TagSubscription,
+    TriageRun,
     User,
 )
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
@@ -7809,3 +7810,87 @@ async def discovery_status(session: AsyncSession) -> DiscoveryState | None:
     is how a site redesign becomes a silent no-op that looks like good news.
     """
     return await session.get(DiscoveryState, DISCOVERY_STATE_ID)
+
+
+# --- AI triage (/admin/discoveries/triage) ---
+
+
+async def request_triage(
+    session: AsyncSession, now: datetime, requested_by: int
+) -> TriageRun:
+    """Ask for a triage pass, or hand back the one already waiting.
+
+    A REQUEST, not a run -- same reasoning as request_sweep: an LLM call over
+    the whole discovery queue is too slow for an HTTP request to hold, so this
+    writes a row the scheduler's next tick picks up. Idempotent while one is
+    still `status="requested"` so a double-click (or a retried POST) queues
+    exactly one pass rather than one per press; once a run starts, moves past
+    "requested", or fails, the NEXT request is free to make a new row.
+    """
+    pending = await pending_triage_run(session)
+    if pending is not None:
+        return pending
+    run = TriageRun(requested_at=now, requested_by=requested_by)
+    session.add(run)
+    await session.flush()
+    return run
+
+
+async def pending_triage_run(session: AsyncSession) -> TriageRun | None:
+    """The oldest run still waiting to be picked up, or None."""
+    return (await session.execute(
+        select(TriageRun)
+        .where(TriageRun.status == "requested")
+        .order_by(TriageRun.id)
+        .limit(1)
+    )).scalar_one_or_none()
+
+
+async def latest_triage_run(session: AsyncSession) -> TriageRun | None:
+    """The most recent run of any status, for an admin page's "last result"."""
+    return (await session.execute(
+        select(TriageRun).order_by(TriageRun.id.desc()).limit(1)
+    )).scalar_one_or_none()
+
+
+async def get_triage_run(session: AsyncSession, run_id: int) -> TriageRun | None:
+    return await session.get(TriageRun, run_id)
+
+
+async def mark_triage_failed(
+    session: AsyncSession, run_id: int, now: datetime, note: str
+) -> None:
+    """Record that a run died, from a CLEANED transaction.
+
+    Re-fetches by id rather than taking a TriageRun instance -- mirrors
+    stamp_discovery_run's re-stamp-after-rollback shape: the caller here is
+    scheduler.loop, invoked after the poisoned session that ran triage was
+    rolled back, so any object it was holding is detached and writing through
+    it would raise or silently no-op. `note` is truncated to fit the column
+    (see TriageRun.error); a message that already fits passes through whole.
+    """
+    run = await session.get(TriageRun, run_id)
+    if run is None:
+        return
+    run.status = "failed"
+    run.finished_at = now
+    run.error = note[:300]
+    await session.flush()
+
+
+async def pending_draft_texts(session: AsyncSession) -> list[str]:
+    """The verbatim text of every still-open PendingDraft.
+
+    The duplicate-containment input for the triage runner: before an LLM
+    proposes a new concert draft, it needs to know what an editor already has
+    sitting in the pending-review batch (invariant: import_commit is the only
+    write path, but a triage pass proposing a draft nobody asked for a second
+    time wastes a token budget and an editor's attention alike). Committed and
+    discarded rows are done -- see PendingDraft's own docstring -- so neither
+    belongs in what is still open.
+    """
+    rows = (await session.execute(
+        select(PendingDraft.draft_text)
+        .where(PendingDraft.committed_at.is_(None), PendingDraft.discarded_at.is_(None))
+    )).scalars().all()
+    return list(rows)
