@@ -91,6 +91,7 @@ from app.domain.prune_list import parse_prune_list
 from app.domain.triage_prompts import (
     LeadLine,
     Survivor,
+    TriageResponseError,
     classify_prompt,
     draft_prompt,
     extract_yaml,
@@ -299,7 +300,19 @@ async def run_triage(
     reply = await llm_chat(*classify_prompt(lines))
     report.tokens_in += reply.tokens_in
     report.tokens_out += reply.tokens_out
-    result = parse_classify_response(reply.text)
+    try:
+        result = parse_classify_response(reply.text)
+    except TriageResponseError as exc:
+        # Diagnosing the 2026-08-05 production incident (a reply that
+        # YAML-loaded to something other than a mapping) took a hand-rolled
+        # server probe because nothing logged what the model actually said.
+        # Head+tail keeps the log line bounded on a long reply while still
+        # showing the shape of the failure at both ends.
+        log.error(
+            "triage classify reply unusable: %s -- reply head: %r -- tail: %r",
+            exc, reply.text[:500], reply.text[-200:],
+        )
+        raise
     for warning in result.warnings:
         log.warning("triage: %s", warning)
     run.prune_yaml = result.prune_yaml

@@ -436,7 +436,12 @@ only when both of their ends are attached -- have shipped since).
   non-JSON 200 and a body missing `choices[0].message.content` are one class
   because its one caller treats them identically. It has no opinion about what
   the messages SAY — the prompts, the fence-stripping and `strip_rounds` are
-  pure, in `domain/triage_prompts.py`.
+  pure, in `domain/triage_prompts.py`. The request body pins
+  `"thinking": {"type": "disabled"}` unconditionally, and a non-`"stop"`
+  `finish_reason` or empty `content` also raises `LlmError` — a 2026-08-05
+  incident found `deepseek-v4-flash` thinks by default, burning ~50k reasoning
+  tokens per classify call until an overrun emptied `content` and only failed
+  later, opaquely, in the YAML parser.
 - `src/app/triage.py` — the AI-triage runner: one LLM pass over the open
   discovery queue, on an admin's press. Same layer and discipline as
   `discovery.py` (imports `domain/`, `app/llm.py`, `app/fetching.py` and

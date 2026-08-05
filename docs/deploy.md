@@ -334,8 +334,17 @@ Then calibrate, because prompt quality is a judgment no test in CI can make.
 **One press is one capped batch** - one classify call over every open lead plus
 at most 25 fetch-and-draft pairs, roughly 7-8 minutes of scheduler tick and a
 cost measured in cents. The status strip flips to done when the run finishes;
-the run row carries the counts and the tokens it billed. Three things to check
-before pressing again, in this order:
+the run row carries the counts and the tokens it billed. A classify call over a
+216-lead queue should bill roughly 14k input tokens and a few thousand output -
+if the run row's token counts run tens of thousands of tokens higher than
+that, or a press comes back `TriageResponseError`, check `deepseek_model` is
+still `deepseek-v4-flash` and that the deploy includes the 2026-08-05 fix
+(`app/llm.py` sends `"thinking": {"type": "disabled"}`). The first production
+press, before that fix, burned ~74k tokens reasoning silently before an empty
+reply tripped the parser - `app.llm.chat` now fails loud with the
+`finish_reason`/empty-content it saw instead of leaving that to the YAML
+parser to discover. Three things to check before pressing again, in this
+order:
 
 - **Read the prune plan critically BEFORE applying it.** "Review prune plan"
   prefills the existing paste box from the run's stored YAML, and nothing has

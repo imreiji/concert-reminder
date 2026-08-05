@@ -31,6 +31,7 @@ async def test_chat_returns_text_and_token_counts(monkeypatch):
     assert seen["auth"] == "Bearer sk-test"
     assert seen["body"]["model"] == "deepseek-v4-flash"
     assert seen["body"]["messages"][0] == {"role": "system", "content": "sys"}
+    assert seen["body"]["thinking"] == {"type": "disabled"}
 
 
 async def test_missing_key_or_model_raises_before_any_network(monkeypatch):
@@ -55,3 +56,35 @@ async def test_malformed_json_body_raises_llm_error(monkeypatch):
     with pytest.raises(LlmError):
         await chat("s", "u", transport=_transport(
             lambda r: httpx.Response(200, text="not json")))
+
+
+async def test_truncated_reply_raises_llm_error_naming_finish_reason(monkeypatch):
+    monkeypatch.setattr(settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(settings, "deepseek_model", "m")
+
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{
+                "message": {"content": "partial"},
+                "finish_reason": "length",
+            }],
+        })
+
+    with pytest.raises(LlmError, match="length"):
+        await chat("s", "u", transport=_transport(handler))
+
+
+async def test_empty_reply_raises_llm_error(monkeypatch):
+    monkeypatch.setattr(settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(settings, "deepseek_model", "m")
+
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{
+                "message": {"content": ""},
+                "finish_reason": "stop",
+            }],
+        })
+
+    with pytest.raises(LlmError, match="empty"):
+        await chat("s", "u", transport=_transport(handler))
