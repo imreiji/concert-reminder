@@ -88,3 +88,19 @@ async def test_empty_reply_raises_llm_error(monkeypatch):
 
     with pytest.raises(LlmError, match="empty"):
         await chat("s", "u", transport=_transport(handler))
+
+
+async def test_null_content_raises_llm_error_not_attributeerror(monkeypatch):
+    monkeypatch.setattr(settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(settings, "deepseek_model", "m")
+
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{
+                "message": {"content": None},
+                "finish_reason": "stop",
+            }],
+        })
+
+    with pytest.raises(LlmError, match="empty"):
+        await chat("s", "u", transport=_transport(handler))

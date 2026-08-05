@@ -114,6 +114,11 @@ async def chat(
         # post-request failure surfacing as LlmError, per the docstring.
         raise LlmError("DeepSeek response missing choices[0].message.content") from exc
 
+    # The OpenAI-compatible schema permits `"content": null`; normalize it to
+    # "" so it lands in the empty-reply check below instead of raising
+    # AttributeError out of `.strip()`.
+    content = content or ""
+
     # A capped reply comes back with a finish_reason other than "stop" (e.g.
     # "length"), and 2026-08-05's incident showed that can leave `content`
     # empty or partial -- which used to fail later and further away, as an
