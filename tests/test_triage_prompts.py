@@ -73,6 +73,22 @@ def test_an_empty_dismiss_list_is_absence_not_failure(body):
     assert [s.title for s in result.survivors] == ["t"]
 
 
+@pytest.mark.parametrize("value", ["[]", "''", "0", "false"])
+def test_a_falsy_non_mapping_dismiss_is_absence_too(value):
+    """`dismiss: []` is a model saying "nothing to dismiss" in the wrong shape,
+    and the bare `if dismiss:` this module started with read every falsy value
+    that way. Only a TRUTHY non-mapping is a real disagreement about the format
+    and stays fatal."""
+    result = parse_classify_response(f"dismiss: {value}\nsurvivors: []\n")
+    assert result.prune_yaml == ""
+    assert result.survivors == ()
+
+
+def test_a_truthy_non_mapping_dismiss_is_still_fatal():
+    with pytest.raises(TriageResponseError):
+        parse_classify_response("dismiss: ['481833']\nsurvivors: []\n")
+
+
 def test_prose_around_the_fence_is_tolerated():
     """Models preface a fenced block with a sentence however firmly they are
     told not to. The fence is the payload; the chat around it is not an error."""

@@ -259,20 +259,24 @@ def parse_classify_response(text: str) -> ClassifyResult:
 
     prune_yaml = ""
     dismiss = data.get("dismiss")
-    if dismiss is not None and not isinstance(dismiss, dict):
+    if not dismiss:
+        # Absent, null, `{}`, `[]`, `''`, `0` -- every one of them is a model
+        # saying "nothing to dismiss", some of them in the wrong shape. The bare
+        # `if dismiss:` this parser started with read them all that way and it
+        # was right to: only a TRUTHY non-mapping is a real disagreement about
+        # the format, and that one still raises below.
+        dismiss = {}
+    if not isinstance(dismiss, dict):
         raise TriageResponseError(
             f"dismiss: expected a mapping of reason -> list of ids, got "
             f"{type(dismiss).__name__}"
         )
-    if isinstance(dismiss, dict):
-        # A reason named with nothing under it proposes NO dismissal, and an
-        # empty proposal is absence, not an error. Dropped BEFORE the emptiness
-        # test, because `{stage: []}` is a truthy dict: left in, it reached
-        # parse_prune_list, raised, and took the whole response -- survivors
-        # included -- down with it.
-        dismiss = {
-            reason: ids for reason, ids in dismiss.items() if ids not in (None, [])
-        }
+    # A reason named with nothing under it proposes NO dismissal, and an empty
+    # proposal is absence, not an error. Dropped BEFORE the emptiness test
+    # below, because `{stage: []}` is a truthy dict: left in, it reached
+    # parse_prune_list, raised, and took the whole response -- survivors
+    # included -- down with it.
+    dismiss = {reason: ids for reason, ids in dismiss.items() if ids not in (None, [])}
     if dismiss:
         prune_yaml = yaml.safe_dump({"dismiss": dismiss}, allow_unicode=True)
         try:
