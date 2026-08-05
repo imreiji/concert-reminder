@@ -13,8 +13,16 @@ from sqlalchemy.pool import StaticPool
 
 from app.calendars import CalendarFeed
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, DiscoveredEvent, DiscoveryState, Tag
-from app.db.service import PlannedDismissal, PrunePlan, apply_prune, plan_prune
+from app.db.models import (
+    Base,
+    Concert,
+    ConcertDay,
+    DiscoveredEvent,
+    DiscoveryState,
+    Tag,
+    TriageRun,
+)
+from app.db.service import PlannedDismissal, PrunePlan, apply_prune, ensure_user, plan_prune
 from app.db.session import get_session
 from app.discovery import DiscoveryFetchError
 from app.domain.prune_list import PruneEntry, PruneList
@@ -1520,3 +1528,144 @@ async def test_apply_reparses_and_ignores_injected_ids(client):
     assert lead_a.dismissed_at is not None, "the file's own entry was applied"
     assert lead_a.dismiss_reason == "stage"
     assert lead_b.dismissed_at is None, "no other field may select a lead to dismiss"
+
+
+# ── AI triage (Task 6: routes + template) ───────────────────────────────────
+#
+# `settings.triage_enabled` gates the button's very existence (unlike the
+# admin-only guard on the route, which stays live even when the flag is off --
+# the flag is a product decision, not access control). Mirrors the
+# sweep-button tests above exactly: request/redirect, an idempotent second
+# press, and a status line read off the live column/row rather than a second
+# piece of state.
+
+
+def _triage_button(body):
+    """The one line carrying the AI triage button, same shape as
+    `_sweep_button` above -- `disabled` must be asserted about THAT control."""
+    lines = [ln for ln in body.splitlines() if ">AI triage<" in ln]
+    assert len(lines) == 1, f"expected exactly one AI triage button, got {len(lines)}"
+    return lines[0]
+
+
+async def _seed_triage_run(client, **overrides):
+    """A TriageRun row, with its `requested_by` user ensured first so the FK
+    does not raise at flush -- same shape as `_artist` above."""
+    fields = dict(status="requested", requested_at=NOW)
+    fields.update(overrides)
+    async with client.db() as s:
+        if fields.get("requested_by") is not None:
+            await ensure_user(s, fields["requested_by"], "reiji")
+        run = TriageRun(**fields)
+        s.add(run)
+        await s.flush()
+        run_id = run.id
+        await s.commit()
+    return run_id
+
+
+async def test_triage_button_renders_only_when_enabled(client, monkeypatch):
+    """The flag hides the button entirely, not merely disables it -- a triage
+    pass costs real money per press, so a deploy that has not opted in should
+    not even advertise the control."""
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "AI triage" not in body
+
+    monkeypatch.setattr(settings, "triage_enabled", True)
+    body = client.get("/admin/discoveries").text
+    assert "AI triage" in body
+    assert "disabled" not in _triage_button(body)
+
+
+async def test_triage_post_requests_a_run_and_disables_the_button(client, db, monkeypatch):
+    """The button REQUESTS; it never runs triage inline -- an LLM pass over
+    the whole queue is far too slow for an HTTP request to hold. Idempotent:
+    a second press while one is still `requested` must queue no second row,
+    the same guarantee `request_sweep` gives the sweep button."""
+    monkeypatch.setattr(settings, "triage_enabled", True)
+    login_as(client, ADMIN_ID, "reiji")
+
+    r = client.post("/admin/discoveries/triage")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin/discoveries"
+
+    async with db() as s:
+        runs = (await s.execute(select(TriageRun))).scalars().all()
+    assert len(runs) == 1
+    assert runs[0].status == "requested"
+    assert runs[0].requested_by == ADMIN_ID
+
+    body = client.get("/admin/discoveries").text
+    assert "disabled" in _triage_button(body), "a second press cannot hurry the tick"
+
+    client.post("/admin/discoveries/triage")
+    async with db() as s:
+        runs = (await s.execute(select(TriageRun))).scalars().all()
+    assert len(runs) == 1, "a pending request is handed back, not duplicated"
+
+
+async def test_status_strip_shows_the_last_run_and_its_links(client, db, monkeypatch):
+    """A finished run's counts, plus the two links its report unlocks: the
+    prune plan (only when it actually proposed dismissals) and the pending
+    drafts queue it feeds."""
+    monkeypatch.setattr(settings, "triage_enabled", True)
+    run_id = await _seed_triage_run(
+        client,
+        status="done",
+        requested_by=ADMIN_ID,
+        prune_yaml="dismiss:\n  stage:\n    - '111'\n",
+        leads_seen=10,
+        productions=4,
+        dismissals_proposed=3,
+        drafts_created=5,
+        skipped=1,
+        calendar_skipped=0,
+        tokens_in=1000,
+        tokens_out=200,
+    )
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "dismissals proposed" in body
+    assert f"/admin/discoveries/prune?triage_run={run_id}" in body
+    assert "/concerts/import/pending" in body
+
+
+def _prune_textarea(body):
+    """The textarea's actual VALUE, not its `placeholder` attribute -- the
+    shipped placeholder already reads `stage: ['481833']` as a worked example,
+    so a bare `"481833" in body` substring check would pass on the blank form
+    too and prove nothing. This regex only matches text between the opening
+    `>` and `</textarea>`, past the attribute list entirely."""
+    m = re.search(r'<textarea name="text"[^>]*>(.*?)</textarea>', body, re.S)
+    assert m, "no #text textarea on the prune page"
+    return m.group(1)
+
+
+async def test_prune_form_prefills_from_a_triage_run(client, db):
+    """A triage run's `prune_yaml` is exactly the paste a human would type by
+    hand, so the SAME `?triage_run=` prefill is what `Review prune plan`
+    above lands on. A stale or mistyped id renders the ordinary blank form --
+    it must never 500, since it is reachable from nothing but a plain GET."""
+    run_id = await _seed_triage_run(
+        client,
+        status="done",
+        requested_by=ADMIN_ID,
+        prune_yaml="dismiss:\n  stage: ['481833']\n",
+    )
+    login_as(client, ADMIN_ID, "reiji")
+
+    r = client.get(f"/admin/discoveries/prune?triage_run={run_id}")
+    assert r.status_code == 200
+    assert "481833" in _prune_textarea(r.text)
+
+    r = client.get("/admin/discoveries/prune?triage_run=999999")
+    assert r.status_code == 200
+    assert _prune_textarea(r.text).strip() == ""
+
+
+async def test_triage_post_requires_admin(client):
+    """Admin-only on the write half, mirroring the sweep button: an LLM pass
+    over the whole queue costs real money and is not an editor's call."""
+    login_as(client, EDITOR_ID, "editor")
+    assert client.post("/admin/discoveries/triage").status_code == 403

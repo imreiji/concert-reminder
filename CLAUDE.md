@@ -426,6 +426,55 @@ only when both of their ends are attached -- have shipped since).
   changes; a roster nobody can audit is how a dead feed survives.
   Leads are namespaced (`"<feed key>:<UID>"`), which is what lets one UNIQUE
   column hold both sources.
+- `src/app/llm.py` — the ONE DeepSeek call, top-level beside `fetching.py` for
+  the same reason (it does I/O, so it cannot live in `domain/`). A hand-rolled
+  httpx POST to `/chat/completions` rather than an OpenAI-compatible SDK — the
+  same trade `domain/ics_read.py` made against a calendar library, since the
+  whole surface this app uses is one JSON request and one JSON response.
+  Everything arrives as `LlmError`: an unset key or model raises BEFORE the
+  network (misconfiguration named plainly), and transport failure, non-200, a
+  non-JSON 200 and a body missing `choices[0].message.content` are one class
+  because its one caller treats them identically. It has no opinion about what
+  the messages SAY — the prompts, the fence-stripping and `strip_rounds` are
+  pure, in `domain/triage_prompts.py`.
+- `src/app/triage.py` — the AI-triage runner: one LLM pass over the open
+  discovery queue, on an admin's press. Same layer and discipline as
+  `discovery.py` (imports `domain/`, `app/llm.py`, `app/fetching.py` and
+  `db.service`; nothing in `db/` imports it), and it is the RUN ORDER only.
+  **The load-bearing idea is that the model writes text this app ALREADY
+  parses**: the classify half emits the prune-list YAML `parse_prune_list`
+  reads, the draft half the `add-concert` YAML `parse_drafts` reads. Malformed
+  model output therefore dies at the same boundary a bad agent draft does, and
+  no second validation vocabulary exists to drift from the first. It creates no
+  concert and dismisses no lead — drafts land as `PendingDraft` rows, so
+  `import_commit` stays the only write path into `concerts`, and the prune YAML
+  is stored TEXT the owner still pastes through the plan/apply screen, which
+  stays the only path to a dismissal. **`strip_rounds` runs on every generated
+  draft whatever the model returned**: the prompt asks for `rounds: []`, the
+  prompt is not the guarantee, this is, and the failure it prevents is an
+  invented `apply_closes_jst` reaching a real user as a real reminder for a
+  deadline that never existed. Gated by `settings.triage_enabled`
+  exactly as the sweep is gated by `discovery_enabled`; `deepseek_model` has NO
+  default, because hardcoding a guess at a third party's current alias starts
+  billing a model nobody chose the moment the flag flips. A press costs ONE
+  classify call over the whole queue plus at most `TRIAGE_DRAFT_CAP` (25)
+  fetch+draft pairs whatever the queue's size — the cap is what makes the price
+  of a press predictable — with fetches SEQUENTIAL and paused and a
+  per-production `heartbeat.beat()`, for the reasons the sweep has both.
+  It queues ONE admin `Notification` (invariant 4) whose kind `"triage"` is
+  deliberately NOT in `UNREPORTED_NOTE_KINDS` — that set is for notices
+  reporting ON deliveries, and this one reports on a model's proposals.
+  **The request stamp IS the `TriageRun` row** (unlike the sweep, which stamps
+  the `DiscoveryState` singleton — triage wants per-run history), which makes
+  `stamp_discovery_run`'s two-halves rule apply IN ROW FORM: a rollback restores
+  the row to `"requested"`, so `scheduler/loop.py` re-marks it failed and
+  commits on the cleaned transaction, or a dead run re-fires 25 fetches and 26
+  LLM calls every 60 seconds forever. One refinement found the hard way there:
+  `session.rollback()` expires every attribute of every object in the
+  transaction, PRIMARY KEY INCLUDED on this aiosqlite stack, so reading
+  `run.id` inside the handler raises `MissingGreenlet` rather than a value —
+  the id is captured BEFORE the run, and any future post-rollback bookkeeping
+  keyed on a row needs the same.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
 - `routes/welcome.py` -- the five-step welcome wizard, rebuilt on the design
   system and flowing seamlessly into `/setup` (`POST /welcome/advance`

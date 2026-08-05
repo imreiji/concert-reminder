@@ -935,6 +935,51 @@ class DiscoveryState(Base):
     sweep_requested_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
+class TriageRun(Base):
+    """One AI-triage pass over the discovery queue: a REQUEST, then a report.
+
+    Same request/drain shape as DiscoveryState's sweep_requested_at, but a row
+    per run rather than a single mutable state row -- a triage pass is an LLM
+    call an operator can look back on (what did it see, what did it propose,
+    did it fail and why), not a clock the next tick merely checks. `status`
+    walks requested -> done|failed and never back; there is no "in progress"
+    state because nothing here reads one mid-run the way /healthz reads the
+    scheduler heartbeat.
+    """
+
+    __tablename__ = "triage_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    status: Mapped[str] = mapped_column(String(20), default="requested")
+    # SET NULL, not CASCADE: erasing the operator who pressed the button must
+    # not take the run's own record (and its counts) down with them -- same
+    # reasoning as PendingDraft.concert_id.
+    requested_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="SET NULL")
+    )
+    requested_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # The proposed prune list, in the same YAML shape a human would paste
+    # into the existing prune-apply flow -- a run's whole point is to hand
+    # back something pasteable, not a row the UI has to re-render from parts.
+    prune_yaml: Mapped[str] = mapped_column(Text, default="")
+    # Run statistics. Nullable rather than defaulted to 0: a run that never
+    # started has no counts at all, and 0 would misreport "looked at nothing
+    # and found nothing" as a real, completed answer.
+    leads_seen: Mapped[int | None] = mapped_column(Integer)
+    productions: Mapped[int | None] = mapped_column(Integer)
+    dismissals_proposed: Mapped[int | None] = mapped_column(Integer)
+    drafts_created: Mapped[int | None] = mapped_column(Integer)
+    skipped: Mapped[int | None] = mapped_column(Integer)
+    calendar_skipped: Mapped[int | None] = mapped_column(Integer)
+    tokens_in: Mapped[int | None] = mapped_column(Integer)
+    tokens_out: Mapped[int | None] = mapped_column(Integer)
+    # Truncated to fit an admin-page row comfortably; the full traceback
+    # belongs in the server log, not this table.
+    error: Mapped[str] = mapped_column(String(300), default="")
+
+
 class PendingDraft(Base):
     """One document out of a multi-draft paste, held until an editor triages it.
 

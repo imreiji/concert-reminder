@@ -106,6 +106,39 @@
   {% endif %}
 </form>
 
+{#- The AI-triage button: an LLM pass that classifies the open queue and
+    drafts survivors. Gated on the flag ITSELF, not merely on whether the
+    route exists -- a deploy that has not opted in should not even see a
+    control that spends a real key per press. Same request/drain shape and
+    same disabled-while-pending reasoning as "Sweep now" above; rounds are
+    always left empty for a human to fill from the official page (this
+    surface never invents a round). -#}
+{% if triage_enabled %}
+<form method="post" action="/admin/discoveries/triage" style="margin:.6rem 0">
+  <button class="act" type="submit" {% if triage_pending %}disabled{% endif %}>AI triage</button>
+  {% if triage_pending %}
+  <span class="dim">Triage requested — the scheduler will start it within a minute.</span>
+  {% else %}
+  <span class="dim">Classifies the open leads and drafts survivors (rounds always left empty for you to fill from the official page). Costs a few cents per press.</span>
+  {% endif %}
+</form>
+{% if triage_last and triage_last.status != "requested" %}
+<p class="dim">
+  Last AI triage: {{ triage_last.status }}
+  {% if triage_last.status == "done" %}
+  — {{ triage_last.dismissals_proposed or 0 }} dismissals proposed,
+  {{ triage_last.drafts_created or 0 }} drafts queued,
+  {{ triage_last.skipped or 0 }} skipped
+  ({{ (triage_last.tokens_in or 0) + (triage_last.tokens_out or 0) }} tokens).
+  {% if triage_last.prune_yaml %}
+  <a href="/admin/discoveries/prune?triage_run={{ triage_last.id }}">Review prune plan</a> ·
+  {% endif %}
+  <a href="/concerts/import/pending">Pending drafts</a>
+  {% elif triage_last.error %} — {{ triage_last.error }}{% endif %}
+</p>
+{% endif %}
+{% endif %}
+
 {% if rows %}
 <h2>{{ rows | length }} open lead{{ '' if rows | length == 1 else 's' }}</h2>
 

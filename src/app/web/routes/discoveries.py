@@ -4,7 +4,8 @@
   POST /admin/discoveries/sweep              ask the scheduler to sweep now
   POST /admin/discoveries/sweep/{tag_id}     read ONE artist's page, inline
   POST /admin/discoveries/{lead_id}/dismiss  wave one off for good
-  GET  /admin/discoveries/prune              paste an agent's prune list
+  POST /admin/discoveries/triage             ask the scheduler for an AI triage pass
+  GET  /admin/discoveries/prune              paste an agent's prune list (or a triage run's own)
   POST /admin/discoveries/prune              show the plan -- writes nothing
   POST /admin/discoveries/prune/apply        re-parse, re-plan, apply, commit
 
@@ -46,6 +47,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.calendars import CALENDAR_FEEDS
+from app.config import settings
 from app.db.models import DiscoveredEvent, Tag
 from app.db.service import (
     PlannedDismissal,
@@ -54,10 +56,14 @@ from app.db.service import (
     discovery_status,
     dismiss_lead,
     dismissed_reason_counts,
+    get_triage_run,
+    latest_triage_run,
     leads_matching_existing_legs,
     open_leads,
+    pending_triage_run,
     plan_prune,
     request_sweep,
+    request_triage,
 )
 from app.db.session import get_session
 from app.discovery import sweep_one_tag
@@ -224,6 +230,13 @@ async def discoveries(
             "reason_counts": await dismissed_reason_counts(session),
             "dismiss_reasons": list(DismissReason),
             "dismiss_reason_labels": DISMISS_REASON_LABELS,
+            # The AI-triage button and status strip: gated on the flag itself
+            # (not merely on whether a route exists), same as the button's
+            # documented reasoning -- a deploy that has not opted in should
+            # not even see a control that spends a real key per press.
+            "triage_enabled": settings.triage_enabled,
+            "triage_pending": await pending_triage_run(session) is not None,
+            "triage_last": await latest_triage_run(session),
         },
     )
 
@@ -317,6 +330,29 @@ async def dismiss(
     return RedirectResponse("/admin/discoveries", status_code=303)
 
 
+@router.post("/admin/discoveries/triage")
+async def triage_now(
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Ask the scheduler for an AI-triage pass over the open queue.
+
+    Same request/drain shape as `sweep_now` above, for the same reason: an LLM
+    call over the whole discovery queue is far too slow for an HTTP request to
+    hold, so this writes a row (`request_triage`) and the scheduler's next
+    tick runs the one triage implementation. `request_triage` is itself
+    idempotent while a run is still `status="requested"`, so this route needs
+    no 404 branch either -- asking twice hands back the same row, and the page
+    disables the button while one is pending.
+
+    303, never 307: the POST must not be replayed against the page it lands
+    on.
+    """
+    await request_triage(session, datetime.now(UTC), user.id)
+    await session.commit()
+    return RedirectResponse("/admin/discoveries", status_code=303)
+
+
 # ── The prune list: paste, plan, apply ──────────────────────────────────────
 #
 # Mirrors /admin/import/tags (routes/admin.py's import_tags_form/_preview/
@@ -377,15 +413,30 @@ def _prune_rows(plan) -> list[PlannedDismissal]:
 @router.get("/admin/discoveries/prune", response_class=HTMLResponse)
 async def prune_form(
     request: Request,
+    triage_run: int | None = None,
     user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
 ):
     """Paste an agent-authored prune list -- the classification of the open
     discovery queue, in the vocabulary domain/prune_list.py parses.
 
+    `?triage_run=<id>` is the "Review prune plan" link an AI-triage run's
+    status strip offers: it prefills the SAME textarea with that run's own
+    `prune_yaml` rather than a human retyping what the run already proposed.
+    An unknown or stale id (the run was deleted, the link was mistyped) is
+    not an error -- it falls back to the ordinary blank form, exactly as a
+    plain visit to this page does, since a stale link is not an operator
+    mistake worth a 404.
+
     Admin-only, English-only and NOT wrapped in _(), like every other
     discovery route.
     """
-    return _prune_page(request, user, "")
+    text = ""
+    if triage_run is not None:
+        run = await get_triage_run(session, triage_run)
+        if run is not None:
+            text = run.prune_yaml
+    return _prune_page(request, user, text)
 
 
 @router.post("/admin/discoveries/prune", response_class=HTMLResponse)
