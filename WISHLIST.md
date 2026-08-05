@@ -958,8 +958,9 @@ trap again.
 The re-rank moves nothing on merit, and entries renumber 1-13 by the one
 removal. The build lived in one template, one route and two runbook
 paragraphs, so every remaining entry was re-read against it and stands as
-written -- there is no Proposed entry it touches, which is the honest reading
-rather than a hunt for contacts. **Minute-level offsets returns to #1 by pure
+written -- the one contact is the Discover-sort-in-the-content-head entry,
+which now carries a rider naming the `rel="nofollow"` a relocation must
+keep, exactly as its fsheet rider already does. **Minute-level offsets returns to #1 by pure
 removal**: its twelfth move, and its SIXTH inside this single day. The running
 record continues in its entry, where twelve moves have now produced twelve
 identical verdicts.
@@ -1326,6 +1327,13 @@ collapse point) -- any future move of sort into the content head must
 carry the fsheet's relocated copy along with it, not just the desktop
 sidebar's, or the two surfaces drift.
 
+Re-reviewed 2026-08-04 (crawler-trap hardening): Discover's sort links now
+carry `rel="nofollow"` (part of the ten-site sweep the outage's crawl-trap
+fix applied), so any future move of sort into the content head must keep
+that attribute on the rebuilt link too -- the sweep test in
+`tests/test_discover.py` will catch a drop, but it belongs here per this
+file's own discipline of naming every contact a shipped entry makes.
+
 ### 10. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
@@ -1530,9 +1538,9 @@ query. So `Disallow: /discover?` blocks every query-stringed Discover URL --
 the entire combinatorial `?sort=…&tag=…&tag=…` space the 605-tag expansion had
 made effectively infinite -- while `/discover` itself, the catalogue page that
 genuinely should be indexed, stays crawlable. It also asks NOTHING of the
-crawler: the wildcard alternative the entry offered would have needed
-wildcard support, which is a Google/Bing extension rather than a universal
-one, and would have been the broader directive of the two. The route is a
+crawler: the wildcard alternative the entry offered would have needed the
+`*`/`$` wildcard shape, which pre-RFC 9309 crawlers are not required to
+implement, and would have been the broader directive of the two. The route is a
 plain `PlainTextResponse` in `web/app.py` with that reasoning in a comment
 beside it, so nobody re-derives the grammar question next time, and its test
 pins both halves: the query-stringed space blocked, the bare page not.

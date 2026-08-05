@@ -150,7 +150,9 @@ was skipped.
   `?tag=` URLs and must be able to pass. Also enable Cloudflare's AI-crawler
   blocking toggle. These are the edge half of the 2026-08-04 crawl-outage
   remedy; the repo half (`rel="nofollow"` on Discover's filter links plus
-  the `/robots.txt` route) deploys with the app.
+  the `/robots.txt` route) deploys with the app. Whatever edge rules exist
+  must leave `/robots.txt` itself reachable to crawlers -- a bot challenged
+  on its robots.txt fetch never reads the disallow.
 - SSH: restrict port 22 to your home IP; key-only auth (Lightsail default).
 - Point a free uptime monitor (UptimeRobot) at `https://dekimasen.app/healthz`.
 - Backups: see the full section below.
@@ -270,10 +272,14 @@ scheduler behind a live website.
 
 Add a SECOND UptimeRobot monitor with a response-time alert on
 `https://dekimasen.app/` (dashboard-only -- recreate it alongside the
-keyword monitor). The keyword monitor has no latency threshold: during the
-2026-08-04 crawler outage `/healthz` answered 200 `"ok":true` in 72
-seconds and the monitor stayed green for the entire half-day the site was
-unusable. A response-time alert is the one that would have fired.
+keyword monitor). It targets `/` rather than `/healthz` because user-facing
+latency is the signal that was actually missing -- `/healthz`'s own latency
+is already proven meaningless as an alert: during the 2026-08-04 crawler
+outage it answered 200 `"ok":true` in 72 seconds and the monitor stayed
+green for the entire half-day the site was unusable. If the account's tier
+will not alert on response time (that has historically been a paid-tier
+feature), fall back to a second keyword monitor on `/` with a short request
+timeout -- a slow response times out and fires the alert on any tier.
 
 UptimeRobot is the ONLY thing that catches scheduler death. The in-process
 checks DM the admin whitelist on a confirmed change for `backup` and `disk`,

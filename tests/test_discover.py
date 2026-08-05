@@ -664,9 +664,10 @@ async def test_every_discover_filter_link_carries_nofollow(client):
     (sweep every rendered <a>), not as a list of known sites that would
     silently rot when a new filter link is added.
 
-    The fixture selects a tag AND a status so the active-filter chips, the
-    "Clear all" link and the region chips all render -- the maximal set of
-    filter-link sites on one page."""
+    The fixture selects a tag AND a status AND a search query so the
+    active-filter chips, the "Clear all" link and the region chips all
+    render -- the maximal set of filter-link sites on one page, and any
+    future filter link gated on a search query being present is swept too."""
     async def build(seed):
         c = await seed.concert("nofollow-fixture")
         await seed.open_round(c)
@@ -682,7 +683,7 @@ async def test_every_discover_filter_link_carries_nofollow(client):
         return artist
 
     artist = await seeded(client.db, build)
-    r = client.get(f"/discover?tag={artist.id}&status=open")
+    r = client.get(f"/discover?tag={artist.id}&status=open&q=nofollow")
     assert r.status_code == 200
 
     anchors = re.findall(r"<a\s[^>]*>", r.text)
