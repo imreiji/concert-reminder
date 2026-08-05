@@ -60,6 +60,29 @@ def test_no_dismissals_is_absence_not_error():
     assert result.survivors == ()
 
 
+@pytest.mark.parametrize("body", ["dismiss:\n  stage: []\n", "dismiss:\n  stage: null\n"])
+def test_an_empty_dismiss_list_is_absence_not_failure(body):
+    """A model that names a reason and then lists nothing under it has proposed
+    NO dismissal -- absence, not an error. Before this, `{stage: []}` was a
+    truthy dict, so it reached parse_prune_list, raised PruneListError, and took
+    the whole response (survivors included) down with it."""
+    result = parse_classify_response(
+        body + "survivors:\n  - title: t\n    lead_ids: ['1']\n    representative: '1'\n"
+    )
+    assert result.prune_yaml == ""
+    assert [s.title for s in result.survivors] == ["t"]
+
+
+def test_prose_around_the_fence_is_tolerated():
+    """Models preface a fenced block with a sentence however firmly they are
+    told not to. The fence is the payload; the chat around it is not an error."""
+    result = parse_classify_response(
+        "Here is the result:\n```yaml\nsurvivors: []\n```"
+    )
+    assert result.survivors == ()
+    assert result.prune_yaml == ""
+
+
 def test_malformed_survivor_is_a_warning_not_a_failure():
     result = parse_classify_response(
         "dismiss:\n  live: ['1']\nsurvivors:\n  - lead_ids: 'not-a-list'\n"

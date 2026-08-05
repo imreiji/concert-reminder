@@ -38,15 +38,20 @@ which will not re-propose the ones already drafted (see the containment step).
 Fetches are SEQUENTIAL with a pause, for the reason `discovery.py` gives: 25
 parallel requests at a third party is how an IP gets blocked. Each fetch
 carries a TOTAL deadline, because httpx's own timeout is per READ and a server
-dripping bytes would otherwise hold the tick open with no bound at all.
+dripping bytes would otherwise hold the tick open with no bound at all. Over the
+whole draft loop sits TRIAGE_BUDGET_SECONDS, the sweep's wall clock: the cap
+bounds the CALLS, and only a clock bounds the TIME.
 
 Two operational rules inherited wholesale from the sweep:
 
-  - It BEATS THE HEARTBEAT inside its own loop. The scheduler beats before
-    `tick()` and /healthz goes unhealthy at 180s; a run that fetches 25 pages
-    with a pause each occupies the tick well past that, so without a beat per
-    production it pages the owner about a perfectly healthy app. The loop
-    genuinely is alive, so beating in it is honest.
+  - It BEATS THE HEARTBEAT before the classify call and inside its own loop.
+    The scheduler beats before `tick()` and /healthz goes unhealthy at 180s; a
+    run that fetches 25 pages with a pause each occupies the tick well past
+    that, so without a beat per production it pages the owner about a perfectly
+    healthy app. The classify beat is the same rule one step earlier: delivery
+    plus one call over the whole queue can age the tick's own beat past 180s
+    before the loop starts. The loop genuinely is alive, so beating in it is
+    honest.
   - It FLUSHES, never commits. The scheduler's block owns the transaction and
     its own rollback -- and the run row's failure marking happens THERE, on a
     cleaned transaction, because a rollback would otherwise restore the row to
@@ -56,7 +61,10 @@ Two operational rules inherited wholesale from the sweep:
 Every per-production failure -- fetch, LLM, parse -- is caught, counted and
 stepped over. One bad production must not cost the other twenty-four, which is
 `run_sweep`'s philosophy and for the same reason: the alternative is a run that
-dies partway and hands back nothing at all.
+dies partway and hands back nothing at all. ONE class of failure is exempt: a
+`SQLAlchemyError` poisons the session, so nothing after it can persist and
+stepping over it would spend twenty-four more paid calls on writes that cannot
+land. That one propagates and the run is marked failed.
 """
 
 import asyncio
@@ -64,8 +72,10 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
+from time import monotonic
 
 import httpx
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import llm
@@ -113,6 +123,26 @@ TRIAGE_DELAY_SECONDS = 1.0
 # last fetch of a run is unbounded and "the run is bounded" would be a comment
 # rather than a fact.
 FETCH_DEADLINE_SECONDS = 30.0
+# A WALL CLOCK over the draft loop, the same 240s `run_sweep` keeps and for the
+# same reason: the run occupies the reminder tick, reminder_loop is strictly
+# serial, and the per-production heartbeat means a long run raises no alarm.
+# The cap bounds the CALLS; this bounds the TIME, which the cap alone cannot --
+# 25 productions each waiting out FETCH_DEADLINE_SECONDS plus an LLM call is
+# well past any sane share of a tick. Survivors past it simply wait for the next
+# press, which containment stops from re-drafting the ones already done.
+TRIAGE_BUDGET_SECONDS = 240.0
+
+
+def _source_line(representative: str) -> str:
+    """The provenance line a generated draft carries, and the containment key.
+
+    ONE expression, used by the prepend and by the check that reads it back --
+    they are the same string by construction or containment silently stops
+    working. It ends in a newline on purpose: matching the bare URL let
+    `/events/4862` contain-match inside a stored `/events/48624` and skip a
+    production nobody had drafted.
+    """
+    return f"# source: {EVENT_URL.format(id=representative)}\n"
 
 
 @dataclass
@@ -134,6 +164,11 @@ class TriageReport:
     calendar_skipped: int = 0
     tokens_in: int = 0
     tokens_out: int = 0
+    # True when TRIAGE_BUDGET_SECONDS ran out and survivors were left for the
+    # next press. Recorded rather than merely logged, exactly as SweepReport
+    # records its own: a truncation only the journal knows about is a silent
+    # degradation.
+    budget_exhausted: bool = False
 
 
 async def fetch_event_page(
@@ -255,6 +290,12 @@ async def run_triage(
     # 2. Classify: one call over the whole batch, because collapsing repeats
     #    into productions is a judgment about the batch AS A WHOLE and cannot
     #    be made a lead at a time.
+    #    Beaten BEFORE the call, not only inside the draft loop below: the tick
+    #    beats once before delivery, and delivery plus one classify call over
+    #    the whole queue can outlast MAX_AGE_SECONDS (180s) on its own -- so
+    #    without this, the first beat of the run comes too late and /healthz
+    #    pages the owner about a perfectly healthy app.
+    heartbeat.beat()
     reply = await llm_chat(*classify_prompt(lines))
     report.tokens_in += reply.tokens_in
     report.tokens_out += reply.tokens_out
@@ -273,20 +314,37 @@ async def run_triage(
     #    so a survivor whose page URL already occurs in a still-open PendingDraft
     #    is one an editor has not triaged yet -- re-drafting it would spend a
     #    fetch and an LLM call to hand them a second copy of a decision they
-    #    have not made once.
+    #    have not made once. Matched as that WHOLE LINE (`_source_line`), never
+    #    the bare URL: `/events/4862` is a substring of `/events/48624`.
     taken = await pending_draft_texts(session)
     candidates: list[Survivor] = []
     for survivor in result.survivors:
         if survivor.representative is not None:
-            url = EVENT_URL.format(id=survivor.representative)
-            if any(url in text for text in taken):
+            marker = _source_line(survivor.representative)
+            if any(marker in text for text in taken):
                 report.skipped += 1
                 continue
         candidates.append(survivor)
 
-    # 4. Draft, oldest-first as the model delivered them, capped.
+    # 4. Draft, in the order the model delivered them -- which follows
+    #    `open_leads`' own event_date DESC, so the FURTHEST-FUTURE production is
+    #    drafted first and a cap or a budget leaves the soonest ones behind.
+    #    That is the calibration consequence docs/deploy.md spells out for the
+    #    operator; it is not accidental and the fix is not here.
+    deadline = monotonic() + TRIAGE_BUDGET_SECONDS
     attempts = 0
-    for survivor in candidates:
+    for index, survivor in enumerate(candidates):
+        # Checked at the TOP, before anything is fetched: the budget caps how
+        # long the reminder tick is held, so the answer has to be "stop" before
+        # the next page is asked for, not after.
+        if monotonic() >= deadline:
+            report.budget_exhausted = True
+            log.warning(
+                "triage: %.0fs budget spent after %d production(s); "
+                "%d left for the next press",
+                TRIAGE_BUDGET_SECONDS, index, len(candidates) - index,
+            )
+            break
         if attempts >= TRIAGE_DRAFT_CAP:
             log.info(
                 "triage: draft cap (%d) reached; %d production(s) left for the next run",
@@ -318,8 +376,9 @@ async def run_triage(
             # module's docstring puts in capitals.
             text = strip_rounds(extract_yaml(reply.text))
             # The provenance line, and the containment key: the next run reads
-            # it back out of `pending_draft_texts` as a substring.
-            text = f"# source: {url}\n{text}"
+            # it back out of `pending_draft_texts` as a substring, through the
+            # same `_source_line` that writes it here.
+            text = _source_line(survivor.representative) + text
             batch = parse_drafts(text)
             if len(batch.drafts) != 1 or batch.errors:
                 raise ValueError(
@@ -328,6 +387,16 @@ async def run_triage(
                 )
             await create_pending_drafts(session, batch, created_by=run.requested_by)
             report.drafts += 1
+        except SQLAlchemyError:
+            # NOT one skipped production. A failed flush POISONS the session, so
+            # nothing after this point can persist -- absorbing it would pay up
+            # to 24 more fetch+LLM calls to write nothing at all, and then close
+            # the run out as "done". Re-raised BEFORE the generic handler below,
+            # which is the only thing keeping it out of the skip count; the
+            # scheduler's block rolls back and marks the row failed on a cleaned
+            # transaction, the path an unusable classify response already takes.
+            log.exception("triage: the session is poisoned; abandoning the run")
+            raise
         except Exception:
             # Fetch, LLM and parse failures are one thing here: a production
             # that did not produce a draft. One must not cost the rest.

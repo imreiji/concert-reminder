@@ -15,6 +15,7 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 import pytest_asyncio
 from sqlalchemy import event, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -123,6 +124,20 @@ survivors:
   - title: "calendar only"
     lead_ids: ['imas-tickets:x@google.com']
     representative: null
+"""
+
+# Two survivors that BOTH have an Eventernote page, so the draft loop makes two
+# fetch+LLM passes rather than skipping the second as calendar-only. That is what
+# lets the budget test show a stop mid-loop and the poisoned-session test show
+# that nothing was spent after the failure.
+TWO_DRAFTABLE_REPLY = """dismiss: {}
+survivors:
+  - title: "学マス LIVE"
+    lead_ids: ['486243']
+    representative: '486243'
+  - title: "もうひとつ"
+    lead_ids: ['481833']
+    representative: '481833'
 """
 
 # Fenced, and carrying a round the model was told not to invent: `strip_rounds`
@@ -303,9 +318,68 @@ async def test_the_draft_loop_beats_the_heartbeat(db, monkeypatch):
         report = await run_triage(s, run, NOW,
                                   fetcher=_fake_page,
                                   llm_chat=_llm([CLASSIFY_REPLY, DRAFT_REPLY]))
-        # One beat per drafted survivor -- the calendar-only one fetches nothing.
+        # One beat before the classify call plus one per drafted survivor -- the
+        # calendar-only one fetches nothing. The classify beat is not optional:
+        # the tick's own beat fires before delivery, and delivery plus a classify
+        # call over the whole queue can outlast the 180s health threshold on its
+        # own, before the loop's first beat ever runs.
         assert report.drafts == 1
-        assert len(beats) == 1
+        assert len(beats) == 2
+
+
+async def test_the_draft_loop_stops_when_its_wall_clock_budget_runs_out(db, monkeypatch):
+    """The run holds the reminder tick, exactly as the sweep does, and the
+    per-production heartbeat means the blackout raises no alarm. So the draft
+    loop keeps a wall clock and leaves the rest of the survivors for the next
+    press -- containment is what stops the next press re-drafting the done ones.
+
+    The clock is faked rather than slept through: a real 240s budget is not a
+    test. `monotonic` is called once for the deadline and once per survivor, so
+    the second survivor's check is the one that lands past it."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr("app.triage.TRIAGE_DELAY_SECONDS", 0)
+    clock = iter([0.0, 0.0, 1000.0])
+    monkeypatch.setattr("app.triage.monotonic", lambda: next(clock))
+
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        llm = _llm([TWO_DRAFTABLE_REPLY, DRAFT_REPLY, DRAFT_REPLY])
+        report = await run_triage(s, run, NOW, fetcher=_fake_page, llm_chat=llm)
+
+        assert report.budget_exhausted is True
+        assert run.status == "done", "a truncated run is finished, not failed"
+        assert report.drafts == 1, "the second survivor's check landed past the deadline"
+        assert report.skipped == 0, "stopping early is not a failure to draft"
+        assert len(llm.calls) == 2, "nothing past the budget was even asked for"
+        assert len(await service.pending_drafts(s, ADMIN_ID)) == 1
+
+
+async def test_a_poisoned_session_stops_the_run(db, monkeypatch):
+    """A failed flush poisons the session: nothing after it can persist, so
+    absorbing the error into the per-production skip would pay up to 24 more
+    fetch+LLM calls to write nothing. SQLAlchemyError therefore re-raises, and
+    the scheduler's handler marks the run failed on a cleaned transaction."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr("app.triage.TRIAGE_DELAY_SECONDS", 0)
+
+    async def boom(*args, **kwargs):
+        raise OperationalError("INSERT INTO pending_drafts", {}, Exception("disk I/O"))
+
+    monkeypatch.setattr("app.triage.create_pending_drafts", boom)
+
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        llm = _llm([TWO_DRAFTABLE_REPLY, DRAFT_REPLY, DRAFT_REPLY])
+        with pytest.raises(OperationalError):
+            await run_triage(s, run, NOW, fetcher=_fake_page, llm_chat=llm)
+        # Classify plus exactly ONE draft call: the second survivor was never
+        # paid for. The runner marks no failure of its own, as ever.
+        assert len(llm.calls) == 2
+        assert run.status == "requested"
 
 
 async def test_an_admin_who_never_signed_in_gets_a_user_row(db, monkeypatch):

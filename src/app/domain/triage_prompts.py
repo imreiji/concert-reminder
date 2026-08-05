@@ -220,15 +220,29 @@ def classify_prompt(leads: Sequence[LeadLine]) -> tuple[str, str]:
 
 
 _FENCE_RE = re.compile(r"^```(?:yaml)?\s*\n?(.*?)\n?```$", re.DOTALL)
+# The same fence, found ANYWHERE in the reply. Tried only after the anchored
+# match fails, so a response that is nothing but a fence keeps the strict
+# whole-response reading and a fenceless response is still returned whole.
+_LOOSE_FENCE_RE = re.compile(r"```(?:yaml)?\s*\n(.*?)```", re.DOTALL)
 
 
 def extract_yaml(text: str) -> str:
-    """Strip a ```yaml ...``` / ``` ...``` fence if the whole response is
-    wrapped in one, else return the stripped text as-is -- models reliably
-    wrap YAML in a fence even when told not to."""
+    """Strip a ```yaml ...``` / ``` ...``` fence and return what it held.
+
+    Three readings, in order: the whole response is one fence; a fence sits
+    somewhere inside prose; there is no fence at all and the text is the YAML.
+    The middle case exists because models preface a fenced block with a
+    sentence ("Here is the result:") however firmly the prompt tells them not
+    to -- the fence is the payload, and the chat around it is not an error
+    worth failing a paid call over."""
     stripped = text.strip()
     match = _FENCE_RE.match(stripped)
-    return match.group(1).strip() if match else stripped
+    if match:
+        return match.group(1).strip()
+    loose = _LOOSE_FENCE_RE.search(stripped)
+    if loose:
+        return loose.group(1).strip()
+    return stripped
 
 
 def parse_classify_response(text: str) -> ClassifyResult:
@@ -245,12 +259,21 @@ def parse_classify_response(text: str) -> ClassifyResult:
 
     prune_yaml = ""
     dismiss = data.get("dismiss")
+    if dismiss is not None and not isinstance(dismiss, dict):
+        raise TriageResponseError(
+            f"dismiss: expected a mapping of reason -> list of ids, got "
+            f"{type(dismiss).__name__}"
+        )
+    if isinstance(dismiss, dict):
+        # A reason named with nothing under it proposes NO dismissal, and an
+        # empty proposal is absence, not an error. Dropped BEFORE the emptiness
+        # test, because `{stage: []}` is a truthy dict: left in, it reached
+        # parse_prune_list, raised, and took the whole response -- survivors
+        # included -- down with it.
+        dismiss = {
+            reason: ids for reason, ids in dismiss.items() if ids not in (None, [])
+        }
     if dismiss:
-        if not isinstance(dismiss, dict):
-            raise TriageResponseError(
-                f"dismiss: expected a mapping of reason -> list of ids, got "
-                f"{type(dismiss).__name__}"
-            )
         prune_yaml = yaml.safe_dump({"dismiss": dismiss}, allow_unicode=True)
         try:
             parse_prune_list(prune_yaml)

@@ -106,9 +106,11 @@ honoured with the flag off. The row is written and simply never picked up, so a
 deploy that has not opted in cannot spend a key by accident (the button and its
 status strip are hidden there too). `DEEPSEEK_MODEL` deliberately has no
 default: hardcoding a guess at a third party's current alias would start
-billing a model nobody chose the moment the flag flipped. Both credentials live
-only here and in the owner's local `.env`, like every secret. Leave all three
-absent and the app runs exactly as before.
+billing a model nobody chose the moment the flag flipped. Only one of the three
+is a credential - `DEEPSEEK_API_KEY`, which lives only here and in the owner's
+local `.env`, like every secret; `DEEPSEEK_MODEL` and `TRIAGE_ENABLED` are
+configuration and are safe to write down anywhere. Leave all three absent and
+the app runs exactly as before.
 
 **`REHEARSAL_ENABLED` must stay absent or false here.** It registers
 `/admin/rehearsal`, whose whole purpose is a "deliver every reminder now"
