@@ -56,3 +56,20 @@ def test_index_renders_landing_for_anonymous(client):
     assert r.status_code == 200
     assert "dekimasen.app" in r.text
     assert "Sign in with Discord" in r.text
+
+
+def test_robots_txt_blocks_query_stringed_discover_only(client):
+    """The 2026-08-04 crawl outage: Discover's ?tag= filter URL space is
+    combinatorially infinite and every hit was a full render. robots.txt
+    disallows the query-stringed URLs by literal prefix ('?' is not a
+    metacharacter in any robots grammar) while the bare catalogue page --
+    and everything else -- stays crawlable."""
+    r = client.get("/robots.txt")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/plain")
+    lines = [line.strip() for line in r.text.splitlines()]
+    assert "User-agent: *" in lines
+    assert "Disallow: /discover?" in lines
+    # The bare page must stay crawlable: no broader disallow may appear.
+    assert "Disallow: /discover" not in lines
+    assert "Disallow: /" not in lines
