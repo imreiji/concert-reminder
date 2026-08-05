@@ -965,10 +965,70 @@ removal**: its twelfth move, and its SIXTH inside this single day. The running
 record continues in its entry, where twelve moves have now produced twelve
 identical verdicts.
 
+The 2026-08-05 pass is the first sourced from a TRIAGE session rather than a
+build or a review: clearing the 528-lead discovery backlog (222 dismissals
+committed through the first agent-authored prune list, batch-1's five
+researched drafts, 79 further dismissals ruled the same evening) surfaced the
+gap the new #1 records -- nothing ever re-checks a tracked concert's round
+ladder, and the session caught two live instances of the failure only by
+accident. Filed at #1 on the correctness-family precedent; every other entry
+is pushed down by insertion, never on merit, and minute-level offsets takes
+its thirteenth displacement in the entry's own running record.
+
 ## Proposed (highest impact first)
 
 
-### 1. Minute-level reminder offsets
+### 1. Nothing re-checks a tracked concert for newly opened rounds
+
+Impact: high (correctness family: a tracked concert whose ladder silently
+rots misses the exact lottery the app exists to catch) - effort: medium,
+with an unresolved design fork. Raised: 2026-08-05 (owner ask at the end of
+the first full triage session, filed with the evidence still warm).
+
+Discovery's sweep answers "what exists that you are not tracking"; NOTHING
+answers "what changed about what you already track". A round announced after
+a concert is imported is invisible: no sweep visits the concert's own pages,
+no surface lists ladders that have gone quiet, and the reminder machinery
+can only plan from rounds it has been given. The 2026-08-05 batch shipped
+the evidence in triplicate:
+
+- ブシロード20周年記念ライブ imported with `rounds: []` because its official
+  page says 出演日程やチケットの詳細は後日発表 -- CORRECT today, and silently
+  wrong from the day tickets are announced. ゾンビランドサガ2027 and the
+  九九組 orchestra live likewise have no 一般発売 announced yet; each will
+  grow rounds nobody is watching for.
+- The sharpest instance was only caught by accident: 石川大観光Ⅱ and
+  103期卒業公演 were imported with their 最速先行 alone, and the missing
+  アップグレード rounds (1次 AND 2次 for 103期) surfaced solely because
+  fan-calendar leads happened to name them -- ten leads deliberately held
+  back from that evening's prune as the last pointer to rounds the catalogue
+  does not carry.
+
+Three shapes, cheapest first, recorded rather than decided:
+
+- **A "quiet ladders" admin surface**: tracked concerts whose ladder holds no
+  future anchor, listed as a re-check worklist with a paste-ready agent
+  prompt, exactly the shape /admin/discoveries already has. Pure read -- no
+  fetch, no new trust decision -- and it converts the failure from silent to
+  visible, which is most of the value.
+- **Teach the discovery matcher the round dimension**: a calendar lead that
+  names a round its matched tracked concert lacks should flag "round gap"
+  instead of only the date+venue hint. Covers only feed-covered franchises,
+  but the 蓮ノ空 catch above proves the signal is real and already arriving.
+- **The heavyweight**: a scheduled re-fetch of each concert's own
+  official/source URL. A genuinely new trust decision -- `fetching.py` is
+  host-pinned per caller and this is arbitrary editor-supplied hosts -- and
+  parsing arbitrary ticket pages is agent work, not a parser. Probably stays
+  manual/agent-driven behind whichever surface above ships first.
+
+Ranked #1 on the correctness-family precedent: a stale ladder on a TRACKED
+concert is the app's core promise failing quietly -- a user who followed the
+right artist, got the 🆕 DM, and still misses the lottery because the round
+arrived after import. Unlike the crawler entry that briefly sat here, no
+edge mitigation stands behind this one; the only current defense is the
+owner remembering to re-check.
+
+### 2. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -1071,7 +1131,14 @@ attributes in one template, a `/robots.txt` route, two runbook paragraphs) and
 untouched in every respect, as it has been through all twelve: position, never
 substance.
 
-### 2. Franchise-aware round-label suggestions
+Displaced to #2 on 2026-08-05 by the round-watch entry -- the THIRTEENTH
+move, by insertion on the new entry's merit, and the second time the thing
+that outranked it came from the correctness family rather than a feature: a
+reminder fired at a slightly-wrong offset degrades, but a round the ladder
+never learned about fires nothing at all, and only one of those failures is
+silent. Same verdict as the twelve before it: position, never substance.
+
+### 3. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1092,7 +1159,7 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 3. Ten of eleven `RoundKind` members are purely cosmetic
+### 4. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1125,7 +1192,7 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 4. PWA / installability
+### 5. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -1158,7 +1225,7 @@ read AHEAD of time, so what web push would actually buy is the interrupting
 half -- the moment itself -- and that is the case this entry should be argued
 on when someone picks it up.
 
-### 5. In-app LLM extraction behind the same draft seam
+### 6. In-app LLM extraction behind the same draft seam
 
 Impact: low-medium - effort: medium, BLOCKED on API budget. Raised and
 deliberately deferred 2026-07-22 (owner: no budget for per-import API calls).
@@ -1187,7 +1254,7 @@ does sharpen the case, since there is now a steady stream of leads whose drafts
 somebody still has to author by hand or by agent. Rank unchanged apart from the
 renumber.
 
-### 6. Minor demo-parity cosmetics
+### 7. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1249,7 +1316,7 @@ it into this entry's single pass rather than spawning a task. Rank unchanged --
 this entry has now grown four times without once being worth doing on its own,
 which is itself the argument for keeping it as one batched pass.
 
-### 7. The event classes outside concerts and talk shows
+### 8. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1278,7 +1345,7 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 8. A/B casts have nowhere to live
+### 9. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1301,7 +1368,7 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 9. Discover sort in the content head, plus the catalogue-count note
+### 10. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1334,7 +1401,7 @@ that attribute on the rebuilt link too -- the sweep test in
 `tests/test_discover.py` will catch a drop, but it belongs here per this
 file's own discipline of naming every contact a shipped entry makes.
 
-### 10. Name the destination on the sign-in bounce
+### 11. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1356,7 +1423,7 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 11. The calendar roster's blind spots
+### 12. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1404,7 +1471,7 @@ refutes: the campaign is already a lead, so what is lost is a second pointer to
 something already visible, not the concert. A rating that contradicts its own
 entry is worse than a cautious one, and this list orders by USER impact.
 
-### 12. Nothing caps the discovery review path
+### 13. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1444,7 +1511,7 @@ or that the copy block can be reconstructed from ids alone. The one HALF of the
 fix this entry already calls cheap -- emitting `copy_text` once instead of twice
 -- is unaffected by any of it and is still the thing to do first.
 
-### 13. Nothing notices a calendar feed going quiet
+### 14. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
