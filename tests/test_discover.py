@@ -652,3 +652,57 @@ def test_style_defines_searchbar_and_filter_search_focus_chrome():
 def test_style_defines_chip_usage_count_styling():
     css = STYLE_CSS.read_text(encoding="utf-8")
     assert ".chip .n {" in css
+
+
+# ── crawler-trap hardening: rel="nofollow" on filter links ───────────────
+
+
+async def test_every_discover_filter_link_carries_nofollow(client):
+    """The 2026-08-04 outage: crawlers exhaustively walked the ?tag=
+    combinatorial URL space. Every anchor whose href is a query-stringed
+    /discover URL must carry rel="nofollow" -- asserted as the PROPERTY
+    (sweep every rendered <a>), not as a list of known sites that would
+    silently rot when a new filter link is added.
+
+    The fixture selects a tag AND a status so the active-filter chips, the
+    "Clear all" link and the region chips all render -- the maximal set of
+    filter-link sites on one page."""
+    async def build(seed):
+        c = await seed.concert("nofollow-fixture")
+        await seed.open_round(c)
+        artist = Tag(name="nofollow band", kind=TagKind.ARTIST)
+        venue = Tag(name="nofollow hall", kind=TagKind.VENUE, region="Kanto")
+        seed.s.add_all([artist, venue])
+        await seed.s.flush()
+        seed.s.add_all([
+            ConcertTag(concert_id=c.id, tag_id=artist.id),
+            ConcertTag(concert_id=c.id, tag_id=venue.id),
+        ])
+        await seed.s.flush()
+        return artist
+
+    artist = await seeded(client.db, build)
+    r = client.get(f"/discover?tag={artist.id}&status=open")
+    assert r.status_code == 200
+
+    anchors = re.findall(r"<a\s[^>]*>", r.text)
+    filter_links = [a for a in anchors if "/discover?" in a]
+    # Sort links, status facets, tag chips, region chips, active-filter
+    # chips, "Clear all" and "Clear filters" -- if this floor is not met the
+    # sweep is matching nothing and the test is asserting vacuously.
+    assert len(filter_links) >= 8, filter_links
+    missing = [a for a in filter_links if 'rel="nofollow"' not in a]
+    assert not missing, missing
+
+
+def test_discover_script_created_filter_links_set_nofollow():
+    """The client-side rebuild CREATES two kinds of anchors from scratch
+    (afChip and the Clear-all link); a rendered-page test cannot see them,
+    so pin the source. updateLinks() only rewrites .href on server-rendered
+    anchors, whose rel survives -- deliberately not asserted."""
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "app" / "web" / "templates" / "discover.html"
+    ).read_text(encoding="utf-8")
+    assert 'a.rel = "nofollow";' in src
+    assert 'clear.rel = "nofollow";' in src
