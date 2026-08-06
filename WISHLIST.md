@@ -998,10 +998,74 @@ the same size, and only the LIFETIME of a large backlog got shorter. Entries
 3-14 renumber to 4-15 by the one insertion; nothing moved on merit, and
 minute-level offsets holds #2 for once.
 
+The 2026-08-06 second pass adds two entries and ships nothing, which is a first
+for this file: both came out of a conversation rather than a build. One is the
+phase-2 CALIBRATION press (new #1) -- the owner deferred it for time, and it is
+filed at the top as a GATE rather than on impact, because it is the only item
+here where minutes decide whether an already-merged build is worth anything.
+The other is the reminder tick's three long jobs (new #7), raised when the
+owner asked whether a more traditional infrastructure stack would help
+performance or maintenance; the answer was no on both counts, and that entry
+records what was ruled OUT as carefully as what it proposes, so the question
+does not have to be re-litigated from scratch. Entries 1-5 renumber to 2-6 and
+6-14 to 8-16 by the two insertions. Nothing moved on merit. Round-watch takes
+its first displacement ever and minute-level offsets its fourteenth, both
+recorded in their own entries.
+
 ## Proposed (highest impact first)
 
 
-### 1. Nothing re-checks a tracked concert for newly opened rounds
+### 1. The first live completion run is not calibrated
+
+Impact: n/a -- it delivers no user-visible change - effort: minutes, plus the
+reading. Raised: 2026-08-06 (owner, immediately after AI draft completion
+merged: "I have no time now").
+
+**Phase 2 has never run against a real DeepSeek key.** Every test injects a
+fake client, which is the right shape for CI and says nothing about the model's
+judgment. Two things only a live press can settle, and both decide whether the
+build is worth anything:
+
+- **Does the model reliably emit `evidence` at all?** If it habitually omits
+  the quotes, every proposed round is rejected for "no evidence" and the
+  feature returns nothing while billing full price. Nothing in the design
+  prevents that -- the prompt asks, and only a run answers.
+- **What is the false-rejection rate on real Japanese ticket pages?** The
+  contiguity rule was tightened deliberately, accepting false rejections to buy
+  out four verified false accepts. Whether that trade costs one round in twenty
+  or one in three is the entire economics of the feature, and it is unmeasured.
+
+The first press completes NOTHING, and that is correct rather than a bug: every
+host is unknown, so it records them and stops. Approve the ones you recognise
+at `/admin/fetch-domains`, decline the rest, press again. `docs/deploy.md` says
+so in its own words, so an empty first result does not read as a failure.
+
+What to read afterwards, in this order. The QUOTES, not only the timestamps --
+a quote that does not say what its timestamp says is the exact failure this
+feature exists to make visible, and it stays invisible if you only check that
+the dates look plausible. Then the REJECTION BANNER, because a rejected round
+is more often a real deadline the model quoted loosely than an invented one,
+and those are the ones to type in by hand. Expect at least one known false
+rejection: a same-day window written on a single line
+(`受付期間 2026年1月10日(土)10:00〜23:59`) rejects its closing time, because the
+hour must be the token immediately after the day. A verified refinement exists
+and is deliberately unapplied -- see the phase-2 entry in Shipped.
+
+If the judgment disappoints, the fallback needs no code: stop pressing. Phase
+1's skeletons still arrive and filling their rounds returns to agent work,
+which is where it was the day before.
+
+**It sits at #1 as a GATE, not on impact**, and that is a deliberate departure
+from this file's ordering rule rather than a claim that a calibration press
+matters more to a user than a missed lottery does. It delivers nothing to
+anyone. It is here because it is the only item on the list where a few minutes
+decide whether an entire merged build is worth anything, and an item that cheap
+sitting mid-list is an item that quietly never happens. It comes off the list
+the moment it runs -- not into Shipped, since it ships nothing, but deleted
+with its verdict folded into the phase-2 shipped entry -- and round-watch
+reclaims #1 in the same motion.
+
+### 2. Nothing re-checks a tracked concert for newly opened rounds
 
 Impact: high (correctness family: a tracked concert whose ladder silently
 rots misses the exact lottery the app exists to catch) - effort: medium,
@@ -1044,7 +1108,7 @@ Three shapes, cheapest first, recorded rather than decided:
   parsing arbitrary ticket pages is agent work, not a parser. Probably stays
   manual/agent-driven behind whichever surface above ships first.
 
-Ranked #1 on the correctness-family precedent: a stale ladder on a TRACKED
+Filed at #1 on the correctness-family precedent: a stale ladder on a TRACKED
 concert is the app's core promise failing quietly -- a user who followed the
 right artist, got the 🆕 DM, and still misses the lottery because the round
 arrived after import. Unlike the crawler entry that briefly sat here, no
@@ -1088,7 +1152,12 @@ and never revisits a concert already in the catalogue. ブシロード20周年�
 that page, correctly finds nothing, and marks the draft done. Nothing in this
 build notices when that page later grows a round.
 
-### 2. Minute-level reminder offsets
+Displaced to #2 on 2026-08-06, its FIRST displacement since it was filed, and
+by something that is not a feature at all: the phase-2 calibration press, which
+sits above it as a gate rather than on impact. Position, never substance -- and
+it reclaims #1 the moment that press is done.
+
+### 3. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -1211,7 +1280,11 @@ present in the data is precisely the one a days-and-hours-only offset can only
 remind you about too early. That sharpens this entry's own strongest case
 again, exactly as the calendar-feed build did, without changing its rank.
 
-### 3. Franchise-aware round-label suggestions
+Displaced to #3 on 2026-08-06 by the two conversation-sourced entries inserted
+above -- the FOURTEENTH move, and the first caused by entries that ship nothing
+and deliver no feature at all. Same verdict as the thirteen before it.
+
+### 4. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1245,7 +1318,7 @@ own phrasing habits rather than by real editorial usage, so whoever builds the
 franchise ranking should look at what the counts actually contain before
 trusting the ORDER BY.
 
-### 4. Ten of eleven `RoundKind` members are purely cosmetic
+### 5. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1291,7 +1364,7 @@ data-driven refactor: this consumer is deliberately NOT the full set
 purpose), so a table generated blindly from the enum would silently re-offer
 them.
 
-### 5. In-app LLM extraction on the import page
+### 6. In-app LLM extraction on the import page
 
 Impact: low-medium - effort: medium, and ACTIONABLE as of 2026-08-05 (the
 budget block lifted). Raised and deliberately deferred 2026-07-22 (owner: no
@@ -1367,7 +1440,62 @@ about what a whole-draft extraction may claim beyond rounds. Impact is
 unchanged and unblocking is still not impact; what moved is that this is now
 the cheapest remaining item of its impact class rather than the dearest.
 
-### 6. PWA / installability
+### 7. Three long jobs share the reminder tick
+
+Impact: low-medium -- no user-visible change today; it removes a false-alarm
+source and a latent outage class - effort: medium. Raised: 2026-08-06 (owner
+asked whether a more traditional infrastructure stack would help performance or
+maintenance; the answer was no, with this as the single exception).
+
+One asyncio loop runs discord.py, FastAPI and the 60-second scheduler tick.
+Three long jobs now share that tick -- the Eventernote sweep, AI triage and AI
+draft completion -- each with a 240s wall clock checked only at the TOP of its
+loop, so each can overshoot by one whole iteration. For completion that
+iteration is worst-case ~151s (`COMPLETION_DELAY_SECONDS` 1 +
+`FETCH_DEADLINE_SECONDS` 30 + `llm.LLM_TIMEOUT_SECONDS` 120), putting a run at
+~390s against `heartbeat.MAX_AGE_SECONDS` of 180.
+
+`heartbeat.beat()` per item is what keeps `/healthz` honest through that, and
+the beat is honest -- the loop genuinely is alive. But the mechanism exists to
+paper over the coupling rather than remove it, and every long job added since
+has had to remember it. Reminder DELIVERY is not starved (it runs first in
+`tick()`), so today's cost is the health signal plus a latent risk.
+
+**The latent risk is real and nearly landed once.** Phase 2's fetch policy was
+first written with a synchronous `socket.getaddrinfo`. On any other stack that
+is merely a slow function; here it would have frozen Discord, the web app and
+the scheduler together for the resolver timeout, up to fifteen times per press.
+A review caught it and it now resolves off the loop -- but the class of bug
+exists only because of the shared loop, and the next one may be less visible.
+
+The fix is not a stack migration. A second asyncio task with its own budget, or
+a second systemd unit, decouples the thing that is actually coupled.
+**Sequencing matters and is worth recording before anyone starts:** splitting
+into two PROCESSES is the first point where SQLite begins to matter, because
+there would then be two writers. WAL plus `busy_timeout=5000` handles that at
+this write volume, but it is the first place Postgres would earn its keep. The
+order is split first, adopt Postgres only if the split makes writes contend --
+not the other way round.
+
+**What the same assessment ruled OUT, recorded so it is not re-proposed without
+new evidence:** Postgres on its own (the dev DB is 299 KB; there is no database
+performance problem and will not be for years), containers or orchestration,
+and a separate queue with a broker. The one outage on record was crawler-driven
+CPU exhaustion of the Lightsail burst credits, which a bigger stack would have
+ABSORBED at permanent cost rather than prevented -- the actual fix was
+`rel="nofollow"`, robots.txt and a Cloudflare Managed Challenge, and it was
+free. Nor would any of it have prevented a single one of the dozen real defects
+the phase-2 reviews caught: those were domain-logic and seam bugs, and what
+caught them was the invariants in CLAUDE.md and the review discipline.
+
+Ranked above PWA because it prevents a failure that has nearly happened, and
+below in-app LLM extraction because that entry delivers a capability and this
+one delivers none. One caveat on the whole assessment: it reasons from the code
+and the single documented outage, not from production metrics -- no response
+times, request volume or real database size were consulted, and latency creep
+under ordinary traffic would change the picture.
+
+### 8. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -1410,7 +1538,7 @@ AI-completed round is a deadline that reaches the user through the SAME
 channels as any other, so it raises the value of the interrupting half without
 altering what web push would have to build.
 
-### 7. Minor demo-parity cosmetics
+### 9. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1484,7 +1612,7 @@ reconstruct. `/admin/fetch-domains` is deliberately NOT on the list: admin
 pages have never had demo frames, exactly as they have never been translated.
 Fifth growth, fifth time not worth doing alone.
 
-### 8. The event classes outside concerts and talk shows
+### 10. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1524,7 +1652,7 @@ this class's actual difficulty, is untouched. Release events stay the honest
 "may not be expressible at all": a completion pass that finds no deadline
 because there is none is not progress on them.
 
-### 9. A/B casts have nowhere to live
+### 11. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1555,7 +1683,7 @@ leg-label-shaped identity too, and a cast convention smuggled into a label would
 be reproduced by it as readily as by a skill. Same verdict either way -- the gap
 stays honest until stage runs come back into scope.
 
-### 10. Discover sort in the content head, plus the catalogue-count note
+### 12. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1594,7 +1722,7 @@ and an admin page, and never went near Discover, its sidebar, the filter sheet
 or the catalogue counts. Recorded only because this file's discipline is that a
 re-read leaves a mark whether or not it found anything.
 
-### 11. Name the destination on the sign-in bounce
+### 13. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1625,7 +1753,7 @@ renders through Jinja's escaping as ordinary content, never into an `on*`
 handler or an inline script (invariant 7). Different surface, same rule,
 already followed.
 
-### 12. The calendar roster's blind spots
+### 14. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1688,7 +1816,7 @@ but it does mean the second half of this entry ("promoter-named rounds are
 unreachable by prefix, and always will be") is now routed around rather than
 merely tolerated, which is a further argument for leaving it at `low`.
 
-### 13. Nothing caps the discovery review path
+### 15. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1757,7 +1885,7 @@ through the plan/apply screen), so it does not deserve an entry of its own --
 but if this one is ever picked up, the two pages want the same answer, and the
 cheap half of the fix here has an exact twin there.
 
-### 14. Nothing notices a calendar feed going quiet
+### 16. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
