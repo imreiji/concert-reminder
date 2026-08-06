@@ -132,6 +132,20 @@ async def test_a_plain_editor_pressing_it_anyway_gets_403(editor_client, monkeyp
     assert r.status_code == 403
 
 
+async def test_a_plain_editor_pressing_it_with_the_flag_off_still_gets_403(
+    editor_client, monkeypatch
+):
+    """Both gates refuse independently, so this combination is not a real
+    gap -- but it is the cheap check that neither gate quietly leans on the
+    other. `require_admin` is a route dependency, evaluated before the
+    handler body ever reads `settings.triage_enabled`, so a non-admin is
+    turned away on IDENTITY alone and never learns whether the flag is even
+    on."""
+    monkeypatch.setattr(settings, "triage_enabled", False)
+    r = editor_client.post("/concerts/import/pending/complete")
+    assert r.status_code == 403
+
+
 async def test_pressing_it_when_the_flag_is_off_404s(admin_client, monkeypatch):
     """The route itself must refuse, not just the template hiding the
     button -- an admin who bookmarks the URL on a deploy that has not

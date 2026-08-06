@@ -672,10 +672,20 @@ async def import_pending_complete(
     button does. 303, never 307 -- the POST must not be replayed against the
     page it lands on.
 
-    Registered BEFORE `import_pending_detail` (`GET /pending/{pending_id}`) --
-    `/pending/complete` would otherwise never be reached, since FastAPI tries
-    path templates in registration order and `pending_id: int` would 422 on
-    "complete" rather than falling through to this route.
+    Registered BEFORE `import_pending_detail` (`GET /pending/{pending_id}`),
+    the same defensive convention as `imports.py`-before-`concerts.py` in
+    `web/app.py` (CLAUDE.md): a literal path registered ahead of a template
+    that could swallow it. Checked directly rather than assumed -- for THIS
+    pair it is not actually load-bearing today: this route is POST-only and
+    `import_pending_detail` is GET-only, so a POST to `/pending/complete`
+    only ever scores a method-mismatch partial against the templated route,
+    and Starlette keeps scanning past a partial for a full match wherever it
+    sits in the list (confirmed by moving this route after
+    `import_pending_detail` and `import_pending_discard` and rerunning
+    tests/test_draft_completion_web.py -- all 11 still passed). The ordering
+    is kept anyway because it costs nothing and is what keeps a future
+    generic `POST /pending/{pending_id}` route -- which WOULD collide --
+    safe by construction, without anyone having to re-derive this.
     """
     if not settings.triage_enabled:
         raise HTTPException(status_code=404)
