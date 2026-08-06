@@ -38,6 +38,7 @@ from app.db.models import (
     DeliveryLog,
     DiscoveredEvent,
     DiscoveryState,
+    FetchDomain,
     LegOptOut,
     Notification,
     OpsCheckState,
@@ -83,7 +84,8 @@ from app.domain.types import (
 )
 from app.domain.upgrades import is_upgrade_eligible
 from app.domain.yaml_export import YamlDay, YamlRound, concert_to_yaml
-from app.domain.yaml_import import DraftBatch
+from app.domain.yaml_import import DraftBatch, DraftError, parse_draft
+from app.fetching import _normalize_host
 from app.i18n import N_, get_locale, gettext_in, loc_field
 from app.i18n import gettext as _
 
@@ -7816,33 +7818,39 @@ async def discovery_status(session: AsyncSession) -> DiscoveryState | None:
 
 
 async def request_triage(
-    session: AsyncSession, now: datetime, requested_by: int
+    session: AsyncSession, now: datetime, requested_by: int, kind: str = "classify"
 ) -> TriageRun:
-    """Ask for a triage pass, or hand back the one already waiting.
+    """Ask for a run of `kind`, or hand back the one of that kind already waiting.
 
-    A REQUEST, not a run -- same reasoning as request_sweep: an LLM call over
-    the whole discovery queue is too slow for an HTTP request to hold, so this
-    writes a row the scheduler's next tick picks up. Idempotent while one is
-    still `status="requested"` so a double-click (or a retried POST) queues
-    exactly one pass rather than one per press; once a run starts, moves past
-    "requested", or fails, the NEXT request is free to make a new row.
+    Idempotent PER KIND, not globally: the classify button and the completion
+    button are two different asks, and a completion request arriving while a
+    classify run is still queued must make its own row rather than silently
+    returning -- and re-rendering as -- the other button's pending run.
     """
-    pending = await pending_triage_run(session)
+    pending = await pending_triage_run(session, kind=kind)
     if pending is not None:
         return pending
-    run = TriageRun(requested_at=now, requested_by=requested_by)
+    run = TriageRun(requested_at=now, requested_by=requested_by, kind=kind)
     session.add(run)
     await session.flush()
     return run
 
 
-async def pending_triage_run(session: AsyncSession) -> TriageRun | None:
-    """The oldest run still waiting to be picked up, or None."""
+async def pending_triage_run(
+    session: AsyncSession, kind: str | None = None
+) -> TriageRun | None:
+    """The oldest run still waiting to be picked up, or None.
+
+    `kind=None` means any kind, which is what the SCHEDULER asks: one tick
+    runs one run, so the two kinds serialize against each other by
+    construction. A button asks for its own kind, to render its own
+    disabled state.
+    """
+    query = select(TriageRun).where(TriageRun.status == "requested")
+    if kind is not None:
+        query = query.where(TriageRun.kind == kind)
     return (await session.execute(
-        select(TriageRun)
-        .where(TriageRun.status == "requested")
-        .order_by(TriageRun.id)
-        .limit(1)
+        query.order_by(TriageRun.id).limit(1)
     )).scalar_one_or_none()
 
 
@@ -7894,3 +7902,130 @@ async def pending_draft_texts(session: AsyncSession) -> list[str]:
         .where(PendingDraft.committed_at.is_(None), PendingDraft.discarded_at.is_(None))
     )).scalars().all()
     return list(rows)
+
+
+# -- AI draft completion (phase 2) ----------------------------------------
+
+
+async def note_fetch_domain(
+    session: AsyncSession, host: str, url: str, now: datetime
+) -> FetchDomain:
+    """Record that something wanted to fetch `host`, and hand back its row.
+
+    The SINGLE write path that creates a `FetchDomain`, and the only place the
+    host is normalized -- two spellings of one host must never become two rows
+    with two different verdicts. Normalization reuses `fetching._normalize_host`
+    rather than a second `.strip().lower()`: that is the EXACT function
+    `ApprovedPublicHosts.check_async` runs on a host before calling
+    `is_approved`, so this store and that read must agree byte-for-byte or an
+    approval recorded here silently fails to match a lookup done there (or
+    vice versa) -- see task 5's contract note. A host `_normalize_host` cannot
+    encode (bad IDNA) falls back to a plain strip+lower: such a host can never
+    pass the fetch guard either way (it raises there too), so this is only
+    about giving the approval screen something readable to show, not about
+    matching a future lookup.
+    An existing row (pending, approved OR declined) comes back untouched:
+    re-noting must never reopen a decision a human already made, and must
+    never overwrite `first_seen_url`, which is what the approver was actually
+    told about.
+    """
+    try:
+        host = _normalize_host(host)
+    except ValueError:
+        host = host.strip().lower()
+    existing = (await session.execute(
+        select(FetchDomain).where(FetchDomain.host == host)
+    )).scalar_one_or_none()
+    if existing is not None:
+        return existing
+    row = FetchDomain(host=host, first_seen_at=now, first_seen_url=url[:1000])
+    session.add(row)
+    await session.flush()
+    return row
+
+
+async def approved_fetch_hosts(session: AsyncSession) -> set[str]:
+    """Every host an admin has approved. Loaded once per run and closed over
+    by the fetch policy, so a run makes one query rather than one per draft."""
+    rows = (await session.execute(
+        select(FetchDomain.host).where(FetchDomain.approved_at.is_not(None))
+    )).scalars().all()
+    return set(rows)
+
+
+async def fetch_domain_rows(session: AsyncSession) -> list[FetchDomain]:
+    """Every recorded host, pending first and newest first within that --
+    the approval screen's whole content."""
+    rows = await session.execute(
+        select(FetchDomain).order_by(
+            FetchDomain.approved_at.is_not(None) | FetchDomain.declined_at.is_not(None),
+            FetchDomain.first_seen_at.desc(),
+        )
+    )
+    return list(rows.scalars())
+
+
+async def pending_fetch_domain_count(session: AsyncSession) -> int:
+    """How many hosts are waiting on a human. Drives the callout on the
+    pending-drafts page: a blocked completion run has to be discoverable from
+    where the button was pressed, not only from an admin page nobody opened."""
+    return (await session.execute(
+        select(func.count())
+        .select_from(FetchDomain)
+        .where(FetchDomain.approved_at.is_(None), FetchDomain.declined_at.is_(None))
+    )).scalar_one()
+
+
+async def decide_fetch_domain(
+    session: AsyncSession, domain_id: int, approve: bool, now: datetime, decided_by: int
+) -> bool:
+    """Approve or decline one host. False when it is unknown or already
+    decided -- the same double-submit rule `discard_pending_draft` follows, so
+    a refreshed POST cannot flip a verdict."""
+    row = await session.get(FetchDomain, domain_id)
+    if row is None or row.approved_at is not None or row.declined_at is not None:
+        return False
+    if approve:
+        row.approved_at = now
+    else:
+        row.declined_at = now
+    row.decided_by = decided_by
+    await session.flush()
+    return True
+
+
+async def completion_candidates(session: AsyncSession, user_id: int) -> list[PendingDraft]:
+    """This user's open drafts that an AI completion pass should try.
+
+    Three filters, and the third is the containment rule: still open, no rounds
+    yet, and not already attempted. `completion_yaml` is written only when an
+    LLM call actually happened, so a draft skipped for a missing URL, an
+    unapproved domain or a dead fetch stays a candidate and the next press
+    retries it once the reason is fixed.
+
+    "No rounds yet" is decided by parsing, because that is where the answer
+    lives -- the pending list already re-parses every row for its counts, and
+    caching a flag at write time would freeze today's parser against
+    tomorrow's (PendingDraft's own reason for storing text, not a parse).
+    """
+    rows = await session.execute(
+        select(PendingDraft)
+        .where(
+            PendingDraft.created_by == user_id,
+            PendingDraft.committed_at.is_(None),
+            PendingDraft.discarded_at.is_(None),
+            PendingDraft.completion_yaml == "",
+        )
+        .order_by(PendingDraft.id)
+    )
+    candidates = []
+    for row in rows.scalars():
+        try:
+            if not parse_draft(row.draft_text).rounds:
+                candidates.append(row)
+        except DraftError:
+            # A row that no longer parses cannot be completed, and is already
+            # surfaced as "couldn't be re-read" on the list. Skipping it here
+            # keeps one unreadable row from costing the batch.
+            continue
+    return candidates
