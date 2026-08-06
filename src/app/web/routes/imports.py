@@ -29,10 +29,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+import yaml
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import llm
 from app.config import settings
 from app.db.models import PendingDraft, Round
 from app.db.service import (
@@ -59,7 +61,9 @@ from app.domain.draft import ParsedConcert
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import ITEM_SALE_KINDS, ConcertKind, RoundKind
 from app.domain.yaml_import import DraftError, parse_draft, parse_drafts
+from app.draft_completion import complete_one
 from app.fetching import FetchFailed, HostNotAllowed, PinnedHost, fetch_html
+from app.llm import LlmError
 from app.web.auth import SessionUser, require_admin, require_editor
 from app.web.forms import form_url, require_variants
 from app.web.routes.concerts import (
@@ -340,6 +344,16 @@ async def import_preview(
             # The URL-scrape path has no pending-draft workflow -- only a
             # pasted draft can be part of a multi-draft batch.
             "pending_id": None,
+            # No completion record on this path (there is no PendingDraft row
+            # for it to hang off), and no paste-fallback box either -- see
+            # _draft_preview_response's own version of these three keys.
+            # Passed explicitly rather than left to Jinja Undefined: the round
+            # loop below evaluates `evidence|length` unconditionally, and
+            # `length` on Undefined raises rather than reading as empty.
+            "evidence": [],
+            "completion_rejected": [],
+            "completion_source": "",
+            "can_complete": False,
         },
     )
 
@@ -350,6 +364,7 @@ async def _draft_preview_response(
     session: AsyncSession,
     parsed: ParsedConcert,
     pending_id: int | None = None,
+    completion: dict | None = None,
 ) -> HTMLResponse:
     """Build the `import_preview.html` render for an already-parsed draft.
 
@@ -360,6 +375,9 @@ async def _draft_preview_response(
     the parsing itself (each caller gets `parsed` its own way) and plus
     `pending_id`, which rides through as a hidden field on the preview form so
     `import_commit` knows which row to stamp on a successful commit.
+
+    `completion` is the parsed `PendingDraft.completion_yaml` record, when one
+    exists -- only `import_pending_detail` ever has one to pass.
     """
     picker = await tag_picker_context(session)
     venue_tags = await all_venue_tags(session)
@@ -441,6 +459,23 @@ async def _draft_preview_response(
                 "pick it by hand"
             )
 
+    # `completion_yaml` is written only by `complete_one`, which always emits
+    # a list for `evidence`/`rejected` and a string for `source_url` -- but a
+    # value read back off the DB is still data, not a promise, and this
+    # render must never 500 on a shape the writer didn't intend. Wrong-typed
+    # leaves fall back to "nothing to show" exactly like a YAML parse failure
+    # does one call up in `import_pending_detail`.
+    completion = completion or {}
+    completion_evidence = completion.get("evidence")
+    if not isinstance(completion_evidence, list):
+        completion_evidence = []
+    completion_rejected = completion.get("rejected")
+    if not isinstance(completion_rejected, list):
+        completion_rejected = []
+    completion_source = completion.get("source_url")
+    if not isinstance(completion_source, str):
+        completion_source = ""
+
     return templates.TemplateResponse(
         request,
         "import_preview.html",
@@ -481,6 +516,18 @@ async def _draft_preview_response(
             # falls through to its unset-pending_id behaviour exactly as
             # before this feature existed.
             "pending_id": pending_id,
+            # What an AI completion pass read, when one ran on this row. None
+            # for a fresh paste and for a draft nobody completed, which is what
+            # keeps the round card's output byte-identical on every other
+            # surface. `evidence` is positional -- index i belongs to round i,
+            # because both lists were written by the same merge.
+            "evidence": completion_evidence,
+            "completion_rejected": completion_rejected,
+            "completion_source": completion_source,
+            # Gates the paste-fallback box exactly like the batch Complete
+            # button on the pending list (import_pending_list) -- same
+            # spelling, so the two controls agree on who gets to spend a call.
+            "can_complete": settings.triage_enabled and user.is_admin,
         },
     )
 
@@ -738,7 +785,18 @@ async def import_pending_detail(
             "import_form.html",
             _import_form_context(user, error=str(e), lang_next_url="/concerts/import"),
         )
-    return await _draft_preview_response(request, user, session, parsed, pending_id=row.id)
+    completion = None
+    if row.completion_yaml:
+        try:
+            loaded = yaml.safe_load(row.completion_yaml)
+            completion = loaded if isinstance(loaded, dict) else None
+        except yaml.YAMLError:
+            # Proofreading scaffolding, not data anything depends on: a record
+            # that no longer parses costs the quotes, never the preview.
+            completion = None
+    return await _draft_preview_response(
+        request, user, session, parsed, pending_id=row.id, completion=completion
+    )
 
 
 @router.post("/pending/{pending_id}/discard")
@@ -756,6 +814,57 @@ async def import_pending_discard(
     await discard_pending_draft(session, pending_id, datetime.now(UTC))
     await session.commit()
     return RedirectResponse("/concerts/import/pending", status_code=303)
+
+
+# A pasted page is capped well below Starlette's hard 1MB per-field limit,
+# which applies to EVERY Form field whatever an app constant says: Japanese
+# costs 3 bytes a character in UTF-8, so 150k characters is ~450KB and stays
+# clear of a wall that would otherwise arrive as an opaque failure.
+MAX_PASTED_PAGE_CHARS = 150_000
+
+
+@router.post("/pending/{pending_id}/complete")
+async def import_pending_complete_one(
+    pending_id: int,
+    page_text: str = Form(""),
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Complete ONE draft from a page the operator pasted.
+
+    The fallback for every way the automatic half declines -- no URL in the
+    draft, a host nobody approved, a dead fetch, a page rendered by JavaScript.
+    It needs no fetch and no approval, which is what makes it safe to keep the
+    automatic half narrow.
+
+    Inline rather than queued, unlike the batch button: one LLM call is a
+    bounded wait in a request. It runs the SAME `complete_one` the batch runner
+    does, so the two cannot drift on what counts as a grounded round.
+    """
+    if not settings.triage_enabled:
+        raise HTTPException(status_code=404)
+    row = await _own_open_pending(session, pending_id, user)
+    if row is None:
+        raise HTTPException(status_code=404)
+    text = page_text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="paste the ticket page's text first")
+    if len(text) > MAX_PASTED_PAGE_CHARS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"that page is longer than {MAX_PASTED_PAGE_CHARS} characters",
+        )
+    try:
+        # llm.chat looked up HERE, at call time, rather than left to
+        # complete_one's own default -- a Python default argument binds its
+        # value once, at complete_one's OWN module-import time, so relying on
+        # it would freeze this route to whatever `llm.chat` was before any
+        # test (or a future call-site) ever got a chance to swap it.
+        await complete_one(session, row, text, "(pasted by hand)", llm_chat=llm.chat)
+    except LlmError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await session.commit()
+    return RedirectResponse(f"/concerts/import/pending/{pending_id}", status_code=303)
 
 
 SKILL_DIST_DIR = Path(__file__).resolve().parents[1] / "skill_dist" / "add-concert"

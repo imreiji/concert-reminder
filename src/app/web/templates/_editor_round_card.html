@@ -30,13 +30,20 @@
       requires_value          the currently-bound target's id/round_key
       requires_options        [(val, label), ...] item-kind rounds already on
                               this concert (edit page only; new/import build
-                              their options client-side) -#}
+                              their options client-side)
+      evidence                {fieldname: quote} an AI completion pass read
+                              for THIS round's timestamps, or none. Only
+                              import_preview's pending-detail render ever
+                              passes it -- concert_new and concert_edit never
+                              do, which is what keeps their cards
+                              byte-identical to before this feature existed. -#}
 {% macro round_card(round_id="", label="", label_en="", label_zh="",
                     kind=none, opens="", closes="", results="", payment="",
                     url="", notes="", leg_value="", leg_selected=none,
                     with_qualifiers=True, qual_value="", qual_selected=none,
                     self_id=none, kind_value="",
-                    round_key="", requires_value="", requires_options=none) %}
+                    round_key="", requires_value="", requires_options=none,
+                    evidence=none) %}
 <div class="redit" data-variant-scope>
   <input type="hidden" name="round_id" value="{{ round_id }}">
   <input type="hidden" name="round_key" value="{{ round_key }}">
@@ -100,5 +107,18 @@
     <input name="round_url" type="url" placeholder="{{ _('Apply URL (optional)') }}" value="{{ url }}">
     <input name="round_notes" maxlength="300" placeholder="{{ _('Notes (optional)') }}" value="{{ notes }}">
   </div>
+  {#- What an AI completion pass quoted for this round's timestamps, when one
+      ran. Optional and absent everywhere else: concert_new and concert_edit
+      pass nothing, so their cards render exactly as they did before this
+      feature existed. `.edgecard` because it is ongoing state rather than
+      something needing attention (the two-shape callout grammar). -#}
+  {% if evidence %}
+  <div class="edgecard ok evidence-quote">
+    <p class="dim tiny">{{ _("Read from the ticket page:") }}</p>
+    {% for fieldname, quote in evidence.items() %}
+    <p class="tiny"><b>{{ fieldname }}</b> — {{ quote }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 {% endmacro %}

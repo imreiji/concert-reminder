@@ -107,6 +107,22 @@
       for a whole-event round. Times are JST.{% endtrans %}</p>
   </div>
 
+  {#- What an AI completion pass proposed but could not ground on the page it
+      read -- a real deadline the checker could not quote is reported here
+      rather than silently dropped, since a quiet loss is exactly as harmful
+      as a quiet invention. `.banner` because this needs attention (the
+      two-shape callout grammar), unlike the per-round `.edgecard` below. -#}
+  {% if completion_rejected %}
+  <div class="banner warn">
+    <p>{% trans %}The AI proposed these and I could not find them on the page — check them by
+      hand before trusting them:{% endtrans %}</p>
+    <ul>{% for reason in completion_rejected %}<li class="tiny">{{ reason }}</li>{% endfor %}</ul>
+    {% if completion_source %}
+    <p class="tiny">{{ _("Source:") }} <a href="{{ completion_source }}" rel="nofollow noopener">{{ completion_source }}</a></p>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <div id="round-rows" class="row-list">
     {#- No qualifier chips here (with_qualifiers=False): a parsed import has no
         saved rounds a nested UPGRADE round could qualify against. Parsed rounds
@@ -114,7 +130,14 @@
         leg_keys_selected.
         round_key/requires_value come off the parsed round itself: the route
         stamps r.round_key ("r0", "r1", ...) and resolves any requires: label
-        to another round's round_key as r.requires_key. -#}
+        to another round's round_key as r.requires_key.
+        evidence is POSITIONAL against parsed.rounds -- index i is round i,
+        because complete_one wrote both lists together off the same merge.
+        Bounds-checked rather than indexed bare: an operator may have added or
+        removed a round on this preview since the completion pass ran (the
+        rows here are re-parsed from draft_text on every GET), which would
+        otherwise misalign the list against a round it was never read for, or
+        index past its end. -#}
     {% for r in parsed.rounds %}
     {{ round_card(
         label=r.label, label_en=r.label_en or '', label_zh=r.label_zh or '',
@@ -125,7 +148,8 @@
         leg_value=r.leg_keys, leg_selected=r.leg_keys_selected or none,
         with_qualifiers=False,
         round_key=r.round_key, requires_value=r.requires_key,
-        requires_options=requires_options) }}
+        requires_options=requires_options,
+        evidence=(evidence[loop.index0] if evidence|length > loop.index0 else none)) }}
     {% else %}
     <p class="dim tiny" data-no-rounds>{{ _("No rounds yet — add the first one below.") }}</p>
     {% endfor %}
@@ -213,6 +237,26 @@
 
   <button class="btn">{{ _("Create event") }}</button>
 </form>
+{#- Outside the main form on purpose, and necessarily so: the rounds section
+    this control logically belongs beside sits INSIDE the form above (it runs
+    from the ebar down through the Tags fold), so the only way to give this
+    its own <form> without nesting one inside another -- invalid HTML the
+    browser silently drops -- is to place it after the form closes. Gated
+    exactly like the pending list's batch Complete button
+    (settings.triage_enabled and user.is_admin, computed once as
+    can_complete), so this box exists only where that one does: a fresh /draft
+    or /preview render has no pending_id to complete against. -#}
+{% if pending_id and can_complete %}
+<details class="fold" data-fold="paste-page">
+  <summary>{{ _("Fill rounds from a page I paste") }}</summary>
+  <form method="post" action="/concerts/import/pending/{{ pending_id }}/complete">
+    <p class="dim tiny">{% trans %}Open the official ticket page, select all, and paste it here. Only
+      deadlines quoted from what you paste will be kept.{% endtrans %}</p>
+    <textarea name="page_text" rows="6" style="width:100%"></textarea>
+    <button class="btn" type="submit">{{ _("Read this page") }}</button>
+  </form>
+</details>
+{% endif %}
 {#- Outside the form on purpose: the dialog's v_* inputs are read by hand
     and must not post on the commit. Same placement concert_new.html uses. -#}
 {% include "_variant_guard.html" %}
