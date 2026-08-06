@@ -40,13 +40,29 @@ one quoted source line per timestamp field it filled. Verification is pure code
 (`domain/round_evidence.py`) and drops any round where:
 
 - a timestamp field has no quote;
-- a quote does not occur in the page text (compared whitespace-normalized);
-- the timestamp's own digits do not occur inside its quote (compared after
-  normalizing full-width digits to ASCII and 年/月/日/時/分 to separators) — so a
-  quote cannot be some *other* real line from the page;
+- a quote does not occur in the page text (compared whitespace-normalized, with
+  full-width digits folded on both sides);
+- the timestamp's own digits do not occur inside its quote **contiguously and in
+  order** — month immediately followed by day, then hour immediately followed by
+  minute, the whole date→time span within 60 characters;
+- the quote is longer than 200 characters (quoting half the page is not
+  evidence, and its own reason says so);
 - the anchors are out of order (opens ≤ closes ≤ results ≤ payment, over
-  whichever are present);
+  whichever are present, compared as parsed tuples rather than as text);
+- the date is not a real calendar date, or its year is implausible;
 - an `applies_to` label names a leg the draft does not have.
+
+**The locality requirement is an owner ruling (2026-08-05), made after a review
+defeated the rule this spec first described.** A bare "do the timestamp's digits
+appear somewhere in the quote" test accepts far too much: against a correct quote
+of `申込締切 2026年1月10日(土)23:59` it also validates a claimed 01:00 (the hour
+matches the `1` of `1月`) and a claimed 10:00 (the hour matches the day), so a
+model that reads the right line and writes the wrong time sails through — and a
+model that simply quotes the whole page validates any timestamp assembled from
+digits anywhere on it. Contiguity is what makes the quote evidence *for this
+timestamp* rather than a bag of numbers. The accepted cost is false rejections on
+some phrasings; a rejection is visible, carries its reason, and costs one round
+typed by hand, which is the trade this whole feature is built around.
 
 The check runs against **exactly the text the model was given**. If the model
 sees HTML and evidence is checked against extracted text — or the reverse — the
