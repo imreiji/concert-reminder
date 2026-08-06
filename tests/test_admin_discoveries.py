@@ -1664,6 +1664,44 @@ async def test_prune_form_prefills_from_a_triage_run(client, db):
     assert _prune_textarea(r.text).strip() == ""
 
 
+async def test_a_pending_completion_run_does_not_disable_the_triage_button(
+    client, db, monkeypatch
+):
+    """A queued completion run (kind="complete") must not grey out THIS
+    page's "AI triage" button -- pending_triage_run must be asked for
+    kind="classify" here, the mirror of the fix import_pending_list's own
+    completion status line already had. Getting this backwards means
+    pressing one button disables the other."""
+    monkeypatch.setattr(settings, "triage_enabled", True)
+    await _seed_triage_run(client, requested_by=ADMIN_ID, kind="complete")
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "disabled" not in _triage_button(body)
+
+
+async def test_a_finished_completion_run_does_not_render_as_a_triage_result(
+    client, db, monkeypatch
+):
+    """A completion run's classify columns (dismissals_proposed/
+    drafts_created) are NULL -- reading it here without filtering by kind
+    would print a confident "0 dismissals proposed, 0 drafts queued" for a
+    pass that never ran, while attributing its skipped/token counts to the
+    wrong run entirely. latest_triage_run must be asked for kind="classify"."""
+    monkeypatch.setattr(settings, "triage_enabled", True)
+    await _seed_triage_run(
+        client,
+        status="done",
+        requested_by=ADMIN_ID,
+        kind="complete",
+        skipped=7,
+        tokens_in=500,
+        tokens_out=100,
+    )
+    login_as(client, ADMIN_ID, "reiji")
+    body = client.get("/admin/discoveries").text
+    assert "Last AI triage" not in body
+
+
 async def test_triage_post_requires_admin(client):
     """Admin-only on the write half, mirroring the sweep button: an LLM pass
     over the whole queue costs real money and is not an editor's call."""

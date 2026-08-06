@@ -336,10 +336,12 @@ async def tick(bot) -> int:
                     await session.commit()
                     log.info(
                         "completion run %d: %d drafts completed, %d rounds added, "
-                        "%d rejected, %d waiting on a domain, %d skipped",
+                        "%d rejected, %d waiting on a domain, %d skipped%s",
                         triage_run_id, completion_report.completed,
                         completion_report.rounds_added, completion_report.rounds_rejected,
                         completion_report.blocked_domains, completion_report.skipped,
+                        " (stopped at its time budget)"
+                        if completion_report.budget_exhausted else "",
                     )
                 else:
                     triage_report = await run_triage(session, triage_run, now)

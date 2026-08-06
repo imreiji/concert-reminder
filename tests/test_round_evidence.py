@@ -305,6 +305,37 @@ def test_a_nonexistent_calendar_date_is_rejected():
     assert "calendar date" in v.rejected[0]
 
 
+# -- Unverified evidence keys never survive acceptance -----------------------
+
+
+def test_an_extra_unverified_evidence_key_is_stripped_from_an_accepted_round():
+    # The round only carries apply_closes_jst -- results_jst is not one of its
+    # TIMESTAMP_FIELDS, so _reject_reason never looks at (and never verifies)
+    # whatever the model wrote for it. That entry must not survive onto the
+    # accepted round: rendering it under "Read from the ticket page:" would
+    # present an unchecked, possibly fabricated quote as page-sourced fact.
+    r = _round(
+        evidence={
+            "results_jst": "当落発表は2026年2月30日(未定) ← never on the page",
+        }
+    )
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    assert len(v.accepted) == 1
+    assert v.accepted[0].evidence == {"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"}
+    assert "results_jst" not in v.accepted[0].evidence
+
+
+def test_evidence_for_a_field_the_round_does_not_carry_is_dropped_even_when_the_round_has_none():
+    # A round with only apply_closes_jst set, whose evidence mapping ALSO
+    # carries an entry for a field (payment_deadline_jst) the round's data
+    # doesn't have at all -- not merely blank. That key is not in
+    # TIMESTAMP_FIELDS-present-on-this-round, so it must be filtered too.
+    r = _round(evidence={"payment_deadline_jst": "made up, not on the page"})
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    assert len(v.accepted) == 1
+    assert set(v.accepted[0].evidence) == {"apply_closes_jst"}
+
+
 # -- Item 6 & 7: full-width folding ------------------------------------------
 
 

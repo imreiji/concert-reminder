@@ -115,6 +115,45 @@ async def test_a_classify_run_still_goes_to_run_triage(maker, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_a_budget_exhausted_completion_run_says_so_in_the_log(maker, monkeypatch, caplog):
+    """The sibling sweep logs its own budget exhaustion (" (stopped at its
+    time budget)" in the discovery sweep's own log line) so an operator can
+    tell a run that hit its 240s wall from one that finished the queue --
+    the completion log line must say the same thing, or a truncated run is
+    indistinguishable from a finished one in the logs."""
+    async def fake_run_completion(session, run, now, **kw):
+        run.status = "done"
+        return CompletionReport(completed=3, budget_exhausted=True)
+
+    monkeypatch.setattr(loop_mod, "run_completion", fake_run_completion)
+    monkeypatch.setattr(settings, "triage_enabled", True)
+
+    await _request(maker, kind="complete")
+    with caplog.at_level("INFO", logger="app.scheduler.loop"):
+        await loop_mod.tick(FakeBot())
+
+    [line] = [r.getMessage() for r in caplog.records if r.getMessage().startswith("completion run")]
+    assert "stopped at its time budget" in line
+
+
+@pytest.mark.asyncio
+async def test_a_finished_completion_run_says_nothing_about_a_budget(maker, monkeypatch, caplog):
+    async def fake_run_completion(session, run, now, **kw):
+        run.status = "done"
+        return CompletionReport(completed=1, budget_exhausted=False)
+
+    monkeypatch.setattr(loop_mod, "run_completion", fake_run_completion)
+    monkeypatch.setattr(settings, "triage_enabled", True)
+
+    await _request(maker, kind="complete")
+    with caplog.at_level("INFO", logger="app.scheduler.loop"):
+        await loop_mod.tick(FakeBot())
+
+    [line] = [r.getMessage() for r in caplog.records if r.getMessage().startswith("completion run")]
+    assert "budget" not in line
+
+
+@pytest.mark.asyncio
 async def test_a_dead_completion_run_is_marked_failed_on_a_cleaned_transaction(maker, monkeypatch):
     # The failure mode this exists for: a rollback restores the row to
     # "requested", and a dead run then re-fires fifteen fetches and fifteen

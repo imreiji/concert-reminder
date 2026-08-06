@@ -173,6 +173,7 @@ async def complete_one(
     source_url: str,
     *,
     llm_chat=llm.chat,
+    llm_timeout: float | None = None,
 ) -> tuple[int, int, int, int]:
     """One draft, one call: propose rounds, keep the grounded ones.
 
@@ -180,13 +181,27 @@ async def complete_one(
     drift on what counts as a grounded round -- the fallback exists because the
     fetch declined, not because the rules are different when it does.
 
+    `llm_timeout` is None by default, which leaves `llm_chat` to its own
+    default (`llm.LLM_TIMEOUT_SECONDS`, 120s) -- right for `run_completion`'s
+    batch loop, which holds no HTTP request open. The paste route
+    (`import_pending_complete_one`, web/routes/imports.py) is the one caller
+    that passes a real value: that call sits inline in a request behind
+    Cloudflare, whose proxy times out at 100s, so it needs a shorter,
+    explicit timeout to fail legibly instead of returning the operator a 524
+    with the call already billed.
+
     Returns (rounds_added, rounds_rejected, tokens_in, tokens_out) and writes
     `completion_yaml` whether or not any round survived: the call was paid for,
     and a second press must not pay for it again -- including when the reply
     or the stored draft turns out to be unusable (see the try/except below).
     """
     page = normalize_page_text(page_text)
-    reply = await llm_chat(*completion_prompt(row.draft_text, page))
+    system, user = completion_prompt(row.draft_text, page)
+    reply = (
+        await llm_chat(system, user, timeout=llm_timeout)
+        if llm_timeout is not None
+        else await llm_chat(system, user)
+    )
     try:
         proposed, warnings = parse_completion_response(reply.text)
         for warning in warnings:

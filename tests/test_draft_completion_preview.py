@@ -299,7 +299,10 @@ async def test_the_paste_fold_wraps_its_content_in_fold_body(
     has a border and none). Without it the paragraph/textarea/button sit
     flush against the border."""
     monkeypatch.setattr("app.config.settings.triage_enabled", True)
-    row = await _seed(session, admin_user_id)
+    # NOT the default COMPLETED seed -- that already has a round, and the
+    # fold is now hidden entirely for such a draft (see
+    # test_the_paste_fold_is_hidden_when_the_draft_already_has_rounds).
+    row = await _seed(session, admin_user_id, draft_text="title: x\nperformances: []\nrounds: []\n")
     body = admin_client.get(f"/concerts/import/pending/{row.id}").text
     m = re.search(
         r'<details class="fold" data-fold="paste-page">.*?</details>', body, re.DOTALL
@@ -359,6 +362,38 @@ async def test_pasting_a_page_completes_the_draft(
 
 
 @pytest.mark.asyncio
+async def test_the_paste_route_calls_the_model_with_a_timeout_under_the_cloudflare_wall(
+    admin_client, session, admin_user_id, monkeypatch
+):
+    """complete_one's LLM call sits inline in THIS request, behind
+    Cloudflare's ~100s proxy timeout -- a slower call returns the operator a
+    524 with the call already billed and nothing to show for it. This one
+    call site must pass an explicit timeout with real margin under that
+    wall; the batch runner keeps llm.chat's own 120s default (see
+    test_llm_timeout_defaults_to_none_and_is_not_passed_to_llm_chat in
+    test_draft_completion_run.py)."""
+    from app.llm import LlmReply
+
+    monkeypatch.setattr("app.config.settings.triage_enabled", True)
+    seen_kwargs = {}
+
+    async def fake_chat(system, user, **kw):
+        seen_kwargs.update(kw)
+        return LlmReply(text="rounds: []\n", tokens_in=1, tokens_out=1)
+
+    monkeypatch.setattr("app.draft_completion.llm.chat", fake_chat)
+    row = await _seed(session, admin_user_id, draft_text="title: x\nperformances: []\nrounds: []\n")
+    r = admin_client.post(
+        f"/concerts/import/pending/{row.id}/complete",
+        data={"page_text": "some ticket page text"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert "timeout" in seen_kwargs
+    assert 0 < seen_kwargs["timeout"] < 100
+
+
+@pytest.mark.asyncio
 async def test_an_oversized_paste_is_refused_before_any_call(
     admin_client, session, admin_user_id, monkeypatch
 ):
@@ -384,6 +419,45 @@ async def test_an_empty_paste_is_refused(admin_client, session, admin_user_id, m
     r = admin_client.post(
         f"/concerts/import/pending/{row.id}/complete",
         data={"page_text": "   "},  # whitespace-only, same as nothing pasted
+        follow_redirects=False,
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_the_paste_fold_is_hidden_when_the_draft_already_has_rounds(
+    admin_client, session, admin_user_id, monkeypatch
+):
+    """complete_one -> merge_rounds replaces `rounds` WHOLESALE. Offering the
+    fold on a draft that already carries a real ladder -- an agent-authored
+    draft off the add-concert skill, or one a human already filled in by
+    hand -- would let one press silently destroy it, with no undo
+    (`draft_text` is the only copy). COMPLETED (the default seed) already
+    has one round."""
+    monkeypatch.setattr("app.config.settings.triage_enabled", True)
+    row = await _seed(session, admin_user_id)
+    body = admin_client.get(f"/concerts/import/pending/{row.id}").text
+    assert 'data-fold="paste-page"' not in body
+
+
+@pytest.mark.asyncio
+async def test_the_route_refuses_a_paste_over_a_draft_that_already_has_rounds(
+    admin_client, session, admin_user_id, monkeypatch
+):
+    """The template gate alone is not a gate -- a bookmarked form, a
+    replayed request, or a second tab must not be able to overwrite a real
+    ladder by posting straight to the route. The model must never even be
+    called: this is refused before complete_one's first line."""
+    monkeypatch.setattr("app.config.settings.triage_enabled", True)
+
+    async def explode(*a, **kw):
+        raise AssertionError("a draft that already has rounds must never reach the model")
+
+    monkeypatch.setattr("app.draft_completion.llm.chat", explode)
+    row = await _seed(session, admin_user_id)  # COMPLETED: already has one round
+    r = admin_client.post(
+        f"/concerts/import/pending/{row.id}/complete",
+        data={"page_text": "some ticket page text"},
         follow_redirects=False,
     )
     assert r.status_code == 422
@@ -445,7 +519,10 @@ async def test_an_llm_error_from_the_provider_is_a_502_not_a_traceback(
         raise LlmError("the provider returned a non-200 response")
 
     monkeypatch.setattr("app.draft_completion.llm.chat", fails)
-    row = await _seed(session, admin_user_id)
+    # NOT the default COMPLETED seed -- that already has a round, and would
+    # now be refused by the already-has-rounds guard (see the paired 422
+    # tests below) before the mocked provider failure is ever reached.
+    row = await _seed(session, admin_user_id, draft_text="title: x\nperformances: []\nrounds: []\n")
     r = admin_client.post(
         f"/concerts/import/pending/{row.id}/complete",
         data={"page_text": "some page text"},

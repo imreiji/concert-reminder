@@ -849,6 +849,42 @@ async def import_pending_discard(
 # clear of a wall that would otherwise arrive as an opaque failure.
 MAX_PASTED_PAGE_CHARS = 150_000
 
+# llm.chat's own default (llm.LLM_TIMEOUT_SECONDS, 120s) is fine for the
+# batch runner (run_completion) -- it holds no HTTP request open. THIS call
+# site is different: it sits inline in a request behind Cloudflare, whose
+# proxy times out at 100s. A completion call that runs past that returns the
+# operator a 524 with the call already billed and the transaction outcome
+# unclear -- worse than a legible LlmError. 90s leaves real margin under the
+# 100s wall for the rest of this request's own work (the DB writes, the
+# redirect) without cutting off calls that would otherwise finish in time.
+PASTE_LLM_TIMEOUT_SECONDS = 90.0
+
+
+def _draft_already_has_rounds(draft_text: str) -> bool:
+    """True only when the stored draft parses AND already carries a real
+    ladder.
+
+    `complete_one` -> `merge_rounds` replaces the `rounds` key WHOLESALE, so
+    pressing "Read this page" on a draft that already has rounds -- an
+    agent-authored draft off the add-concert skill, or a human-typed one --
+    would destroy them and substitute whatever the (deliberately strict)
+    verifier grounds, with no undo: `draft_text` is the only copy. Mirrors
+    `completion_candidates`' own "no rounds yet" rule (same reasoning, same
+    file) so the automatic batch path and this human-driven fallback can
+    never disagree about which drafts are safe to run a completion pass over.
+
+    A draft that fails to parse at all answers False, deliberately: this
+    function only guards against overwriting a ladder it can actually SEE.
+    A row whose stored text is unreadable already fails downstream, inside
+    `complete_one`'s own `merge_rounds` call, as a recorded rejection rather
+    than a silent refusal here -- see
+    test_a_corrupted_stored_draft_redirects_and_is_not_rebilled.
+    """
+    try:
+        return bool(parse_draft(draft_text).rounds)
+    except DraftError:
+        return False
+
 
 @router.post("/pending/{pending_id}/complete")
 async def import_pending_complete_one(
@@ -873,6 +909,17 @@ async def import_pending_complete_one(
     row = await _own_open_pending(session, pending_id, user)
     if row is None:
         raise HTTPException(status_code=404)
+    if _draft_already_has_rounds(row.draft_text):
+        # The template hides the fold for exactly this row (see
+        # import_preview.html's `not parsed.rounds` gate), but that is
+        # presentation, not enforcement -- a bookmarked form, a replayed
+        # request, or a second tab must not be able to overwrite a real
+        # ladder that already exists here. No undo exists once merge_rounds
+        # has run.
+        raise HTTPException(
+            status_code=422,
+            detail="this draft already has rounds -- reading a page would replace them",
+        )
     text = page_text.strip()
     if not text:
         raise HTTPException(status_code=422, detail="paste the ticket page's text first")
@@ -887,7 +934,13 @@ async def import_pending_complete_one(
         # value once, at complete_one's OWN module-import time, so relying on
         # it would freeze this route to whatever `llm.chat` was before any
         # test (or a future call-site) ever got a chance to swap it.
-        await complete_one(session, row, text, "(pasted by hand)", llm_chat=llm.chat)
+        # llm_timeout=PASTE_LLM_TIMEOUT_SECONDS (see its own comment): this
+        # ONE call site is inline in a request behind Cloudflare's 100s proxy
+        # wall, unlike the batch runner, which keeps llm.chat's 120s default.
+        await complete_one(
+            session, row, text, "(pasted by hand)",
+            llm_chat=llm.chat, llm_timeout=PASTE_LLM_TIMEOUT_SECONDS,
+        )
     except LlmError as exc:
         # complete_one calls llm_chat as its very FIRST line, before any
         # write -- so a transport/provider failure here has flushed nothing,

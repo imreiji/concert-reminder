@@ -420,6 +420,11 @@ usual cause), open that draft and use **Fill rounds from a page I paste**:
 select all on the real page in a browser, paste, and the same verification
 rules apply to what you pasted. That path needs no fetch and no approval, so it
 also covers any host you would rather not put on the approved list.
+That box only offers itself on a draft with no rounds yet, and the route
+refuses the same case with a 422 - `merge_rounds` replaces a draft's rounds
+wholesale, so pasting a page over a draft that already has a real ladder
+(one an agent authored, or one you already typed by hand) would destroy it
+with no undo.
 
 ## Updating (every deploy after the first)
 

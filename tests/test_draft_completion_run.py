@@ -151,6 +151,47 @@ async def test_an_attempt_that_found_nothing_still_marks_the_draft_tried(session
     assert row.completion_yaml != ""
 
 
+async def test_llm_timeout_defaults_to_none_and_is_not_passed_to_llm_chat(session):
+    """`run_completion`'s batch loop never sets `llm_timeout` -- it holds no
+    HTTP request open, so it must keep llm.chat's own 120s default rather
+    than have some other value silently imposed on it. Confirmed by checking
+    `llm_chat` never received a `timeout` kwarg at all, not merely that it
+    received the "right" one -- a stray `timeout=None` reaching a real
+    provider client would be its own bug."""
+    seen_kwargs = {}
+
+    async def _chat(system, user, **kw):
+        seen_kwargs.update(kw)
+        return LlmReply(text=GOOD_REPLY, tokens_in=1, tokens_out=1)
+
+    row = await _seed(session)
+    await complete_one(
+        session, row, "1次先行抽選 申込締切 2026年1月10日(土)23:59",
+        "https://eplus.jp/x", llm_chat=_chat,
+    )
+    assert "timeout" not in seen_kwargs
+
+
+async def test_llm_timeout_when_given_is_threaded_to_llm_chat(session):
+    """The paste route's one call site (test_draft_completion_preview.py)
+    passes an explicit, shorter timeout so a slow call fails legibly before
+    Cloudflare's proxy wall does it for them, uncontrolled. This is the unit
+    half of that contract: complete_one must actually forward whatever value
+    it is given."""
+    seen_kwargs = {}
+
+    async def _chat(system, user, **kw):
+        seen_kwargs.update(kw)
+        return LlmReply(text=GOOD_REPLY, tokens_in=1, tokens_out=1)
+
+    row = await _seed(session)
+    await complete_one(
+        session, row, "1次先行抽選 申込締切 2026年1月10日(土)23:59",
+        "https://eplus.jp/x", llm_chat=_chat, llm_timeout=42.0,
+    )
+    assert seen_kwargs.get("timeout") == 42.0
+
+
 async def test_an_unapproved_host_is_never_fetched(session):
     row = await _seed(session)
     run = TriageRun(requested_at=NOW, requested_by=USER_ID, kind="complete")

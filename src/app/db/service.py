@@ -7854,11 +7854,22 @@ async def pending_triage_run(
     )).scalar_one_or_none()
 
 
-async def latest_triage_run(session: AsyncSession) -> TriageRun | None:
-    """The most recent run of any status, for an admin page's "last result"."""
-    return (await session.execute(
-        select(TriageRun).order_by(TriageRun.id.desc()).limit(1)
-    )).scalar_one_or_none()
+async def latest_triage_run(
+    session: AsyncSession, kind: str | None = None
+) -> TriageRun | None:
+    """The most recent run of `kind` (any status), for an admin page's
+    "last result".
+
+    `kind=None` means any kind -- there is no caller that actually wants
+    that today; every admin page reads its OWN kind's history, the same
+    reason `pending_triage_run` takes the same parameter (a completion run's
+    classify columns are NULL, and vice versa, so a kind-blind read renders
+    the wrong run's numbers under the other button's label).
+    """
+    query = select(TriageRun).order_by(TriageRun.id.desc())
+    if kind is not None:
+        query = query.where(TriageRun.kind == kind)
+    return (await session.execute(query.limit(1))).scalar_one_or_none()
 
 
 async def get_triage_run(session: AsyncSession, run_id: int) -> TriageRun | None:

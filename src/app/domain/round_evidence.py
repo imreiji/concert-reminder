@@ -60,6 +60,17 @@ proofreading scaffolding, stripped here as one of two layers (the draft
 parser downstream strips it again) because a key that must never reach a
 document committed into `concerts` should not depend on exactly one layer
 remembering to remove it.
+
+AN ACCEPTED ROUND'S `evidence` IS TRIMMED TO WHAT WAS ACTUALLY VERIFIED.
+Everything above checks the keys in TIMESTAMP_FIELDS a round itself carries --
+nothing else. A model's evidence mapping can carry MORE keys than that (a
+field the round doesn't have, or one it invented outright), and those extra
+entries are never compared against the page at all. The preview renders
+`evidence` under a heading that says "Read from the ticket page:", so an
+unverified key surviving there would be exactly the fabricated-but-trusted
+quote this whole module exists to catch -- `verify_rounds` drops every
+evidence key outside the verified set before an accepted round's `evidence`
+ever leaves this module.
 """
 
 from __future__ import annotations
@@ -245,6 +256,23 @@ def _quote_carries_stamp(
     return False
 
 
+def _present_timestamp_fields(data: dict) -> set[str]:
+    """Which of TIMESTAMP_FIELDS this round's `data` actually carries
+    (non-blank) -- the same membership test `_reject_reason` uses to build its
+    own `stamps` dict, pulled out so `verify_rounds` can reuse it to trim an
+    accepted round's `evidence` down to exactly the keys that were checked.
+
+    This is what stands between "the model quoted a real page line for
+    apply_closes_jst" and "the model's ENTIRE evidence mapping, unchecked,
+    rides onto the preview under a heading that says it came from the page" --
+    `_reject_reason` only ever inspects the keys in TIMESTAMP_FIELDS the round
+    itself carries, so any other key in `evidence` (a field the round doesn't
+    have, or one the model invented) has never been compared against the page
+    at all.
+    """
+    return {name for name in TIMESTAMP_FIELDS if str(data.get(name) or "").strip()}
+
+
 def _check_order(stamps: dict[str, str]) -> str | None:
     """The anchors present must not go backwards in time -- compared as
     PARSED (year, month, day, hour, minute) tuples, never as raw text.
@@ -299,7 +327,17 @@ def verify_rounds(
             # the document that gets committed -- stripped here as one of two
             # layers (the draft parser strips it again downstream).
             cleaned_data = {k: v for k, v in proposed.data.items() if k != "evidence"}
-            accepted.append(replace(proposed, data=cleaned_data))
+            # The evidence that DOES survive onto the preview must be trimmed
+            # to the keys `_reject_reason` actually verified against the page
+            # -- the TIMESTAMP_FIELDS this round carries. `_reject_reason`
+            # only ever checks those; any OTHER key the model wrote into
+            # `evidence` (a field this round doesn't have, one it invented) is
+            # unchecked free text, and rendering it under a "Read from the
+            # ticket page:" heading would be exactly the misdirection this
+            # whole module exists to prevent, whatever the checked fields say.
+            verified_keys = _present_timestamp_fields(proposed.data)
+            cleaned_evidence = {k: v for k, v in proposed.evidence.items() if k in verified_keys}
+            accepted.append(replace(proposed, data=cleaned_data, evidence=cleaned_evidence))
         else:
             rejected.append(f"round {label!r}: {reason}")
 
@@ -315,9 +353,7 @@ def _reject_reason(
 ) -> str | None:
     """The first reason this round cannot be trusted, or None."""
     stamps = {
-        name: str(proposed.data.get(name) or "").strip()
-        for name in TIMESTAMP_FIELDS
-        if str(proposed.data.get(name) or "").strip()
+        name: str(proposed.data[name]).strip() for name in _present_timestamp_fields(proposed.data)
     }
     if not stamps:
         return "no timestamps at all -- a round with no deadline is a label, not a rung"
