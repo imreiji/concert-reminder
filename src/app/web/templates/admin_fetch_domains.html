@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{#- Admin-only operational page: English-only and deliberately NOT wrapped in
+    _(), following admin_deliveries.html and admin_discoveries.html. Styling
+    reuses the existing `.tagtable` rules rather than inventing tokens for a
+    page only admins see -- an operational surface should look plain, not
+    novel. `r.host` and `r.first_seen_url` are model-supplied strings (an LLM
+    read them off a draft's official_url) and are rendered as plain text
+    below, never interpolated into an attribute or a script -- Jinja's default
+    autoescaping is what makes that safe. -#}
+{% block title %}Fetch domains — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Websites the AI may read</h1>
+<p class="dim">
+  When a draft's official ticket page sits on a website nobody has approved
+  yet, the completion pass records it here and skips that draft. Approve a
+  website and its pages can be read from then on; decline it and it will not
+  be asked about again. Every other fetch this app makes is locked to a
+  single site named in the code — this list is what stands in for that lock.
+</p>
+
+{% if rows %}
+<div>
+  <table class="tagtable">
+    <thead><tr><th>Website</th><th>First wanted for</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><b>{{ r.host }}</b></td>
+        <td class="dim">{{ r.first_seen_url }}</td>
+        <td>
+          {% if r.approved_at %}approved
+          {% elif r.declined_at %}declined
+          {% else %}<b>waiting</b>{% endif %}
+        </td>
+        <td class="r">
+          {% if not r.approved_at and not r.declined_at %}
+          <form method="post" action="/admin/fetch-domains/{{ r.id }}/approve" style="display:contents">
+            <button class="act yes" type="submit">Approve</button>
+          </form>
+          <form method="post" action="/admin/fetch-domains/{{ r.id }}/decline" style="display:contents">
+            <button class="act no" type="submit">Decline</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="dim">No website has been asked about yet.</p>
+{% endif %}
+{% endblock %}

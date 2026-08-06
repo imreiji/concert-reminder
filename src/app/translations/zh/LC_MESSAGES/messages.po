@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-04 10:21-0300\n"
+"POT-Creation-Date: 2026-08-06 02:29-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -16,22 +16,22 @@ msgstr ""
 
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/cogs/reminders.py:104
 #: src/app/bot/messages.py:33 src/app/bot/views.py:221
-#: src/app/db/service.py:1632
+#: src/app/db/service.py:1635
 msgid "opens"
 msgstr "申请开始"
 
 #: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:34
-#: src/app/bot/views.py:223 src/app/db/service.py:1633
+#: src/app/bot/views.py:223 src/app/db/service.py:1636
 msgid "closes"
 msgstr "截止"
 
 #: src/app/bot/cogs/reminders.py:106 src/app/bot/messages.py:35
-#: src/app/db/service.py:1634
+#: src/app/db/service.py:1637
 msgid "results announced"
 msgstr "结果公布"
 
 #: src/app/bot/cogs/reminders.py:107 src/app/bot/messages.py:36
-#: src/app/bot/views.py:228 src/app/db/service.py:1635
+#: src/app/bot/views.py:228 src/app/db/service.py:1638
 #: src/app/web/templates/setup.html:155
 msgid "payment due"
 msgstr "付款截止"
@@ -67,7 +67,7 @@ msgid "{unit} ago"
 msgstr "{unit}前"
 
 #: src/app/bot/messages.py:77 src/app/bot/messages.py:185
-#: src/app/db/service.py:1636 src/app/web/templates/tags.html:481
+#: src/app/db/service.py:1639 src/app/web/templates/tags.html:481
 msgid "event"
 msgstr "活动"
 
@@ -449,138 +449,138 @@ msgstr "延后"
 msgid "same-day"
 msgstr "当天"
 
-#: src/app/db/service.py:1640
+#: src/app/db/service.py:1643
 msgid "Lottery round"
 msgstr "抽选轮次"
 
-#: src/app/db/service.py:1641
+#: src/app/db/service.py:1644
 msgid "Eligibility item sale"
 msgstr "抽选资格商品发售"
 
-#: src/app/db/service.py:1642
+#: src/app/db/service.py:1645
 msgid "Stream ticket sale"
 msgstr "直播票发售"
 
-#: src/app/db/service.py:1643
+#: src/app/db/service.py:1646
 msgid "General sale"
 msgstr "一般发售"
 
-#: src/app/db/service.py:1644
+#: src/app/db/service.py:1647
 msgid "Result announcement"
 msgstr "结果公布"
 
-#: src/app/db/service.py:1645
+#: src/app/db/service.py:1648
 msgid "Payment deadline"
 msgstr "付款截止"
 
-#: src/app/db/service.py:1646
+#: src/app/db/service.py:1649
 msgid "First come, first served"
 msgstr "先到先得"
 
-#: src/app/db/service.py:1647
+#: src/app/db/service.py:1650
 msgid "Overseas tour package"
 msgstr "海外观演旅行套餐"
 
-#: src/app/db/service.py:1648
+#: src/app/db/service.py:1651
 msgid "Goods sale"
 msgstr "周边贩售"
 
-#: src/app/db/service.py:1649
+#: src/app/db/service.py:1652
 msgid "Upgrade round"
 msgstr "升级抽选"
 
-#: src/app/db/service.py:1650
+#: src/app/db/service.py:1653
 msgid "Other"
 msgstr "其他"
 
-#: src/app/db/service.py:2651 src/app/db/service.py:2797
-#: src/app/db/service.py:6494 src/app/web/templates/_board.html:73
+#: src/app/db/service.py:2654 src/app/db/service.py:2800
+#: src/app/db/service.py:6497 src/app/web/templates/_board.html:73
 #: src/app/web/templates/discover.html:79 src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "多个"
 
-#: src/app/db/service.py:3880
+#: src/app/db/service.py:3883
 #, python-brace-format
 msgid "{n}d"
 msgstr "{n}天"
 
-#: src/app/db/service.py:3882
+#: src/app/db/service.py:3885
 #, python-brace-format
 msgid "{n}h"
 msgstr "{n}小时"
 
-#: src/app/db/service.py:3883
+#: src/app/db/service.py:3886
 #, python-brace-format
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/service.py:3980
+#: src/app/db/service.py:3983
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "升级中签 — 最迟于 {day} 付款"
 
-#: src/app/db/service.py:3981
+#: src/app/db/service.py:3984
 msgid "Upgrade won — payment due"
 msgstr "升级中签 — 付款截止"
 
-#: src/app/db/service.py:4000
+#: src/app/db/service.py:4003
 msgid "Upgrade · Applied"
 msgstr "升级 · 已申请"
 
-#: src/app/db/service.py:4003
+#: src/app/db/service.py:4006
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "升级 · {n}后截止"
 
-#: src/app/db/service.py:4006
+#: src/app/db/service.py:4009
 msgid "Upgrade · Open now"
 msgstr "升级 · 申请开放中"
 
-#: src/app/db/service.py:4012 src/app/web/templates/_board.html:23
+#: src/app/db/service.py:4015 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:35
 #: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "已获票"
 
-#: src/app/db/service.py:4023
+#: src/app/db/service.py:4026
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "中签 — 最迟于 {day} 付款"
 
-#: src/app/db/service.py:4024
+#: src/app/db/service.py:4027
 msgid "Won — payment due"
 msgstr "中签 — 付款截止"
 
-#: src/app/db/service.py:4033
+#: src/app/db/service.py:4036
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind} · 已申请"
 
-#: src/app/db/service.py:4053
+#: src/app/db/service.py:4056
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind} · {n}后截止"
 
-#: src/app/db/service.py:4058
+#: src/app/db/service.py:4061
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind} · 开放中"
 
-#: src/app/db/service.py:4064
+#: src/app/db/service.py:4067
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind} · {n}后开放"
 
-#: src/app/db/service.py:4071
+#: src/app/db/service.py:4074
 msgid "All rounds closed"
 msgstr "所有轮次均已截止"
 
-#: src/app/db/service.py:6113
+#: src/app/db/service.py:6116
 msgid "From dekimasen.app"
 msgstr "来自 dekimasen.app"
 
-#: src/app/db/service.py:6746 src/app/web/templates/concert_edit.html:40
+#: src/app/db/service.py:6749 src/app/web/templates/concert_edit.html:40
 #: src/app/web/templates/concert_edit.html:129
 #: src/app/web/templates/concert_edit.html:134
 #: src/app/web/templates/concert_new.html:35
@@ -590,7 +590,7 @@ msgstr "来自 dekimasen.app"
 msgid "Title"
 msgstr "标题"
 
-#: src/app/db/service.py:6750 src/app/web/templates/concert_edit.html:116
+#: src/app/db/service.py:6753 src/app/web/templates/concert_edit.html:116
 #: src/app/web/templates/concert_edit.html:118
 #: src/app/web/templates/concert_edit.html:131
 #: src/app/web/templates/concert_edit.html:136
@@ -598,22 +598,22 @@ msgstr "标题"
 #: src/app/web/templates/concert_new.html:91
 #: src/app/web/templates/concert_new.html:103
 #: src/app/web/templates/concert_new.html:108
-#: src/app/web/templates/import_preview.html:182
-#: src/app/web/templates/import_preview.html:184
+#: src/app/web/templates/import_preview.html:212
+#: src/app/web/templates/import_preview.html:214
 msgid "Notes"
 msgstr "备注"
 
-#: src/app/db/service.py:6756
+#: src/app/db/service.py:6759
 #, python-brace-format
 msgid "Leg {n} label"
 msgstr "场次 {n} 名称"
 
-#: src/app/db/service.py:6761
+#: src/app/db/service.py:6764
 #, python-brace-format
 msgid "Round {n} label"
 msgstr "轮次 {n} 名称"
 
-#: src/app/db/service.py:6770 src/app/web/templates/_tag_create_dialog.html:44
+#: src/app/db/service.py:6773 src/app/web/templates/_tag_create_dialog.html:44
 #: src/app/web/templates/_tag_create_dialog.html:46
 #: src/app/web/templates/_tag_create_dialog.html:48
 #: src/app/web/templates/_venue_create_dialog.html:34
@@ -628,7 +628,7 @@ msgstr "轮次 {n} 名称"
 msgid "Name"
 msgstr "名称"
 
-#: src/app/db/service.py:6775
+#: src/app/db/service.py:6778
 #: src/app/web/templates/_venue_create_dialog.html:41
 #: src/app/web/templates/_venue_create_dialog.html:43
 #: src/app/web/templates/_venue_create_dialog.html:44
@@ -636,64 +636,64 @@ msgstr "名称"
 msgid "City"
 msgstr "城市"
 
-#: src/app/web/app.py:118
+#: src/app/web/app.py:119
 #, python-format
 msgid "%(count)s lost"
 msgid_plural "%(count)s lost"
 msgstr[0] "落选 %(count)s 个"
 
-#: src/app/web/app.py:120
+#: src/app/web/app.py:121
 #, python-format
 msgid "%(count)s skipped"
 msgid_plural "%(count)s skipped"
 msgstr[0] "跳过 %(count)s 个"
 
-#: src/app/web/app.py:122
+#: src/app/web/app.py:123
 #, python-format
 msgid "%(count)s covered"
 msgid_plural "%(count)s covered"
 msgstr[0] "已获票 %(count)s 个"
 
-#: src/app/web/app.py:124
+#: src/app/web/app.py:125
 #, python-format
 msgid "%(count)s upcoming"
 msgid_plural "%(count)s upcoming"
 msgstr[0] "尚未开放 %(count)s 个"
 
-#: src/app/web/app.py:235
+#: src/app/web/app.py:236
 msgid "Page not found"
 msgstr "找不到页面"
 
-#: src/app/web/app.py:236
+#: src/app/web/app.py:237
 msgid "That page doesn't exist. The link may be out of date."
 msgstr "该页面不存在，链接可能已过期。"
 
-#: src/app/web/app.py:238
+#: src/app/web/app.py:239
 msgid "No access"
 msgstr "没有访问权限"
 
-#: src/app/web/app.py:244
+#: src/app/web/app.py:245
 #, python-format
 msgid "You're signed in as %(name)s, which doesn't have access to that page."
 msgstr "你当前以 %(name)s 登录，该账户没有访问那个页面的权限。"
 
-#: src/app/web/app.py:248
+#: src/app/web/app.py:249
 msgid "That page needs an account with more access than yours."
 msgstr "该页面需要权限更高的账户。"
 
-#: src/app/web/app.py:251
+#: src/app/web/app.py:252
 msgid "That didn't go through"
 msgstr "提交未成功"
 
-#: src/app/web/app.py:252
+#: src/app/web/app.py:253
 msgid "Nothing was saved. Here's what needs fixing:"
 msgstr "没有保存任何内容。需要修正以下问题："
 
-#: src/app/web/app.py:254
+#: src/app/web/app.py:255
 msgid "Something broke"
 msgstr "出问题了"
 
-#: src/app/web/app.py:256
+#: src/app/web/app.py:257
 msgid ""
 "Something broke on our end, and it's been logged. Nothing you did caused "
 "it."
@@ -971,7 +971,7 @@ msgid "A cancelled performance stays in the list, but appears faded with a label
 msgstr "已取消的场次仍会保留在列表中，但会以淡色显示并带有标记。"
 
 #: src/app/web/templates/_editor_leg_card.html:58
-#: src/app/web/templates/_editor_round_card.html:51
+#: src/app/web/templates/_editor_round_card.html:58
 msgid "More actions"
 msgstr "更多操作"
 
@@ -1001,55 +1001,60 @@ msgstr "入场（JST）"
 msgid "Starts (JST)"
 msgstr "开演（JST）"
 
-#: src/app/web/templates/_editor_round_card.html:46
+#: src/app/web/templates/_editor_round_card.html:53
 msgid "Round label"
 msgstr "轮次名称"
 
-#: src/app/web/templates/_editor_round_card.html:53
+#: src/app/web/templates/_editor_round_card.html:60
 msgid "Remove this round"
 msgstr "删除此轮次"
 
-#: src/app/web/templates/_editor_round_card.html:59
-#: src/app/web/templates/_editor_round_card.html:62
+#: src/app/web/templates/_editor_round_card.html:66
+#: src/app/web/templates/_editor_round_card.html:69
 msgid "1st-round advance lottery"
 msgstr "第 1 轮先行抽选"
 
-#: src/app/web/templates/_editor_round_card.html:66
+#: src/app/web/templates/_editor_round_card.html:73
 msgid "Remembered"
 msgstr "已保存"
 
-#: src/app/web/templates/_editor_round_card.html:80
+#: src/app/web/templates/_editor_round_card.html:87
 msgid "Requires item from"
 msgstr "报名所需商品"
 
-#: src/app/web/templates/_editor_round_card.html:81
-#: src/app/web/templates/_editor_round_card.html:82
+#: src/app/web/templates/_editor_round_card.html:88
+#: src/app/web/templates/_editor_round_card.html:89
 msgid "No item needed"
 msgstr "无需购买商品"
 
-#: src/app/web/templates/_editor_round_card.html:94
+#: src/app/web/templates/_editor_round_card.html:101
 msgid "Apply opens (JST)"
 msgstr "申请开始（JST）"
 
-#: src/app/web/templates/_editor_round_card.html:95
+#: src/app/web/templates/_editor_round_card.html:102
 msgid "Apply deadline (JST)"
 msgstr "申请截止（JST）"
 
-#: src/app/web/templates/_editor_round_card.html:96
+#: src/app/web/templates/_editor_round_card.html:103
 msgid "Results (JST)"
 msgstr "结果公布（JST）"
 
-#: src/app/web/templates/_editor_round_card.html:97
+#: src/app/web/templates/_editor_round_card.html:104
 msgid "Payment deadline (JST)"
 msgstr "付款截止（JST）"
 
-#: src/app/web/templates/_editor_round_card.html:100
+#: src/app/web/templates/_editor_round_card.html:107
 msgid "Apply URL (optional)"
 msgstr "申请链接（可选）"
 
-#: src/app/web/templates/_editor_round_card.html:101
+#: src/app/web/templates/_editor_round_card.html:108
 msgid "Notes (optional)"
 msgstr "备注（可选）"
+
+#: src/app/web/templates/_editor_round_card.html:117
+#, fuzzy
+msgid "Read from the ticket page:"
+msgstr "直播票发售"
 
 #: src/app/web/templates/_feed_links.html:7
 msgid "Your feed link is ready — save it now, it won't be shown again."
@@ -1543,7 +1548,7 @@ msgstr "发现"
 #: src/app/web/templates/concert_detail.html:48
 #: src/app/web/templates/concert_edit.html:142
 #: src/app/web/templates/concert_new.html:114
-#: src/app/web/templates/import_preview.html:193
+#: src/app/web/templates/import_preview.html:223
 #: src/app/web/templates/tags.html:7
 msgid "Tags"
 msgstr "标签"
@@ -1769,7 +1774,7 @@ msgstr "标题（日文）"
 
 #: src/app/web/templates/concert_edit.html:41
 #: src/app/web/templates/concert_new.html:36
-#: src/app/web/templates/import_preview.html:172
+#: src/app/web/templates/import_preview.html:202
 msgid "Event ID"
 msgstr "活动 ID"
 
@@ -1802,7 +1807,7 @@ msgstr[0] "%(count)s 个轮次"
 
 #: src/app/web/templates/concert_edit.html:63
 #: src/app/web/templates/concert_new.html:64
-#: src/app/web/templates/import_preview.html:135
+#: src/app/web/templates/import_preview.html:165
 msgid "Add a round"
 msgstr "添加轮次"
 
@@ -1829,7 +1834,7 @@ msgstr "还没有场次 — 请在上方添加第一个场次。"
 
 #: src/app/web/templates/concert_edit.html:105
 #: src/app/web/templates/concert_new.html:72
-#: src/app/web/templates/import_preview.html:144
+#: src/app/web/templates/import_preview.html:174
 msgid "Details and links"
 msgstr "详情与链接"
 
@@ -1839,38 +1844,38 @@ msgstr "尚未设置任何内容"
 
 #: src/app/web/templates/concert_edit.html:109
 #: src/app/web/templates/concert_new.html:76
-#: src/app/web/templates/import_preview.html:158
+#: src/app/web/templates/import_preview.html:188
 msgid "Artist / organizer"
 msgstr "艺人／主办方"
 
 #: src/app/web/templates/concert_edit.html:110
 #: src/app/web/templates/concert_new.html:83
-#: src/app/web/templates/import_preview.html:160
+#: src/app/web/templates/import_preview.html:190
 msgid "Categories (comma-sep)"
 msgstr "分类（逗号分隔）"
 
 #: src/app/web/templates/concert_edit.html:111
 #: src/app/web/templates/concert_new.html:84
-#: src/app/web/templates/import_preview.html:162
+#: src/app/web/templates/import_preview.html:192
 #: src/app/web/templates/tags.html:130 src/app/web/templates/tags.html:435
 msgid "eventernote URL"
 msgstr "eventernote 链接"
 
 #: src/app/web/templates/concert_edit.html:112
 #: src/app/web/templates/concert_new.html:85
-#: src/app/web/templates/import_preview.html:164
+#: src/app/web/templates/import_preview.html:194
 msgid "Official URL"
 msgstr "官方链接"
 
 #: src/app/web/templates/concert_edit.html:113
 #: src/app/web/templates/concert_new.html:86
-#: src/app/web/templates/import_preview.html:166
+#: src/app/web/templates/import_preview.html:196
 msgid "Source URL"
 msgstr "来源链接"
 
 #: src/app/web/templates/concert_edit.html:115
 #: src/app/web/templates/concert_new.html:88
-#: src/app/web/templates/import_preview.html:175
+#: src/app/web/templates/import_preview.html:205
 msgid "Performers (one per line)"
 msgstr "出演者（每行一名）"
 
@@ -2005,17 +2010,17 @@ msgid "Optional — title EN, organizer, kind, categories, links, performers, no
 msgstr "可选 — 标题 EN、主办方、类型、分类、链接、出演者、备注"
 
 #: src/app/web/templates/concert_new.html:76
-#: src/app/web/templates/import_preview.html:159
+#: src/app/web/templates/import_preview.html:189
 msgid "non-series acts, etc."
 msgstr "非系列艺人等"
 
 #: src/app/web/templates/concert_new.html:83
-#: src/app/web/templates/import_preview.html:161
+#: src/app/web/templates/import_preview.html:191
 msgid "event, tour"
 msgstr "活动、巡演"
 
 #: src/app/web/templates/concert_new.html:86
-#: src/app/web/templates/import_preview.html:167
+#: src/app/web/templates/import_preview.html:197
 msgid "where this was sourced from"
 msgstr "此信息的来源"
 
@@ -2024,7 +2029,7 @@ msgid "Franchise, group, artists, venue — optional"
 msgstr "系列、组合、艺人、场馆 — 可选"
 
 #: src/app/web/templates/concert_new.html:121
-#: src/app/web/templates/import_preview.html:214
+#: src/app/web/templates/import_preview.html:244
 msgid "Create event"
 msgstr "创建活动"
 
@@ -2057,7 +2062,7 @@ msgid "Filters"
 msgstr "筛选"
 
 #: src/app/web/templates/discover.html:51
-#: src/app/web/templates/discover.html:272
+#: src/app/web/templates/discover.html:276
 msgid "Clear all"
 msgstr "全部清除"
 
@@ -2478,45 +2483,76 @@ msgid ""
 " it isn't worth tracking."
 msgstr "多份草稿粘贴中尚未确认的每一份文档。打开即可查看完整预览、编辑内容并创建活动 -- 如果不值得追踪，也可以直接丢弃。"
 
-#: src/app/web/templates/import_pending.html:24
+#: src/app/web/templates/import_pending.html:18
+msgid "Complete drafts with AI"
+msgstr ""
+
+#: src/app/web/templates/import_pending.html:20
+msgid "Completion requested — the scheduler will start it within a minute."
+msgstr ""
+
+#: src/app/web/templates/import_pending.html:22
+msgid ""
+"Reads each draft's official ticket page and proposes rounds, keeping only"
+"\n"
+"    deadlines it can quote from that page. Costs a few cents per press."
+msgstr ""
+
+#: src/app/web/templates/import_pending.html:28
+#, python-format
+msgid ""
+"One website is waiting for your approval before its page can be\n"
+"  read."
+msgid_plural ""
+"%(count)s websites are waiting for your approval before their pages can "
+"be\n"
+"  read."
+msgstr[0] ""
+
+#: src/app/web/templates/import_pending.html:31
+#, fuzzy
+msgid "Review them"
+msgstr "查看"
+
+#: src/app/web/templates/import_pending.html:49
 msgid "(untitled)"
 msgstr "（无标题）"
 
-#: src/app/web/templates/import_pending.html:27
+#: src/app/web/templates/import_pending.html:52
 msgid "couldn't be re-read"
 msgstr "无法重新读取"
 
-#: src/app/web/templates/import_pending.html:29
+#: src/app/web/templates/import_pending.html:54
 #, python-format
 msgid "%(n)s leg"
 msgid_plural "%(n)s legs"
 msgstr[0] "%(n)s 个场次"
 
-#: src/app/web/templates/import_pending.html:30
+#: src/app/web/templates/import_pending.html:55
 #, python-format
 msgid "%(n)s round"
 msgid_plural "%(n)s rounds"
 msgstr[0] "%(n)s 个轮次"
 
-#: src/app/web/templates/import_pending.html:32
+#: src/app/web/templates/import_pending.html:57
 #, python-format
 msgid "%(n)s tag not matched"
 msgid_plural "%(n)s tags not matched"
 msgstr[0] "%(n)s 个标签未匹配"
 
-#: src/app/web/templates/import_pending.html:38
+#: src/app/web/templates/import_pending.html:63
 msgid "Review"
 msgstr "查看"
 
-#: src/app/web/templates/import_pending.html:40
+#: src/app/web/templates/import_pending.html:65
 msgid "Discard"
 msgstr "丢弃"
 
-#: src/app/web/templates/import_pending.html:48
+#: src/app/web/templates/import_pending.html:73
 msgid "Nothing pending -- every draft you pasted has been reviewed."
 msgstr "没有待处理的草稿 -- 你粘贴的内容都已确认。"
 
-#: src/app/web/templates/import_pending.html:52
+#: src/app/web/templates/import_pending.html:77
 msgid ""
 "Have more to add? <a class=\"more\" href=\"/concerts/import\">Paste "
 "another batch</a>."
@@ -2580,41 +2616,68 @@ msgid ""
 "      for a whole-event round. Times are JST."
 msgstr "勾选每个轮次适用的日期 — 如果该轮次适用于整个活动，则无需勾选任何日期。时间为 JST。"
 
-#: src/app/web/templates/import_preview.html:130
+#: src/app/web/templates/import_preview.html:117
+msgid ""
+"The AI proposed these and I could not find them on the page — check them "
+"by\n"
+"      hand before trusting them:"
+msgstr ""
+
+#: src/app/web/templates/import_preview.html:126
+#, fuzzy
+msgid "Source:"
+msgstr "来源链接"
+
+#: src/app/web/templates/import_preview.html:160
 msgid "No rounds yet — add the first one below."
 msgstr "还没有轮次 — 请在下方添加第一个轮次。"
 
-#: src/app/web/templates/import_preview.html:145
+#: src/app/web/templates/import_preview.html:175
 msgid "Optional — title and notes in each language, organizer, source URL"
 msgstr "可选 — 各语言的标题和备注、主办、来源链接"
 
-#: src/app/web/templates/import_preview.html:152
+#: src/app/web/templates/import_preview.html:182
 msgid "Title (EN)"
 msgstr "标题（EN）"
 
-#: src/app/web/templates/import_preview.html:155
+#: src/app/web/templates/import_preview.html:185
 msgid "Title (中文)"
 msgstr "标题（中文）"
 
-#: src/app/web/templates/import_preview.html:173
+#: src/app/web/templates/import_preview.html:203
 msgid "auto-generated from the English title"
 msgstr "根据英文标题自动生成"
 
-#: src/app/web/templates/import_preview.html:185
+#: src/app/web/templates/import_preview.html:215
 msgid "Notes (EN)"
 msgstr "备注（EN）"
 
-#: src/app/web/templates/import_preview.html:187
+#: src/app/web/templates/import_preview.html:217
 msgid "Notes (中文)"
 msgstr "备注（中文）"
 
-#: src/app/web/templates/import_preview.html:194
+#: src/app/web/templates/import_preview.html:224
 msgid "Franchise, group, artists, venue — imported and editable"
 msgstr "系列、组合、艺人、场馆 — 已导入，可编辑"
 
-#: src/app/web/templates/import_preview.html:206
+#: src/app/web/templates/import_preview.html:236
 msgid "No tag yet:"
 msgstr "尚无标签:"
+
+#: src/app/web/templates/import_preview.html:257
+msgid "Fill rounds from a page I paste"
+msgstr ""
+
+#: src/app/web/templates/import_preview.html:260
+msgid ""
+"Open the official ticket page, select all, and paste it here. Only\n"
+"        deadlines quoted from what you paste will be kept."
+msgstr ""
+
+#: src/app/web/templates/import_preview.html:263
+#, fuzzy
+msgid "Read this page"
+msgstr "删除此标签"
 
 #: src/app/web/templates/preferences.html:2
 msgid "preferences"
@@ -3098,28 +3161,36 @@ msgid "Message a chosen set of users. Held two minutes so it can be cancelled."
 msgstr "向选定的用户发送消息。会保留两分钟，以便取消。"
 
 #: src/app/web/templates/preferences.html:451
+msgid "Fetch domains"
+msgstr "允许抓取的网站"
+
+#: src/app/web/templates/preferences.html:452
+msgid "Websites the AI draft completion may read pages from."
+msgstr "AI 草稿补全可以读取页面的网站。"
+
+#: src/app/web/templates/preferences.html:455
 msgid "Export catalogue"
 msgstr "导出目录"
 
-#: src/app/web/templates/preferences.html:452
+#: src/app/web/templates/preferences.html:456
 msgid "Every concert and tag as YAML, zipped. No personal data."
 msgstr "以 YAML 打包导出所有活动和标签。不含任何个人数据。"
 
-#: src/app/web/templates/preferences.html:455
+#: src/app/web/templates/preferences.html:459
 msgid "Import tags"
 msgstr "导入标签"
 
-#: src/app/web/templates/preferences.html:456
+#: src/app/web/templates/preferences.html:460
 msgid ""
 "Restore a tags.yaml from a catalogue export. Existing tags are skipped, "
 "never overwritten."
 msgstr "从目录导出文件恢复 tags.yaml。已存在的标签会被跳过，不会被覆盖。"
 
-#: src/app/web/templates/preferences.html:463
+#: src/app/web/templates/preferences.html:467
 msgid "Rehearsal"
 msgstr "彩排"
 
-#: src/app/web/templates/preferences.html:464
+#: src/app/web/templates/preferences.html:468
 msgid ""
 "Local harness: seed a concert, pull its reminders forward, send any DM "
 "shape."
