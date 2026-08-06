@@ -18,6 +18,15 @@ because that is the only place it can write it; this module removes it before
 the round mapping goes anywhere near a draft. A draft is a document that gets
 exported, re-pasted and committed into `concerts`, and scaffolding that rides
 along becomes an unknown key somebody's parser warns about two features later.
+
+Two exceptions are exported and they mean different things, on purpose:
+`CompletionResponseError` is a bad reply from the MODEL -- nothing has been
+written anywhere yet, and the runner just re-asks or gives up on this pass.
+`DraftMergeError` is a stored DRAFT `merge_rounds` cannot safely amend -- the
+write is refused outright rather than attempted with some fallback, because
+by the time `merge_rounds` runs the model's reply was already fine; a body
+that fails there is a corrupted or hand-edited draft, a different fault with
+a different remedy, and a later runner task will want to catch the two apart.
 """
 
 from __future__ import annotations
@@ -38,11 +47,33 @@ class CompletionResponseError(Exception):
     warnings-over-failures split every parser in `domain/` makes."""
 
 
+class DraftMergeError(Exception):
+    """`merge_rounds` was asked to amend a stored draft it cannot safely
+    amend -- the body (everything after the leading comment prefix) doesn't
+    parse as YAML, or parses to something other than a mapping.
+
+    Raised rather than defaulting to `{}`: this module's whole contract is
+    that `merge_rounds` rewrites ONLY the `rounds:` key and leaves every
+    other key (title, legs, cast, ...) exactly as it was. Silently swapping
+    in an empty mapping when the body can't be read would satisfy that
+    contract's letter -- `rounds` would indeed be the only key SET -- while
+    destroying the entire rest of the document it was supposed to leave
+    alone. Refusing is the only response that actually keeps the promise."""
+
+
 # `kind` values are the exact `RoundKind` (app.domain.types) enum values, not
 # a shorthand of them -- `yaml_import._round_kind` compares this field against
 # those literal strings and silently defaults anything else to `other` with a
 # warning, so a mismatched list here would be a silent quality loss on every
 # completion, not a caught error.
+#
+# RESULT_ANNOUNCEMENT and PAYMENT_DEADLINE are real RoundKind members but are
+# deliberately NOT offered below: they exist as an editor's escape hatch for
+# not bundling a round's own anchors together, and offering that same escape
+# to a model would invite exactly the mistake the rules already forbid --
+# splitting one round's 当落発表 and 入金期限 into rounds of their own. The
+# rules bullet on results/payment tells the model what to do instead of
+# reaching for one of these two (or defaulting to `other`).
 _COMPLETION_SYSTEM_PROMPT = """\
 You are filling in the ticket rounds for ONE dekimasen.app concert draft, in
 the vocabulary `.claude/skills/add-concert/SKILL.md` uses. You are given the
@@ -93,6 +124,10 @@ Rules, and the first one is the only one that matters:
 - One round per campaign rung. 1次先行, 2次先行 and 一般発売 are three rounds,
   not one; a single round's own 受付開始 and 申込締切 are two fields of ONE
   round, not two rounds.
+- A results announcement (当落発表) and a payment deadline (入金期限) are
+  FIELDS of the round they belong to (`results_jst`, `payment_deadline_jst`)
+  -- never rounds of their own. Attach them to the lottery/sale round they
+  settle rather than proposing a separate round for either.
 - `kind` is one of: lottery_round, fcfs_sale, general_sale, stream_ticket_sale,
   eligibility_item_sale, goods_sale, tour_package, upgrade, other. Use `other`
   when unsure rather than guessing a mechanic.
@@ -164,7 +199,18 @@ def parse_completion_response(text: str) -> tuple[list[ProposedRound], list[str]
             warnings.append(f"round {i}: evidence was not a mapping -- treated as absent")
         for name in TIMESTAMP_FIELDS:
             if name in payload:
-                payload[name] = _as_stamp_text(payload[name])
+                if payload[name] is None:
+                    # `apply_closes_jst:` with nothing after the colon is the
+                    # model half-answering, not declining -- YAML gives us
+                    # None here and _as_stamp_text would otherwise stringify
+                    # it into the literal text "None", a wrong-looking value
+                    # with no warning attached. Drop the field instead: a
+                    # missing timestamp reads as "not proposed", which is
+                    # what it is.
+                    del payload[name]
+                    warnings.append(f"round {i}: {name} has no value -- dropped")
+                else:
+                    payload[name] = _as_stamp_text(payload[name])
         label = str(payload.get("label") or "").strip()
         if not label:
             warnings.append(f"round {i}: no label -- skipped")
@@ -202,11 +248,21 @@ def merge_rounds(draft_text: str, rounds: Sequence[dict]) -> str:
     inline comments are not load-bearing; a comment-preserving YAML library
     would be a new dependency protecting data nothing reads. The leading
     prefix, which IS load-bearing, is preserved above.
+
+    Raises `DraftMergeError` -- and writes nothing -- when the body can't be
+    read back as a mapping. See that class's docstring: defaulting to `{}`
+    here would "succeed" by wiping the rest of the document instead of
+    leaving it alone, which is the one thing this function promises not to do.
     """
     prefix, body = _split_comment_prefix(draft_text)
-    data = yaml.safe_load(body)
+    try:
+        data = yaml.safe_load(body)
+    except yaml.YAMLError as exc:
+        raise DraftMergeError(f"the stored draft doesn't parse as YAML: {exc}") from exc
     if not isinstance(data, dict):
-        data = {}
+        raise DraftMergeError(
+            "the stored draft isn't a YAML mapping -- refusing to overwrite it"
+        )
     data["rounds"] = [dict(r) for r in rounds]
     return prefix + yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
 

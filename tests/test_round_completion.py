@@ -5,6 +5,7 @@ import yaml
 
 from app.domain.round_completion import (
     CompletionResponseError,
+    DraftMergeError,
     completion_prompt,
     draft_leg_labels,
     merge_rounds,
@@ -113,3 +114,33 @@ def test_merge_survives_a_draft_with_no_comment_prefix():
 
 def test_leg_labels_come_off_the_draft():
     assert draft_leg_labels(SKELETON) == ["Day 1", "Day 2"]
+
+
+def test_merge_refuses_a_non_mapping_body_rather_than_wiping_it():
+    # A body that parses to a YAML list (not a mapping) must not be silently
+    # replaced with `{rounds: [...]}` -- that would discard the title, legs
+    # and cast the stored draft already had, with no warning at all.
+    original = "# source: x\n- just\n- a list\n"
+    with pytest.raises(DraftMergeError):
+        merge_rounds(original, [{"label": "y"}])
+    # The property that matters: the function raised before producing
+    # anything, so nothing overwrote the stored draft.
+    assert original == "# source: x\n- just\n- a list\n"
+
+
+def test_merge_refuses_a_malformed_body_rather_than_wiping_it():
+    original = "# source: x\ntitle: [unterminated\n"
+    with pytest.raises(DraftMergeError):
+        merge_rounds(original, [{"label": "y"}])
+    assert original == "# source: x\ntitle: [unterminated\n"
+
+
+def test_a_timestamp_with_no_value_is_dropped_and_warned():
+    # `apply_closes_jst:` with nothing after the colon is the model
+    # half-answering, not declining -- it must not travel through as the
+    # literal string "None".
+    rounds, warnings = parse_completion_response(
+        "rounds:\n  - label: x\n    apply_closes_jst:\n    evidence: {}\n"
+    )
+    assert "apply_closes_jst" not in rounds[0].data
+    assert warnings and "apply_closes_jst" in warnings[0]
