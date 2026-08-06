@@ -55,7 +55,7 @@ from app.domain.draft import ParsedConcert
 from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import ITEM_SALE_KINDS, ConcertKind, RoundKind
 from app.domain.yaml_import import DraftError, parse_draft, parse_drafts
-from app.fetching import FetchFailed, HostNotAllowed, check_host, fetch_html
+from app.fetching import FetchFailed, HostNotAllowed, PinnedHost, fetch_html
 from app.web.auth import SessionUser, require_editor
 from app.web.forms import form_url, require_variants
 from app.web.routes.concerts import (
@@ -116,7 +116,7 @@ def _check_host(url: str) -> None:
     has always answered.
     """
     try:
-        check_host(url, ALLOWED_HOST)
+        PinnedHost(ALLOWED_HOST).check(url)
     except HostNotAllowed as exc:
         raise HTTPException(
             status_code=400,
@@ -141,7 +141,7 @@ async def fetch_ramen_html(url: str, transport: httpx.AsyncBaseTransport | None 
     try:
         return await fetch_html(
             url,
-            allowed_host=ALLOWED_HOST,
+            policy=PinnedHost(ALLOWED_HOST),
             user_agent="dekimasen.app/1.0 (event import)",
             timeout=FETCH_TIMEOUT,
             max_bytes=MAX_RESPONSE_BYTES,
