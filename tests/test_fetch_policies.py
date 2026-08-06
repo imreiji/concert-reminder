@@ -60,6 +60,21 @@ def test_approved_public_hosts_accepts_an_approved_public_host(monkeypatch):
     ApprovedPublicHosts(lambda host: host == "eplus.jp").check("https://eplus.jp/x")
 
 
+def test_approved_public_hosts_refuses_an_ipv4_compatible_ipv6_metadata_address(monkeypatch):
+    # `::169.254.169.254` is the deprecated IPv4-COMPATIBLE IPv6 form (RFC
+    # 4291 ::/96, distinct from IPv4-MAPPED `::ffff:a.b.c.d`). Both glibc's
+    # and Windows' inet_ntop render an address in that block back into this
+    # exact dotted-decimal text, and plain `ip.is_global` does NOT unwrap it
+    # -- it reports this string as global. A crafted AAAA record in this
+    # block for an admin-approved host must still be refused.
+    monkeypatch.setattr(
+        "app.fetching._resolve", lambda host: ["::169.254.169.254"]
+    )
+    policy = ApprovedPublicHosts(lambda host: True)
+    with pytest.raises(HostNotAllowed):
+        policy.check("https://metadata.example/latest/meta-data/")
+
+
 @pytest.mark.asyncio
 async def test_a_redirect_off_an_approved_host_to_an_unapproved_one_is_refused(monkeypatch):
     monkeypatch.setattr("app.fetching._resolve", lambda host: ["93.184.216.34"])
