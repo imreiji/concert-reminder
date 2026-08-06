@@ -235,8 +235,19 @@ async def discoveries(
             # documented reasoning -- a deploy that has not opted in should
             # not even see a control that spends a real key per press.
             "triage_enabled": settings.triage_enabled,
-            "triage_pending": await pending_triage_run(session) is not None,
-            "triage_last": await latest_triage_run(session),
+            # kind="classify" on BOTH: this page's "AI triage" button and its
+            # status strip report on the classify pass alone. Unfiltered, a
+            # completion run (kind="complete") -- queued or finished -- would
+            # masquerade as a classify result here: its classify columns
+            # (dismissals/drafts) are NULL and render as a confident "0
+            # dismissals, 0 drafts", while its skipped count and token totals
+            # are the COMPLETION run's real numbers attributed to the wrong
+            # pass. The completion button's own status strip
+            # (import_pending_list, routes/imports.py) already reads
+            # kind="complete" -- this is that page's mirror, which the
+            # original cut never got.
+            "triage_pending": await pending_triage_run(session, kind="classify") is not None,
+            "triage_last": await latest_triage_run(session, kind="classify"),
         },
     )
 

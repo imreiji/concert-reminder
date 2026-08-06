@@ -8,6 +8,31 @@
     full preview, edit anything, and create the event -- or discard it if it isn't worth tracking.{% endtrans %}</p>
 </div>
 
+{% if can_complete %}
+{#- The AI completion button. Rounds are the one thing phase 1 deliberately
+    never fills, and this is where they get filled: it reads each draft's own
+    official_url and proposes rounds, keeping only those it can find quoted on
+    that page. Gated on the flag itself, not merely on the route existing. -#}
+<form method="post" action="/concerts/import/pending/complete" style="margin:1rem 0">
+  <button class="act" type="submit" {% if completion_pending %}disabled{% endif %}>
+    {{ _("Complete drafts with AI") }}</button>
+  {% if completion_pending %}
+  <span class="dim">{{ _("Completion requested — the scheduler will start it within a minute.") }}</span>
+  {% else %}
+  <span class="dim">{% trans %}Reads each draft's official ticket page and proposes rounds, keeping only
+    deadlines it can quote from that page. Costs a few cents per press.{% endtrans %}</span>
+  {% endif %}
+</form>
+{% if waiting_domains %}
+<div class="banner warn">
+  {% trans count=waiting_domains %}One website is waiting for your approval before its page can be
+  read.{% pluralize %}{{ count }} websites are waiting for your approval before their pages can be
+  read.{% endtrans %}
+  <a href="/admin/fetch-domains">{{ _("Review them") }}</a>
+</div>
+{% endif %}
+{% endif %}
+
 {% if rows %}
 <div class="row-list" style="margin-top:1.5rem; max-width:52rem">
   {#- Its own `.prow` layout rather than `.subrow` (preferences.html): that

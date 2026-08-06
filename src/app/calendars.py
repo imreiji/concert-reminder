@@ -122,7 +122,7 @@ import httpx
 from app.db.service import DiscoveredInput
 from app.domain.eventernote import ActorEvent
 from app.domain.ics_read import parse_ics
-from app.fetching import FetchError, fetch_html
+from app.fetching import FetchError, PinnedHost, fetch_html
 
 log = logging.getLogger(__name__)
 
@@ -280,7 +280,7 @@ async def fetch_feed(
     try:
         return await fetch_html(
             url,
-            allowed_host=ALLOWED_HOST,
+            policy=PinnedHost(ALLOWED_HOST),
             user_agent=USER_AGENT,
             max_bytes=MAX_FEED_BYTES,
             transport=transport,

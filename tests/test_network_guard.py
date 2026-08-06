@@ -15,7 +15,7 @@ import pytest
 from conftest import RealNetworkAttempt
 
 from app.discovery import fetch_actor_events
-from app.fetching import fetch_html
+from app.fetching import PinnedHost, fetch_html
 
 URL = "https://www.eventernote.com/actors/Liyuu/34637/events"
 
@@ -41,7 +41,7 @@ async def test_fetch_html_direct_is_blocked_and_names_the_fetch():
     reads "a test constructed a real httpx.AsyncClient", which does not say
     which fetch to stub; with it, the failing URL is in the text."""
     with pytest.raises(RealNetworkAttempt, match=r"fetch_html\('https://www\.eventernote"):
-        await fetch_html(URL, allowed_host="www.eventernote.com", user_agent="x")
+        await fetch_html(URL, policy=PinnedHost("www.eventernote.com"), user_agent="x")
 
 
 async def test_a_bare_async_client_is_blocked():

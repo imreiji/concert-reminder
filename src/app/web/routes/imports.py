@@ -29,10 +29,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+import yaml
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import llm
+from app.config import settings
 from app.db.models import PendingDraft, Round
 from app.db.service import (
     create_pending_drafts,
@@ -44,7 +47,10 @@ from app.db.service import (
     match_venue_tag_id,
     match_venue_tag_id_by_slug,
     pending_drafts,
+    pending_fetch_domain_count,
+    pending_triage_run,
     record_round_label_phrase,
+    request_triage,
     round_label_phrases,
     sync_concert,
     sync_concert_venue_tags,
@@ -53,10 +59,14 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.draft import ParsedConcert
 from app.domain.ingest import IngestError, parse_ramen_event
+from app.domain.round_completion import CompletionResponseError, DraftMergeError
 from app.domain.types import ITEM_SALE_KINDS, ConcertKind, RoundKind
+from app.domain.urls import UnsafeURLError, clean_url
 from app.domain.yaml_import import DraftError, parse_draft, parse_drafts
-from app.fetching import FetchFailed, HostNotAllowed, check_host, fetch_html
-from app.web.auth import SessionUser, require_editor
+from app.draft_completion import complete_one
+from app.fetching import FetchFailed, HostNotAllowed, PinnedHost, fetch_html
+from app.llm import LlmError
+from app.web.auth import SessionUser, require_admin, require_editor
 from app.web.forms import form_url, require_variants
 from app.web.routes.concerts import (
     RoundRequiresError,
@@ -116,7 +126,7 @@ def _check_host(url: str) -> None:
     has always answered.
     """
     try:
-        check_host(url, ALLOWED_HOST)
+        PinnedHost(ALLOWED_HOST).check(url)
     except HostNotAllowed as exc:
         raise HTTPException(
             status_code=400,
@@ -141,7 +151,7 @@ async def fetch_ramen_html(url: str, transport: httpx.AsyncBaseTransport | None 
     try:
         return await fetch_html(
             url,
-            allowed_host=ALLOWED_HOST,
+            policy=PinnedHost(ALLOWED_HOST),
             user_agent="dekimasen.app/1.0 (event import)",
             timeout=FETCH_TIMEOUT,
             max_bytes=MAX_RESPONSE_BYTES,
@@ -336,6 +346,17 @@ async def import_preview(
             # The URL-scrape path has no pending-draft workflow -- only a
             # pasted draft can be part of a multi-draft batch.
             "pending_id": None,
+            # No completion record on this path (there is no PendingDraft row
+            # for it to hang off), and no paste-fallback box either -- see
+            # _draft_preview_response's own version of these five keys.
+            # Passed explicitly rather than left to Jinja Undefined: the round
+            # loop below evaluates `evidence|length` unconditionally, and
+            # `length` on Undefined raises rather than reading as empty.
+            "evidence": [],
+            "completion_rejected": [],
+            "completion_source": "",
+            "completion_source_url": None,
+            "can_complete": False,
         },
     )
 
@@ -346,6 +367,7 @@ async def _draft_preview_response(
     session: AsyncSession,
     parsed: ParsedConcert,
     pending_id: int | None = None,
+    completion: dict | None = None,
 ) -> HTMLResponse:
     """Build the `import_preview.html` render for an already-parsed draft.
 
@@ -356,6 +378,9 @@ async def _draft_preview_response(
     the parsing itself (each caller gets `parsed` its own way) and plus
     `pending_id`, which rides through as a hidden field on the preview form so
     `import_commit` knows which row to stamp on a successful commit.
+
+    `completion` is the parsed `PendingDraft.completion_yaml` record, when one
+    exists -- only `import_pending_detail` ever has one to pass.
     """
     picker = await tag_picker_context(session)
     venue_tags = await all_venue_tags(session)
@@ -437,6 +462,44 @@ async def _draft_preview_response(
                 "pick it by hand"
             )
 
+    # `completion_yaml` is written only by `complete_one`, which always emits
+    # a list for `evidence`/`rejected` and a string for `source_url` -- but a
+    # value read back off the DB is still data, not a promise, and this
+    # render must never 500 on a shape the writer didn't intend. Wrong-typed
+    # leaves fall back to "nothing to show" exactly like a YAML parse failure
+    # does one call up in `import_pending_detail`.
+    completion = completion or {}
+    completion_evidence = completion.get("evidence")
+    if not isinstance(completion_evidence, list):
+        completion_evidence = []
+    else:
+        # The outer list being a list doesn't say anything about its
+        # ELEMENTS -- round_card does `evidence.items()`, so one non-dict
+        # entry (e.g. `evidence: ["oops"]`) would 500 the whole page. Kept
+        # in place rather than dropped, so a bad entry at index i still
+        # leaves the REST of the list correctly aligned to their rounds; it
+        # just reads as "no evidence for this one" instead of crashing.
+        completion_evidence = [e if isinstance(e, dict) else {} for e in completion_evidence]
+    completion_rejected = completion.get("rejected")
+    if not isinstance(completion_rejected, list):
+        completion_rejected = []
+    completion_source = completion.get("source_url")
+    if not isinstance(completion_source, str):
+        completion_source = ""
+    # completion_source lands in an <a href> on the template -- the SAME
+    # invariant-7 gate every editor-supplied URL passes through
+    # (domain.urls.clean_url), because this string is exactly as untrusted:
+    # it is either model output or the paste route's own literal
+    # "(pasted by hand)" (never a URL at all). clean_url raises on anything
+    # that isn't http(s)-shaped; caught rather than propagated, because losing
+    # the link is fine but the banner should still say WHERE the rounds came
+    # from -- completion_source itself stays the raw text either way, and the
+    # template only wraps it in a link when completion_source_url is set.
+    try:
+        completion_source_url = clean_url(completion_source)
+    except UnsafeURLError:
+        completion_source_url = None
+
     return templates.TemplateResponse(
         request,
         "import_preview.html",
@@ -477,6 +540,21 @@ async def _draft_preview_response(
             # falls through to its unset-pending_id behaviour exactly as
             # before this feature existed.
             "pending_id": pending_id,
+            # What an AI completion pass read, when one ran on this row. None
+            # for a fresh paste and for a draft nobody completed, which is what
+            # keeps the round card's output byte-identical on every other
+            # surface. `evidence` is positional -- index i belongs to round i,
+            # because both lists were written by the same merge.
+            "evidence": completion_evidence,
+            "completion_rejected": completion_rejected,
+            "completion_source": completion_source,
+            # The http(s)-checked half of completion_source -- see the
+            # clean_url comment above. None means "show the text, no link".
+            "completion_source_url": completion_source_url,
+            # Gates the paste-fallback box exactly like the batch Complete
+            # button on the pending list (import_pending_list) -- same
+            # spelling, so the two controls agree on who gets to spend a call.
+            "can_complete": settings.triage_enabled and user.is_admin,
         },
     )
 
@@ -633,8 +711,61 @@ async def import_pending_list(
             unmatched_count=len(unmatched),
         ))
     return templates.TemplateResponse(
-        request, "import_pending.html", {"user": user, "rows": pending_rows}
+        request,
+        "import_pending.html",
+        {
+            "user": user,
+            "rows": pending_rows,
+            # The completion button and its two status lines. Gated on the
+            # flag ITSELF, not merely on the route's existence -- a deploy
+            # that has not opted in should not see a control that spends a
+            # real key per press -- and on admin, because pressing it costs
+            # money.
+            "can_complete": settings.triage_enabled and user.is_admin,
+            "completion_pending": await pending_triage_run(session, kind="complete") is not None,
+            "waiting_domains": await pending_fetch_domain_count(session),
+        },
     )
+
+
+@router.post("/pending/complete")
+async def import_pending_complete(
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Ask the scheduler for an AI completion pass over this admin's own open
+    skeleton drafts.
+
+    Same request/drain shape as the triage button and for the same reason: a
+    run that fetches up to fifteen official pages and makes fifteen LLM calls
+    is far too slow for an HTTP request to hold, so this writes a row the next
+    tick picks up. `request_triage` is idempotent per kind while one is still
+    "requested", so a double-press queues one pass.
+
+    Admin, not editor: the press spends real money, exactly as the triage
+    button does. 303, never 307 -- the POST must not be replayed against the
+    page it lands on.
+
+    Registered BEFORE `import_pending_detail` (`GET /pending/{pending_id}`),
+    the same defensive convention as `imports.py`-before-`concerts.py` in
+    `web/app.py` (CLAUDE.md): a literal path registered ahead of a template
+    that could swallow it. Checked directly rather than assumed -- for THIS
+    pair it is not actually load-bearing today: this route is POST-only and
+    `import_pending_detail` is GET-only, so a POST to `/pending/complete`
+    only ever scores a method-mismatch partial against the templated route,
+    and Starlette keeps scanning past a partial for a full match wherever it
+    sits in the list (confirmed by moving this route after
+    `import_pending_detail` and `import_pending_discard` and rerunning
+    tests/test_draft_completion_web.py -- all 11 still passed). The ordering
+    is kept anyway because it costs nothing and is what keeps a future
+    generic `POST /pending/{pending_id}` route -- which WOULD collide --
+    safe by construction, without anyone having to re-derive this.
+    """
+    if not settings.triage_enabled:
+        raise HTTPException(status_code=404)
+    await request_triage(session, datetime.now(UTC), user.id, kind="complete")
+    await session.commit()
+    return RedirectResponse("/concerts/import/pending", status_code=303)
 
 
 async def _own_open_pending(
@@ -681,7 +812,18 @@ async def import_pending_detail(
             "import_form.html",
             _import_form_context(user, error=str(e), lang_next_url="/concerts/import"),
         )
-    return await _draft_preview_response(request, user, session, parsed, pending_id=row.id)
+    completion = None
+    if row.completion_yaml:
+        try:
+            loaded = yaml.safe_load(row.completion_yaml)
+            completion = loaded if isinstance(loaded, dict) else None
+        except yaml.YAMLError:
+            # Proofreading scaffolding, not data anything depends on: a record
+            # that no longer parses costs the quotes, never the preview.
+            completion = None
+    return await _draft_preview_response(
+        request, user, session, parsed, pending_id=row.id, completion=completion
+    )
 
 
 @router.post("/pending/{pending_id}/discard")
@@ -699,6 +841,130 @@ async def import_pending_discard(
     await discard_pending_draft(session, pending_id, datetime.now(UTC))
     await session.commit()
     return RedirectResponse("/concerts/import/pending", status_code=303)
+
+
+# A pasted page is capped well below Starlette's hard 1MB per-field limit,
+# which applies to EVERY Form field whatever an app constant says: Japanese
+# costs 3 bytes a character in UTF-8, so 150k characters is ~450KB and stays
+# clear of a wall that would otherwise arrive as an opaque failure.
+MAX_PASTED_PAGE_CHARS = 150_000
+
+# llm.chat's own default (llm.LLM_TIMEOUT_SECONDS, 120s) is fine for the
+# batch runner (run_completion) -- it holds no HTTP request open. THIS call
+# site is different: it sits inline in a request behind Cloudflare, whose
+# proxy times out at 100s. A completion call that runs past that returns the
+# operator a 524 with the call already billed and the transaction outcome
+# unclear -- worse than a legible LlmError. 90s leaves real margin under the
+# 100s wall for the rest of this request's own work (the DB writes, the
+# redirect) without cutting off calls that would otherwise finish in time.
+PASTE_LLM_TIMEOUT_SECONDS = 90.0
+
+
+def _draft_already_has_rounds(draft_text: str) -> bool:
+    """True only when the stored draft parses AND already carries a real
+    ladder.
+
+    `complete_one` -> `merge_rounds` replaces the `rounds` key WHOLESALE, so
+    pressing "Read this page" on a draft that already has rounds -- an
+    agent-authored draft off the add-concert skill, or a human-typed one --
+    would destroy them and substitute whatever the (deliberately strict)
+    verifier grounds, with no undo: `draft_text` is the only copy. Mirrors
+    `completion_candidates`' own "no rounds yet" rule (same reasoning, same
+    file) so the automatic batch path and this human-driven fallback can
+    never disagree about which drafts are safe to run a completion pass over.
+
+    A draft that fails to parse at all answers False, deliberately: this
+    function only guards against overwriting a ladder it can actually SEE.
+    A row whose stored text is unreadable already fails downstream, inside
+    `complete_one`'s own `merge_rounds` call, as a recorded rejection rather
+    than a silent refusal here -- see
+    test_a_corrupted_stored_draft_redirects_and_is_not_rebilled.
+    """
+    try:
+        return bool(parse_draft(draft_text).rounds)
+    except DraftError:
+        return False
+
+
+@router.post("/pending/{pending_id}/complete")
+async def import_pending_complete_one(
+    pending_id: int,
+    page_text: str = Form(""),
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Complete ONE draft from a page the operator pasted.
+
+    The fallback for every way the automatic half declines -- no URL in the
+    draft, a host nobody approved, a dead fetch, a page rendered by JavaScript.
+    It needs no fetch and no approval, which is what makes it safe to keep the
+    automatic half narrow.
+
+    Inline rather than queued, unlike the batch button: one LLM call is a
+    bounded wait in a request. It runs the SAME `complete_one` the batch runner
+    does, so the two cannot drift on what counts as a grounded round.
+    """
+    if not settings.triage_enabled:
+        raise HTTPException(status_code=404)
+    row = await _own_open_pending(session, pending_id, user)
+    if row is None:
+        raise HTTPException(status_code=404)
+    if _draft_already_has_rounds(row.draft_text):
+        # The template hides the fold for exactly this row (see
+        # import_preview.html's `not parsed.rounds` gate), but that is
+        # presentation, not enforcement -- a bookmarked form, a replayed
+        # request, or a second tab must not be able to overwrite a real
+        # ladder that already exists here. No undo exists once merge_rounds
+        # has run.
+        raise HTTPException(
+            status_code=422,
+            detail="this draft already has rounds -- reading a page would replace them",
+        )
+    text = page_text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="paste the ticket page's text first")
+    if len(text) > MAX_PASTED_PAGE_CHARS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"that page is longer than {MAX_PASTED_PAGE_CHARS} characters",
+        )
+    try:
+        # llm.chat looked up HERE, at call time, rather than left to
+        # complete_one's own default -- a Python default argument binds its
+        # value once, at complete_one's OWN module-import time, so relying on
+        # it would freeze this route to whatever `llm.chat` was before any
+        # test (or a future call-site) ever got a chance to swap it.
+        # llm_timeout=PASTE_LLM_TIMEOUT_SECONDS (see its own comment): this
+        # ONE call site is inline in a request behind Cloudflare's 100s proxy
+        # wall, unlike the batch runner, which keeps llm.chat's 120s default.
+        await complete_one(
+            session, row, text, "(pasted by hand)",
+            llm_chat=llm.chat, llm_timeout=PASTE_LLM_TIMEOUT_SECONDS,
+        )
+    except LlmError as exc:
+        # complete_one calls llm_chat as its very FIRST line, before any
+        # write -- so a transport/provider failure here has flushed nothing,
+        # and there is nothing to commit. get_session's ordinary
+        # rollback-on-unhandled-exception handling is exactly the right
+        # transaction outcome; this 502 just carries the provider's message.
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except (CompletionResponseError, DraftMergeError):
+        # An unusable model reply, or a stored draft merge_rounds refuses to
+        # touch -- an ordinary production outcome (the batch runner counts it
+        # as one skipped draft), not a corrupted-state event. complete_one
+        # already wrote and FLUSHED completion_yaml recording this as a
+        # rejection before re-raising (its own docstring: the call was
+        # already paid for, so a second press must not pay for it again).
+        # Falling through to the commit below is what makes that promise
+        # hold -- catching only LlmError and letting this reach the 500
+        # handler would roll the flushed mark back (get_session never
+        # commits) and re-bill the SAME unusable reply on the very next
+        # press, the exact double-charge complete_one exists to prevent.
+        # The rejection then renders in the banner above, right where an
+        # operator should read "the model's reply could not be used".
+        pass
+    await session.commit()
+    return RedirectResponse(f"/concerts/import/pending/{pending_id}", status_code=303)
 
 
 SKILL_DIST_DIR = Path(__file__).resolve().parents[1] / "skill_dist" / "add-concert"

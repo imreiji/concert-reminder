@@ -99,7 +99,7 @@ from app.domain.triage_prompts import (
     strip_rounds,
 )
 from app.domain.yaml_import import parse_drafts
-from app.fetching import fetch_html
+from app.fetching import PinnedHost, fetch_html
 from app.scheduler import heartbeat
 
 log = logging.getLogger(__name__)
@@ -185,7 +185,7 @@ async def fetch_event_page(
     """
     return await fetch_html(
         url,
-        allowed_host=ALLOWED_HOST,
+        policy=PinnedHost(ALLOWED_HOST),
         user_agent=TRIAGE_USER_AGENT,
         transport=transport,
     )

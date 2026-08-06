@@ -958,6 +958,13 @@ class TriageRun(Base):
         BigInteger, ForeignKey("users.discord_id", ondelete="SET NULL")
     )
     requested_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    # Which run this is. "classify" is phase 1 (the discovery-queue pass) and
+    # "complete" is phase 2 (filling pending skeletons' rounds). ONE table for
+    # both because they share everything that is hard -- the request/pickup
+    # handshake, the status machine, and the re-stamp-after-rollback rule --
+    # and differ only in what they count. server_default so every row written
+    # before this column existed reads back as the classify run it was.
+    kind: Mapped[str] = mapped_column(String(20), default="classify", server_default="classify")
     started_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     # The proposed prune list, in the same YAML shape a human would paste
@@ -975,9 +982,54 @@ class TriageRun(Base):
     calendar_skipped: Mapped[int | None] = mapped_column(Integer)
     tokens_in: Mapped[int | None] = mapped_column(Integer)
     tokens_out: Mapped[int | None] = mapped_column(Integer)
+    # Completion-run counts. NULL on a classify run and on a run that never
+    # started; 0 means "looked, found none". Kind-specific by design -- see
+    # `kind` above -- so reading a count without checking the kind is a bug in
+    # the reader, not a reason to fold these into the classify counts, whose
+    # meanings genuinely differ.
+    drafts_completed: Mapped[int | None] = mapped_column(Integer)
+    rounds_added: Mapped[int | None] = mapped_column(Integer)
+    rounds_rejected: Mapped[int | None] = mapped_column(Integer)
+    blocked_domains: Mapped[int | None] = mapped_column(Integer)
     # Truncated to fit an admin-page row comfortably; the full traceback
     # belongs in the server log, not this table.
     error: Mapped[str] = mapped_column(String(300), default="")
+
+
+class FetchDomain(Base):
+    """One host the completion pass wanted to read, and whether it may.
+
+    This app's HTTP fetches are host-pinned by design (`app/fetching.py`), but
+    a draft's `official_url` is by nature an arbitrary host -- that is what an
+    official page IS. Rather than drop the pin, the completion pass asks a
+    human once per host: an unknown host is recorded here and the draft is
+    skipped, and only an approved host is ever fetched.
+
+    Pending is BOTH timestamps NULL, the nullable-timestamp idiom
+    `dismissed_at`/`announced_at` already use rather than a status string with
+    its own vocabulary. A declined host stays declined and is never proposed
+    again -- re-proposing something a human already refused is how an approval
+    queue becomes noise nobody reads.
+    """
+
+    __tablename__ = "fetch_domains"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Lowercased at the single write path (`note_fetch_domain`); hosts are
+    # case-insensitive and two casings of one host must not be two rows with
+    # two different verdicts.
+    host: Mapped[str] = mapped_column(String(255), unique=True)
+    first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    # The URL that wanted it, so the approver can judge the host by what it
+    # was actually asked to read rather than by its name alone.
+    first_seen_url: Mapped[str] = mapped_column(String(1000), default="")
+    approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    declined_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # SET NULL, not CASCADE: erasing the admin who decided must not un-decide
+    # the host -- same reasoning as TriageRun.requested_by.
+    decided_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.discord_id", ondelete="SET NULL")
+    )
 
 
 class PendingDraft(Base):
@@ -1026,6 +1078,15 @@ class PendingDraft(Base):
         ForeignKey("concerts.id", ondelete="SET NULL")
     )
     discarded_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # What an AI completion pass read and decided, as one small YAML document:
+    # `source_url`, `evidence` (round index -> field -> the quoted source line)
+    # and `rejected` (human-readable reasons a proposed round was dropped).
+    # BESIDE the draft, never inside it: evidence is proofreading scaffolding,
+    # and draft_text is a document that gets exported, re-pasted and committed
+    # into concerts. Non-empty also means ATTEMPTED, which is what stops a
+    # second press re-paying for a decision already handed to the operator --
+    # so it is written only when an LLM call actually happened.
+    completion_yaml: Mapped[str] = mapped_column(Text, default="", server_default="")
 
 
 class OpsCheckState(Base):

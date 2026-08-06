@@ -41,7 +41,7 @@ from app.domain.eventernote import (
 )
 from app.domain.timezones import utc_to_jst
 from app.domain.types import TagKind
-from app.fetching import FetchError, fetch_html
+from app.fetching import FetchError, PinnedHost, fetch_html
 from app.scheduler import heartbeat
 
 log = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ async def fetch_actor_events(
     """
     try:
         return await fetch_html(
-            url, allowed_host=ALLOWED_HOST, user_agent=USER_AGENT, transport=transport
+            url, policy=PinnedHost(ALLOWED_HOST), user_agent=USER_AGENT, transport=transport
         )
     except FetchError as exc:
         raise DiscoveryFetchError(str(exc)) from exc

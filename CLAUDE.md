@@ -340,17 +340,44 @@ only when both of their ends are attached -- have shipped since).
   you owe outranks a round you could still enter. LOST and NOT_APPLIED place
   nothing (neither is an end state). `service.board_cards` gathers its
   inputs and `OPEN_COLUMN_LIMIT` caps the open column.
-- `src/app/fetching.py` — the ONE host-pinned HTTP fetch, top-level beside
+- `src/app/fetching.py` — the ONE outbound HTTP fetch, top-level beside
   `i18n.py` and `ops.py` (it does I/O, so it cannot live in `domain/`; both a
   web route and the scheduler import it). It was private to the ramen.events
   importer first, and it was EXTRACTED rather than copied when discovery needed
   it: two copies of a security control means a weakness found later gets fixed
-  in one and missed in the other. The caller names its `allowed_host`; the guard
-  raises its own `FetchError`/`HostNotAllowed`/`FetchFailed` and each caller
-  translates (the web route to HTTP status codes, the sweep to a per-artist
-  skip). The redirect hook is built PER CALL so it closes over that caller's
-  host — a module-level hook pinned to one host is the obvious extraction bug
-  and is exactly what a shared guard must not have.
+  in one and missed in the other. The guard raises its own
+  `FetchError`/`HostNotAllowed`/`FetchFailed` and each caller translates (the
+  web route to HTTP status codes, the sweep to a per-artist skip). The redirect
+  hook is built PER CALL so it closes over that caller's policy — a
+  module-level hook pinned to one is the obvious extraction bug and is exactly
+  what a shared guard must not have.
+  **It takes a host POLICY, not a host string** (2026-08-06). `HostPolicy`'s
+  one required method is `check_async`, run before the request and again on
+  every redirect hop. `PinnedHost` is the original guard unchanged — the
+  ramen.events importer, the Eventernote sweep, the calendar feeds and
+  phase-1 triage, i.e. every pre-existing caller — and additionally keeps a
+  genuinely SYNCHRONOUS `check` for its one synchronous caller
+  (`web/routes/imports.py`'s `_check_host`) — a property of that policy, not a
+  second method every policy must grow. `ApprovedPublicHosts` is the
+  completion pass's, and it is the FIRST fetch in this app that is not pinned
+  to a host named in code, because a draft's `official_url` is by nature
+  somebody else's domain. Three things stand in for the pin: https only, a
+  host an admin has approved by name (`FetchDomain`, reviewed at
+  `/admin/fetch-domains` — a human is what the pin became), and every address
+  the host resolves to being public unicast, ALL of them and not any, since a
+  host answering with one public and one private address is a rebinding setup
+  rather than a deployment to accommodate. The policy is what makes the check
+  async: resolution goes through `_resolve_async`, off the event loop and
+  under a total deadline, because this process runs discord.py, FastAPI and
+  the 60s tick on ONE loop and a stalling nameserver would otherwise block all
+  three, not merely this fetch. `_is_actually_global` deliberately does not
+  trust `ip.is_global` alone — measured, not assumed, that the IPv6 wrapper's
+  classification wins over an embedded IPv4's in `::/96`, `::ffff:0:0:0/96`
+  and `64:ff9b::/96`, each of which can encode 169.254.169.254, which on this
+  deploy is a real credential source. Don't add a third policy or a
+  "just this once" bypass: the paste fallback
+  (`POST /concerts/import/pending/{id}/complete`) is what exists for the cases
+  the policy declines, and it needs no fetch at all.
 - `src/app/discovery.py` — the discovery sweep: the Eventernote fetch, and
   since 2026-08-02 a calendar-feed pass in front of it. Sits ABOVE `db/` like
   `ops.py`: it imports `domain/`, `app/calendars.py` and `db.service`, and
@@ -480,6 +507,79 @@ only when both of their ends are attached -- have shipped since).
   `run.id` inside the handler raises `MissingGreenlet` rather than a value —
   the id is captured BEFORE the run, and any future post-rollback bookkeeping
   keyed on a row needs the same.
+- `src/app/draft_completion.py` — phase 2: filling a pending skeleton's
+  `rounds:` from the official page the draft itself names. Same layer and
+  discipline as `triage.py`, and it reuses that feature's `TriageRun` row
+  through a `kind` column (`"complete"` vs the classify default), so the
+  request/pickup handshake, the budget shape and the re-stamp-after-rollback
+  rule exist once rather than twice; `scheduler/loop.py` picks up the oldest
+  requested run OF ANY KIND and dispatches on `kind`, so the two halves
+  serialize against each other by construction and neither starves the
+  reminder tick behind the other. **The rule that replaces `strip_rounds` is
+  EVIDENCE GROUNDING**: the model must quote the page line it read each
+  timestamp from, and `domain/round_evidence.py` drops any round whose quote
+  it cannot find in the same text the model was given — plus the nastier
+  case, a quote that IS on the page but does not carry that timestamp.
+  **That last check is a CONTIGUITY rule, and it is an owner ruling
+  (2026-08-05) made after a review defeated the looser one.** "Do this
+  timestamp's digits appear somewhere in the quote" accepts far too much:
+  against a correct quote of `申込締切 2026年1月10日(土)23:59` it also
+  validates a claimed 01:00 (the hour matches the `1` of `1月`) and a claimed
+  10:00 (it matches the day), and a model that quotes the whole page validates
+  anything assembled from digits anywhere on it. So month must be immediately
+  followed by day as the next number token, hour must be the VERY NEXT number
+  token after that date (immediately followed by minute), the date→time span
+  is capped at 60 characters and the whole quote at 200 — quoting half the
+  page is not evidence, whatever it contains. Two deliberate looseners inside
+  that tight rule: the minute is waived only when it is 0 AND the quote
+  carries no time separator (`:`/`：`/`分`), because `10時` states no zero to
+  find; and the YEAR is checked broadly — anywhere in the quote's numbers or
+  anywhere on the page — never adjacent, since Japanese ticket pages put it in
+  a heading and omit it from the deadline line. The accepted cost is false
+  rejections on some phrasings, and that trade is the whole feature: a
+  rejection is visible, carries its reason,
+  and costs one round typed by hand, while a false accept is a fabricated
+  deadline reaching a real user as a real reminder. NOTHING IS DROPPED
+  SILENTLY — every rejection reaches the preview with its reason, because a
+  real deadline quietly discarded is as harmful as a fake one quietly kept:
+  the operator has no way to know to look in either case.
+  `domain/page_text.py` produces that text ONCE for both the prompt and the
+  check, under one 60k cap; two normalizations would make the guarantee
+  theatre by letting a quote fail on a whitespace rule the model never saw, or
+  verify against text it was never shown. The completion pass rewrites
+  exactly ONE key of the stored draft, `rounds:` (`merge_rounds`,
+  `domain/round_completion.py`), and preserves the leading comment prefix,
+  because phase 1's duplicate containment matches the whole `# source: ...`
+  line and a naive YAML round-trip drops it; a body that will not read back as
+  a mapping raises `DraftMergeError` and writes NOTHING, rather than
+  "succeeding" by wiping the document. Evidence lives BESIDE the draft
+  (`PendingDraft.completion_yaml`), never inside it: a draft is a document
+  that gets committed into `concerts`. It creates no concert — `import_commit`
+  stays the only write path — and it never fetches `eventernote_url`, which
+  carries no ticket information and so could not contain the answer.
+  Two failure rules worth keeping: `complete_one` writes `completion_yaml`
+  even when the reply or the merge is unusable, because the call was already
+  paid for and a second press must not pay for the same junk twice; and
+  `SQLAlchemyError` is the ONE exception the per-draft handler does not
+  absorb, since a poisoned session means the remaining fourteen paid calls
+  would write nothing at all.
+- `routes/fetch_domains.py` — `/admin/fetch-domains`, the approval queue that
+  pays for the widening above. Its own module for the reason `discoveries.py`
+  and `rehearsal.py` are: a router registers whole. English-only and NOT
+  wrapped in `_()` like the other admin pages; only the Preferences LINK is
+  translated. An unapproved host costs one PASSED-OVER DRAFT, never a failed
+  run — counted apart from `skipped` as `blocked_domains`, because nothing
+  failed and the remedy is a click; the draft keeps an empty
+  `completion_yaml`, stays a candidate and the next press picks it up — and a
+  declined
+  host is never proposed again, because an approval queue that keeps re-asking
+  becomes one nobody reads. `note_fetch_domain` (`db/service.py`) is the
+  single write path and RAISES `ValueError` on a host that is URL-shaped,
+  port-bearing or blank: storing one would fail closed but SILENTLY, since
+  `approved_fetch_hosts` could never match it and an admin would think they
+  had approved something. It normalizes through `fetching._normalize_host`,
+  the exact function the guard runs before calling `is_approved`, or an
+  approval recorded here silently fails to match the lookup done there.
 - `src/app/scheduler/` — the tick loop that delivers DMs.
 - `routes/welcome.py` -- the five-step welcome wizard, rebuilt on the design
   system and flowing seamlessly into `/setup` (`POST /welcome/advance`

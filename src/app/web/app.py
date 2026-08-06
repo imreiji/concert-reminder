@@ -37,6 +37,7 @@ from app.web.routes import calendar as calendar_routes
 from app.web.routes import concerts as concert_routes
 from app.web.routes import discover as discover_routes
 from app.web.routes import discoveries as discoveries_routes
+from app.web.routes import fetch_domains as fetch_domain_routes
 from app.web.routes import imports as import_routes
 from app.web.routes import outcomes as outcome_routes
 from app.web.routes import preferences as pref_routes
@@ -353,6 +354,11 @@ def create_app() -> FastAPI:
     # unrelated operational concerns.
     discoveries_routes.templates = templates
     app.include_router(discoveries_routes.router)
+    # /admin/fetch-domains, likewise a literal path -- order-independent. Its
+    # own router for the reason discoveries.py has one: a router registers
+    # whole, and this is a fifth unrelated operational concern.
+    fetch_domain_routes.templates = templates
+    app.include_router(fetch_domain_routes.router)
     # Gated, not guarded: production leaves rehearsal_enabled false, so these
     # routes are absent from the app entirely rather than merely protected.
     if settings.rehearsal_enabled:
