@@ -1,15 +1,18 @@
 """Phase 2's strip_rounds: a round survives only if the app can find the text
-the model says it read.
+the model says it read, IN ONE PLACE.
 
 Phase 1 could guarantee honesty by emitting no rounds at all. Phase 2 emits
 them, so every one of these cases is a way a fabricated deadline could reach a
 real user as a real reminder. A rejection is never silent -- each one carries a
-reason that reaches the preview.
+reason that reaches the preview. A false ACCEPT is the failure that matters
+here; a false REJECT only costs a human one round typed in by hand, so several
+cases below exist specifically to pin that the stricter reading did not tip
+into rejecting things that are actually fine.
 """
 
 from datetime import date
 
-from app.domain.round_evidence import ProposedRound, verify_rounds
+from app.domain.round_evidence import ProposedRound, normalize_numbers, verify_rounds
 
 PAGE = (
     "チケット情報 1次先行抽選 受付開始 2026年1月5日(月)12:00 "
@@ -136,5 +139,186 @@ def test_one_bad_round_does_not_cost_a_good_one():
 
 
 def test_evidence_never_rides_into_the_accepted_data():
-    v = verify_rounds([_round()], PAGE, ["Day 1"], TODAY)
+    # A `data` dict carrying its own stray "evidence" key (e.g. a model that
+    # echoed the field name back into the round mapping itself) must not
+    # survive acceptance -- this is defence in depth, since the draft parser
+    # downstream strips it again; a fixture that never had the key in the
+    # first place would prove nothing about that stripping actually running.
+    r = _round(data={"evidence": "should never reach the committed document"})
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    assert len(v.accepted) == 1
     assert "evidence" not in v.accepted[0].data
+
+
+# -- Regression tests: false accepts found against this fixture in review ---
+
+
+def test_an_hour_that_only_matches_the_dates_own_month_digit_is_rejected():
+    # The real quote and the real date are both correct; only the claimed
+    # HOUR is wrong (it happens to equal the month digit already in the
+    # quote). A flat "is every digit present somewhere" test passed this.
+    r = _round(
+        data={"apply_closes_jst": "2026-01-10 01:00"},
+        evidence={"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"},
+    )
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_hour_that_only_matches_the_dates_own_day_digit_is_rejected():
+    r = _round(
+        data={"apply_closes_jst": "2026-01-10 10:00"},
+        evidence={"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"},
+    )
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_quote_spanning_two_real_lines_does_not_recombine_into_a_third_stamp():
+    # A genuine substring of the page, but it splices one line's DATE with a
+    # different line's TIME. Every digit in the claimed stamp is present in
+    # the quote "somewhere" -- the cross-product a flat set test cannot see.
+    quote = "受付開始 2026年1月5日(月)12:00 申込締切 2026年1月10日(土)23:59"
+    assert quote in PAGE  # sanity: this really is one contiguous page substring
+    r = _round(
+        data={"apply_closes_jst": "2026-01-05 23:59"},
+        evidence={"apply_closes_jst": quote},
+    )
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    assert not v.accepted
+
+
+def test_quoting_the_whole_page_grants_no_stamp_assembled_from_its_digits():
+    r = _round(
+        data={"apply_closes_jst": "2026-01-20 12:00"},
+        evidence={"apply_closes_jst": PAGE},
+    )
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    assert not v.accepted
+
+
+# -- Item 1: quote length cap and date-to-time proximity --------------------
+
+
+def test_a_quote_over_200_characters_is_rejected_on_length_alone():
+    filler = "とても長い注意事項がここにたくさん書かれています。" * 8
+    page = f"申込締切 2026年1月10日(土)23:59 {filler}"
+    quote = page  # a real substring of the page -- rejected for its length, not its truth
+    assert len(quote) > 200
+    r = _round(evidence={"apply_closes_jst": quote})
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "characters" in v.rejected[0]
+    assert "does not carry" not in v.rejected[0]
+    assert "not on the page" not in v.rejected[0]
+
+
+def test_a_date_and_time_more_than_60_characters_apart_is_rejected():
+    filler = "これは注意事項です" * 6  # digit-free padding between date and time
+    page = f"申込締切 2026年1月10日 {filler} 23:59"
+    r = _round(evidence={"apply_closes_jst": page})
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+
+
+def test_a_close_date_and_time_within_60_characters_is_still_accepted():
+    page = "申込締切 2026年1月10日(土)23:59"
+    r = _round(evidence={"apply_closes_jst": page})
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert len(v.accepted) == 1
+
+
+def test_a_nonzero_minute_does_not_get_the_zero_waiver():
+    # The real page minute is 30, not 0 -- with a ':' present the waiver must
+    # not apply, so the claimed 0 minute is checked for real and fails.
+    page = "申込締切 2026年1月10日(土)12:30"
+    r = _round(
+        data={"apply_closes_jst": "2026-01-10 12:00"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+
+
+# -- Item 2: chronological, not lexicographic, ordering ---------------------
+
+
+def test_a_T_separated_stamp_that_is_genuinely_out_of_order_is_rejected():
+    # ' ' sorts below 'T' in plain text, so the OLD raw-string compare read
+    # this pair as in order even though the round would close before it opens.
+    page = "受付開始 2026年1月10日(土)23:59 申込締切 2026年1月10日(土)12:00"
+    r = _round(
+        data={"apply_opens_jst": "2026-01-10 23:59", "apply_closes_jst": "2026-01-10T12:00"},
+        evidence={
+            "apply_opens_jst": "受付開始 2026年1月10日(土)23:59",
+            "apply_closes_jst": "申込締切 2026年1月10日(土)12:00",
+        },
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "out of order" in v.rejected[0]
+
+
+def test_a_stamp_with_a_leading_prefix_that_is_genuinely_in_order_is_kept():
+    # `_stamp_parts` uses `.search()`, so a stray prefix like "受付 " parses
+    # fine -- but as a RAW STRING it sorts above every ASCII digit, so the
+    # OLD compare misread a genuinely-in-order pair as backwards.
+    page = "受付開始 2026年1月10日(土)12:00 申込締切 2026年1月10日(土)23:59"
+    r = _round(
+        data={"apply_opens_jst": "受付 2026-01-10 12:00", "apply_closes_jst": "2026-01-10 23:59"},
+        evidence={
+            "apply_opens_jst": "受付開始 2026年1月10日(土)12:00",
+            "apply_closes_jst": "申込締切 2026年1月10日(土)23:59",
+        },
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert len(v.accepted) == 1
+
+
+# -- Item 3: an unrecognized applies_to shape is rejected loudly ------------
+
+
+def test_applies_to_as_a_bare_scalar_is_rejected_not_skipped():
+    # A bare YAML scalar ("applies_to: Day 9") is a string, not a list -- an
+    # entirely ordinary way for a model to answer wrong. It must not fall
+    # through the `isinstance(..., list)` guard unexamined.
+    r = _round(data={"applies_to": "Day 9"})
+    v = verify_rounds([r], PAGE, ["Day 1", "Day 2"], TODAY)
+    assert not v.accepted
+    assert "applies_to" in v.rejected[0]
+    assert "list" in v.rejected[0]
+
+
+# -- Item 8: an invalid calendar date is rejected ----------------------------
+
+
+def test_a_nonexistent_calendar_date_is_rejected():
+    page = "申込締切 2026年2月30日(月)23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-02-30 23:59"},
+        evidence={"apply_closes_jst": "申込締切 2026年2月30日(月)23:59"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "calendar date" in v.rejected[0]
+
+
+# -- Item 6 & 7: full-width folding ------------------------------------------
+
+
+def test_normalize_numbers_folds_full_width_digits_and_colon():
+    assert normalize_numbers("２０２６年１月１０日(土)２３：５９") == [2026, 1, 10, 23, 59]
+    assert normalize_numbers("2026-01-10 23:59") == [2026, 1, 10, 23, 59]
+
+
+def test_a_full_width_page_still_matches_a_half_width_quote():
+    # The page (as a real Japanese site might write it) uses zenkaku digits;
+    # the model's quote reproduces it in ASCII digits, which is a normal
+    # transcription, not a fabrication -- the on-page substring test must
+    # fold both sides the same way or this reads as "not on the page".
+    page = "申込締切　２０２６年１月１０日(土)２３：５９"
+    r = _round(evidence={"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"})
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert len(v.accepted) == 1
