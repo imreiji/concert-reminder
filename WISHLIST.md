@@ -1064,6 +1064,30 @@ shapes above -- the "quiet ladders" admin surface -- gets cheaper in the same
 motion, because a rounds-less concert originating from a skeleton draft is
 exactly what such a list would find first.
 
+Re-read 2026-08-06 against AI triage phase 2 -- the build most likely of any so
+far to have moved this entry -- and **held at #1, but the composition of the
+case has genuinely changed in both directions and that is worth writing down
+rather than leaving to be re-derived.** Weakened: the volume argument added the
+day before is largely ANSWERED. A skeleton's rounds are now filled BEFORE it is
+committed, so pressing the triage button no longer manufactures tracked
+concerts with empty ladders at the rate that paragraph feared -- the drafts
+still arrive empty, but they no longer arrive empty INTO THE CATALOGUE.
+Strengthened, and more than the first point weakens it: the HEAVYWEIGHT of the
+three shapes above -- a scheduled re-fetch of each concert's own official URL
+-- was explicitly gated on "a genuinely new trust decision (`fetching.py` is
+host-pinned per caller and this is arbitrary editor-supplied hosts)", and that
+decision has now been MADE and SHIPPED. `ApprovedPublicHosts`, the
+`/admin/fetch-domains` approval queue and evidence-grounded rounds are exactly
+the machinery that shape was waiting on, so its effort drops from "a new
+security posture plus a parser" to "a scheduler pass over concerts instead of
+over pending drafts". Unchanged, and this is why the rank holds: the CORE claim
+is untouched. Phase 2 reads a page only when an admin presses a button, only
+for a PENDING draft (`completion_candidates` filters `committed_at IS NULL`),
+and never revisits a concert already in the catalogue. ブシロード20周年記念ライブ
+-- whose page says 詳細は後日発表 -- is the canonical case, and phase 2 reads
+that page, correctly finds nothing, and marks the draft done. Nothing in this
+build notices when that page later grows a round.
+
 ### 2. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
@@ -1174,43 +1198,20 @@ reminder fired at a slightly-wrong offset degrades, but a round the ladder
 never learned about fires nothing at all, and only one of those failures is
 silent. Same verdict as the twelve before it: position, never substance.
 
-### 3. AI completion of a skeleton draft (AI triage, phase 2)
+Held at #2 on 2026-08-06 by pure removal, when the phase-2 entry directly below
+it shipped -- the first time in this entry's history that a removal did NOT
+change its number, since everything that renumbered sat underneath it. Re-read against what shipped (a runner, a pure evidence checker, a
+host policy and an admin approval page; nothing within reach of `PresetItem`,
+the offset form or the sentence builders) and untouched in substance for the
+fourteenth consecutive pass. One thing worth naming rather than implying,
+because the two builds do touch: an AI-completed round can now carry an
+`apply_opens_jst` the editor never typed, which means the moment an FCFS sale
+opens is more often PRESENT in the data than it used to be -- and a moment
+present in the data is precisely the one a days-and-hours-only offset can only
+remind you about too early. That sharpens this entry's own strongest case
+again, exactly as the calendar-feed build did, without changing its rank.
 
-Impact: medium - effort: large, with one hard design question already
-identified. Raised: 2026-08-05 (owner, framing the AI-triage build as phase 1
-of two before that build started).
-
-Phase 1 (Shipped below) drafts a discovery lead into a SKELETON: trilingual
-titles and leg labels, legs, cast tags -- and `rounds: []`, always, stripped in
-code whatever the model returns. Phase 2 is the other half: completing one of
-those pending skeletons into a full draft, rounds included, so the deadlines an
-event actually has arrive without a human reading a ticket page and typing four
-timestamps per round. That is the expensive step of the whole pipeline and the
-only one phase 1 left untouched -- which is precisely why it was left: a round
-is a promise this app makes to a user ("a deadline it names is real"), and a
-hallucinated `apply_closes_jst` is the worst thing this system can produce.
-
-**The hard question is already recorded, in the phase-1 spec's Phasing note
-(`docs/superpowers/specs/2026-08-05-ai-triage-design.md`), so it is not
-rediscovered: how the official ticket page reaches the model.** Owner-supplied
--- a URL or pasted page text on the pending-draft review -- keeps a human
-vouching for the source and keeps the fetch surface as narrow as it is today.
-Server-side search would mean an arbitrary-host fetch surface (`fetching.py` is
-host-pinned per caller by design) and would put a model's judgment where the
-app's core promise lives. Recorded, deliberately not decided here: it is phase
-2's brainstorm to make, and it wants phase 1's calibration verdict first.
-
-Ranked #3, below minute-level offsets on the effort tiebreak -- both read as
-medium impact, but that one is small and unblocked while this is large and
-gated on a calibration run that has not happened. Two adjacencies are worth
-naming rather than rediscovering. It shares a family with #1: that entry makes
-a missing round ladder VISIBLE on concerts already tracked, this one makes
-FILLING one cheap, and neither substitutes for the other. And phase 1 has, by
-design, made #1 slightly worse -- every skeleton it drafts is another concert
-whose ladder is empty on purpose -- which is an argument for #1's rank, not
-against phase 1.
-
-### 4. Franchise-aware round-label suggestions
+### 3. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1231,7 +1232,20 @@ dimension should check the phrase library's shipped schema stores enough to
 count phrases per franchise tag, and extend it there rather than bolting a
 second count on the side.
 
-### 5. Ten of eleven `RoundKind` members are purely cosmetic
+Re-read 2026-08-06 against AI triage phase 2, **rank unchanged** (it moved from
+#4 to #3 by the removal above, not on merit), with one real contact recorded so
+it is not rediscovered: the completion prompt asks for `label`/`label_en`/
+`label_zh` as all three or none, and `import_commit` already calls
+`record_round_label_phrase`, which records only a COMPLETE triple. So a
+committed AI-completed round now FEEDS this entry's corpus, on the same terms a
+hand-typed one does. That grows the data this entry proposes to rank by
+franchise -- mildly in its favour -- and adds one caution: a phrase library
+fed partly by a model is a library whose counts can be inflated by the model's
+own phrasing habits rather than by real editorial usage, so whoever builds the
+franchise ranking should look at what the counts actually contain before
+trusting the ORDER BY.
+
+### 4. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1264,40 +1278,20 @@ zero user-visible benefit, and the taxonomy was corrected as recently as
 rather than done, on purpose, so the observation is not rediscovered a third
 time.
 
-### 6. PWA / installability
+Re-read 2026-08-06 against AI triage phase 2, **rank unchanged**, and it grew a
+THIRD consumer of the taxonomy that whoever collapses it must carry: the
+completion prompt enumerates nine of the eleven kinds as literal strings
+(`_COMPLETION_SYSTEM_PROMPT`, `domain/round_completion.py`), and its comment
+records that this list must match the `RoundKind` values exactly because
+`yaml_import._round_kind` silently defaults an unknown one to `other`. That is
+new evidence FOR the label/emoji-table shape this entry proposes -- three
+places now spell the same set -- and one new caution against a naive
+data-driven refactor: this consumer is deliberately NOT the full set
+(RESULT_ANNOUNCEMENT and PAYMENT_DEADLINE are withheld from the model on
+purpose), so a table generated blindly from the enum would silently re-offer
+them.
 
-Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
-build).
-
-The phone retrofit (tab bar, FAB, bottom sheets) makes the site read like
-an app on a phone browser, but there is still no way to install it as one:
-no manifest, no service worker, no "Add to Home Screen" affordance. A
-manifest.json (name, icons, `display: standalone`, theme color matching
-the token layer) plus a minimal service worker would let a phone user add
-a real home-screen icon and launch into a browser-chrome-free window --
-the natural next step after this build, not a prerequisite for it. Impact
-stays low-medium rather than higher until it's paired with something a
-plain browser tab can't do (push notifications would need this shipped
-first, since web push requires a service worker; DM-notification parity
-for phone users who don't want the Discord app open is the case that would
-raise this). Effort is medium: the manifest and icons are small, but a
-correct service worker (cache strategy, update flow, avoiding the classic
-"stale offline shell" trap) is not.
-
-Annotated 2026-08-04 (calendar-feed story), rank unchanged either way: the
-subscription feed is now this app's SECOND surface that works with the site
-closed -- the Discord DM was the first -- and a phone that has subscribed to it
-already shows the user's shows and live deadlines in the OS calendar with no
-tab open and no install. That neither raises this entry (a calendar is not a
-notification, and none of the manifest/service-worker work got cheaper) nor
-lowers it, but the push-notification argument above should now cite it as prior
-art: the "DM-notification parity for phone users who don't want the Discord app
-open" case has to clear a bar the feed already meets for anything the user can
-read AHEAD of time, so what web push would actually buy is the interrupting
-half -- the moment itself -- and that is the case this entry should be argued
-on when someone picks it up.
-
-### 7. In-app LLM extraction on the import page
+### 5. In-app LLM extraction on the import page
 
 Impact: low-medium - effort: medium, and ACTIONABLE as of 2026-08-05 (the
 budget block lifted). Raised and deliberately deferred 2026-07-22 (owner: no
@@ -1346,15 +1340,77 @@ rows through the batch path, which is the same queue and the same
 build should simply reuse rather than re-decide: the model emits the app's own
 draft vocabulary and dies at `parse_drafts` when it is wrong, and rounds are
 stripped in code rather than trusted from a prompt (whether an import-page
-extraction may emit rounds is exactly the question #3 owns, and this entry
-should NOT answer it independently).
+extraction may emit rounds is exactly the question the phase-2 entry owns, and
+this entry should NOT answer it independently).
 
 Rank unchanged at low-medium impact apart from the renumber, and that is
-deliberate: unblocking is not impact. It stays below #3 because it automates a
-step the owner already has an agent for, on a page he visits deliberately, and
-below the user-facing entries above it for the reason it always was.
+deliberate: unblocking is not impact. It stays below the phase-2 entry because
+it automates a step the owner already has an agent for, on a page he visits
+deliberately, and below the user-facing entries above it for the reason it
+always was.
 
-### 8. Minor demo-parity cosmetics
+Re-read 2026-08-06 against AI triage phase 2, and this is the one entry that
+build genuinely MOVED -- up one place, to #5, above PWA. Both still read
+low-medium impact, so the swap is on the effort tiebreak this file already uses
+(it is the same tiebreak that once put phase 2 itself below minute-level
+offsets), and phase 2 changed both halves of that tiebreak at once. **The one
+design question this entry deferred to phase 2 is now ANSWERED**: "whether an
+import-page extraction may emit rounds" was explicitly not this entry's to
+decide, and the answer shipped -- yes, under evidence grounding, in code, with
+every rejection reported. And the plumbing an import-page extraction would need
+now exists and is proven in production shape: `domain/page_text.py` turns a
+page into the one text a model reads and a checker searches, `app/llm.py` is
+called from a web route (the paste fallback) as well as from the scheduler, and
+`import_preview.html` already renders a model's proposals with their evidence.
+What is left is genuinely the small half -- a prompt, a route, and the decision
+about what a whole-draft extraction may claim beyond rounds. Impact is
+unchanged and unblocking is still not impact; what moved is that this is now
+the cheapest remaining item of its impact class rather than the dearest.
+
+### 6. PWA / installability
+
+Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
+build).
+
+The phone retrofit (tab bar, FAB, bottom sheets) makes the site read like
+an app on a phone browser, but there is still no way to install it as one:
+no manifest, no service worker, no "Add to Home Screen" affordance. A
+manifest.json (name, icons, `display: standalone`, theme color matching
+the token layer) plus a minimal service worker would let a phone user add
+a real home-screen icon and launch into a browser-chrome-free window --
+the natural next step after this build, not a prerequisite for it. Impact
+stays low-medium rather than higher until it's paired with something a
+plain browser tab can't do (push notifications would need this shipped
+first, since web push requires a service worker; DM-notification parity
+for phone users who don't want the Discord app open is the case that would
+raise this). Effort is medium: the manifest and icons are small, but a
+correct service worker (cache strategy, update flow, avoiding the classic
+"stale offline shell" trap) is not.
+
+Annotated 2026-08-04 (calendar-feed story), rank unchanged either way: the
+subscription feed is now this app's SECOND surface that works with the site
+closed -- the Discord DM was the first -- and a phone that has subscribed to it
+already shows the user's shows and live deadlines in the OS calendar with no
+tab open and no install. That neither raises this entry (a calendar is not a
+notification, and none of the manifest/service-worker work got cheaper) nor
+lowers it, but the push-notification argument above should now cite it as prior
+art: the "DM-notification parity for phone users who don't want the Discord app
+open" case has to clear a bar the feed already meets for anything the user can
+read AHEAD of time, so what web push would actually buy is the interrupting
+half -- the moment itself -- and that is the case this entry should be argued
+on when someone picks it up.
+
+Re-read 2026-08-06 against AI triage phase 2 and **displaced to #6** by the
+import-extraction entry above -- on that entry's merit (its one blocking
+question answered, its plumbing shipped), never on this one's, which is
+untouched in substance: nothing in that build went near a manifest, a service
+worker or web push, and none of the work this entry describes got cheaper. The
+push-notification argument recorded above is also unchanged by it -- an
+AI-completed round is a deadline that reaches the user through the SAME
+channels as any other, so it raises the value of the interrupting half without
+altering what web push would have to build.
+
+### 7. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1416,7 +1472,19 @@ it into this entry's single pass rather than spawning a task. Rank unchanged --
 this entry has now grown four times without once being worth doing on its own,
 which is itself the argument for keeping it as one batched pass.
 
-### 9. The event classes outside concerts and talk shows
+Grew a FIFTH of the same kind on 2026-08-06 (AI draft completion), re-read and
+rank unchanged: the import preview gained an evidence block under each round
+(`.edgecard ok`, "Read from the ticket page:"), a rejection callout above the
+rounds section (`.banner warn`) and a "Fill rounds from a page I paste" fold,
+and no demo frame has any of them. This one is a slightly better-behaved gap
+than the four before it, because all three compose the EXISTING two-shape
+callout grammar (G2, 2026-07-24) rather than inventing a shape -- so what the
+demo owes is a frame showing them in place, not a design decision to
+reconstruct. `/admin/fetch-domains` is deliberately NOT on the list: admin
+pages have never had demo frames, exactly as they have never been translated.
+Fifth growth, fifth time not worth doing alone.
+
+### 8. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1445,7 +1513,18 @@ into one "support more event types" task would hide that:
   have and has never needed. This is the one where "we decided not to" and "we
   cannot" are close together.
 
-### 10. A/B casts have nowhere to live
+Re-read 2026-08-06 against AI draft completion, **rank unchanged and for the
+same reason it was filed**: this entry is a SCOPE decision, and no amount of
+cheaper round research changes what belongs in the catalogue. One class does
+move a little, and only in effort: festivals were called "catalogueable today"
+with their own ticketing shape (day tickets, two-day passes), which is exactly
+the kind of multi-round ladder that used to mean reading a long ticket page by
+hand -- phase 2 makes that half cheap. The tag-attachment question, which is
+this class's actual difficulty, is untouched. Release events stay the honest
+"may not be expressible at all": a completion pass that finds no deadline
+because there is none is not progress on them.
+
+### 9. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1468,7 +1547,15 @@ Do not let a triage skill paper over it with a label convention in the meantime.
 A convention that encodes cast in free text would look like support and would
 still leave the outcome unrecordable, which is worse than the honest gap.
 
-### 11. Discover sort in the content head, plus the catalogue-count note
+Re-read 2026-08-06 against AI draft completion, **rank unchanged**, and the
+warning in the paragraph above now has a second audience worth naming: a round's
+`applies_to` binds to leg LABELS as free text, and phase 2's evidence checker
+rejects a round naming a label the draft lacks. So a model is now a producer of
+leg-label-shaped identity too, and a cast convention smuggled into a label would
+be reproduced by it as readily as by a skill. Same verdict either way -- the gap
+stays honest until stage runs come back into scope.
+
+### 10. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1501,7 +1588,13 @@ that attribute on the rebuilt link too -- the sweep test in
 `tests/test_discover.py` will catch a drop, but it belongs here per this
 file's own discipline of naming every contact a shipped entry makes.
 
-### 12. Name the destination on the sign-in bounce
+Re-read 2026-08-06 against AI draft completion: **no contact at all, rank
+unchanged.** That build touched the import/pending surfaces, the fetch guard
+and an admin page, and never went near Discover, its sidebar, the filter sheet
+or the catalogue counts. Recorded only because this file's discipline is that a
+re-read leaves a mark whether or not it found anything.
+
+### 11. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1523,7 +1616,16 @@ is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
 five chances to get it wrong for no gain.)
 
-### 13. The calendar roster's blind spots
+Re-read 2026-08-06 against AI draft completion: **no contact, rank unchanged.**
+Nothing in that build touches `safe_next`, the bounce copy or the landing page.
+Worth one line anyway, since the entry's own reasoning is about echoing
+attacker-suppliable text into a page: this build added a new class of
+model-supplied free text to the app (quotes, rejection reasons), and all of it
+renders through Jinja's escaping as ordinary content, never into an `on*`
+handler or an inline script (invariant 7). Different surface, same rule,
+already followed.
+
+### 12. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1571,7 +1673,22 @@ refutes: the campaign is already a lead, so what is lost is a second pointer to
 something already visible, not the concert. A rating that contradicts its own
 entry is worse than a cautious one, and this list orders by USER impact.
 
-### 14. Nothing caps the discovery review path
+Re-read 2026-08-06 against AI draft completion, **rank unchanged, and its
+accepted argument is now backed by shipped code rather than by an expectation.**
+The paragraph above lives on "triage verifies every round against the official
+page anyway" -- which was aspirational when it was written, since phase 1
+stripped every round it was given. Phase 2 is that verification, and it is
+stricter than the sentence promised: a round survives only when the model can
+quote the official page for each timestamp and the app can find that quote
+carrying that timestamp. So a campaign that reaches the catalogue through its
+FIRST generic round now gets its remaining, promoter-named rounds filled from
+the official page rather than from a feed prefix that will never match them.
+That does not close either blind spot -- the roster still sees what it sees --
+but it does mean the second half of this entry ("promoter-named rounds are
+unreachable by prefix, and always will be") is now routed around rather than
+merely tolerated, which is a further argument for leaving it at `low`.
+
+### 13. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1628,7 +1745,19 @@ grew a status strip and a prefilled prune link, which are bounded and tiny
 beside the row list, and the cheap half of the fix -- emit `copy_text` once --
 is still untouched by all of it and is still first.
 
-### 15. Nothing notices a calendar feed going quiet
+Re-read 2026-08-06 against AI draft completion, **rank unchanged**, and the
+page this entry is about was not touched at all -- phase 2's surfaces are
+`/concerts/import/pending`, the draft preview and `/admin/fetch-domains`. One
+adjacency worth naming so nobody re-derives it: `/concerts/import/pending`
+renders every open draft with no LIMIT either, exactly as `/admin/discoveries`
+does, and the completion button now gives an admin a reason to sit on that page
+repeatedly. Its ceiling is far lower (a batch is fifty-to-a-hundred drafts, and
+committing or discarding one removes it, whereas a lead lingers until dismissed
+through the plan/apply screen), so it does not deserve an entry of its own --
+but if this one is ever picked up, the two pages want the same answer, and the
+cheap half of the fix here has an exact twin there.
+
+### 14. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
@@ -1667,6 +1796,16 @@ its whole duration and nothing beats inside one. Fine at today's sizes and
 measured as such; if the tick ever visibly blocks, the parse is the first place
 to look and a thread offload is the obvious answer.
 
+Re-read 2026-08-06 against AI draft completion, **rank unchanged**, with the
+2026-09-03 `imas-tix` re-check still standing and still owned by this entry
+alone. One genuine contact: the loop-blocking measurement recorded above has a
+precedent now. That build's review found a synchronous `getaddrinfo` on the
+shared loop and moved it to `asyncio.to_thread` under a total deadline
+(`fetching._resolve_async`), so the "if the tick ever visibly blocks, a thread
+offload is the obvious answer" line is no longer a hypothesis about this
+codebase -- it is a pattern with a working instance to copy. Nothing else here
+moves; a feed going quiet is still invisible.
+
 (The former "`/admin/discoveries` row height wants a real viewport" entry
 (2026-07-31) was closed the same day by measuring it -- see its Shipped entry.
 The measurement moved the answer: the hint banner was not the cause.)
@@ -1686,13 +1825,110 @@ performer chips - see its Shipped entry below.)
 
 ## Shipped
 
+### AI completion of a skeleton draft (AI triage, phase 2) (2026-08-06)
+
+Branch `draft-completion`, twelve tasks, spec
+`docs/superpowers/specs/2026-08-05-draft-completion-design.md`, plan
+`docs/superpowers/plans/2026-08-05-draft-completion.md`, migration
+`2fa4d11a473a` (`fetch_domains`, plus `pending_drafts.completion_yaml` and
+five `triage_runs` columns). This was Proposed #3, filed the day before by the
+owner as the second half of the AI-triage build; it shipped a day later
+because phase 1's calibration verdict -- the thing it said it was waiting for
+-- came back good.
+
+**One button on `/concerts/import/pending`, and it still commits nothing.** A
+press writes a `TriageRun` with `kind="complete"`; the next 60s tick picks it
+up and, for up to `COMPLETION_DRAFT_CAP` (15) of that admin's pending drafts,
+reads the `official_url` the draft ALREADY NAMES, extracts the page text, and
+asks for the ticket rounds. Survivors are merged into the draft by rewriting
+exactly one key, `rounds:`; the draft is still a `PendingDraft` whose preview a
+human presses Create event on, so `import_commit` stays the only write path
+into `concerts`. Reusing the phase-1 run row through a `kind` column rather
+than a second table is what keeps the request/pickup handshake, the budget
+shape and the re-stamp-after-rollback rule existing once -- and the tick picks
+up the oldest requested run of ANY kind, so the two halves serialize by
+construction.
+
+**Evidence grounding is phase 2's `strip_rounds`, and the locality rule is an
+owner ruling.** Phase 1 could promise honesty cheaply: it emitted no rounds and
+stripped any the model invented anyway. Phase 2 emits rounds, so the promise is
+earned per round, in code: the model must quote the page line it read each
+timestamp from, and `domain/round_evidence.py` drops any round whose quote it
+cannot find in the same text the model was given -- plus the nastier case, a
+quote that IS on the page but does not carry that timestamp. **A review defeated
+the looser rule this feature was specced with**, and the owner ruled the
+tighter one (2026-08-05, recorded in the spec): "do the digits appear somewhere
+in the quote" validates a claimed 01:00 and a claimed 10:00 against a perfectly
+correct quote of `申込締切 2026年1月10日(土)23:59` -- the hour matches the `1` of
+`1月`, then the day -- and a model that simply quotes the whole page validates
+anything assembled from digits anywhere on it. So the rule is CONTIGUITY: month
+immediately followed by day, hour the very next number token after that date
+and immediately followed by minute, the date-to-time span capped at 60
+characters and the whole quote at 200. The accepted cost is false rejections on
+some phrasings, and that is the trade the whole feature is built around -- a
+rejection is visible, carries its reason, and costs one round typed by hand,
+while a false accept is a fabricated deadline reaching a real user as a real
+reminder. NOTHING IS DROPPED SILENTLY: rejections reach the preview in a banner
+with their reasons, because a real deadline quietly discarded is exactly as
+harmful as a fake one quietly kept.
+
+**One known false rejection, deferred with its fix already verified.** A
+same-day window on ONE line -- `受付期間 2026年1月10日(土)10:00〜23:59` -- passes
+its OPEN time and rejects its CLOSE, because the hour must be the token right
+after the day and the second time on a dated line is unreachable. The
+refinement is written down rather than left to be rediscovered: keep
+hour-adjacent-to-date and the span cap, but ADDITIONALLY require that no other
+date pair intervenes between the matched date and the matched time. That was
+verified against the four false accepts that motivated the locality rule and
+closes none of them, so it is safe -- it simply did not ship, because this
+failure is visible, carries its reason, and costs one timestamp typed by hand.
+
+**The fetch policy widened, and an approval queue is what pays for it.**
+`fetching.py` took a host STRING; it now takes a host POLICY. `PinnedHost` is
+every pre-existing caller unchanged; `ApprovedPublicHosts` is this pass's, and
+it is the first fetch in this app not pinned to a host named in code -- a
+draft's `official_url` is by nature somebody else's domain. Three things stand
+in for the pin: https only, every resolved address public unicast (ALL of them,
+not any -- one public and one private answer is a rebinding setup), and the
+host approved BY NAME by an admin at `/admin/fetch-domains`. A human is what
+the pin became. The same policy runs on every redirect hop, so a redirect off
+an approved host onto an unapproved one is refused. The SSRF review of that
+widening earned its keep twice over: `ip.is_global` reports the IPv6 WRAPPER's
+classification rather than an embedded IPv4's, so `::169.254.169.254`,
+`::ffff:0:a9fe:a9fe` and `64:ff9b::a9fe:a9fe` -- all three encoding the
+Lightsail metadata endpoint -- each read back global unpatched, and the review
+also caught a synchronous `getaddrinfo` on the one asyncio loop this whole
+process shares. Both are closed and pinned by a 29-row address-family table.
+
+**The paste fallback is not a lesser path.** "Fill rounds from a page I paste"
+on the preview runs the IDENTICAL `complete_one`, so the two cannot drift on
+what counts as a grounded round -- the fallback exists because the fetch
+declined, not because the rules change when it does. It covers a
+JavaScript-rendered vendor page, an unapproved host, and any host the owner
+would rather not put on the list at all.
+
+**Cost is bounded the same way phase 1's is.** 15 fetch+call pairs per press
+whatever the queue's size, fetches sequential with a 1s pause, a total deadline
+per fetch, a wall clock over the loop (the cap bounds the CALLS; only a clock
+bounds the TIME) and `heartbeat.beat()` per draft. A draft is attempted at
+MOST ONCE -- `completion_yaml` is written even when the reply or the merge is
+unusable, because the call was already paid for and a second press must not pay
+for the same junk twice -- while a draft skipped without a call (no URL,
+unapproved host, dead fetch) stays a candidate. `SQLAlchemyError` is the one
+per-draft failure that is NOT absorbed: a poisoned session means the remaining
+fourteen paid calls would write nothing at all. No new env vars; it reuses
+`TRIAGE_ENABLED` and the DeepSeek keys, and `deploy.md` carries the operator
+half, including the fact that the first press completes nothing on purpose.
+
+Full suite 2462 green.
+
 ### AI triage of discovery leads (phase 1) (2026-08-05)
 
 Branch `ai-triage`, seven tasks, spec
 `docs/superpowers/specs/2026-08-05-ai-triage-design.md`, plan
 `docs/superpowers/plans/2026-08-05-ai-triage.md`, migration `ff500647fa9c`
 (`triage_runs`). Not a Proposed entry in its own right: it is the
-discovery-lead half of the in-app LLM extraction entry (#7), unblocked the day
+discovery-lead half of the in-app LLM extraction entry, unblocked the day
 the owner bought DeepSeek V4 Flash credits and pointed at a different first
 target than that entry had imagined. The import-page half stays Proposed and
 was rewritten in place rather than closed.
@@ -1717,8 +1953,9 @@ draft in code, whatever the model returned, pinned by a test asserting the
 property on the STORED text. Round research needs an official page plus
 judgment and sits exactly where a hallucination would break this app's core
 promise ("a deadline it names is real"), so it was carved out as phase 2 before
-implementation started rather than attempted and walked back -- see the new #3,
-which also carries phase 2's one known hard question so it is not rediscovered.
+implementation started rather than attempted and walked back -- it was filed the
+same day as its own entry, which also carried phase 2's one known hard question
+so it would not be rediscovered, and which shipped as the phase-2 entry above.
 
 **The request stamp IS the `TriageRun` row.** Unlike the sweep, which stamps
 the `DiscoveryState` singleton, triage wants per-run history, so the button

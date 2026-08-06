@@ -355,7 +355,8 @@ order:
   trilingual titles and leg labels; that is the quality question. Its `rounds`
   list is empty by design and stays empty whatever the model returned - rounds
   are stripped in code - so the draft is a starting point a human still
-  completes, not a finished event.
+  completes, not a finished event. (Phase 2's completion pass is what fills
+  them, on a separate press and under a separate rule; see the next section.)
 - **Note which productions got drafted.** `open_leads` orders by
   `event_date DESC`, so on a backlog longer than the 25-draft cap the
   FURTHEST-FUTURE events are drafted first and the most imminent ones wait for
@@ -366,6 +367,59 @@ order:
 If the judgment disappoints, the fallback needs no code and no config: stop at
 the prune plan and never press past it. The classify half alone is what cuts
 the queue by the largest factor.
+
+### The completion pass, and its approval queue
+
+Phase 2 brings ONE migration, `2fa4d11a473a` (columns on `triage_runs` and
+`pending_drafts`, plus a new `fetch_domains` table) and NO new env vars - it
+reuses `TRIAGE_ENABLED` and the same two DeepSeek keys. With the flag on,
+`/concerts/import/pending` grows a **Complete drafts with AI** button: one
+press writes a `TriageRun` row with `kind="complete"`, the next 60s tick picks
+it up, and for up to 15 of that admin's pending drafts it reads the
+`official_url` the draft already names, asks the model for the ticket rounds,
+and keeps only the ones it can verify.
+
+**The first press will complete NOTHING, and that is correct.** Every host it
+wants is unknown, so it records them and stops - the admin DM the run queues
+counts those drafts as "waiting on domain approval" rather than skipped, and
+the pending page grows a banner saying how many websites are waiting. Open
+`/admin/fetch-domains` (linked from that banner, and from Preferences with the
+other admin pages), approve the ticket vendors and franchise sites you
+recognise, decline the rest, and press again. Thereafter only genuinely NEW hosts interrupt, and a declined
+host is never proposed again. That page is the whole of why an arbitrary-host
+fetch is acceptable here: every other fetch this app makes is pinned to a host
+named in code, and for `official_url` a person is what the pin became. An
+unapproved host costs one skipped draft, never a failed run.
+
+Two things to check on the first real completion:
+
+- **Read the quotes, not just the timestamps.** Every round the pass keeps
+  carries the page line it was read from, rendered under the round on the
+  preview. A round whose quote does not say what the timestamp says is exactly
+  the failure this feature is built to make visible - and the quote is meant to
+  be enough to check the round WITHOUT opening the ticket page. If it is not,
+  say so; that is the property no test can assert.
+- **Read the rejection banner.** A rejected round is often a REAL deadline the
+  model quoted loosely rather than an invented one - the grounding rule is
+  deliberately the stricter reading, so it false-rejects some phrasings (a
+  one-line 受付期間 window with two times on it is a known example, and its
+  closing time is currently rejected). Those are the ones to type in by hand.
+  Nothing is dropped silently: every rejection reaches that banner with its
+  reason.
+
+Nothing here creates a concert. A completed draft is still a pending draft
+whose preview you press **Create event** on, exactly as before. A draft is
+attempted at most ONCE - the moment a call has been paid for, the draft is
+marked and later presses skip it, even if it came back with nothing - so
+pressing repeatedly works through the queue rather than re-billing the front of
+it. A draft skipped WITHOUT a call (no URL, unapproved host, dead fetch) is not
+marked and is retried on the next press.
+
+If a page comes back empty or useless (a JavaScript-rendered vendor page is the
+usual cause), open that draft and use **Fill rounds from a page I paste**:
+select all on the real page in a browser, paste, and the same verification
+rules apply to what you pasted. That path needs no fetch and no approval, so it
+also covers any host you would rather not put on the approved list.
 
 ## Updating (every deploy after the first)
 

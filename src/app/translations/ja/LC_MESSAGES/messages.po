@@ -1052,9 +1052,8 @@ msgid "Notes (optional)"
 msgstr "メモ（任意）"
 
 #: src/app/web/templates/_editor_round_card.html:117
-#, fuzzy
 msgid "Read from the ticket page:"
-msgstr "配信チケット販売"
+msgstr "チケットページから読み取った記述:"
 
 #: src/app/web/templates/_feed_links.html:7
 msgid "Your feed link is ready — save it now, it won't be shown again."
@@ -2489,11 +2488,11 @@ msgstr ""
 
 #: src/app/web/templates/import_pending.html:18
 msgid "Complete drafts with AI"
-msgstr ""
+msgstr "AIで下書きを補完"
 
 #: src/app/web/templates/import_pending.html:20
 msgid "Completion requested — the scheduler will start it within a minute."
-msgstr ""
+msgstr "補完を受け付けました。スケジューラーが1分以内に開始します。"
 
 #: src/app/web/templates/import_pending.html:22
 msgid ""
@@ -2501,6 +2500,7 @@ msgid ""
 "\n"
 "    deadlines it can quote from that page. Costs a few cents per press."
 msgstr ""
+"各下書きの公式チケットページを読み取り、受付を提案します。そのページから引用できた締切だけが残ります。1回の実行につき数セントかかります。"
 
 #: src/app/web/templates/import_pending.html:28
 #, python-format
@@ -2511,12 +2511,11 @@ msgid_plural ""
 "%(count)s websites are waiting for your approval before their pages can "
 "be\n"
 "  read."
-msgstr[0] ""
+msgstr[0] "%(count)s件のサイトが、ページの読み取りを許可されるのを待っています。"
 
 #: src/app/web/templates/import_pending.html:31
-#, fuzzy
 msgid "Review them"
-msgstr "確認"
+msgstr "確認する"
 
 #: src/app/web/templates/import_pending.html:49
 msgid "(untitled)"
@@ -2625,12 +2624,11 @@ msgid ""
 "The AI proposed these and I could not find them on the page — check them "
 "by\n"
 "      hand before trusting them:"
-msgstr ""
+msgstr "AIが提案しましたが、ページ上で該当する記述を見つけられませんでした。信頼する前に手作業で確認してください:"
 
 #: src/app/web/templates/import_preview.html:126
-#, fuzzy
 msgid "Source:"
-msgstr "ソースURL"
+msgstr "出典:"
 
 #: src/app/web/templates/import_preview.html:160
 msgid "No rounds yet — add the first one below."
@@ -2670,18 +2668,17 @@ msgstr "まだタグがありません:"
 
 #: src/app/web/templates/import_preview.html:257
 msgid "Fill rounds from a page I paste"
-msgstr ""
+msgstr "貼り付けたページから受付を補完"
 
 #: src/app/web/templates/import_preview.html:260
 msgid ""
 "Open the official ticket page, select all, and paste it here. Only\n"
 "        deadlines quoted from what you paste will be kept."
-msgstr ""
+msgstr "公式チケットページを開き、全選択してここに貼り付けてください。貼り付けた内容から引用できた締切だけが残ります。"
 
 #: src/app/web/templates/import_preview.html:263
-#, fuzzy
 msgid "Read this page"
-msgstr "このラベルを削除"
+msgstr "このページを読み取る"
 
 #: src/app/web/templates/preferences.html:2
 msgid "preferences"

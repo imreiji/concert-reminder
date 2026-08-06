@@ -1052,9 +1052,8 @@ msgid "Notes (optional)"
 msgstr "备注（可选）"
 
 #: src/app/web/templates/_editor_round_card.html:117
-#, fuzzy
 msgid "Read from the ticket page:"
-msgstr "直播票发售"
+msgstr "从购票页面读到的原文:"
 
 #: src/app/web/templates/_feed_links.html:7
 msgid "Your feed link is ready — save it now, it won't be shown again."
@@ -2485,18 +2484,18 @@ msgstr "多份草稿粘贴中尚未确认的每一份文档。打开即可查看
 
 #: src/app/web/templates/import_pending.html:18
 msgid "Complete drafts with AI"
-msgstr ""
+msgstr "用 AI 补全草稿"
 
 #: src/app/web/templates/import_pending.html:20
 msgid "Completion requested — the scheduler will start it within a minute."
-msgstr ""
+msgstr "已提交补全请求 — 调度器会在一分钟内开始。"
 
 #: src/app/web/templates/import_pending.html:22
 msgid ""
 "Reads each draft's official ticket page and proposes rounds, keeping only"
 "\n"
 "    deadlines it can quote from that page. Costs a few cents per press."
-msgstr ""
+msgstr "读取每份草稿的官方购票页面并提出轮次，只保留能从该页面引用到原文的截止时间。每次点击花费几美分。"
 
 #: src/app/web/templates/import_pending.html:28
 #, python-format
@@ -2507,12 +2506,11 @@ msgid_plural ""
 "%(count)s websites are waiting for your approval before their pages can "
 "be\n"
 "  read."
-msgstr[0] ""
+msgstr[0] "有 %(count)s 个网站正在等待你批准，之后才能读取其页面。"
 
 #: src/app/web/templates/import_pending.html:31
-#, fuzzy
 msgid "Review them"
-msgstr "查看"
+msgstr "去查看"
 
 #: src/app/web/templates/import_pending.html:49
 msgid "(untitled)"
@@ -2621,12 +2619,11 @@ msgid ""
 "The AI proposed these and I could not find them on the page — check them "
 "by\n"
 "      hand before trusting them:"
-msgstr ""
+msgstr "AI 提出了以下内容，但我无法在页面上找到对应的原文 — 请先手动核对再采信:"
 
 #: src/app/web/templates/import_preview.html:126
-#, fuzzy
 msgid "Source:"
-msgstr "来源链接"
+msgstr "来源:"
 
 #: src/app/web/templates/import_preview.html:160
 msgid "No rounds yet — add the first one below."
@@ -2666,18 +2663,17 @@ msgstr "尚无标签:"
 
 #: src/app/web/templates/import_preview.html:257
 msgid "Fill rounds from a page I paste"
-msgstr ""
+msgstr "从我粘贴的页面补全轮次"
 
 #: src/app/web/templates/import_preview.html:260
 msgid ""
 "Open the official ticket page, select all, and paste it here. Only\n"
 "        deadlines quoted from what you paste will be kept."
-msgstr ""
+msgstr "打开官方购票页面，全选后粘贴到这里。只有能从你粘贴的内容中引用到原文的截止时间才会被保留。"
 
 #: src/app/web/templates/import_preview.html:263
-#, fuzzy
 msgid "Read this page"
-msgstr "删除此标签"
+msgstr "读取此页面"
 
 #: src/app/web/templates/preferences.html:2
 msgid "preferences"
