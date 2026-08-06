@@ -21,7 +21,12 @@ decides, not what the prompt asked for. `verify_rounds` is this module's
 NOTHING IS DROPPED SILENTLY. A rejected round is recorded with its reason on
 the draft's own `completion_yaml` and rendered on its preview. A real deadline
 quietly discarded is exactly as harmful as a fake one quietly kept: in both
-cases the operator has no way to know to look.
+cases the operator has no way to know to look. The same rule covers a call
+that produced nothing usable at all -- an unparseable reply
+(`CompletionResponseError`) or a stored draft `merge_rounds` refuses to touch
+(`DraftMergeError`) still writes `completion_yaml` recording why, before
+re-raising, so the LLM call that was already paid for is never paid for
+twice on the next press.
 
 THE FETCH IS THE WIDENING, AND IT IS PAID FOR. A draft's `official_url` is by
 nature an arbitrary host, so this is the first fetch in this app that is not
@@ -29,7 +34,13 @@ host-pinned. Three things stand in for the pin: a host is fetched only after an
 admin approved it by name (`FetchDomain`), only over https, and only when every
 address it resolves to is public. The approval queue is the part a human is in,
 and an unapproved host costs a skipped draft rather than a refused run -- the
-draft stays a candidate and the next press picks it up.
+draft stays a candidate and the next press picks it up. A host `note_fetch_domain`
+itself refuses to store (URL-shaped, carrying a port, or blank -- `urlparse`
+keeps an IPv6 literal's colons, which slips past this module's own checks) is
+one no approval screen could ever unblock either, so that ALSO costs a skipped
+draft, never a run-ending exception: this module's one hard rule about model-
+and agent-authored free text is that nothing it puts in `official_url` may take
+the whole press down with it.
 
 WHAT IT NEVER DOES. It creates no concert: a completed draft is still a
 `PendingDraft` whose preview a human presses commit on, so `import_commit`
@@ -86,6 +97,8 @@ from app.db.service import (
 )
 from app.domain.page_text import html_to_text, normalize_page_text
 from app.domain.round_completion import (
+    CompletionResponseError,
+    DraftMergeError,
     completion_prompt,
     draft_leg_labels,
     merge_rounds,
@@ -169,26 +182,47 @@ async def complete_one(
 
     Returns (rounds_added, rounds_rejected, tokens_in, tokens_out) and writes
     `completion_yaml` whether or not any round survived: the call was paid for,
-    and a second press must not pay for it again.
+    and a second press must not pay for it again -- including when the reply
+    or the stored draft turns out to be unusable (see the try/except below).
     """
     page = normalize_page_text(page_text)
     reply = await llm_chat(*completion_prompt(row.draft_text, page))
-    proposed, warnings = parse_completion_response(reply.text)
-    for warning in warnings:
-        log.warning("completion: draft %s: %s", row.id, warning)
+    try:
+        proposed, warnings = parse_completion_response(reply.text)
+        for warning in warnings:
+            log.warning("completion: draft %s: %s", row.id, warning)
 
-    # UTC's date, not a local one: the plausibility window is ±2/+3 YEARS, so
-    # a day's drift at the boundary cannot matter, and a naive datetime.now()
-    # in a codebase whose one hard rule is aware-UTC is a bad example to leave
-    # lying around (invariant 1).
-    verdict = verify_rounds(
-        proposed, page, draft_leg_labels(row.draft_text), datetime.now(UTC).date()
-    )
-    # merge_rounds raises DraftMergeError on a stored draft it cannot safely
-    # amend (a hand-corrupted body). That is not caught here: it propagates to
-    # the caller exactly like a fetch or parse failure, and run_completion's
-    # per-draft handler absorbs it the same way -- one bad draft, not the run.
-    row.draft_text = merge_rounds(row.draft_text, [r.data for r in verdict.accepted])
+        # UTC's date, not a local one: the plausibility window is ±2/+3
+        # YEARS, so a day's drift at the boundary cannot matter, and a naive
+        # datetime.now() in a codebase whose one hard rule is aware-UTC is a
+        # bad example to leave lying around (invariant 1).
+        verdict = verify_rounds(
+            proposed, page, draft_leg_labels(row.draft_text), datetime.now(UTC).date()
+        )
+        merged_text = merge_rounds(row.draft_text, [r.data for r in verdict.accepted])
+    except (CompletionResponseError, DraftMergeError) as exc:
+        # The reply is already in hand -- the call was paid for -- so a
+        # reply that turns out to be unusable (not YAML, not a mapping) or a
+        # stored draft merge_rounds refuses to touch (a hand-corrupted body)
+        # must still leave a paid-for mark on the row, or completion_candidates
+        # hands it right back next press and this pays for the same junk
+        # reply twice. Recorded as a rejection like any other, so the
+        # operator sees WHAT went wrong rather than a draft that silently
+        # never progresses. Re-raised so run_completion's caller still counts
+        # this as a skipped draft -- the row changed, the outcome did not.
+        row.completion_yaml = yaml.safe_dump(
+            {
+                "source_url": source_url,
+                "evidence": [],
+                "rejected": [f"the model's reply could not be used: {exc}"],
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        )
+        await session.flush()
+        raise
+
+    row.draft_text = merged_text
     row.completion_yaml = yaml.safe_dump(
         {
             "source_url": source_url,
@@ -227,7 +261,7 @@ async def _announce(session: AsyncSession, report: CompletionReport) -> None:
     body = (
         f"Draft completion finished: {report.completed} draft(s) completed, "
         f"{report.rounds_added} round(s) added, {report.rounds_rejected} rejected, "
-        f"{report.blocked_domains} waiting on domain approval, "
+        f"{report.blocked_domains} draft(s) waiting on domain approval, "
         f"{report.skipped} skipped.\n"
         "Review: https://dekimasen.app/concerts/import/pending"
     )
@@ -314,7 +348,25 @@ async def run_completion(
         if host is None or host not in hosts:
             # Record it for a human and move on. NOT a failure: the remedy is a
             # click on /admin/fetch-domains, and the draft stays a candidate.
-            await note_fetch_domain(session, raw_host, url, now)
+            try:
+                await note_fetch_domain(session, raw_host, url, now)
+            except ValueError:
+                # note_fetch_domain refuses a host shaped like a URL, a
+                # host:port, or blank after stripping -- and urlparse() keeps
+                # an IPv6 literal's colons intact (`2606:4700::1111`), which
+                # both `_normalize_host` above and this check let straight
+                # through. Such a host can never be approved either way, so
+                # there is nothing for a human to click: this is a skip, not
+                # a pending approval, and (critically) not left to propagate
+                # out of the loop -- an unhandled ValueError here would kill
+                # the whole run and, worse, leave every draft already
+                # completed this press unmarked, so the next press re-pays
+                # for them and dies on this same row again.
+                log.warning(
+                    "completion: draft %s: %r is not a storable hostname", row.id, raw_host
+                )
+                report.skipped += 1
+                continue
             report.blocked_domains += 1
             continue
 
