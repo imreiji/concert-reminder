@@ -60,6 +60,7 @@ from app.db.service import (
 from app.db.session import SessionMaker
 from app.discovery import run_sweep
 from app.domain.types import DeliveryOutcome
+from app.draft_completion import run_completion
 from app.ops import run_checks
 from app.scheduler import heartbeat
 from app.triage import run_triage
@@ -326,13 +327,28 @@ async def tick(bot) -> int:
                 if triage_run is not None:
                     triage_run_id = triage_run.id
             if triage_run is not None:
-                triage_report = await run_triage(session, triage_run, now)
-                await session.commit()
-                log.info(
-                    "triage run %d: %d leads, %d dismissals proposed, %d drafts, %d skipped",
-                    triage_run_id, triage_report.leads_seen, triage_report.dismissals,
-                    triage_report.drafts, triage_report.skipped,
-                )
+                # ONE run per tick whatever its kind: pending_triage_run asks
+                # for the oldest of any kind, so the classify and completion
+                # halves serialize against each other by construction and
+                # neither can starve the reminder tick behind the other.
+                if triage_run.kind == "complete":
+                    completion_report = await run_completion(session, triage_run, now)
+                    await session.commit()
+                    log.info(
+                        "completion run %d: %d drafts completed, %d rounds added, "
+                        "%d rejected, %d waiting on a domain, %d skipped",
+                        triage_run_id, completion_report.completed,
+                        completion_report.rounds_added, completion_report.rounds_rejected,
+                        completion_report.blocked_domains, completion_report.skipped,
+                    )
+                else:
+                    triage_report = await run_triage(session, triage_run, now)
+                    await session.commit()
+                    log.info(
+                        "triage run %d: %d leads, %d dismissals proposed, %d drafts, %d skipped",
+                        triage_run_id, triage_report.leads_seen, triage_report.dismissals,
+                        triage_report.drafts, triage_report.skipped,
+                    )
         except Exception:
             log.exception("triage run failed; delivery was unaffected")
             await session.rollback()
