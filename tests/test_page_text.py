@@ -38,3 +38,13 @@ def test_text_is_capped():
 def test_normalize_is_idempotent():
     once = normalize_page_text("  a \n b  ")
     assert normalize_page_text(once) == once
+
+
+def test_normalize_is_idempotent_when_the_cut_lands_on_a_space():
+    # Engineer a string whose cut at PAGE_TEXT_CAP falls right after a space:
+    # collapse() would have stripped that space had it been the end of the
+    # string, so truncation must not leave it behind for a second pass to trim.
+    text = "a" * (PAGE_TEXT_CAP - 1) + " " + "b" * 500
+    once = normalize_page_text(text)
+    assert once.endswith(" ") is False
+    assert normalize_page_text(once) == once

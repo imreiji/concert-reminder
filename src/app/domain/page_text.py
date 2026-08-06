@@ -57,4 +57,7 @@ def html_to_text(html: str) -> str:
 def normalize_page_text(text: str) -> str:
     """Collapse, then cap. The entry point for text that is already text
     (a pasted page), and the tail of `html_to_text`."""
-    return collapse(text)[:PAGE_TEXT_CAP]
+    # A cut can land right after a space collapse() already reduced to one --
+    # truncation is the only thing that can put whitespace back at the end,
+    # so strip it again or this stops being idempotent at the cap boundary.
+    return collapse(text)[:PAGE_TEXT_CAP].rstrip()
