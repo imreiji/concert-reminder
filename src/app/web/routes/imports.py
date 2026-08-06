@@ -59,7 +59,9 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.draft import ParsedConcert
 from app.domain.ingest import IngestError, parse_ramen_event
+from app.domain.round_completion import CompletionResponseError, DraftMergeError
 from app.domain.types import ITEM_SALE_KINDS, ConcertKind, RoundKind
+from app.domain.urls import UnsafeURLError, clean_url
 from app.domain.yaml_import import DraftError, parse_draft, parse_drafts
 from app.draft_completion import complete_one
 from app.fetching import FetchFailed, HostNotAllowed, PinnedHost, fetch_html
@@ -346,13 +348,14 @@ async def import_preview(
             "pending_id": None,
             # No completion record on this path (there is no PendingDraft row
             # for it to hang off), and no paste-fallback box either -- see
-            # _draft_preview_response's own version of these three keys.
+            # _draft_preview_response's own version of these five keys.
             # Passed explicitly rather than left to Jinja Undefined: the round
             # loop below evaluates `evidence|length` unconditionally, and
             # `length` on Undefined raises rather than reading as empty.
             "evidence": [],
             "completion_rejected": [],
             "completion_source": "",
+            "completion_source_url": None,
             "can_complete": False,
         },
     )
@@ -469,12 +472,33 @@ async def _draft_preview_response(
     completion_evidence = completion.get("evidence")
     if not isinstance(completion_evidence, list):
         completion_evidence = []
+    else:
+        # The outer list being a list doesn't say anything about its
+        # ELEMENTS -- round_card does `evidence.items()`, so one non-dict
+        # entry (e.g. `evidence: ["oops"]`) would 500 the whole page. Kept
+        # in place rather than dropped, so a bad entry at index i still
+        # leaves the REST of the list correctly aligned to their rounds; it
+        # just reads as "no evidence for this one" instead of crashing.
+        completion_evidence = [e if isinstance(e, dict) else {} for e in completion_evidence]
     completion_rejected = completion.get("rejected")
     if not isinstance(completion_rejected, list):
         completion_rejected = []
     completion_source = completion.get("source_url")
     if not isinstance(completion_source, str):
         completion_source = ""
+    # completion_source lands in an <a href> on the template -- the SAME
+    # invariant-7 gate every editor-supplied URL passes through
+    # (domain.urls.clean_url), because this string is exactly as untrusted:
+    # it is either model output or the paste route's own literal
+    # "(pasted by hand)" (never a URL at all). clean_url raises on anything
+    # that isn't http(s)-shaped; caught rather than propagated, because losing
+    # the link is fine but the banner should still say WHERE the rounds came
+    # from -- completion_source itself stays the raw text either way, and the
+    # template only wraps it in a link when completion_source_url is set.
+    try:
+        completion_source_url = clean_url(completion_source)
+    except UnsafeURLError:
+        completion_source_url = None
 
     return templates.TemplateResponse(
         request,
@@ -524,6 +548,9 @@ async def _draft_preview_response(
             "evidence": completion_evidence,
             "completion_rejected": completion_rejected,
             "completion_source": completion_source,
+            # The http(s)-checked half of completion_source -- see the
+            # clean_url comment above. None means "show the text, no link".
+            "completion_source_url": completion_source_url,
             # Gates the paste-fallback box exactly like the batch Complete
             # button on the pending list (import_pending_list) -- same
             # spelling, so the two controls agree on who gets to spend a call.
@@ -862,7 +889,27 @@ async def import_pending_complete_one(
         # test (or a future call-site) ever got a chance to swap it.
         await complete_one(session, row, text, "(pasted by hand)", llm_chat=llm.chat)
     except LlmError as exc:
+        # complete_one calls llm_chat as its very FIRST line, before any
+        # write -- so a transport/provider failure here has flushed nothing,
+        # and there is nothing to commit. get_session's ordinary
+        # rollback-on-unhandled-exception handling is exactly the right
+        # transaction outcome; this 502 just carries the provider's message.
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except (CompletionResponseError, DraftMergeError):
+        # An unusable model reply, or a stored draft merge_rounds refuses to
+        # touch -- an ordinary production outcome (the batch runner counts it
+        # as one skipped draft), not a corrupted-state event. complete_one
+        # already wrote and FLUSHED completion_yaml recording this as a
+        # rejection before re-raising (its own docstring: the call was
+        # already paid for, so a second press must not pay for it again).
+        # Falling through to the commit below is what makes that promise
+        # hold -- catching only LlmError and letting this reach the 500
+        # handler would roll the flushed mark back (get_session never
+        # commits) and re-bill the SAME unusable reply on the very next
+        # press, the exact double-charge complete_one exists to prevent.
+        # The rejection then renders in the banner above, right where an
+        # operator should read "the model's reply could not be used".
+        pass
     await session.commit()
     return RedirectResponse(f"/concerts/import/pending/{pending_id}", status_code=303)
 

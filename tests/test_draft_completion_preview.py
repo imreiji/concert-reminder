@@ -8,6 +8,8 @@ pattern, plus `admin_user_id` so a seeded PendingDraft's `created_by` can
 match whichever discord id `admin_client` actually signed in as.
 """
 
+import re
+
 import pytest
 import pytest_asyncio
 import yaml
@@ -145,12 +147,55 @@ async def test_a_rejected_round_is_reported_on_the_preview(
 
 
 @pytest.mark.asyncio
-async def test_a_draft_with_no_completion_record_renders_exactly_as_before(
+async def test_a_real_source_url_renders_as_a_clickable_link(
     admin_client, session, admin_user_id
 ):
-    row = await _seed(session, admin_user_id)
+    # RECORD's source_url is a genuine https:// URL -- it must reach an
+    # href, not just appear as text.
+    row = await _seed(session, admin_user_id, completion_yaml=RECORD)
     body = admin_client.get(f"/concerts/import/pending/{row.id}").text
-    assert body.count("evidence-quote") == 0
+    assert 'href="https://eplus.jp/x"' in body
+
+
+@pytest.mark.asyncio
+async def test_a_non_url_source_is_shown_as_text_never_a_broken_link(
+    admin_client, session, admin_user_id
+):
+    """The paste route stores the literal "(pasted by hand)" as source_url --
+    not a URL at all. It must still say where the rounds came from (invariant
+    7 is about the LINK, not the sentence), but never as an href: a relative
+    "(pasted by hand)" link would resolve under /concerts/import/pending/ and
+    404 if anyone clicked it."""
+    record = yaml.safe_dump(
+        {
+            "source_url": "(pasted by hand)",
+            "evidence": [{"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"}],
+            "rejected": ["round '2次先行': the quote for apply_closes_jst is not on the page"],
+        },
+        allow_unicode=True,
+    )
+    row = await _seed(session, admin_user_id, completion_yaml=record)
+    body = admin_client.get(f"/concerts/import/pending/{row.id}").text
+    assert "(pasted by hand)" in body
+    assert 'href="(pasted by hand)"' not in body
+
+
+@pytest.mark.asyncio
+async def test_a_draft_with_no_completion_record_renders_no_evidence_or_rejection_ui(
+    admin_client, session, admin_user_id
+):
+    """Renamed from a name that promised more than the assertion checked
+    ("...renders exactly as before" with no comparison to any prior render).
+    Pins what actually matters: neither the per-round evidence block nor the
+    rejected-rounds banner appears when completion_yaml is empty, and the
+    page renders normally rather than erroring."""
+    row = await _seed(session, admin_user_id)
+    r = admin_client.get(f"/concerts/import/pending/{row.id}")
+    assert r.status_code == 200
+    assert "evidence-quote" not in r.text
+    # The rejected-banner's own copy, from import_preview.html -- absent
+    # confirms the banner itself didn't render, not just that it was empty.
+    assert "The AI proposed these" not in r.text
 
 
 @pytest.mark.asyncio
@@ -208,11 +253,65 @@ async def test_a_completion_record_with_the_wrong_shape_does_not_crash(
 
 
 @pytest.mark.asyncio
+async def test_an_evidence_list_with_a_non_dict_element_does_not_crash(
+    admin_client, session, admin_user_id
+):
+    """The outer-list check alone isn't enough: `evidence: ["oops"]` IS a
+    list, so it passes that check, but round_card calls `.items()` on each
+    element -- a bare string has no `.items()`. The bad entry must read as
+    "no evidence for this round" rather than 500 the whole page, and it must
+    not shift a LATER, well-formed entry's position (positional alignment)."""
+    malformed = yaml.safe_dump(
+        {
+            "source_url": "https://eplus.jp/x",
+            "evidence": ["oops", {"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"}],
+        },
+        allow_unicode=True,
+    )
+    draft_with_two_rounds = COMPLETED + (
+        "- label: 2次先行抽選\n  kind: lottery\n  apply_closes_jst: 2026-01-20 23:59\n"
+    )
+    row = await _seed(
+        session, admin_user_id, draft_text=draft_with_two_rounds, completion_yaml=malformed
+    )
+    r = admin_client.get(f"/concerts/import/pending/{row.id}")
+    assert r.status_code == 200
+    # Round 0's bad entry shows nothing; round 1's good entry, at its
+    # correct (unshifted) index, still shows its quote.
+    assert r.text.count("evidence-quote") == 1
+    assert "申込締切 2026年1月10日(土)23:59" in r.text
+
+
+@pytest.mark.asyncio
 async def test_the_concert_editor_surfaces_render_no_evidence_block(admin_client):
     # The round card is shared with concert_new/concert_edit. Neither passes
     # evidence, and neither may grow a block because this feature exists.
     body = admin_client.get("/concerts/new").text
     assert "evidence-quote" not in body
+
+
+@pytest.mark.asyncio
+async def test_the_paste_fold_wraps_its_content_in_fold_body(
+    admin_client, session, admin_user_id, monkeypatch
+):
+    """Every other details.fold in this template wraps its content in a
+    .fold-body div, which is what supplies the padding (the bare details.fold
+    has a border and none). Without it the paragraph/textarea/button sit
+    flush against the border."""
+    monkeypatch.setattr("app.config.settings.triage_enabled", True)
+    row = await _seed(session, admin_user_id)
+    body = admin_client.get(f"/concerts/import/pending/{row.id}").text
+    m = re.search(
+        r'<details class="fold" data-fold="paste-page">.*?</details>', body, re.DOTALL
+    )
+    assert m, "no paste-page fold on the page"
+    fold_html = m.group(0)
+    assert 'class="fold-body"' in fold_html
+    # And the form/textarea/button must be INSIDE that div, not just present
+    # somewhere in the fold.
+    assert re.search(
+        r'class="fold-body">\s*<form.*?</form>\s*</div>', fold_html, re.DOTALL
+    ), fold_html
 
 
 @pytest.mark.asyncio
@@ -353,3 +452,89 @@ async def test_an_llm_error_from_the_provider_is_a_502_not_a_traceback(
         follow_redirects=False,
     )
     assert r.status_code == 502
+
+
+@pytest.mark.asyncio
+async def test_an_unusable_model_reply_redirects_and_is_not_rebilled(
+    admin_client, session, admin_user_id, monkeypatch
+):
+    """CompletionResponseError: the reply as a WHOLE isn't a YAML mapping.
+    complete_one already wrote and flushed completion_yaml recording this
+    before re-raising -- the route must commit that (a redirect, not a 500)
+    or the SAME unusable reply gets billed again on the very next press."""
+    from app.db.service import completion_candidates
+    from app.llm import LlmReply
+
+    monkeypatch.setattr("app.config.settings.triage_enabled", True)
+
+    async def bad_reply(system, user, **kw):
+        # Parses as YAML, but as a scalar string, not a mapping --
+        # parse_completion_response's "expected a YAML mapping" branch.
+        return LlmReply(text="just a plain string, not a mapping", tokens_in=5, tokens_out=2)
+
+    monkeypatch.setattr("app.draft_completion.llm.chat", bad_reply)
+    row = await _seed(session, admin_user_id)
+    row.draft_text = "title: x\nperformances: []\nrounds: []\n"
+    await session.commit()
+    row_id = row.id
+
+    r = admin_client.post(
+        f"/concerts/import/pending/{row_id}/complete",
+        data={"page_text": "some ticket page text"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    session.expire_all()
+    refreshed = await session.get(PendingDraft, row_id)
+    assert refreshed.completion_yaml != ""
+    assert "could not be used" in refreshed.completion_yaml
+
+    # The mark survived the commit, so a second press has nothing left to
+    # retry: this row must not come back as a candidate.
+    candidates = await completion_candidates(session, admin_user_id)
+    assert row_id not in [r.id for r in candidates]
+
+
+@pytest.mark.asyncio
+async def test_a_corrupted_stored_draft_redirects_and_is_not_rebilled(
+    admin_client, session, admin_user_id, monkeypatch
+):
+    """DraftMergeError: the STORED draft (not the reply) can't be read back
+    as a mapping -- a hand-corrupted row. Same contract as the reply-side
+    failure above: complete_one already flushed the rejection, so the route
+    must commit rather than let it roll back and re-bill next press."""
+    from app.db.service import completion_candidates
+    from app.llm import LlmReply
+
+    monkeypatch.setattr("app.config.settings.triage_enabled", True)
+
+    async def valid_reply(system, user, **kw):
+        return LlmReply(
+            text="rounds:\n  - label: 1次先行抽選\n    kind: lottery\n"
+            "    apply_closes_jst: 2026-01-10 23:59\n",
+            tokens_in=5,
+            tokens_out=2,
+        )
+
+    monkeypatch.setattr("app.draft_completion.llm.chat", valid_reply)
+    row = await _seed(session, admin_user_id)
+    # Not a YAML mapping at all -- merge_rounds refuses to touch it.
+    row.draft_text = "just a plain string, not a mapping"
+    await session.commit()
+    row_id = row.id
+
+    r = admin_client.post(
+        f"/concerts/import/pending/{row_id}/complete",
+        data={"page_text": "some ticket page text"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    session.expire_all()
+    refreshed = await session.get(PendingDraft, row_id)
+    assert refreshed.completion_yaml != ""
+    assert "could not be used" in refreshed.completion_yaml
+
+    candidates = await completion_candidates(session, admin_user_id)
+    assert row_id not in [r.id for r in candidates]

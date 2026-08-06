@@ -117,8 +117,14 @@
     <p>{% trans %}The AI proposed these and I could not find them on the page — check them by
       hand before trusting them:{% endtrans %}</p>
     <ul>{% for reason in completion_rejected %}<li class="tiny">{{ reason }}</li>{% endfor %}</ul>
+    {#- completion_source_url is the http(s)-checked half (invariant 7 --
+        see the clean_url comment in _draft_preview_response); it is None for
+        the paste route's own "(pasted by hand)" literal, which is not a URL
+        at all. Still say WHERE the rounds came from either way -- only the
+        link is conditional, not the sentence. -#}
     {% if completion_source %}
-    <p class="tiny">{{ _("Source:") }} <a href="{{ completion_source }}" rel="nofollow noopener">{{ completion_source }}</a></p>
+    <p class="tiny">{{ _("Source:") }}
+      {% if completion_source_url %}<a href="{{ completion_source_url }}" rel="nofollow noopener">{{ completion_source }}</a>{% else %}{{ completion_source }}{% endif %}</p>
     {% endif %}
   </div>
   {% endif %}
@@ -249,12 +255,14 @@
 {% if pending_id and can_complete %}
 <details class="fold" data-fold="paste-page">
   <summary>{{ _("Fill rounds from a page I paste") }}</summary>
-  <form method="post" action="/concerts/import/pending/{{ pending_id }}/complete">
-    <p class="dim tiny">{% trans %}Open the official ticket page, select all, and paste it here. Only
-      deadlines quoted from what you paste will be kept.{% endtrans %}</p>
-    <textarea name="page_text" rows="6" style="width:100%"></textarea>
-    <button class="btn" type="submit">{{ _("Read this page") }}</button>
-  </form>
+  <div class="fold-body">
+    <form method="post" action="/concerts/import/pending/{{ pending_id }}/complete">
+      <p class="dim tiny">{% trans %}Open the official ticket page, select all, and paste it here. Only
+        deadlines quoted from what you paste will be kept.{% endtrans %}</p>
+      <textarea name="page_text" rows="6" style="width:100%"></textarea>
+      <button class="btn" type="submit">{{ _("Read this page") }}</button>
+    </form>
+  </div>
 </details>
 {% endif %}
 {#- Outside the form on purpose: the dialog's v_* inputs are read by hand
