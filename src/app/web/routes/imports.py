@@ -33,6 +33,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.models import PendingDraft, Round
 from app.db.service import (
     create_pending_drafts,
@@ -44,7 +45,10 @@ from app.db.service import (
     match_venue_tag_id,
     match_venue_tag_id_by_slug,
     pending_drafts,
+    pending_fetch_domain_count,
+    pending_triage_run,
     record_round_label_phrase,
+    request_triage,
     round_label_phrases,
     sync_concert,
     sync_concert_venue_tags,
@@ -56,7 +60,7 @@ from app.domain.ingest import IngestError, parse_ramen_event
 from app.domain.types import ITEM_SALE_KINDS, ConcertKind, RoundKind
 from app.domain.yaml_import import DraftError, parse_draft, parse_drafts
 from app.fetching import FetchFailed, HostNotAllowed, PinnedHost, fetch_html
-from app.web.auth import SessionUser, require_editor
+from app.web.auth import SessionUser, require_admin, require_editor
 from app.web.forms import form_url, require_variants
 from app.web.routes.concerts import (
     RoundRequiresError,
@@ -633,8 +637,51 @@ async def import_pending_list(
             unmatched_count=len(unmatched),
         ))
     return templates.TemplateResponse(
-        request, "import_pending.html", {"user": user, "rows": pending_rows}
+        request,
+        "import_pending.html",
+        {
+            "user": user,
+            "rows": pending_rows,
+            # The completion button and its two status lines. Gated on the
+            # flag ITSELF, not merely on the route's existence -- a deploy
+            # that has not opted in should not see a control that spends a
+            # real key per press -- and on admin, because pressing it costs
+            # money.
+            "can_complete": settings.triage_enabled and user.is_admin,
+            "completion_pending": await pending_triage_run(session, kind="complete") is not None,
+            "waiting_domains": await pending_fetch_domain_count(session),
+        },
     )
+
+
+@router.post("/pending/complete")
+async def import_pending_complete(
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Ask the scheduler for an AI completion pass over this admin's own open
+    skeleton drafts.
+
+    Same request/drain shape as the triage button and for the same reason: a
+    run that fetches up to fifteen official pages and makes fifteen LLM calls
+    is far too slow for an HTTP request to hold, so this writes a row the next
+    tick picks up. `request_triage` is idempotent per kind while one is still
+    "requested", so a double-press queues one pass.
+
+    Admin, not editor: the press spends real money, exactly as the triage
+    button does. 303, never 307 -- the POST must not be replayed against the
+    page it lands on.
+
+    Registered BEFORE `import_pending_detail` (`GET /pending/{pending_id}`) --
+    `/pending/complete` would otherwise never be reached, since FastAPI tries
+    path templates in registration order and `pending_id: int` would 422 on
+    "complete" rather than falling through to this route.
+    """
+    if not settings.triage_enabled:
+        raise HTTPException(status_code=404)
+    await request_triage(session, datetime.now(UTC), user.id, kind="complete")
+    await session.commit()
+    return RedirectResponse("/concerts/import/pending", status_code=303)
 
 
 async def _own_open_pending(
