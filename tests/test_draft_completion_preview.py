@@ -22,7 +22,7 @@ from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
 
-ADMIN_ID = 42
+ADMIN_ID, EDITOR_ID = 42, 77
 
 
 @pytest_asyncio.fixture()
@@ -45,6 +45,7 @@ async def db():
 @pytest.fixture()
 def client(db, monkeypatch):
     monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr(settings, "editor_whitelist", str(EDITOR_ID))
     app = create_app()
 
     async def override_session():
@@ -76,6 +77,12 @@ def login_as(client, discord_id, name):
 @pytest.fixture()
 def admin_client(client):
     login_as(client, ADMIN_ID, "admin")
+    return client
+
+
+@pytest.fixture()
+def editor_client(client):
+    login_as(client, EDITOR_ID, "editor")
     return client
 
 
@@ -269,3 +276,80 @@ async def test_an_oversized_paste_is_refused_before_any_call(
         follow_redirects=False,
     )
     assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_an_empty_paste_is_refused(admin_client, session, admin_user_id, monkeypatch):
+    monkeypatch.setattr("app.config.settings.triage_enabled", True)
+    row = await _seed(session, admin_user_id)
+    r = admin_client.post(
+        f"/concerts/import/pending/{row.id}/complete",
+        data={"page_text": "   "},  # whitespace-only, same as nothing pasted
+        follow_redirects=False,
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_pressing_it_with_the_flag_off_404s(
+    admin_client, session, admin_user_id, monkeypatch
+):
+    monkeypatch.setattr("app.config.settings.triage_enabled", False)
+    row = await _seed(session, admin_user_id)
+    r = admin_client.post(
+        f"/concerts/import/pending/{row.id}/complete",
+        data={"page_text": "some page text"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_plain_editor_pressing_it_gets_403(editor_client, session, monkeypatch):
+    monkeypatch.setattr("app.config.settings.triage_enabled", True)
+    row = await _seed(session, EDITOR_ID)
+    r = editor_client.post(
+        f"/concerts/import/pending/{row.id}/complete",
+        data={"page_text": "some page text"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_draft_that_is_not_yours_404s(admin_client, session, monkeypatch):
+    from app.db.service import ensure_user
+
+    monkeypatch.setattr("app.config.settings.triage_enabled", True)
+    # Seeded under a DIFFERENT discord id than admin_client signed in as --
+    # created_by is an FK to users.discord_id, so that user must exist first
+    # (a real one would, from having logged in at least once themselves).
+    await ensure_user(session, EDITOR_ID, "someone-else")
+    row = await _seed(session, EDITOR_ID)
+    r = admin_client.post(
+        f"/concerts/import/pending/{row.id}/complete",
+        data={"page_text": "some page text"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_an_llm_error_from_the_provider_is_a_502_not_a_traceback(
+    admin_client, session, admin_user_id, monkeypatch
+):
+    from app.llm import LlmError
+
+    monkeypatch.setattr("app.config.settings.triage_enabled", True)
+
+    async def fails(*a, **kw):
+        raise LlmError("the provider returned a non-200 response")
+
+    monkeypatch.setattr("app.draft_completion.llm.chat", fails)
+    row = await _seed(session, admin_user_id)
+    r = admin_client.post(
+        f"/concerts/import/pending/{row.id}/complete",
+        data={"page_text": "some page text"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 502
