@@ -7912,6 +7912,20 @@ async def note_fetch_domain(
 ) -> FetchDomain:
     """Record that something wanted to fetch `host`, and hand back its row.
 
+    `host` MUST already be a bare hostname -- no scheme, no path, no port, no
+    userinfo -- the exact shape `urlparse(url).hostname` produces, which is
+    how every real caller gets one: `ApprovedPublicHosts.check_async`
+    (`app/fetching.py`) extracts a host from a URL the identical way before
+    ever calling `is_approved`. This is checked, not assumed: verified
+    empirically that `_normalize_host` alone does NOT reject the shapes a
+    careless caller might pass instead -- `"https://eplus.jp/a"` and
+    `"eplus.jp:443"` both come back changed only in case, not refused. Storing
+    either would fail CLOSED but SILENTLY: `approved_fetch_hosts()` could
+    never match it against a real lookup, so an admin who thinks they just
+    approved a host would find the real host stays blocked forever with no
+    error anywhere. A loud `ValueError` at this table's one write path is far
+    cheaper than that.
+
     The SINGLE write path that creates a `FetchDomain`, and the only place the
     host is normalized -- two spellings of one host must never become two rows
     with two different verdicts. Normalization reuses `fetching._normalize_host`
@@ -7920,15 +7934,22 @@ async def note_fetch_domain(
     `is_approved`, so this store and that read must agree byte-for-byte or an
     approval recorded here silently fails to match a lookup done there (or
     vice versa) -- see task 5's contract note. A host `_normalize_host` cannot
-    encode (bad IDNA) falls back to a plain strip+lower: such a host can never
-    pass the fetch guard either way (it raises there too), so this is only
-    about giving the approval screen something readable to show, not about
-    matching a future lookup.
+    encode (a label over 63 characters, or otherwise unencodable IDNA) falls
+    back to a plain strip+lower: such a host can never pass the fetch guard
+    either way (it raises `HostNotAllowed` there for the identical reason), so
+    that fallback only affects what the approval screen displays for an
+    already-doomed host, never a future lookup match.
+
     An existing row (pending, approved OR declined) comes back untouched:
     re-noting must never reopen a decision a human already made, and must
     never overwrite `first_seen_url`, which is what the approver was actually
     told about.
     """
+    if not host.strip() or any(c in host for c in "/:@"):
+        raise ValueError(
+            f"{host!r} is not a bare hostname -- pass urlparse(url).hostname, "
+            "never the URL itself or a host:port string"
+        )
     try:
         host = _normalize_host(host)
     except ValueError:

@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 import pytest_asyncio
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -49,6 +50,44 @@ async def test_noting_a_host_twice_makes_one_pending_row(session):
     # The FIRST url is kept: it is what the approver was told about.
     assert b.first_seen_url == "https://eplus.jp/a"
     assert await pending_fetch_domain_count(session) == 1
+
+
+async def test_note_fetch_domain_strips_a_trailing_dns_root_dot(session):
+    row = await note_fetch_domain(session, "eplus.jp.", "https://eplus.jp/a", NOW)
+    assert row.host == "eplus.jp"
+
+
+async def test_note_fetch_domain_idna_encodes_a_unicode_host(session):
+    row = await note_fetch_domain(
+        session, "日本語.jp", "https://xn--wgv71a119e.jp/a", NOW
+    )
+    assert row.host == "xn--wgv71a119e.jp"
+
+
+async def test_note_fetch_domain_rejects_a_host_with_a_port(session):
+    # `_normalize_host` alone does NOT reject this shape (verified: it comes
+    # back unchanged but for case), so the function's own shape check is
+    # what stands between a careless caller and a garbage row that
+    # `approved_fetch_hosts()` could never match.
+    with pytest.raises(ValueError):
+        await note_fetch_domain(session, "eplus.jp:443", "https://eplus.jp/a", NOW)
+
+
+async def test_note_fetch_domain_rejects_a_full_url(session):
+    with pytest.raises(ValueError):
+        await note_fetch_domain(
+            session, "https://eplus.jp/a", "https://eplus.jp/a", NOW
+        )
+
+
+async def test_note_fetch_domain_falls_back_to_strip_lower_for_unencodable_idna(session):
+    # A label over 63 characters cannot be IDNA-encoded. Such a host can
+    # never pass the fetch guard either way (it raises `HostNotAllowed` there
+    # for the identical reason), so the fallback only needs to be readable,
+    # not future-lookup-correct -- pinned here rather than left self-reported.
+    bad = "a" * 70 + ".example"
+    row = await note_fetch_domain(session, "  " + bad.upper() + "  ", "https://x/a", NOW)
+    assert row.host == bad.lower()
 
 
 async def test_fetch_domain_rows_puts_pending_first_and_newest_first_within_that(session):
