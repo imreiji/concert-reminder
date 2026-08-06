@@ -1,4 +1,5 @@
-"""One host-pinned HTTP fetch, shared by every importer that leaves the box.
+"""One outbound HTTP fetch, gated by a host policy, shared by every importer
+that leaves the box.
 
 Top-level, beside `i18n.py` and `ops.py`: it does I/O so it cannot live in
 `domain/`, and both a web route (`web/routes/imports.py`) and the Eventernote
@@ -18,6 +19,7 @@ The guard is three-way, and all three parts matter regardless of policy:
   3. a byte-capped streamed body.
 """
 
+import asyncio
 import ipaddress
 import logging
 import socket
@@ -31,6 +33,13 @@ log = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 10.0
 DEFAULT_MAX_BYTES = 2_000_000
 DEFAULT_MAX_REDIRECTS = 5
+# A TOTAL deadline on address resolution, for the same reason `discovery.py`
+# and `triage.py` each keep a FETCH_DEADLINE_SECONDS: a stalling nameserver
+# has no other bound (glibc's own default is 5s x 2 attempts x however many
+# nameservers are configured), and this runs off the event loop precisely so
+# a slow answer costs a borrowed thread, not the whole process -- see
+# `_resolve_async`.
+DEFAULT_RESOLVE_TIMEOUT = 10.0
 
 
 class FetchError(Exception):
@@ -46,23 +55,39 @@ class FetchFailed(FetchError):
 
 
 class HostPolicy:
-    """Which hosts a fetch may reach. One method, called before the request
-    and again on every redirect hop.
+    """Which hosts a fetch may reach. `check_async` is the one required
+    method, called before the request and again on every redirect hop.
 
     A POLICY rather than a widened `allowed_host` string, because the two
     answers this app needs are different KINDS of answer -- "exactly this one
     host" and "any public host a human has approved" -- and expressing both
     through one loosened parameter is how a security control acquires a mode
     nobody remembers is there. Two policies, one guard, one redirect hook.
+
+    ASYNC, not sync, because a policy that resolves DNS (`ApprovedPublicHosts`)
+    must never do that on the shared event loop this process runs discord.py,
+    FastAPI and the 60s scheduler tick on -- see `_resolve_async`'s docstring
+    for the incident this prevents. `PinnedHost` does no I/O of its own and
+    additionally exposes a genuine synchronous `check`, for its one
+    synchronous caller (`web/routes/imports.py`'s `_check_host`); that is a
+    property of `PinnedHost` specifically, not a second method every policy
+    must grow.
     """
 
-    def check(self, url: str) -> None:
+    async def check_async(self, url: str) -> None:
         raise NotImplementedError
 
 
 class PinnedHost(HostPolicy):
     """https, and exactly one host. The original guard, unchanged: an
-    allowlist of one, never a blocklist."""
+    allowlist of one, never a blocklist.
+
+    `check` is a genuine SYNCHRONOUS method -- `web/routes/imports.py`'s
+    `_check_host` calls it directly, off any event loop, since pinning to one
+    literal host needs no I/O and never will. `check_async` just forwards to
+    it so `fetch_html` and the redirect hook can call every policy the same
+    (awaited) way regardless of which one actually does I/O.
+    """
 
     def __init__(self, host: str) -> None:
         self.host = host
@@ -72,38 +97,121 @@ class PinnedHost(HostPolicy):
         if parsed.scheme != "https" or parsed.hostname != self.host:
             raise HostNotAllowed(f"only https://{self.host}/... URLs are supported")
 
+    async def check_async(self, url: str) -> None:
+        self.check(url)
+
 
 def _resolve(host: str) -> list[str]:
     """Every address `host` resolves to. Its own function so a test can
-    replace it without a network, and so the policy below reads as policy."""
+    replace it without a network, and so the policy below reads as policy.
+
+    Synchronous and BLOCKING (`socket.getaddrinfo` does real I/O) -- callers
+    on the event loop must go through `_resolve_async`, never this directly.
+    """
     return [info[4][0] for info in socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)]
 
 
-def _is_actually_global(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """`ip.is_global` alone is not quite enough, MEASURED rather than assumed:
-    it correctly unwraps an IPv4-MAPPED IPv6 address (`::ffff:a.b.c.d`) and
-    classifies the embedded IPv4 -- `::ffff:169.254.169.254` already comes
-    back non-global. What it does NOT unwrap is the older, deprecated
-    IPv4-COMPATIBLE form (`::a.b.c.d`, no `ffff`, RFC 4291 `::/96`): both
-    glibc's and Windows' `inet_ntop` render ANY address in that block back
-    into dotted-decimal text, so a crafted AAAA answer of `::169.254.169.254`
-    round-trips through `_resolve` as that exact string, and `is_global` on
-    the parsed result reports True -- confirmed empirically, not assumed.
-    A host an admin approved, later re-pointed at that record, would sail
-    through the guard. Unwrap that block ourselves and classify the embedded
-    IPv4 instead of trusting the library's classification of the IPv6
-    wrapper. `::` and `::1` are excluded from the unwrap (they collapse to
-    0.0.0.0 and 0.0.0.1, an unrelated question) and native `is_global`
-    already reports both of them correctly as non-global.
+async def _resolve_async(host: str) -> list[str]:
+    """`_resolve`, off the event loop, with a total deadline.
+
+    This process runs discord.py, FastAPI and the 60s scheduler tick on ONE
+    asyncio loop (CLAUDE.md). A plain synchronous `_resolve` call from
+    `ApprovedPublicHosts.check_async` would block that ENTIRE loop for
+    however long a stalling nameserver takes -- not one request stalling, the
+    whole process: no Discord heartbeat, no web response, no scheduler tick,
+    for as long as DNS takes to give up. `asyncio.to_thread` pays that cost
+    with a borrowed thread instead of the loop, and `asyncio.wait_for` bounds
+    it so one bad nameserver cannot hang a fetch (or, transitively, the
+    process) indefinitely. Wraps the still-plain, still-monkeypatchable
+    `_resolve` rather than switching to `loop.getaddrinfo` directly, so every
+    existing test that patches `app.fetching._resolve` keeps intercepting it.
     """
+    return await asyncio.wait_for(
+        asyncio.to_thread(_resolve, host), timeout=DEFAULT_RESOLVE_TIMEOUT
+    )
+
+
+# Every IPv6 /96 (or narrower) block whose LOW 32 bits carry an embedded IPv4
+# address, where the block's OWN allocation status is not what determines
+# whether an address inside it is reachable -- the embedded IPv4 is. Measured
+# empirically (not assumed) that native `ip.is_global` does NOT unwrap any of
+# these the way it correctly unwraps IPv4-mapped (`::ffff:a.b.c.d`, handled by
+# `ip.ipv4_mapped` and deliberately absent from this list -- it needs no help):
+#   - `::/96`            IPv4-compatible, deprecated (RFC 4291 2.5.5.1)
+#   - `::ffff:0:0:0/96`  IPv4-translated (historic SIIT / RFC 2765 -- NOT the
+#                        same block as IPv4-mapped `::ffff:0:0/96` despite the
+#                        similar prefix text; one extra zero group shifts it)
+#   - `64:ff9b::/96`     the NAT64 well-known prefix (RFC 6052 2.1)
+# `64:ff9b:1::/48` (RFC 6052's LOCAL-USE translation prefix) is deliberately
+# NOT here: it already reads non-global natively for every embedded payload,
+# confirmed empirically, so unwrapping it would be a no-op branch.
+_EMBEDDED_IPV4_BLOCKS: tuple[ipaddress.IPv6Network, ...] = (
+    ipaddress.IPv6Network("::/96"),
+    ipaddress.IPv6Network("::ffff:0:0:0/96"),
+    ipaddress.IPv6Network("64:ff9b::/96"),
+)
+# :: and ::1 both sit inside ::/96 too, but they mean "unspecified" and
+# "loopback", not "IPv4 embedded as 0.0.0.0 / 0.0.0.1" -- an unrelated
+# question -- and native `is_global` already reports both correctly, so they
+# are carved out of the unwrap rather than reclassified through it.
+_NOT_EMBEDDED_IPV4 = (ipaddress.IPv6Address("::"), ipaddress.IPv6Address("::1"))
+
+
+def _is_actually_global(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Public unicast, not merely `is_global` -- both measured gaps in the
+    standard library's own classification, closed explicitly rather than
+    trusted:
+
+    1. `ip.is_global` reports the IPv6 WRAPPER's classification, not the
+       embedded IPv4's, for every block in `_EMBEDDED_IPV4_BLOCKS` --
+       confirmed for each: `::169.254.169.254`, `::ffff:0:a9fe:a9fe` and
+       `64:ff9b::a9fe:a9fe` (all three encode 169.254.169.254, the Lightsail
+       metadata endpoint) each read back `is_global=True` unpatched. A host an
+       admin approved, later re-pointed at any of these AAAA forms, would
+       sail through the guard. Detect membership in one of those blocks and
+       classify the embedded IPv4 (`ip.packed`'s low 4 bytes) instead.
+    2. `ip.is_global` alone says nothing about multicast, IANA-reserved
+       (`240.0.0.0/4`) or unspecified addresses -- none are on a private- or
+       loopback-shaped allowlist, so `is_global` alone lets them through, and
+       none are a route to a TCP-reachable credential source either, so this
+       is defense-in-depth rather than a closed gap: excluded explicitly so
+       the predicate reads as "public unicast", not "not on a list I thought
+       of enumerating".
+    """
+    effective: ipaddress.IPv4Address | ipaddress.IPv6Address = ip
     if (
         isinstance(ip, ipaddress.IPv6Address)
         and ip.ipv4_mapped is None
-        and ip.packed[:12] == b"\x00" * 12
-        and ip not in (ipaddress.IPv6Address("::"), ipaddress.IPv6Address("::1"))
+        and ip not in _NOT_EMBEDDED_IPV4
+        and any(ip in block for block in _EMBEDDED_IPV4_BLOCKS)
     ):
-        return ipaddress.IPv4Address(ip.packed[12:]).is_global
-    return ip.is_global
+        effective = ipaddress.IPv4Address(ip.packed[12:])
+    return (
+        effective.is_global
+        and not effective.is_multicast
+        and not effective.is_reserved
+        and not effective.is_unspecified
+    )
+
+
+def _normalize_host(host: str) -> str:
+    """The exact host BOTH `is_approved` and `_resolve_async` see: a single
+    trailing DNS root dot stripped, IDNA-encoded to ASCII, lowercased.
+
+    Normalized ONCE, here, rather than left to whatever an approval STORE (a
+    later task) happens to pick: `eplus.jp.` and `eplus.jp` must approve
+    identically, and an IDN host must reach `is_approved` in the same ASCII
+    form `_resolve_async` (and httpx, and TLS) actually use to reach the
+    network, or a Unicode-vs-punycode split lets a host bypass approval by
+    spelling -- with nothing today to catch it, since `.encode("idna")` on an
+    already-ASCII host is close to a no-op and the gap would sit silent until
+    the approval store picked its own, possibly different, convention.
+    Raises `UnicodeError` (a `ValueError`) on an unencodable label; the
+    caller turns that into `HostNotAllowed` same as any other malformed host.
+    """
+    if host.endswith("."):
+        host = host[:-1]
+    return host.encode("idna").decode("ascii").lower()
 
 
 class ApprovedPublicHosts(HostPolicy):
@@ -117,35 +225,54 @@ class ApprovedPublicHosts(HostPolicy):
       2. `is_approved(host)`, so nothing is fetched from a host an admin has
          not personally approved (see `FetchDomain`) -- and, because this same
          check runs on every redirect hop, a redirect off an approved host
-         onto an unapproved one is refused rather than followed;
-      3. every address the host resolves to must be GLOBAL, so a private,
-         loopback, link-local or CGNAT target is refused. That covers the
-         instance metadata endpoint at 169.254.169.254, which on this deploy
-         is a real credential source. ALL addresses must pass, not any: a host
-         answering with one public and one private address is a rebinding
-         setup, not a deployment to accommodate.
+         onto an unapproved one is refused rather than followed. `is_approved`
+         is always called with the NORMALIZED host (see `_normalize_host`):
+         ASCII, lowercased, no trailing dot -- a contract the guard keeps, not
+         one every future caller of `is_approved` has to remember.
+      3. every address the host resolves to must be public UNICAST
+         (`_is_actually_global`), so a private, loopback, link-local, CGNAT,
+         multicast or reserved target is refused -- across every IPv4-in-IPv6
+         encoding this module knows about, not just the obvious one. That
+         covers the instance metadata endpoint at 169.254.169.254, which on
+         this deploy is a real credential source. ALL addresses must pass, not
+         any: a host answering with one public and one private address is a
+         rebinding setup, not a deployment to accommodate.
 
-    Accepted residual risk, recorded rather than ignored: DNS rebinding
-    between this resolution and the connection httpx makes. Closing it means
-    connecting to the resolved address with a Host override and re-doing TLS
-    verification by name; the exposure is an attacker who both controls a host
-    an admin explicitly approved and can flip its DNS inside the request
-    window.
+    Resolution happens OFF the event loop (`_resolve_async`) -- this check
+    runs from `fetch_html` and from the async redirect hook, both on the one
+    loop this whole process shares, and a synchronous DNS call there would
+    block Discord, the web app and the scheduler tick together, not just this
+    fetch.
+
+    Accepted residual risk, recorded rather than ignored: this check and
+    httpx's own connection are TWO INDEPENDENT DNS lookups. "ALL addresses
+    must pass" only covers the ONE answer set this check happens to see; a
+    short-TTL or round-robin record can hand httpx's later lookup a
+    completely different, disjoint answer set with NO attacker timing needed
+    at all -- this is broader than the classic rebinding picture of an
+    attacker flipping DNS inside a narrow window, and can happen to any
+    approved host whose DNS legitimately varies between requests. Closing it
+    means connecting to the resolved address directly with a Host override and
+    re-doing TLS verification by name.
     """
 
     def __init__(self, is_approved: Callable[[str], bool]) -> None:
         self.is_approved = is_approved
 
-    def check(self, url: str) -> None:
+    async def check_async(self, url: str) -> None:
         parsed = urlparse(url)
-        host = parsed.hostname
-        if parsed.scheme != "https" or not host:
+        raw_host = parsed.hostname
+        if parsed.scheme != "https" or not raw_host:
             raise HostNotAllowed("only https:// URLs can be read")
+        try:
+            host = _normalize_host(raw_host)
+        except ValueError as exc:
+            raise HostNotAllowed(f"{raw_host} is not a usable hostname: {exc}") from exc
         if not self.is_approved(host):
             raise HostNotAllowed(f"{host} has not been approved for fetching")
         try:
-            addresses = _resolve(host)
-        except OSError as exc:
+            addresses = await _resolve_async(host)
+        except (OSError, ValueError, TimeoutError) as exc:
             raise HostNotAllowed(f"{host} does not resolve: {exc}") from exc
         if not addresses:
             raise HostNotAllowed(f"{host} does not resolve")
@@ -172,7 +299,7 @@ def _redirect_hook(policy: HostPolicy):
     async def _check_redirect(response: httpx.Response) -> None:
         if response.is_redirect:
             location = response.headers.get("location", "")
-            policy.check(urljoin(str(response.url), location))
+            await policy.check_async(urljoin(str(response.url), location))
 
     return _check_redirect
 
@@ -198,7 +325,7 @@ async def fetch_html(
     `transport` is test-only (httpx.MockTransport); production always uses
     httpx's default.
     """
-    policy.check(url)
+    await policy.check_async(url)
     try:
         async with httpx.AsyncClient(
             timeout=timeout,
