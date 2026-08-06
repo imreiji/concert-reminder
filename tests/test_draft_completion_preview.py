@@ -403,7 +403,11 @@ async def test_an_oversized_paste_is_refused_before_any_call(
         raise AssertionError("an oversized paste must not reach the model")
 
     monkeypatch.setattr("app.draft_completion.llm.chat", explode)
-    row = await _seed(session, admin_user_id)
+    # NOT the default COMPLETED seed -- that already has a round, and the
+    # already-has-rounds guard (checked BEFORE this size check) would answer
+    # 422 on its own, making this assertion pass vacuously without ever
+    # reaching the size check it claims to pin.
+    row = await _seed(session, admin_user_id, draft_text="title: x\nperformances: []\nrounds: []\n")
     r = admin_client.post(
         f"/concerts/import/pending/{row.id}/complete",
         data={"page_text": "x" * 150_001},
@@ -415,7 +419,10 @@ async def test_an_oversized_paste_is_refused_before_any_call(
 @pytest.mark.asyncio
 async def test_an_empty_paste_is_refused(admin_client, session, admin_user_id, monkeypatch):
     monkeypatch.setattr("app.config.settings.triage_enabled", True)
-    row = await _seed(session, admin_user_id)
+    # NOT the default COMPLETED seed -- see the oversized-paste test above for
+    # why: the already-has-rounds guard runs first and would satisfy this
+    # test's assertion without the empty check underneath it ever running.
+    row = await _seed(session, admin_user_id, draft_text="title: x\nperformances: []\nrounds: []\n")
     r = admin_client.post(
         f"/concerts/import/pending/{row.id}/complete",
         data={"page_text": "   "},  # whitespace-only, same as nothing pasted

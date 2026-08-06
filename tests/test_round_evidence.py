@@ -132,6 +132,29 @@ def test_a_round_with_no_timestamps_at_all_is_rejected():
     assert "no timestamps" in v.rejected[0]
 
 
+def test_the_earlier_field_in_ladder_order_is_named_when_two_timestamps_are_ungrounded():
+    # Both apply_opens_jst and apply_closes_jst are present with NO evidence
+    # at all. _reject_reason must return the FIRST reason in TIMESTAMP_FIELDS
+    # (ladder) order -- apply_opens_jst, since it precedes apply_closes_jst
+    # there -- not whichever field a set's randomized-per-process hash order
+    # happens to visit first. Built with ProposedRound directly rather than
+    # the `_round` helper: that helper's own default evidence already quotes
+    # apply_closes_jst, which this test needs blank.
+    r = ProposedRound(
+        data={
+            "label": "1次先行抽選", "kind": "lottery",
+            "apply_opens_jst": "2026-01-05 12:00",
+            "apply_closes_jst": "2026-01-10 23:59",
+        },
+        evidence={},
+        label="1次先行抽選",
+    )
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "apply_opens_jst" in v.rejected[0]
+    assert "apply_closes_jst" not in v.rejected[0]
+
+
 def test_one_bad_round_does_not_cost_a_good_one():
     good, bad = _round(), _round(evidence={"apply_closes_jst": "存在しない行"})
     v = verify_rounds([good, bad], PAGE, ["Day 1"], TODAY)

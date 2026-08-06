@@ -352,8 +352,18 @@ def _reject_reason(
     today: date,
 ) -> str | None:
     """The first reason this round cannot be trusted, or None."""
+    # Built by walking TIMESTAMP_FIELDS itself, not `present` directly: that
+    # set is for MEMBERSHIP only (Python randomizes string-hash order per
+    # process, so iterating a set is non-deterministic run to run), and this
+    # dict's OWN iteration order is what decides which reason the loop below
+    # returns first when more than one timestamp is bad -- this module's
+    # whole contract is that the operator sees the FIRST reason, in ladder
+    # order, not whichever one a hash happened to yield first.
+    present = _present_timestamp_fields(proposed.data)
     stamps = {
-        name: str(proposed.data[name]).strip() for name in _present_timestamp_fields(proposed.data)
+        name: str(proposed.data[name]).strip()
+        for name in TIMESTAMP_FIELDS
+        if name in present
     }
     if not stamps:
         return "no timestamps at all -- a round with no deadline is a label, not a rung"
