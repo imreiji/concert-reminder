@@ -1938,6 +1938,38 @@ moves; a feed going quiet is still invisible.
 (2026-07-31) was closed the same day by measuring it -- see its Shipped entry.
 The measurement moved the answer: the hint banner was not the cause.)
 
+### 17. `db/core.py` is one mutually-recursive 4,000-line component
+
+Impact: nil for users, real for anyone changing the reminder engine - effort:
+large. Raised: 2026-08-07 (the service.py split; this is the part that
+deliberately did NOT move, written down so the next person does not rediscover
+why).
+
+The 2026-08-07 pass took `db/service.py` from 8,063 lines to a 556-line facade
+plus thirteen feature modules. `core.py` kept ~4,000 of those lines, and not
+for lack of appetite: its nine sections -- queue sync, retrieval, the personal
+board, the concert page's rounds-by-leg, Discover status, presets and
+subscriptions, DM button actions, users, adapters -- form ONE strongly-connected
+component in the call graph. That was measured with an AST pass, not estimated.
+The thirteen modules that did move were acyclic, which is exactly why moving
+them was safe to do mechanically.
+
+So there is no cut through `core.py` that yields modules importing in one
+direction, and any file-move split would buy smaller files at the price of
+import cycles -- the specific fragility the facade exists to avoid, since a
+cycle here surfaces or not depending on which module a process imports first.
+
+Splitting it needs a DESIGN change rather than a reorganisation. The most
+promising is the `reminder_queue` inversion (see the review that produced this
+entry): stop materialising planned reminders, keep a `sent` ledger keyed on
+(rule, round, day, anchor, fire_at) and compute due rows on read. That deletes
+invariant 2's 21 `sync_*` call sites, and with them most of the mutual
+recursion -- the suppression passes exist to filter CANDIDATES before planning
+precisely because a materialised table has to stay honest. Worth doing on its
+own merits; the file size is a symptom, not the reason.
+
+Do not attempt this as a tidy-up. The engine is the product.
+
 (The former "Editor page parity with the demo" entry (2026-07-20) was
 absorbed on 2026-07-23 into the editor-pages coherence pass --
 everything it tracked (demo's nested-rounds structure vs shipped flat lists,
