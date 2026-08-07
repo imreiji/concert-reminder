@@ -18,14 +18,11 @@ paste path this one builds on.
 from datetime import UTC, datetime
 
 import pytest
-import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
 from app.config import settings
-from app.db.models import Base, Concert, PendingDraft, User
+from app.db.models import Concert, PendingDraft, User
 from app.db.service import (
     create_pending_drafts,
     delete_user,
@@ -43,23 +40,6 @@ USER_A = 111
 USER_B = 222
 NOW = datetime(2026, 8, 2, 12, 0, tzinfo=UTC)
 LATER = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool,
-        connect_args={"check_same_thread": False},
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")  # match production: cascades must fire
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 def _batch(*titles: str) -> DraftBatch:

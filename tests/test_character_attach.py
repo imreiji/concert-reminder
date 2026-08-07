@@ -1,30 +1,10 @@
 """Attach-time chaining: character -> seiyuu, and group -> character -> seiyuu."""
 
-import pytest_asyncio
-from sqlalchemy import event, func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import func, select
 
-from app.db.models import Base, Concert, ConcertTag, Tag, TagMember
+from app.db.models import Concert, ConcertTag, Tag, TagMember
 from app.db.service import attach_tag
 from app.domain.types import TagKind
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool,
-        connect_args={"check_same_thread": False},
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 async def _seed(s):

@@ -18,7 +18,19 @@
   <title>{% block title %}dekimasen.app{% endblock %}</title>
   <link rel="stylesheet" href="{{ static_url('style.css') }}">
   <link rel="icon" href="{{ static_url('favicon.ico') }}" sizes="any">
-  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  {# htmx is VENDORED (static/htmx.min.js), not loaded from unpkg. Every
+     interactive surface in this app is htmx, so a CDN outage broke the site
+     and a CDN compromise would have run attacker script in-origin -- where
+     the session cookie lives and where SameSite=Lax gives no protection
+     (there is no CSRF token by design; see invariant 5). Serving it
+     ourselves also removes the last third-party script origin, which is what
+     lets the Caddyfile ship a real Content-Security-Policy.
+     Upgrade = replace the file wholesale from
+     https://unpkg.com/htmx.org@<version>/dist/htmx.min.js and bump the
+     version here. Currently htmx 2.0.4 (50,917 bytes,
+     sha256 e209dda5c8235479f3166defc7750e1dbcd5a5c1808b7792fc2e6733768fb447).
+     static_url() cache-busts on the content hash, so no purge step. #}
+  <script src="{{ static_url('htmx.min.js') }}" defer></script>
 </head>
 <body class="has-tabbar" data-tz="{{ tz or '' }}" data-tz-auto="{{ '1' if tz_auto else '0' }}">
   <div id="hxbar" aria-hidden="true"></div>

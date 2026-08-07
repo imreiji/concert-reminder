@@ -3,12 +3,9 @@
 Spec: docs/superpowers/specs/2026-07-30-catalogue-round-trip-design.md
 """
 
-import pytest_asyncio
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
-from app.db.models import Base, Concert, ConcertTag, Notification, Tag, TagMember
+from app.db.models import Concert, ConcertTag, Notification, Tag, TagMember
 from app.db.service import (
     ImportChoices,
     apply_tag_import,
@@ -21,23 +18,6 @@ from app.domain.tags_yaml import parse_tags
 from app.domain.types import TagKind
 
 ADMIN = 42
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool,
-        connect_args={"check_same_thread": False},
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")  # match production
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 FILE = """

@@ -14,12 +14,7 @@ cannot quietly change the other.
 
 from datetime import UTC, datetime, timedelta
 
-import pytest_asyncio
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
-
-from app.db.models import Base, Concert, ConcertDay, Round
+from app.db.models import Concert, ConcertDay, Round
 from app.db.service import (
     RoundRow,
     _needs_you,
@@ -37,25 +32,6 @@ NOW = datetime(2026, 6, 1, tzinfo=UTC)
 
 def dt(month: int, day: int, hour: int = 12) -> datetime:
     return datetime(2026, month, day, hour, tzinfo=UTC)
-
-
-@pytest_asyncio.fixture()
-async def session():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    # Cascades silently do not fire without this (production registers it too).
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as s:
-        yield s
-    await engine.dispose()
 
 
 async def seed(s, *, cancel_leg_a: bool = False, cancel_leg_b: bool = False):

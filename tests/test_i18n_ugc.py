@@ -10,14 +10,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
 from app import i18n
-from app.db.models import Base, Concert, ConcertDay, Round, Tag, User
+from app.db.models import Concert, ConcertDay, Round, Tag, User
 from app.db.service import ensure_user, snapshot_concert
 from app.db.session import get_session
 from app.domain.types import Anchor, RoundKind, TagKind
@@ -32,24 +29,6 @@ EDITOR = 9001
 class _Obj:
     def __init__(self, **kw):
         self.__dict__.update(kw)
-
-
-@pytest_asyncio.fixture()
-async def session():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as s:
-        yield s
-    await engine.dispose()
 
 
 # ── loc_field fallback rule ──────────────────────────────────────────────
@@ -199,22 +178,6 @@ async def test_snapshot_concert_includes_new_fields(session):
 
 
 # ── web fixtures (mirror tests/test_editor_legs.py) ──────────────────────
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 @pytest.fixture()

@@ -9,14 +9,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
 from app.config import settings
-from app.db.models import Base, Concert, ReminderRule, Round, User
+from app.db.models import Concert, ReminderRule, Round, User
 from app.db.service import concert_round_rows, due_reminders, ensure_user, sync_rule
 from app.db.session import get_session
 from app.domain.ingest import _guess_kind
@@ -73,24 +70,6 @@ def test_requires_script_item_kinds_mirrors_item_sale_kinds():
     assert js_kinds == sorted(kind.value for kind in ITEM_SALE_KINDS)
 
 
-@pytest_asyncio.fixture()
-async def session():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as s:
-        yield s
-    await engine.dispose()
-
-
 async def test_required_item_round_set_null_on_target_delete(session):
     # Build a concert with an item-sale round and a lottery round that
     # requires it, straight through the models (write-boundary validation is
@@ -141,22 +120,6 @@ def test_resolver_rejects_missing_wrong_kind_and_self():
 # Same logged-in-editor client shape as tests/test_crud.py: a fresh in-memory
 # DB per test, get_session dependency-overridden, login simulated by
 # monkeypatching the auth module's Discord calls.
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 @pytest.fixture()

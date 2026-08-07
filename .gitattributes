@@ -2,3 +2,9 @@
 # would arrive as "3.14\r" and fail to resolve. Force LF regardless of the
 # committer's platform (the owner is on Windows).
 .python-version text eol=lf
+
+# Vendored htmx: `static_url` cache-busts on a CONTENT hash, so a CRLF
+# checkout on Windows and an LF one on the server would advertise two
+# different ?v= for the same release. Pin it, and never hand-edit the file --
+# it is upstream's build, replaced wholesale on upgrade (see base.html).
+src/app/web/static/htmx.min.js -text eol=lf

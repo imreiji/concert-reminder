@@ -1214,8 +1214,18 @@ deleting them.
 
 - Async tests via pytest-asyncio auto mode — `await` directly, never
   `run_until_complete` inside a test.
-- DB fixtures MUST register the `PRAGMA foreign_keys=ON` connect listener
-  (production does; cascades silently don't fire without it).
+- **Use `tests/conftest.py`'s shared `db` / `session` fixtures; do not write
+  a new one.** `db` yields an `async_sessionmaker`, `session` yields one open
+  `AsyncSession` on the same database, and both give a fresh in-memory DB per
+  test with `PRAGMA foreign_keys=ON` registered (production does; cascades
+  silently don't fire without it -- and a missing cascade makes a test PASS,
+  so nothing reports it). These replaced 81 hand-copies of one fixture across
+  79 files, two of which had already lost that pragma. Override locally only
+  to ADD setup, and derive from `db` when you do -- see
+  `test_fetch_domain_service.py`, which seeds the users its FKs need. The
+  schema is built from statements compiled once per process rather than by
+  `create_all`; `test_conftest_fixtures.py` diffs the two schemas so that
+  optimisation cannot drift.
 - Every page must have at least one logged-in GET render test — a missing
   one shipped a 500 once (template context drift).
 - Discord is never imported in service tests; button/scheduler behavior is

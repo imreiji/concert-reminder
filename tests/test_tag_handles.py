@@ -4,31 +4,11 @@ Spec: docs/superpowers/specs/2026-07-29-tag-handles-design.md
 """
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
-from app.db.models import Base, Tag
+from app.db.models import Tag
 from app.db.service import assign_tag_slug
 from app.domain.types import TagKind
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool,
-        connect_args={"check_same_thread": False},
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")  # match production
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 async def _add(s, **kw) -> Tag:
