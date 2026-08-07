@@ -30,22 +30,49 @@ dekimasen.app, www.dekimasen.app {
     # query string - POST /me/calendar-feed redirects to
     # /preferences?feed_token=<raw token> (or /welcome?feed_token=... from
     # the onboarding wizard), and that raw token is the only credential the
-    # feed has. Those pages load htmx from unpkg.com and may link out, so
-    # same-origin guarantees no Referer carrying that URL ever leaves the
-    # site, rather than trusting each browser's default policy.
+    # feed has. Those pages may link out, so same-origin guarantees no
+    # Referer carrying that URL ever leaves the site, rather than trusting
+    # each browser's default policy. (This mattered more when htmx came from
+    # unpkg.com; it is vendored now, but a link-out still leaks a Referer, so
+    # the header keeps earning its place.)
     #
     # Deliberately NOT set here:
     #   - Strict-Transport-Security: .app is HSTS-preloaded at the TLD
     #     level, so browsers already refuse plaintext to this domain. An
     #     extra header adds nothing and a bad max-age/includeSubDomains is
     #     painful to walk back. Do not "helpfully" add it.
-    #   - Content-Security-Policy: base.html pulls htmx from unpkg.com and
-    #     the templates use inline <script>. A correct policy needs its own
-    #     change with page-by-page verification, not a guess here.
+    #
+    # Content-Security-Policy: htmx is now VENDORED (src/app/web/static/
+    # htmx.min.js), so this site loads NO third-party script at all and the
+    # policy can name 'self' as the only script origin. That is the whole
+    # value here -- before vendoring, a unpkg.com outage broke every
+    # interactive surface and a unpkg compromise would have run attacker
+    # script in-origin.
+    #
+    # Two relaxations, both currently load-bearing, neither permanent:
+    #   - script-src 'unsafe-inline': ~15 templates carry inline <script>
+    #     blocks, including base.html's pre-paint theme stamp (which MUST be
+    #     inline -- an external file would race first paint and flash the
+    #     wrong theme). Tightening means a per-request nonce threaded through
+    #     every block; worth doing, not worth guessing at.
+    #   - style-src 'unsafe-inline': inline style="" attributes across ~10
+    #     templates (preferences.html alone has 31).
+    # Even with both, this policy still stops the injected-<script src> and
+    # exfiltrate-to-attacker-host classes, which is what actually matters
+    # given there is no CSRF token by design (SameSite=Lax only).
+    #
+    # img-src names cdn.discordapp.com because SessionUser.avatar_url points
+    # there (web/auth.py) -- it is the ONLY third-party origin left.
+    # frame-ancestors 'none' restates X-Frame-Options for browsers that
+    # honour CSP over the older header; keep both while old clients exist.
+    # connect-src 'self' bounds htmx's XHRs. form-action 'self' is safe:
+    # every <form action> in the templates is a same-origin path, and the
+    # Discord OAuth handoff is a redirect, not a form post.
     header {
         X-Frame-Options DENY
         X-Content-Type-Options nosniff
         Referrer-Policy same-origin
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
     }
 
     @www host www.dekimasen.app
