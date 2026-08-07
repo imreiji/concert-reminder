@@ -414,13 +414,36 @@ def create_app() -> FastAPI:
         return "User-agent: *\nDisallow: /discover?\n"
 
     @app.get("/healthz")
-    async def healthz(session: AsyncSession = Depends(get_session)) -> dict:
+    async def healthz(
+        session: AsyncSession = Depends(get_session),
+        user: auth.SessionUser | None = Depends(auth.current_user),
+    ) -> dict:
+        """Liveness for anyone; diagnostics for an admin.
+
+        The endpoint stays PUBLIC and unauthenticated -- UptimeRobot polls it
+        with no cookie and keyword-matches '"ok":true', so that field's shape
+        and meaning are an external contract.
+
+        What moved behind admin is `checks`, whose details are infrastructure
+        facts about a machine anonymous callers have no business reading: free
+        disk in GB, the timestamp of the last backup, and -- on a marker that
+        will not parse -- a filesystem path inside the exception string.
+        `check_dms` already withheld its number for exactly this reason (it
+        logs the count instead); the other three simply never got the same
+        treatment, and this makes the surface consistent rather than
+        per-check.
+
+        Anonymous callers also skip run_checks ENTIRELY rather than having its
+        output filtered out. `ok` is derived from the in-memory heartbeat
+        alone, so the checks are not needed to answer them -- and running them
+        anyway would do a disk stat, a file read and a COUNT(*) on the users
+        table for every unauthenticated request, which is a free amplification
+        primitive pointed at the one endpoint that must always answer.
+        `Depends(auth.current_user)` (not require_admin) is what keeps the
+        route reachable signed out: it returns None instead of raising.
+        """
         scheduler_ok, last_tick = heartbeat.status()
-        # run_checks never raises: every check is wrapped, so a broken check
-        # degrades to ok=false rather than 500ing the endpoint the uptime
-        # monitor is watching.
-        results = await run_checks(session)
-        return {
+        body = {
             # `ok` deliberately still follows the scheduler ALONE. UptimeRobot
             # keyword-matches '"ok":true'; folding degraded checks in here would
             # silently redefine an existing external alert. The detail lives in
@@ -429,8 +452,14 @@ def create_app() -> FastAPI:
             "bot_enabled": settings.bot_enabled,
             "scheduler_ok": scheduler_ok,
             "scheduler_last_tick": last_tick,
-            "checks": {r.name: {"ok": r.ok, "detail": r.detail} for r in results},
         }
+        if user is not None and user.is_admin:
+            # run_checks never raises: every check is wrapped, so a broken check
+            # degrades to ok=false rather than 500ing the endpoint the uptime
+            # monitor is watching.
+            results = await run_checks(session)
+            body["checks"] = {r.name: {"ok": r.ok, "detail": r.detail} for r in results}
+        return body
 
     @app.get("/", response_class=HTMLResponse)
     async def home(

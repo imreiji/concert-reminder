@@ -111,9 +111,11 @@ def test_a_raising_check_becomes_a_failure_not_a_crash():
 
 
 def test_a_raising_check_does_not_leak_its_message():
-    """/healthz is public so UptimeRobot can poll it. str() on a SQLAlchemy
-    error carries the full statement and column names, which would publish
-    schema internals to anonymous callers exactly when something breaks."""
+    """str() on a SQLAlchemy error carries the full statement and column
+    names. /healthz shows `checks` to an admin only now, so this is defence in
+    depth -- but a CheckResult is a value two consumers already render and a
+    third could be less careful, so a detail that never contains a statement
+    cannot leak one wherever it ends up."""
 
     def boom():
         raise RuntimeError("SELECT secret FROM users WHERE token = 'hunter2'")
@@ -140,9 +142,10 @@ def test_scheduler_check_is_reported_but_never_alerting():
 
 
 async def test_dms_detail_carries_no_user_derived_count():
-    """/healthz is public. Infrastructure facts (disk, backup) are fine to
-    publish; "N users have DMs closed" is derived from the user table and must
-    not be readable by an anonymous caller."""
+    """Infrastructure facts (disk, backup) are admin-gated on /healthz;
+    "N users have DMs closed" is derived from the USER table and stays out of
+    the detail string entirely, one layer further in. Naming who is affected
+    belongs to /admin/deliveries, which owns that responsibility explicitly."""
 
     class CountingSession:
         async def scalar(self, _query):

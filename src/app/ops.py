@@ -55,10 +55,15 @@ class RegistryEntry:
 
 
 def _redacted(e: Exception) -> str:
-    """Exception TYPE only -- /healthz is public so UptimeRobot can poll it, and
-    str(e) on a SQLAlchemy error carries the full statement and column names.
-    That would publish schema internals to anonymous callers at exactly the
-    moment something is broken. The full traceback goes to the log above."""
+    """Exception TYPE only. str(e) on a SQLAlchemy error carries the full
+    statement and column names, and this text is rendered into a response.
+
+    /healthz now shows `checks` to an ADMIN only, so this is defence in depth
+    rather than the sole barrier it was -- keep it anyway. A CheckResult is a
+    value the registry hands to two consumers (the endpoint and the scheduler's
+    alerting path), and a future third could be less careful than either; a
+    detail string that never contains a statement cannot leak one wherever it
+    ends up. The full traceback goes to the log above."""
     return f"check raised: {type(e).__name__}"
 
 
@@ -134,10 +139,14 @@ async def check_dms(session) -> CheckResult:
     blocked = await session.scalar(
         select(func.count()).select_from(User).where(User.dm_blocked_since.is_not(None))
     )
-    # The count stays OUT of the detail: /healthz is public (UptimeRobot polls
-    # it anonymously) and this is the one check whose number is derived from the
-    # user table rather than being an infrastructure fact. Logged instead, where
-    # only the owner can see it.
+    # The count stays OUT of the detail. This is the one check whose number is
+    # derived from the USER table rather than being an infrastructure fact, and
+    # it was withheld back when /healthz published every detail anonymously.
+    # `checks` is admin-only now, so that reasoning has been generalised rather
+    # than made redundant -- but keep the count out regardless: it is a fact
+    # about identifiable people's privacy settings, and the delivery log
+    # (/admin/deliveries) is the surface that deliberately owns naming them.
+    # Logged instead, where only the owner can see it.
     log.debug("dms check: %s users have DMs closed", blocked)
     return CheckResult("dms", True, "dm-block state tracked")
 
