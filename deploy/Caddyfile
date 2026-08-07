@@ -43,11 +43,33 @@ dekimasen.app, www.dekimasen.app {
     #     painful to walk back. Do not "helpfully" add it.
     #
     # Content-Security-Policy: htmx is now VENDORED (src/app/web/static/
-    # htmx.min.js), so this site loads NO third-party script at all and the
-    # policy can name 'self' as the only script origin. That is the whole
-    # value here -- before vendoring, a unpkg.com outage broke every
-    # interactive surface and a unpkg compromise would have run attacker
-    # script in-origin.
+    # htmx.min.js), so the APP itself serves every script it depends on.
+    # That is the value here -- before vendoring, a unpkg.com outage broke
+    # every interactive surface and a unpkg compromise would have run
+    # attacker script in-origin.
+    #
+    # static.cloudflareinsights.com is the ONE remaining script origin, and
+    # it is not ours to remove from here: Cloudflare Web Analytics injects
+    # `beacon.min.js` into the HTML AT THE EDGE, after the response has left
+    # this server. Nothing in the repo references it, which is exactly why
+    # neither the template sweep in tests/test_vendored_assets.py nor a local
+    # run against the app could ever have predicted it -- the first shipped
+    # CSP blocked it and the console said so on every page. Two ways to
+    # change that, both in the Cloudflare dashboard, NOT here:
+    #   - don't want the analytics -> turn Web Analytics off, then drop the
+    #     host from script-src below;
+    #   - want them -> leave as is.
+    # It is a defensible thing to allow: cookieless (so it needs no consent
+    # banner, which is why it was turned on), and on the automatic-injection
+    # path Cloudflare stamps the tag with its own `integrity` hash, so the
+    # host is allowed but a swapped payload still would not execute.
+    #
+    # connect-src deliberately does NOT name cloudflareinsights.com. This
+    # zone is orange-cloud proxied, so the beacon POSTs its data to
+    # https://dekimasen.app/cdn-cgi/rum -- same origin, already covered by
+    # 'self'. Only MANUAL embedding on an unproxied site talks to
+    # cloudflareinsights.com directly. If this zone is ever grey-clouded,
+    # that changes and the console will say so.
     #
     # Two relaxations, both currently load-bearing, neither permanent:
     #   - script-src 'unsafe-inline': ~15 templates carry inline <script>
@@ -72,7 +94,7 @@ dekimasen.app, www.dekimasen.app {
         X-Frame-Options DENY
         X-Content-Type-Options nosniff
         Referrer-Policy same-origin
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
     }
 
     @www host www.dekimasen.app
