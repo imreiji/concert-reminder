@@ -3,12 +3,9 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
-from app.db.models import Base, Concert, DeliveryLog, Notification, User
+from app.db.models import Concert, DeliveryLog, Notification, User
 from app.db.service import (
     DELIVERY_LOG_RETENTION_DAYS,
     UNREPORTED_NOTE_KINDS,
@@ -38,22 +35,6 @@ def test_scheduler_reexports_the_same_object():
     from app.scheduler.loop import DeliveryOutcome as FromScheduler
 
     assert FromScheduler is DeliveryOutcome
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 async def _seed(session):

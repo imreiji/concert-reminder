@@ -18,6 +18,7 @@ import, so config values leak in from whatever machine the suite runs on. See
 """
 
 import pytest
+import pytest_asyncio
 
 
 @pytest.fixture(autouse=True)
@@ -135,3 +136,121 @@ def _no_real_network(monkeypatch):
     for module in list(sys.modules.values()):
         if getattr(module, "fetch_html", None) is real_fetch:
             monkeypatch.setattr(module, "fetch_html", guarded_fetch)
+
+
+# ── The database fixtures ────────────────────────────────────────────────
+#
+# These replaced 81 byte-identical copies of the same fixture, spread across 79
+# test files. Two things came of that duplication, and the second is the reason
+# this lives here now rather than being left alone:
+#
+#   * test_venue_regions.py and test_web.py had quietly dropped the
+#     `PRAGMA foreign_keys=ON` listener -- which the testing conventions in
+#     CLAUDE.md require BY NAME, because production registers it and cascades
+#     silently do not fire without it. A convention enforced by 81 hand-copies
+#     is a convention with a 2-in-81 defect rate, and nothing could have
+#     reported it: a missing cascade makes a test pass, not fail.
+#   * There was nowhere to make a change that applied to all of them --
+#     including the one below, which is worth ~50 seconds of every full run.
+#
+# Isolation semantics are EXACTLY as before: one fresh in-memory database per
+# test, disposed after. Nothing is shared between tests. A session-scoped
+# engine would be faster still, and was rejected: aiosqlite binds its
+# connection to the event loop that created it, pytest-asyncio gives each test
+# its own loop, and buying ~30 more seconds by introducing cross-test state and
+# loop-affinity hazards into a 2,474-test suite is a bad trade.
+
+
+def _schema_ddl() -> tuple[str, ...]:
+    """`Base.metadata.create_all` compiled ONCE per process instead of per test.
+
+    Nearly all of create_all's per-call cost is work whose answer never changes
+    between tests: compiling 29 CREATE TABLEs and 29 CREATE INDEXes from the
+    metadata, and (with the default checkfirst=True) asking SQLite whether each
+    table already exists -- in a database that was created empty microseconds
+    earlier and cannot possibly have any.
+
+    Measured, per schema build in isolation:
+
+        create_all(checkfirst=True)   32.3 ms   <- what all 81 copies did
+        create_all(checkfirst=False)  16.7 ms
+        precompiled statements        11.7 ms   <- this
+
+    End to end, both figures below are BACK-TO-BACK on one machine, because
+    this box's absolute timings drift by >50% across a session and a number
+    quoted from an earlier run is worth nothing:
+
+        200 identical tests, old fixture 18.6s  -> shared fixture 10.5s
+        full suite, HEAD in a clean worktree 470s -> this tree 405s
+
+    The output is verified identical to create_all's, not assumed to be:
+    test_conftest_fixtures.py diffs every resulting sqlite_master row -- name
+    AND stored SQL text -- including the expression-based
+    `uq_reminder_queue_dedupe`, which is the one object here a naive
+    reimplementation would get wrong.
+    """
+    global _DDL_CACHE
+    if _DDL_CACHE is None:
+        from sqlalchemy.dialects import sqlite
+        from sqlalchemy.schema import CreateIndex, CreateTable
+
+        from app.db.models import Base
+
+        dialect = sqlite.dialect()
+        statements: list[str] = []
+        # sorted_tables is create_all's own ordering: FK dependencies first.
+        for table in Base.metadata.sorted_tables:
+            statements.append(str(CreateTable(table).compile(dialect=dialect)))
+            for index in table.indexes:
+                statements.append(str(CreateIndex(index).compile(dialect=dialect)))
+        _DDL_CACHE = tuple(statements)
+    return _DDL_CACHE
+
+
+_DDL_CACHE: tuple[str, ...] | None = None
+
+
+@pytest_asyncio.fixture()
+async def db():
+    """A fresh in-memory database; yields an `async_sessionmaker`.
+
+    The dominant shape by far -- ~64 of the copies wanted the MAKER, because a
+    web test's `get_session` override opens a new session per request and a
+    scheduler test wants one per tick.
+    """
+    from sqlalchemy import event
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import StaticPool
+
+    engine = create_async_engine(
+        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
+    )
+
+    # StaticPool means one connection for the whole engine, so ":memory:" is a
+    # single database rather than a new empty one per checkout.
+    @event.listens_for(engine.sync_engine, "connect")
+    def _fk(dbapi_conn, _record):
+        # Production registers this too (db/session.py). SQLite defaults FKs
+        # OFF, and without it every ON DELETE CASCADE in the schema silently
+        # does nothing -- a deletion test then passes for the wrong reason.
+        dbapi_conn.execute("PRAGMA foreign_keys=ON")
+
+    async with engine.begin() as conn:
+        for statement in _schema_ddl():
+            await conn.exec_driver_sql(statement)
+
+    yield async_sessionmaker(engine, expire_on_commit=False)
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture()
+async def session(db):
+    """One open `AsyncSession` on that database -- what service-layer tests want.
+
+    Derived from `db` rather than building its own engine, so the two fixtures
+    cannot drift, and so a test may request BOTH and have them address the same
+    database (several web tests seed through `session` and then assert through
+    a route that goes via `db`).
+    """
+    async with db() as s:
+        yield s

@@ -3,12 +3,9 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
-from app.db.models import Base, Broadcast, DeliveryLog, Notification, User
+from app.db.models import Broadcast, DeliveryLog, Notification, User
 from app.db.service import (
     BROADCAST_BODY_MAX,
     HOLD_SECONDS,
@@ -22,22 +19,6 @@ from app.db.service import (
 from app.domain.types import BroadcastMode, DeliveryOutcome, DeliverySource
 
 NOW = datetime(2026, 7, 28, 14, 23, tzinfo=UTC)
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 async def _admin(session, discord_id=1):

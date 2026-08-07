@@ -1,20 +1,20 @@
 """Transition machine wired to the DB and the outbox.
 
-The fixture registers PRAGMA foreign_keys=ON deliberately: Notification.user_id
-is a FK to users.discord_id, and the ensure_user call this code makes is
-load-bearing -- without it, queuing an alert for an admin who has never logged
-in violates the constraint.
+FK enforcement matters here specifically: Notification.user_id is a FK to
+users.discord_id, and the ensure_user call this code makes is load-bearing --
+without it, queuing an alert for an admin who has never logged in violates the
+constraint. conftest's shared `db` fixture registers PRAGMA foreign_keys=ON,
+so that constraint is really enforced rather than silently ignored; these
+tests are only meaningful while it is.
 """
 
 from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
-from app.db.models import Base, Notification, OpsCheckState, User
+from app.db.models import Notification, OpsCheckState, User
 from app.db.service import ensure_user, evaluate_and_alert
 from app.ops import CheckResult
 
@@ -23,24 +23,8 @@ NOW = datetime(2026, 7, 19, 12, 0, tzinfo=UTC)
 
 
 @pytest_asyncio.fixture()
-async def maker():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")  # cascades silently skip without this
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
-
-
-@pytest_asyncio.fixture()
-async def session(maker):
-    async with maker() as s:
+async def session(db):
+    async with db() as s:
         yield s
 
 
@@ -153,14 +137,14 @@ class _FakeBot:
         return _FakeUser(self.sent)
 
 
-async def _seed_pending_dm(maker):
-    async with maker() as s:
+async def _seed_pending_dm(db):
+    async with db() as s:
         await ensure_user(s, ADMIN, "reiji")
         s.add(Notification(user_id=ADMIN, body="hello", kind="ops_alert"))
         await s.commit()
 
 
-async def test_a_broken_health_check_cannot_lose_delivered_reminders(maker, monkeypatch):
+async def test_a_broken_health_check_cannot_lose_delivered_reminders(db, monkeypatch):
     """The whole reason health evaluation sits after the delivery commit.
 
     The tick has already put DMs on the wire by the time health runs; if a
@@ -169,12 +153,12 @@ async def test_a_broken_health_check_cannot_lose_delivered_reminders(maker, monk
     """
     import app.scheduler.loop as loop_mod
 
-    await _seed_pending_dm(maker)
+    await _seed_pending_dm(db)
 
     async def boom(*_a, **_kw):
         raise RuntimeError("kaboom")
 
-    monkeypatch.setattr(loop_mod, "SessionMaker", maker)
+    monkeypatch.setattr(loop_mod, "SessionMaker", db)
     monkeypatch.setattr(loop_mod, "evaluate_and_alert", boom)
     monkeypatch.setattr(loop_mod, "_tick_count", loop_mod.HEALTH_EVERY_N_TICKS - 1)
 
@@ -183,7 +167,7 @@ async def test_a_broken_health_check_cannot_lose_delivered_reminders(maker, monk
 
     assert delivered == 1
     assert bot.sent == ["hello"]  # plain-text path: no concert_id, no embed
-    async with maker() as s:
+    async with db() as s:
         # Scoped to the seeded kind: delivering it also logs it, and the log
         # write queues a delivery_digest for the admin, so an unscoped
         # scalar_one() now sees two rows. The claim under test is about THIS
@@ -194,7 +178,7 @@ async def test_a_broken_health_check_cannot_lose_delivered_reminders(maker, monk
         assert note.sent_at_utc is not None  # committed before health ran
 
 
-async def test_health_runs_only_every_nth_tick(maker, monkeypatch):
+async def test_health_runs_only_every_nth_tick(db, monkeypatch):
     import app.scheduler.loop as loop_mod
 
     calls = []
@@ -203,7 +187,7 @@ async def test_health_runs_only_every_nth_tick(maker, monkeypatch):
         calls.append(1)
         return 0
 
-    monkeypatch.setattr(loop_mod, "SessionMaker", maker)
+    monkeypatch.setattr(loop_mod, "SessionMaker", db)
     monkeypatch.setattr(loop_mod, "evaluate_and_alert", spy)
     monkeypatch.setattr(loop_mod, "_tick_count", 0)
 
@@ -212,7 +196,7 @@ async def test_health_runs_only_every_nth_tick(maker, monkeypatch):
     assert len(calls) == 1
 
 
-async def test_tick_counter_advances_even_when_delivery_raises(maker, monkeypatch):
+async def test_tick_counter_advances_even_when_delivery_raises(db, monkeypatch):
     """The counter gates health evaluation, so it must not depend on the tick
     succeeding. reminder_loop swallows tick exceptions and retries forever: a
     tick that raises every minute would otherwise freeze the counter, health
@@ -225,7 +209,7 @@ async def test_tick_counter_advances_even_when_delivery_raises(maker, monkeypatc
     async def boom(*_a, **_kw):
         raise RuntimeError("due_reminders exploded")
 
-    monkeypatch.setattr(loop_mod, "SessionMaker", maker)
+    monkeypatch.setattr(loop_mod, "SessionMaker", db)
     monkeypatch.setattr(loop_mod, "due_reminders", boom)
     monkeypatch.setattr(loop_mod, "_tick_count", 0)
 

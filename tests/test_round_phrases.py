@@ -4,14 +4,11 @@ import re
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
 from app.config import settings
-from app.db.models import Base, Concert, ConcertDay, Round, RoundKind, RoundLabelPhrase
+from app.db.models import Concert, ConcertDay, Round, RoundKind, RoundLabelPhrase
 from app.db.service import (
     forget_round_label_phrase,
     record_round_label_phrase,
@@ -25,23 +22,6 @@ from app.web.routes import imports as import_routes
 EDITOR_ID = 42
 FIXTURES = Path(__file__).parent / "fixtures"
 GRADUATION_URL = "https://ramen.events/hasunosora-103rd-class-graduation-concert/"
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    # Production registers this too; cascades silently do not fire without it.
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 @pytest.fixture()

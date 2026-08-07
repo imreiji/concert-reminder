@@ -11,15 +11,11 @@ eligibility gating on every surface.
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy.pool import StaticPool
 
 from app.db.models import (
-    Base,
     Concert,
     ConcertDay,
     ConcertTag,
@@ -48,22 +44,6 @@ NOW = datetime.now(UTC)
 
 def dt(offset_days: float) -> datetime:
     return NOW + timedelta(days=offset_days)
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")  # cascades must fire, as in prod
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 @pytest.fixture()

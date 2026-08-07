@@ -12,11 +12,9 @@ from datetime import UTC, datetime
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, Tag
+from app.db.models import Tag
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web import auth
@@ -61,17 +59,6 @@ def test_region_sidebar_links_toggle_selects_and_deselects_whole_group():
 
 
 # ── HTTP-level: tag edit, region filter, past-marking ─────────────────────
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 @pytest_asyncio.fixture()

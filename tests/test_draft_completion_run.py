@@ -7,15 +7,12 @@ run_sweep and run_triage take theirs.
 from datetime import UTC, datetime
 
 import pytest
-import pytest_asyncio
 import yaml
-from sqlalchemy import event, select
+from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, FetchDomain, Notification, PendingDraft, TriageRun
+from app.db.models import FetchDomain, Notification, PendingDraft, TriageRun
 from app.db.service import decide_fetch_domain, ensure_user, note_fetch_domain
 from app.domain.round_completion import CompletionResponseError, DraftMergeError
 from app.draft_completion import complete_one, draft_source_url, run_completion
@@ -55,24 +52,6 @@ rounds:
     evidence:
       apply_closes_jst: "申込締切 2026年2月20日(土)23:59"
 """
-
-
-@pytest_asyncio.fixture()
-async def session():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as s:
-        yield s
-    await engine.dispose()
 
 
 def fake_llm(reply_text):

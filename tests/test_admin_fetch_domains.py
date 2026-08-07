@@ -11,12 +11,9 @@ from datetime import UTC, datetime
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
 
 from app.config import settings
-from app.db.models import Base, FetchDomain
+from app.db.models import FetchDomain
 from app.db.service import note_fetch_domain
 from app.db.session import get_session
 from app.web import auth
@@ -24,23 +21,6 @@ from app.web.app import create_app
 
 ADMIN_ID, EDITOR_ID = 42, 77
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool,
-        connect_args={"check_same_thread": False},
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 @pytest.fixture()

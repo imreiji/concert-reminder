@@ -16,13 +16,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
-from app.db.models import Base, Concert, ConcertDay, ConcertTag, Round, Tag, User
+from app.db.models import Concert, ConcertDay, ConcertTag, Round, Tag, User
 from app.db.service import (
     all_legs_cancelled,
     discoverable_concert_criterion,
@@ -36,22 +33,6 @@ from app.web.app import create_app
 STYLE_CSS = Path(__file__).resolve().parents[1] / "src" / "app" / "web" / "static" / "style.css"
 
 USER = 5151
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")  # match production: cascades must fire
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 @pytest.fixture()

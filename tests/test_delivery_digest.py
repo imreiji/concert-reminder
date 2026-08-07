@@ -3,13 +3,10 @@
 from datetime import UTC, datetime
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
 from app.config import settings
-from app.db.models import Base, DeliveryLog, Notification, User
+from app.db.models import DeliveryLog, Notification, User
 from app.db.service import queue_delivery_digest
 from app.domain.digest import MAX_SENT_GROUPS, DeliveryFact, build_digest
 from app.domain.types import Anchor, DeliveryOutcome, DeliverySource
@@ -127,22 +124,6 @@ def test_never_contains_a_user_id():
 
 def test_empty_facts_produce_no_digest():
     assert build_digest([], BATCH) == ""
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 async def _seed_users(session):

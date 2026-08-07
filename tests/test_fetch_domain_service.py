@@ -4,11 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
 
-from app.db.models import Base, PendingDraft, User
+from app.db.models import PendingDraft, User
 from app.db.service import (
     approved_fetch_hosts,
     completion_candidates,
@@ -24,23 +21,18 @@ NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
 
 
 @pytest_asyncio.fixture()
-async def session():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
+async def session(db):
+    """conftest's `session`, plus the two users this module's rows point at.
 
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as s:
+    Overrides the shared fixture deliberately -- `request_triage` and the
+    `PendingDraft` rows below carry FKs to `users.discord_id`, and with
+    PRAGMA foreign_keys=ON (which conftest registers) an unseeded database
+    fails them at flush, several frames from the actual subject.
+    """
+    async with db() as s:
         s.add_all([User(discord_id=1, username="a"), User(discord_id=2, username="b")])
         await s.flush()
         yield s
-    await engine.dispose()
 
 
 async def test_noting_a_host_twice_makes_one_pending_row(session):

@@ -21,15 +21,11 @@ Two things these tests deliberately pin:
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
-from sqlalchemy.pool import StaticPool
 
 from app.db.models import (
-    Base,
     Concert,
     ConcertDay,
     ConcertTag,
@@ -53,23 +49,6 @@ from app.web.app import create_app, fold_count_label
 
 USER = 4242
 EDITOR = 777
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    # Production registers this too; cascades silently do not fire without it.
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 @pytest.fixture()

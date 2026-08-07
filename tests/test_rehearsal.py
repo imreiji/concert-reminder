@@ -3,16 +3,12 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
 from app.bot import client as bot_client
 from app.config import settings
 from app.db.models import (
-    Base,
     Concert,
     ConcertDay,
     ConcertTag,
@@ -44,22 +40,6 @@ from app.web.app import create_app
 from app.web.routes.rehearsal import LOCALES, SHAPES
 
 ADMIN_ID, PLAIN_ID = 42, 777
-
-
-@pytest_asyncio.fixture()
-async def db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    await engine.dispose()
 
 
 @pytest.fixture()
