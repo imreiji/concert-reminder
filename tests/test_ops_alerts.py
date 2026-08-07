@@ -14,6 +14,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import select
 
+from app.config import settings
 from app.db.models import Notification, OpsCheckState, User
 from app.db.service import ensure_user, evaluate_and_alert
 from app.ops import CheckResult
@@ -34,11 +35,17 @@ def _admins(monkeypatch):
     are pinned rather than assumed. `bot_enabled` is a property over
     `discord_token`; pydantic models allow plain attribute assignment, so
     patching the field really does flip the property (verified by
-    test_nothing_queues_when_bot_disabled, which patches it the other way)."""
-    from app.db import service
+    test_nothing_queues_when_bot_disabled, which patches it the other way).
 
-    monkeypatch.setattr(service.settings, "admin_whitelist", str(ADMIN))
-    monkeypatch.setattr(service.settings, "discord_token", "x")  # bot_enabled
+    Reached through `app.config` -- the same idiom the rest of the suite uses
+    (test_admin_deliveries.py, test_healthz_checks.py). This file used to say
+    `service.settings`, which worked only because the old single-file
+    `db/service.py` happened to import the name and so re-exported it by
+    accident. `settings` is a singleton, so patching its attribute here is
+    seen by every module that reads it -- which is the whole reason the
+    indirection never mattered, and why removing it changes nothing."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN))
+    monkeypatch.setattr(settings, "discord_token", "x")  # bot_enabled
 
 
 async def _run(session, ok, now):
@@ -225,15 +232,13 @@ async def test_a_failing_alert_does_not_consume_the_nag_clock(session, monkeypat
     untouched. Advancing it would make the alert look already-sent, and the
     first 24h of alerts would vanish on a server that gains a DISCORD_TOKEN
     later."""
-    from app.db import service
-
-    monkeypatch.setattr(service.settings, "discord_token", "")
+    monkeypatch.setattr(settings, "discord_token", "")
     await _run(session, False, NOW)
     await _run(session, False, NOW + timedelta(minutes=5))  # would have alerted
     assert (await session.get(OpsCheckState, "backup")).last_notified_at is None
 
     # Bot comes online: the very next confirmed-failing pass must alert.
-    monkeypatch.setattr(service.settings, "discord_token", "x")
+    monkeypatch.setattr(settings, "discord_token", "x")
     assert await _run(session, False, NOW + timedelta(minutes=10)) == 1
 
 
@@ -241,9 +246,7 @@ async def test_nothing_queues_when_bot_disabled(session, monkeypatch):
     """A laptop's disk is not an operational signal. This also proves the
     _admins fixture's discord_token patch reaches `bot_enabled` at all: flip it
     the other way and the queuing stops."""
-    from app.db import service
-
-    monkeypatch.setattr(service.settings, "discord_token", "")
+    monkeypatch.setattr(settings, "discord_token", "")
     assert await _run(session, False, NOW) == 0
     assert await _run(session, False, NOW + timedelta(minutes=5)) == 0
     assert (await session.execute(select(Notification))).scalars().all() == []

@@ -175,8 +175,38 @@ only when both of their ends are attached -- have shipped since).
   deadline-shaped fake into an aware-UTC schema (invariant 1), and a lead's
   date is a pointer, not a deadline -- which is also why the ≤1-day skew of a
   UTC-suffixed stamp at the JST boundary is accepted rather than corrected.
-- `src/app/db/` — models, session, and `service.py` (all business logic that
-  touches the DB; discord-free so it's testable).
+- `src/app/db/` — models, session, and the business logic that touches the DB
+  (discord-free so it's testable). **`service.py` is a FACADE, not a module
+  with logic in it**: it re-exports every name the layer defines, so
+  `from app.db.service import X` still reaches everything and bot/web code
+  needs no knowledge of the split. ADD a name to a module below and you must
+  add it to `service.py`'s import list too — `tests/test_service_facade.py`
+  fails if the two disagree. The work lives in:
+  - `core.py` — the engine, and the ONE file still worth its size: queue
+    sync, retrieval for the scheduler, the personal board, the concert page's
+    rounds-by-leg, Discover status, DM button actions, presets/subscriptions,
+    users, and the ORM→domain adapters. Those nine sections are MUTUALLY
+    recursive (measured: one strongly-connected component in the call graph),
+    so no cut through them produces modules that import in one direction.
+    Splitting it needs a design change, not a file move — see WISHLIST.md.
+  - `tags.py` — the tag catalogue, membership and slug minting
+    (`create_tag_row`/`assign_tag_slug`, invariant 3's single construction
+    path). `venues.py` — the legs→concert VENUE rollup, and the one module
+    that depends on `tags.py`.
+  - `drafts.py` (`PendingDraft` rows) and `discovery_events.py`
+    (`DiscoveredEvent` leads) — named that, NOT `discovery.py`, because
+    `app/discovery.py` is the sweep RUNNER and imports this layer.
+  - `setup_flow.py` (the `/setup` capture flow), `calendar_feed.py` (the
+    personal `.ics`), `rehearsal.py` (the flag-gated harness's data layer).
+  - `delivery.py` (`delivery_log` + the per-tick digest), `broadcast.py`,
+    `ops_alerts.py` (health checks → admin DMs).
+  - `audit.py` (`ConcertAudit`), `phrases.py` (the round-label library),
+    `translation_gaps.py` (the edit pages' "what's missing" notice).
+  Dependencies point ONE way: feature modules import `core`, `core` imports
+  none of them, and the facade imports everything and is imported by nothing.
+  A feature module must never `from app.db.service import ...` — that is a
+  cycle, and one that surfaces or not depending on which module a process
+  imports first. Import `app.db.core` (or the sibling) directly.
 - **Venues live on the LEG, as a tag.** `ConcertDay.venue_tag_id` (FK ->
   `tags.id`, ON DELETE SET NULL, indexed) is the structured venue and the ONLY
   one anything reads for display; SET NULL rather than CASCADE because a VENUE
@@ -761,7 +791,12 @@ only when both of their ends are attached -- have shipped since).
   cookie); the OAuth callback (`web/auth.py`) seeds the column from the
   cookie, but ONLY at account creation, since the column can't otherwise
   distinguish "defaulted to en" from "chose en".
-- Bot and web NEVER contain business logic; they call `db/service.py`.
+- Bot and web NEVER contain business logic; they call `db/service.py` — which
+  is still literally true after the split, because that module is the facade
+  re-exporting the whole layer (see the `src/app/db/` entry above). Keep
+  importing from `app.db.service`, not from `app.db.core` or a feature module:
+  the facade is the seam, and routing around it is what would make this rule
+  stop meaning anything.
 - `docs/superpowers/specs/` + `plans/` — date-prefixed design specs and
   implementation plans; each recent feature (cancelled legs, Tags redesign,
   index reorg) committed one of each before code. Follow that pattern for
