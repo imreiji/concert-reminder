@@ -33,6 +33,7 @@ from app.ops import run_checks
 from app.scheduler import heartbeat
 from app.web import auth
 from app.web.routes import admin as admin_routes
+from app.web.routes import api as api_routes
 from app.web.routes import calendar as calendar_routes
 from app.web.routes import concerts as concert_routes
 from app.web.routes import discover as discover_routes
@@ -219,7 +220,14 @@ def create_app() -> FastAPI:
         quick-create dialogs, which read `(await resp.json()).detail` off a 409
         to offer "that already exists, select it instead" -- they would fall
         back to a generic failure with no message and nothing would say why.
+
+        The agent API always answers JSON, including its errors. Its requests
+        can carry a browser-like Accept header, so without this an agent's
+        401 arrives as a styled HTML error page it cannot parse. Checked
+        first because it is unconditional -- no header may override it.
         """
+        if request.url.path.startswith("/api/"):
+            return False
         if request.headers.get("hx-request"):
             return False
         return "text/html" in request.headers.get("accept", "")
@@ -304,6 +312,9 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=_here / "static"), name="static")
     app.include_router(auth.router)
+    # /api/v1/* is a literal, unique prefix -- order-independent, unlike the
+    # imports/concerts pair below.
+    app.include_router(api_routes.router)
 
     # import_routes MUST be registered before concert_routes: GET /concerts/import
     # would otherwise be swallowed by GET /concerts/{event_id} -- FastAPI matches
