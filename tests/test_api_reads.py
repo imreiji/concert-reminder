@@ -12,14 +12,15 @@ states the intent, and would catch a regression if this ever becomes a real
 query.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Concert, ConcertDay, Round, Tag
+from app.config import settings
+from app.db.models import Concert, ConcertDay, DiscoveredEvent, Round, Tag
 from app.db.service import ensure_user, generate_api_token, record_round_outcome, set_leg_opt_out
 from app.db.session import get_session
 from app.domain.types import LotteryOutcome, RoundKind, TagKind
@@ -452,3 +453,75 @@ async def test_tags_filter_by_kind(client, db):
 
 async def test_tags_require_a_token(client):
     assert client.get("/api/v1/tags").status_code == 401
+
+
+async def test_leads_are_admin_only(client, db, monkeypatch):
+    """The tier boundary, which is the thing most likely to be got wrong --
+    and this is the FIRST direct exercise of api_admin's 403 path. All three
+    tiers must come back distinct: an editor-but-not-admin token is 403 (not
+    401, not 404, not 200), an admin token is 200, and no token at all is
+    401 -- proven below, not merely asserted for one case."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN))
+    editor_token = await _mint(db, 99, "someone")
+    r = client.get("/api/v1/leads", headers=_auth(editor_token))
+    assert r.status_code == 403
+
+    admin_token = await _mint(db, ADMIN, "reiji")
+    r = client.get("/api/v1/leads", headers=_auth(admin_token))
+    assert r.status_code == 200
+
+    assert client.get("/api/v1/leads").status_code == 401
+
+
+async def test_leads_carry_date_is_deadline(client, db, monkeypatch):
+    """An agent treating a 申込締切 as a performance date would file the wrong
+    thing, so the flag must ride along."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN))
+    token = await _mint(db, ADMIN, "reiji")
+    async with db() as s:
+        s.add(DiscoveredEvent(
+            source_event_id="imas:abc", source="imas", date_is_deadline=True,
+            title="申込", event_date=date(2026, 10, 1), venue="",
+        ))
+        await s.commit()
+
+    body = client.get("/api/v1/leads", headers=_auth(token)).json()
+    row = next(r for r in body["items"] if r["source_event_id"] == "imas:abc")
+    assert row["date_is_deadline"] is True
+    assert row["source"] == "imas"
+    assert row["event_date"] == "2026-10-01"
+
+
+async def test_open_leads_excludes_dismissed_and_bound(client, db, monkeypatch):
+    """`api_lead_rows` is built on `open_leads`, so the API must agree with
+    /admin/discoveries about what "open" means -- proven by seeding one of
+    each excluded state alongside a genuinely open lead."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN))
+    token = await _mint(db, ADMIN, "reiji")
+    async with db() as s:
+        c = Concert(title="Live", event_id="bound-live", created_by=ADMIN)
+        s.add(c)
+        await s.flush()
+        s.add_all([
+            DiscoveredEvent(
+                source_event_id="open-1", source="eventernote",
+                title="Open lead", event_date=date(2026, 11, 1), venue="",
+            ),
+            DiscoveredEvent(
+                source_event_id="dismissed-1", source="eventernote",
+                title="Dismissed lead", event_date=date(2026, 11, 2), venue="",
+                dismissed_at=datetime(2026, 8, 1, tzinfo=UTC),
+            ),
+            DiscoveredEvent(
+                source_event_id="bound-1", source="eventernote",
+                title="Bound lead", event_date=date(2026, 11, 3), venue="",
+                concert_id=c.id,
+            ),
+        ])
+        await s.commit()
+
+    body = client.get("/api/v1/leads", headers=_auth(token)).json()
+    ids = {r["source_event_id"] for r in body["items"]}
+    assert "open-1" in ids
+    assert "dismissed-1" not in ids
+    assert "bound-1" not in ids

@@ -206,6 +206,7 @@ from app.db.delivery import (
 from app.db.discovery_events import (
     DiscoveredInput,
     _bind_leads_to_concerts,
+    api_lead_rows,
     dismiss_lead,
     dismissed_reason_counts,
     open_leads,
@@ -428,6 +429,7 @@ __all__ = [
     "all_legs_cancelled",
     "api_concert_detail",
     "api_concert_rows",
+    "api_lead_rows",
     "api_tag_rows",
     "apply_default_preset",
     "apply_preset",

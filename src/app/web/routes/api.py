@@ -27,6 +27,7 @@ from app.config import settings
 from app.db.service import (
     api_concert_detail,
     api_concert_rows,
+    api_lead_rows,
     api_tag_rows,
     concert_export_yaml,
     get_user_by_api_token,
@@ -134,6 +135,18 @@ async def list_tags(
     rows, total = await api_tag_rows(
         session, kind=kind, limit=page.limit, offset=page.offset
     )
+    return page_envelope(rows, total, page)
+
+
+@router.get("/leads")
+async def list_leads(
+    page: PageParams = Depends(page_params),
+    user: SessionUser = Depends(api_admin),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """The open discovery queue. ADMIN only -- same audience as
+    /admin/discoveries, which is where these are triaged."""
+    rows, total = await api_lead_rows(session, limit=page.limit, offset=page.offset)
     return page_envelope(rows, total, page)
 
 
