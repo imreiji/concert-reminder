@@ -83,7 +83,10 @@ undo.
 - **`src/app/bot/` and `src/app/web/` are thin shells** — cogs, embed
   builders, routes, templates. They contain NO business logic; they call
   `db/service.py`. Keep importing from the facade, not from `core` or a
-  feature module: the facade is the seam.
+  feature module: the facade is the seam. `web/routes/api.py` is the
+  read-only agent API at `/api/v1`, bearer-token authenticated, GET only —
+  see `docs/agent-api.md` for usage and
+  `docs/superpowers/specs/2026-08-08-agent-read-api-design.md` for the design.
 - `src/app/scheduler/` — the 60s tick that delivers DMs.
 - `src/app/fetching.py` — the ONE outbound HTTP fetch, SSRF-guarded, shared
   by the importer, the discovery sweep, the calendar feeds and triage. Takes
