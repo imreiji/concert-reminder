@@ -5,7 +5,6 @@ user's standing-aware LANDSCAPE, not a mirror of their reminder rules (ruling
 2026-08-04). Its `locale` parameter is explicit and `None` means canonical.
 """
 
-import hashlib
 import secrets
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,6 +32,7 @@ from app.db.models import (
     RoundOutcome,
     User,
 )
+from app.db.tokens import hash_token
 from app.domain.types import (
     Anchor,
     LotteryOutcome,
@@ -41,10 +41,6 @@ from app.domain.types import (
 from app.i18n import loc_field
 
 # ── Personal calendar feed ────────────────────────────────────────────────
-
-
-def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
 
 
 async def generate_calendar_token(session: AsyncSession, user_id: int) -> str:
@@ -59,14 +55,14 @@ async def generate_calendar_token(session: AsyncSession, user_id: int) -> str:
     if user is None:
         raise ValueError(f"no such user: {user_id}")
     token = secrets.token_urlsafe(32)
-    user.calendar_token_hash = _hash_token(token)
+    user.calendar_token_hash = hash_token(token)
     await session.flush()
     return token
 
 
 async def get_user_by_calendar_token(session: AsyncSession, token: str) -> User | None:
     res = await session.execute(
-        select(User).where(User.calendar_token_hash == _hash_token(token))
+        select(User).where(User.calendar_token_hash == hash_token(token))
     )
     return res.scalar_one_or_none()
 

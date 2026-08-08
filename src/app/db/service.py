@@ -69,7 +69,6 @@ from app.db.broadcast import (
 )
 from app.db.calendar_feed import (
     CalendarEvent,
-    _hash_token,
     generate_calendar_token,
     get_user_by_calendar_token,
     user_calendar_events,
@@ -304,6 +303,11 @@ from app.db.tags import (
     tag_picker_context,
     would_create_tag_cycle,
 )
+from app.db.tokens import (
+    generate_api_token,
+    get_user_by_api_token,
+    hash_token,
+)
 from app.db.translation_gaps import (
     VariantGap,
     _regroup_gaps,
@@ -377,7 +381,6 @@ __all__ = [
     "_eligible_upgrade_ids",
     "_fold_counts",
     "_framed_body",
-    "_hash_token",
     "_humanize_until",
     "_is_attached",
     "_leg_result_for",
@@ -465,14 +468,17 @@ __all__ = [
     "find_tags_by_name_and_kind",
     "followed_tag_counts",
     "forget_round_label_phrase",
+    "generate_api_token",
     "generate_calendar_token",
     "get_default_preset",
     "get_rehearsal_concert",
     "get_triage_run",
+    "get_user_by_api_token",
     "get_user_by_calendar_token",
     "group_members",
     "handle_newly_tagged",
     "has_day_results",
+    "hash_token",
     "is_round_cancelled",
     "latest_triage_run",
     "leads_matching_existing_legs",
