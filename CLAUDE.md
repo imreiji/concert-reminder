@@ -9,85 +9,20 @@ Discord bot + web app tracking Japanese concert deadlines (lottery rounds,
 serial-code sales, stream tickets). One Python process runs three things on a
 single asyncio loop: discord.py bot, FastAPI web (Jinja2 + htmx), and a 60s
 scheduler tick. SQLite + SQLAlchemy async + Alembic. Live at dekimasen.app
-(AWS Lightsail behind Cloudflare). 2008 tests as of this writing (past the
-Phase 12 roadmap in README.md — event_id/edit-page, venue regions, .ics
-export, ramen.events import, a personal calendar-feed subscription,
-free-text concert search, a personalized `/mydeadlines` Discord command, a
-per-concert edit history, a per-leg cancelled status, a redesigned Tags
-page (search, hierarchy, dialog-based editing, rename, retroactive
-artist-to-active-events apply), an index-page reorg (open-and-upcoming
-bucketing plus a global chronological deadline list), surfaced
-undeliverable-DM feedback (a sitewide banner plus a synchronous test-DM
-diagnostic), free-text search matching tag names (franchise/group/
-artist/venue) and a free-text-venue fallback, per-round lottery outcome
-tracking (applied/won/lost/paid, with automatic reminder suppression and
-next-round auto-arming), a first-run guided setup wizard sequencing
-tag subscriptions, a default preset, timezone confirmation, a test DM,
-the calendar feed for brand-new logins, a corrected first-come-first-served
-round kind (split out from the previously-conflated general-sale kind) and
-a new overseas tour package round kind, both reflected in round-kind
-labels/emoji and the ramen.events import heuristics, and a post-wizard
-first-run capture flow — prune tag-implied concerts, record existing
-applications, board reveal — at /setup, re-runnable from Preferences —
-and a demo-reconciliation pass restoring the full design-token layer,
-dark mode, and each view's lost components against the frozen concept
-demo, and an onboarding build -- a real signed-out landing page, the
-welcome wizard rebuilt on the design system and feeding into /setup,
-import preview rebuilt in the day/round/leg vocabulary with real
-multi-leg round binding, and retroactive-apply/privacy/terms reframed in
-the design system -- and multi-language support (English/Mandarin/Japanese)
-end to end: gettext catalogues, per-user + per-visitor locale resolution,
-localized dates, and parallel-column UGC translation -- and a phone
-retrofit (bottom tab bar, editor FAB, bottom-sheet dialogs, Discover's
-filter sheet) confined to one `@media` section, and a signed-out
-redirect replacing the old bare 401, returning the visitor to the page
-they asked for once they log in, and the venue-to-tags move complete -- a
-leg's venue is now a real VENUE tag FK, a concert's VENUE tags are derived
-from its legs, venue city/address live on the tag, an editor can create a
-venue without leaving the form, and the legacy free-text venue columns have
-been dropped -- and a trilingual-concert-page arc on top of it: the import
-preview's per-leg venue picker, leg/round label localization in the viewer's
-language, a self-populating round-label phrase library (typed triples become
-one-click suggestions, since real labels don't decompose into a taxonomy), and
-all-three-languages-or-none variant enforcement (one pure rule, a 422 at create
-boundaries with an inline browser-side block, edit-page gap notices, a
-Tags-page untranslated count) -- and the agent-driven import seam (paste a
-YAML draft, the preview arrives prefilled; the add-concert skill that
-authors drafts is downloadable from the import page) and a native-review
-i18n calibration applied across both catalogues, including a ja
-agent-proofread round and the 132 reviewed English-source fixes applied
-at the msgid layer (mapping preserved in
-`docs/i18n-english-source-fixes-2026-07-24.csv`) -- and the editor
-coherence pass: the three editor surfaces' leg/round cards share two
-partials, destructive actions moved into a kebab menu, EN/中文 variants
-got their own row, and the sentence-style reminder builders render
-through locale-ordered slot patterns so ja/zh read grammatically -- and a
-UX pass (20 changes across the board heads, Discover's active-filter chips
-and live counts, the concert header's "Next for you" strip, the Tags
-chips⇄table view, an htmx progress bar, and the two-shape callout grammar)
--- and a standing-at-a-glance arc: per-leg outcome truth (a round covering
-Sat+Sun can come back won on one leg and lost on the other, and a round
-whose legs you already hold stops asking), "Coming up" collapsed to one
-block per concert, the board's ladder capped at the rungs that matter,
-settled rounds folded per leg on the concert page, and performer chips
-clustered by group -- and a dead concert (every leg cancelled) leaving
-*Open now*, offering no capture and announcing nothing -- and the
-operations trio: a `delivery_log` of every DM with `/admin/deliveries` and
-a per-tick counts digest, a cancellable admin broadcast held 120s in the
-outbox, and the flag-gated local rehearsal harness -- and real
-403/404/422/500 pages (HTML for a navigation, the original JSON for an
-XHR) with the admin pages indexed in Preferences -- and a correctness
-sweep closing a born-dead concert's permanent "new event" DM and a
-generated `event_id` taking a reserved word -- and Eventernote
-discovery, a daily flag-gated sweep of every tag carrying an
-`eventernote_url` that records performances the catalogue lacks, DMs
-admins one digest ending in a paste-ready agent prompt, and reviews them
-at `/admin/discoveries` -- and CHARACTER tags: an im@s bill credits
-如月千早 rather than the 今井麻美 who voices her, so a character is a fifth
-tag kind carrying `voiced_by_tag_id`, attaching her attaches her seiyuu
-(which is what makes following the performer match the show), a group may
-now sit inside a group as a subunit, and both new relationships are DRAWN
-only when both of their ends are attached -- have shipped since).
+(AWS Lightsail behind Cloudflare). ~2,500 tests.
+
+**Two companion documents. Read on demand, not every session:**
+
+- `docs/architecture.md` — per-module detail: why each module is shaped the
+  way it is, and which reasonable-looking edits would undo a measurement or
+  re-open a fixed incident. **Read a module's entry before changing it.**
+- `docs/ui-conventions.md` — the full design detail behind the short rules
+  under "UI conventions" below.
+
+The running feature history that used to sit here is in `WISHLIST.md`'s
+Shipped section (dated, with the reasoning that produced each one) and
+`README.md`'s roadmap. It was a duplicate of both, and a list of what already
+works is the one thing a reader can always recover from the code itself.
 
 ## Commands
 
@@ -113,716 +48,88 @@ only when both of their ends are attached -- have shipped since).
 
 ## Layout
 
-- `src/app/domain/` — pure logic, NO I/O, no discord/fastapi/sqlalchemy
-  imports. Reminder math in `reminders.py`, JST↔UTC conversion in
-  `timezones.py`, ramen.events HTML parsing in `ingest.py` (takes an HTML
-  string, returns a draft — no httpx call itself), `.ics`/YAML export
-  formatting in `ics_export.py`/`yaml_export.py`, and editor-supplied URL
-  scheme validation in `urls.py` (`clean_url` normalizes an http(s) URL or
-  raises `UnsafeURLError`; see invariant 7). `urls.py` also holds
-  `safe_next`, the open-redirect guard on the post-login return path --
-  same family, opposite direction (a same-origin PATH or None, never an
-  absolute URL), and it returns None rather than raising, since a bad
-  `next` is a stale link, not an editor mistake worth a 422.
-  `tags_yaml.py` is the TAGS vocabulary and holds BOTH halves --
-  `tags_to_yaml` and `parse_tags` in one module, deliberately. Splitting a
-  format's serializer from its parser is how the catalogue round-trip hole
-  opened: the concert export looked complete until something had to read it
-  back, and only then did it turn out a tag had no identity to key on. Keep
-  them together, and add fields to both at once. Its parser follows
-  `parse_draft`'s philosophy -- warnings over failures, one bad row skipped and
-  named, only an unusable file raises -- and `RESTORE_NOTES`, the text written
-  into every export, lives here too because it documents the format.
-  `eventernote.py` parses an actor's events page the way `ingest.py` parses a
-  ramen.events page -- HTML string in, rows out, no httpx -- and skips-and-counts
-  an unreadable row rather than raising, so a site redesign degrades to "found
-  nothing" instead of crashing a scheduler tick every day. Its `future_events`
-  is a TAKE-WHILE, not a filter, and that is the whole economy of discovery:
-  rows are strictly newest-first (measured, and pinned by a test), so stopping
-  at the first past row means ONE fetch per artist -- ~86 a sweep instead of the
-  ~1,548 that reading all 18 pages of every artist would cost. A filter would
-  be correct and eighteen times as expensive, so don't "simplify" it into one.
-  An event dated TODAY counts as future. `actor_events_url` builds
-  `/actors/<name>/<id>/events` from OUR name because **the name segment is
-  DECORATIVE** -- `/actors/x/5847` resolves the same as the site's own path
-  (verified against the live site) -- so only the id is identity, which is also
-  why `actor_id_from_url` reads nothing else out of a stored URL. The site's own
-  slug sometimes disagrees with the displayed name; that is fine and expected.
-  `discovery_message.py` composes the discovery DM and is its own module for the
-  reason `tags_yaml`/`tags_diff` are two: that one is about READING a source,
-  this is about COMPOSING a message. The message is deliberately the same content
-  TWICE -- a readable markdown list, then a fenced block carrying the same leads
-  as a paste-ready agent prompt -- because Discord does not linkify inside a
-  fence, so one half stays clickable and the other stays copyable. The 2000-char
-  limit is a hard budget and **the block yields first**, saying so on its last
-  line when lines are dropped; every free-text field is clipped and there is a
-  final prose truncation floor, because past Discord's real cap discord.py
-  raises and the WHOLE DM is lost rather than trimmed. `build_discovery_dm` takes
-  `budget=None` for `/admin/discoveries`, which has no character limit and is
-  where the DM's "+N more" points. Its `Lead.deadline` renders as an ADDITIVE
-  `申込締切 ` prefix on the date and never reorders the line, because the
-  `triage-leads` skill reads the copy block by field position; `Lead.source`
-  gates the Eventernote LINK, since a calendar lead has no page behind it.
-  `ics_read.py` is the RFC 5545 half of calendar discovery -- text in,
-  `IcsEvent` rows out, no httpx, exactly as `eventernote.py` takes HTML.
-  Hand-rolled rather than a new dependency (the feeds are Google Calendar
-  exports and the app wants four fields per VEVENT), warnings over failures
-  like every parser here: a VEVENT missing UID/SUMMARY/DTSTART is skipped and
-  COUNTED, and only a body with no `BEGIN:VEVENT` structure at all raises
-  `IcsError` -- so a feed that rots degrades to "found nothing" on the status
-  line instead of crashing a scheduler tick every day. **It keeps only the
-  DATE half of a DTSTART**: inventing a midnight instant would put a
-  deadline-shaped fake into an aware-UTC schema (invariant 1), and a lead's
-  date is a pointer, not a deadline -- which is also why the ≤1-day skew of a
-  UTC-suffixed stamp at the JST boundary is accepted rather than corrected.
-- `src/app/db/` — models, session, and the business logic that touches the DB
-  (discord-free so it's testable). **`service.py` is a FACADE, not a module
-  with logic in it**: it re-exports every name the layer defines, so
-  `from app.db.service import X` still reaches everything and bot/web code
-  needs no knowledge of the split. ADD a name to a module below and you must
-  add it to `service.py`'s import list too — `tests/test_service_facade.py`
-  fails if the two disagree. The work lives in:
-  - `core.py` — the engine, and the ONE file still worth its size: queue
-    sync, retrieval for the scheduler, the personal board, the concert page's
-    rounds-by-leg, Discover status, DM button actions, presets/subscriptions,
-    users, and the ORM→domain adapters. Those nine sections are MUTUALLY
-    recursive (measured: one strongly-connected component in the call graph),
-    so no cut through them produces modules that import in one direction.
-    Splitting it needs a design change, not a file move — see WISHLIST.md.
-  - `tags.py` — the tag catalogue, membership and slug minting
-    (`create_tag_row`/`assign_tag_slug`, invariant 3's single construction
-    path). `venues.py` — the legs→concert VENUE rollup, and the one module
-    that depends on `tags.py`.
-  - `drafts.py` (`PendingDraft` rows) and `discovery_events.py`
-    (`DiscoveredEvent` leads) — named that, NOT `discovery.py`, because
-    `app/discovery.py` is the sweep RUNNER and imports this layer.
-  - `setup_flow.py` (the `/setup` capture flow), `calendar_feed.py` (the
-    personal `.ics`), `rehearsal.py` (the flag-gated harness's data layer).
-  - `delivery.py` (`delivery_log` + the per-tick digest), `broadcast.py`,
-    `ops_alerts.py` (health checks → admin DMs).
-  - `audit.py` (`ConcertAudit`), `phrases.py` (the round-label library),
-    `translation_gaps.py` (the edit pages' "what's missing" notice).
+One line per module. The reasoning, the measurements and the "do NOT simplify
+this" warnings live in `docs/architecture.md` — **read a module's entry there
+before you change it.** Almost every one of them records either a measurement
+or a shipped incident, and most are things a reasonable-looking edit would
+undo.
+
+- **`src/app/domain/` — pure logic, NO I/O.** No discord/fastapi/sqlalchemy
+  imports, ever. Reminder math (`reminders.py`), JST↔UTC (`timezones.py`),
+  board column precedence (`board.py`), URL safety (`urls.py` — `clean_url`
+  for editor input, `safe_next` for the post-login redirect), sentence slot
+  patterns (`sentence.py`), evidence grounding (`round_evidence.py`), LLM
+  prompts (`triage_prompts.py`), and the parsers/formatters: `ingest.py`
+  (ramen.events), `eventernote.py`, `ics_read.py`, `ics_export.py`,
+  `yaml_export.py`/`yaml_import.py`, `tags_yaml.py`, `tags_diff.py`,
+  `discovery_message.py`, `page_text.py`, `prune_list.py`.
+  Two habits hold across the whole package: a parser takes a STRING and never
+  fetches, and it warns-and-skips rather than raising, so a third party's
+  redesign degrades to "found nothing" instead of crashing a scheduler tick
+  every day.
+- **`src/app/db/` — the DB layer, discord-free so it's testable.**
+  `service.py` is a FACADE re-exporting the whole layer; `core.py` is the
+  engine (queue sync, retrieval, the personal board, the concert page,
+  Discover status, DM button actions, presets/subscriptions, users,
+  adapters); beside it sit `tags`, `venues`, `drafts`, `discovery_events`,
+  `setup_flow`, `calendar_feed`, `rehearsal`, `delivery`, `broadcast`,
+  `ops_alerts`, `audit`, `phrases`, `translation_gaps`.
   Dependencies point ONE way: feature modules import `core`, `core` imports
   none of them, and the facade imports everything and is imported by nothing.
-  A feature module must never `from app.db.service import ...` — that is a
-  cycle, and one that surfaces or not depending on which module a process
-  imports first. Import `app.db.core` (or the sibling) directly.
-- **Venues live on the LEG, as a tag.** `ConcertDay.venue_tag_id` (FK ->
-  `tags.id`, ON DELETE SET NULL, indexed) is the structured venue and the ONLY
-  one anything reads for display; SET NULL rather than CASCADE because a VENUE
-  tag is shared taxonomy and deleting one must never take performances down
-  with it. It replaced a case-insensitive free-text NAME match, which left a
-  re-pointed leg rendering its previous venue forever -- the old
-  `find_venue_tag` helper is gone, don't reintroduce that shape. The tag
-  carries `city`/`city_en`/`city_zh` and `address`: a venue is always in one
-  city, so the city is a property of the VENUE, not of each leg visiting it
-  (`address` deliberately has NO locale variants -- its job is to be pasted
-  into a map, and `location_url` already covers the maps link). A concert's
-  VENUE tags are DERIVED, never typed: `sync_concert_venue_tags`
-  (`db/service.py`) rewrites them as the union of its legs' venues, and the
-  create route, the edit route and `import_commit` all call it. It returns the
-  tags it NEWLY attached and every caller MUST feed those to
-  `handle_newly_tagged` -- VENUE tags are subscribable, so someone following
-  "Zepp Haneda" is owed the same DM notice a concert-level attach gives them
-  (invariant 4). It touches VENUE rows only; franchise/group/artist attachment
-  is deliberate and materialized (invariant 3) and must survive untouched.
-  Discover's region filter is unchanged by all of this -- it still reads
-  `concert_tags` client-side off each tile's `data-tags`, and this rollup is
-  exactly what keeps that current while venues live on legs.
-  `ConcertDay.venue_tag` is `lazy="raise"` ON PURPOSE: a lazy load during async
-  template rendering is a `MissingGreenlet` 500, which this project has shipped
-  once, and raising at the seam turns that into a loud test failure instead.
-  Every path handing legs to a template must `selectinload` it, or load the
-  tags separately by id the way `concert_rounds_context`
-  (`web/routes/concerts.py`) does.
-- **The legacy free-text venue columns are GONE (venue-to-tags is complete).**
-  `ConcertDay.city`/`venue`/`venue_address` and `Concert.venue`/`venue_en`/
-  `venue_zh` were dropped by migration `ce43bfcfcae3` once every venue lived on
-  a leg's VENUE tag. They existed through phases 1-4 as recovery data (a leg
-  whose free-text venue did not match a tag during the `789bbcc95bc3` backfill
-  stayed recoverable); the owner confirmed zero unmatched legs in production
-  before the drop. Do not reintroduce them or the old `apply_day_fields`
-  preserve-on-empty rule -- a leg's venue is a VENUE tag and nothing else. A
-  concert with no leg venue tag simply has no venue anywhere. NOTE the drop
-  migration reversed the deploy order (restart on new code BEFORE
-  `alembic upgrade head`) so the old process could not SELECT the dropped
-  columns mid-deploy; any future column-DROP migration needs the same order.
-- **A CHARACTER is a tag, and `Tag.voiced_by_tag_id` says who plays her**
-  (migration `bb9780f0ad82`, 2026-08-01). `TagKind.CHARACTER` is a fifth kind
-  beside franchise/artist/venue/group, because an idolm@ster bill credits
-  如月千早 and never mentions 今井麻美 -- a user following the performer missed
-  the show entirely, which is this app's worst failure. `voiced_by_tag_id` is a
-  nullable self-FK to the ARTIST who voices her, `ON DELETE SET NULL` for the
-  same reason `ConcertDay.venue_tag_id` is: deleting a performer's tag must not
-  take the character down with it. A recast is this ONE value re-pointed --
-  there is deliberately no history model, and the owner ruled recasting rare
-  enough that there never should be.
-  **It is NOT `parent_id`, and that was a decision, not an oversight.**
-  `parent_id` means "the broader thing I belong to" and is what the Tags page
-  renders its hierarchy from; a seiyuu is not broader than a character, and
-  spending the column on her would leave 如月千早 unable to say she belongs to
-  idolm@ster at all -- which Discover's franchise filtering reads.
-  Only an ARTIST may voice a character, checked at BOTH write boundaries
-  (`resolve_seiyuu` in `web/routes/tags.py`, 422; `apply_tag_import` in
-  `db/service.py`, warn-and-leave-unvoiced). That check also refuses
-  SELF-voicing for free, and the failure it prevents is silent rather than
-  loud: a character pointed at herself lands in `performer_clusters`'
-  `paired_seiyuu` set and is filtered out of `entries`, so she VANISHES from
-  the Performing panel instead of erroring. Pointing it at a VENUE was the
-  other reachable trap -- `attach_tag` materialises whatever it names onto the
-  concert, so the venue would render as a performer and `handle_newly_tagged`
-  would DM its followers.
-  A tag's KIND stays immutable -- no route accepts it and the importer refuses
-  a mismatch outright -- and the im@s reformat needs no exception: seiyuu stay
-  ARTIST tags, characters are NEW tags, and a group's member list swaps
-  handles. Don't add a kind-change path for this.
-- `src/app/bot/` — thin shell: cogs, embed builders (`messages.py`),
-  persistent buttons (`views.py`).
-- `src/app/web/` — thin shell: routes, templates, static. `routes/imports.py`
-  (the ramen.events importer, fetches the URL then delegates parsing to
-  `domain/ingest.py`) MUST be registered before `routes/concerts.py` in
-  `web/app.py` — otherwise `GET /concerts/import` gets swallowed by the
-  `GET /concerts/{event_id}` route, since FastAPI matches path templates
-  before literal segments. Its fetch is SSRF-guarded three ways: https +
-  `ramen.events` host only, the same check re-run on every redirect hop via
-  an httpx response hook, and the body streamed under a byte cap — don't
-  loosen any of them. That guard is no longer local to this route: it lives in
-  `app/fetching.py` and is SHARED with the Eventernote sweep (see below), so
-  `fetch_ramen_html` is now a thin wrapper that translates the shared errors
-  into this route's 400/502. Its preview (`import_preview.html`) is built in the
-  same day-card/round-card/leg-chip vocabulary as `concert_new.html`/
-  `concert_edit.html`, and `import_commit` binds a parsed round's
-  `applies_to` to legs via the same `round_legs`/`day_key`/
-  `parse_round_legs`/`key_to_day_id` path `create_concert` uses -- before
-  this, the flat import form could not express a round spanning more than
-  one leg.
-  The same preview has a second producer: `POST /concerts/import/draft`
-  takes a pasted YAML draft (the `domain/yaml_export.py` vocabulary made
-  two-way -- `domain/yaml_import.py` parses it, warnings over failures,
-  `yaml.safe_load` only) and renders `import_preview.html` fully prefilled:
-  trilingual titles/labels, all four round anchors, tag/venue NAMES resolved
-  to picker pre-selections via `match_tag_ids_by_name` /
-  `match_venue_tag_id` (never ids in the draft; unmatched names render as
-  hints, never dropped). The producer is normally an agent following
-  `.claude/skills/add-concert/SKILL.md`, whose example draft is pinned to
-  the parser by a test. import_commit stays the only write path.
-  A THIRD producer takes MANY drafts at once: `POST /concerts/import/batch`
-  splits a multi-document paste (`---` separated, plain YAML, no wrapper key)
-  and persists each document verbatim as a `PendingDraft` row, which
-  `/concerts/import/pending` then walks one preview at a time. It is
-  deliberately NOT all-or-nothing -- `domain/yaml_import.py`'s `parse_drafts`
-  names the documents that failed and keeps the rest, because at fifty
-  concerts one typo must not cost the other forty-nine. Boundaries come from
-  `yaml.scan()` rather than `text.split("---")` (a `---` inside a block scalar
-  would cut a draft in half) and rather than `safe_load_all`/`compose_all`
-  (both abort their generator on the FIRST bad document, silently losing every
-  one after it); a paste that breaks the scanner itself falls back to a
-  line-based split, so a scanner-level typo costs one oddly-split fragment
-  instead of the batch. `PendingDraft` is the ONE place this app keeps step
-  state, and the reason is that it is not step state: it is a work batch of
-  fifty-to-a-hundred concerts each needing a human-read preview, which is not
-  one sitting, and a hidden form field would lose it to a closed tab. A
-  resubmitted pending commit (back button, refresh) answers 409 rather than
-  minting a second concert -- agent drafts carry no `event_id`, so
-  `generate_event_id` would de-dupe to `alpha-2` instead of colliding, and
-  nothing would link the duplicate.
-  **Starlette hard-caps every `Form(...)` field at 1MB**, whatever an
-  app-level constant says, so `MAX_BATCH_CHARS` is 300k rather than the
-  millions a paste of a hundred drafts might suggest. This applies to EVERY
-  form field in the codebase, not just this route -- any future large-paste
-  feature hits the same wall, and hits it as an opaque failure well before
-  its own limit.
-  Reminder-rule add/delete lives in
-  `routes/reminders.py` (split out of `concerts.py`; renders via
-  `concerts.render_rules_fragment`), and the `/me/timezone*` routes live in
-  `routes/preferences.py` with the other per-user preference routes.
-  `web/forms.py` holds the HTTP-boundary wrappers around domain validators
-  (currently `form_url`) -- its own module so routes/concerts.py,
-  routes/tags.py and routes/imports.py can all import it cheaply.
-  A venue can be created without leaving the editor: `POST /tags/venue/quick`
-  (`routes/tags.py`, editor-only, JSON) plus `_venue_create_dialog.html`,
-  included by both `concert_new.html` and `concert_edit.html`. It answers 409
-  on a duplicate name specifically, so the dialog can say "that venue already
-  exists" instead of the generic 422 everything else gets. The concert-level
-  venue picker was REMOVED from both forms -- the leg is the single place a
-  venue is entered, and `create_concert_row` sets `venue=None`.
-  Franchise/group/artist tags get the same treatment in the IMPORT PREVIEW:
-  each unmatched draft name renders as a per-name create chip
-  (`data-new-tag` + `data-tag-name`/`data-tag-kind`) opening
-  `_tag_create_dialog.html`, backed by `POST /tags/quick` (editor-only,
-  kind-aware, groups take a `parent_id`; its kind-scoped 409 returns the
-  existing tag's id+name so the dialog offers one-click select-existing).
-  A group created there is EMPTY on purpose -- expansion stays
-  attach-time-only (invariant 3) -- and creation fires no notification
-  (creation is not attachment, invariant 4). The created tag joins the
-  picker via `_tag_picker_script.html`'s `pickerAddAndSelect`.
-  `routes/discover.py` is the public catalogue and `routes/outcomes.py` is
-  the web half of lottery-outcome capture (`POST /rounds/{id}/outcome`) --
-  it shares `record_round_outcome` with the DM buttons rather than writing
-  its own path (a second writer would desync the queue, invariant 2) and
-  returns THREE top-level fragments: the deadline rows as the hx-target,
-  plus `#board` and `#board-summary` out-of-band, since one recorded outcome
-  changes all three. Don't wrap that response -- htmx only honours OOB
-  elements at the top level.
-- `src/app/domain/board.py` -- pure column precedence for Home's campaign
-  board. `column_for(outcomes, has_open_round)` returns the ONE column a
-  concert shows in; PAID > WON > APPLIED > open, deliberately, because money
-  you owe outranks a round you could still enter. LOST and NOT_APPLIED place
-  nothing (neither is an end state). `service.board_cards` gathers its
-  inputs and `OPEN_COLUMN_LIMIT` caps the open column.
-- `src/app/fetching.py` — the ONE outbound HTTP fetch, top-level beside
-  `i18n.py` and `ops.py` (it does I/O, so it cannot live in `domain/`; both a
-  web route and the scheduler import it). It was private to the ramen.events
-  importer first, and it was EXTRACTED rather than copied when discovery needed
-  it: two copies of a security control means a weakness found later gets fixed
-  in one and missed in the other. The guard raises its own
-  `FetchError`/`HostNotAllowed`/`FetchFailed` and each caller translates (the
-  web route to HTTP status codes, the sweep to a per-artist skip). The redirect
-  hook is built PER CALL so it closes over that caller's policy — a
-  module-level hook pinned to one is the obvious extraction bug and is exactly
-  what a shared guard must not have.
-  **It takes a host POLICY, not a host string** (2026-08-06). `HostPolicy`'s
-  one required method is `check_async`, run before the request and again on
-  every redirect hop. `PinnedHost` is the original guard unchanged — the
-  ramen.events importer, the Eventernote sweep, the calendar feeds and
-  phase-1 triage, i.e. every pre-existing caller — and additionally keeps a
-  genuinely SYNCHRONOUS `check` for its one synchronous caller
-  (`web/routes/imports.py`'s `_check_host`) — a property of that policy, not a
-  second method every policy must grow. `ApprovedPublicHosts` is the
-  completion pass's, and it is the FIRST fetch in this app that is not pinned
-  to a host named in code, because a draft's `official_url` is by nature
-  somebody else's domain. Three things stand in for the pin: https only, a
-  host an admin has approved by name (`FetchDomain`, reviewed at
-  `/admin/fetch-domains` — a human is what the pin became), and every address
-  the host resolves to being public unicast, ALL of them and not any, since a
-  host answering with one public and one private address is a rebinding setup
-  rather than a deployment to accommodate. The policy is what makes the check
-  async: resolution goes through `_resolve_async`, off the event loop and
-  under a total deadline, because this process runs discord.py, FastAPI and
-  the 60s tick on ONE loop and a stalling nameserver would otherwise block all
-  three, not merely this fetch. `_is_actually_global` deliberately does not
-  trust `ip.is_global` alone — measured, not assumed, that the IPv6 wrapper's
-  classification wins over an embedded IPv4's in `::/96`, `::ffff:0:0:0/96`
-  and `64:ff9b::/96`, each of which can encode 169.254.169.254, which on this
-  deploy is a real credential source. Don't add a third policy or a
-  "just this once" bypass: the paste fallback
-  (`POST /concerts/import/pending/{id}/complete`) is what exists for the cases
-  the policy declines, and it needs no fetch at all.
-- `src/app/discovery.py` — the discovery sweep: the Eventernote fetch, and
-  since 2026-08-02 a calendar-feed pass in front of it. Sits ABOVE `db/` like
-  `ops.py`: it imports `domain/`, `app/calendars.py` and `db.service`, and
-  nothing in `db/` imports it. **The daily sweep SKIPS CHARACTER tags**
-  (`Tag.kind != TagKind.CHARACTER` in `run_sweep`'s tag query) — a reversal of
-  the kind-blind rule this file used to state, made on LOAD grounds (owner
-  ruling, 2026-08-02): a character's `eventernote_url` is her seiyuu's own
-  actor page, and the owner's ~90-tag im@s/LL expansion would have added
-  hundreds of daily third-party fetches for pages whose events are franchise
-  events the calendar feeds now cover. The URL stays storable and rendered (it
-  is still the right link for a character), and `sweep_one_tag` — the manual
-  per-tag button — deliberately does NOT filter: one fetch the owner asked for
-  is not a daily cost. Don't re-widen the daily query to "every tag with a
-  URL"; that is the thing that was undone. The EDITOR side is unaffected and
-  keeps CHARACTER: `EVENTERNOTE_KINDS`
-  (`domain/types.py`) is the one table saying which kinds' dialogs render the
-  field AND which submits `edit_tag` may write it from, and the two must never
-  become two lists. FastAPI folds an empty form value into an optional field's
-  default, so `""` cannot mean "absent" and the omitted-leaves-alone trick
-  `slug`/`voiced_by_tag_id` use is unavailable here — the KIND is what says
-  whether this submit had a box. Writing it unconditionally is what erased a
-  character's discovery link on the next rename. The sweep keeps the
-  future prefix of each page, hands the whole sweep's events to
-  `record_discovered` in ONE call (its event-id key is what stops the LoveLive
-  15th, listed by nine catalogue tags, being reported nine times), and queues
-  ONE `Notification` — never a DM of its own (invariant 4). **The calendar
-  pass runs FIRST and pours into that same call and that same digest**: two
-  pipelines, one `seen` list, one DM, and a feed that fails to fetch or parse
-  is counted and skipped without ever costing the Eventernote half. It is
-  outside the actor budget on purpose, so the worst-case tick is the SUM of
-  both phases (spelled out at the top of `discovery.py`) — a feed roster that
-  grows must never starve the artist rotation behind it. Fetches are
-  SEQUENTIAL with a 1s pause; 86 parallel requests at a third party is how an
-  IP gets blocked. Gated by `settings.discovery_enabled` (default False, same
-  shape as `rehearsal_enabled`), which is also what keeps tests and dev runs
-  off the network. Two operational rules, both learned the hard way and both
-  silent when broken:
-  - **A long in-tick job must beat the heartbeat inside its own loop.** The
-    scheduler calls `heartbeat.beat()` BEFORE `tick()`, and `/healthz` reports
-    unhealthy once the last beat is `MAX_AGE_SECONDS` (180s) old. A sweep of 86
-    pages each with its own deliberate pause occupies the tick for minutes, so
-    without a beat per artist it pages the owner about a perfectly healthy app.
-    The loop genuinely IS alive, so beating in it is honest, not a workaround.
-  - **`stamp_discovery_run` only FLUSHES**, so a stamp written in run_sweep's
-    `finally` is thrown away by `scheduler/loop.py`'s handler when it (correctly)
-    rolls the poisoned session back. The handler therefore RE-stamps and commits
-    on the cleaned transaction. Both halves are needed, and the failure mode is
-    the nastiest kind: tests are green because they never roll back, while in
-    production a sweep that dies leaves `discovery_due` true and re-runs 86
-    fetches every 60 seconds forever. Any future "record that we ran" written in
-    a `finally` on the scheduler's session has the same hole.
-- `src/app/calendars.py` — WHICH public `.ics` feeds discovery reads, and what
-  counts as a lead in each. Same layer as `discovery.py`/`ops.py` (imports
-  `domain/` and `db.service`; nothing in `db/` imports it), and it must NOT
-  import `app.discovery` — the sweep imports THIS, so the reverse would close
-  a cycle, which is why the User-Agent string is spelled out here rather than
-  borrowed. The roster is CODE-LEVEL CONFIG, not a table or an env var: it
-  changes rarely, changing it is an edit+deploy exactly like the admin
-  whitelist, and `dates_are`/`include_prefixes` are typed fields no env CSV
-  expresses. **`dates_are` is per FEED, and that is what keeps stored dates
-  honest** — the LL-Fans main calendar carries performance dates while its
-  per-group subs carry 申込期限, so they are separate roster entries rather
-  than one feed with mixed semantics; mixing them would file a deadline as a
-  show date, which is the exact mistake `date_is_deadline` exists to prevent.
-  `include_prefixes` matches with `str.startswith` and empty means "take every
-  VEVENT" (right for the single-purpose imas feed); a SUMMARY the list does
-  not want is DROPPED and NOT counted as skipped, because skipped means
-  UNREADABLE and folding a working filter into it would make a healthy feed
-  read as a rotting one. The nine-feed launch roster was fetched and parsed
-  one by one before inclusion and the verdicts — including why an
-  empty-but-alive feed was KEPT, and the accepted promoter-named-round gap —
-  are in the module's own probe block. Update it there when the roster
-  changes; a roster nobody can audit is how a dead feed survives.
-  Leads are namespaced (`"<feed key>:<UID>"`), which is what lets one UNIQUE
-  column hold both sources.
-- `src/app/llm.py` — the ONE DeepSeek call, top-level beside `fetching.py` for
-  the same reason (it does I/O, so it cannot live in `domain/`). A hand-rolled
-  httpx POST to `/chat/completions` rather than an OpenAI-compatible SDK — the
-  same trade `domain/ics_read.py` made against a calendar library, since the
-  whole surface this app uses is one JSON request and one JSON response.
-  Everything arrives as `LlmError`: an unset key or model raises BEFORE the
-  network (misconfiguration named plainly), and transport failure, non-200, a
-  non-JSON 200 and a body missing `choices[0].message.content` are one class
-  because its one caller treats them identically. It has no opinion about what
-  the messages SAY — the prompts, the fence-stripping and `strip_rounds` are
-  pure, in `domain/triage_prompts.py`. The request body pins
-  `"thinking": {"type": "disabled"}` unconditionally, and a non-`"stop"`
-  `finish_reason` or empty `content` also raises `LlmError` — a 2026-08-05
-  incident found `deepseek-v4-flash` thinks by default, burning ~50k reasoning
-  tokens per classify call until an overrun emptied `content` and only failed
-  later, opaquely, in the YAML parser.
-- `src/app/triage.py` — the AI-triage runner: one LLM pass over the open
-  discovery queue, on an admin's press. Same layer and discipline as
-  `discovery.py` (imports `domain/`, `app/llm.py`, `app/fetching.py` and
-  `db.service`; nothing in `db/` imports it), and it is the RUN ORDER only.
-  **The load-bearing idea is that the model writes text this app ALREADY
-  parses**: the classify half emits the prune-list YAML `parse_prune_list`
-  reads, the draft half the `add-concert` YAML `parse_drafts` reads. Malformed
-  model output therefore dies at the same boundary a bad agent draft does, and
-  no second validation vocabulary exists to drift from the first. It creates no
-  concert and dismisses no lead — drafts land as `PendingDraft` rows, so
-  `import_commit` stays the only write path into `concerts`, and the prune YAML
-  is stored TEXT the owner still pastes through the plan/apply screen, which
-  stays the only path to a dismissal. **`strip_rounds` runs on every generated
-  draft whatever the model returned**: the prompt asks for `rounds: []`, the
-  prompt is not the guarantee, this is, and the failure it prevents is an
-  invented `apply_closes_jst` reaching a real user as a real reminder for a
-  deadline that never existed. Gated by `settings.triage_enabled`
-  exactly as the sweep is gated by `discovery_enabled`; `deepseek_model` has NO
-  default, because hardcoding a guess at a third party's current alias starts
-  billing a model nobody chose the moment the flag flips. A press costs ONE
-  classify call over the whole queue plus at most `TRIAGE_DRAFT_CAP` (25)
-  fetch+draft pairs whatever the queue's size — the cap is what makes the price
-  of a press predictable — with fetches SEQUENTIAL and paused and a
-  per-production `heartbeat.beat()`, for the reasons the sweep has both.
-  It queues ONE admin `Notification` (invariant 4) whose kind `"triage"` is
-  deliberately NOT in `UNREPORTED_NOTE_KINDS` — that set is for notices
-  reporting ON deliveries, and this one reports on a model's proposals.
-  **The request stamp IS the `TriageRun` row** (unlike the sweep, which stamps
-  the `DiscoveryState` singleton — triage wants per-run history), which makes
-  `stamp_discovery_run`'s two-halves rule apply IN ROW FORM: a rollback restores
-  the row to `"requested"`, so `scheduler/loop.py` re-marks it failed and
-  commits on the cleaned transaction, or a dead run re-fires 25 fetches and 26
-  LLM calls every 60 seconds forever. One refinement found the hard way there:
-  `session.rollback()` expires every attribute of every object in the
-  transaction, PRIMARY KEY INCLUDED on this aiosqlite stack, so reading
-  `run.id` inside the handler raises `MissingGreenlet` rather than a value —
-  the id is captured BEFORE the run, and any future post-rollback bookkeeping
-  keyed on a row needs the same.
-- `src/app/draft_completion.py` — phase 2: filling a pending skeleton's
-  `rounds:` from the official page the draft itself names. Same layer and
-  discipline as `triage.py`, and it reuses that feature's `TriageRun` row
-  through a `kind` column (`"complete"` vs the classify default), so the
-  request/pickup handshake, the budget shape and the re-stamp-after-rollback
-  rule exist once rather than twice; `scheduler/loop.py` picks up the oldest
-  requested run OF ANY KIND and dispatches on `kind`, so the two halves
-  serialize against each other by construction and neither starves the
-  reminder tick behind the other. **The rule that replaces `strip_rounds` is
-  EVIDENCE GROUNDING**: the model must quote the page line it read each
-  timestamp from, and `domain/round_evidence.py` drops any round whose quote
-  it cannot find in the same text the model was given — plus the nastier
-  case, a quote that IS on the page but does not carry that timestamp.
-  **That last check is a CONTIGUITY rule, and it is an owner ruling
-  (2026-08-05) made after a review defeated the looser one.** "Do this
-  timestamp's digits appear somewhere in the quote" accepts far too much:
-  against a correct quote of `申込締切 2026年1月10日(土)23:59` it also
-  validates a claimed 01:00 (the hour matches the `1` of `1月`) and a claimed
-  10:00 (it matches the day), and a model that quotes the whole page validates
-  anything assembled from digits anywhere on it. So month must be immediately
-  followed by day as the next number token, hour must be the VERY NEXT number
-  token after that date (immediately followed by minute), the date→time span
-  is capped at 60 characters and the whole quote at 200 — quoting half the
-  page is not evidence, whatever it contains. Two deliberate looseners inside
-  that tight rule: the minute is waived only when it is 0 AND the quote
-  carries no time separator (`:`/`：`/`分`), because `10時` states no zero to
-  find; and the YEAR is checked broadly — anywhere in the quote's numbers or
-  anywhere on the page — never adjacent, since Japanese ticket pages put it in
-  a heading and omit it from the deadline line. The accepted cost is false
-  rejections on some phrasings, and that trade is the whole feature: a
-  rejection is visible, carries its reason,
-  and costs one round typed by hand, while a false accept is a fabricated
-  deadline reaching a real user as a real reminder. NOTHING IS DROPPED
-  SILENTLY — every rejection reaches the preview with its reason, because a
-  real deadline quietly discarded is as harmful as a fake one quietly kept:
-  the operator has no way to know to look in either case.
-  `domain/page_text.py` produces that text ONCE for both the prompt and the
-  check, under one 60k cap; two normalizations would make the guarantee
-  theatre by letting a quote fail on a whitespace rule the model never saw, or
-  verify against text it was never shown. The completion pass rewrites
-  exactly ONE key of the stored draft, `rounds:` (`merge_rounds`,
-  `domain/round_completion.py`), and preserves the leading comment prefix,
-  because phase 1's duplicate containment matches the whole `# source: ...`
-  line and a naive YAML round-trip drops it; a body that will not read back as
-  a mapping raises `DraftMergeError` and writes NOTHING, rather than
-  "succeeding" by wiping the document. Evidence lives BESIDE the draft
-  (`PendingDraft.completion_yaml`), never inside it: a draft is a document
-  that gets committed into `concerts`. It creates no concert — `import_commit`
-  stays the only write path — and it never fetches `eventernote_url`, which
-  carries no ticket information and so could not contain the answer.
-  Two failure rules worth keeping: `complete_one` writes `completion_yaml`
-  even when the reply or the merge is unusable, because the call was already
-  paid for and a second press must not pay for the same junk twice; and
-  `SQLAlchemyError` is the ONE exception the per-draft handler does not
-  absorb, since a poisoned session means the remaining fourteen paid calls
-  would write nothing at all.
-- `routes/fetch_domains.py` — `/admin/fetch-domains`, the approval queue that
-  pays for the widening above. Its own module for the reason `discoveries.py`
-  and `rehearsal.py` are: a router registers whole. English-only and NOT
-  wrapped in `_()` like the other admin pages; only the Preferences LINK is
-  translated. An unapproved host costs one PASSED-OVER DRAFT, never a failed
-  run — counted apart from `skipped` as `blocked_domains`, because nothing
-  failed and the remedy is a click; the draft keeps an empty
-  `completion_yaml`, stays a candidate and the next press picks it up — and a
-  declined
-  host is never proposed again, because an approval queue that keeps re-asking
-  becomes one nobody reads. `note_fetch_domain` (`db/service.py`) is the
-  single write path and RAISES `ValueError` on a host that is URL-shaped,
-  port-bearing or blank: storing one would fail closed but SILENTLY, since
-  `approved_fetch_hosts` could never match it and an admin would think they
-  had approved something. It normalizes through `fetching._normalize_host`,
-  the exact function the guard runs before calling `is_approved`, or an
-  approval recorded here silently fails to match the lookup done there.
-- `src/app/scheduler/` — the tick loop that delivers DMs.
-- `routes/welcome.py` -- the five-step welcome wizard, rebuilt on the design
-  system and flowing seamlessly into `/setup` (`POST /welcome/advance`
-  redirects there once the step count is exhausted). Its default-reminders
-  step is the one step here that writes: it materialises a real
-  `ReminderPreset` through the single `db/service.py` helper
-  `create_preset_from_rules` (no second write path), offering three
-  template rule sets (Relaxed / Standard / On the ball) plus a
-  sentence-style fine-tune list over the five anchors. Offsets are
-  days+hours only -- `PresetItem` has no minutes column, so the wizard
-  cannot offer a "30 minutes before" choice; see the minute-offset entry
-  in WISHLIST.md.
-- `routes/setup.py` — the first-run capture flow, run AFTER the `/welcome`
-  wizard. Three plain GETs (`/setup` prune tiles → `/setup/applications` →
-  `/setup/ready` reveal) plus two batch POSTs. NO capture-flow step state
-  exists anywhere: each screen renders current DB truth (tag-implied concerts
-  minus overrides, outcomes), which is what makes it tamper-safe and
-  re-runnable (Preferences' "Run first-time setup again" points here). Pruning
-  goes through the branch-4 `set/clear_concert_subscription` writers;
-  applications funnel EXCLUSIVELY through `record_round_outcome`. All logic is
-  in `db/service.py`'s `# First-run capture flow (/setup)` section.
-- `routes/calendar.py` — the personal calendar-feed subscription
-  (`POST /me/calendar-feed` mints the token, `GET /calendar/{token}.ics` is
-  the feed itself). The `.ics` route deliberately has NO `require_user` —
-  calendar apps poll it directly with no cookies, so the token in the URL
-  *is* the credential.
-  **The feed is the user's STANDING-AWARE LANDSCAPE, not a mirror of their
-  reminder rules** (ruling 2026-08-04). `user_calendar_events` reads no
-  `reminder_queue` at all: it derives every tracked concert's live show dates
-  plus each surviving round's next moments, selected by that user's outcome —
-  no outcome → future opens + closes, APPLIED → `_result_moment`, WON →
-  payment deadline, LOST/NOT_APPLIED/PAID → nothing (a LOST round's auto-armed
-  successor is an ordinary no-outcome round and carries the ladder on).
-  Future-only, and every exclusion goes through the shared per-user helpers
-  the other read surfaces use — no suppression rule is invented here.
-  **Reminder rules therefore mean exactly one thing: when Discord DMs you**;
-  a sparse preset used to read as a broken calendar, which is the bug this
-  replaced. `/mydeadlines` (`bot/cogs/reminders.py`) reads the SAME function,
-  so it inherits the landscape — a deliberate behavior change, one derivation.
-  `CalendarEvent.anchor` is required because a no-outcome round emits two
-  events with one summary: the feed qualifies canonically from
-  `CANONICAL_ANCHOR_QUALIFIERS` (`domain/ics_export.py` — 受付開始/申込締切/
-  当落発表/支払期限, plain data and deliberately NOT gettext, since canonical
-  text is by definition untranslated), while the cog qualifies through `_()`
-  in the recipient's language. The locale contract is unchanged: feed
-  canonical (`locale=None`), cog localized.
-  There is NO per-round `.ics` download any more — the 📅 link,
-  `GET /rounds/{id}/ics` and `build_ics` were deleted (a file is a snapshot
-  that rots the moment a deadline moves; the feed re-plans on every fetch).
-  `build_calendar` and its VEVENT helpers stay; a 404 test pins the absence.
-  A minted URL is shown through ONE partial, `_feed_links.html` (webcal://
-  link + copy button + the URL), consumed by Preferences, welcome step 4 and
-  the concert page's calendar dialog, so the ergonomics cannot drift; the
-  mint's `next` runs `safe_next` first, then an allowlist of SHAPES
-  (`/preferences`, `/welcome`, `/concerts/` prefix) — `_allowed_next`.
-- `routes/rehearsal.py` — the local rehearsal harness (`/admin/rehearsal`):
-  seed one canonical concert, pull its reminders forward so the real 60s tick
-  delivers them now, and send any DM shape in any language on demand. **Gated,
-  not guarded**: `web/app.py` registers this router only when
-  `settings.rehearsal_enabled` is true, which production never sets, so there
-  the routes do not exist at all — `require_admin` on each one is a second
-  layer for a misconfigured deploy, not the primary guard. Its own module
-  because a router registers whole and `admin.py` serves routes production
-  needs. English-only and NOT wrapped in `_()`, like `/admin/deliveries`. Its
-  shape catalogue (`POST /admin/rehearsal/shape`) sends a DM straight from a
-  web route: the SECOND sanctioned exception to invariant 4, alongside
-  `POST /me/test-dm` and for the same reason (a manual, one-at-a-time
-  diagnostic, not a system-initiated notice) — with the extra claim that this
-  route is absent from production entirely. Don't read either as licence for a
-  third. Operator setup (second Discord app, test server, the redirect URI
-  that bites) is `docs/local-dev-bot.md`.
-- `routes/discoveries.py` — the discovery review surface
-  (`GET /admin/discoveries`, `POST /admin/discoveries/{id}/dismiss`), admin-only,
-  linked from Preferences with the other admin pages. Its own module rather than
-  a section of `admin.py` for the same reason `rehearsal.py` is: a router
-  registers whole, and discovery is a fourth unrelated concern beside the
-  delivery log, the broadcast and the catalogue round-trip. English-only and NOT
-  wrapped in `_()`, like `/admin/deliveries`; only the Preferences LINK is
-  translated. **It writes exactly one column, `dismissed_at`** — it never creates
-  a concert, because neither source carries a verified round: Eventernote has no
-  ticket information at all, and a fan-maintained calendar entry is a POINTER a
-  human still checks against the official page. A lead says "this exists and you
-  are not tracking it" and nothing more. Turning one
-  into a concert stays with an agent following `.claude/skills/add-concert`,
-  which is what the page's copy block (the same `build_discovery_dm`, with
-  `budget=None`) is for. `import_commit` remains the only write path into
-  `concerts`. Two things it deliberately does NOT do: `open_leads` does not
-  filter on `announced_at` (announced is not triaged — the sweep marks every
-  fresh lead announced whether the DM named it or merely counted it, so this page
-  is where a first sweep's "+N more" is actually reachable; the column is SHOWN
-  instead), and a same-date-same-venue collision with an existing leg is a HINT
-  on the row, never a suppression, because 昼公演 and 夜公演 are two Eventernote
-  events on one date at one venue and suppressing would hide exactly the second
-  show. `ConcertDay.eventernote_event_id` is the exact-match half of the same
-  question: populated by the import path going forward, so "do I already have
-  this?" is an id lookup rather than a guess about Japanese titles that vary in
-  spacing, brackets and 〜 marks. It is not backfilled, so that branch gains
-  coverage over time rather than arriving complete. It keeps its
-  Eventernote-specific NAME on purpose — a calendar lead never exact-matches a
-  leg, it only ever gets the date+venue hint, and only when the VEVENT carried
-  a LOCATION.
-  **A lead's id column is `DiscoveredEvent.source_event_id`** (migration
-  `d446e6c0a3e6` renamed it from `eventernote_event_id` and widened it):
-  Eventernote rows keep their bare numeric ids, calendar rows carry a
-  namespaced `"<feed key>:<UID>"`, and the prefix is what lets the single
-  UNIQUE column serve both without a cross-source collision. Two sibling
-  columns say the rest — `source` (`"eventernote"` or a `CalendarFeed.key`,
-  stored EXPLICITLY rather than parsed back out of the id, so nothing has to
-  split a string to know where a row came from) and `date_is_deadline`, which
-  is why this page and the DM render such rows as `申込締切 {date}`: the imas
-  feed's DTSTART is an application deadline, and showing it as a performance
-  date would mislead exactly the person triaging it. Both server-default to
-  the pre-calendar behaviour, so every pre-existing row reads back correct.
-- Concert edit history: `db/service.py`'s `snapshot_concert`/
-  `record_concert_edit`/`concert_audit_log`, backing the `ConcertAudit`
-  table (`db/models.py`). Deliberately lightweight — only the concert's own
-  top-level scalar fields (title, organizer, URLs, notes, ...), NOT
-  day/round/tag adds-removes-edits. `edit_concert` (`web/routes/concerts.py`)
-  must call `snapshot_concert` BEFORE mutating the concert and
-  `record_concert_edit` AFTER — get that order backwards and every diff
-  reads as unchanged.
-- `src/app/i18n.py` — gettext plumbing, top-level (not `domain/`, since it
-  does file I/O at startup; not `web/`, since the bot imports it too).
-  `messages.po` in `src/app/translations/{ja,zh}/LC_MESSAGES/` compile to
-  `.mo` in memory at first use per locale (no `.mo` on disk, no deploy-ritual
-  change). `en` is `NullTranslations` — the identity function, so English
-  output stays byte-identical to the pre-i18n app and no EN test should ever
-  assert a translated string. Locale is an asyncio-context `ContextVar`
-  (`get_locale`/`set_locale`), set once per request by `web/app.py`'s
-  middleware and once per recipient by the scheduler. Write translatable
-  strings as `_("literal")` at the point they're rendered/looked up (`_` is
-  `gettext`); a module-level dict keyed or valued by translatable text (e.g.
-  `LABEL_BY_ROUND_KIND`) instead wraps each literal in `N_()`, a no-op marker
-  that only makes `pybabel extract` see it — the real translation happens
-  later, at lookup time, via `_`/`gettext`, never at the dict's definition
-  time.
-  `tags_diff.py` is the third piece of the tags vocabulary and deliberately its
-  own module: `tags_yaml.py` is about the FORMAT (serialize/parse), this is
-  about COMPARISON, and one module doing all three is how a file starts growing
-  unwieldy. It reuses `TagExport` as the current-catalogue carrier rather than
-  inventing a second shape, and `service.current_tag_exports` is the ONE builder
-  of that snapshot -- the zip export and the differ must compare against exactly
-  the same thing or a restore drifts. `gettext_in(locale, msg)` is the explicit-locale escape hatch for
-  text composed before a per-recipient locale is known (e.g. `NoticeContext`,
-  built once for many recipients up front). `loc_field(obj, field, locale)`
-  resolves a UGC field's viewer-locale variant: en → `{field}_en`, zh →
-  `{field}_zh`, ja → the original column (Japanese IS the source of truth,
-  there's no `_ja` column); an empty string counts as unfilled and falls
-  through; there is no cross-locale chaining (zh never falls back through en
-  to the original). The UGC layer now also covers venue names through tags
-  (`Tag.name_en`/`name_zh`, plus `city_en`/`city_zh`), and phase 2 added
-  `ConcertDay.label_en`/`label_zh` and `Round.label_zh` (migration
-  `a589d82c11b4`) so leg and round labels resolve in the viewer's language
-  too. `Round.label_en` CHANGED MEANING there: it predates the i18n layer
-  and used to render to EVERY viewer as an English gloss beside the Japanese
-  label, and it is now a true locale variant selected by `loc_field`.
-  THREE locale sources are in play, and choosing the wrong one is SILENT --
-  nothing raises, the text just comes out in somebody else's language.
-  `get_locale()` for anything inside a web request; `user.language` for
-  per-recipient text composed once for many recipients OUTSIDE any request
-  (scheduler DMs, `NoticeContext`); and an explicit `locale: str | None`
-  parameter where the caller must decide -- currently `user_calendar_events`
-  alone, where `None` is DELIBERATE so the `.ics` feed stays canonical rather
-  than following whoever happened to trigger the render. This bites hardest in
-  `db/service.py`, where ~10 sites COPY a label string into a dataclass before
-  it ever reaches a template: the field resolves at the copy site, not at
-  render time, so the locale has to be right there.
-  Editing existing English copy must keep the msgid
-  byte-identical (or both catalogues silently lose that translation) and
-  update BOTH `messages.po` files — `tests/test_i18n_catalogues.py` extracts
-  every msgid in-process and fails on anything untranslated (fuzzy entries
-  count as untranslated, since `i18n.py` compiles with `use_fuzzy=False`).
-  Locale resolution treats the `lang` cookie as a CACHE of `users.language`,
-  never the source of truth: `web/app.py`'s middleware reads the cookie if
-  present and supported, else negotiates from `Accept-Language`
-  (`i18n.negotiate`), else `en`; the single write path is public
-  `POST /language` (`web/app.py`), which always sets the cookie and also
-  updates the DB column when signed in (Discord DMs read the column, not the
-  cookie); the OAuth callback (`web/auth.py`) seeds the column from the
-  cookie, but ONLY at account creation, since the column can't otherwise
-  distinguish "defaulted to en" from "chose en".
-- Bot and web NEVER contain business logic; they call `db/service.py` — which
-  is still literally true after the split, because that module is the facade
-  re-exporting the whole layer (see the `src/app/db/` entry above). Keep
-  importing from `app.db.service`, not from `app.db.core` or a feature module:
-  the facade is the seam, and routing around it is what would make this rule
-  stop meaning anything.
-- `docs/superpowers/specs/` + `plans/` — date-prefixed design specs and
-  implementation plans; each recent feature (cancelled legs, Tags redesign,
-  index reorg) committed one of each before code. Follow that pattern for
-  substantial features. `docs/codebase-review-2026-07-17.md` records a
-  full-codebase review and the fixes it drove.
-- `docs/superpowers/demo/` — the interactive concept demos that drove the UI,
-  and the **design source of truth** for it. All are self-contained
-  single-file mockups on the same design tokens the app ships. Review UI/UX
-  changes against the matching one; when the shipped design deliberately
-  moves, update that demo so it stays the reference. The full inventory,
-  because reaching for the wrong file wastes a whole pass:
-  - `dekimasen-demo.html` — the reconciliation reference for Home/Discover/
-    concert/editor/tags/preferences/setup. The default answer.
-  - `dekimasen-onboarding-demo.html` — the signed-out landing, the new-user
-    flow, import + import preview, retroactive-apply, legal.
-  - `dekimasen-mobile-demo.html` (static frames, reference CSS values) and
-    `dekimasen-mobile-live.html` (interactions) — the phone reference.
-  - `dekimasen-tablet-demo.html` — the 701-1040px band.
-  - `dekimasen-ux-pass-demo.html` — the 2026-07-24 UX pass's 20 changes,
-    including the two-shape callout grammar.
-  - `_tablet_harness.html` — not a demo: the measuring rig the tablet band
-    was built against (see the measure-don't-reason rule below).
+  **Add a name to a module and you must add it to `service.py` too** —
+  `tests/test_service_facade.py` fails if they disagree. A feature module
+  must NEVER import the facade; that is a cycle which surfaces or not
+  depending on which module a process imports first.
+- **`src/app/bot/` and `src/app/web/` are thin shells** — cogs, embed
+  builders, routes, templates. They contain NO business logic; they call
+  `db/service.py`. Keep importing from the facade, not from `core` or a
+  feature module: the facade is the seam.
+- `src/app/scheduler/` — the 60s tick that delivers DMs.
+- `src/app/fetching.py` — the ONE outbound HTTP fetch, SSRF-guarded, shared
+  by the importer, the discovery sweep, the calendar feeds and triage. Takes
+  a host POLICY (`PinnedHost` / `ApprovedPublicHosts`). Don't add a third
+  policy or a bypass.
+- `src/app/discovery.py` (the sweep runner), `src/app/calendars.py` (which
+  `.ics` feeds it reads), `src/app/llm.py` (the one DeepSeek call),
+  `src/app/triage.py` and `src/app/draft_completion.py` (the AI passes),
+  `src/app/ops.py` (health checks), `src/app/i18n.py` (gettext plumbing).
+  All sit ABOVE `db/`: they import it, nothing in it imports them.
 
-  Known gap: the 403/404/422/500 error pages shipped with no demo frame, and
-  the signed-out `.signin-note` never got one either. Both are logged in
-  WISHLIST's demo-parity cosmetics entry rather than left to be rediscovered.
+### The few footguns worth keeping in front of you
+
+- **`routes/imports.py` MUST be registered before `routes/concerts.py`** in
+  `web/app.py`, or `GET /concerts/import` is swallowed by
+  `GET /concerts/{event_id}` — FastAPI matches path templates before literal
+  segments.
+- **Starlette hard-caps every `Form(...)` field at 1MB**, whatever an
+  app-level constant says. This applies to every form in the codebase; any
+  large-paste feature hits it as an opaque failure well before its own limit.
+- **Venues live on the LEG, as a tag.** `ConcertDay.venue_tag_id` is the
+  structured venue and the only one anything reads. A concert's VENUE tags
+  are DERIVED by `sync_concert_venue_tags`, never typed, and every caller
+  must feed its newly-attached tags to `handle_newly_tagged` (invariant 4).
+  `ConcertDay.venue_tag` is `lazy="raise"` on purpose — a lazy load during
+  async template rendering is a `MissingGreenlet` 500. The legacy free-text
+  venue columns are GONE; do not reintroduce them.
+- **A CHARACTER is a tag, and `Tag.voiced_by_tag_id` says who plays her** —
+  not `parent_id`, which means "the broader thing I belong to" and is what
+  the Tags page renders its hierarchy from. Only an ARTIST may voice a
+  character, checked at both write boundaries. A tag's KIND is immutable.
+- **`i18n` has THREE locale sources and picking the wrong one is SILENT** —
+  nothing raises, the text just comes out in someone else's language.
+  `get_locale()` inside a web request; `user.language` for per-recipient text
+  composed outside one (scheduler DMs); an explicit `locale` parameter where
+  the caller must decide (only `user_calendar_events`, where `None` keeps the
+  `.ics` canonical). This bites hardest in `db/`, where ~10 sites copy a
+  label into a dataclass before it ever reaches a template — the field
+  resolves at the COPY site, not at render time.
+- Editing existing English copy must keep the msgid byte-identical, or both
+  catalogues silently lose that translation, and must update both `.po`
+  files. `tests/test_i18n_catalogues.py` fails on anything untranslated.
+
+- `docs/superpowers/specs/` + `plans/` — date-prefixed design specs and
+  implementation plans; substantial features commit one of each before code.
+  `docs/codebase-review-2026-07-17.md` records a full-codebase review.
 
 ## Feature wishlist
 
@@ -1276,305 +583,66 @@ deleting them.
 
 ## UI conventions
 
-- Sentence case everywhere ("Add group", not "add group").
-- The 🌐 language switcher is the concept demo's CYCLE CHIP (`base.html`'s
-  `.langform`/`.langtoggle`): one bordered chip showing the current
-  language; clicking posts the NEXT language in the EN → 中文 → 日本語 cycle
-  as a plain `<form method="post" action="/language">`, so it works with JS
-  disabled and renders on every page, signed in or out. A dropdown menu
-  shipped first and was replaced at the owner's request -- don't bring it
-  back. Language NAMES (EN/中文/日本語) are never translated -- a visitor
-  picking their language needs to recognize it before they can read
-  anything else.
-- **Theming**: the full design-token layer (`--paper`, `--accent`, the
-  `*-wash` set, `--raise`, `--chip`, `--shadow`, ...) lives in `style.css`'s
-  `:root`. Dark mode is defined BOTH ways -- `@media (prefers-color-scheme:
-  dark)` (the OS default when the user has never chosen) AND
-  `:root[data-theme="dark"]`/`[data-theme="light"]` (the header toggle
-  stamps `data-theme`, which wins on specificity and persists to
-  `localStorage`). `base.html` stamps the saved theme in `<head>` before
-  first paint -- do this in `<body>` or after CSS loads and every page
-  flashes the wrong theme on load. Style new components against both
-  directions, not just light.
-- Deadline TIMES render as two lines via `fmt_dual_lines`/the `dual_lines`
-  Jinja global -- a bold weekday+day+month line, then a "HH:MM JST, HH:MM
-  local" time line -- never a flat one-line string on the web (that shape is
-  `fmt_dual`, kept only for Discord embeds/plain text, which can't do two
-  lines). Performance DATES (a concert's start day, not a deadline) use
-  `fmt_day_month`/`day_month` instead: day-month only, no zone, no dual
-  apparatus -- a date is a fact about the world, invariant 1 governs
-  deadlines you must act by, not this.
-- Tag chips are the universal element; "+ Add x" buttons share the exact
-  chip silhouette. Pickers are native <dialog> white cards: header (title +
-  ×), search, chip list; no footer; backdrop-click and Esc close --
-  backdrop-close comes ONLY from base.html's global drag-safe handler; never
-  add a local `e.target === dlg` click handler to a dialog (that shipped the
-  drag-out-closes-the-dialog bug twice; a sweep test in
-  `test_theme_and_tokens.py` now forbids it).
-- Editor leg/round cards render through the shared partials
-  `_editor_leg_card.html`/`_editor_round_card.html` -- concert_new,
-  concert_edit and import_preview (their loops AND `<template>` blocks) all
-  use them. Never hand-roll a card copy again; that six-site duplication is
-  exactly what the coherence pass removed. Card anatomy: ja label on the
-  top row, EN/中文 on the always-visible `.vary` row, fields below.
-- Destructive card actions live in the kebab menu (`details.kebab`,
-  top-right; menu items keep the `data-remove-leg`/`data-remove-round`
-  hooks). It is the app's ONLY overflow menu and stays single-purpose:
-  destructive actions only, never a place to bury regular controls. The
-  inline × beside the Cancelled toggle was removed deliberately (owner
-  call) -- do not reintroduce it. (2026-07-24: folding the concert header's
-  Edit/Export into the kebab was proposed and rejected -- the rule stays.)
-- Callouts come in two shapes (G2, 2026-07-24): `.edgecard` (raise ground,
-  left edge in the tone colour -- ongoing state; `.dg`/`.ok`) and `.banner`
-  (wash ground, full border -- needs attention; `.warn`/`.dgr`). Anatomy
-  classes (`.standing`, `.next`, `.upgradebox`, `.feedbox`, `.danger`,
-  `.danger-row`) compose the shape and keep only their layout. Don't invent
-  a third callout shape. Radiuses: 3px default, 999px chips, 4px overlay
-  cards, 50% circles, bottom sheets `14px 14px 0 0` (documented at the top
-  of `style.css`). Type ramp is 400/600/700 only. Motion budget: one 150ms
-  card-lift hover plus the functional `#hxbar` progress bar -- nothing
-  decorative (owner ruling, 2026-07-24).
-- **A `<details>` inside a swappable region carries a `data-fold` key.**
-  These regions (`#concert-rounds`, `#deadline-rows`) are swapped whole by
-  `outerHTML`, so every fold in one is a NEW element rendered from scratch
-  and comes back closed -- a reader who expanded a leg's round history and
-  then toggled a different leg off watched every fold on the page snap shut.
-  `base.html` collects the open keys inside the request target on
-  `htmx:beforeRequest` and reopens the matching folds on `htmx:afterSettle`
-  (per-request, keyed off the detail object's `xhr`, since two requests can
-  overlap). It only ever OPENS. Keys are server-rendered ids/event_ids --
-  `leg-{day_id}`, `block-{event_id}`, `more-concerts` -- never user text.
-  `open_round_id` is the OTHER half, not a duplicate: it is server-rendered,
-  so it survives with JS off, and it reopens the fold that OWNS a round a
-  capture press just wrote. The client half generalises to swaps that write
-  no round (a leg opt-out) with no per-caller plumbing. Keep both; reaching
-  for `open_round_id` to solve a general fold reset is the trap.
-- The sentence-style reminder builders (welcome, Preferences) render
-  through locale-ordered slot patterns: ONE translatable pattern msgid per
-  builder (e.g. ja 「{anchor}の{offset}{direction}に通知。」), split by
-  `domain/sentence.py:split_slots` (raises on unknown slots) and rendered
-  by the `sentence_slots` Jinja global -- text parts escaped, only the
-  server-built selects pass as Markup (invariant 7). Translators own the
-  word order; option labels (offsets, anchors) are their own msgids
-  translated per-request in `routes/welcome.py`. A dropped placeholder is
-  caught by `test_i18n_catalogues.py`'s placeholder-integrity tests.
-  Welcome's JS adds rows by cloning the server-rendered
-  `<template id="remrule-template">` -- never by assembling English DOM.
-- Tile display rules: franchise+group → "F · G"; group only → G; artists
-  only → artist chips; >1 venue → "📍 Multiple".
-- The concert page's **Performing panel is per-group clusters**
-  (`.pcluster`): one block per attached GROUP -- its chip on a `.pclabel`
-  row, that group's attached performers in the `.chiprow` beneath -- then an
-  unlabelled trailer block for performers in no attached group. Three owner
-  rulings hold it: a performer in several attached groups appears under EACH
-  (the repetition is information), clusters never fold (the panel is
-  reference, not a to-do), and the header's DISTINCT performer count
-  disappears entirely at zero rather than reading "0 performers". A
-  member-less group keeps its label row and emits NO `.chiprow` -- an empty
-  one still pays `.pclabel`'s bottom margin, and `:empty` can't reach it past
-  the template's own whitespace.
-- **Draw a relationship only when BOTH of its ends are attached to this
-  concert.** ONE rule, applied twice (2026-08-01), and both halves are derived
-  per concert, never stored:
-  - a CHARACTER and her seiyuu render as one **split pill** (`.mchip`, two
-    halves each its own link) when she is attached too; the seiyuu is then
-    dropped from the standalone list because she is rendered inside the pill.
-  - a SUBUNIT nests under its parent (`.pcluster.sub` on the concert page,
-    `.grow2.sub` on the Tags page) when the parent is an attached GROUP.
-    "Attached GROUP", not "attached tag": a group's parent is usually a
-    FRANCHISE, and asking the looser question made every group on a franchise
-    bill read as depth 1, emptied `roots`, and made the whole panel VANISH.
-  Either end alone renders exactly as it did before -- a lone character is a
-  plain chip, a lone subunit an ordinary top-level cluster. That is why the
-  split shape was chosen over an inline `如月千早（今井麻美）` gloss (owner, from
-  four mockups): the merge is CONDITIONAL, and the shape makes the difference
-  read as meaningful rather than as inconsistent styling. A seiyuu attached in
-  her OWN right is listed as herself in the unlabelled trailer -- she is not in
-  `members_by_group` once a group's members are characters, so the existing
-  code already does the right thing. The pill's box is DERIVED from
-  `.performers .chip`'s own padding/line-height/border rather than tuned to
-  match it (measured: 28.72px both, both themes; a chip SETS `line-height: 1.5`
-  and does not inherit it, so a half that inherits comes out 2.5px short), and
-  a parity test compares rule to rule so moving the chip desyncs loudly.
-- **The Tags directory walks `parent_id` in Python, not in Jinja**
-  (`tag_directory_context` returns a FLAT, pre-ordered list of
-  `(group, members, depth)`). A template recursion over a children map would
-  HANG on a `parent_id` cycle, and a cycle is reachable — rows predate
-  `would_create_tag_cycle`. The `walked` set terminates the walk, and a
-  leftover pass appends whatever it never reached, which is the property that
-  actually matters: **every group renders exactly once, whatever its
-  `parent_id` says**. Before that walk existed a GROUP under a GROUP fell out
-  of the chips directory entirely and took its members with it (they already
-  counted as grouped, so `ungrouped_performers` skipped them too), and a
-  signed-in non-editor saw neither anywhere on /tags.
-- **Membership is resolved SERVICE-side**, in `db/service.py`'s
-  `performer_clusters` (one batched `tag_members` query, pinned by a
-  statement-count test), and awaited in the route -- never in the template.
-  `Tag.members` is a lazy self-referential m2m and a lazy load during async
-  template rendering is a `MissingGreenlet` 500, the failure this project has
-  already shipped once. Its caller precondition is that `concert.tags` is
-  already eager-loaded, for the same reason.
-- Times always render dual: JST + the user's timezone.
-- VENUE tags filter by `region` (sidebar groups venues into regions like
-  "Kanto"/"Kansai"/"Other"; toggling a region (de)selects every venue tag id
-  in it) — filtering by one exact venue was explicitly ruled out as unhelpful.
-  A leg's venue IS a VENUE tag now (see the `src/app/db/` note above) and the
-  concert's venue tags -- which is what this filter reads -- are the rollup of
-  its legs', so a concert whose legs carry no venue tag shows no venue
-  anywhere and is invisible to this filter.
-- **Home vs Discover** -- the old combined index is split in two by the
-  question each page answers. `/` (`home.html`, the handler in `web/app.py`)
-  is Home: "where do I stand", personal and login-gated, four blocks in order
-  -- Up next, the campaign board, Coming up, a Discover teaser. Signed out it
-  is a real landing page instead -- hero, a "how it works" section, a static
-  illustrative campaign board (sample data, not the viewer's, since there is
-  no viewer), a real Discover taste pulling live public cards, and the
-  sign-in CTA. The first block is headed "Up next", NOT "Closes
-  next": it picks the soonest row with a round behind it whatever anchor that
-  row carries, so the header must stay moment-agnostic while the body names
-  the moment. Narrowing the pick to `Anchor.CLOSES` to justify the old header
-  was considered and rejected -- an opening round or a results announcement
-  genuinely needs attention, and filtering would hide real urgency.
-  **Coming up is per-concert BLOCKS, not a flat list**: `my_deadline_blocks`
-  collapses each round to its soonest future anchor and groups what is left
-  under one block per concert -- a header naming the concert once, the LEAD
-  row, and the rest behind a fold -- so the row budget counts concerts, not
-  anchors. Which row leads is `_wants_you`, the SAME predicate the concert
-  page's "Next for you" uses (`_needs_you` is a thin adapter over it): keep
-  them one rule, don't grow a second. Both folds -- "+N more rounds" in a
-  block, "+N more events" past `VISIBLE_BLOCKS` -- are native `<details>`
-  and are presentation ONLY: every folded row is in the DOM with its
-  capture form intact, since rendering on expand would need a round trip
-  and would make the fold a second silent limit beside
-  `DEADLINE_ROWS_LIMIT`. Discover's "Coming up soon" list stays FLAT on
-  purpose -- it calls `upcoming_deadlines` directly, and chronological is
-  the right shape for a catalogue nobody has standing on. `/discover` (`routes/discover.py` +
-  `discover.html`) is the catalogue: "what's on", and it is **public** --
-  `current_user`, not `require_user`, the only content page in the app an
-  anonymous visitor can reach. Header nav is Home / Discover / Tags and
-  nothing else; the active item carries `aria-current="page"`, which is also
-  what the CSS styles off.
-- **Capture actions live on Coming up rows, never on board cards.** A
-  deadline row is exactly ONE round on ONE leg, where "I have applied" has a
-  single meaning. A board card is a whole campaign with a multi-rung ladder,
-  where the same button is ambiguous -- applied to which round? A destructive
-  control sitting inside something you are scanning to read is also a mode
-  error. Do not "improve" the board by adding buttons to it.
-  Two gates govern WHICH buttons a row offers, both resolved in
-  `service.my_deadline_rows` (round timing is not presentation) and both
-  load-bearing because `upcoming_deadlines` emits one row per future ANCHOR,
-  so a single round can produce three or four rows. `can_capture` -- the
-  round has opened -- because you cannot have applied to a round that has
-  not opened, and recording APPLIED is irreversible (`record_round_outcome`
-  refuses to overwrite a starting state). `can_report_result` -- outcome is
-  APPLIED and the results time (or, failing that, the close) has passed --
-  which is the web's ONLY exit from APPLIED: WON/LOST are also DM buttons,
-  but a `dm_blocked` user or a `bot_enabled=False` deploy has no DM to
-  press, and without them the board's four columns are reachable as two.
-  PAID stays offered only from WON. Never "fix" this by relaxing
-  `record_round_outcome`'s sequence rule -- the gates belong on the read
-  side.
-- **The board CAPS its ladder and never expands it.** `domain/board.py`'s
-  `visible_rungs` keeps at most `VISIBLE_RUNGS` (2) rungs -- the one whose
-  STANDING explains the card's column (ranked by `column_for`'s own
-  precedence, never by position) plus the next actionable one -- and the
-  remainder renders as a plain `.rmore` count line, deliberately NOT a
-  `<details>`: uniform card height is what makes four columns scan as a
-  board, and nothing on a card is interactive anyway (capture stays off
-  cards, per the rule above). Surviving rungs keep their ORIGINAL ladder
-  numbers; a rung's mark IS its place in the full ladder.
-- **The concert page folds settled rounds per LEG**, one
-  `<details class="moreround">` each (`service._split_leg_rounds` decides
-  what stays up; the summary carries `+N more round(s)` plus one `.fchip`
-  per state). Its rule is `_wants_you`, which now drives THREE surfaces --
-  Home's block lead, the concert page's "Next for you" strip, and this fold
-  -- so change it in one place and check all three. A secured leg keeps its
-  receipt visible; the fold is presentation only, so a folded round's
-  capture form stays in the DOM and works.
-- Discover carries **one** status pill per card, merging the event's round
-  state with the viewer's standing (`service.discover_statuses`). The
-  standing REPLACES the countdown rather than sitting beside it, and the tone
-  says who owes the next move: ok = you are covered, danger = you owe an
-  action, quiet = you have no standing. Signed out there is no standing to
-  merge, so the pill is the event state alone.
-- Discover's three filters -- the tag/region chips, the free-text search box
-  (matches title, title_en, every attached tag's name, and a free-text-venue
-  fallback when no VENUE tag exists, all case-insensitive), and the
-  round-status facet (Open now / Opening soon / Not tracking) -- combine as
-  AND, not OR: all three narrow the same tile set together, plus the "Coming
-  up soon" deadline list below the grids (each `<li>` carries the same
-  `data-tags`/`data-search` attributes a tile does; it has no `data-status`,
-  so the facet never hides a row). All three follow one contract: the initial
-  state is computed server-side so there is no flash of wrongly shown tiles,
-  every subsequent change is client-side off `data-tags`/`data-search`/
-  `data-status` with no round trip, and each control stays a real `<a href>`
-  or a real GET `<form>` so it degrades to slower server-side filtering with
-  JS disabled. Add a fourth filter the same way.
-- **Mobile is a retrofit, not a second design**: every phone rule lives in
-  a banner-commented `@media (max-width: 700px)` section at the end of the
-  file -- desktop pixels stay untouched by construction, since nothing
-  outside those blocks may change. There are TWO such top-level blocks, not
-  one: the main retrofit section, and a second one right after it holding
-  the `.fsheet` bottom-sheet presentation alone (its own banner explains
-  why it is separate -- it used to be a 760px query, and moved to 700 when
-  `.layout`'s collapse went to 1040). New phone rules go in the FIRST
-  block; the second stays single-purpose. Both are counted by
-  `test_theme_and_tokens.py`'s top-level query pin.
-  **The tablet band (701-1040px) follows the same discipline**: one
-  banner-commented `@media (min-width: 701px) and (max-width: 1040px)`
-  section (just before the phone section) holds every band rule -- the
-  compact one-row header (wordmark secondary hidden, username hidden,
-  icon-only Preferences/Sign out via base.html's `.nav-lbl`/`.nav-ico`
-  spans), the swipeable 280px-column campaign board (the phone board's
-  mechanics at tablet numbers), the `.peek` 2-col, the coming-up rows'
-  data-happens fold, and the inline filter-sheet panel. The old scattered
-  1024/960 breakpoints died into it; the 900 (`.rnd2`) and 860 (`.plyt`)
-  queries deliberately remain standalone (they serve phones too);
-  `test_theme_and_tokens.py` pins the exact top-level max-width query
-  count so scattered-breakpoint drift fails CI.
-  The `.fsheet`/`.layout` coupling now sits at 1040/1041: `.layout`
-  collapses at 1040 and the `.fsheet` summary-flip is `min-width: 1041`,
-  so the two-column desktop and the sidebar presentation flip on the
-  identical boundary -- the invariant is "same boundary", not any magic
-  number. TWO further boundaries govern the sheet: discover.html's
-  collapse-on-load JS runs at <=1040 (must match the summary-visible
-  range), while the bottom-sheet OVERLAY presentation is phone-only at
-  <=700 -- in-band the sheet opens as an inline panel.
-  Narrow phones (<=380px) get a NESTED `@media (max-width: 380px)` inside
-  that same 700px block rather than a second top-level one, so the retrofit
-  stays one section. It currently holds a single rule: drop the header's
-  `dekimasen.app` wordmark, keeping the `できません` mark. That exists for the
-  language chip -- it is the one header item whose width follows the
-  language (EN -> 中文 -> 日本語), and since `.site-in` is `nowrap` a
-  too-narrow bar squeezes the auth cluster instead of overflowing it, so a
-  CJK label breaks between characters and the chip folds onto a second line,
-  growing the whole header a row (measured: 59px -> 77px at 365px, -> 112px
-  at 320px). `nav.auth { flex: 0 0 auto }` + `white-space: nowrap` on the
-  chip pin it; hiding the wordmark is what buys them the room. Don't remove
-  any of the three.
-  Three phone-only patterns recur: a fixed bottom `.tabbar` (Home/Discover/
-  Tags/Me or Sign in, `aria-current` on the active tab exactly like the
-  desktop nav, keyed off the same `nav_page`) replacing the header nav; an
-  editor-only `.fab` ("+", bottom-right) replacing the header's "+ Add";
-  and dialogs (`<dialog>`, including `.picker`/`.prune`/`.tagdlg`) becoming
-  bottom sheets (anchored to the bottom edge, rounded top corners, `max-
-  height: 78dvh`) instead of the desktop's centered card. `docs/superpowers/
-  demo/dekimasen-mobile-demo.html` (static frames, reference CSS values)
-  and `dekimasen-mobile-live.html` (interactions) are the mobile design
-  reference, alongside the existing `dekimasen-demo.html`/`dekimasen-
-  onboarding-demo.html` for desktop. The 3px-radius guard
-  (`test_style_uses_3px_radius_not_6or8`) still applies inside the mobile
-  section -- phone cards and chips use the same `border-radius: 3px` as
-  desktop; only the bottom-sheet corners deliberately deviate (`14px 14px
-  0 0`, a sheet-specific shape, never 6px or 8px).
+The hard rules. The reasoning, the exact token values, the per-surface
+anatomy and the mobile/tablet detail are in `docs/ui-conventions.md` — read
+it before changing the interface. The **design source of truth** is the
+concept demos in `docs/superpowers/demo/` (inventory in that file); when the
+shipped design deliberately moves, update the matching demo so it stays the
+reference.
+
 - **Measure a layout bug; do not reason about it.** Before diagnosing any
   layout, overflow or breakpoint problem, put the real app in a real viewport
-  at a real width and read the numbers off it -- a seeded dev server in an
-  iframe harness, the way `docs/superpowers/demo/_tablet_harness.html` was
-  used to build the 701-1040px band, and the way the header measurements
-  above (59px -> 77px -> 112px) were obtained. Reasoning from the CSS
-  shipped a confidently wrong fix twice. The tell is a sentence of the shape
-  "this must be overflowing because..." with no measurement in it.
+  at a real width and read the numbers off it. Reasoning from the CSS shipped
+  a confidently wrong fix twice. The tell is a sentence of the shape "this
+  must be overflowing because..." with no measurement in it.
+- Sentence case everywhere ("Add group", not "add group").
+- **Times always render dual: JST + the user's timezone.** On the web that is
+  `fmt_dual_lines`/`dual_lines` (two lines); `fmt_dual` is the one-line shape
+  and is for Discord embeds only. Performance DATES use
+  `fmt_day_month`/`day_month` — day-month, no zone, no dual apparatus. A date
+  is a fact about the world; invariant 1 governs deadlines you must act by.
+- **Theming**: design tokens live in `style.css`'s `:root`. Dark mode is
+  defined BOTH ways — `@media (prefers-color-scheme: dark)` and
+  `:root[data-theme="dark"]`. `base.html` stamps the saved theme in `<head>`
+  before first paint; do it later and every page flashes the wrong theme.
+  Style new components against both directions.
+- **Radiuses: 3px default, 999px chips, 4px overlay cards, 50% circles,
+  bottom sheets `14px 14px 0 0`.** Never 6px or 8px — there is a sweep test.
+  Type ramp is 400/600/700 only. Motion budget: one 150ms card-lift hover
+  plus the `#hxbar` progress bar, nothing decorative.
+- **Two callout shapes and no third**: `.edgecard` (raise ground, coloured
+  left edge — ongoing state) and `.banner` (wash ground, full border — needs
+  attention).
+- Tag chips are the universal element. Pickers are native `<dialog>` white
+  cards. **Backdrop-close comes ONLY from `base.html`'s global drag-safe
+  handler** — never add a local `e.target === dlg` handler; that shipped the
+  drag-out-closes-the-dialog bug twice and a sweep test now forbids it.
+- Editor leg/round cards render through the shared partials
+  `_editor_leg_card.html`/`_editor_round_card.html` — never hand-roll a copy.
+  Destructive actions live in the kebab menu, which is the app's only
+  overflow menu and stays destructive-only.
+- **A `<details>` inside a swappable region carries a `data-fold` key**, or
+  it snaps shut whenever the region is swapped by htmx.
+- **The 🌐 language switcher is a CYCLE CHIP, not a dropdown** (a dropdown
+  shipped first and was replaced at the owner's request). Language NAMES
+  (EN/中文/日本語) are never translated.
+- **Home vs Discover**: `/` is personal and login-gated ("where do I stand");
+  signed out it is the real landing page. `/discover` is the public
+  catalogue ("what's on") and is the only content page an anonymous visitor
+  can reach. Header nav is Home / Discover / Tags and nothing else.
+- **Capture actions live on Coming up rows, never on board cards.** A
+  deadline row is one round on one leg, where "I have applied" has a single
+  meaning; a board card is a whole campaign, where the same button is
+  ambiguous. Do not "improve" the board by adding buttons to it.
+- Discover's filters (tag/region chips, free-text search, round-status facet)
+  combine as AND. Each computes its initial state server-side, filters
+  client-side with no round trip, and stays a real `<a href>`/GET form so it
+  degrades with JS off. Add a fourth the same way.
+- **Mobile is a retrofit, not a second design**: every phone rule lives in
+  banner-commented `@media (max-width: 700px)` blocks at the end of
+  `style.css`, and the tablet band (701–1040px) in its own block before them.
+  Desktop pixels stay untouched by construction. `test_theme_and_tokens.py`
+  pins the top-level query count so scattered-breakpoint drift fails CI.
 
 ## Deploy
 

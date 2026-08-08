@@ -478,8 +478,10 @@ for whoever writes the next one.
 **`ce43bfcfcae3` (drop the legacy free-text venue columns) reverses the
 order**: restart on the NEW code BEFORE `alembic upgrade head`, so the old
 process cannot SELECT columns that no longer exist mid-deploy. The rule and
-the reasoning live in CLAUDE.md's `src/app/db/` section (the "legacy free-text
-venue columns are GONE" entry) and are deliberately not repeated here - it
+the reasoning live in `architecture.md`'s `src/app/db/` section (the "legacy
+free-text venue columns are GONE" entry - it was in CLAUDE.md until the
+2026-08-07 trim moved the per-module detail there) and are deliberately not
+repeated here - it
 binds every future column-DROP migration, so it is a codebase rule that
 happens to have a deploy consequence, not a one-off. Already deployed; listed
 so the precedent is findable from this file.

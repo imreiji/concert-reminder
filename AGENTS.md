@@ -1,8 +1,22 @@
 # AGENTS.md
 
 Guidance for AI coding agents working in this repository. `CLAUDE.md` carries
-the same content with more historical narrative; keep the two consistent when
-you change conventions.
+the same content in the shape Claude Code loads every session; keep the two
+consistent when you change conventions.
+
+Both are deliberately short on per-module detail. That detail lives in two
+documents meant to be read when you are about to touch what they describe,
+not on every task:
+
+- `docs/architecture.md` — why each module is shaped the way it is, and which
+  reasonable-looking edits would undo a measurement or re-open a fixed
+  incident. **Read a module's entry before changing it.**
+- `docs/ui-conventions.md` — the full design detail (tokens, anatomy, the
+  mobile and tablet bands) behind the short UI rules.
+
+Both were split out of CLAUDE.md on 2026-08-07, verbatim: it had reached
+110 KB (~28k tokens) of always-loaded context, of which two thirds was
+description rather than rules.
 
 ## Project overview
 
