@@ -104,6 +104,12 @@ class User(Base):
     # as WebSession.token_hash) -- the raw token lives only in the feed URL,
     # shown once at generation time, never stored or re-displayable.
     calendar_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    # Agent read-API token, hashed at rest -- same pattern as
+    # calendar_token_hash and WebSession.token_hash (invariant 5 names this as
+    # the shape for any personal-secret-link feature). Sent as an
+    # Authorization: Bearer header rather than in a URL, which the calendar
+    # feed cannot do because calendar clients send no headers.
+    api_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
     # None = DMs working (or never tested); a timestamp = the most recent
     # attempted send hit discord.Forbidden. One shared signal across both
     # reminder-DM and notification-DM sends (see scheduler/loop.py's

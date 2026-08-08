@@ -14,6 +14,7 @@
   POST /me/timezone/auto                     browser-detected timezone
   POST /me/timezone/reset                    back to browser auto-detect
   POST /me/test-dm                           send a synchronous diagnostic test DM
+  POST /me/api-token                         mint/re-mint the agent read-API token
 
 Everything here is per-user: routes verify ownership and 404 on other
 people's presets/subscriptions rather than admitting they exist.
@@ -37,6 +38,7 @@ from app.db.service import (
     delete_user,
     ensure_user,
     followed_tag_counts,
+    generate_api_token,
     get_default_preset,
     group_members,
     list_editors,
@@ -110,6 +112,12 @@ async def preferences(
 ):
     from app.domain.types import TagKind
 
+    # POP, not get: this is what makes the mint's session flash one-shot. A
+    # second render of this same page (back button, refresh, a second tab)
+    # must show nothing -- see POST /me/api-token's docstring for why the
+    # token isn't carried here as a query parameter the way feed_token is.
+    api_token = request.session.pop("api_token", None)
+
     presets = await my_presets(session, user.id)
     subs = list((await session.execute(
         select(TagSubscription, Tag)
@@ -131,6 +139,7 @@ async def preferences(
     tz = db_user.timezone if db_user else "America/Moncton"
     tz_auto = db_user.tz_auto if db_user else True
     has_calendar_feed = bool(db_user and db_user.calendar_token_hash)
+    has_api_token = bool(db_user and db_user.api_token_hash)
     editors = await list_editors(session) if user.is_admin else []
 
     # Following section: the tracked count, plus the deliberately-invisible
@@ -169,6 +178,7 @@ async def preferences(
          "tracked_count": tracked_count, "upcoming_count": upcoming_count,
          "pruned_concerts": pruned_concerts,
          "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
+         "has_api_token": has_api_token, "api_token": api_token,
          "bot_enabled": settings.bot_enabled},
     )
 
@@ -495,6 +505,55 @@ async def reset_timezone_auto(
     db_user.tz_auto = True
     await session.commit()
     return RedirectResponse(_safe_next(next_url), status_code=303)
+
+
+# ── Agent API token ──────────────────────────────────────────────────────
+
+
+@router.post("/me/api-token")
+async def create_api_token(
+    request: Request,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Mint (or re-mint) the agent read-API token -- require_user, generate,
+    commit, same as every other mint in this file. Only its hash is stored
+    (invariant 5), so the reveal this triggers is the only time the raw
+    value is ever shown.
+
+    This route DELIBERATELY DOES NOT mirror POST /me/calendar-feed's reveal
+    mechanism, and that is not an oversight -- don't "restore consistency"
+    by putting the token back in the URL. The calendar feed's token MUST
+    live in a URL forever (a calendar client polls that URL on its own
+    schedule with no cookies, per calendar.py), so its appearance in
+    Caddy/Cloudflare access logs, browser history and the address bar is
+    unavoidable and already an accepted cost. This token is the opposite
+    shape: `db/models.py`'s own comment on `api_token_hash` says it is "sent
+    as an Authorization: Bearer header rather than in a URL, which the
+    calendar feed cannot do" -- so putting it in a URL here, even a
+    same-origin redirect target only this browser follows, would be an
+    AVOIDABLE credential leak into exactly those logs. `Referrer-Policy` does
+    not help: it stops the URL leaking to a third-party Referer header, not
+    its own appearance in the server's access log or this browser's history.
+
+    So the raw value rides a one-shot session flash instead -- a signed
+    cookie, not a URL -- and the redirect target is the bare, query-free
+    `/preferences`. GET /preferences pops (not reads) the flash, which is
+    what makes it one-shot: a second render, even of the exact same
+    /preferences URL, shows nothing.
+
+    One residual exposure the flash doesn't close: if the user never loads
+    /preferences again after this 303 (closes the tab, the browser crashes),
+    the raw token sits in the signed -- NOT encrypted -- session cookie,
+    readable by anyone who gets that cookie, until something eventually pops
+    it. Still strictly better than the query string this replaced (no
+    server/proxy access log, no browser history, no Referer leak), so this is
+    accepted rather than fixed here -- just worth knowing before treating the
+    flash as a full mitigation."""
+    token = await generate_api_token(session, user.id)
+    await session.commit()
+    request.session["api_token"] = token
+    return RedirectResponse("/preferences", status_code=303)
 
 
 # ── DM diagnostics ───────────────────────────────────────────────────────

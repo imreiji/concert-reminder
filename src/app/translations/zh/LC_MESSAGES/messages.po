@@ -3033,6 +3033,49 @@ msgid ""
 "using the old link will stop getting updates."
 msgstr "创建新链接后，旧链接会立即无法使用。仍在使用旧链接的人将不再收到更新。"
 
+#: src/app/web/templates/preferences.html:20
+#: src/app/web/templates/preferences.html:367
+msgid "API access"
+msgstr "API 访问"
+
+#: src/app/web/templates/preferences.html:368
+msgid "A personal token so an agent can read your data over the API."
+msgstr "供代理通过 API 读取你的数据的个人令牌。"
+
+#: src/app/web/templates/preferences.html:372
+msgid "API token active"
+msgstr "API 令牌已启用"
+
+#: src/app/web/templates/preferences.html:373
+msgid "Read-only access to your concerts and drafts, scoped to your account."
+msgstr "只读访问权限，仅限于你自己的演出和草稿。"
+
+#: src/app/web/templates/preferences.html:375
+msgid "No API token"
+msgstr "无 API 令牌"
+
+#: src/app/web/templates/preferences.html:382
+msgid "Your API token is ready — save it now, it won't be shown again."
+msgstr "API 令牌已生成 — 请立即保存，它不会再次显示。"
+
+#: src/app/web/templates/preferences.html:385
+msgid "Copy token"
+msgstr "复制令牌"
+
+#: src/app/web/templates/preferences.html:393
+msgid ""
+"Your current token will stop working. Any agent using it will need the "
+"new one."
+msgstr "当前令牌将立即失效。使用它的代理需要换成新令牌。"
+
+#: src/app/web/templates/preferences.html:394
+msgid "Generate a new token"
+msgstr "生成新令牌"
+
+#: src/app/web/templates/preferences.html:397
+msgid "Generate API token"
+msgstr "生成 API 令牌"
+
 #: src/app/web/templates/preferences.html:362
 #, python-format
 msgid "Signed in with Discord as <b>%(username)s</b>."

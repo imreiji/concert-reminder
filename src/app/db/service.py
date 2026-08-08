@@ -23,6 +23,8 @@ It is a FACADE and holds no logic of its own. The work moved to:
     phrases.py           the round-label phrase library
     audit.py             ConcertAudit, the concert edit history
     venues.py            the legs -> concert VENUE tag rollup
+    tokens.py            secret tokens at rest -- one hash implementation
+                         shared by the calendar feed and the agent API token
 
 WHY `core` is still 4,000 lines, and why that is not laziness: its nine
 sections are MUTUALLY recursive -- measured, not assumed. Queue sync,
@@ -33,7 +35,7 @@ a real design change (see WISHLIST.md), not a file move, and doing it by
 moving lines would buy smaller files at the price of import cycles.
 
 Everything extracted here WAS acyclic: core references nothing in any of the
-thirteen feature modules, which is what made this safe to do mechanically.
+fourteen feature modules, which is what made this safe to do mechanically.
 
 WHY a facade rather than importing the feature modules at the bottom of a
 still-fat service.py: they import FROM core, so a bottom import would only
@@ -69,7 +71,6 @@ from app.db.broadcast import (
 )
 from app.db.calendar_feed import (
     CalendarEvent,
-    _hash_token,
     generate_calendar_token,
     get_user_by_calendar_token,
     user_calendar_events,
@@ -92,6 +93,7 @@ from app.db.core import (
     RoundRow,
     Rung,
     UpcomingDeadline,
+    _api_concert_row,
     _apply_outcome_suppression,
     _auto_arm_next_round,
     _can_resolve_days,
@@ -102,11 +104,14 @@ from app.db.core import (
     _day_info,
     _day_month,
     _eligible_upgrade_ids,
+    _first_leg_sort_key,
     _fold_counts,
     _humanize_until,
+    _jst_date,
     _leg_result_for,
     _materialize_implicit_won_rows,
     _needs_you,
+    _next_anchor_iso,
     _next_deadline,
     _next_moment_key,
     _next_round_for_leg,
@@ -128,6 +133,8 @@ from app.db.core import (
     _wants_you,
     _won_day_ids,
     all_legs_cancelled,
+    api_concert_detail,
+    api_concert_rows,
     apply_default_preset,
     apply_preset,
     board_cards,
@@ -136,6 +143,7 @@ from app.db.core import (
     clear_concert_subscription,
     concert_next_moment,
     concert_round_rows,
+    concert_search_text,
     concert_subscription_states,
     covered_round_ids,
     covered_round_ids_by_concert,
@@ -200,6 +208,7 @@ from app.db.delivery import (
 from app.db.discovery_events import (
     DiscoveredInput,
     _bind_leads_to_concerts,
+    api_lead_rows,
     dismiss_lead,
     dismissed_reason_counts,
     open_leads,
@@ -211,6 +220,8 @@ from app.db.drafts import (
     PlannedDismissal,
     PrunePlan,
     PruneReport,
+    api_draft_detail,
+    api_draft_rows,
     apply_prune,
     approved_fetch_hosts,
     completion_candidates,
@@ -284,6 +295,7 @@ from app.db.tags import (
     _is_attached,
     _takes_handle,
     active_concerts_missing_member,
+    api_tag_rows,
     apply_tag_import,
     assign_tag_slug,
     attach_tag,
@@ -303,6 +315,11 @@ from app.db.tags import (
     tag_directory_context,
     tag_picker_context,
     would_create_tag_cycle,
+)
+from app.db.tokens import (
+    generate_api_token,
+    get_user_by_api_token,
+    hash_token,
 )
 from app.db.translation_gaps import (
     VariantGap,
@@ -362,6 +379,7 @@ __all__ = [
     "_DUPLICATE_WINDOW",
     "_FOLD_KINDS",
     "_HANDLE_FIELDS",
+    "_api_concert_row",
     "_apply_outcome_suppression",
     "_audit_value",
     "_auto_arm_next_round",
@@ -375,14 +393,16 @@ __all__ = [
     "_day_month",
     "_detach_one",
     "_eligible_upgrade_ids",
+    "_first_leg_sort_key",
     "_fold_counts",
     "_framed_body",
-    "_hash_token",
     "_humanize_until",
     "_is_attached",
+    "_jst_date",
     "_leg_result_for",
     "_materialize_implicit_won_rows",
     "_needs_you",
+    "_next_anchor_iso",
     "_next_deadline",
     "_next_moment_key",
     "_next_round_anchor",
@@ -411,6 +431,12 @@ __all__ = [
     "_won_day_ids",
     "active_concerts_missing_member",
     "all_legs_cancelled",
+    "api_concert_detail",
+    "api_concert_rows",
+    "api_draft_detail",
+    "api_draft_rows",
+    "api_lead_rows",
+    "api_tag_rows",
     "apply_default_preset",
     "apply_preset",
     "apply_prune",
@@ -431,6 +457,7 @@ __all__ = [
     "concert_export_yaml",
     "concert_next_moment",
     "concert_round_rows",
+    "concert_search_text",
     "concert_subscription_states",
     "concert_variant_gaps",
     "covered_round_ids",
@@ -465,14 +492,17 @@ __all__ = [
     "find_tags_by_name_and_kind",
     "followed_tag_counts",
     "forget_round_label_phrase",
+    "generate_api_token",
     "generate_calendar_token",
     "get_default_preset",
     "get_rehearsal_concert",
     "get_triage_run",
+    "get_user_by_api_token",
     "get_user_by_calendar_token",
     "group_members",
     "handle_newly_tagged",
     "has_day_results",
+    "hash_token",
     "is_round_cancelled",
     "latest_triage_run",
     "leads_matching_existing_legs",

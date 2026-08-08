@@ -205,6 +205,46 @@ async def open_leads(session: AsyncSession) -> list[DiscoveredEvent]:
     )).scalars())
 
 
+async def api_lead_rows(
+    session: AsyncSession, *, limit: int = 200, offset: int = 0
+) -> tuple[list[dict], int]:
+    """Open leads as JSON rows, plus the pre-paging total.
+
+    Built on `open_leads`, so the API and /admin/discoveries agree on what
+    "open" means -- not dismissed, not bound to a concert, and deliberately NOT
+    filtered on announced_at (announced is not triaged). Its sort is already
+    (event_date DESC, id DESC), which is totally ordered and safe to page.
+
+    `date_is_deadline` is not optional decoration: the imas feed's DTSTART is
+    an application deadline, and an agent reading it as a performance date
+    would file the wrong thing.
+
+    Does NOT carry the same-date-same-venue collision hint
+    `/admin/discoveries` computes (`leads_matching_existing_legs`,
+    `db/drafts.py`): that helper runs a second query and a JST date
+    conversion per row, and is worth adding here only when an agent
+    consumer actually needs it -- a wrong hint would be worse than an
+    absent one.
+    """
+    leads = await open_leads(session)
+    total = len(leads)
+    return [
+        {
+            "id": r.id,
+            "source": r.source,
+            "source_event_id": r.source_event_id,
+            "title": r.title,
+            "event_date": r.event_date.isoformat(),
+            "date_is_deadline": r.date_is_deadline,
+            "venue": r.venue,
+            "first_seen_via_tag_id": r.first_seen_via_tag_id,
+            "first_seen_at": r.first_seen_at.isoformat(),
+            "announced_at": r.announced_at.isoformat() if r.announced_at else None,
+        }
+        for r in leads[offset : offset + limit]
+    ], total
+
+
 async def dismissed_reason_counts(session: AsyncSession) -> dict[str, int]:
     """How many leads were dismissed as each taxonomy class.
 

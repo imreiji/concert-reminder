@@ -18,7 +18,7 @@ Sync semantics (per rule):
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +46,7 @@ from app.db.models import (
 )
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
-from app.domain.timezones import fmt_day_month
+from app.domain.timezones import fmt_day_month, utc_to_jst
 from app.domain.types import (
     Anchor,
     LegResult,
@@ -3645,6 +3645,211 @@ async def discover_statuses(
         )
 
     return out
+
+
+def concert_search_text(c: Concert) -> str:
+    """Lowercased blob everything free-text search matches: title (plus its
+    en/zh variants) and every attached tag's name (all five kinds count --
+    franchise/group/artist/venue/character -- plus each tag's en/zh variants).
+    A concert's venue comes off its VENUE tags, so it is already in the blob.
+    Localizing the haystack rather than the query lets a search in any
+    language match a concert filled in any other.
+
+    It lived in `web/routes/discover.py` until the agent API needed it. Two
+    definitions of "what search sees" would drift, and /discover and
+    /api/v1/concerts answering the same question differently is exactly the
+    failure that makes an agent's "do I already have this?" unreliable.
+    Requires `c.tags` to be loaded -- every caller eager-loads it.
+    """
+    parts = [c.title, c.title_en, c.title_zh]
+    for t in c.tags:
+        parts += [t.name, t.name_en, t.name_zh]
+    return " ".join(p for p in parts if p).lower()
+
+
+# ── Agent read API (/api/v1) ──────────────────────────────────────────────
+
+
+async def api_concert_rows(
+    session: AsyncSession,
+    *,
+    q: str = "",
+    tag_handles: Sequence[str] = (),
+    since: date | None = None,
+    until: date | None = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Compact catalogue rows for the agent API, plus the pre-paging total.
+
+    Filtered in PYTHON over the eager-loaded set, exactly as /discover does,
+    not in SQL. `q` matches localized tag names, which a plain LIKE cannot
+    reach without joining tags three times per locale, and the catalogue is
+    dozens of rows. If it ever reaches thousands this becomes a real query;
+    the envelope's shape does not change when it does.
+
+    SORT IS TOTALLY ORDERED -- earliest live leg, then event_id, which is
+    unique. Offset paging over a tie-prone key silently repeats and drops rows
+    (see web/paging.py), and a batch of concerts seeded on one date is exactly
+    that case.
+    """
+    res = await session.execute(
+        select(Concert)
+        .where(discoverable_concert_criterion())
+        .options(
+            selectinload(Concert.tags),
+            # venue_tag is lazy="raise", and _api_concert_row reads it -- a
+            # bare selectinload(Concert.days) here is a MissingGreenlet 500.
+            selectinload(Concert.days).selectinload(ConcertDay.venue_tag),
+            selectinload(Concert.rounds),
+        )
+    )
+    concerts = list(res.scalars().unique())
+
+    needle = q.strip().lower()
+    wanted = {h for h in tag_handles if h}
+
+    def _keep(c: Concert) -> bool:
+        if needle and needle not in concert_search_text(c):
+            return False
+        # By HANDLE, never by name: invariant 3, names are not unique.
+        if wanted and not wanted <= {t.slug for t in c.tags}:
+            return False
+        live = [d for d in c.days if not d.cancelled and d.starts_at_utc]
+        # ONE leg must satisfy BOTH bounds. Two independent `any()` passes
+        # would let a tour with a March leg and a December leg answer
+        # since=September on the first and until=September on the second, and
+        # come back for a month it plays nothing in -- which is exactly the
+        # "what's on next month" query this filter exists for. Dates are JST,
+        # like every other date in the app (domain/timezones.py).
+        if since or until:
+            if not any(
+                (since is None or _jst_date(d.starts_at_utc) >= since)
+                and (until is None or _jst_date(d.starts_at_utc) <= until)
+                for d in live
+            ):
+                return False
+        return True
+
+    kept = [c for c in concerts if _keep(c)]
+    kept.sort(key=lambda c: (_first_leg_sort_key(c), c.event_id))
+    total = len(kept)
+    now = _now()
+    return [_api_concert_row(c, now) for c in kept[offset:offset + limit]], total
+
+
+def _jst_date(aware_utc: datetime) -> date:
+    """A performance's calendar date, in JST.
+
+    "Always JST, like every other date in the app" (domain/timezones.py's
+    `fmt_day_month`). A leg at 00:30 JST is 15:30 UTC the PREVIOUS day, so
+    `.date()` on the stored instant puts this API a day off from every other
+    surface -- `db/drafts.py`'s discovery collision hint asks the identical
+    question through `utc_to_jst(...).date()`. Both the emitted `leg_dates`
+    and the since/until filter go through here, or a row's own date could
+    exclude it from a range containing it.
+    """
+    return utc_to_jst(aware_utc).date()
+
+
+def _first_leg_sort_key(concert: Concert) -> tuple[int, float]:
+    """Earliest live leg. A concert with no dated leg sorts LAST (the leading 1),
+    matching /discover, where a dateless draft is still listed but never first."""
+    live = [d.starts_at_utc for d in concert.days if not d.cancelled and d.starts_at_utc]
+    return (0, min(live).timestamp()) if live else (1, 0.0)
+
+
+def _api_concert_row(concert: Concert, now: datetime | None = None) -> dict:
+    """One catalogue row. Datetimes are ISO-8601 UTC (invariant 1); plain dates
+    carry no zone, because a performance date is a fact about the world rather
+    than an instant to act by.
+
+    `now` is threaded in rather than read per row so every row in one response
+    is answered against ONE instant -- a list spanning a deadline would
+    otherwise report a moment as future on one row and past on the next.
+    """
+    live = [d for d in concert.days if not d.cancelled]
+    return {
+        "event_id": concert.event_id,
+        "title": concert.title,
+        "title_en": concert.title_en,
+        "leg_dates": [
+            _jst_date(d.starts_at_utc).isoformat() for d in sorted(
+                (d for d in live if d.starts_at_utc), key=lambda d: d.starts_at_utc
+            )
+        ],
+        "tag_handles": sorted(t.slug for t in concert.tags),
+        "venue_handles": sorted(
+            {d.venue_tag.slug for d in live if d.venue_tag_id and d.venue_tag}
+        ),
+        "round_count": len(concert.rounds),
+        "next_anchor_at": _next_anchor_iso(concert, now or _now()),
+    }
+
+
+def _next_anchor_iso(concert: Concert, now: datetime) -> str | None:
+    """CATALOGUE-LEVEL, not per-viewer -- the earliest future moment among live
+    rounds.
+
+    Deliberately NOT concert_next_moment/_needs_you, which consult this user's
+    outcomes and leg opt-outs: routed through those, an admin's token and an
+    editor's token would report different facts about the same concert. None
+    means the ladder holds no future anchor at all.
+
+    A DEAD concert answers None outright, and `is_round_cancelled` cannot
+    reach that case: invariant 2 says a concert whose every leg is cancelled
+    "contributes no live rounds anywhere -- including the General rounds
+    `is_round_cancelled` rightly exempts", and names `all_legs_cancelled` as
+    the concert-level predicate. Widening `is_round_cancelled` instead is
+    explicitly forbidden there -- a General round on a multi-leg concert with
+    ONE dead leg must stay live. The list endpoint never meets this (a dead
+    concert fails `discoverable_concert_criterion`); the DETAIL endpoint
+    does, deliberately, since a dead concert stays reachable at its own URL.
+    """
+    if all_legs_cancelled(concert.days):
+        return None
+    cancelled = {d.id for d in concert.days if d.cancelled}
+    moments: list[datetime] = []
+    for r in concert.rounds:
+        if is_round_cancelled(r, cancelled):
+            continue
+        for at in (
+            r.opens_at_utc, r.closes_at_utc, r.results_at_utc, r.payment_deadline_at_utc,
+        ):
+            if at is not None and at > now:
+                moments.append(at)
+    return min(moments).isoformat() if moments else None
+
+
+async def api_concert_detail(
+    session: AsyncSession, event_id: str
+) -> tuple[dict, Concert] | None:
+    """The compact row, plus the Concert so the CALLER can attach `draft_yaml`.
+
+    `concert_export_yaml` lives in `db/tags.py`, and core.py must never import
+    a sibling feature module -- feature modules import core, never the reverse
+    (`tests/test_service_facade.py::test_core_does_not_depend_on_any_feature_module`).
+    So the route composes the two rather than core reaching sideways.
+
+    That YAML is the existing export verbatim -- the vocabulary the add-concert
+    skill already writes and `parse_draft` already reads back. NOTE it carries
+    JST timestamps because it is the AUTHORING format, while every other field
+    here is UTC, which is why the field is named `draft_yaml` (a document)
+    rather than anything suggesting parsed data.
+    """
+    res = await session.execute(
+        select(Concert)
+        .where(Concert.event_id == event_id)
+        .options(
+            selectinload(Concert.tags),
+            selectinload(Concert.days).selectinload(ConcertDay.venue_tag),
+            selectinload(Concert.rounds),
+        )
+    )
+    concert = res.scalars().unique().one_or_none()
+    if concert is None:
+        return None
+    return _api_concert_row(concert), concert
 
 
 # ── Presets & subscriptions (Phase 10) ───────────────────────────────────

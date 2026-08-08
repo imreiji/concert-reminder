@@ -32,6 +32,13 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.db.models import Concert, ConcertDay, Tag, User
 from app.db.service import (
+    # Lives in the db layer, not here, because /api/v1/concerts matches on the
+    # SAME haystack: two definitions of "what free-text search sees" would
+    # drift, and the API's job is to answer "do I already have this?" the way
+    # this page answers it. Re-exported from this module's namespace, so the
+    # existing `from app.web.routes.discover import concert_search_text`
+    # import in tests/test_i18n_ugc.py still resolves.
+    concert_search_text,
     discover_statuses,
     discoverable_concert_count,
     discoverable_concert_criterion,
@@ -114,19 +121,6 @@ def region_sidebar_links(
             "href": "/discover?" + filter_query(sort, href_ids, status), "ids": rtag_ids,
         })
     return links
-
-
-def concert_search_text(c: Concert) -> str:
-    """Lowercased blob everything free-text search matches: title (plus its
-    en/zh variants) and every attached tag's name (all four kinds count --
-    franchise/group/artist/venue -- plus each tag's en/zh variants). A
-    concert's venue comes off its VENUE tags, so it is already in the blob.
-    Localizing the haystack rather than the query lets a search in any
-    language match a concert filled in any other."""
-    parts = [c.title, c.title_en, c.title_zh]
-    for t in c.tags:
-        parts += [t.name, t.name_en, t.name_zh]
-    return " ".join(p for p in parts if p).lower()
 
 
 @router.get("/discover", response_class=HTMLResponse)
