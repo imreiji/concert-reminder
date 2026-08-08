@@ -266,15 +266,81 @@ The crontab line does not change: `backup.sh` sources
 `/etc/default/dekimasen-backup` itself, so there is no half-migrated state
 where the script is updated but cron still runs it without a bucket.
 
-**Restore drill (do this once now so it isn't theory):**
+### Restore drill
+
+**What is monitored today is that backups HAPPEN, not that they WORK.**
+`backup.sh` writes `~/.dekimasen-backup-ok` and `check_backup` alerts when that
+marker goes stale - so a nightly job that faithfully uploads a corrupt or
+unbootable file looks identical to a healthy one, forever. The drill is the
+only thing that closes that gap, and an untested backup is not a backup.
+
+Run it **once now**, and again after any change to the schema, the backup
+script or the bucket. Five minutes.
+
+Two things make it awkward, both deliberate, so do not "fix" them:
+- The server's IAM key is **PutObject only** (see the policy above). It cannot
+  list or download - that is the point, so a compromised server cannot read or
+  destroy the backup history. Run the drill from AWS CloudShell, the console,
+  or a trusted machine with a read-capable identity, **never by widening the
+  server key**.
+- `backup.sh` uses `sqlite3 .backup`, not `cp`. The app runs in WAL mode, so a
+  plain copy of `app.db` can miss committed pages still sitting in the `-wal`
+  file and restore to a torn database. `.backup` is the online-safe read.
+
 ```bash
-aws s3 ls s3://YOUR-BUCKET-NAME/dekimasen/        # requires ListBucket - run from
-                                                  # AWS console/CloudShell instead,
-                                                  # since the server key can't list
-# from the console, download a backup, or on a trusted machine:
+# 1. Fetch the newest backup (from CloudShell / a machine that can read the bucket)
+aws s3 ls s3://YOUR-BUCKET-NAME/dekimasen/
+aws s3 cp s3://YOUR-BUCKET-NAME/dekimasen/app-YYYY-MM-DD.db.gz .
 gunzip app-YYYY-MM-DD.db.gz
-sqlite3 app-YYYY-MM-DD.db "SELECT count(*) FROM concerts"
+
+# 2. Is the file structurally sound? Must print exactly "ok".
+sqlite3 app-YYYY-MM-DD.db "PRAGMA integrity_check;"
+sqlite3 app-YYYY-MM-DD.db "PRAGMA foreign_key_check;"    # must print NOTHING
+
+# 3. Is the DATA there? Zero rows in a table you know is populated means the
+#    backup ran against the wrong file, not that the app is empty.
+sqlite3 app-YYYY-MM-DD.db \
+  "SELECT 'concerts', count(*) FROM concerts
+   UNION ALL SELECT 'users', count(*) FROM users
+   UNION ALL SELECT 'tags', count(*) FROM tags
+   UNION ALL SELECT 'rounds', count(*) FROM rounds
+   UNION ALL SELECT 'reminder_queue', count(*) FROM reminder_queue;"
+
+# 4. How far behind the code is it? The backup carries the schema version it
+#    was taken at; restoring onto newer code needs `alembic upgrade head`
+#    FIRST. This tells you whether that step is needed and is the one thing
+#    the old drill could not tell you.
+sqlite3 app-YYYY-MM-DD.db "SELECT version_num FROM alembic_version;"
+uv run alembic heads          # compare: equal = restore as-is
 ```
+
+**5. Boot the app against it.** This is the actual test - everything above
+only proves the file parses. Web-only (no `DISCORD_TOKEN`) so the restored
+copy cannot DM anyone from a stale `reminder_queue`:
+
+```bash
+cd ~/app   # or a checkout on the trusted machine
+DISCORD_TOKEN= DATABASE_URL="sqlite+aiosqlite:///$(pwd)/app-YYYY-MM-DD.db" \
+  uv run python -m app.main
+```
+Then load `http://127.0.0.1:8000/discover` and confirm real concerts render.
+**Pass = a page of your actual data.** Stop the process and delete the copy.
+
+Never point a restored copy at the live `DISCORD_TOKEN` while testing: its
+`reminder_queue` holds rows already delivered from production, and a second
+process draining them re-sends every one.
+
+The empty `DISCORD_TOKEN=` prefix is what prevents that, and it is load-bearing
+rather than decorative: `~/app/.env` on the server holds the real token, and an
+environment variable takes precedence over `.env` in pydantic-settings, so the
+empty value wins and `bot_enabled` comes out False. Verified, not assumed
+(2026-08-07). Set it on the command line as shown - do NOT edit `.env` to
+achieve the same thing, or the real token is one forgotten revert away from
+being missing on the next restart.
+
+Every command in this drill was run and its output checked on 2026-08-07:
+`integrity_check` prints `ok`, `foreign_key_check` prints nothing, and
+`alembic heads` prints the same revision a current database is stamped with.
 
 ## 10. Monitoring (Phase 7)
 
