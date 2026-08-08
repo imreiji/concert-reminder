@@ -46,7 +46,7 @@ from app.db.models import (
 )
 from app.domain.board import OPEN_COLUMN_LIMIT, Column, column_for, pill_tone
 from app.domain.reminders import DayInfo, RoundInfo, RuleInfo, anchor_time, plan_for_rule
-from app.domain.timezones import fmt_day_month
+from app.domain.timezones import fmt_day_month, utc_to_jst
 from app.domain.types import (
     Anchor,
     LegResult,
@@ -3716,10 +3716,19 @@ async def api_concert_rows(
         if wanted and not wanted <= {t.slug for t in c.tags}:
             return False
         live = [d for d in c.days if not d.cancelled and d.starts_at_utc]
-        if since and not any(d.starts_at_utc.date() >= since for d in live):
-            return False
-        if until and not any(d.starts_at_utc.date() <= until for d in live):
-            return False
+        # ONE leg must satisfy BOTH bounds. Two independent `any()` passes
+        # would let a tour with a March leg and a December leg answer
+        # since=September on the first and until=September on the second, and
+        # come back for a month it plays nothing in -- which is exactly the
+        # "what's on next month" query this filter exists for. Dates are JST,
+        # like every other date in the app (domain/timezones.py).
+        if since or until:
+            if not any(
+                (since is None or _jst_date(d.starts_at_utc) >= since)
+                and (until is None or _jst_date(d.starts_at_utc) <= until)
+                for d in live
+            ):
+                return False
         return True
 
     kept = [c for c in concerts if _keep(c)]
@@ -3727,6 +3736,20 @@ async def api_concert_rows(
     total = len(kept)
     now = _now()
     return [_api_concert_row(c, now) for c in kept[offset:offset + limit]], total
+
+
+def _jst_date(aware_utc: datetime) -> date:
+    """A performance's calendar date, in JST.
+
+    "Always JST, like every other date in the app" (domain/timezones.py's
+    `fmt_day_month`). A leg at 00:30 JST is 15:30 UTC the PREVIOUS day, so
+    `.date()` on the stored instant puts this API a day off from every other
+    surface -- `db/drafts.py`'s discovery collision hint asks the identical
+    question through `utc_to_jst(...).date()`. Both the emitted `leg_dates`
+    and the since/until filter go through here, or a row's own date could
+    exclude it from a range containing it.
+    """
+    return utc_to_jst(aware_utc).date()
 
 
 def _first_leg_sort_key(concert: Concert) -> tuple[int, float]:
@@ -3751,7 +3774,7 @@ def _api_concert_row(concert: Concert, now: datetime | None = None) -> dict:
         "title": concert.title,
         "title_en": concert.title_en,
         "leg_dates": [
-            d.starts_at_utc.date().isoformat() for d in sorted(
+            _jst_date(d.starts_at_utc).isoformat() for d in sorted(
                 (d for d in live if d.starts_at_utc), key=lambda d: d.starts_at_utc
             )
         ],
@@ -3772,7 +3795,19 @@ def _next_anchor_iso(concert: Concert, now: datetime) -> str | None:
     outcomes and leg opt-outs: routed through those, an admin's token and an
     editor's token would report different facts about the same concert. None
     means the ladder holds no future anchor at all.
+
+    A DEAD concert answers None outright, and `is_round_cancelled` cannot
+    reach that case: invariant 2 says a concert whose every leg is cancelled
+    "contributes no live rounds anywhere -- including the General rounds
+    `is_round_cancelled` rightly exempts", and names `all_legs_cancelled` as
+    the concert-level predicate. Widening `is_round_cancelled` instead is
+    explicitly forbidden there -- a General round on a multi-leg concert with
+    ONE dead leg must stay live. The list endpoint never meets this (a dead
+    concert fails `discoverable_concert_criterion`); the DETAIL endpoint
+    does, deliberately, since a dead concert stays reachable at its own URL.
     """
+    if all_legs_cancelled(concert.days):
+        return None
     cancelled = {d.id for d in concert.days if d.cancelled}
     moments: list[datetime] = []
     for r in concert.rounds:

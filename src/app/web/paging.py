@@ -8,8 +8,16 @@ over a non-unique sort key is broken even when nothing is being inserted --
 SQLite may order ties differently between the two queries, so a row repeats on
 page 2 while another vanishes. Every paged query must sort on a TOTALLY ORDERED
 key, with a unique column (normally `id`) as the final tiebreaker. This module
-cannot enforce that; `tests/test_api_reads.py` asserts it per endpoint by
-checking that the union of pages equals the whole set.
+cannot enforce that; `tests/test_api_reads.py` asserts it per endpoint.
+
+HOW it asserts it depends on where the sort happens, and the obvious test is
+the wrong one for a Python-side sort. Against a SQL `ORDER BY ... LIMIT ...
+OFFSET`, checking that the union of the pages equals the whole set is exactly
+right. Against rows sorted in Python it proves nothing: `list.sort` is stable
+and deterministic, so slices of one list are disjoint whatever the key is.
+There the assertion that bites is on the ORDER
+(`test_the_list_sort_is_totally_ordered`), seeded so the query's own row order
+disagrees with the tiebreaker. Pick the one that matches the endpoint.
 """
 
 from dataclasses import dataclass
