@@ -540,7 +540,16 @@ async def create_api_token(
     cookie, not a URL -- and the redirect target is the bare, query-free
     `/preferences`. GET /preferences pops (not reads) the flash, which is
     what makes it one-shot: a second render, even of the exact same
-    /preferences URL, shows nothing."""
+    /preferences URL, shows nothing.
+
+    One residual exposure the flash doesn't close: if the user never loads
+    /preferences again after this 303 (closes the tab, the browser crashes),
+    the raw token sits in the signed -- NOT encrypted -- session cookie,
+    readable by anyone who gets that cookie, until something eventually pops
+    it. Still strictly better than the query string this replaced (no
+    server/proxy access log, no browser history, no Referer leak), so this is
+    accepted rather than fixed here -- just worth knowing before treating the
+    flash as a full mitigation."""
     token = await generate_api_token(session, user.id)
     await session.commit()
     request.session["api_token"] = token

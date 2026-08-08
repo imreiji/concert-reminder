@@ -331,6 +331,18 @@ async def api_tag_rows(
 
     Handles, never ids or names: invariant 3. This is what stops an agent
     inventing tag names that match nothing.
+
+    OWNER RULING (2026-08-08): this endpoint stays ANY-VALID-TOKEN, including
+    `eventernote_url`, `address` and `location_url` -- fields the web UI
+    shows only to editors (`templates/tags.html`). That is a deliberate
+    crossing, not an accident of reusing `current_tag_exports`, and the
+    justification is NOT "/discover is public" (that argument covers
+    `/concerts`, whose catalogue really is a mirror of a public page, not
+    this). It is that the tag VOCABULARY itself carries nothing sensitive:
+    `eventernote_url` and `location_url` are public third-party URLs, and
+    `address` is a public venue address -- none of the three is personal data,
+    and unlike `/leads` this endpoint names no one. The tier stays as it is;
+    do not tighten it without a fresh ruling.
     """
     exports = await current_tag_exports(session)
     if kind:

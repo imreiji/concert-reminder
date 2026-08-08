@@ -104,6 +104,11 @@ measurement or an incident that a reasonable-looking edit would undo.
     `ops_alerts.py` (health checks → admin DMs).
   - `audit.py` (`ConcertAudit`), `phrases.py` (the round-label library),
     `translation_gaps.py` (the edit pages' "what's missing" notice).
+  - `tokens.py` — secret tokens at rest: one `hash_token`/`generate_*_token`
+    shape shared by the calendar feed and the agent read API's
+    `api_token_hash`, so the two never carry two hash implementations that
+    could drift apart silently (a mismatched hash just means a token that
+    stops matching, with no error anywhere).
   Dependencies point ONE way: feature modules import `core`, `core` imports
   none of them, and the facade imports everything and is imported by nothing.
   A feature module must never `from app.db.service import ...` — that is a
@@ -266,6 +271,18 @@ measurement or an incident that a reasonable-looking edit would undo.
   plus `#board` and `#board-summary` out-of-band, since one recorded outcome
   changes all three. Don't wrap that response -- htmx only honours OOB
   elements at the top level.
+  `routes/api.py` is the read-only agent API at `/api/v1`, bearer-token
+  authenticated (`User.api_token_hash`, minted at `POST /me/api-token` in
+  `routes/preferences.py`), GET only and swept by a test that no route under
+  the prefix ever declares another method. English-only and NOT wrapped in
+  `_()`, like `/admin/deliveries` -- its consumer is a program. See
+  `docs/agent-api.md` for the endpoints and
+  `docs/superpowers/specs/2026-08-08-agent-read-api-design.md` for the
+  design. `web/paging.py` is the offset-paging helper it and no other router
+  currently uses: `limit`/`offset` parsing plus the `{items, total, limit,
+  offset}` envelope, with `limit` over its cap answering 422 rather than a
+  silent clamp -- the module's own docstring states why (an agent that asked
+  for 5000 and silently got 500 back would conclude it had read everything).
 - `src/app/domain/board.py` -- pure column precedence for Home's campaign
   board. `column_for(outcomes, has_open_round)` returns the ONE column a
   concert shows in; PAID > WON > APPLIED > open, deliberately, because money

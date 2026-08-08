@@ -23,6 +23,8 @@ It is a FACADE and holds no logic of its own. The work moved to:
     phrases.py           the round-label phrase library
     audit.py             ConcertAudit, the concert edit history
     venues.py            the legs -> concert VENUE tag rollup
+    tokens.py            secret tokens at rest -- one hash implementation
+                         shared by the calendar feed and the agent API token
 
 WHY `core` is still 4,000 lines, and why that is not laziness: its nine
 sections are MUTUALLY recursive -- measured, not assumed. Queue sync,
@@ -33,7 +35,7 @@ a real design change (see WISHLIST.md), not a file move, and doing it by
 moving lines would buy smaller files at the price of import cycles.
 
 Everything extracted here WAS acyclic: core references nothing in any of the
-thirteen feature modules, which is what made this safe to do mechanically.
+fourteen feature modules, which is what made this safe to do mechanically.
 
 WHY a facade rather than importing the feature modules at the bottom of a
 still-fat service.py: they import FROM core, so a bottom import would only

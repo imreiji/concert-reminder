@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import settings
+from app.db.models import User
 from app.db.service import ensure_user, generate_api_token
 from app.db.session import get_session
 from app.web.app import create_app
@@ -49,6 +50,26 @@ async def test_whoami_reports_the_minting_user(client, db, monkeypatch):
     assert body["discord_id"] == ADMIN
     assert body["username"] == "reiji"
     assert body["is_admin"] is True
+
+
+async def test_whoami_reports_an_editor_who_is_not_an_admin(client, db, monkeypatch):
+    """The auth matrix's middle tier: an editor token must read is_editor=True,
+    is_admin=False -- distinct from both the admin case above and the plain
+    user `api_admin`'s 403 tests exercise elsewhere. Promoted via the DB flag
+    (`User.is_editor`), the same path `/promote-editor` writes, rather than
+    `settings.editor_whitelist`, so this also proves `api_user` consults the
+    DB flag and not only the env whitelist."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN))
+    token = await _mint(db, EDITOR, "someone")
+    async with db() as s:
+        user = await s.get(User, EDITOR)
+        user.is_editor = True
+        await s.commit()
+
+    body = client.get("/api/v1/whoami", headers=_auth(token)).json()
+    assert body["discord_id"] == EDITOR
+    assert body["is_editor"] is True
+    assert body["is_admin"] is False
 
 
 async def test_no_token_is_401(client):
@@ -92,22 +113,40 @@ async def test_a_404_under_the_api_prefix_is_json(client):
 def test_every_api_route_is_read_only():
     """Read-only as a property of the routing table, not a docstring promise.
 
-    This reads `app.openapi()["paths"]` rather than walking `app.routes`
-    directly. On this FastAPI version, `include_router` defers flattening --
-    `app.routes` holds an opaque `_IncludedRouter` wrapper per included
-    router, not the individual `APIRoute` objects, so a naive walk of
-    `app.routes` finds nothing under `/api/` at all and this assertion would
-    pass VACUOUSLY even with a POST route present (verified locally: adding
-    one and asserting `r.path.startswith("/api/")` over `app.routes` stayed
-    green). The OpenAPI schema is generated from the same effective routing
-    table the app actually matches against, so it is what this sweep must
-    read to mean anything.
+    This walks `app.routes` and unwraps FastAPI's `_IncludedRouter` wrapper
+    down to the real `APIRoute` objects, rather than reading
+    `app.openapi()["paths"]`. The schema was tried first and has a hole: a
+    route registered `@router.post(..., include_in_schema=False)` never
+    enters the OpenAPI schema at all, so a schema-based sweep would pass
+    GREEN with a live write endpoint sitting under /api/v1 -- this is the
+    branch's single structural guarantee of "read-only by construction", and
+    a hidden route is exactly the kind of thing that guarantee exists to
+    catch.
+
+    Naively walking `app.routes` directly does not work either: on this
+    FastAPI version, `include_router` defers flattening, so `app.routes`
+    holds one opaque `_IncludedRouter` per included router rather than its
+    individual routes, and a plain `r.path.startswith("/api/")` scan over
+    that finds nothing under /api/ at all -- vacuously green even with a POST
+    route present. `_IncludedRouter.original_router.routes` is where the real
+    `APIRoute` objects (with a true `.methods` set, unaffected by
+    `include_in_schema`) actually live, so this walks those instead.
+
+    Verified red-then-green: temporarily adding
+    `@router.post("/x", include_in_schema=False)` to `api.py` fails this test
+    (and left the openapi-based version green), removed again once confirmed.
     """
     app = create_app()
-    schema = app.openapi()
-    offenders = [
-        (path, sorted(m.upper() for m in methods))
-        for path, methods in schema["paths"].items()
-        if path.startswith("/api/") and set(methods) - {"get"}
-    ]
+    offenders: list[tuple[str, list[str]]] = []
+    for route in app.routes:
+        original = getattr(route, "original_router", None)
+        candidates = original.routes if original is not None else [route]
+        for candidate in candidates:
+            path = getattr(candidate, "path", None)
+            methods = getattr(candidate, "methods", None)
+            if not path or not methods or not path.startswith("/api/"):
+                continue
+            extra = sorted(methods - {"GET", "HEAD"})
+            if extra:
+                offenders.append((path, extra))
     assert offenders == [], f"non-GET routes under /api/: {offenders}"

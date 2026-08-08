@@ -128,6 +128,17 @@ Example — `curl -s .../api/v1/concerts?q=sunshine -H "Authorization: Bearer $T
 group/character), sorted; `venue_handles` is the subset of those that are
 VENUE tags, derived from the legs.
 
+**`round_count` is the one field here that does NOT filter cancelled
+rounds** — unlike `leg_dates`/`venue_handles` above, it is a plain
+`len(concert.rounds)` and counts every round on the concert, cancelled or
+not. A concert whose every leg is cancelled (a dead concert) can therefore
+report a non-zero `round_count` alongside an empty `leg_dates` and a `null`
+`next_anchor_at` — e.g. `{"leg_dates": [], "next_anchor_at": null,
+"round_count": 3}`. That inconsistency is left as-is deliberately (it isn't
+worth a second query per row to fix a count nothing downstream currently
+relies on for correctness), so don't read `round_count` as "live rounds" —
+treat it as "rounds ever created on this concert."
+
 `next_anchor_at` is the earliest **future** moment (open/close/results/
 payment-deadline) among the concert's still-live rounds, or `null` if none
 remains. **It is catalogue-level, not per-viewer** — it does not consult
@@ -278,8 +289,21 @@ web page has it.
 
 **Tier:** any valid token, scoped to the token's own user.
 
-Your own open `PendingDraft` rows — never another user's, whether that user
-is an admin or not.
+Your own **open** `PendingDraft` rows — never another user's, whether that
+user is an admin or not, and never a row you've already committed or
+discarded.
+
+**The list and the detail endpoint disagree about "open", and that's
+deliberate, not a bug to fix.** This list filters to open rows only
+(`committed_at IS NULL AND discarded_at IS NULL`), but `GET
+/api/v1/drafts/{id}` below does not apply that filter — it's a bare lookup
+plus an ownership check. So a draft you've already committed or discarded
+stops appearing here, but its `GET /api/v1/drafts/{id}` stays reachable by
+id (with `committed_at`/`discarded_at` now set) for as long as the row
+exists. An agent that pages this list, notices an id it previously saw is
+gone, and concludes the row was deleted would be wrong — paging the list
+alone can't tell you that; check the detail endpoint's `committed_at`/
+`discarded_at` fields if you need to know why an id fell off.
 
 | param | meaning |
 |---|---|
@@ -397,9 +421,20 @@ directly comparable to a UTC field sitting next to it in the same response.
 
 ## Errors
 
-Every response under `/api/v1/*` is JSON, including failures — this holds
-even for a request that sends browser-like `Accept: text/html` headers,
-which everywhere else in this app gets a styled HTML error page instead.
+Every *handled* response under `/api/v1/*` is JSON, including 401/403/404/422
+failures — this holds even for a request that sends browser-like
+`Accept: text/html` headers, which everywhere else in this app gets a styled
+HTML error page instead.
+
+**The one exception is a 500.** An unhandled exception inside a route is
+re-raised rather than turned into an error page for anything that doesn't
+look like a browser navigation (`web/app.py`'s `unhandled_error` handler), so
+Starlette's own default takes over and answers `Internal Server Error` as
+`text/plain`, not JSON. This is a gap in the *doc*, not a change being made
+here: the 500 handler itself is untouched (it is a behaviour change in an
+error path with test implications, deliberately deferred), so if you're
+writing a generic API client, don't assume every status code comes back as
+`{"detail": ...}` — a 500 does not, and its body is plain text.
 
 | status | meaning |
 |---|---|
@@ -407,6 +442,7 @@ which everywhere else in this app gets a styled HTML error page instead.
 | 403 | the token is valid but its account lacks the tier the endpoint needs (e.g. a non-admin token on `/leads`). |
 | 404 | unknown `event_id`, unknown draft id, or a draft id that belongs to a different user. |
 | 422 | a bad query parameter — `limit` outside 1-500, a negative `offset`, or an unparseable `since`/`until`/date. |
+| 500 | an unhandled server error. **Not JSON** — `text/plain`, Starlette's own default body (`Internal Server Error`), no `detail` key at all. |
 
 **422 bodies are NOT all one shape**, and this is worth knowing before you
 write a parser against them. `limit`/`offset` are checked by this app's own

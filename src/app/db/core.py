@@ -3649,9 +3649,9 @@ async def discover_statuses(
 
 def concert_search_text(c: Concert) -> str:
     """Lowercased blob everything free-text search matches: title (plus its
-    en/zh variants) and every attached tag's name (all four kinds count --
-    franchise/group/artist/venue -- plus each tag's en/zh variants). A
-    concert's venue comes off its VENUE tags, so it is already in the blob.
+    en/zh variants) and every attached tag's name (all five kinds count --
+    franchise/group/artist/venue/character -- plus each tag's en/zh variants).
+    A concert's venue comes off its VENUE tags, so it is already in the blob.
     Localizing the haystack rather than the query lets a search in any
     language match a concert filled in any other.
 

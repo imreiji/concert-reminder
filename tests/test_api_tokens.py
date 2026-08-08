@@ -10,6 +10,7 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.db.models import User
 from app.db.service import (
@@ -157,6 +158,16 @@ async def test_mint_route_shows_the_token_once(client_pref, db):
     assert 'id="api-token-value"' not in second_render
 
 
-async def test_mint_route_requires_a_session(client_pref_anon):
+async def test_mint_route_requires_a_session(client_pref_anon, db):
+    """The authenticated happy path is ALSO a 303 (to /preferences), so the
+    status code alone doesn't distinguish "rejected" from "served" -- assert
+    the actual property instead: an anonymous POST must redirect to Home (the
+    signed-out `LoginRequired` handler's target), never /preferences, and
+    must mint nothing for anybody."""
     r = client_pref_anon.post("/me/api-token", data={})
-    assert r.status_code in (303, 401, 403)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"
+
+    async with db() as s:
+        rows = (await s.execute(select(User.api_token_hash))).scalars().all()
+    assert all(h is None for h in rows)

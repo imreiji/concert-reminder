@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.db.models import Concert, ConcertDay, DiscoveredEvent, Round, Tag
+from app.db.models import Concert, ConcertDay, DiscoveredEvent, Round, Tag, User
 from app.db.service import ensure_user, generate_api_token, record_round_outcome, set_leg_opt_out
 from app.db.session import get_session
 from app.domain.types import LotteryOutcome, RoundKind, TagKind
@@ -455,14 +455,37 @@ async def test_tags_require_a_token(client):
     assert client.get("/api/v1/tags").status_code == 401
 
 
+async def test_unknown_kind_is_422_not_a_silent_empty_result(client, db):
+    """`kind` is a closed five-value enum -- a typo (`?kind=venues`) must not
+    silently answer `{"items": [], "total": 0}`, which would tell an agent
+    the catalogue holds no venues at all and be believed. Contrast `?tag=` on
+    /concerts, which is deliberately NOT the same case: an arbitrary handle
+    matching nothing is a legitimate, non-error outcome there."""
+    token = await _mint(db)
+    r = client.get("/api/v1/tags?kind=venues", headers=_auth(token))
+    assert r.status_code == 422
+    assert "kind" in r.json()["detail"]
+
+
 async def test_leads_are_admin_only(client, db, monkeypatch):
     """The tier boundary, which is the thing most likely to be got wrong --
     and this is the FIRST direct exercise of api_admin's 403 path. All three
     tiers must come back distinct: an editor-but-not-admin token is 403 (not
     401, not 404, not 200), an admin token is 200, and no token at all is
-    401 -- proven below, not merely asserted for one case."""
+    401 -- proven below, not merely asserted for one case.
+
+    `editor_token`'s user must ACTUALLY be an editor -- `_mint` only calls
+    `ensure_user`, so without setting `User.is_editor` this token belongs to
+    a plain user and the 403 would hold whether or not the editor tier is
+    enforced at all. Setting the DB flag (rather than patching
+    `settings.editor_whitelist`) exercises the same is_editor resolution
+    `api_user` runs for a real editor promoted from Preferences."""
     monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN))
     editor_token = await _mint(db, 99, "someone")
+    async with db() as s:
+        editor = await s.get(User, 99)
+        editor.is_editor = True
+        await s.commit()
     r = client.get("/api/v1/leads", headers=_auth(editor_token))
     assert r.status_code == 403
 

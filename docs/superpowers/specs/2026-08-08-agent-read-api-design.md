@@ -158,16 +158,36 @@ would be a second thing to keep in sync.
 
 `GET /api/v1/tags?kind=&limit=&offset=`
 `current_tag_exports()` as JSON: handle, `name`/`name_en`/`name_zh`, kind,
-parent handle, `voiced_by` handle, member handles, region, city,
-`eventernote_url`. This is what stops the agent inventing tag names that match
-nothing — it is the vocabulary, served.
+parent handle, `voiced_by` handle, member handles, region, city, `address`,
+`location_url`, `eventernote_url`. This is what stops the agent inventing tag
+names that match nothing — it is the vocabulary, served.
+
+**Owner ruling (2026-08-08): this endpoint stays ANY-VALID-TOKEN**, `address`/
+`location_url`/`eventernote_url` included, even though the web UI shows those
+three only to editors (`templates/tags.html:345`). Naming the fields
+explicitly here so the crossing reads as considered, not accidental: they are
+public third-party URLs and a public venue address, carrying no personal
+data, and the tag vocabulary is user-tier information generally. The
+justification is deliberately NOT "/discover is public" — that argument
+covers `/concerts`, which mirrors a page any visitor can already load, not
+this. It is that the vocabulary itself is not sensitive. Contrast `/leads`,
+which stays admin-only because it names people's discovery activity, not
+because of any field it carries.
 
 ### Leads — admin
 
 `GET /api/v1/leads?limit=&offset=`
 `open_leads()` as JSON: id, `source`, `source_event_id`, `title`, `event_date`,
-`date_is_deadline`, `venue`, the tag it was first seen via, `announced_at`,
-plus the same-date-same-venue collision hint `/admin/discoveries` computes.
+`date_is_deadline`, `venue`, the tag it was first seen via, `announced_at`.
+
+**Amendment (2026-08-08, post-ship): this endpoint deliberately does NOT
+carry the same-date-same-venue collision hint** `/admin/discoveries` shows on
+each row. This spec originally listed it as in scope; it was cut during
+build rather than half-built, because the hint is a second query per row and
+the API had no requirement forcing it in. Both `api_lead_rows`
+(`db/discovery_events.py`) and `docs/agent-api.md` document the omission
+explicitly, so this line is corrected to match what shipped rather than
+describe scope that was later dropped.
 
 `date_is_deadline` must be carried: the imas feed's DTSTART is an application
 deadline, and an agent treating it as a performance date would file the wrong

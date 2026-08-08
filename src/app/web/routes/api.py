@@ -35,6 +35,7 @@ from app.db.service import (
     get_user_by_api_token,
 )
 from app.db.session import get_session
+from app.domain.types import TagKind
 from app.web.auth import SessionUser
 from app.web.paging import PageParams, page_envelope, page_params
 
@@ -133,7 +134,26 @@ async def list_tags(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """The vocabulary, served -- so an agent stops inventing tag names that
-    match nothing. Any valid token, same as /concerts."""
+    match nothing. Any valid token, same as /concerts.
+
+    This deliberately serves `eventernote_url`/`address`/`location_url` to any
+    holder, though the web UI shows those three editor-only
+    (`templates/tags.html`) -- an owner ruling (2026-08-08), not an accident;
+    see `api_tag_rows`' docstring for the full reasoning.
+
+    `kind` is a closed five-value enum, so an unrecognised value is a 422, the
+    same doctrine `web/paging.py` states for `limit`: silently matching
+    nothing (`?kind=venues` typo'd off `venue`) would tell an agent the
+    catalogue has no venues, and it would believe it -- unlike `?tag=` on
+    /concerts, where an arbitrary handle legitimately matching nothing is a
+    normal outcome, not a client mistake to flag.
+    """
+    valid_kinds = {k.value for k in TagKind}
+    if kind is not None and kind not in valid_kinds:
+        raise HTTPException(
+            status_code=422,
+            detail=f"kind must be one of: {', '.join(sorted(valid_kinds))}",
+        )
     rows, total = await api_tag_rows(
         session, kind=kind, limit=page.limit, offset=page.offset
     )

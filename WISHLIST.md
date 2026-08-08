@@ -1065,6 +1065,14 @@ the moment it runs -- not into Shipped, since it ships nothing, but deleted
 with its verdict folded into the phase-2 shipped entry -- and round-watch
 reclaims #1 in the same motion.
 
+Re-read 2026-08-08 against the agent read API and **held at #1, unchanged**.
+The two are explicitly orthogonal by the new build's own design doc: the
+read API is useful "whether or not the in-app LLM passes survive" this
+calibration, because it answers a different friction (the agent cannot see
+the catalogue) than this entry's question (is the model's judgment on real
+Japanese pages any good). Shipping the API neither runs the calibration
+press nor changes what it would find.
+
 ### 2. Nothing re-checks a tracked concert for newly opened rounds
 
 Impact: high (correctness family: a tracked concert whose ladder silently
@@ -1156,6 +1164,25 @@ Displaced to #2 on 2026-08-06, its FIRST displacement since it was filed, and
 by something that is not a feature at all: the phase-2 calibration press, which
 sits above it as a gate rather than on impact. Position, never substance -- and
 it reclaims #1 the moment that press is done.
+
+Re-read 2026-08-08 against the agent read API, **held at #2 (effectively #1
+on impact, the gate above it delivering nothing to anyone), but the CHEAPEST
+of the three shapes this entry proposes just got cheaper still.** The "quiet
+ladders" admin surface's whole job is finding tracked concerts whose ladder
+holds no future anchor -- and the read API's own design doc names this
+exactly: `_api_concert_row`'s `next_anchor_at` (`db/core.py`) IS that signal,
+computed catalogue-wide already, `null` meaning precisely "no future anchor
+remains." Building the admin surface is now closer to a filtered query over
+already-shipped code than new logic. It goes further than that, too: an
+agent with API access could compute the same "quiet ladders" worklist itself
+by paging `/api/v1/concerts` and collecting `next_anchor_at: null` rows,
+without the admin surface existing at all -- though the owner presumably
+still wants the page for HIS OWN visibility, not only an agent's, so this
+is a reason the cheap shape got cheaper, not a reason to skip it. The other
+two shapes (the discovery-matcher round-gap flag, the scheduled re-fetch)
+are untouched by this build -- neither reads nor needs the catalogue view
+the API adds. Rank unchanged; effort, for the cheap shape specifically, drops
+further.
 
 ### 3. Minute-level reminder offsets
 
@@ -1439,6 +1466,19 @@ What is left is genuinely the small half -- a prompt, a route, and the decision
 about what a whole-draft extraction may claim beyond rounds. Impact is
 unchanged and unblocking is still not impact; what moved is that this is now
 the cheapest remaining item of its impact class rather than the dearest.
+
+Re-read 2026-08-08 against the agent read API, **rank unchanged**, with one
+real contact worth recording: this entry's design question was always "how
+does a page become a draft", and the read API answers a DIFFERENT question
+this entry never had to ("do I already have this concert"). The design doc
+that shipped it names the same friction this feature would eventually hit --
+"the agent cannot see the catalogue... re-proposes duplicates" -- and now
+`GET /api/v1/concerts?q=` is a call away, whether an in-app extraction step
+ends up reusing `api_concert_rows` directly or the agent-side skills reach
+for it instead (see the new Proposed entry on teaching the skills to use
+these endpoints). Whoever eventually builds this should check the catalogue
+via that path before drafting rather than re-inventing a dedup query. Impact
+and rank unchanged; the dedup half of the eventual build just got an answer.
 
 ### 7. Three long jobs share the reminder tick
 
@@ -1970,6 +2010,97 @@ own merits; the file size is a symptom, not the reason.
 
 Do not attempt this as a tidy-up. The engine is the product.
 
+### 18. Teach `add-concert` / `triage-leads` to use the agent read API
+
+Impact: nil for tracked users, real for the owner's own workflow -- effort:
+small (skill-file prompt/instruction edits; no app code, the API already
+exists). Raised: 2026-08-08, one of three follow-ups the agent read API's own
+design doc recorded rather than scheduled.
+
+The read API shipped the same day this entry was filed, and it closes the
+loop for a PROGRAM, not yet for the two skills that actually run today. Both
+`.claude/skills/add-concert/SKILL.md` and `.claude/skills/triage-leads/`
+still work the way they did before the API existed: the owner pastes a DM
+copy block or a discovery page into the conversation, the skill drafts YAML
+from what it was handed, and the owner pastes the result back into
+`/concerts/import`. Nothing about that changed on 2026-08-08 -- the API
+shipped the SURFACE, not the two skills learning to call it. With a minted
+token, `add-concert` could check `GET /api/v1/concerts?q=` and
+`GET /api/v1/tags` before drafting, instead of guessing at whether a title or
+a tag name already exists and leaving the owner to catch the duplicate; and
+`triage-leads` could read `GET /api/v1/leads` directly rather than depending
+on a DM's copy block or an `/admin/discoveries` paste. Deliberately out of
+scope of the API build itself -- the design doc's own words: "the API ships
+first and the skills follow, so the paste path keeps working throughout" --
+and that sequencing reasoning still holds; this entry is the "follow"
+half now that the surface exists to follow. Ranked near the bottom because
+it changes nothing about what a tracked user ever sees; ranked at all
+because it is the most directly actionable of the three follow-ups the design
+doc named, and the cheapest -- no new endpoint, no new trust boundary, just
+teaching two existing prompts to call four already-shipped GETs.
+
+### 19. Agent write endpoints
+
+Impact: potentially high, longer-term -- it would close the loop the read
+API opened -- but explicitly NOT ACTIONABLE today, and gated on evidence
+this build was built to produce - effort: large. Raised: 2026-08-08, recorded
+scope boundary from the agent read API's design doc ("What this deliberately
+is not").
+
+The read API stops an agent inventing duplicate concerts and tag names, and
+lets it iterate on its own drafts without the owner relaying either half by
+hand -- but a proposal can still become a concert only through
+`import_commit`, which stays a human pressing a button on
+`/concerts/import/pending`. That is not friction that leaked in; CLAUDE.md's
+own words for the parallel case (`PendingDraft` rows) apply here without
+edit: the owner's approval is the safety property the whole AI-triage build
+(both completion phases) was constructed around. Reads shipped FIRST, and
+deliberately, because they make the writes question DECIDABLE rather than a
+guess: once an agent can see the catalogue, the leads queue and its own
+drafts, the quality of what it proposes becomes something a human can
+actually observe over real use -- and that observation is what would
+eventually say whether committing unread is safe for any of it. There is no
+evidence yet either way; this entry is logged as a recorded scope boundary,
+not a task queued behind anything. It becomes actionable when the read API
+(and the skills that start using it, see #18) have been used long enough
+that the owner has an opinion about the AGENT's judgment, the same way phase
+2's calibration gate (see the item that used to sit at Proposed #1) is what
+decides whether draft-completion's judgment is trustworthy. Don't build this
+speculatively ahead of that evidence.
+
+### 20. An MCP server in front of the agent read API
+
+Impact: low -- a convenience wrapper around a capability that already
+exists, not a new capability - effort: small-medium, and explicitly not
+worth building without a concrete friction driving it. Raised: 2026-08-08,
+"Approach B" from the same 2026-08-08 discussion that produced the read API,
+considered and rejected as the FIRST build.
+
+An MCP server that calls `/api/v1/*` under the hood, so an agent (inside
+Claude Code or elsewhere) reaches the catalogue/leads/drafts through MCP
+tool calls rather than shelling out to `curl` with a bearer token. Explicitly
+NOT foreclosed by choosing the plain HTTP API first -- the owner's own
+reasoning, recorded in the design doc, was that an MCP server is "this plus
+a wrapper, deployable separately, and usable only from an MCP client", which
+is exactly why it was the wrong thing to build BEFORE the API it would wrap
+existed. Building the wrapper first would have meant guessing at an
+interface for a resource that didn't exist yet -- the same sequencing
+argument that put reads before writes at #19. Worth a fresh look if the raw
+HTTP ergonomics prove genuinely annoying inside Claude Code in practice;
+nothing so far says they do, so this stays logged rather than built.
+
+**Revision-pass note (2026-08-08, full pass required by CLAUDE.md's
+WISHLIST rule after every shipped feature):** every remaining entry (#3-#5,
+#7-#17 above) was re-read against the agent read API specifically, not only
+skimmed. None of them touch the catalogue, the discovery queue or
+`PendingDraft` rows in a way the API's read-only surface changes -- they
+range across reminder offsets, round-kind taxonomy, PWA installability, the
+calendar feed roster, the sign-in bounce, and `db/core.py`'s own internal
+shape, none of which this build touched. Judgement: nothing else moves.
+Recorded explicitly rather than left implicit, per the instruction that a
+revision pass leaving no trace is indistinguishable from one that never
+happened.
+
 (The former "Editor page parity with the demo" entry (2026-07-20) was
 absorbed on 2026-07-23 into the editor-pages coherence pass --
 everything it tracked (demo's nested-rounds structure vs shipped flat lists,
@@ -1984,6 +2115,108 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### The agent read API (2026-08-08)
+
+Branch `agent-read-api`, fourteen commits, spec
+`docs/superpowers/specs/2026-08-08-agent-read-api-design.md`, docs
+`docs/agent-api.md`. Not a Proposed entry before it was filed -- raised and
+built the same day, on the owner's own diagnosis of a friction the AI-triage
+arc had been running into since phase 1: every hop between the app and an
+agent was copy-paste, in both directions.
+
+**The problem was the copy-paste LOOP itself, not any one hop of it.** The
+owner copied the discovery-lead block out of a DM or `/admin/discoveries`
+into the agent; the agent emitted YAML with no way to check its own work
+against the catalogue; the owner pasted the result back at
+`/concerts/import`. Four frictions came out of that, confirmed by the owner
+the day this was scoped: the agent cannot see the catalogue, so it
+re-proposes duplicates and invents tag names that match nothing; feeding it
+leads is manual; iterating on a draft is manual, since the agent cannot read
+back its own committed draft or the evidence/rejection result the completion
+pass produced; and the owner sits in every step. Read surfaces already
+existed -- `GET /admin/export.zip`, a concert's `export.yaml`, the
+`/admin/discoveries` paste block -- but all three are browser downloads
+behind a session cookie, unreachable by a program.
+
+**It is READS ONLY, and that is the load-bearing decision, not a phase-1
+placeholder.** `src/app/web/routes/api.py` declares nothing but `@router.get`,
+swept by a test that fails if any other method is ever registered under
+`/api/v1`. `POST /concerts/import/draft` -> `/concerts/import/pending/{id}/commit`
+stays the only write path into `concerts`, exactly as it already was for a
+human pasting YAML. The owner's approval was never friction that leaked in --
+it is the safety property the entire AI-triage build (both completion phases)
+was constructed around, and reads were sequenced deliberately FIRST because
+they make the WRITES question decidable: once the agent can see the
+catalogue, leads and its own drafts, the quality of its proposals becomes
+observable, and that observability is what would eventually say whether
+letting it commit unread is safe. Designing autonomy first would have meant
+guessing.
+
+**Auth reuses the calendar feed's shape rather than inventing a second one**
+(invariant 5 already named this pattern for "any future personal-secret-link
+feature"): a new nullable, unique `User.api_token_hash`, minted at
+`POST /me/api-token` in Preferences, shown once, `secrets.token_urlsafe(32)`
+with only the SHA-256 stored. The one deliberate divergence from the
+calendar feed is transport -- `Authorization: Bearer <token>`, a header, not
+a URL, because unlike a calendar client an agent can send one, and a header
+keeps the credential out of access logs, browser history and `Referer`. The
+token resolves to the same `SessionUser` the cookie path builds, so
+`is_editor`/`is_admin` mean exactly what they mean everywhere else and there
+is no second permission model to drift from the first.
+
+**Four endpoint families, each scoped to the tier its content actually
+needs.** `whoami` (any token) turns "my token doesn't work" into one
+request. `/concerts` and `/concerts/{event_id}` (any token -- the catalogue
+is already public at `/discover`) answer "do I already have this?", the
+latter carrying `draft_yaml`, the SAME `concert_export_yaml` output
+`add-concert` already writes and `import_commit` already reads back, so an
+agent round-trips it directly instead of the API inventing a second concert
+schema to keep in sync. `/tags` (any token; see the owner ruling recorded in
+`api_tag_rows` and the spec for why `eventernote_url`/`address`/
+`location_url` ride along) is the vocabulary, served, so an agent stops
+proposing tag names that match nothing. `/leads` (admin only, same audience
+as `/admin/discoveries`) is the open discovery queue. `/drafts` and
+`/drafts/{id}` (scoped to the token's own user, 404 not 403 on another
+user's row -- invariant 5) close the iteration loop: an agent reads its own
+draft text AND the completion pass's evidence/rejection YAML together,
+without the owner relaying either half by hand.
+
+**Paging is offset-based, at the owner's explicit request** (2026-08-08)
+after the trade was laid out: at current volumes (dozens of concerts, tens
+of leads, ~100 tags) a capped `limit` alone would have sufficed, and
+`offset` is insurance against growth rather than a present need. Every list
+carries a totally-ordered sort with `id` (or, for `/tags`, the already-unique
+`slug`) as the final tiebreaker -- offset paging over a non-unique key
+repeats or drops rows between two calls even with nothing being inserted,
+because SQLite is free to order ties differently call to call. `limit` over
+the 500 cap is a 422, not a silent clamp, matching `web/paging.py`'s stated
+doctrine: an agent asking for 5000 and receiving 500 with no signal would
+believe it had read the whole set.
+
+**Two footguns named rather than left to be found the hard way.** `/api/v1/*`
+needed an explicit carve-out from `web/app.py`'s HTML-error-page machinery,
+since an agent's request looks exactly like a browser navigation to that
+code -- every response stays JSON even for a request carrying
+`Accept: text/html`. And `draft_yaml`'s timestamps are JST while the rest of
+the envelope is UTC, because the draft format has to stay byte-compatible
+with what the editor forms and `parse_draft` already expect; both the spec
+and `docs/agent-api.md` state the rule by name (never parse `draft_yaml`'s
+timestamps as UTC) rather than trust a reader to infer it from two
+differently-shaped datetime strings sitting next to each other.
+
+**Delivery data stays out entirely**, on the same invariant-4 grounds that
+keep `/admin/deliveries` the only surface naming DM recipients: nothing under
+`/api/v1` touches `delivery_log` or anything that names who received what.
+
+A final whole-branch review (this same day) found the branch mergeable and
+raised documentation-accuracy and test-strength items rather than design
+issues -- an owner ruling recording that the `/tags` tier crossing is
+deliberate (`api_tag_rows`'s docstring, the spec), a closed hole in the
+read-only sweep (`include_in_schema=False` routes were invisible to an
+OpenAPI-schema-based sweep; it now walks the real routing table), and two
+tests that asserted less than their names claimed. Folded into the same
+merge rather than a separate entry, since none of it changed what shipped.
 
 ### AI completion of a skeleton draft (AI triage, phase 2) (2026-08-06)
 
