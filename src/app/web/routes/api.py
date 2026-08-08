@@ -27,6 +27,8 @@ from app.config import settings
 from app.db.service import (
     api_concert_detail,
     api_concert_rows,
+    api_draft_detail,
+    api_draft_rows,
     api_lead_rows,
     api_tag_rows,
     concert_export_yaml,
@@ -148,6 +150,34 @@ async def list_leads(
     /admin/discoveries, which is where these are triaged."""
     rows, total = await api_lead_rows(session, limit=page.limit, offset=page.offset)
     return page_envelope(rows, total, page)
+
+
+@router.get("/drafts")
+async def list_drafts(
+    page: PageParams = Depends(page_params),
+    user: SessionUser = Depends(api_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """The token holder's OWN open pending-import drafts -- never another
+    user's. Two editors (or agents) triaging their own batches at once is the
+    expected case, not an exotic one; see `api_draft_rows`."""
+    rows, total = await api_draft_rows(session, user.id, limit=page.limit, offset=page.offset)
+    return page_envelope(rows, total, page)
+
+
+@router.get("/drafts/{draft_id}")
+async def get_draft(
+    draft_id: int,
+    user: SessionUser = Depends(api_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """One draft's full text plus its completion evidence -- the pairing that
+    closes the agent's iteration loop (see `api_draft_detail`). Another
+    user's draft answers 404, never 403 -- invariant 5's ownership rule."""
+    row = await api_draft_detail(session, draft_id, user.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="no such draft")
+    return row
 
 
 @router.get("/concerts/{event_id}")

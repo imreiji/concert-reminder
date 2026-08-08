@@ -492,6 +492,111 @@ async def test_leads_carry_date_is_deadline(client, db, monkeypatch):
     assert row["event_date"] == "2026-10-01"
 
 
+async def _seed_draft(db, user_id, text="title: x\nrounds: []\n", title="x", **extra):
+    from app.db.models import PendingDraft
+
+    async with db() as s:
+        await ensure_user(s, user_id, "someone")
+        row = PendingDraft(draft_text=text, title=title, created_by=user_id, **extra)
+        s.add(row)
+        await s.commit()
+        return row.id
+
+
+async def test_draft_detail_carries_text_and_completion(client, db):
+    token = await _mint(db)
+    draft_id = await _seed_draft(db, ADMIN)
+    body = client.get(f"/api/v1/drafts/{draft_id}", headers=_auth(token)).json()
+    assert body["draft_text"].startswith("title:")
+    assert body["completion_yaml"] == ""
+
+
+async def test_unknown_draft_id_is_404(client, db):
+    token = await _mint(db)
+    assert client.get("/api/v1/drafts/999999", headers=_auth(token)).status_code == 404
+
+
+async def test_another_users_draft_is_404_not_403(client, db):
+    """Invariant 5: ownership checks 404. A 403 would confirm the row exists."""
+    token = await _mint(db, ADMIN, "reiji")
+    other = await _seed_draft(db, 777)
+    assert client.get(f"/api/v1/drafts/{other}", headers=_auth(token)).status_code == 404
+
+
+async def test_another_users_draft_is_not_listed(client, db):
+    """The half of invariant 5's rule people forget: it isn't enough for the
+    detail route to 404 another user's draft, it must never surface as a row
+    in this user's own list either."""
+    token = await _mint(db, ADMIN, "reiji")
+    await _seed_draft(db, 777)
+    mine = await _seed_draft(db, ADMIN)
+    body = client.get("/api/v1/drafts", headers=_auth(token)).json()
+    assert [r["id"] for r in body["items"]] == [mine]
+    assert body["total"] == 1
+
+
+async def test_drafts_require_a_token(client, db):
+    await _seed_draft(db, ADMIN)
+    assert client.get("/api/v1/drafts").status_code == 401
+    assert client.get("/api/v1/drafts/1").status_code == 401
+
+
+async def test_has_rounds_is_a_real_parse_not_a_string_sniff(client, db):
+    """Pins the three cases a literal `"rounds: []" not in text` sniff gets
+    wrong: an explicit empty list (correctly False), a real round (correctly
+    True), and -- the one the sniff actively got backwards -- NO `rounds:`
+    key at all, which is what an agent's freshly-authored skeleton draft
+    looks like before any completion pass. The sniff read that case as
+    `has_rounds=True` since the literal substring is absent; the parse
+    correctly reads it as False, since `parse_draft(...).rounds` is `[]`
+    either way."""
+    token = await _mint(db)
+    empty_list_id = await _seed_draft(db, ADMIN, text="title: a\nrounds: []\n", title="a")
+    no_key_id = await _seed_draft(db, ADMIN, text="title: b\n", title="b")
+    real_round_id = await _seed_draft(
+        db, ADMIN,
+        text=(
+            "title: c\n"
+            "rounds:\n"
+            "  - label: R1\n"
+            "    apply_closes_jst: '2026-10-01 20:00'\n"
+        ),
+        title="c",
+    )
+    body = client.get("/api/v1/drafts", headers=_auth(token)).json()
+    by_id = {r["id"]: r["has_rounds"] for r in body["items"]}
+    assert by_id[empty_list_id] is False
+    assert by_id[no_key_id] is False
+    assert by_id[real_round_id] is True
+
+
+async def test_has_rounds_false_for_unparseable_draft_text(client, db):
+    """A row whose text no longer parses at all (not a YAML mapping) reports
+    has_rounds=False rather than 500ing the whole list -- the same
+    "unreadable" bucket `completion_candidates` silently skips past."""
+    token = await _mint(db)
+    draft_id = await _seed_draft(
+        db, ADMIN, text="just a plain scalar, not a mapping at all", title="broken"
+    )
+    body = client.get("/api/v1/drafts", headers=_auth(token)).json()
+    row = next(r for r in body["items"] if r["id"] == draft_id)
+    assert row["has_rounds"] is False
+
+
+async def test_has_completion_reflects_completion_yaml(client, db):
+    token = await _mint(db)
+    with_completion = await _seed_draft(
+        db, ADMIN, text="title: c\n", title="c",
+        completion_yaml="source_url: https://example.com\n",
+    )
+    without_completion = await _seed_draft(db, ADMIN, text="title: d\n", title="d")
+
+    body = client.get("/api/v1/drafts", headers=_auth(token)).json()
+    by_id = {r["id"]: r["has_completion"] for r in body["items"]}
+    assert by_id[with_completion] is True
+    assert by_id[without_completion] is False
+
+
 async def test_open_leads_excludes_dismissed_and_bound(client, db, monkeypatch):
     """`api_lead_rows` is built on `open_leads`, so the API must agree with
     /admin/discoveries about what "open" means -- proven by seeding one of

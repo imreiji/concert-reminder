@@ -551,6 +551,77 @@ async def mark_triage_failed(
     await session.flush()
 
 
+async def api_draft_rows(
+    session: AsyncSession, user_id: int, *, limit: int = 200, offset: int = 0
+) -> tuple[list[dict], int]:
+    """This user's open drafts, plus the pre-paging total.
+
+    Built on `pending_drafts`, which is already scoped to the pasting user and
+    already ordered by id -- unique, so totally ordered and safe to page.
+
+    `has_rounds` is a REAL PARSE through `parse_draft`, not a string sniff --
+    it asks the exact same question `completion_candidates` already asks
+    ("does this draft have `rounds`") through the exact same function, so the
+    two never disagree. An earlier version of this endpoint checked for the
+    literal substring `"rounds: []"`, which is wrong in at least three
+    directions this parse gets right: a draft with NO `rounds:` key at all
+    (an agent's freshly-authored skeleton, before any completion pass) does
+    not contain that substring either, so the sniff reported `has_rounds=True`
+    for a draft that has never had a round in it; `rounds: []` written with
+    different whitespace (`rounds:  []`, or spread over two lines) defeats a
+    literal match; and a real, non-empty `rounds:` list never contains that
+    substring, so the sniff was RIGHT there only by coincidence of never being
+    asked to distinguish it from the empty case in the one place it was wrong.
+    A row whose text no longer parses at all (`DraftError` -- YAML rot, or a
+    hand-edited row that broke) reports `has_rounds=False` rather than 500ing
+    the whole list: there is no rounds list to report either way, and this is
+    the same "unreadable" bucket `completion_candidates` silently skips past.
+    The detail endpoint's `draft_text` is where an agent would see why.
+    """
+    rows = await pending_drafts(session, user_id)
+    total = len(rows)
+    out = []
+    for r in rows[offset : offset + limit]:
+        try:
+            has_rounds = bool(parse_draft(r.draft_text).rounds)
+        except DraftError:
+            has_rounds = False
+        out.append(
+            {
+                "id": r.id,
+                "title": r.title,
+                "created_at": r.created_at.isoformat(),
+                "has_rounds": has_rounds,
+                "has_completion": bool(r.completion_yaml),
+            }
+        )
+    return out, total
+
+
+async def api_draft_detail(session: AsyncSession, draft_id: int, user_id: int) -> dict | None:
+    """One draft's full text AND its completion evidence.
+
+    Both together is the point: this is the iteration loop, where an agent
+    reads its own draft alongside the evidence/rejection result rather than
+    having a human relay either.
+
+    None for another user's draft, which the caller renders as 404 -- invariant
+    5's ownership rule. A 403 would confirm the row exists.
+    """
+    row = await session.get(PendingDraft, draft_id)
+    if row is None or row.created_by != user_id:
+        return None
+    return {
+        "id": row.id,
+        "title": row.title,
+        "created_at": row.created_at.isoformat(),
+        "committed_at": row.committed_at.isoformat() if row.committed_at else None,
+        "discarded_at": row.discarded_at.isoformat() if row.discarded_at else None,
+        "draft_text": row.draft_text,
+        "completion_yaml": row.completion_yaml,
+    }
+
+
 async def pending_draft_texts(session: AsyncSession) -> list[str]:
     """The verbatim text of every still-open PendingDraft.
 
