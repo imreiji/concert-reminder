@@ -408,13 +408,38 @@ which everywhere else in this app gets a styled HTML error page instead.
 | 404 | unknown `event_id`, unknown draft id, or a draft id that belongs to a different user. |
 | 422 | a bad query parameter — `limit` outside 1-500, a negative `offset`, or an unparseable `since`/`until`/date. |
 
-Error bodies are `{"detail": "..."}`, e.g.:
+**422 bodies are NOT all one shape**, and this is worth knowing before you
+write a parser against them. `limit`/`offset` are checked by this app's own
+code and come back as a plain string, exactly like every other error here:
+
+```json
+{ "detail": "limit must be between 1 and 500" }
+```
+
+But `since`/`until` are typed as `date` query parameters and validated by
+FastAPI itself *before* this app's code ever runs, so an unparseable value
+comes back in FastAPI's own validation-error shape instead — `detail` is a
+**list** of objects, not a string:
+
+```json
+{
+  "detail": [
+    {
+      "type": "date_from_datetime_parsing",
+      "loc": ["query", "since"],
+      "msg": "Input should be a valid date or datetime, invalid character in year",
+      "input": "not-a-date",
+      "ctx": { "error": "invalid character in year" }
+    }
+  ]
+}
+```
+
+Every other error body in this API — 401, 403, 404, and the `limit`/`offset`
+422s — is the simple string-`detail` shape:
 
 ```json
 { "detail": "invalid or missing API token" }
-```
-```json
-{ "detail": "limit must be between 1 and 500" }
 ```
 ```json
 { "detail": "no such concert" }
@@ -422,6 +447,9 @@ Error bodies are `{"detail": "..."}`, e.g.:
 ```json
 { "detail": "admin only" }
 ```
+
+If you're parsing errors generically, check whether `detail` is a string or
+a list before assuming one or the other.
 
 ## What this API deliberately does not do
 
