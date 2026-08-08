@@ -6,6 +6,9 @@ pinning are the ones that make a leak survivable: the raw value is never
 persisted, and minting again invalidates whatever was issued before.
 """
 
+import pytest
+from fastapi.testclient import TestClient
+
 from app.db.models import User
 from app.db.service import (
     ensure_user,
@@ -13,6 +16,9 @@ from app.db.service import (
     get_user_by_api_token,
     hash_token,
 )
+from app.db.session import get_session
+from app.web import auth
+from app.web.app import create_app
 
 USER = 4242
 
@@ -67,3 +73,69 @@ async def test_the_calendar_feed_uses_the_same_hash(session):
 
     assert not hasattr(calendar_feed, "_hash_token")
     assert calendar_feed.hash_token is hash_token
+
+
+# ── POST /me/api-token (Task 8: minting from Preferences) ──────────────────
+#
+# Same client + login_as pattern as tests/test_preferences_page.py, copied
+# rather than shared -- that file's `client` fixture is scoped to its own
+# module.
+
+
+@pytest.fixture()
+def client_pref(db, monkeypatch):
+    app = create_app()
+
+    async def override_session():
+        async with db() as s:
+            yield s
+
+    app.dependency_overrides[get_session] = override_session
+
+    async def fake_exchange(code):
+        return "tok"
+
+    monkeypatch.setattr(auth, "exchange_code", fake_exchange)
+
+    async def fake_identity(token):
+        return {"id": str(USER), "username": "reiji", "global_name": "reiji", "avatar": None}
+
+    monkeypatch.setattr(auth, "fetch_identity", fake_identity)
+
+    c = TestClient(app, follow_redirects=False)
+    r = c.get("/auth/login")
+    state = r.headers["location"].split("state=")[1].split("&")[0]
+    c.get(f"/auth/callback?code=x&state={state}")
+    return c
+
+
+@pytest.fixture()
+def client_pref_anon(db):
+    app = create_app()
+
+    async def override_session():
+        async with db() as s:
+            yield s
+
+    app.dependency_overrides[get_session] = override_session
+    return TestClient(app, follow_redirects=False)
+
+
+async def test_mint_route_shows_the_token_once(client_pref, db):
+    """The raw value is displayed exactly once and is unrecoverable after.
+    Recovery is 'mint a new one', which is the whole point of storing a hash."""
+    r = client_pref.post("/me/api-token", data={})
+    assert r.status_code in (200, 303)
+    if r.status_code == 303:
+        location = r.headers["location"]
+        assert "api_token=" in location
+        token = location.split("api_token=")[1].split("&")[0]
+        reveal = client_pref.get(location).text
+        assert token in reveal
+    page = client_pref.get("/preferences").text
+    assert "api_token=" not in page  # never sticky in the URL or re-rendered
+
+
+async def test_mint_route_requires_a_session(client_pref_anon):
+    r = client_pref_anon.post("/me/api-token", data={})
+    assert r.status_code in (303, 401, 403)

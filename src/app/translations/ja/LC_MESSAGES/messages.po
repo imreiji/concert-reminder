@@ -3036,6 +3036,49 @@ msgid ""
 "using the old link will stop getting updates."
 msgstr "新しいリンクを作成すると、古いリンクはすぐに使えなくなります。古いリンクを使っている人には更新が届かなくなります。"
 
+#: src/app/web/templates/preferences.html:20
+#: src/app/web/templates/preferences.html:367
+msgid "API access"
+msgstr "APIアクセス"
+
+#: src/app/web/templates/preferences.html:368
+msgid "A personal token so an agent can read your data over the API."
+msgstr "エージェントがAPI経由でデータを読み取るための個人用トークンです。"
+
+#: src/app/web/templates/preferences.html:372
+msgid "API token active"
+msgstr "APIトークン有効"
+
+#: src/app/web/templates/preferences.html:373
+msgid "Read-only access to your concerts and drafts, scoped to your account."
+msgstr "あなたのアカウントに限定した、コンサートと下書きへの読み取り専用アクセスです。"
+
+#: src/app/web/templates/preferences.html:375
+msgid "No API token"
+msgstr "APIトークンなし"
+
+#: src/app/web/templates/preferences.html:382
+msgid "Your API token is ready — save it now, it won't be shown again."
+msgstr "APIトークンを作成しました。今すぐ保存してください。この画面には再表示されません。"
+
+#: src/app/web/templates/preferences.html:385
+msgid "Copy token"
+msgstr "トークンをコピー"
+
+#: src/app/web/templates/preferences.html:393
+msgid ""
+"Your current token will stop working. Any agent using it will need the "
+"new one."
+msgstr "現在のトークンは使えなくなります。これを使っているエージェントには新しいトークンが必要です。"
+
+#: src/app/web/templates/preferences.html:394
+msgid "Generate a new token"
+msgstr "新しいトークンを生成する"
+
+#: src/app/web/templates/preferences.html:397
+msgid "Generate API token"
+msgstr "APIトークンを生成"
+
 #: src/app/web/templates/preferences.html:362
 #, python-format
 msgid "Signed in with Discord as <b>%(username)s</b>."

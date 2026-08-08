@@ -5,8 +5,8 @@
    `.swb`/`.presetcard`/`.ruleline`/`.statline`/`.danger`). The rail is an
    in-page anchor nav; every section carries the matching id and a scrollspy
    (bottom script) keeps the `.on` rail link in step with the section in view.
-   Order, as in the concept: Following, Reminders, Time, Delivery, Account,
-   Editors (admin only). #}
+   Order, as in the concept: Following, Reminders, Time, Delivery, API access,
+   Account, Editors (admin only). #}
 <div class="head" style="margin-top:1.5rem">
   <h1 style="margin:0;font-size:1.35rem">{{ _("Preferences") }}</h1>
 </div>
@@ -17,6 +17,7 @@
     <a href="#p-remind">{{ _("Reminders") }}</a>
     <a href="#p-time">{{ _("Time") }}</a>
     <a href="#p-deliver">{{ _("Delivery") }}</a>
+    <a href="#p-api">{{ _("API access") }}</a>
     <a href="#p-account">{{ _("Account") }}</a>
     {% if user.is_admin %}<a href="#p-admin">{{ _("Editors") }}</a>{% endif %}
   </nav>
@@ -354,6 +355,47 @@
     <p class="clock" style="margin-top:.6rem; display:block">
       {% trans %}Creating a new link makes the old one stop working right away. Anyone using the old link will stop getting updates.{% endtrans %}
     </p>
+  </section>
+
+  {# ── API access ───────────────────────────────────────────────────────
+     A personal token for the read-only agent API (/api/v1). Same shape as
+     the calendar feed above: require_user, generate_api_token, redirect
+     back to /preferences with the raw value in a one-shot query parameter --
+     the raw token is unrecoverable afterwards (only its hash is stored), so
+     this reveal is the only time it is ever shown. #}
+  <section class="psec" id="p-api">
+    <h3>{{ _("API access") }}</h3>
+    <p class="blurb">{{ _("A personal token so an agent can read your data over the API.") }}</p>
+
+    <div class="statline">
+      {% if has_api_token or api_token %}
+      <span class="pill p-ok">{{ _("API token active") }}</span>
+      <span class="clock">{{ _("Read-only access to your concerts and drafts, scoped to your account.") }}</span>
+      {% else %}
+      <span class="pill p-quiet">{{ _("No API token") }}</span>
+      {% endif %}
+    </div>
+
+    {% if api_token %}
+    <div class="presetcard" style="margin-top:.8rem">
+      <div class="feedlinks">
+        <div class="ruleline"><b>{{ _("Your API token is ready — save it now, it won't be shown again.") }}</b></div>
+        <p class="inline" style="margin:.4rem 0 0">
+          <button type="button" class="act" data-copy="{{ api_token }}"
+                  onclick="navigator.clipboard.writeText(this.dataset.copy)">{{ _("Copy token") }}</button>
+        </p>
+        <p class="inline" style="margin:.4rem 0 0"><code class="feed-url">{{ api_token }}</code></p>
+      </div>
+    </div>
+    {% elif has_api_token %}
+    <form class="inline" method="post" action="/me/api-token" style="margin-top:.6rem">
+      <button class="act no" type="submit"
+              data-confirm="{{ _('Your current token will stop working. Any agent using it will need the new one.') }}"
+              onclick="return confirm(this.dataset.confirm)">{{ _("Generate a new token") }}</button>
+    </form>
+    {% else %}
+    <form method="post" action="/me/api-token" style="margin-top:.6rem"><button class="act" type="submit">{{ _("Generate API token") }}</button></form>
+    {% endif %}
   </section>
 
   {# ── Account ───────────────────────────────────────────────────────── #}

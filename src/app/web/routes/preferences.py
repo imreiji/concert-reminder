@@ -14,6 +14,7 @@
   POST /me/timezone/auto                     browser-detected timezone
   POST /me/timezone/reset                    back to browser auto-detect
   POST /me/test-dm                           send a synchronous diagnostic test DM
+  POST /me/api-token                         mint/re-mint the agent read-API token
 
 Everything here is per-user: routes verify ownership and 404 on other
 people's presets/subscriptions rather than admitting they exist.
@@ -37,6 +38,7 @@ from app.db.service import (
     delete_user,
     ensure_user,
     followed_tag_counts,
+    generate_api_token,
     get_default_preset,
     group_members,
     list_editors,
@@ -107,6 +109,7 @@ async def preferences(
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
     feed_token: str = "",
+    api_token: str = "",
 ):
     from app.domain.types import TagKind
 
@@ -131,6 +134,7 @@ async def preferences(
     tz = db_user.timezone if db_user else "America/Moncton"
     tz_auto = db_user.tz_auto if db_user else True
     has_calendar_feed = bool(db_user and db_user.calendar_token_hash)
+    has_api_token = bool(db_user and db_user.api_token_hash)
     editors = await list_editors(session) if user.is_admin else []
 
     # Following section: the tracked count, plus the deliberately-invisible
@@ -169,6 +173,7 @@ async def preferences(
          "tracked_count": tracked_count, "upcoming_count": upcoming_count,
          "pruned_concerts": pruned_concerts,
          "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
+         "has_api_token": has_api_token, "api_token": api_token or None,
          "bot_enabled": settings.bot_enabled},
     )
 
@@ -495,6 +500,29 @@ async def reset_timezone_auto(
     db_user.tz_auto = True
     await session.commit()
     return RedirectResponse(_safe_next(next_url), status_code=303)
+
+
+# ── Agent API token ──────────────────────────────────────────────────────
+
+
+@router.post("/me/api-token")
+async def create_api_token(
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Mint (or re-mint) the agent read-API token. Mirrors POST
+    /me/calendar-feed (routes/calendar.py): require_user, generate, commit,
+    redirect with the raw value in a one-shot query parameter -- only its hash
+    is stored (invariant 5), so this is the only time it is ever shown.
+
+    Unlike the calendar feed -- minted from Preferences, welcome step 4, and
+    the concert page's calendar dialog, hence its safe_next-guarded `next`
+    allowlist -- this route has exactly one caller. A fixed redirect needs no
+    open-redirect guard: there is no attacker-supplied destination to guard
+    against."""
+    token = await generate_api_token(session, user.id)
+    await session.commit()
+    return RedirectResponse(f"/preferences?api_token={token}", status_code=303)
 
 
 # ── DM diagnostics ───────────────────────────────────────────────────────
