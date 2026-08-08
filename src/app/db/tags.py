@@ -313,6 +313,52 @@ async def current_tag_exports(session: AsyncSession) -> list[TagExport]:
     ]
 
 
+async def api_tag_rows(
+    session: AsyncSession,
+    *,
+    kind: str | None = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """The tag vocabulary as JSON rows, plus the pre-paging total.
+
+    Built from `current_tag_exports`, the ONE builder of the catalogue
+    snapshot, so the API, the zip export and the differ all describe the same
+    thing. Ordering comes from there too -- (kind, slug) -- and slug is
+    UNIQUE, so the sort is already totally ordered and safe to page: no
+    tiebreaker is needed on top of it (contrast `web/paging.py`'s warning
+    about non-unique sort keys, which does not apply here).
+
+    Handles, never ids or names: invariant 3. This is what stops an agent
+    inventing tag names that match nothing.
+    """
+    exports = await current_tag_exports(session)
+    if kind:
+        exports = [e for e in exports if e.kind == kind]
+    total = len(exports)
+    window = exports[offset : offset + limit]
+    return [
+        {
+            "handle": e.handle,
+            "name": e.name,
+            "name_en": e.name_en,
+            "name_zh": e.name_zh,
+            "kind": e.kind,
+            "parent": e.parent,
+            "voiced_by": e.voiced_by,
+            "members": list(e.members),
+            "region": e.region,
+            "city": e.city,
+            "city_en": e.city_en,
+            "city_zh": e.city_zh,
+            "address": e.address,
+            "location_url": e.location_url,
+            "eventernote_url": e.eventernote_url,
+        }
+        for e in window
+    ], total
+
+
 async def catalogue_export_files(session: AsyncSession) -> list[tuple[str, str]]:
     """(path in zip, text) for the whole catalogue, deterministically ordered.
 

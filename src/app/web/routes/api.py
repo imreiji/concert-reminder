@@ -27,6 +27,7 @@ from app.config import settings
 from app.db.service import (
     api_concert_detail,
     api_concert_rows,
+    api_tag_rows,
     concert_export_yaml,
     get_user_by_api_token,
 )
@@ -117,6 +118,21 @@ async def list_concerts(
     rows, total = await api_concert_rows(
         session, q=q, tag_handles=tag, since=since, until=until,
         limit=page.limit, offset=page.offset,
+    )
+    return page_envelope(rows, total, page)
+
+
+@router.get("/tags")
+async def list_tags(
+    kind: str | None = None,
+    page: PageParams = Depends(page_params),
+    user: SessionUser = Depends(api_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """The vocabulary, served -- so an agent stops inventing tag names that
+    match nothing. Any valid token, same as /concerts."""
+    rows, total = await api_tag_rows(
+        session, kind=kind, limit=page.limit, offset=page.offset
     )
     return page_envelope(rows, total, page)
 

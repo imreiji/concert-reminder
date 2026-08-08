@@ -422,3 +422,33 @@ async def test_concerts_require_a_token(client, db):
     await _seed_concerts(db, 1)
     assert client.get("/api/v1/concerts").status_code == 401
     assert client.get("/api/v1/concerts/live-0").status_code == 401
+
+
+async def test_tags_expose_the_vocabulary(client, db):
+    token = await _mint(db)
+    async with db() as s:
+        s.add(Tag(name="ラブライブ！", name_en="Love Live!", kind=TagKind.FRANCHISE,
+                  slug="love-live"))
+        await s.commit()
+
+    body = client.get("/api/v1/tags", headers=_auth(token)).json()
+    row = next(r for r in body["items"] if r["handle"] == "love-live")
+    assert row["name"] == "ラブライブ！"
+    assert row["name_en"] == "Love Live!"
+    assert row["kind"] == "franchise"
+    assert body["total"] >= 1
+
+
+async def test_tags_filter_by_kind(client, db):
+    token = await _mint(db)
+    async with db() as s:
+        s.add(Tag(name="A", kind=TagKind.ARTIST, slug="a"))
+        s.add(Tag(name="V", kind=TagKind.VENUE, slug="v"))
+        await s.commit()
+
+    body = client.get("/api/v1/tags?kind=venue", headers=_auth(token)).json()
+    assert [r["handle"] for r in body["items"]] == ["v"]
+
+
+async def test_tags_require_a_token(client):
+    assert client.get("/api/v1/tags").status_code == 401
