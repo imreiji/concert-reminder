@@ -6,6 +6,8 @@ pinning are the ones that make a leak survivable: the raw value is never
 persisted, and minting again invalidates whatever was issued before.
 """
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -121,19 +123,38 @@ def client_pref_anon(db):
     return TestClient(app, follow_redirects=False)
 
 
-async def test_mint_route_shows_the_token_once(client_pref, db):
-    """The raw value is displayed exactly once and is unrecoverable after.
-    Recovery is 'mint a new one', which is the whole point of storing a hash."""
+_TOKEN_RE = re.compile(r'id="api-token-value"[^>]*>([^<]+)<')
+
+
+async def test_mint_never_puts_the_token_in_a_url(client_pref):
+    """The raw value must never appear in a redirect Location -- that is what
+    would put it in Caddy/Cloudflare access logs, browser history and the
+    address bar. Unlike the calendar feed (a URL forever, by necessity), this
+    is a header credential and has no excuse to ever be one."""
     r = client_pref.post("/me/api-token", data={})
-    assert r.status_code in (200, 303)
-    if r.status_code == 303:
-        location = r.headers["location"]
-        assert "api_token=" in location
-        token = location.split("api_token=")[1].split("&")[0]
-        reveal = client_pref.get(location).text
-        assert token in reveal
-    page = client_pref.get("/preferences").text
-    assert "api_token=" not in page  # never sticky in the URL or re-rendered
+    assert r.status_code == 303
+    assert r.headers["location"] == "/preferences"  # bare, no query at all
+
+
+async def test_mint_route_shows_the_token_once(client_pref, db):
+    """The raw value rides a one-shot session flash: present on the render
+    immediately after minting, gone (POPPED, not merely hidden) from every
+    render after that -- proven the honest way, by minting, reading the
+    actual token value off the page, then asserting that exact value is
+    absent from a second render. Recovery is 'mint a new one', which is the
+    whole point of storing only a hash."""
+    r = client_pref.post("/me/api-token", data={})
+    assert r.status_code == 303
+
+    first_render = client_pref.get("/preferences").text
+    match = _TOKEN_RE.search(first_render)
+    assert match, "expected the freshly minted token to render exactly once"
+    token = match.group(1)
+    assert len(token) >= 32
+
+    second_render = client_pref.get("/preferences").text
+    assert token not in second_render
+    assert 'id="api-token-value"' not in second_render
 
 
 async def test_mint_route_requires_a_session(client_pref_anon):

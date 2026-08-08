@@ -109,9 +109,14 @@ async def preferences(
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
     feed_token: str = "",
-    api_token: str = "",
 ):
     from app.domain.types import TagKind
+
+    # POP, not get: this is what makes the mint's session flash one-shot. A
+    # second render of this same page (back button, refresh, a second tab)
+    # must show nothing -- see POST /me/api-token's docstring for why the
+    # token isn't carried here as a query parameter the way feed_token is.
+    api_token = request.session.pop("api_token", None)
 
     presets = await my_presets(session, user.id)
     subs = list((await session.execute(
@@ -173,7 +178,7 @@ async def preferences(
          "tracked_count": tracked_count, "upcoming_count": upcoming_count,
          "pruned_concerts": pruned_concerts,
          "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
-         "has_api_token": has_api_token, "api_token": api_token or None,
+         "has_api_token": has_api_token, "api_token": api_token,
          "bot_enabled": settings.bot_enabled},
     )
 
@@ -507,22 +512,39 @@ async def reset_timezone_auto(
 
 @router.post("/me/api-token")
 async def create_api_token(
+    request: Request,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Mint (or re-mint) the agent read-API token. Mirrors POST
-    /me/calendar-feed (routes/calendar.py): require_user, generate, commit,
-    redirect with the raw value in a one-shot query parameter -- only its hash
-    is stored (invariant 5), so this is the only time it is ever shown.
+    """Mint (or re-mint) the agent read-API token -- require_user, generate,
+    commit, same as every other mint in this file. Only its hash is stored
+    (invariant 5), so the reveal this triggers is the only time the raw
+    value is ever shown.
 
-    Unlike the calendar feed -- minted from Preferences, welcome step 4, and
-    the concert page's calendar dialog, hence its safe_next-guarded `next`
-    allowlist -- this route has exactly one caller. A fixed redirect needs no
-    open-redirect guard: there is no attacker-supplied destination to guard
-    against."""
+    This route DELIBERATELY DOES NOT mirror POST /me/calendar-feed's reveal
+    mechanism, and that is not an oversight -- don't "restore consistency"
+    by putting the token back in the URL. The calendar feed's token MUST
+    live in a URL forever (a calendar client polls that URL on its own
+    schedule with no cookies, per calendar.py), so its appearance in
+    Caddy/Cloudflare access logs, browser history and the address bar is
+    unavoidable and already an accepted cost. This token is the opposite
+    shape: `db/models.py`'s own comment on `api_token_hash` says it is "sent
+    as an Authorization: Bearer header rather than in a URL, which the
+    calendar feed cannot do" -- so putting it in a URL here, even a
+    same-origin redirect target only this browser follows, would be an
+    AVOIDABLE credential leak into exactly those logs. `Referrer-Policy` does
+    not help: it stops the URL leaking to a third-party Referer header, not
+    its own appearance in the server's access log or this browser's history.
+
+    So the raw value rides a one-shot session flash instead -- a signed
+    cookie, not a URL -- and the redirect target is the bare, query-free
+    `/preferences`. GET /preferences pops (not reads) the flash, which is
+    what makes it one-shot: a second render, even of the exact same
+    /preferences URL, shows nothing."""
     token = await generate_api_token(session, user.id)
     await session.commit()
-    return RedirectResponse(f"/preferences?api_token={token}", status_code=303)
+    request.session["api_token"] = token
+    return RedirectResponse("/preferences", status_code=303)
 
 
 # ── DM diagnostics ───────────────────────────────────────────────────────
