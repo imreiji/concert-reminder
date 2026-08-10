@@ -40,6 +40,17 @@ from app.domain.page_text import PAGE_TEXT_CAP
 from app.domain.round_evidence import TIMESTAMP_FIELDS, ProposedRound
 from app.domain.triage_prompts import extract_yaml
 
+# Which pass wrote a completion record. Two passes now produce one --
+# `triage.py` reading an Eventernote page (phase 1) and `draft_completion.py`
+# reading the official one (phase 2) -- and `db/drafts.py:completion_candidates`
+# reads this key to tell them apart: a phase-1 record must NOT spend phase 2's
+# one attempt, because the two read DIFFERENT PAGES and a draft phase 1 could
+# not ground is exactly one that still wants the official page read. A record
+# with no `pass` at all predates this and is phase 2's, which is the safe
+# reading -- it withholds an attempt rather than paying for a second one.
+TRIAGE_PASS = "triage"
+COMPLETION_PASS = "completion"
+
 
 class CompletionResponseError(Exception):
     """The reply can't be used at all -- not YAML, or not a mapping. Anything
@@ -218,6 +229,35 @@ def parse_completion_response(text: str) -> tuple[list[ProposedRound], list[str]
         payload["label"] = label
         rounds.append(ProposedRound(data=payload, evidence=evidence, label=label))
     return rounds, warnings
+
+
+def completion_record(
+    *,
+    source_url: str,
+    source_pass: str,
+    evidence: Sequence[dict],
+    rejected: Sequence[str],
+) -> str:
+    """The proofreading record that rides BESIDE a draft, never inside it.
+
+    One writer for the shape, because two passes now write it (see
+    `TRIAGE_PASS`/`COMPLETION_PASS`) and one of them adding a key the other
+    forgets is how `completion_candidates` would start guessing which pass a
+    record came from. Stored on `PendingDraft.completion_yaml` and read by the
+    preview: `evidence` is POSITIONAL against the draft's own rounds, and
+    `rejected` carries every round that was refused, with its reason, because a
+    real deadline quietly discarded is as harmful as a fake one quietly kept.
+    """
+    return yaml.safe_dump(
+        {
+            "source_url": source_url,
+            "pass": source_pass,
+            "evidence": [dict(e) for e in evidence],
+            "rejected": list(rejected),
+        },
+        allow_unicode=True,
+        sort_keys=False,
+    )
 
 
 def _split_comment_prefix(text: str) -> tuple[str, str]:

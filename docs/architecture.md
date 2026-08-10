@@ -411,8 +411,9 @@ measurement or an incident that a reasonable-looking edit would undo.
   network (misconfiguration named plainly), and transport failure, non-200, a
   non-JSON 200 and a body missing `choices[0].message.content` are one class
   because its one caller treats them identically. It has no opinion about what
-  the messages SAY — the prompts, the fence-stripping and `strip_rounds` are
-  pure, in `domain/triage_prompts.py`. The request body pins
+  the messages SAY — the prompts and the fence-stripping are pure, in
+  `domain/triage_prompts.py`, and what a model's proposed round has to prove is
+  pure too, in `domain/round_evidence.py`. The request body pins
   `"thinking": {"type": "disabled"}` unconditionally, and a non-`"stop"`
   `finish_reason` or empty `content` also raises `LlmError` — a 2026-08-05
   incident found `deepseek-v4-flash` thinks by default, burning ~50k reasoning
@@ -436,11 +437,49 @@ measurement or an incident that a reasonable-looking edit would undo.
   concert and dismisses no lead — drafts land as `PendingDraft` rows, so
   `import_commit` stays the only write path into `concerts`, and the prune YAML
   is stored TEXT the owner still pastes through the plan/apply screen, which
-  stays the only path to a dismissal. **`strip_rounds` runs on every generated
-  draft whatever the model returned**: the prompt asks for `rounds: []`, the
-  prompt is not the guarantee, this is, and the failure it prevents is an
-  invented `apply_closes_jst` reaching a real user as a real reminder for a
-  deadline that never existed. Gated by `settings.triage_enabled`
+  stays the only path to a dismissal. **Every round of every generated draft is
+  EVIDENCE-GROUNDED, whatever the model returned** — `verify_rounds`
+  (`domain/round_evidence.py`) keeps only the rounds whose verbatim quote it can
+  find in the same page text the model was shown, and `strip_rounds`, which used
+  to delete all of them unconditionally, is gone. The failure being prevented is
+  unchanged and is still this app's worst — an invented `apply_closes_jst`
+  reaching a real user as a real reminder for a deadline that never existed —
+  but the guarantee moved from "delete everything" to "verify everything" by
+  **owner ruling, 2026-08-10, and the ruling is a measurement**: `strip_rounds`
+  rested on the claim that Eventernote pages carry no ticket data, and they
+  routinely carry the whole ladder in their free-text description. Over 13 real
+  productions the model read 7 real rounds, every one verifiable on its own
+  page, and `strip_rounds` deleted all 7; `round_evidence.py` in the same run
+  accepted 39 rounds across three models with zero invented timestamps. What
+  made the old rule right when it shipped was that phase 1 had no way to tell a
+  read deadline from an invented one, and that is exactly what no longer holds.
+  Eventernote is also sometimes the ONLY source left — an official page drops a
+  round once it closes, so a deadline this pass declines to read is one phase 2
+  can never recover.
+  **The model is shown page TEXT, not HTML**, and that is not a tidying: the
+  central property of `round_evidence.py` is that the text the model read and
+  the text the verifier searches are the SAME text, so phase 1 now runs
+  `html_to_text` and prompts under the one `PAGE_TEXT_CAP` the verifier
+  re-normalizes under, exactly as phase 2 does. The old 120k HTML cap against a
+  60k text check would have failed a real quote for a transformation nobody
+  applied to both sides. The measured cost of dropping the tags is none that a
+  leg needs: the 2026-08-10 sample page went 28,296 characters of HTML to 5,141
+  of text and kept its date, doors/start, venue, cast, related links (the
+  `official_url` phase 2 later fetches is printed as visible text, not only as
+  an `href`) and its 受付期間 block; the script bodies and image URLs it loses
+  were never evidence.
+  **Nothing is dropped silently**: every rejection is written to the new
+  draft's `PendingDraft.completion_yaml` — the record phase 2 already writes,
+  through the one `completion_record` builder, rendered on the same preview
+  banner — because a real deadline quietly discarded is as harmful as a fake one
+  quietly kept. That record carries `pass: triage`, and
+  `completion_candidates` reads it: a phase-1 record must NOT spend phase 2's
+  one attempt, since the two passes read DIFFERENT PAGES and a draft this pass
+  could not ground is precisely one that still wants its official page read. A
+  draft this pass DID ground is kept away from phase 2 by the older "no rounds
+  yet" filter, and that is also correct — `merge_rounds` replaces the whole
+  `rounds:` key, so re-reading it would delete the very deadlines phase 1
+  rescued. Gated by `settings.triage_enabled`
   exactly as the sweep is gated by `discovery_enabled`; `deepseek_model` has NO
   default, because hardcoding a guess at a third party's current alias starts
   billing a model nobody chose the moment the flag flips. A press costs one
@@ -497,7 +536,14 @@ measurement or an incident that a reasonable-looking edit would undo.
   EVIDENCE GROUNDING**: the model must quote the page line it read each
   timestamp from, and `domain/round_evidence.py` drops any round whose quote
   it cannot find in the same text the model was given — plus the nastier
-  case, a quote that IS on the page but does not carry that timestamp.
+  case, a quote that IS on the page but does not carry that timestamp. Since
+  2026-08-10 it is BOTH passes' rule, not this one's alone (see `triage.py`
+  above): phase 1 runs the same `parse_completion_response` →
+  `verify_rounds` → `merge_rounds` sequence over the Eventernote page, and
+  writes the same `completion_record`. What did NOT move is the half of
+  `complete_one` around it — that one amends a STORED draft a human may
+  already have proofread, where phase 1 merges into the model's own fresh
+  reply and has no row yet.
   **That last check is a CONTIGUITY rule, and it is an owner ruling
   (2026-08-05) made after a review defeated the looser one.** "Do this
   timestamp's digits appear somewhere in the quote" accepts far too much:
@@ -552,7 +598,12 @@ measurement or an incident that a reasonable-looking edit would undo.
   a mapping raises `DraftMergeError` and writes NOTHING, rather than
   "succeeding" by wiping the document. Evidence lives BESIDE the draft
   (`PendingDraft.completion_yaml`), never inside it: a draft is a document
-  that gets committed into `concerts`. It creates no concert — `import_commit`
+  that gets committed into `concerts`. That record has ONE builder
+  (`completion_record`) and names the pass that wrote it, which is what
+  `completion_candidates` now reads instead of mere non-emptiness — a phase-1
+  record is not an attempt at the official page, and anything without the key
+  (every record predating it) reads as phase 2, the reading that withholds an
+  attempt rather than paying twice. It creates no concert — `import_commit`
   stays the only write path — and it never fetches `eventernote_url`, which
   carries no ticket information and so could not contain the answer.
   Two failure rules worth keeping: `complete_one` writes `completion_yaml`

@@ -35,18 +35,21 @@ Two prompts, two response parsers:
   round-trips through `parse_prune_list` -- which a naive concatenation of
   two batches' text would not, since a repeated `stage:` key is precisely
   what that parser's `_UniqueKeyLoader` refuses.
-- `draft_prompt`/`extract_yaml`/`strip_rounds` -- pass 3, one survivor at a
-  time, in the exact vocabulary `.claude/skills/add-concert/SKILL.md` and
-  its pinned `references/example-draft.yaml` use (trilingual title, per-leg
-  date/venue/label, series/artist NAME lists, never ids). `strip_rounds` is
-  a belt-and-braces net for the one rule both skills repeat under threat of
-  a real user getting a fake reminder: a model asked for `rounds: []` can
-  still invent one anyway, so the runner is expected to call `strip_rounds`
-  on every draft response regardless of what the model actually said,
-  discarding any round the model proposed rather than trusting its
-  self-restraint. `PAGE_CHAR_CAP` caps how much of a fetched ticket page
-  rides in the user prompt, so one enormous page cannot blow an LLM
-  context budget silently.
+- `draft_prompt`/`extract_yaml` -- pass 3, one survivor at a time, in the
+  exact vocabulary `.claude/skills/add-concert/SKILL.md` and its pinned
+  `references/example-draft.yaml` use (trilingual title, per-leg
+  date/venue/label, series/artist NAME lists, never ids). It asks for
+  ROUNDS WITH EVIDENCE, in the same words `round_completion.py`'s prompt
+  uses, and `strip_rounds` -- which used to delete every round this pass
+  produced -- is GONE (owner ruling, 2026-08-10; see `app/triage.py`).
+  The guarantee moved from "delete everything" to "verify everything":
+  `domain/round_evidence.py:verify_rounds` drops any round whose quote is
+  not on the page the model was shown, so the prompt asks and the code
+  still decides. `draft_prompt` therefore takes page TEXT
+  (`domain/page_text.py`), never HTML, capped at that module's
+  `PAGE_TEXT_CAP` -- the cap `verify_rounds` re-normalizes under. Showing
+  the model text the verifier cannot search is how a real quote fails for
+  a transformation nobody applied to both sides.
 """
 
 from __future__ import annotations
@@ -57,10 +60,9 @@ from dataclasses import dataclass
 
 import yaml
 
+from app.domain.page_text import PAGE_TEXT_CAP
 from app.domain.prune_list import PruneListError, parse_prune_list
 from app.domain.types import DismissReason
-
-PAGE_CHAR_CAP = 120_000
 
 
 class TriageResponseError(Exception):
@@ -396,9 +398,17 @@ def merge_classify_results(results: Sequence[ClassifyResult]) -> ClassifyResult:
 #    vocabulary) --------------------------------------------------------
 
 # The add-concert skill's skeleton (.claude/skills/add-concert/SKILL.md,
-# references/example-draft.yaml), trimmed to one leg and rounds: []. Same
+# references/example-draft.yaml), trimmed to one leg and one round. Same
 # top-level keys parse_draft (app.domain.yaml_import) knows: trilingual
 # title, series/artist NAME lists (never ids), per-leg date/venue/labels.
+#
+# The `rounds:` entry is shaped EXACTLY like `_COMPLETION_SYSTEM_PROMPT`'s,
+# `evidence` block included, because the same `verify_rounds` reads both
+# passes' output: two prompts describing one contract in two shapes is how a
+# model learns to write a round only one of them accepts. `kind` values are
+# the literal `RoundKind` (app.domain.types) enum values for the reason that
+# prompt gives -- `yaml_import._round_kind` silently defaults anything else to
+# `other` with a warning, so a shorthand here is a quality loss, not an error.
 _DRAFT_SKELETON = """\
 title: 例）ライブタイトル
 title_en: Example live title
@@ -423,7 +433,22 @@ performances:
     doors_jst: 2026-01-01 15:30
     starts_at_jst: 2026-01-01 17:00
     eventernote_event_id: "000000"
-rounds: []
+rounds:
+  - label: 1次先行抽選
+    label_en: 1st advance lottery
+    label_zh: 首轮先行抽选
+    kind: lottery_round
+    applies_to: [Day 1]
+    apply_opens_jst: 2026-01-05 12:00
+    apply_closes_jst: 2026-01-10 23:59
+    results_jst: 2026-01-15 18:00
+    payment_deadline_jst: 2026-01-20 23:59
+    url: https://example.com/ticket
+    evidence:
+      apply_opens_jst: "受付開始 2026年1月5日(月)12:00"
+      apply_closes_jst: "申込締切 2026年1月10日(土)23:59"
+      results_jst: "当落発表 2026年1月15日(木)18:00"
+      payment_deadline_jst: "入金期限 2026年1月20日(火)23:59"
 """
 
 _DRAFT_SYSTEM_PROMPT = f"""\
@@ -442,19 +467,36 @@ Rules:
   An unmatched name becomes a harmless preview hint at paste time; guessing
   an id would attach the wrong tag silently.
 - Eventernote pages carry per-leg facts (date, venue, doors/start, cast), and
-  their free-text description often carries the full ticket/round ladder too
-  -- read it for what it says, this pass just doesn't act on it.
-- `rounds: []` is the rule here, unconditionally, even when a round is
-  sitting right there in the text above. A round belongs to the COMPLETION
-  pass, which grounds every timestamp in a verbatim quote from the page and
-  verifies it before trusting it -- this pass makes no such check, so any
-  apply_opens_jst / apply_closes_jst / results_jst / payment_deadline_jst it
-  wrote here would reach a real user as a real reminder for a deadline nobody
-  verified. Leave `rounds: []` exactly as shown.
-- A "申込締切"-prefixed date from a calendar lead is the same kind of
-  unverified pointer -- it says a deadline exists, not that this pass may
-  write it. Leave the round out here too; the completion pass is where it
-  gets confirmed.
+  their free-text description often carries the full ticket/round ladder too.
+  Read it, and write down what it actually says -- under the evidence rule
+  below, which is the only one that really matters.
+- EVERY timestamp you write MUST have an `evidence` entry quoting the text on
+  the page you read it from, copied VERBATIM from that page. A round whose
+  evidence cannot be found on the page is thrown away by the application, so
+  an invented quote does not get you a round -- it loses you one. If the page
+  does not state a time, leave that field out. If it states none, write
+  `rounds: []`.
+- NEVER infer, estimate or complete a timestamp the page does not state. A
+  fabricated deadline reaches a real person as a real reminder for something
+  that was never real, which is the worst thing this system can do.
+- Times are JST, written `YYYY-MM-DD HH:MM`. A page writing 2026年4月5日（日）
+  21:00 means `2026-04-05 21:00`. A deadline written 23:59 stays 23:59 -- do
+  not round it.
+- A 受付期間 line states TWO fields of ONE round -- `apply_opens_jst` and
+  `apply_closes_jst` -- not two rounds. One round per campaign rung: 最速先行,
+  2次先行 and 一般発売 are three rounds.
+- A results announcement (当落発表) and a payment deadline (入金期限) are
+  FIELDS of the round they settle (`results_jst`, `payment_deadline_jst`) --
+  never rounds of their own.
+- `applies_to` is a list of leg labels copied EXACTLY from the `performances`
+  you wrote above. Omit it (or leave it empty) when the round covers the whole
+  event; that is the common case for a tour-wide lottery.
+- `kind` is one of: lottery_round, fcfs_sale, general_sale, stream_ticket_sale,
+  eligibility_item_sale, goods_sale, tour_package, upgrade, other. Use `other`
+  when unsure rather than guessing a mechanic.
+- A "申込締切"-prefixed date from a calendar LEAD LINE is not evidence: it is a
+  pointer that says a deadline exists, not page text you may quote. A round
+  may only be written from the page itself.
 """
 
 
@@ -467,30 +509,25 @@ def _draft_lead_line(lead_id: str, leads_by_id: dict[str, LeadLine]) -> str:
 
 
 def draft_prompt(
-    survivor: Survivor, leads: Sequence[LeadLine], page_html: str
+    survivor: Survivor, leads: Sequence[LeadLine], page_text: str
 ) -> tuple[str, str]:
+    """The system+user pair for one survivor's draft.
+
+    `page_text` is TEXT (`page_text.html_to_text` of the fetched page), never
+    HTML, and is capped at `PAGE_TEXT_CAP` -- the same cap
+    `round_evidence.verify_rounds` re-normalizes the page under when it looks
+    for the model's quotes. Two different caps would mean the model could read
+    a deadline out of text no quote of it could ever be verified against, and
+    the rejection would name the quote rather than the cap.
+    """
     leads_by_id = {lead.source_event_id: lead for lead in leads}
     lead_lines = "\n".join(_draft_lead_line(lid, leads_by_id) for lid in survivor.lead_ids)
-    truncated_html = page_html[:PAGE_CHAR_CAP]
     user = (
         f"Production: {survivor.title}\n"
         f"Representative Eventernote id: "
         f"{survivor.representative or '(none -- calendar-only lead)'}\n"
         f"Known legs from discovery:\n{lead_lines}\n\n"
-        f"Eventernote page HTML (may be truncated at {PAGE_CHAR_CAP} "
-        f"characters):\n{truncated_html}"
+        f"The Eventernote page, as text (may be truncated at {PAGE_TEXT_CAP} "
+        f"characters):\n{page_text[:PAGE_TEXT_CAP]}"
     )
     return _DRAFT_SYSTEM_PROMPT, user
-
-
-def strip_rounds(draft_text: str) -> str:
-    """Drop whatever `rounds:` the model wrote and replace it with `[]`,
-    unconditionally -- called on every draft response regardless of what the
-    model said, since a model asked for `rounds: []` can still invent one
-    anyway and this is the one rule both skills repeat under threat of a
-    real user getting a fake reminder."""
-    data = yaml.safe_load(draft_text)
-    if not isinstance(data, dict):
-        data = {}
-    data["rounds"] = []
-    return yaml.safe_dump(data, allow_unicode=True, sort_keys=False)

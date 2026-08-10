@@ -5,9 +5,9 @@ and app.domain.yaml_import the same way the runner (a later task) will."""
 import pytest
 import yaml
 
+from app.domain.page_text import PAGE_TEXT_CAP
 from app.domain.prune_list import parse_prune_list
 from app.domain.triage_prompts import (
-    PAGE_CHAR_CAP,
     LeadLine,
     Survivor,
     TriageResponseError,
@@ -15,7 +15,6 @@ from app.domain.triage_prompts import (
     draft_prompt,
     merge_classify_results,
     parse_classify_response,
-    strip_rounds,
 )
 from app.domain.types import DismissReason
 
@@ -113,54 +112,48 @@ def test_unusable_response_raises():
         parse_classify_response("I'm sorry, I can't help with that.")
 
 
-def test_strip_rounds_removes_what_the_model_invented():
-    text = (
-        "title: ライブ\ntitle_en: Live\ntitle_zh: 演唱会\n"
-        "rounds:\n  - label: 最速先行\n    apply_closes_jst: 2026-09-15 23:59\n"
-    )
-    stripped = strip_rounds(text)
-    assert "最速先行" not in stripped
-    assert "apply_closes_jst" not in stripped
-    data = yaml.safe_load(stripped)
-    assert data["rounds"] == []
-    assert data["title_zh"] == "演唱会"   # unicode survives the round-trip
-
-
-def test_draft_prompt_caps_page_size_and_forbids_rounds():
+def test_draft_prompt_caps_the_page_at_the_verifier_s_own_cap():
+    """The one cap, `PAGE_TEXT_CAP`, because `verify_rounds` re-normalizes to
+    exactly it: a prompt built under a LARGER cap can show the model text no
+    quote from it could ever be verified against."""
     system, user = draft_prompt(
         Survivor(title="t", lead_ids=("1",), representative="1"),
-        [_lead()], page_html="x" * (PAGE_CHAR_CAP + 50_000),
+        [_lead()], page_text="x" * (PAGE_TEXT_CAP + 50_000),
     )
-    assert len(user) < PAGE_CHAR_CAP + 10_000
-    assert "rounds: []" in system
+    assert len(user) < PAGE_TEXT_CAP + 10_000
+    assert str(PAGE_TEXT_CAP) in user
 
 
-def test_draft_prompt_labels_the_payload_as_an_eventernote_page():
+def test_draft_prompt_labels_the_payload_as_eventernote_page_text():
     # run_triage fetches EVENT_URL = eventernote.com/events/{id} for this
-    # pass -- never an official ticket page -- so the user message must not
-    # call the payload something it isn't.
+    # pass -- never an official ticket page -- and hands it over as TEXT, the
+    # same shape the completion pass uses, so the user message must not call
+    # the payload something it isn't.
     _system, user = draft_prompt(
         Survivor(title="t", lead_ids=("1",), representative="1"),
-        [_lead()], page_html="<html></html>",
+        [_lead()], page_text="開催日時 2027-04-24",
     )
-    assert "Eventernote page HTML" in user
+    assert "Eventernote page, as text" in user
+    assert "HTML" not in user
     assert "Official ticket page" not in user
 
 
-def test_draft_system_prompt_does_not_claim_eventernote_has_no_ticket_data():
-    # Eventernote event pages routinely carry the full ticket ladder in their
-    # free-text description -- the system prompt must not tell the model
-    # otherwise, only that this pass still doesn't act on it.
+def test_the_draft_prompt_asks_for_evidence_instead_of_forbidding_rounds():
+    """The owner's 2026-08-10 ruling: an Eventernote page routinely carries the
+    whole ladder, so the rule is no longer "never write a round" but "quote the
+    line you read it from". The prompt has to say so the way the completion
+    prompt does, including that an invented quote COSTS a round."""
     system, _user = draft_prompt(
         Survivor(title="t", lead_ids=("1",), representative="1"),
-        [_lead()], page_html="<html></html>",
+        [_lead()], page_text="x",
     )
-    assert "no lottery data" not in system
-    assert "NEVER round/ticket information" not in system
-    # The rule stays, now with the reason spelled out: extraction is the
-    # completion pass's job, which grounds and verifies each timestamp.
-    assert "COMPLETION" in system
-    assert "grounds every timestamp in a verbatim quote" in system
+    assert "evidence" in system
+    assert "VERBATIM" in system
+    assert "an invented quote does not get you a round" in system
+    assert "NEVER infer" in system
+    # The old unconditional rule is GONE, not merely softened: leaving it in
+    # beside the evidence rule tells the model both things at once.
+    assert "`rounds: []` is the rule here, unconditionally" not in system
 
 
 # -- Merging the per-batch classify results --------------------------------

@@ -97,9 +97,11 @@ from app.db.service import (
 )
 from app.domain.page_text import html_to_text, normalize_page_text
 from app.domain.round_completion import (
+    COMPLETION_PASS,
     CompletionResponseError,
     DraftMergeError,
     completion_prompt,
+    completion_record,
     draft_leg_labels,
     merge_rounds,
     parse_completion_response,
@@ -225,27 +227,21 @@ async def complete_one(
         # operator sees WHAT went wrong rather than a draft that silently
         # never progresses. Re-raised so run_completion's caller still counts
         # this as a skipped draft -- the row changed, the outcome did not.
-        row.completion_yaml = yaml.safe_dump(
-            {
-                "source_url": source_url,
-                "evidence": [],
-                "rejected": [f"the model's reply could not be used: {exc}"],
-            },
-            allow_unicode=True,
-            sort_keys=False,
+        row.completion_yaml = completion_record(
+            source_url=source_url,
+            source_pass=COMPLETION_PASS,
+            evidence=[],
+            rejected=[f"the model's reply could not be used: {exc}"],
         )
         await session.flush()
         raise
 
     row.draft_text = merged_text
-    row.completion_yaml = yaml.safe_dump(
-        {
-            "source_url": source_url,
-            "evidence": [dict(r.evidence) for r in verdict.accepted],
-            "rejected": list(verdict.rejected) + list(warnings),
-        },
-        allow_unicode=True,
-        sort_keys=False,
+    row.completion_yaml = completion_record(
+        source_url=source_url,
+        source_pass=COMPLETION_PASS,
+        evidence=[r.evidence for r in verdict.accepted],
+        rejected=list(verdict.rejected) + list(warnings),
     )
     await session.flush()
     return len(verdict.accepted), len(verdict.rejected), reply.tokens_in, reply.tokens_out

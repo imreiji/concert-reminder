@@ -152,6 +152,30 @@ async def test_completion_candidates_are_this_users_open_roundless_untried_draft
     assert [r.id for r in rows] == [wanted.id]
 
 
+async def test_a_triage_pass_record_does_not_spend_the_completion_pass_s_turn(session):
+    """Two passes write `completion_yaml` now, and they read DIFFERENT PAGES:
+    phase 1 reads Eventernote, phase 2 the official page. So a draft phase 1
+    could not ground is precisely one that still wants phase 2 -- while a
+    record from phase 2 itself, or from before the marker existed, still means
+    "already paid for" (the reading that withholds an attempt rather than
+    buying a second one)."""
+    from_triage = _draft(
+        "title: a\nrounds: []\n",
+        completion_yaml="source_url: https://www.eventernote.com/events/1\npass: triage\n",
+    )
+    from_completion = _draft(
+        "title: b\nrounds: []\n",
+        completion_yaml="source_url: https://example.com/\npass: completion\n",
+    )
+    legacy = _draft("title: c\nrounds: []\n", completion_yaml="evidence: []\n")
+    unreadable = _draft("title: d\nrounds: []\n", completion_yaml="[[ not yaml\n")
+    session.add_all([from_triage, from_completion, legacy, unreadable])
+    await session.flush()
+
+    rows = await completion_candidates(session, 1)
+    assert [r.id for r in rows] == [from_triage.id]
+
+
 async def test_requesting_two_kinds_queues_two_runs(session):
     a = await request_triage(session, NOW, 1)
     b = await request_triage(session, NOW, 1, kind="complete")

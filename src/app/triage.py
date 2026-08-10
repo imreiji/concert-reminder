@@ -24,11 +24,42 @@ only write path into `concerts` (invariant 6's neighbourhood). Both halves
 therefore cross a parser boundary this app already trusts, rather than earning
 a new one because the text came from a model.
 
-ROUNDS ARE STRIPPED IN CODE, always. `strip_rounds` runs on EVERY generated
-draft regardless of what the model returned, because the failure it prevents is
-this app's worst: an invented `apply_closes_jst` reaches a real user as a real
-reminder for a deadline that never existed. The prompt asks for `rounds: []`;
-the prompt is not the guarantee, this is.
+ROUNDS ARE GROUNDED IN CODE, always. `verify_rounds`
+(`domain/round_evidence.py`) runs on EVERY round of EVERY generated draft, and
+keeps only the ones whose verbatim quote it can find in the same page text the
+model was shown. The failure it prevents is unchanged and is still this app's
+worst -- an invented `apply_closes_jst` reaching a real user as a real reminder
+for a deadline that never existed -- but the way it prevents it changed on
+2026-08-10, by owner ruling: from `strip_rounds` deleting every round to
+`verify_rounds` refusing the unquotable ones. The prompt asks; the prompt is
+not the guarantee, this is.
+
+WHY THAT CHANGED, measured. `strip_rounds` rested on the claim that Eventernote
+pages carry no ticket data. They routinely carry the whole ladder in their
+free-text description: in a live run over 13 real productions the model read 7
+real rounds, every one verifiable on its own page, and `strip_rounds` deleted
+all of them. The rule was right when it shipped, because phase 1 had no way to
+tell a read deadline from an invented one; `round_evidence.py` is now that way,
+and it is measured too -- in the same run it accepted 39 rounds across three
+models with zero invented timestamps. And Eventernote is sometimes the ONLY
+surviving source: an official page routinely drops a round once it closes, so a
+deadline phase 1 declines to read is one phase 2 can never recover.
+
+THE MODEL READS TEXT, NOT HTML, for one reason: `verify_rounds` searches the
+text the model was given, so the two must be the same string. `html_to_text`
+produces it once (as it already does for phase 2) under the one `PAGE_TEXT_CAP`,
+and the leg facts survive that conversion -- the real 2026-08-10 sample page
+went 28,296 characters of HTML to 5,141 of text keeping its date, doors/start,
+venue, cast, related links and its 受付期間 block intact.
+
+NOTHING IS DROPPED SILENTLY. Every rejection is written to the new draft's
+`PendingDraft.completion_yaml`, the record phase 2 already writes and the
+preview already renders, because a real deadline quietly discarded is exactly
+as harmful as a fake one quietly kept -- in both cases the operator has no way
+to know to look. That record is marked `pass: triage`, which is what stops it
+consuming phase 2's own attempt: phase 1 read Eventernote, phase 2 reads the
+OFFICIAL page, and a draft this pass could not ground is exactly one that still
+wants the other page read (`db/drafts.py:completion_candidates`).
 
 THE BUDGET. One classify call per TRIAGE_CLASSIFY_BATCH leads, then at most
 TRIAGE_DRAFT_CAP fetch+draft pairs -- so a press costs at most
@@ -97,7 +128,16 @@ from app.db.service import (
     open_leads,
     pending_draft_texts,
 )
+from app.domain.page_text import html_to_text
 from app.domain.prune_list import parse_prune_list
+from app.domain.round_completion import (
+    TRIAGE_PASS,
+    completion_record,
+    draft_leg_labels,
+    merge_rounds,
+    parse_completion_response,
+)
+from app.domain.round_evidence import Verdict, verify_rounds
 from app.domain.triage_prompts import (
     ClassifyResult,
     LeadLine,
@@ -108,7 +148,6 @@ from app.domain.triage_prompts import (
     extract_yaml,
     merge_classify_results,
     parse_classify_response,
-    strip_rounds,
 )
 from app.domain.yaml_import import parse_drafts
 from app.fetching import PinnedHost, fetch_html
@@ -180,6 +219,36 @@ def _source_line(representative: str) -> str:
     return f"# source: {EVENT_URL.format(id=representative)}\n"
 
 
+def _ground_rounds(
+    reply_text: str, page: str, now: datetime
+) -> tuple[str, Verdict, list[str]]:
+    """One draft reply, with only the rounds it proved left in it.
+
+    The SAME three pure steps `draft_completion.complete_one` runs, over the
+    same three functions, so the two passes cannot drift on what counts as a
+    grounded round -- parse the reply (which lifts `evidence` out of each round
+    and normalizes its timestamps to the draft vocabulary's text), verify every
+    round against the page, then rewrite the `rounds:` key with the survivors.
+    What could NOT be shared is the surrounding half of `complete_one`: it
+    amends a stored `PendingDraft` this pass has not created yet, and it merges
+    into a document a human may already have proofread, where this merges into
+    the model's own fresh reply.
+
+    `merge_rounds` is the rewrite for both, and here it also does what
+    `strip_rounds` used to: a reply whose body is not a mapping raises rather
+    than being coerced to `{}` -- there was never a draft in it to save.
+
+    `now` supplies `verify_rounds`' plausibility date. The run's own clock, not
+    a fresh `datetime.now()`: this module already takes `now` from the caller,
+    and the window it feeds is +/- years wide, so nothing turns on which.
+    """
+    proposed, warnings = parse_completion_response(reply_text)
+    draft_yaml = extract_yaml(reply_text)
+    verdict = verify_rounds(proposed, page, draft_leg_labels(draft_yaml), now.date())
+    text = merge_rounds(draft_yaml, [r.data for r in verdict.accepted])
+    return text, verdict, warnings
+
+
 @dataclass
 class TriageReport:
     """What one run did, for the scheduler's log line and the run row.
@@ -195,6 +264,14 @@ class TriageReport:
     productions: int = 0
     dismissals: int = 0
     drafts: int = 0
+    # Rounds this pass read off an Eventernote page and GROUNDED, and the ones
+    # `verify_rounds` refused. Counted apart from `skipped` (a production that
+    # produced no draft at all): a rejected round costs its draft nothing, and
+    # both numbers reach the admin notice because a run that reads twenty
+    # rounds and grounds none is a calibration problem the counts announce and
+    # nothing else would.
+    rounds_added: int = 0
+    rounds_rejected: int = 0
     skipped: int = 0
     calendar_skipped: int = 0
     tokens_in: int = 0
@@ -259,6 +336,13 @@ def _finish(run: TriageRun, now: datetime, report: TriageReport) -> None:
     run.productions = report.productions
     run.dismissals_proposed = report.dismissals
     run.drafts_created = report.drafts
+    # Shared with the completion run, and they mean the same thing on both:
+    # rounds that reached a draft, and rounds `verify_rounds` refused. They
+    # were phase-2-only while phase 1 emitted no rounds at all; now that it
+    # grounds them, leaving these NULL would report "never got there" about a
+    # number this run genuinely measured.
+    run.rounds_added = report.rounds_added
+    run.rounds_rejected = report.rounds_rejected
     run.skipped = report.skipped
     run.calendar_skipped = report.calendar_skipped
     run.tokens_in = report.tokens_in
@@ -277,7 +361,13 @@ async def _announce(session: AsyncSession, report: TriageReport) -> None:
     lines = [
         f"AI triage finished: {report.dismissals} dismissal(s) proposed, "
         f"{report.drafts} draft(s) queued, {report.skipped} skipped "
-        f"({report.leads_seen} open lead(s) read)."
+        f"({report.leads_seen} open lead(s) read).",
+        # Named on every run, zeros included: rounds are what phase 1 started
+        # keeping on 2026-08-10, and "0 grounded, 9 rejected" is the shape a
+        # miscalibrated prompt takes. The per-round reasons are on each
+        # draft's own preview; this is the number that says go and look.
+        f"{report.rounds_added} round(s) grounded on the page, "
+        f"{report.rounds_rejected} rejected as unquotable.",
     ]
     if report.classify_batches_failed:
         # Named rather than swallowed: a lost batch's leads were never
@@ -479,15 +569,22 @@ async def run_triage(
         try:
             await asyncio.sleep(TRIAGE_DELAY_SECONDS)
             async with asyncio.timeout(FETCH_DEADLINE_SECONDS):
-                page = await fetcher(url)
+                html = await fetcher(url)
+            # ONE text, produced once and used twice -- the prompt below and
+            # the verifier in `_ground_rounds`. Two normalizations would let a
+            # real quote read as "not on the page" for a transformation the
+            # model never saw, which is `page_text.py`'s whole reason to exist.
+            page = html_to_text(html)
             reply = await llm_chat(*draft_prompt(survivor, lines, page))
             # Accounted before anything can fail below it: the tokens were
             # billed whether or not the reply turns out to be usable.
             report.tokens_in += reply.tokens_in
             report.tokens_out += reply.tokens_out
-            # UNCONDITIONALLY, whatever the model returned -- the one rule this
-            # module's docstring puts in capitals.
-            text = strip_rounds(extract_yaml(reply.text))
+            # Whatever the model returned, only the rounds it can PROVE
+            # survive -- the one rule this module's docstring puts in capitals.
+            text, verdict, warnings = _ground_rounds(reply.text, page, now)
+            for warning in warnings + list(verdict.rejected):
+                log.warning("triage: draft for %s: %s", survivor.title, warning)
             # The provenance line, and the containment key: the next run reads
             # it back out of `pending_draft_texts` as a substring, through the
             # same `_source_line` that writes it here.
@@ -498,8 +595,26 @@ async def run_triage(
                     f"expected exactly one parseable draft, got "
                     f"{len(batch.drafts)} and errors {batch.errors}"
                 )
-            await create_pending_drafts(session, batch, created_by=run.requested_by)
+            rows = await create_pending_drafts(session, batch, created_by=run.requested_by)
+            # Exactly one row, by the check above. The grounding record goes on
+            # it rather than into it: a draft is a document that gets committed
+            # into `concerts`, and this is proofreading scaffolding an operator
+            # reads on the preview -- including every rejection, since a real
+            # deadline quietly discarded is as harmful as a fake one kept.
+            # A production that fails BEFORE this line leaves no row to carry
+            # its reasons and simply gets re-attempted next press; that is the
+            # pre-existing shape of a skip here (phase 1 mints the row, so
+            # there is nothing yet to mark), not something this change added.
+            rows[0].completion_yaml = completion_record(
+                source_url=url,
+                source_pass=TRIAGE_PASS,
+                evidence=[r.evidence for r in verdict.accepted],
+                rejected=list(verdict.rejected) + list(warnings),
+            )
+            await session.flush()
             report.drafts += 1
+            report.rounds_added += len(verdict.accepted)
+            report.rounds_rejected += len(verdict.rejected)
         except SQLAlchemyError:
             # NOT one skipped production. A failed flush POISONS the session, so
             # nothing after this point can persist -- absorbing it would pay up

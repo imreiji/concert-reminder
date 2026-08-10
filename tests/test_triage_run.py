@@ -14,6 +14,7 @@ import logging
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
+import yaml
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
@@ -29,6 +30,7 @@ from app.db.models import (
 from app.db.service import ensure_user
 from app.domain.prune_list import parse_prune_list
 from app.domain.triage_prompts import TriageResponseError
+from app.domain.yaml_import import parse_draft
 from app.llm import LlmError, LlmReply
 from app.scheduler import heartbeat
 from app.triage import run_triage
@@ -120,15 +122,62 @@ survivors:
     representative: '481833'
 """
 
-# Fenced, and carrying a round the model was told not to invent: `strip_rounds`
-# has to drop it whatever the model said, which is what the happy path pins.
-DRAFT_REPLY = """```yaml
+# The page every draft call in this file reads, shaped like the real
+# Eventernote event page it stands in for: a script the text pass must drop, a
+# leg's own facts, and a 受付期間 block stating the whole round. The quoted
+# ladder line is VERBATIM from eventernote.com/events/473609, whose deadline
+# the owner's catalogue records to the minute.
+PAGE_HTML = """<html><head><style>.x{color:red}</style></head><body>
+<script>var tracking = "2020年1月1日（水）00:00";</script>
+<h1>学マス LIVE</h1>
+<div>開催日時 2026-09-12 (土) 開場 15:00 開演 16:00</div>
+<div>開催場所 Zepp Haneda</div>
+<p>■最速抽選先行受付期間（一般指定席のみ販売）※本先行受付は抽選受付です。
+2026年4月5日（日）21:00 ～ 2026年4月19日（日）23:59</p>
+</body></html>"""
+
+# The evidence line as it reads AFTER html_to_text: the newline inside the <p>
+# collapses to one space, which is the text the model is shown and therefore
+# the text a verbatim quote has to be.
+LADDER_LINE = (
+    "■最速抽選先行受付期間（一般指定席のみ販売）※本先行受付は抽選受付です。 "
+    "2026年4月5日（日）21:00 ～ 2026年4月19日（日）23:59"
+)
+
+# Fenced, and carrying the round the page really states, quoted verbatim: the
+# owner's 2026-08-10 ruling is that such a round SURVIVES, verified by
+# `verify_rounds` rather than deleted unread.
+DRAFT_REPLY = f"""```yaml
+title: 学マス LIVE
+title_en: Gakumas Live
+title_zh: 学马斯演唱会
+rounds:
+  - label: 最速抽選先行
+    kind: lottery_round
+    applies_to: [Day 1]
+    apply_opens_jst: 2026-04-05 21:00
+    apply_closes_jst: 2026-04-19 23:59
+    evidence:
+      apply_opens_jst: "{LADDER_LINE}"
+      apply_closes_jst: "{LADDER_LINE}"
+performances:
+  - label: Day 1
+    venue: Zepp Haneda
+```"""
+
+# The same draft, with a deadline the page never states and a quote that is not
+# on it -- the plain hallucination, and the one this whole change rests on
+# being caught.
+INVENTED_DRAFT_REPLY = """```yaml
 title: 学マス LIVE
 title_en: Gakumas Live
 title_zh: 学马斯演唱会
 rounds:
   - label: 最速先行
+    kind: lottery_round
     apply_closes_jst: 2026-09-01 23:59
+    evidence:
+      apply_closes_jst: "申込締切 2026年9月1日（火）23:59"
 performances:
   - label: Day 1
     venue: Zepp Haneda
@@ -157,7 +206,7 @@ def _forbidden_llm():
 
 
 async def _fake_page(url, transport=None):
-    return "<html>学マス LIVE 2026-09-12 Zepp Haneda</html>"
+    return PAGE_HTML
 
 
 async def _seed_leads(s):
@@ -200,14 +249,111 @@ async def test_happy_path_stores_prune_and_creates_a_skeleton_draft(db, monkeypa
         assert run.calendar_skipped == 1
         # Both phases billed: one classify call plus one draft call.
         assert run.tokens_in == 200 and run.tokens_out == 100
+        assert run.rounds_added == 1 and run.rounds_rejected == 0
         drafts = await service.pending_drafts(s, ADMIN_ID)
         assert len(drafts) == 1
-        assert "最速先行" not in drafts[0].draft_text          # THE safety pin
-        assert "apply_closes_jst" not in drafts[0].draft_text
+        # THE safety pin, inverted by the 2026-08-10 ruling: a round the page
+        # really states, quoted verbatim, now SURVIVES -- verified rather than
+        # deleted unread.
+        assert "最速抽選先行" in drafts[0].draft_text
+        assert "2026-04-19 23:59" in drafts[0].draft_text
+        # Scaffolding never rides into the document that gets committed.
+        assert "evidence" not in drafts[0].draft_text
         assert "eventernote.com/events/486243" in drafts[0].draft_text
         notes = (await s.execute(select(Notification))).scalars().all()
         assert [n.kind for n in notes] == ["triage"]
         assert notes[0].concert_id is None
+
+
+async def test_a_round_the_page_does_not_state_is_rejected_with_its_reason(db, monkeypatch):
+    """THE guarantee this change rests on. `strip_rounds` kept it by deleting
+    every round; `verify_rounds` keeps it by refusing the ones whose quote is
+    not on the page -- and says so, because a real deadline quietly discarded
+    is exactly as harmful as a fake one quietly kept."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        report = await run_triage(s, run, NOW, fetcher=_fake_page,
+                                  llm_chat=_llm([CLASSIFY_REPLY, INVENTED_DRAFT_REPLY]))
+
+        assert report.drafts == 1, "the draft still lands -- only the round is refused"
+        assert report.rounds_added == 0 and report.rounds_rejected == 1
+        [draft] = await service.pending_drafts(s, ADMIN_ID)
+        assert "2026-09-01 23:59" not in draft.draft_text
+        assert yaml.safe_load(draft.draft_text.split("\n", 1)[1])["rounds"] == []
+        # ...and the operator can see WHY, on the preview that reads this row.
+        record = yaml.safe_load(draft.completion_yaml)
+        assert record["evidence"] == []
+        assert len(record["rejected"]) == 1
+        assert "最速先行" in record["rejected"][0]
+        assert "not on the page" in record["rejected"][0]
+        assert record["source_url"] == "https://www.eventernote.com/events/486243"
+
+
+async def test_a_round_quoting_the_real_page_line_survives_with_its_evidence(db, monkeypatch):
+    """The other half of the same ruling, measured on a real page: over 13 live
+    productions the model read 7 real rounds, every one verifiable on its own
+    page, and `strip_rounds` deleted all of them."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        report = await run_triage(s, run, NOW, fetcher=_fake_page,
+                                  llm_chat=_llm([CLASSIFY_REPLY, DRAFT_REPLY]))
+
+        assert report.rounds_added == 1 and report.rounds_rejected == 0
+        [draft] = await service.pending_drafts(s, ADMIN_ID)
+        parsed = parse_draft(draft.draft_text)
+        [round_] = parsed.rounds
+        assert round_.label == "最速抽選先行"
+        assert round_.applies_to_labels == ["Day 1"]
+        # The evidence lives BESIDE the draft, positionally against its rounds,
+        # exactly as the completion pass writes it -- the preview renders it
+        # under "Read from the ticket page:".
+        record = yaml.safe_load(draft.completion_yaml)
+        assert record["rejected"] == []
+        assert record["evidence"][0]["apply_closes_jst"] == LADDER_LINE
+
+
+async def test_the_model_is_shown_page_text_not_raw_html(db, monkeypatch):
+    """The one property `round_evidence.py` rests on: the text the model reads
+    and the text the verifier searches must be the SAME text. Phase 1 used to
+    show raw HTML under a 120k cap while `verify_rounds` searches collapsed
+    text under a 60k one, so a quote could be "not on the page" for a
+    transformation the model never saw."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        llm = _llm([CLASSIFY_REPLY, DRAFT_REPLY])
+        await run_triage(s, run, NOW, fetcher=_fake_page, llm_chat=llm)
+
+        _system, user = llm.calls[1]
+        assert "<div>" not in user and "<script>" not in user
+        assert "2020年1月1日" not in user, "a <script> body is not page text"
+        assert LADDER_LINE in user
+        assert "開場 15:00 開演 16:00" in user, "the leg's own facts survive the pass"
+
+
+async def test_a_draft_with_no_grounded_round_still_awaits_the_completion_pass(db, monkeypatch):
+    """Phase 1 reads Eventernote; phase 2 reads the OFFICIAL page. A phase-1
+    record must therefore not spend phase 2's one attempt -- `rounds: []` plus
+    a completion record is a draft that has never had its official page read."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        await run_triage(s, run, NOW, fetcher=_fake_page,
+                         llm_chat=_llm([CLASSIFY_REPLY, INVENTED_DRAFT_REPLY]))
+
+        [draft] = await service.pending_drafts(s, ADMIN_ID)
+        assert draft.completion_yaml != ""
+        assert [r.id for r in await service.completion_candidates(s, ADMIN_ID)] == [draft.id]
 
 
 async def test_a_drafted_survivor_is_not_redrafted_next_press(db, monkeypatch):

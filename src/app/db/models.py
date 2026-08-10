@@ -988,11 +988,15 @@ class TriageRun(Base):
     calendar_skipped: Mapped[int | None] = mapped_column(Integer)
     tokens_in: Mapped[int | None] = mapped_column(Integer)
     tokens_out: Mapped[int | None] = mapped_column(Integer)
-    # Completion-run counts. NULL on a classify run and on a run that never
-    # started; 0 means "looked, found none". Kind-specific by design -- see
-    # `kind` above -- so reading a count without checking the kind is a bug in
-    # the reader, not a reason to fold these into the classify counts, whose
-    # meanings genuinely differ.
+    # Completion-run counts. NULL on a run that never started; 0 means
+    # "looked, found none". Kind-specific by design -- see `kind` above -- so
+    # reading a count without checking the kind is a bug in the reader, not a
+    # reason to fold these into the classify counts, whose meanings genuinely
+    # differ. TWO of them are now written by BOTH kinds: since 2026-08-10 the
+    # classify run grounds rounds of its own (`triage.py`), and
+    # rounds_added/rounds_rejected mean the same thing there -- rounds that
+    # reached a draft, and rounds `verify_rounds` refused. drafts_completed and
+    # blocked_domains stay phase-2-only and stay NULL on a classify run.
     drafts_completed: Mapped[int | None] = mapped_column(Integer)
     rounds_added: Mapped[int | None] = mapped_column(Integer)
     rounds_rejected: Mapped[int | None] = mapped_column(Integer)

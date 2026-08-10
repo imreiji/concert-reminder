@@ -119,7 +119,7 @@
   {% if triage_pending %}
   <span class="dim">Triage requested — the scheduler will start it within a minute.</span>
   {% else %}
-  <span class="dim">Classifies the open leads and drafts survivors (rounds always left empty for you to fill from the official page). Costs a few cents per press.</span>
+  <span class="dim">Classifies the open leads and drafts survivors, keeping only the rounds it can quote off the Eventernote page. Costs a few cents per press.</span>
   {% endif %}
 </form>
 {% if triage_last and triage_last.status != "requested" %}
@@ -128,6 +128,8 @@
   {% if triage_last.status == "done" %}
   — {{ triage_last.dismissals_proposed or 0 }} dismissals proposed,
   {{ triage_last.drafts_created or 0 }} drafts queued,
+  {{ triage_last.rounds_added or 0 }} rounds grounded,
+  {{ triage_last.rounds_rejected or 0 }} rounds rejected,
   {{ triage_last.skipped or 0 }} skipped
   ({{ (triage_last.tokens_in or 0) + (triage_last.tokens_out or 0) }} tokens).
   {% if triage_last.prune_yaml %}
