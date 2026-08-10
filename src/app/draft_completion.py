@@ -113,6 +113,36 @@ from app.scheduler import heartbeat
 log = logging.getLogger(__name__)
 
 COMPLETION_USER_AGENT = "dekimasen.app/1.0 (draft completion)"
+# Hosts that answer COMPLETION_USER_AGENT with a refusal, and the string they
+# do serve. A NAMED EXCEPTION PER HOST, never a global switch: the honest UA
+# stays the default everywhere, and adding a row here is a deliberate act with
+# a reason attached, not a mode somebody can turn on.
+#
+# lovelive-anime.jp (owner ruling, 2026-08-10). Measured: this exact UA gets
+# HTTP 403 from an S3 error page, an ordinary desktop browser string gets 200
+# from Apache. It is a blanket CDN filter on non-browser agents rather than a
+# decision about this app -- the site's own robots.txt disallows only
+# `/common/` (asset paths, no concert page is under it) and publishes a
+# sitemap, so its machine-readable policy invites exactly the reads this
+# refuses. It matters because it is not a corner of the catalogue: 8 of the
+# owner's 12 exported concerts and 28 of their 47 hand-typed rounds sit behind
+# this host, so phase 2 could not read the franchise the catalogue is mostly
+# made of.
+#
+# What this does NOT change: the approved-public host policy, the 15-page cap,
+# the 1s pause, or the 30s deadline. The rate stays what a person clicking
+# would produce.
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/140.0 Safari/537.36"
+)
+# Both spellings: every catalogue URL uses `www.`, but an editor pasting the
+# bare domain must not silently fall back to the UA this host refuses -- the
+# failure would be a 403 nobody connects to a missing prefix.
+HOST_USER_AGENTS = {
+    "www.lovelive-anime.jp": _BROWSER_UA,
+    "lovelive-anime.jp": _BROWSER_UA,
+}
 # At most this many fetch+call pairs per press. Lower than triage's 25 because
 # an official ticket page is a far bigger read than an Eventernote event page.
 COMPLETION_DRAFT_CAP = 15
@@ -159,12 +189,34 @@ def draft_source_url(draft_text: str) -> str | None:
     return None
 
 
+def _user_agent_for(url: str) -> str:
+    """`COMPLETION_USER_AGENT`, unless this host is one of the few that refuse
+    it outright.
+
+    See `HOST_USER_AGENTS` -- the default is the honest one and stays the
+    default; this is a per-host exception. The host is normalized through the
+    SAME `_normalize_host` the approval policy uses, so a `WWW.`-cased or
+    trailing-dot URL cannot miss the table by spelling. A malformed host falls
+    through to the default rather than raising: `fetch_html` is about to
+    reject it anyway, and the UA lookup is not the place that decision gets
+    made.
+    """
+    try:
+        # `.hostname` parses the authority, so it raises on a malformed IPv6
+        # literal all by itself -- both halves belong inside the guard, and a
+        # test pins that (`http://[::bad::]/x` used to escape as a ValueError).
+        host = _normalize_host(urlparse(url).hostname or "")
+    except (UnicodeError, ValueError):
+        return COMPLETION_USER_AGENT
+    return HOST_USER_AGENTS.get(host, COMPLETION_USER_AGENT)
+
+
 async def _fetch_page(url: str, hosts: set[str]) -> str:
     """One official page, under the approved-public policy."""
     return await fetch_html(
         url,
         policy=ApprovedPublicHosts(lambda host: host in hosts),
-        user_agent=COMPLETION_USER_AGENT,
+        user_agent=_user_agent_for(url),
     )
 
 

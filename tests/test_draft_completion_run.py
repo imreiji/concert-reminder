@@ -15,7 +15,13 @@ from app.config import settings
 from app.db.models import FetchDomain, Notification, PendingDraft, TriageRun
 from app.db.service import decide_fetch_domain, ensure_user, note_fetch_domain
 from app.domain.round_completion import CompletionResponseError, DraftMergeError
-from app.draft_completion import complete_one, draft_source_url, run_completion
+from app.draft_completion import (
+    COMPLETION_USER_AGENT,
+    _user_agent_for,
+    complete_one,
+    draft_source_url,
+    run_completion,
+)
 from app.llm import LlmReply
 
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
@@ -459,3 +465,47 @@ async def test_an_empty_queue_costs_nothing_and_announces_nothing(session, monke
     assert report.drafts_seen == 0
     assert run.status == "done"
     assert (await session.execute(select(Notification))).scalars().all() == []
+
+
+# -- The per-host User-Agent table -----------------------------------------
+#
+# `lovelive-anime.jp` answers the app's own UA with a 403 (owner ruling,
+# 2026-08-10; see HOST_USER_AGENTS). These pin the exception's SHAPE -- that it
+# is per-host and that the honest UA remains the default everywhere else --
+# because the failure mode of getting this wrong is silent: a UA that leaks to
+# every host is not visibly different from one that does not until somebody
+# reads the outbound request.
+
+
+def test_the_default_user_agent_is_the_honest_one():
+    for url in (
+        "https://idolmaster-official.jp/live_event/gkmas_livetour_shirube/",
+        "https://zombielandsaga-movie.com/collaboration/detail.php?id=1002644",
+        "https://example.com/",
+    ):
+        assert _user_agent_for(url) == COMPLETION_USER_AGENT, url
+
+
+def test_the_refusing_host_gets_a_browser_string():
+    ua = _user_agent_for("https://www.lovelive-anime.jp/hasunosora/")
+    assert ua != COMPLETION_USER_AGENT
+    assert ua.startswith("Mozilla/5.0")
+
+
+def test_the_table_is_matched_on_the_normalized_host():
+    # Same three spellings the approval policy normalizes together: casing, a
+    # trailing DNS root dot, and the bare domain an editor might paste. A miss
+    # on any of them is a 403 nobody would connect to a URL's spelling.
+    for url in (
+        "https://WWW.LoveLive-Anime.JP/yuigaoka/",
+        "https://www.lovelive-anime.jp./yuigaoka/",
+        "https://lovelive-anime.jp/yuigaoka/",
+    ):
+        assert _user_agent_for(url).startswith("Mozilla/5.0"), url
+
+
+def test_a_malformed_host_falls_through_to_the_default():
+    # fetch_html is about to reject these anyway; the UA lookup is not where
+    # that decision belongs, and it must not raise on the way there.
+    for url in ("not-a-url", "", "https:///nohost", "http://[::bad::]/x"):
+        assert _user_agent_for(url) == COMPLETION_USER_AGENT, url

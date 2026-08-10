@@ -525,7 +525,30 @@ measurement or an incident that a reasonable-looking edit would undo.
   the id is captured BEFORE the run, and any future post-rollback bookkeeping
   keyed on a row needs the same.
 - `src/app/draft_completion.py` — phase 2: filling a pending skeleton's
-  `rounds:` from the official page the draft itself names. Same layer and
+  `rounds:` from the official page the draft itself names.
+  **`HOST_USER_AGENTS` is a per-host exception table, never a global switch**
+  (owner ruling, 2026-08-10). `COMPLETION_USER_AGENT` — the honest one — stays
+  the default for every host, and a row here says only that this host refuses
+  it. `www.lovelive-anime.jp` is the first and, at the time of writing, only
+  entry: measured, it answers that UA with HTTP 403 from an S3 error page and
+  an ordinary browser string with 200 from Apache, which is a blanket CDN
+  filter on non-browser agents rather than a decision about this app — the
+  site's own `robots.txt` disallows only `/common/` and publishes a sitemap,
+  so its machine-readable policy invites exactly the read the filter refuses.
+  It earns the exception on scale rather than convenience: 8 of the owner's 12
+  exported concerts and 28 of their 47 hand-typed rounds sit behind that host,
+  so without it phase 2 cannot read the franchise the catalogue is mostly made
+  of. Nothing else moves — the approved-public policy, the 15-page cap, the 1s
+  pause and the 30s deadline are untouched, so the request RATE stays what a
+  person clicking would produce. Look the host up through `_user_agent_for`,
+  which normalizes via the same `_normalize_host` the approval policy uses (a
+  `WWW.`-cased or trailing-dot URL must not miss the table by spelling) and
+  falls through to the default on a malformed host rather than raising —
+  `urlparse(...).hostname` raises by itself on a bad IPv6 literal, which is
+  pinned by a test. Adding a second row is a deliberate act needing its own
+  reason; a general "pretend to be a browser" mode is the thing this shape
+  exists to prevent.
+  Same layer and
   discipline as `triage.py`, and it reuses that feature's `TriageRun` row
   through a `kind` column (`"complete"` vs the classify default), so the
   request/pickup handshake, the budget shape and the re-stamp-after-rollback
