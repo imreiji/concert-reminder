@@ -417,7 +417,13 @@ measurement or an incident that a reasonable-looking edit would undo.
   `finish_reason` or empty `content` also raises `LlmError` — a 2026-08-05
   incident found `deepseek-v4-flash` thinks by default, burning ~50k reasoning
   tokens per classify call until an overrun emptied `content` and only failed
-  later, opaquely, in the YAML parser.
+  later, opaquely, in the YAML parser. `max_tokens` is likewise sent
+  EXPLICITLY (`settings.deepseek_max_tokens`, 8192) rather than inherited:
+  DeepSeek's own default is the same number, and on 2026-08-09 an unbatched
+  classify reply hit it exactly and lost a press that had already been billed —
+  a ceiling nobody in this app had chosen was acting as a design constraint.
+  Batched, the largest reply over that queue was 1,473 output tokens, so the
+  value is a guard against a runaway reply, not a limit anything approaches.
 - `src/app/triage.py` — the AI-triage runner: one LLM pass over the open
   discovery queue, on an admin's press. Same layer and discipline as
   `discovery.py` (imports `domain/`, `app/llm.py`, `app/fetching.py` and
@@ -437,11 +443,34 @@ measurement or an incident that a reasonable-looking edit would undo.
   deadline that never existed. Gated by `settings.triage_enabled`
   exactly as the sweep is gated by `discovery_enabled`; `deepseek_model` has NO
   default, because hardcoding a guess at a third party's current alias starts
-  billing a model nobody chose the moment the flag flips. A press costs ONE
-  classify call over the whole queue plus at most `TRIAGE_DRAFT_CAP` (25)
-  fetch+draft pairs whatever the queue's size — the cap is what makes the price
-  of a press predictable — with fetches SEQUENTIAL and paused and a
-  per-production `heartbeat.beat()`, for the reasons the sweep has both.
+  billing a model nobody chose the moment the flag flips. A press costs one
+  classify call per `TRIAGE_CLASSIFY_BATCH` (60) leads plus at most
+  `TRIAGE_DRAFT_CAP` (25) fetch+draft pairs whatever the queue's size — the
+  draft cap is what makes the price of the draft half predictable — with
+  fetches SEQUENTIAL and paused and a `heartbeat.beat()` per classify batch and
+  per drafted production, for the reasons the sweep has both.
+  **The classify batch size is a MEASUREMENT, not a style choice** (2026-08-09,
+  against a real 511-lead queue). Unbatched, that queue failed twice: at
+  DeepSeek's 8,192 default output cap the reply hit the cap exactly and raised,
+  and given a raised cap it completed at 27,142 output tokens only to be
+  rejected whole — one lead id under two dismiss reasons, which `parse_prune_list`
+  treats as fatal for the entire list, with 494 of 511 leads placed more than
+  once. A model cannot hold "each lead exactly once" over a list that long. The
+  same queue at 60 per call: 9 calls, all `finish_reason: stop` inside the
+  shipped cap, largest 1,473 output tokens, 9,485 total against 27,142, 60s
+  against 124s. Cheaper, faster and correct, so raising it buys nothing and
+  walks back toward an incoherence that surfaces only as an unusable batch.
+  Batching also CHANGED THE FAILURE POLICY, deliberately: one unusable classify
+  batch is caught, counted (`TriageReport.classify_batches_failed`, named in the
+  admin notice so a partial classify is not silent) and stepped over — the draft
+  loop's "one bad production must not cost the other twenty-four" one step
+  earlier, which was unavailable while a single call decided everything. A press
+  where EVERY batch failed still propagates: then there genuinely is no partial
+  to salvage. `domain/triage_prompts.py:merge_classify_results` folds the
+  per-batch results back into one, and its load-bearing detail is that the
+  merged `dismiss` block is re-dumped as ONE mapping — concatenating two
+  batches' text would repeat a reason key, which `parse_prune_list`'s
+  `_UniqueKeyLoader` refuses outright.
   It queues ONE admin `Notification` (invariant 4) whose kind `"triage"` is
   deliberately NOT in `UNREPORTED_NOTE_KINDS` — that set is for notices
   reporting ON deliveries, and this one reports on a model's proposals.
@@ -484,7 +513,27 @@ measurement or an incident that a reasonable-looking edit would undo.
   carries no time separator (`:`/`：`/`分`), because `10時` states no zero to
   find; and the YEAR is checked broadly — anywhere in the quote's numbers or
   anywhere on the page — never adjacent, since Japanese ticket pages put it in
-  a heading and omit it from the deadline line. The accepted cost is false
+  a heading and omit it from the deadline line.
+  **That rule reads the Japanese shape only, and ENGLISH gets a SECOND matcher
+  rather than a looser first one** (2026-08-10, after a live run over the real
+  catalogue accepted 39 rounds with zero invented timestamps and false-rejected
+  exactly one). An international page carries its overseas-package section in
+  English, which states the time FIRST, the month as a WORD and the year AFTER
+  the day — `"From 19:00 on Wednesday, August 5, 2026 JST to 23:59 on Monday,
+  August 17, 2026 JST"`, verbatim from the LoveLive! Series 15th Anniversary
+  page — so the number-token adjacency rule cannot match it at all.
+  `_english_stamp_in` matches a month WORD adjacent to a day (either order,
+  ordinal suffixes allowed and not grammar-checked) and binds it to an `HH:MM`
+  by an EXHAUSTIVE WHITELIST of the connectives that join the two (`on`, a
+  weekday, `at`, `from`, `JST`, a comma), matched in full — not by distance,
+  because that quote's second time sits nine characters after the FIRST date,
+  nearer to it than to its own, and any distance rule proves a deadline the
+  page never states. Two deliberate divergences from the Japanese path, both
+  strictly tighter: a year written beside the day MUST equal the claimed one
+  (English gives the year a place, so it is usable evidence; absent, the broad
+  rule stands), and 12-hour times and lowercase month words are refused
+  outright — `7:00 PM` claimed as 07:00 is twelve hours wrong, and "may" is a
+  modal verb far more often than a month. The accepted cost is false
   rejections on some phrasings, and that trade is the whole feature: a
   rejection is visible, carries its reason,
   and costs one round typed by hand, while a false accept is a fabricated

@@ -30,11 +30,16 @@ this app's worst: an invented `apply_closes_jst` reaches a real user as a real
 reminder for a deadline that never existed. The prompt asks for `rounds: []`;
 the prompt is not the guarantee, this is.
 
-THE BUDGET. One classify call over the whole queue, then at most
-TRIAGE_DRAFT_CAP fetch+draft pairs -- so a press costs at most 1 + 25 LLM calls
-and 25 third-party fetches, whatever the queue's size. The cap is what makes
-the cost of a press predictable; survivors past it wait for the next press,
-which will not re-propose the ones already drafted (see the containment step).
+THE BUDGET. One classify call per TRIAGE_CLASSIFY_BATCH leads, then at most
+TRIAGE_DRAFT_CAP fetch+draft pairs -- so a press costs at most
+ceil(queue/60) + 25 LLM calls and 25 third-party fetches. The draft cap is
+what makes the DRAFT half's cost predictable; survivors past it wait for the
+next press, which will not re-propose the ones already drafted (see the
+containment step). The classify half scales with the queue, as it must -- every
+lead has to be read once -- but the batch size bounds each individual CALL,
+which is the thing that broke on 2026-08-09 when it was unbounded: the reply
+overran the output cap, and given room it instead lost track of "each lead
+exactly once" and was rejected whole. The measurements are on the constant.
 Fetches are SEQUENTIAL with a pause, for the reason `discovery.py` gives: 25
 parallel requests at a third party is how an IP gets blocked. Each fetch
 carries a TOTAL deadline, because httpx's own timeout is per READ and a server
@@ -44,13 +49,14 @@ bounds the CALLS, and only a clock bounds the TIME.
 
 Two operational rules inherited wholesale from the sweep:
 
-  - It BEATS THE HEARTBEAT before the classify call and inside its own loop.
+  - It BEATS THE HEARTBEAT per classify batch and per drafted production.
     The scheduler beats before `tick()` and /healthz goes unhealthy at 180s; a
     run that fetches 25 pages with a pause each occupies the tick well past
     that, so without a beat per production it pages the owner about a perfectly
-    healthy app. The classify beat is the same rule one step earlier: delivery
-    plus one call over the whole queue can age the tick's own beat past 180s
-    before the loop starts. The loop genuinely is alive, so beating in it is
+    healthy app. The classify beats are the same rule one step earlier:
+    delivery plus a classify pass long enough to need slicing (nine calls over
+    a 511-lead queue took 60s) ages the tick's own beat past 180s before the
+    draft loop starts. The run genuinely is alive, so beating in both loops is
     honest.
   - It FLUSHES, never commits. The scheduler's block owns the transaction and
     its own rollback -- and the run row's failure marking happens THERE, on a
@@ -59,7 +65,11 @@ Two operational rules inherited wholesale from the sweep:
     forever. That is `stamp_discovery_run`'s two-halves pattern in row form.
 
 Every per-production failure -- fetch, LLM, parse -- is caught, counted and
-stepped over. One bad production must not cost the other twenty-four, which is
+stepped over, and so is every per-BATCH classify failure -- which is something
+slicing MADE possible: one bad batch is a partial loss where one bad call over
+the whole queue was a total one. Only a press where EVERY classify batch failed
+still propagates, because only then is there nothing to salvage. One bad
+production must not cost the other twenty-four, which is
 `run_sweep`'s philosophy and for the same reason: the alternative is a run that
 dies partway and hands back nothing at all. ONE class of failure is exempt: a
 `SQLAlchemyError` poisons the session, so nothing after it can persist and
@@ -89,12 +99,14 @@ from app.db.service import (
 )
 from app.domain.prune_list import parse_prune_list
 from app.domain.triage_prompts import (
+    ClassifyResult,
     LeadLine,
     Survivor,
     TriageResponseError,
     classify_prompt,
     draft_prompt,
     extract_yaml,
+    merge_classify_results,
     parse_classify_response,
     strip_rounds,
 )
@@ -118,6 +130,28 @@ EVENT_URL = "https://www.eventernote.com/events/{id}"
 # what makes the cost of pressing the button predictable rather than a function
 # of however long the queue happens to be.
 TRIAGE_DRAFT_CAP = 25
+# How many leads one classify call reads. TRIAGE_DRAFT_CAP bounds the draft
+# half; this is the classify half's equivalent, and it exists because the
+# unbounded version failed twice against a real 511-lead queue on 2026-08-09:
+#   - at DeepSeek's 8,192 default output cap the reply hit the cap exactly
+#     (`finish_reason: length`) and the press returned nothing, billed anyway;
+#   - given a raised cap the reply completed at 27,142 output tokens and was
+#     then rejected outright, one lead id under two dismiss reasons -- which
+#     `parse_prune_list` treats as fatal for the WHOLE list. 494 of the 511
+#     leads had been placed more than once. The model cannot hold "each lead
+#     exactly once" across a list that long.
+# The SAME queue at 60: 9 calls, every one `finish_reason: stop` inside the
+# shipped 8,192 cap, largest reply 1,473 output tokens, zero duplicate-reason
+# failures, 9,485 output tokens total against 27,142, 60s against 124s.
+# Cheaper, faster and correct, so this is not a safety tax. Raising it walks
+# back toward the incoherence above, which does not announce itself -- it
+# arrives as one unusable batch.
+# The ACCEPTED cost: collapsing repeats is a judgment WITHIN a batch, so a tour
+# whose legs straddle a boundary comes back as two productions and is drafted
+# twice, for an editor to merge. `open_leads` orders by event_date DESC, which
+# keeps a tour's legs adjacent and makes that rare -- and two drafts an editor
+# merges is a far cheaper failure than one reply the parser rejects whole.
+TRIAGE_CLASSIFY_BATCH = 60
 # Sequential with a pause, exactly as the sweep does it.
 TRIAGE_DELAY_SECONDS = 1.0
 # A TOTAL deadline per page: httpx's timeout is per READ, so without this the
@@ -165,6 +199,14 @@ class TriageReport:
     calendar_skipped: int = 0
     tokens_in: int = 0
     tokens_out: int = 0
+    # Classify batches whose call or whose reply could not be used. Counted
+    # APART from `skipped`, which means "a production that did not produce a
+    # draft": a lost batch is a set of leads that were never classified at
+    # all, so folding the two together would report a partial classify as a
+    # handful of failed drafts. Reported to the admins for the same reason
+    # `budget_exhausted` is: the queue otherwise looks triaged and the leads in
+    # the lost batch are simply never mentioned again.
+    classify_batches_failed: int = 0
     # True when TRIAGE_BUDGET_SECONDS ran out and survivors were left for the
     # next press. Recorded rather than merely logged, exactly as SweepReport
     # records its own: a truncation only the journal knows about is a silent
@@ -232,12 +274,21 @@ async def _announce(session: AsyncSession, report: TriageReport) -> None:
     deliberately NOT in UNREPORTED_NOTE_KINDS -- that set is for notices that
     report ON deliveries, and this one reports on a model's proposals.
     """
-    body = (
+    lines = [
         f"AI triage finished: {report.dismissals} dismissal(s) proposed, "
         f"{report.drafts} draft(s) queued, {report.skipped} skipped "
-        f"({report.leads_seen} open lead(s) read).\n"
-        "Review: https://dekimasen.app/admin/discoveries"
-    )
+        f"({report.leads_seen} open lead(s) read)."
+    ]
+    if report.classify_batches_failed:
+        # Named rather than swallowed: a lost batch's leads were never
+        # classified, so they appear nowhere in the counts above and the
+        # queue reads as fully triaged when it is not.
+        lines.append(
+            f"{report.classify_batches_failed} classify batch(es) came back "
+            f"unusable -- those leads went unread and stay in the queue."
+        )
+    lines.append("Review: https://dekimasen.app/admin/discoveries")
+    body = "\n".join(lines)
     for admin_id in sorted(settings.admin_ids):
         # An admin who has never logged into the web app has no users row, and
         # Notification.user_id is a FK to it. Guarded on absence rather than
@@ -263,11 +314,14 @@ async def run_triage(
     spend a real key -- one seam per external system, the same shape
     `run_sweep` uses for its two fetchers.
 
-    An unusable CLASSIFY response propagates (`TriageResponseError`): there is
-    no partial run to salvage when the one call that decides what everything
-    else does came back as junk, and the scheduler's handler marks the row
-    failed on a cleaned transaction. Every per-production failure below is the
-    opposite case and is absorbed.
+    A classify batch that comes back unusable is caught, counted
+    (`classify_batches_failed`) and stepped over -- the draft loop's "one bad
+    production must not cost the other twenty-four", one step earlier, and it
+    only became available once the classify pass was sliced: unbatched, the
+    one call that decides what everything else does had no partial to salvage.
+    It still has none when EVERY batch fails, and that case propagates as
+    before, for the scheduler's handler to mark failed on a cleaned
+    transaction.
 
     The transaction stays the caller's: this flushes, never commits.
     """
@@ -288,31 +342,77 @@ async def run_triage(
         return report
     lines = [_lead_line(row) for row in rows]
 
-    # 2. Classify: one call over the whole batch, because collapsing repeats
-    #    into productions is a judgment about the batch AS A WHOLE and cannot
-    #    be made a lead at a time.
-    #    Beaten BEFORE the call, not only inside the draft loop below: the tick
-    #    beats once before delivery, and delivery plus one classify call over
-    #    the whole queue can outlast MAX_AGE_SECONDS (180s) on its own -- so
-    #    without this, the first beat of the run comes too late and /healthz
-    #    pages the owner about a perfectly healthy app.
-    heartbeat.beat()
-    reply = await llm_chat(*classify_prompt(lines))
-    report.tokens_in += reply.tokens_in
-    report.tokens_out += reply.tokens_out
-    try:
-        result = parse_classify_response(reply.text)
-    except TriageResponseError as exc:
-        # Diagnosing the 2026-08-05 production incident (a reply that
-        # YAML-loaded to something other than a mapping) took a hand-rolled
-        # server probe because nothing logged what the model actually said.
-        # Head+tail keeps the log line bounded on a long reply while still
-        # showing the shape of the failure at both ends.
-        log.error(
-            "triage classify reply unusable: %s -- reply head: %r -- tail: %r",
-            exc, reply.text[:500], reply.text[-200:],
-        )
-        raise
+    # 2. Classify, one call per BATCH of TRIAGE_CLASSIFY_BATCH leads. Collapsing
+    #    repeats into productions is a judgment about a batch AS A WHOLE and
+    #    cannot be made a lead at a time -- but it does not need the whole
+    #    QUEUE either, and asking for the whole queue is what broke twice on
+    #    2026-08-09 (see the constant). A batch is still a batch; only its size
+    #    is now chosen here rather than by however long the sweep's queue got.
+    #    Beaten per batch, for the reason the draft loop beats per production:
+    #    the tick beats once before delivery, and delivery plus a classify pass
+    #    long enough to need slicing outlasts MAX_AGE_SECONDS (180s) easily --
+    #    so without a beat here /healthz pages the owner about a perfectly
+    #    healthy app.
+    batches = [
+        lines[i : i + TRIAGE_CLASSIFY_BATCH]
+        for i in range(0, len(lines), TRIAGE_CLASSIFY_BATCH)
+    ]
+    per_batch: list[ClassifyResult] = []
+    last_classify_error: Exception | None = None
+    for number, batch in enumerate(batches, start=1):
+        heartbeat.beat()
+        try:
+            reply = await llm_chat(*classify_prompt(batch))
+        except Exception as exc:
+            # The call itself failed -- a transport error, a non-200, or the
+            # truncated reply that started all this. ONE bad batch is a
+            # partial loss, not a total one, which is the draft loop's
+            # philosophy applied one step earlier: a batch that came back
+            # unusable must not cost the other eight. No SQLAlchemyError
+            # carve-out here, unlike the draft loop: nothing in this loop
+            # touches the session, so there is no poisoned session to protect.
+            last_classify_error = exc
+            report.classify_batches_failed += 1
+            log.exception(
+                "triage: classify batch %d/%d failed; its leads go unclassified",
+                number, len(batches),
+            )
+            continue
+        # Accounted before the parse, as in the draft loop: the tokens were
+        # billed whether or not the reply turns out to be usable.
+        report.tokens_in += reply.tokens_in
+        report.tokens_out += reply.tokens_out
+        try:
+            result = parse_classify_response(reply.text)
+        except TriageResponseError as exc:
+            # Diagnosing the 2026-08-05 production incident (a reply that
+            # YAML-loaded to something other than a mapping) took a hand-rolled
+            # server probe because nothing logged what the model actually said.
+            # Head+tail keeps the log line bounded on a long reply while still
+            # showing the shape of the failure at both ends.
+            last_classify_error = exc
+            report.classify_batches_failed += 1
+            log.error(
+                "triage classify reply unusable (batch %d/%d): %s -- "
+                "reply head: %r -- tail: %r",
+                number, len(batches), exc, reply.text[:500], reply.text[-200:],
+            )
+            continue
+        per_batch.append(result)
+
+    if not per_batch:
+        # EVERY batch failed. The original reasoning survives exactly at its
+        # limit: there is no partial run to salvage when nothing came back
+        # usable, so this propagates (as the batch's own error, whatever kind
+        # it was) and the scheduler's handler marks the row failed on a
+        # cleaned transaction. One survivor is enough to keep going -- the
+        # press then reports what it did read and says what it lost.
+        # Never None here: `rows` is non-empty by the early return above, so
+        # there is at least one batch, and an empty `per_batch` means every
+        # one of them recorded its error.
+        raise last_classify_error
+
+    result = merge_classify_results(per_batch)
     for warning in result.warnings:
         log.warning("triage: %s", warning)
     run.prune_yaml = result.prune_yaml

@@ -13,6 +13,7 @@ from app.domain.triage_prompts import (
     TriageResponseError,
     classify_prompt,
     draft_prompt,
+    merge_classify_results,
     parse_classify_response,
     strip_rounds,
 )
@@ -132,3 +133,108 @@ def test_draft_prompt_caps_page_size_and_forbids_rounds():
     )
     assert len(user) < PAGE_CHAR_CAP + 10_000
     assert "rounds: []" in system
+
+
+def test_draft_prompt_labels_the_payload_as_an_eventernote_page():
+    # run_triage fetches EVENT_URL = eventernote.com/events/{id} for this
+    # pass -- never an official ticket page -- so the user message must not
+    # call the payload something it isn't.
+    _system, user = draft_prompt(
+        Survivor(title="t", lead_ids=("1",), representative="1"),
+        [_lead()], page_html="<html></html>",
+    )
+    assert "Eventernote page HTML" in user
+    assert "Official ticket page" not in user
+
+
+def test_draft_system_prompt_does_not_claim_eventernote_has_no_ticket_data():
+    # Eventernote event pages routinely carry the full ticket ladder in their
+    # free-text description -- the system prompt must not tell the model
+    # otherwise, only that this pass still doesn't act on it.
+    system, _user = draft_prompt(
+        Survivor(title="t", lead_ids=("1",), representative="1"),
+        [_lead()], page_html="<html></html>",
+    )
+    assert "no lottery data" not in system
+    assert "NEVER round/ticket information" not in system
+    # The rule stays, now with the reason spelled out: extraction is the
+    # completion pass's job, which grounds and verifies each timestamp.
+    assert "COMPLETION" in system
+    assert "grounds every timestamp in a verbatim quote" in system
+
+
+# -- Merging the per-batch classify results --------------------------------
+#
+# The classify pass is sliced into batches of TRIAGE_CLASSIFY_BATCH leads
+# (app/triage.py), so the runner gets one ClassifyResult per batch and needs
+# exactly one back. The merge is here, not there, for the reason every other
+# piece of response handling is here: the runner is the run ORDER only.
+
+
+def test_merge_concatenates_survivors_warnings_and_dismissals():
+    first = parse_classify_response(
+        "dismiss:\n  stage: ['1']\n"
+        "survivors:\n  - title: a\n    lead_ids: ['2']\n    representative: '2'\n"
+    )
+    second = parse_classify_response(
+        "dismiss:\n  stage: ['3']\n  release: ['4']\n"
+        "survivors:\n  - title: b\n    lead_ids: ['5']\n    representative: null\n"
+        "  - lead_ids: 'not-a-list'\n"          # a warning, not a failure
+    )
+    merged = merge_classify_results([first, second])
+
+    assert [s.title for s in merged.survivors] == ["a", "b"]
+    assert merged.warnings == second.warnings
+    # THE property the runner leans on: the merged text is still a prune list.
+    parsed = parse_prune_list(merged.prune_yaml)
+    assert {e.event_id: e.reason.value for e in parsed.entries} == {
+        "1": "stage", "3": "stage", "4": "release",
+    }
+
+
+def test_merge_folds_one_reason_split_across_batches_into_one_key():
+    """Two batches dismissing for the same reason must produce ONE key with
+    both ids -- a repeated `stage:` key is exactly what parse_prune_list's
+    _UniqueKeyLoader refuses, so a naive text concatenation would round-trip
+    into a PruneListError and take the whole press down."""
+    results = [
+        parse_classify_response(f"dismiss:\n  stage: ['{i}']\nsurvivors: []\n")
+        for i in range(1, 4)
+    ]
+    merged = merge_classify_results(results)
+    assert yaml.safe_load(merged.prune_yaml) == {"dismiss": {"stage": ["1", "2", "3"]}}
+    assert len(parse_prune_list(merged.prune_yaml).entries) == 3
+
+
+def test_merge_keeps_the_first_reason_when_two_batches_name_one_id():
+    """It cannot happen honestly -- a lead sits in exactly ONE batch, so no two
+    batches are ever shown the same id -- which means a repeat is an id the
+    model made up. parse_prune_list treats one id under two reasons as fatal
+    for the WHOLE list, so the merge resolves it here (first wins) and warns,
+    rather than letting one hallucinated id cost every real dismissal."""
+    first = parse_classify_response("dismiss:\n  stage: ['9']\nsurvivors: []\n")
+    second = parse_classify_response("dismiss:\n  release: ['9']\nsurvivors: []\n")
+    merged = merge_classify_results([first, second])
+
+    parsed = parse_prune_list(merged.prune_yaml)   # must not raise
+    assert [(e.event_id, e.reason.value) for e in parsed.entries] == [("9", "stage")]
+    assert any("9" in w for w in merged.warnings)
+
+
+def test_merge_of_results_with_nothing_dismissed_is_the_empty_string():
+    merged = merge_classify_results(
+        [parse_classify_response("survivors: []\n") for _ in range(3)]
+    )
+    assert merged.prune_yaml == ""      # "" is absence, as everywhere else
+    assert merged.survivors == ()
+
+
+def test_merging_one_result_returns_it_unchanged():
+    only = parse_classify_response(
+        "dismiss:\n  stage: ['1']\nsurvivors:\n  - title: a\n"
+        "    lead_ids: ['2']\n    representative: '2'\n"
+    )
+    merged = merge_classify_results([only])
+    assert merged.survivors == only.survivors
+    assert parse_prune_list(merged.prune_yaml).entries == \
+        parse_prune_list(only.prune_yaml).entries

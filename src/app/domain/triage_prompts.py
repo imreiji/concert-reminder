@@ -29,7 +29,12 @@ Two prompts, two response parsers:
   malformed individual survivor (no title, non-list `lead_ids`) is skipped
   and counted into `warnings` instead -- warnings over failures, like every
   parser in this package -- but the response as a WHOLE is only unusable
-  when it isn't a YAML mapping at all.
+  when it isn't a YAML mapping at all. `merge_classify_results` folds one
+  such result per BATCH back into one (the runner slices the queue; see
+  `TRIAGE_CLASSIFY_BATCH`), and the merged `dismiss` document still
+  round-trips through `parse_prune_list` -- which a naive concatenation of
+  two batches' text would not, since a repeated `stage:` key is precisely
+  what that parser's `_UniqueKeyLoader` refuses.
 - `draft_prompt`/`extract_yaml`/`strip_rounds` -- pass 3, one survivor at a
   time, in the exact vocabulary `.claude/skills/add-concert/SKILL.md` and
   its pinned `references/example-draft.yaml` use (trilingual title, per-leg
@@ -326,6 +331,67 @@ def parse_classify_response(text: str) -> ClassifyResult:
     )
 
 
+def merge_classify_results(results: Sequence[ClassifyResult]) -> ClassifyResult:
+    """Fold one ClassifyResult per BATCH into the single one the runner reads.
+
+    The classify pass is sliced into batches of `TRIAGE_CLASSIFY_BATCH` leads
+    (`app/triage.py` records the measurement); this is where the slices come
+    back together, here rather than in the runner for the reason every other
+    piece of response handling is here -- that module is the run ORDER only.
+
+    Survivors and warnings simply concatenate, in batch order. `prune_yaml`
+    cannot: each batch's is a whole `dismiss:` document, and two of them
+    dismissing for the same reason would produce a REPEATED `stage:` key,
+    which is exactly what `parse_prune_list`'s `_UniqueKeyLoader` refuses. So
+    the ids are re-read out of each batch's text (they already round-tripped
+    once, inside `parse_classify_response`) and re-dumped as ONE mapping,
+    which keeps the property the runner leans on: the merged text is still a
+    prune list the existing importer accepts.
+
+    One id under two reasons is fatal for a whole prune list, and the merge
+    resolves it rather than passing it on: FIRST batch wins, with a warning.
+    Two batches cannot disagree honestly -- a lead sits in exactly one batch,
+    so no two batches are ever shown the same id -- which means a repeat is an
+    id the model invented, and one invented id must not cost every real
+    dismissal in the press.
+    """
+    survivors: list[Survivor] = []
+    warnings: list[str] = []
+    # Ids stay in the order the batches proposed them; the dump below sorts the
+    # reason keys, exactly as parse_classify_response's own dump does, so one
+    # batch and many produce the same shaped document.
+    merged: dict[str, list[str]] = {}
+    seen: dict[str, DismissReason] = {}
+
+    for result in results:
+        survivors.extend(result.survivors)
+        warnings.extend(result.warnings)
+        if not result.prune_yaml:
+            continue
+        for entry in parse_prune_list(result.prune_yaml).entries:
+            prior = seen.get(entry.event_id)
+            if prior is not None:
+                if prior != entry.reason:
+                    warnings.append(
+                        f"{entry.event_id}: two batches dismissed it under "
+                        f"{prior.value!r} and {entry.reason.value!r} -- keeping "
+                        f"{prior.value!r} (a lead belongs to one batch, so one "
+                        f"of these ids was invented)"
+                    )
+                continue
+            seen[entry.event_id] = entry.reason
+            merged.setdefault(entry.reason.value, []).append(entry.event_id)
+
+    prune_yaml = (
+        yaml.safe_dump({"dismiss": merged}, allow_unicode=True) if merged else ""
+    )
+    return ClassifyResult(
+        prune_yaml=prune_yaml,
+        survivors=tuple(survivors),
+        warnings=tuple(warnings),
+    )
+
+
 # -- Draft prompt (pass 3 of triage-leads/SKILL.md, delegated to add-concert
 #    vocabulary) --------------------------------------------------------
 
@@ -375,17 +441,20 @@ Rules:
   are NAME lists, exactly as the source spells them -- NEVER ids or slugs.
   An unmatched name becomes a harmless preview hint at paste time; guessing
   an id would attach the wrong tag silently.
-- Eventernote pages carry per-leg facts (date, venue, doors/start, cast) and
-  NEVER round/ticket information -- Eventernote has no lottery data at all.
-- `rounds: []` is the safe default and is what this skeleton shows. Only add
-  a round when its window comes from that production's own OFFICIAL ticket
-  page. NEVER invent an apply_opens_jst / apply_closes_jst / results_jst /
-  payment_deadline_jst -- a fabricated deadline reaches a real user as a
-  real reminder for a deadline that was never real. If the ticket page can't
-  be found or confirmed, leave `rounds: []` exactly as shown.
-- A "申込締切"-prefixed date from a calendar lead is a POINTER to a deadline,
-  not a confirmed round -- confirm it on the official page before writing it
-  into a round, or leave the round out entirely.
+- Eventernote pages carry per-leg facts (date, venue, doors/start, cast), and
+  their free-text description often carries the full ticket/round ladder too
+  -- read it for what it says, this pass just doesn't act on it.
+- `rounds: []` is the rule here, unconditionally, even when a round is
+  sitting right there in the text above. A round belongs to the COMPLETION
+  pass, which grounds every timestamp in a verbatim quote from the page and
+  verifies it before trusting it -- this pass makes no such check, so any
+  apply_opens_jst / apply_closes_jst / results_jst / payment_deadline_jst it
+  wrote here would reach a real user as a real reminder for a deadline nobody
+  verified. Leave `rounds: []` exactly as shown.
+- A "申込締切"-prefixed date from a calendar lead is the same kind of
+  unverified pointer -- it says a deadline exists, not that this pass may
+  write it. Leave the round out here too; the completion pass is where it
+  gets confirmed.
 """
 
 
@@ -408,7 +477,7 @@ def draft_prompt(
         f"Representative Eventernote id: "
         f"{survivor.representative or '(none -- calendar-only lead)'}\n"
         f"Known legs from discovery:\n{lead_lines}\n\n"
-        f"Official ticket page HTML (may be truncated at {PAGE_CHAR_CAP} "
+        f"Eventernote page HTML (may be truncated at {PAGE_CHAR_CAP} "
         f"characters):\n{truncated_html}"
     )
     return _DRAFT_SYSTEM_PROMPT, user

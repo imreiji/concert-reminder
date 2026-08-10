@@ -29,7 +29,7 @@ from app.db.models import (
 from app.db.service import ensure_user
 from app.domain.prune_list import parse_prune_list
 from app.domain.triage_prompts import TriageResponseError
-from app.llm import LlmReply
+from app.llm import LlmError, LlmReply
 from app.scheduler import heartbeat
 from app.triage import run_triage
 
@@ -381,3 +381,164 @@ async def test_an_admin_who_never_signed_in_gets_a_user_row(db, monkeypatch):
         assert await s.get(User, STRANGER_ADMIN_ID) is not None
         notes = (await s.execute(select(Notification))).scalars().all()
         assert [n.user_id for n in notes] == [STRANGER_ADMIN_ID]
+
+
+# ── The classify pass is BATCHED ──────────────────────────────────────────
+#
+# One call over the whole queue failed two ways against a real 511-lead queue
+# on 2026-08-09 (see TRIAGE_CLASSIFY_BATCH in app/triage.py). These pin the
+# slicing, the merge, and the failure policy that batching makes possible.
+
+# Two batches' worth of replies, for a batch size monkeypatched down to 2.
+# `open_leads` hands them over event_date DESC, so a batch of two is
+# [imas-tickets:x@google.com, 486243] and then [481833] -- the replies below
+# answer the slices the runner really makes, not the order _seed_leads writes.
+BATCH_ONE_REPLY = """dismiss:
+  release: ['imas-tickets:x@google.com']
+survivors:
+  - title: "学マス LIVE"
+    lead_ids: ['486243']
+    representative: '486243'
+"""
+
+BATCH_TWO_REPLY = """dismiss:
+  stage: ['481833']
+survivors: []
+"""
+
+
+def _batches_of_two(monkeypatch):
+    """Three seeded leads sliced two at a time -- two classify calls."""
+    monkeypatch.setattr("app.triage.TRIAGE_CLASSIFY_BATCH", 2)
+
+
+async def test_classify_is_sliced_into_batches_and_merged(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    _batches_of_two(monkeypatch)
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        llm = _llm([BATCH_ONE_REPLY, BATCH_TWO_REPLY, DRAFT_REPLY])
+        report = await run_triage(s, run, NOW, fetcher=_fake_page, llm_chat=llm)
+
+        # Two classify calls, each seeing only its own slice of the queue.
+        assert len(llm.calls) == 3
+        assert "486243" in llm.calls[0][1]
+        assert "imas-tickets:x@google.com" in llm.calls[0][1]
+        assert "481833" not in llm.calls[0][1], "a lead belongs to exactly one batch"
+        assert "481833" in llm.calls[1][1]
+
+        # Both batches' dismissals survive the merge, under their own reasons,
+        # in one document the prune-list parser still accepts.
+        entries = parse_prune_list(run.prune_yaml).entries
+        assert {e.event_id: e.reason.value for e in entries} == {
+            "481833": "stage", "imas-tickets:x@google.com": "release",
+        }
+        assert report.dismissals == 2
+        assert report.productions == 1
+        assert report.drafts == 1
+        # Every call is billed to the run, not just the last batch.
+        assert report.tokens_in == 300 and report.tokens_out == 150
+        assert run.tokens_in == 300 and run.tokens_out == 150
+
+
+async def test_every_batch_beats_the_heartbeat(db, monkeypatch):
+    """Per batch, for the reason the draft loop beats per production: a queue
+    long enough to need slicing is a queue whose classify phase alone can
+    outlast the 180s health threshold."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    _batches_of_two(monkeypatch)
+    beats = []
+    monkeypatch.setattr(heartbeat, "beat", lambda: beats.append(1))
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        await run_triage(s, run, NOW, fetcher=_fake_page,
+                         llm_chat=_llm([BATCH_ONE_REPLY, BATCH_TWO_REPLY, DRAFT_REPLY]))
+        assert len(beats) == 3       # two classify batches + one drafted survivor
+
+
+async def test_one_unusable_batch_is_stepped_over(db, monkeypatch):
+    """One bad batch is a partial loss, not a total one -- the same reasoning
+    that keeps one bad production from costing the other twenty-four. The
+    surviving batch's dismissals and survivors still land and the run finishes."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    _batches_of_two(monkeypatch)
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        llm = _llm([BATCH_ONE_REPLY, "not yaml at all: [[", DRAFT_REPLY])
+        report = await run_triage(s, run, NOW, fetcher=_fake_page, llm_chat=llm)
+
+        assert run.status == "done"
+        assert report.classify_batches_failed == 1
+        assert report.skipped == 0, "a lost batch is not a production that failed to draft"
+        assert [e.event_id for e in parse_prune_list(run.prune_yaml).entries] == [
+            "imas-tickets:x@google.com"
+        ]
+        assert report.drafts == 1
+        # The junk reply was still billed: the tokens were spent either way.
+        assert report.tokens_in == 300
+
+
+async def test_a_batch_whose_llm_call_raises_is_stepped_over_too(db, monkeypatch):
+    """The 2026-08-09 failure #1 in miniature: the call itself blew up (an
+    8,192-token cap hit exactly, finish_reason "length"). Unbatched that killed
+    the whole press for a queue it had already been paid for."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    _batches_of_two(monkeypatch)
+    replies = [BATCH_ONE_REPLY, DRAFT_REPLY]
+    calls = []
+
+    async def flaky(system, user):
+        calls.append(user)
+        if len(calls) == 2:
+            raise LlmError("DeepSeek reply truncated (finish_reason: length)")
+        return LlmReply(text=replies[0] if len(calls) == 1 else replies[1],
+                        tokens_in=100, tokens_out=50)
+
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        report = await run_triage(s, run, NOW, fetcher=_fake_page, llm_chat=flaky)
+
+        assert run.status == "done"
+        assert report.classify_batches_failed == 1
+        assert report.productions == 1 and report.drafts == 1
+
+
+async def test_every_batch_failing_still_fails_the_run(db, monkeypatch):
+    """The original reasoning survives at its limit: when NO batch came back
+    usable there is no partial run to salvage, so it propagates and the
+    scheduler marks the row failed on a cleaned transaction."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    _batches_of_two(monkeypatch)
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        llm = _llm(["not yaml at all: [[", "nor is this: [["])
+        with pytest.raises(TriageResponseError):
+            await run_triage(s, run, NOW, fetcher=_fake_page, llm_chat=llm)
+        assert len(llm.calls) == 2, "every batch is tried before the run is given up on"
+        assert run.status == "requested"
+
+
+async def test_the_admin_notice_names_a_lost_batch(db, monkeypatch):
+    """A partial classify is a silent degradation otherwise: the queue looks
+    triaged, and the leads in the lost batch are simply never mentioned again.
+    Recorded in the notice for the same reason budget_exhausted is recorded."""
+    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    _batches_of_two(monkeypatch)
+    async with db() as s:
+        await ensure_user(s, ADMIN_ID, "admin")
+        await _seed_leads(s)
+        run = await service.request_triage(s, NOW, ADMIN_ID)
+        await run_triage(s, run, NOW, fetcher=_fake_page,
+                         llm_chat=_llm([BATCH_ONE_REPLY, "junk [[", DRAFT_REPLY]))
+        [note] = (await s.execute(select(Notification))).scalars().all()
+        assert "1 classify batch" in note.body
