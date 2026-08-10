@@ -14,7 +14,7 @@ counter instead.
 
 The second: `settings` is a pydantic-settings object that reads `.env` at
 import, so config values leak in from whatever machine the suite runs on. See
-`_pin_discord_token`.
+`_pin_shipped_defaults`.
 """
 
 import pytest
@@ -30,9 +30,21 @@ def _reset_tick_count():
     loop_mod._tick_count = 0
 
 
+# Every setting that ships switched OFF and that the owner's `.env` switches
+# ON. The value here is the SHIPPED default, not a test-specific one: the
+# point is to make the suite see what a fresh checkout sees.
+_SHIPPED_OFF_DEFAULTS = {
+    "discord_token": "",
+    "rehearsal_enabled": False,
+    "discovery_enabled": False,
+    "triage_enabled": False,
+    "deepseek_api_key": "",
+}
+
+
 @pytest.fixture(autouse=True)
-def _pin_discord_token(monkeypatch):
-    """Force `bot_enabled` off by default instead of inheriting it from `.env`.
+def _pin_shipped_defaults(monkeypatch):
+    """Force the off-by-default subsystems off instead of inheriting `.env`.
 
     Three places used to assert that `discord_token` "defaults to ''" in
     tests. It does not: `Settings` reads `.env`, and on the owner's machine
@@ -43,13 +55,26 @@ def _pin_discord_token(monkeypatch):
     -- the worst shape for a test failure, because the suite disagrees with
     itself depending on who runs it.
 
-    Pin it rather than assume it. Tests that need the bot ON set it
-    themselves; test_ops_alerts.py already pins it in both directions and
-    explains why plain attribute assignment works on a pydantic model.
+    That is a CLASS of bug, not one setting, and pinning only the token left
+    the rest of the class live: `TRIAGE_ENABLED=true` in the same `.env` later
+    broke `test_triage_button_renders_only_when_enabled`, which asserts the
+    button is absent BEFORE switching the flag on, in exactly the same
+    passes-in-CI-fails-locally shape. So pin every flag that ships off, and
+    the API key beside them -- a blank key is what stops a stray triage path
+    from spending the owner's real credit, and `_no_real_network` should not
+    be the only thing standing between a test and a paid endpoint.
+
+    Pin them rather than assume them. Tests that need a subsystem ON set it
+    themselves, and every current one already does, in both directions;
+    test_ops_alerts.py explains why plain attribute assignment works on a
+    pydantic model. A test asserting a SHIPPED default must read
+    `settings.model_fields[...].default` (the class default, which no `.env`
+    can reach), the way test_rehearsal.py does -- never the live attribute.
     """
     from app.config import settings
 
-    monkeypatch.setattr(settings, "discord_token", "")
+    for name, shipped in _SHIPPED_OFF_DEFAULTS.items():
+        monkeypatch.setattr(settings, name, shipped)
 
 
 class RealNetworkAttempt(BaseException):
