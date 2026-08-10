@@ -359,6 +359,247 @@ def test_evidence_for_a_field_the_round_does_not_carry_is_dropped_even_when_the_
     assert set(v.accepted[0].evidence) == {"apply_closes_jst"}
 
 
+# -- English-language pages: the second shape of the locality rule -----------
+#
+# An international page carries its overseas-package section in ENGLISH, and
+# English states a deadline in an order the Japanese rule cannot see: the time
+# FIRST, the month as a WORD, the year AFTER the day. The quote below is
+# verbatim from the LoveLive! Series 15th Anniversary page (2026-08-10), was
+# proposed correctly by a model, and was rejected -- the one false reject in a
+# 39-round live run. Everything here pins the new matcher: the true cases it
+# must now accept, and the splices it must still refuse.
+
+EN_PAGE = (
+    "LoveLive! Series 15th Anniversary Overseas Tour Package "
+    "Application period: From 19:00 on Wednesday, August 5, 2026 JST "
+    "to 23:59 on Monday, August 17, 2026 JST. "
+    "Winners are announced at 18:00 on Friday, August 21, 2026 JST."
+)
+EN_QUOTE = (
+    "From 19:00 on Wednesday, August 5, 2026 JST "
+    "to 23:59 on Monday, August 17, 2026 JST"
+)
+
+
+def test_an_english_quote_proves_both_of_the_timestamps_it_states():
+    # The motivating case. ONE quote, TWO English dates, and each anchor is
+    # proved against its own half of it.
+    r = ProposedRound(
+        data={
+            "label": "Overseas package",
+            "kind": "lottery",
+            "apply_opens_jst": "2026-08-05 19:00",
+            "apply_closes_jst": "2026-08-17 23:59",
+        },
+        evidence={"apply_opens_jst": EN_QUOTE, "apply_closes_jst": EN_QUOTE},
+        label="Overseas package",
+    )
+    v = verify_rounds([r], EN_PAGE, ["Day 1"], TODAY)
+    assert v.rejected == ()
+    assert len(v.accepted) == 1
+
+
+def test_an_english_quote_does_not_lend_the_second_dates_time_to_the_first():
+    # The splice the two-date case makes possible, and the likeliest way this
+    # matcher could go wrong: the FIRST date with the SECOND date's time. Every
+    # digit is in the quote, and the two are only 9 characters apart -- what
+    # refuses it is that the text between them ("JST to ") is not a connective
+    # that binds a time to the date before it. "to" starts the next clause.
+    r = _round(
+        data={"apply_closes_jst": "2026-08-05 23:59"},
+        evidence={"apply_closes_jst": EN_QUOTE},
+    )
+    v = verify_rounds([r], EN_PAGE, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_english_quote_does_not_lend_the_first_dates_time_to_the_second():
+    # The mirror splice: the SECOND date with the FIRST date's time. The whole
+    # first half of the quote, another date included, sits between them.
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 19:00"},
+        evidence={"apply_closes_jst": EN_QUOTE},
+    )
+    v = verify_rounds([r], EN_PAGE, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_english_quote_grants_no_stamp_merely_assembled_from_its_digits():
+    # 17 and 00 are both in the quote (a day, and the minute of 19:00), so a
+    # flat "are these digits present" test would call 17:00 proved. No time in
+    # this quote reads 17:00, so nothing is.
+    r = _round(
+        data={"apply_closes_jst": "2026-08-05 17:00"},
+        evidence={"apply_closes_jst": EN_QUOTE},
+    )
+    v = verify_rounds([r], EN_PAGE, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_english_time_after_its_date_is_accepted():
+    page = "Overseas package sales open on August 5, 2026 at 19:00 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-05 19:00"},
+        evidence={"apply_closes_jst": "sales open on August 5, 2026 at 19:00 JST"},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY).accepted) == 1
+
+
+def test_an_english_time_separated_from_its_date_by_a_clause_is_rejected():
+    # A real page line, a real date, a real time, and they are about different
+    # things -- the English analogue of the two-real-lines splice.
+    page = "Entries close at 23:59, and the winners for August 17, 2026 are drawn later."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_month_and_year_with_no_day_is_not_read_as_a_date():
+    # "August 2026" names a month, not a day, and the digits of its YEAR must
+    # never be read as one: without the digit fence around the day, this quote
+    # offers "August 20" with an allowed connective and a real time after it,
+    # and proves a deadline the page does not state anywhere.
+    page = "The August 2026 lottery closes at 19:00 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-20 19:00"},
+        evidence={"apply_closes_jst": "The August 2026 lottery closes at 19:00 JST"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_the_minute_of_one_time_is_not_read_as_the_day_of_the_date_after_it():
+    # Found by probing the day-first form ("5 August 2026") rather than by
+    # reasoning about it: that form reads a number standing in front of a month
+    # name, and the number in front of the month name here is the MINUTE of an
+    # earlier time. Unfenced, this quote hands over a date of "05 August, 2026"
+    # -- a day the page states nowhere -- with a real time bound to it by a
+    # real connective, and 2026-08-05 19:00 was ACCEPTED. The day is now fenced
+    # against a preceding ':' as well as a digit, so the tail of a clock time
+    # is never a day.
+    page = "Doors 18:05 August, 2026 at 19:00 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-05 19:00"},
+        evidence={"apply_closes_jst": "Doors 18:05 August, 2026 at 19:00 JST"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_english_time_in_the_sentence_before_the_date_is_rejected():
+    # Adjacent, both real, and about different things -- the connective
+    # whitelist has no sentence boundary in it, so the two never join.
+    page = "Doors open at 18:00. August 5, 2026 tickets go on sale later."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-05 18:00"},
+        evidence={"apply_closes_jst": "Doors open at 18:00. August 5, 2026 tickets go on sale"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_abbreviated_english_month_and_an_ordinal_day_are_accepted():
+    page = "Applications close Aug. 17th, 2026 at 23:59 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 23:59"},
+        evidence={"apply_closes_jst": "Applications close Aug. 17th, 2026 at 23:59 JST"},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY).accepted) == 1
+
+
+def test_a_day_first_english_date_is_accepted():
+    page = "Applications close at 23:59 on 17 August 2026 (JST)."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 23:59"},
+        evidence={"apply_closes_jst": "Applications close at 23:59 on 17 August 2026"},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY).accepted) == 1
+
+
+def test_an_english_year_that_contradicts_the_claim_is_rejected():
+    # English writes the year next to the day, so unlike the Japanese shape it
+    # is USABLE evidence and gets held to it: 2027 is on the page (in a
+    # heading), which is all the broad year rule ever asks for, but the quote's
+    # own date says 2026 and the claim says otherwise.
+    page = "Ticket calendar 2027 season. Applications close on August 17, 2026 at 23:59 JST."
+    r = _round(
+        data={"apply_closes_jst": "2027-08-17 23:59"},
+        evidence={"apply_closes_jst": "Applications close on August 17, 2026 at 23:59 JST"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_english_date_without_a_year_still_takes_it_from_the_page():
+    # The other half of that rule, and the English twin of the Japanese
+    # year-in-a-heading case: no year beside the date, so the broad rule stands.
+    page = "2026 tour information. Applications close on August 17 at 23:59 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 23:59"},
+        evidence={"apply_closes_jst": "Applications close on August 17 at 23:59 JST"},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY).accepted) == 1
+
+
+def test_a_twelve_hour_english_time_is_never_read_as_a_24_hour_one():
+    # "7:00 PM" is 19:00, and a claimed 07:00 is 12 hours wrong. Rather than
+    # teach the matcher to convert -- and own every way that conversion can be
+    # got backwards -- an am/pm time is not evidence of anything: the round is
+    # rejected and a human types it in. A false reject, deliberately.
+    page = "Applications close at 7:00 PM on August 17, 2026 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 07:00"},
+        evidence={"apply_closes_jst": "Applications close at 7:00 PM on August 17, 2026 JST"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_lowercase_may_is_not_read_as_a_month():
+    # "may" is a modal verb far more often than it is a month, and it is the
+    # one month name that is also an ordinary English word. A lowercase month
+    # is therefore not a month here, which costs this all-lowercase page its
+    # round -- the cheap side of the trade, and the reason the rule exists.
+    page = "entries close may 5, 2026 at 23:59 jst."
+    r = _round(
+        data={"apply_closes_jst": "2026-05-05 23:59"},
+        evidence={"apply_closes_jst": "entries close may 5, 2026 at 23:59 jst"},
+    )
+    assert not verify_rounds([r], page, ["Day 1"], TODAY).accepted
+
+
+def test_an_upper_case_english_date_is_accepted():
+    page = "APPLICATIONS CLOSE AUGUST 17, 2026 AT 23:59 JST"
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY).accepted) == 1
+
+
+def test_the_japanese_shape_is_untouched_by_the_english_matcher():
+    # The English matcher is a second, separate reader -- the Japanese rule was
+    # not loosened to make room for it, so its own false-accept cases must
+    # still fail exactly as they did before.
+    r = _round(
+        data={"apply_closes_jst": "2026-01-10 01:00"},
+        evidence={"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"},
+    )
+    assert not verify_rounds([r], PAGE, ["Day 1"], TODAY).accepted
+
+
 # -- Item 6 & 7: full-width folding ------------------------------------------
 
 

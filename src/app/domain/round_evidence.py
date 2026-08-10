@@ -27,7 +27,8 @@ of them a way a fabricated deadline could otherwise reach a real user:
      not merely present later in the quote. The date-to-time span is
      additionally capped at 60 characters, so a real deadline line still
      passes while a quote padding a lot of irrelevant text between the two
-     does not;
+     does not. That rule reads the JAPANESE shape; the English shape gets its
+     own, equally strict reader -- see `_english_stamp_in`;
   5. an implausible year, or a month/day that isn't a real calendar date;
   6. anchors out of order (results before the deadline they announce),
      compared as PARSED (year, month, day, hour, minute) tuples -- never as
@@ -38,6 +39,26 @@ of them a way a fabricated deadline could otherwise reach a real user:
   7. an `applies_to` naming a leg the draft lacks, OR not shaped like a list
      of leg names at all -- an unrecognized shape gets no free pass, it gets
      a reason.
+
+TWO LANGUAGES, TWO MATCHERS -- NEVER ONE LOOSE ONE. Rule 4 above encodes the
+Japanese order (`2026年8月5日（水）19:00`: date first, month as a NUMBER, time
+immediately after). English states the same fact in an order that rule cannot
+see -- the time FIRST, the month as a WORD, the year AFTER the day -- and the
+overseas-package section of an international page is written in it. A live run
+over the real catalogue (2026-08-10) accepted 39 rounds with no invented
+timestamps and false-rejected exactly one: the LoveLive! Series 15th
+Anniversary page's
+
+    "From 19:00 on Wednesday, August 5, 2026 JST to 23:59 on Monday,
+     August 17, 2026 JST"
+
+quoted verbatim, both anchors correct, and discarded. So `_english_stamp_in`
+is a SECOND matcher tried after the Japanese one fails, never a loosening of
+it: the Japanese path is byte-for-byte what it was, and each matcher stays the
+strictest reading of the one shape it knows. Widening one rule to cover both
+orders is how a rule that catches "a real date and someone else's real time"
+stops catching it -- note that the quote above states TWO deadlines nine
+characters apart, so it is itself the splice a loose reader would fall for.
 
 NOTHING IS DROPPED SILENTLY. Every rejection carries a human-readable reason
 that reaches the preview, because a real deadline quietly discarded is exactly
@@ -116,6 +137,89 @@ _FULLWIDTH = str.maketrans("０１２３４５６７８９：", "0123456789:")
 _NUMBER = re.compile(r"\d+")
 _STAMP = re.compile(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})")
 
+# -- The English shape ------------------------------------------------------
+#
+# Month names TITLE-CASED and ALL-CAPS only, never lowercase, and the reason is
+# "May": it is the one month that is also an ordinary English word, and a page
+# reading "winners may 5 days later, from 23:59" would otherwise offer a date.
+# Requiring a capital costs an all-lowercase page its round (a visible false
+# reject, one line typed by hand) and buys the modal verb out of the grammar
+# entirely -- the trade this module makes everywhere.
+_EN_MONTHS: dict[str, int] = {
+    "January": 1, "Jan": 1,
+    "February": 2, "Feb": 2,
+    "March": 3, "Mar": 3,
+    "April": 4, "Apr": 4,
+    "May": 5,
+    "June": 6, "Jun": 6,
+    "July": 7, "Jul": 7,
+    "August": 8, "Aug": 8,
+    "September": 9, "Sept": 9, "Sep": 9,
+    "October": 10, "Oct": 10,
+    "November": 11, "Nov": 11,
+    "December": 12, "Dec": 12,
+}
+# Longest first, so "September" is tried before "Sept" before "Sep" -- with the
+# short form first, `Sep` would match and the rest of the word would be left to
+# the trailing `(?![A-Za-z])` to reject, losing a perfectly good date.
+_MONTH_ALT = "|".join(
+    form
+    for name in sorted(_EN_MONTHS, key=len, reverse=True)
+    for form in (name, name.upper())
+)
+_WEEKDAY_ALT = "|".join(
+    sorted(
+        (
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+            "Mon", "Tue", "Tues", "Wed", "Weds", "Thu", "Thur", "Thurs", "Fri", "Sat", "Sun",
+        ),
+        key=len,
+        reverse=True,
+    )
+)
+
+# The day is fenced on BOTH sides so it can never be part of a longer number
+# that means something else -- each half of this fence was a false accept
+# before it was a lookaround:
+#   trailing: without it "5 August 2026" ALSO reads month-first as "August 20"
+#     (the "20" of 2026), a date the page states nowhere;
+#   leading: a bare `(?<!\d)` still lets the day-first form take the MINUTE of
+#     a clock time as its day, so "Doors 18:05 August, 2026 at 19:00" offered
+#     "05 August, 2026" with a real connective and a real time after it, and
+#     proved 2026-08-05 19:00. A ':' or '.' in front means this number is the
+#     tail of something, not a day.
+_EN_DAY = r"(?<![\d:.])(?P<day>\d{1,2})(?!\d)(?i:st|nd|rd|th)?"
+# Ordinal suffixes are accepted and NOT checked for agreement -- "5th" and the
+# typo "5st" are the same evidence about the same day, and a grammar check here
+# would only ever turn a real page into a rejection.
+_EN_YEAR = r"(?:,?\s*(?P<year>\d{4})(?!\d))?"
+_EN_MONTH = rf"(?P<month>{_MONTH_ALT})\.?(?![A-Za-z])"
+_EN_DATES = (
+    re.compile(rf"{_EN_MONTH}\s+{_EN_DAY}{_EN_YEAR}"),  # August 5, 2026
+    re.compile(rf"{_EN_DAY}\s+{_EN_MONTH}{_EN_YEAR}"),  # 5 August 2026
+)
+
+# A 12-hour time is refused outright rather than converted: "7:00 PM" is 19:00,
+# a model claiming 07:00 from it is twelve hours wrong, and matching the digits
+# would call that proved. Teaching this module to convert means owning every
+# way the conversion can be got backwards on evidence it is supposed to be
+# checking, so am/pm is simply not evidence here -- a visible false reject.
+_EN_TIME = re.compile(r"(?<![\d:])(?P<hour>\d{1,2}):(?P<minute>\d{2})(?![\d:])(?!\s*[APap]\.?[Mm])")
+
+# What may sit between a date and its time, and NOTHING else. This is the
+# English locality guarantee: not a character budget (a budget is what lets
+# "August 5, 2026 JST to 23:59" read as one statement -- nine characters, two
+# different deadlines) but an exhaustive list of the connectives that actually
+# bind a time to a date. "to", "until", "and", or any other word that starts a
+# new clause is absent by construction, so a splice fails on the words between
+# its halves rather than on how far apart they are.
+_EN_GAP_TIME_BEFORE = re.compile(  # "19:00 [JST] on [Wednesday,] August 5"
+    rf"\s*(?:\(?JST\)?)?\s*(?:on\s+)?(?:(?:{_WEEKDAY_ALT})\.?,?\s*)?", re.IGNORECASE
+)
+_EN_GAP_TIME_AFTER = re.compile(  # "August 5, 2026 [JST][,] [at|from] 19:00"
+    r"\s*(?:\(?JST\)?)?\s*,?\s*(?:(?:at|from)\s+)?", re.IGNORECASE
+)
+
 
 @dataclass(frozen=True)
 class ProposedRound:
@@ -191,6 +295,11 @@ def _quote_carries_stamp(
 ) -> bool:
     """Does this quote actually say this timestamp, IN ONE PLACE?
 
+    In JAPANESE, below; in ENGLISH, in `_english_stamp_in`, which this falls
+    through to and which is a separate matcher for a separate grammar -- an
+    international page writes its overseas section in English, and neither
+    reader is loosened to cover the other's shape.
+
     Locality, not just presence: month must be immediately followed by day as
     the next number token, and hour must be the VERY NEXT number token after
     that date (immediately followed by minute, unless waived) -- not merely
@@ -252,6 +361,73 @@ def _quote_carries_stamp(
             start = tokens[i - 1][1]
         if time_end - start <= _MAX_STAMP_SPAN_CHARS:
             return True
+
+    # Nothing in the Japanese shape. Try the English one -- a second matcher,
+    # not a relaxation of the loop above, which is unchanged.
+    return _english_stamp_in(quote, parts)
+
+
+def _english_stamp_in(quote: str, parts: tuple[int, int, int, int, int]) -> bool:
+    """Does this quote say this timestamp in ENGLISH, IN ONE PLACE?
+
+    Same guarantee as the Japanese loop, expressed in the grammar English
+    actually uses. A date is a month WORD and a day adjacent to each other in
+    either order, with only whitespace between them ("August 5", "5 August").
+    A time is `HH:MM`. The two are one statement only when the text BETWEEN
+    them is a connective that binds them -- `_EN_GAP_TIME_BEFORE` when the time
+    leads ("19:00 on Wednesday, August 5, 2026"), `_EN_GAP_TIME_AFTER` when it
+    follows ("August 5, 2026 at 19:00") -- matched in FULL, so anything else
+    there is a refusal rather than a tolerated gap.
+
+    That whitelist, not the character span, is what makes the motivating quote
+    safe. "From 19:00 on Wednesday, August 5, 2026 JST to 23:59 on Monday,
+    August 17, 2026 JST" states two deadlines whose halves interleave: the
+    second time sits NINE characters after the first date, nearer to it than to
+    its own. Any distance rule pairs them and proves a deadline the page never
+    states; the words between them ("JST to ") do not bind, so this one
+    doesn't. `_MAX_STAMP_SPAN_CHARS` is applied on top -- the same number the
+    Japanese path uses, unreachable while the whitelist stays this short, and
+    there precisely so that adding a connective to it later cannot quietly buy
+    an unbounded one.
+
+    The YEAR is the one place this is STRICTER than the Japanese path, because
+    English gives it something to be strict with: the year is written beside
+    the day, so when the date states one it must be the claimed one. Where the
+    date states none, the broad "in this quote or anywhere on the page" rule
+    the caller already applied stands, exactly as it does for a Japanese page
+    that puts the year in a heading.
+    """
+    year, month, day, hour, minute = parts
+    text = _fold_digits(quote)
+
+    dates = [
+        match
+        for pattern in _EN_DATES
+        for match in pattern.finditer(text)
+        if _EN_MONTHS[match.group("month").title()] == month
+        and int(match.group("day")) == day
+        and (match.group("year") is None or int(match.group("year")) == year)
+    ]
+    if not dates:
+        return False
+    times = [
+        match
+        for match in _EN_TIME.finditer(text)
+        if int(match.group("hour")) == hour and int(match.group("minute")) == minute
+    ]
+
+    for stated_date in dates:
+        for stated_time in times:
+            if stated_time.end() <= stated_date.start():
+                gap = text[stated_time.end() : stated_date.start()]
+                bound, span = _EN_GAP_TIME_BEFORE, stated_date.end() - stated_time.start()
+            elif stated_time.start() >= stated_date.end():
+                gap = text[stated_date.end() : stated_time.start()]
+                bound, span = _EN_GAP_TIME_AFTER, stated_time.end() - stated_date.start()
+            else:
+                continue  # overlapping: the "time" is part of the date's digits
+            if bound.fullmatch(gap) and span <= _MAX_STAMP_SPAN_CHARS:
+                return True
 
     return False
 
