@@ -153,6 +153,30 @@ _TIME_SEPARATORS = (":", "：", "分")
 
 _FULLWIDTH = str.maketrans("０１２３４５６７８９：", "0123456789:")
 _NUMBER = re.compile(r"\d+")
+# A Japanese 12-hour clock is REFUSED, never converted -- the same policy
+# `_EN_TIME` applies to `PM`, and it was missing here for no better reason than
+# that nobody had written it. Found 2026-08-10 while probing the carryover
+# matcher, and it was live: 「申込締切：2026年7月28日午後11時59分」 ACCEPTED a claim
+# of `2026-07-28 11:59` -- twelve hours early -- while REFUSING the true 23:59,
+# so both a misreading and a correct reading came out wrong, and the misreading
+# was the one that reached a user as a real reminder. Converting instead would
+# mean owning every way a conversion can be got backwards inside the module
+# whose job is checking somebody else's arithmetic, so a 12-hour time is simply
+# not evidence here: a deliberate, VISIBLE false reject, one line typed by hand.
+# Anchored at the end, so it fires only when the marker is the hour's own --
+# 「午後の部 … 2026年7月28日 23:59」 states a 24-hour time and still passes.
+_MERIDIEM_BEFORE = re.compile(r"(?:午前|午後)\s*$")
+
+
+def _meridiem_marked(quote: str, hour_start: int) -> bool:
+    """Is the hour token at `hour_start` written on a 12-hour clock?
+
+    Indexes the ORIGINAL quote, which it may do because every transformation
+    between the two is length-preserving (`_fold_digits` is a 1:1 character
+    translation, `_blank_era_words` replaces one character with one) -- the
+    same property `_number_tokens` documents and relies on.
+    """
+    return _MERIDIEM_BEFORE.search(quote[:hour_start]) is not None
 _STAMP = re.compile(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})")
 
 # -- The abbreviated Japanese shape -----------------------------------------
@@ -382,8 +406,10 @@ def _quote_carries_stamp(
         time_index = i + 2
         if time_index >= len(tokens):
             continue
-        hour_value, _, hour_end = tokens[time_index]
+        hour_value, hour_start, hour_end = tokens[time_index]
         if hour_value != hour:
+            continue
+        if _meridiem_marked(quote, hour_start):
             continue
 
         if minute_waived:
@@ -505,8 +531,10 @@ def _carryover_stamp_in(
         time_index += 1
         if time_index >= len(tokens):
             continue
-        hour_value, _, hour_end = tokens[time_index]
+        hour_value, hour_start, hour_end = tokens[time_index]
         if hour_value != hour:
+            continue
+        if _meridiem_marked(quote, hour_start):
             continue
 
         if minute_waived:

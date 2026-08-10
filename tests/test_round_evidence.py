@@ -862,3 +862,53 @@ def test_a_full_width_page_still_matches_a_half_width_quote():
     r = _round(evidence={"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"})
     v = verify_rounds([r], page, ["Day 1"], TODAY)
     assert len(v.accepted) == 1
+
+
+# -- 12-hour Japanese clocks are refused, never converted -------------------
+#
+# Found 2026-08-10 while probing the carryover matcher, and it was LIVE: a
+# 午後 time was accepted as its bare digits -- twelve hours early -- while the
+# true 24-hour value was refused, so a misreading reached a user as a real
+# reminder and a correct reading was thrown away. Mirrors `_EN_TIME`'s refusal
+# of am/pm, which had the same reasoning and simply got written first.
+
+
+def _carries(quote: str, claimed: str) -> bool:
+    """Would a round claiming `claimed`, quoting `quote`, survive on a page
+    that contains that quote? The quote IS the page here, which keeps each
+    case to the one thing it is about."""
+    r = ProposedRound(
+        data={"label": "x", "kind": "lottery", "apply_closes_jst": claimed},
+        evidence={"apply_closes_jst": quote},
+        label="x",
+    )
+    return bool(verify_rounds([r], quote, [], TODAY).accepted)
+
+
+def test_a_12_hour_japanese_time_proves_nothing():
+    # BOTH readings must fail: the naive one because it is wrong, and the
+    # correct one because this module does not do the conversion that would
+    # make it right. A refusal costs one round typed by hand; an acceptance is
+    # a deadline twelve hours early.
+    quote = "申込締切：2026年7月28日午後11時59分"
+    for claimed in ("2026-07-28 11:59", "2026-07-28 23:59"):
+        assert not _carries(quote, claimed), claimed
+
+
+def test_gozen_is_refused_too():
+    assert not _carries("受付開始：2026年7月28日午前10時00分", "2026-07-28 10:00")
+
+
+def test_a_24_hour_time_still_passes_when_the_word_appears_elsewhere():
+    # The guard is anchored to the hour's own position, so a page that merely
+    # mentions 午後 -- 午後の部 is an ordinary session name -- keeps its
+    # perfectly good 24-hour deadline.
+    assert _carries("午後の部 申込締切：2026年7月28日 23:59", "2026-07-28 23:59")
+
+
+def test_the_carryover_matcher_refuses_a_12_hour_time_too():
+    # The second reader inherits the main loop's downstream rules, so it has to
+    # inherit this one as well or the fix is only half applied.
+    quote = "抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）午後11時59分"
+    assert not _carries(quote, "2026-07-28 11:59")
+    assert not _carries(quote, "2026-07-28 23:59")
