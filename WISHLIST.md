@@ -1184,6 +1184,20 @@ are untouched by this build -- neither reads nor needs the catalogue view
 the API adds. Rank unchanged; effort, for the cheap shape specifically, drops
 further.
 
+Re-read 2026-08-10, when phase 1 stopped stripping rounds and started
+GROUNDING them (owner ruling; `strip_rounds` deleted, `verify_rounds` wired
+into the draft loop). **Held, and one sentence of the 2026-08-05 re-read above
+is now historically false and should be read as history**: phase 1's drafts no
+longer carry `rounds: []` by construction. They carry whatever the Eventernote
+page states and the model can quote -- 7 real rounds over 13 productions in the
+run that produced the ruling. That weakens the volume argument a second time
+(fewer drafts arrive empty at all, and the ones that do reach phase 2 as
+before), and it strengthens the core claim in the same motion for a NEW reason:
+some of those rounds exist ONLY on Eventernote, because an official page drops
+a round once it closes. A ladder assembled from two sources that each forget
+different parts of it is exactly a ladder that goes stale in a way only a
+re-fetch pass would notice.
+
 ### 3. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
@@ -2349,6 +2363,19 @@ promise ("a deadline it names is real"), so it was carved out as phase 2 before
 implementation started rather than attempted and walked back -- it was filed the
 same day as its own entry, which also carried phase 2's one known hard question
 so it would not be rediscovered, and which shipped as the phase-2 entry above.
+
+*Superseded 2026-08-10 (owner ruling).* `strip_rounds` is gone; phase 1 now
+runs the same evidence grounding phase 2 does, over page TEXT, and keeps the
+rounds it can quote. The carve-out above was right for the reason it gave --
+phase 1 had no way to tell a read deadline from an invented one -- and
+`round_evidence.py` is now that way. The measurement that turned it: the claim
+"Eventernote carries no ticket data" is simply false (the ladder sits in the
+free-text description), and over 13 real productions `strip_rounds` deleted 7
+real rounds, every one verifiable on its own page, some of which the official
+page no longer states at all. The promise is unchanged and the test that pins
+it is now the inverse pair: a round whose quote is not on the page is refused,
+a round quoting the real line survives, and every refusal is written to the
+draft's preview.
 
 **The request stamp IS the `TriageRun` row.** Unlike the sweep, which stamps
 the `DiscoveryState` singleton, triage wants per-run history, so the button

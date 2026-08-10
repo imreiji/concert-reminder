@@ -29,19 +29,27 @@ Two prompts, two response parsers:
   malformed individual survivor (no title, non-list `lead_ids`) is skipped
   and counted into `warnings` instead -- warnings over failures, like every
   parser in this package -- but the response as a WHOLE is only unusable
-  when it isn't a YAML mapping at all.
-- `draft_prompt`/`extract_yaml`/`strip_rounds` -- pass 3, one survivor at a
-  time, in the exact vocabulary `.claude/skills/add-concert/SKILL.md` and
-  its pinned `references/example-draft.yaml` use (trilingual title, per-leg
-  date/venue/label, series/artist NAME lists, never ids). `strip_rounds` is
-  a belt-and-braces net for the one rule both skills repeat under threat of
-  a real user getting a fake reminder: a model asked for `rounds: []` can
-  still invent one anyway, so the runner is expected to call `strip_rounds`
-  on every draft response regardless of what the model actually said,
-  discarding any round the model proposed rather than trusting its
-  self-restraint. `PAGE_CHAR_CAP` caps how much of a fetched ticket page
-  rides in the user prompt, so one enormous page cannot blow an LLM
-  context budget silently.
+  when it isn't a YAML mapping at all. `merge_classify_results` folds one
+  such result per BATCH back into one (the runner slices the queue; see
+  `TRIAGE_CLASSIFY_BATCH`), and the merged `dismiss` document still
+  round-trips through `parse_prune_list` -- which a naive concatenation of
+  two batches' text would not, since a repeated `stage:` key is precisely
+  what that parser's `_UniqueKeyLoader` refuses.
+- `draft_prompt`/`extract_yaml` -- pass 3, one survivor at a time, in the
+  exact vocabulary `.claude/skills/add-concert/SKILL.md` and its pinned
+  `references/example-draft.yaml` use (trilingual title, per-leg
+  date/venue/label, series/artist NAME lists, never ids). It asks for
+  ROUNDS WITH EVIDENCE, in the same words `round_completion.py`'s prompt
+  uses, and `strip_rounds` -- which used to delete every round this pass
+  produced -- is GONE (owner ruling, 2026-08-10; see `app/triage.py`).
+  The guarantee moved from "delete everything" to "verify everything":
+  `domain/round_evidence.py:verify_rounds` drops any round whose quote is
+  not on the page the model was shown, so the prompt asks and the code
+  still decides. `draft_prompt` therefore takes page TEXT
+  (`domain/page_text.py`), never HTML, capped at that module's
+  `PAGE_TEXT_CAP` -- the cap `verify_rounds` re-normalizes under. Showing
+  the model text the verifier cannot search is how a real quote fails for
+  a transformation nobody applied to both sides.
 """
 
 from __future__ import annotations
@@ -52,10 +60,9 @@ from dataclasses import dataclass
 
 import yaml
 
+from app.domain.page_text import PAGE_TEXT_CAP
 from app.domain.prune_list import PruneListError, parse_prune_list
 from app.domain.types import DismissReason
-
-PAGE_CHAR_CAP = 120_000
 
 
 class TriageResponseError(Exception):
@@ -326,13 +333,82 @@ def parse_classify_response(text: str) -> ClassifyResult:
     )
 
 
+def merge_classify_results(results: Sequence[ClassifyResult]) -> ClassifyResult:
+    """Fold one ClassifyResult per BATCH into the single one the runner reads.
+
+    The classify pass is sliced into batches of `TRIAGE_CLASSIFY_BATCH` leads
+    (`app/triage.py` records the measurement); this is where the slices come
+    back together, here rather than in the runner for the reason every other
+    piece of response handling is here -- that module is the run ORDER only.
+
+    Survivors and warnings simply concatenate, in batch order. `prune_yaml`
+    cannot: each batch's is a whole `dismiss:` document, and two of them
+    dismissing for the same reason would produce a REPEATED `stage:` key,
+    which is exactly what `parse_prune_list`'s `_UniqueKeyLoader` refuses. So
+    the ids are re-read out of each batch's text (they already round-tripped
+    once, inside `parse_classify_response`) and re-dumped as ONE mapping,
+    which keeps the property the runner leans on: the merged text is still a
+    prune list the existing importer accepts.
+
+    One id under two reasons is fatal for a whole prune list, and the merge
+    resolves it rather than passing it on: FIRST batch wins, with a warning.
+    Two batches cannot disagree honestly -- a lead sits in exactly one batch,
+    so no two batches are ever shown the same id -- which means a repeat is an
+    id the model invented, and one invented id must not cost every real
+    dismissal in the press.
+    """
+    survivors: list[Survivor] = []
+    warnings: list[str] = []
+    # Ids stay in the order the batches proposed them; the dump below sorts the
+    # reason keys, exactly as parse_classify_response's own dump does, so one
+    # batch and many produce the same shaped document.
+    merged: dict[str, list[str]] = {}
+    seen: dict[str, DismissReason] = {}
+
+    for result in results:
+        survivors.extend(result.survivors)
+        warnings.extend(result.warnings)
+        if not result.prune_yaml:
+            continue
+        for entry in parse_prune_list(result.prune_yaml).entries:
+            prior = seen.get(entry.event_id)
+            if prior is not None:
+                if prior != entry.reason:
+                    warnings.append(
+                        f"{entry.event_id}: two batches dismissed it under "
+                        f"{prior.value!r} and {entry.reason.value!r} -- keeping "
+                        f"{prior.value!r} (a lead belongs to one batch, so one "
+                        f"of these ids was invented)"
+                    )
+                continue
+            seen[entry.event_id] = entry.reason
+            merged.setdefault(entry.reason.value, []).append(entry.event_id)
+
+    prune_yaml = (
+        yaml.safe_dump({"dismiss": merged}, allow_unicode=True) if merged else ""
+    )
+    return ClassifyResult(
+        prune_yaml=prune_yaml,
+        survivors=tuple(survivors),
+        warnings=tuple(warnings),
+    )
+
+
 # -- Draft prompt (pass 3 of triage-leads/SKILL.md, delegated to add-concert
 #    vocabulary) --------------------------------------------------------
 
 # The add-concert skill's skeleton (.claude/skills/add-concert/SKILL.md,
-# references/example-draft.yaml), trimmed to one leg and rounds: []. Same
+# references/example-draft.yaml), trimmed to one leg and one round. Same
 # top-level keys parse_draft (app.domain.yaml_import) knows: trilingual
 # title, series/artist NAME lists (never ids), per-leg date/venue/labels.
+#
+# The `rounds:` entry is shaped EXACTLY like `_COMPLETION_SYSTEM_PROMPT`'s,
+# `evidence` block included, because the same `verify_rounds` reads both
+# passes' output: two prompts describing one contract in two shapes is how a
+# model learns to write a round only one of them accepts. `kind` values are
+# the literal `RoundKind` (app.domain.types) enum values for the reason that
+# prompt gives -- `yaml_import._round_kind` silently defaults anything else to
+# `other` with a warning, so a shorthand here is a quality loss, not an error.
 _DRAFT_SKELETON = """\
 title: 例）ライブタイトル
 title_en: Example live title
@@ -357,7 +433,22 @@ performances:
     doors_jst: 2026-01-01 15:30
     starts_at_jst: 2026-01-01 17:00
     eventernote_event_id: "000000"
-rounds: []
+rounds:
+  - label: 1次先行抽選
+    label_en: 1st advance lottery
+    label_zh: 首轮先行抽选
+    kind: lottery_round
+    applies_to: [Day 1]
+    apply_opens_jst: 2026-01-05 12:00
+    apply_closes_jst: 2026-01-10 23:59
+    results_jst: 2026-01-15 18:00
+    payment_deadline_jst: 2026-01-20 23:59
+    url: https://example.com/ticket
+    evidence:
+      apply_opens_jst: "受付開始 2026年1月5日(月)12:00"
+      apply_closes_jst: "申込締切 2026年1月10日(土)23:59"
+      results_jst: "当落発表 2026年1月15日(木)18:00"
+      payment_deadline_jst: "入金期限 2026年1月20日(火)23:59"
 """
 
 _DRAFT_SYSTEM_PROMPT = f"""\
@@ -375,17 +466,37 @@ Rules:
   are NAME lists, exactly as the source spells them -- NEVER ids or slugs.
   An unmatched name becomes a harmless preview hint at paste time; guessing
   an id would attach the wrong tag silently.
-- Eventernote pages carry per-leg facts (date, venue, doors/start, cast) and
-  NEVER round/ticket information -- Eventernote has no lottery data at all.
-- `rounds: []` is the safe default and is what this skeleton shows. Only add
-  a round when its window comes from that production's own OFFICIAL ticket
-  page. NEVER invent an apply_opens_jst / apply_closes_jst / results_jst /
-  payment_deadline_jst -- a fabricated deadline reaches a real user as a
-  real reminder for a deadline that was never real. If the ticket page can't
-  be found or confirmed, leave `rounds: []` exactly as shown.
-- A "申込締切"-prefixed date from a calendar lead is a POINTER to a deadline,
-  not a confirmed round -- confirm it on the official page before writing it
-  into a round, or leave the round out entirely.
+- Eventernote pages carry per-leg facts (date, venue, doors/start, cast), and
+  their free-text description often carries the full ticket/round ladder too.
+  Read it, and write down what it actually says -- under the evidence rule
+  below, which is the only one that really matters.
+- EVERY timestamp you write MUST have an `evidence` entry quoting the text on
+  the page you read it from, copied VERBATIM from that page. A round whose
+  evidence cannot be found on the page is thrown away by the application, so
+  an invented quote does not get you a round -- it loses you one. If the page
+  does not state a time, leave that field out. If it states none, write
+  `rounds: []`.
+- NEVER infer, estimate or complete a timestamp the page does not state. A
+  fabricated deadline reaches a real person as a real reminder for something
+  that was never real, which is the worst thing this system can do.
+- Times are JST, written `YYYY-MM-DD HH:MM`. A page writing 2026年4月5日（日）
+  21:00 means `2026-04-05 21:00`. A deadline written 23:59 stays 23:59 -- do
+  not round it.
+- A 受付期間 line states TWO fields of ONE round -- `apply_opens_jst` and
+  `apply_closes_jst` -- not two rounds. One round per campaign rung: 最速先行,
+  2次先行 and 一般発売 are three rounds.
+- A results announcement (当落発表) and a payment deadline (入金期限) are
+  FIELDS of the round they settle (`results_jst`, `payment_deadline_jst`) --
+  never rounds of their own.
+- `applies_to` is a list of leg labels copied EXACTLY from the `performances`
+  you wrote above. Omit it (or leave it empty) when the round covers the whole
+  event; that is the common case for a tour-wide lottery.
+- `kind` is one of: lottery_round, fcfs_sale, general_sale, stream_ticket_sale,
+  eligibility_item_sale, goods_sale, tour_package, upgrade, other. Use `other`
+  when unsure rather than guessing a mechanic.
+- A "申込締切"-prefixed date from a calendar LEAD LINE is not evidence: it is a
+  pointer that says a deadline exists, not page text you may quote. A round
+  may only be written from the page itself.
 """
 
 
@@ -398,30 +509,25 @@ def _draft_lead_line(lead_id: str, leads_by_id: dict[str, LeadLine]) -> str:
 
 
 def draft_prompt(
-    survivor: Survivor, leads: Sequence[LeadLine], page_html: str
+    survivor: Survivor, leads: Sequence[LeadLine], page_text: str
 ) -> tuple[str, str]:
+    """The system+user pair for one survivor's draft.
+
+    `page_text` is TEXT (`page_text.html_to_text` of the fetched page), never
+    HTML, and is capped at `PAGE_TEXT_CAP` -- the same cap
+    `round_evidence.verify_rounds` re-normalizes the page under when it looks
+    for the model's quotes. Two different caps would mean the model could read
+    a deadline out of text no quote of it could ever be verified against, and
+    the rejection would name the quote rather than the cap.
+    """
     leads_by_id = {lead.source_event_id: lead for lead in leads}
     lead_lines = "\n".join(_draft_lead_line(lid, leads_by_id) for lid in survivor.lead_ids)
-    truncated_html = page_html[:PAGE_CHAR_CAP]
     user = (
         f"Production: {survivor.title}\n"
         f"Representative Eventernote id: "
         f"{survivor.representative or '(none -- calendar-only lead)'}\n"
         f"Known legs from discovery:\n{lead_lines}\n\n"
-        f"Official ticket page HTML (may be truncated at {PAGE_CHAR_CAP} "
-        f"characters):\n{truncated_html}"
+        f"The Eventernote page, as text (may be truncated at {PAGE_TEXT_CAP} "
+        f"characters):\n{page_text[:PAGE_TEXT_CAP]}"
     )
     return _DRAFT_SYSTEM_PROMPT, user
-
-
-def strip_rounds(draft_text: str) -> str:
-    """Drop whatever `rounds:` the model wrote and replace it with `[]`,
-    unconditionally -- called on every draft response regardless of what the
-    model said, since a model asked for `rounds: []` can still invent one
-    anyway and this is the one rule both skills repeat under threat of a
-    real user getting a fake reminder."""
-    data = yaml.safe_load(draft_text)
-    if not isinstance(data, dict):
-        data = {}
-    data["rounds"] = []
-    return yaml.safe_dump(data, allow_unicode=True, sort_keys=False)

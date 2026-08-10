@@ -25,7 +25,10 @@ async def test_triage_run_defaults_to_the_classify_kind(session):
     session.add(run)
     await session.flush()
     assert run.kind == "classify"
-    # A classify run never gets there, so the completion counts stay absent.
+    # Nothing has run yet, so every count is absent -- including the two a
+    # finished CLASSIFY run does now write (`rounds_added`/`rounds_rejected`,
+    # since 2026-08-10 phase 1 grounds rounds of its own); `drafts_completed`
+    # and `blocked_domains` stay phase-2-only whatever happens.
     assert run.drafts_completed is None
     assert run.rounds_added is None
     assert run.rounds_rejected is None

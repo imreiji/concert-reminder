@@ -411,13 +411,20 @@ measurement or an incident that a reasonable-looking edit would undo.
   network (misconfiguration named plainly), and transport failure, non-200, a
   non-JSON 200 and a body missing `choices[0].message.content` are one class
   because its one caller treats them identically. It has no opinion about what
-  the messages SAY — the prompts, the fence-stripping and `strip_rounds` are
-  pure, in `domain/triage_prompts.py`. The request body pins
+  the messages SAY — the prompts and the fence-stripping are pure, in
+  `domain/triage_prompts.py`, and what a model's proposed round has to prove is
+  pure too, in `domain/round_evidence.py`. The request body pins
   `"thinking": {"type": "disabled"}` unconditionally, and a non-`"stop"`
   `finish_reason` or empty `content` also raises `LlmError` — a 2026-08-05
   incident found `deepseek-v4-flash` thinks by default, burning ~50k reasoning
   tokens per classify call until an overrun emptied `content` and only failed
-  later, opaquely, in the YAML parser.
+  later, opaquely, in the YAML parser. `max_tokens` is likewise sent
+  EXPLICITLY (`settings.deepseek_max_tokens`, 8192) rather than inherited:
+  DeepSeek's own default is the same number, and on 2026-08-09 an unbatched
+  classify reply hit it exactly and lost a press that had already been billed —
+  a ceiling nobody in this app had chosen was acting as a design constraint.
+  Batched, the largest reply over that queue was 1,473 output tokens, so the
+  value is a guard against a runaway reply, not a limit anything approaches.
 - `src/app/triage.py` — the AI-triage runner: one LLM pass over the open
   discovery queue, on an admin's press. Same layer and discipline as
   `discovery.py` (imports `domain/`, `app/llm.py`, `app/fetching.py` and
@@ -430,18 +437,79 @@ measurement or an incident that a reasonable-looking edit would undo.
   concert and dismisses no lead — drafts land as `PendingDraft` rows, so
   `import_commit` stays the only write path into `concerts`, and the prune YAML
   is stored TEXT the owner still pastes through the plan/apply screen, which
-  stays the only path to a dismissal. **`strip_rounds` runs on every generated
-  draft whatever the model returned**: the prompt asks for `rounds: []`, the
-  prompt is not the guarantee, this is, and the failure it prevents is an
-  invented `apply_closes_jst` reaching a real user as a real reminder for a
-  deadline that never existed. Gated by `settings.triage_enabled`
+  stays the only path to a dismissal. **Every round of every generated draft is
+  EVIDENCE-GROUNDED, whatever the model returned** — `verify_rounds`
+  (`domain/round_evidence.py`) keeps only the rounds whose verbatim quote it can
+  find in the same page text the model was shown, and `strip_rounds`, which used
+  to delete all of them unconditionally, is gone. The failure being prevented is
+  unchanged and is still this app's worst — an invented `apply_closes_jst`
+  reaching a real user as a real reminder for a deadline that never existed —
+  but the guarantee moved from "delete everything" to "verify everything" by
+  **owner ruling, 2026-08-10, and the ruling is a measurement**: `strip_rounds`
+  rested on the claim that Eventernote pages carry no ticket data, and they
+  routinely carry the whole ladder in their free-text description. Over 13 real
+  productions the model read 7 real rounds, every one verifiable on its own
+  page, and `strip_rounds` deleted all 7; `round_evidence.py` in the same run
+  accepted 39 rounds across three models with zero invented timestamps. What
+  made the old rule right when it shipped was that phase 1 had no way to tell a
+  read deadline from an invented one, and that is exactly what no longer holds.
+  Eventernote is also sometimes the ONLY source left — an official page drops a
+  round once it closes, so a deadline this pass declines to read is one phase 2
+  can never recover.
+  **The model is shown page TEXT, not HTML**, and that is not a tidying: the
+  central property of `round_evidence.py` is that the text the model read and
+  the text the verifier searches are the SAME text, so phase 1 now runs
+  `html_to_text` and prompts under the one `PAGE_TEXT_CAP` the verifier
+  re-normalizes under, exactly as phase 2 does. The old 120k HTML cap against a
+  60k text check would have failed a real quote for a transformation nobody
+  applied to both sides. The measured cost of dropping the tags is none that a
+  leg needs: the 2026-08-10 sample page went 28,296 characters of HTML to 5,141
+  of text and kept its date, doors/start, venue, cast, related links (the
+  `official_url` phase 2 later fetches is printed as visible text, not only as
+  an `href`) and its 受付期間 block; the script bodies and image URLs it loses
+  were never evidence.
+  **Nothing is dropped silently**: every rejection is written to the new
+  draft's `PendingDraft.completion_yaml` — the record phase 2 already writes,
+  through the one `completion_record` builder, rendered on the same preview
+  banner — because a real deadline quietly discarded is as harmful as a fake one
+  quietly kept. That record carries `pass: triage`, and
+  `completion_candidates` reads it: a phase-1 record must NOT spend phase 2's
+  one attempt, since the two passes read DIFFERENT PAGES and a draft this pass
+  could not ground is precisely one that still wants its official page read. A
+  draft this pass DID ground is kept away from phase 2 by the older "no rounds
+  yet" filter, and that is also correct — `merge_rounds` replaces the whole
+  `rounds:` key, so re-reading it would delete the very deadlines phase 1
+  rescued. Gated by `settings.triage_enabled`
   exactly as the sweep is gated by `discovery_enabled`; `deepseek_model` has NO
   default, because hardcoding a guess at a third party's current alias starts
-  billing a model nobody chose the moment the flag flips. A press costs ONE
-  classify call over the whole queue plus at most `TRIAGE_DRAFT_CAP` (25)
-  fetch+draft pairs whatever the queue's size — the cap is what makes the price
-  of a press predictable — with fetches SEQUENTIAL and paused and a
-  per-production `heartbeat.beat()`, for the reasons the sweep has both.
+  billing a model nobody chose the moment the flag flips. A press costs one
+  classify call per `TRIAGE_CLASSIFY_BATCH` (60) leads plus at most
+  `TRIAGE_DRAFT_CAP` (25) fetch+draft pairs whatever the queue's size — the
+  draft cap is what makes the price of the draft half predictable — with
+  fetches SEQUENTIAL and paused and a `heartbeat.beat()` per classify batch and
+  per drafted production, for the reasons the sweep has both.
+  **The classify batch size is a MEASUREMENT, not a style choice** (2026-08-09,
+  against a real 511-lead queue). Unbatched, that queue failed twice: at
+  DeepSeek's 8,192 default output cap the reply hit the cap exactly and raised,
+  and given a raised cap it completed at 27,142 output tokens only to be
+  rejected whole — one lead id under two dismiss reasons, which `parse_prune_list`
+  treats as fatal for the entire list, with 494 of 511 leads placed more than
+  once. A model cannot hold "each lead exactly once" over a list that long. The
+  same queue at 60 per call: 9 calls, all `finish_reason: stop` inside the
+  shipped cap, largest 1,473 output tokens, 9,485 total against 27,142, 60s
+  against 124s. Cheaper, faster and correct, so raising it buys nothing and
+  walks back toward an incoherence that surfaces only as an unusable batch.
+  Batching also CHANGED THE FAILURE POLICY, deliberately: one unusable classify
+  batch is caught, counted (`TriageReport.classify_batches_failed`, named in the
+  admin notice so a partial classify is not silent) and stepped over — the draft
+  loop's "one bad production must not cost the other twenty-four" one step
+  earlier, which was unavailable while a single call decided everything. A press
+  where EVERY batch failed still propagates: then there genuinely is no partial
+  to salvage. `domain/triage_prompts.py:merge_classify_results` folds the
+  per-batch results back into one, and its load-bearing detail is that the
+  merged `dismiss` block is re-dumped as ONE mapping — concatenating two
+  batches' text would repeat a reason key, which `parse_prune_list`'s
+  `_UniqueKeyLoader` refuses outright.
   It queues ONE admin `Notification` (invariant 4) whose kind `"triage"` is
   deliberately NOT in `UNREPORTED_NOTE_KINDS` — that set is for notices
   reporting ON deliveries, and this one reports on a model's proposals.
@@ -457,7 +525,30 @@ measurement or an incident that a reasonable-looking edit would undo.
   the id is captured BEFORE the run, and any future post-rollback bookkeeping
   keyed on a row needs the same.
 - `src/app/draft_completion.py` — phase 2: filling a pending skeleton's
-  `rounds:` from the official page the draft itself names. Same layer and
+  `rounds:` from the official page the draft itself names.
+  **`HOST_USER_AGENTS` is a per-host exception table, never a global switch**
+  (owner ruling, 2026-08-10). `COMPLETION_USER_AGENT` — the honest one — stays
+  the default for every host, and a row here says only that this host refuses
+  it. `www.lovelive-anime.jp` is the first and, at the time of writing, only
+  entry: measured, it answers that UA with HTTP 403 from an S3 error page and
+  an ordinary browser string with 200 from Apache, which is a blanket CDN
+  filter on non-browser agents rather than a decision about this app — the
+  site's own `robots.txt` disallows only `/common/` and publishes a sitemap,
+  so its machine-readable policy invites exactly the read the filter refuses.
+  It earns the exception on scale rather than convenience: 8 of the owner's 12
+  exported concerts and 28 of their 47 hand-typed rounds sit behind that host,
+  so without it phase 2 cannot read the franchise the catalogue is mostly made
+  of. Nothing else moves — the approved-public policy, the 15-page cap, the 1s
+  pause and the 30s deadline are untouched, so the request RATE stays what a
+  person clicking would produce. Look the host up through `_user_agent_for`,
+  which normalizes via the same `_normalize_host` the approval policy uses (a
+  `WWW.`-cased or trailing-dot URL must not miss the table by spelling) and
+  falls through to the default on a malformed host rather than raising —
+  `urlparse(...).hostname` raises by itself on a bad IPv6 literal, which is
+  pinned by a test. Adding a second row is a deliberate act needing its own
+  reason; a general "pretend to be a browser" mode is the thing this shape
+  exists to prevent.
+  Same layer and
   discipline as `triage.py`, and it reuses that feature's `TriageRun` row
   through a `kind` column (`"complete"` vs the classify default), so the
   request/pickup handshake, the budget shape and the re-stamp-after-rollback
@@ -468,7 +559,14 @@ measurement or an incident that a reasonable-looking edit would undo.
   EVIDENCE GROUNDING**: the model must quote the page line it read each
   timestamp from, and `domain/round_evidence.py` drops any round whose quote
   it cannot find in the same text the model was given — plus the nastier
-  case, a quote that IS on the page but does not carry that timestamp.
+  case, a quote that IS on the page but does not carry that timestamp. Since
+  2026-08-10 it is BOTH passes' rule, not this one's alone (see `triage.py`
+  above): phase 1 runs the same `parse_completion_response` →
+  `verify_rounds` → `merge_rounds` sequence over the Eventernote page, and
+  writes the same `completion_record`. What did NOT move is the half of
+  `complete_one` around it — that one amends a STORED draft a human may
+  already have proofread, where phase 1 merges into the model's own fresh
+  reply and has no row yet.
   **That last check is a CONTIGUITY rule, and it is an owner ruling
   (2026-08-05) made after a review defeated the looser one.** "Do this
   timestamp's digits appear somewhere in the quote" accepts far too much:
@@ -482,9 +580,59 @@ measurement or an incident that a reasonable-looking edit would undo.
   page is not evidence, whatever it contains. Two deliberate looseners inside
   that tight rule: the minute is waived only when it is 0 AND the quote
   carries no time separator (`:`/`：`/`分`), because `10時` states no zero to
-  find; and the YEAR is checked broadly — anywhere in the quote's numbers or
-  anywhere on the page — never adjacent, since Japanese ticket pages put it in
-  a heading and omit it from the deadline line. The accepted cost is false
+  find; and the YEAR is not required adjacent to the date, since Japanese
+  ticket pages put it in a heading and omit it from the deadline line.
+  **The YEAR is the one part of a stamp that is not localised, and until
+  2026-08-10 it was not localised AT ALL** — it passed if the number appeared
+  anywhere on the page. A mutation harness over the real evidence corpus (129
+  timestamp claims three models produced across the real catalogue, each with
+  its page) shifted every claim forward one year: **111 of 129 were still
+  ACCEPTED, an 86% false-accept rate**, the worst hole this module has had, and
+  the one whose consequence is a reminder that fires AFTER the real deadline.
+  The page cannot be the fallback because this catalogue is full of pages whose
+  SHOW is next year and whose DEADLINES are this year (`2027年4月24日 公演 …
+  受付期間：2026年7月24日（金）18:00～`, reproduced on the real zombieland page),
+  and the year cannot simply be required in the quote either: measured over the
+  same 129 claims, 92 (71%) carry it and 37 (29%) do not (`9月13日（日）23:59`).
+  So `verify_rounds` now takes the draft's LEG DATES beside its leg labels
+  (`draft_leg_dates`, `domain/round_completion.py`) and decides the year in
+  three branches — (1) the quote states one or more years, and the claim must
+  be one of them, no fallback; (2) it states none, and the year is ARITHMETIC:
+  the latest year in which that month-day falls strictly before the FIRST
+  performance, since an application deadline precedes its show; (3) it states
+  none and there are no leg dates (a dateless skeleton, which
+  `duplicate_concert` legitimately creates), refused. Measured after: **year
+  shift 111 → 0 with every other mutation column still 0 and all 129 real
+  claims still accepted** (branch 1 carries 92, branch 2 the other 37, all
+  resolved correctly). Two things that look like omissions and are not: the
+  show date only ever RESOLVES an absent year and never overrules a stated one
+  — a `goods_sale` or `stream_ticket_sale` legitimately opens after the live
+  date (archive access), so refusing every post-show deadline would be a new
+  false-rejection class — and `leg_dates` is REQUIRED with no default, so a
+  caller reaches the refusing branch 3 only by saying it has no dates, never by
+  forgetting. `page_numbers` went with the fallback: the page's digits are now
+  read for exactly one purpose, the on-page substring test.
+  **That rule reads the Japanese shape only, and ENGLISH gets a SECOND matcher
+  rather than a looser first one** (2026-08-10, after a live run over the real
+  catalogue accepted 39 rounds with zero invented timestamps and false-rejected
+  exactly one). An international page carries its overseas-package section in
+  English, which states the time FIRST, the month as a WORD and the year AFTER
+  the day — `"From 19:00 on Wednesday, August 5, 2026 JST to 23:59 on Monday,
+  August 17, 2026 JST"`, verbatim from the LoveLive! Series 15th Anniversary
+  page — so the number-token adjacency rule cannot match it at all.
+  `_english_stamp_in` matches a month WORD adjacent to a day (either order,
+  ordinal suffixes allowed and not grammar-checked) and binds it to an `HH:MM`
+  by an EXHAUSTIVE WHITELIST of the connectives that join the two (`on`, a
+  weekday, `at`, `from`, `JST`, a comma), matched in full — not by distance,
+  because that quote's second time sits nine characters after the FIRST date,
+  nearer to it than to its own, and any distance rule proves a deadline the
+  page never states. Two deliberate divergences from the Japanese path, both
+  strictly tighter: a year written beside the day MUST equal the claimed one
+  (English gives the year a place, so it is usable evidence; absent, the
+  three-branch rule above stands), and 12-hour times and lowercase month words
+  are refused
+  outright — `7:00 PM` claimed as 07:00 is twelve hours wrong, and "may" is a
+  modal verb far more often than a month. The accepted cost is false
   rejections on some phrasings, and that trade is the whole feature: a
   rejection is visible, carries its reason,
   and costs one round typed by hand, while a false accept is a fabricated
@@ -503,7 +651,12 @@ measurement or an incident that a reasonable-looking edit would undo.
   a mapping raises `DraftMergeError` and writes NOTHING, rather than
   "succeeding" by wiping the document. Evidence lives BESIDE the draft
   (`PendingDraft.completion_yaml`), never inside it: a draft is a document
-  that gets committed into `concerts`. It creates no concert — `import_commit`
+  that gets committed into `concerts`. That record has ONE builder
+  (`completion_record`) and names the pass that wrote it, which is what
+  `completion_candidates` now reads instead of mere non-emptiness — a phase-1
+  record is not an attempt at the official page, and anything without the key
+  (every record predating it) reads as phase 2, the reading that withholds an
+  attempt rather than paying twice. It creates no concert — `import_commit`
   stays the only write path — and it never fetches `eventernote_url`, which
   carries no ticket information and so could not contain the answer.
   Two failure rules worth keeping: `complete_one` writes `completion_yaml`

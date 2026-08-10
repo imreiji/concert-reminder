@@ -40,6 +40,17 @@ from app.domain.page_text import PAGE_TEXT_CAP
 from app.domain.round_evidence import TIMESTAMP_FIELDS, ProposedRound
 from app.domain.triage_prompts import extract_yaml
 
+# Which pass wrote a completion record. Two passes now produce one --
+# `triage.py` reading an Eventernote page (phase 1) and `draft_completion.py`
+# reading the official one (phase 2) -- and `db/drafts.py:completion_candidates`
+# reads this key to tell them apart: a phase-1 record must NOT spend phase 2's
+# one attempt, because the two read DIFFERENT PAGES and a draft phase 1 could
+# not ground is exactly one that still wants the official page read. A record
+# with no `pass` at all predates this and is phase 2's, which is the safe
+# reading -- it withholds an attempt rather than paying for a second one.
+TRIAGE_PASS = "triage"
+COMPLETION_PASS = "completion"
+
 
 class CompletionResponseError(Exception):
     """The reply can't be used at all -- not YAML, or not a mapping. Anything
@@ -220,6 +231,35 @@ def parse_completion_response(text: str) -> tuple[list[ProposedRound], list[str]
     return rounds, warnings
 
 
+def completion_record(
+    *,
+    source_url: str,
+    source_pass: str,
+    evidence: Sequence[dict],
+    rejected: Sequence[str],
+) -> str:
+    """The proofreading record that rides BESIDE a draft, never inside it.
+
+    One writer for the shape, because two passes now write it (see
+    `TRIAGE_PASS`/`COMPLETION_PASS`) and one of them adding a key the other
+    forgets is how `completion_candidates` would start guessing which pass a
+    record came from. Stored on `PendingDraft.completion_yaml` and read by the
+    preview: `evidence` is POSITIONAL against the draft's own rounds, and
+    `rejected` carries every round that was refused, with its reason, because a
+    real deadline quietly discarded is as harmful as a fake one quietly kept.
+    """
+    return yaml.safe_dump(
+        {
+            "source_url": source_url,
+            "pass": source_pass,
+            "evidence": [dict(e) for e in evidence],
+            "rejected": list(rejected),
+        },
+        allow_unicode=True,
+        sort_keys=False,
+    )
+
+
 def _split_comment_prefix(text: str) -> tuple[str, str]:
     """The leading '#' comment lines, and the rest.
 
@@ -267,20 +307,59 @@ def merge_rounds(draft_text: str, rounds: Sequence[dict]) -> str:
     return prefix + yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
 
 
-def draft_leg_labels(draft_text: str) -> list[str]:
-    """The `performances` labels an `applies_to` may name. Never raises: an
-    unreadable draft simply has no legs to bind to, and the caller's verify
-    step will reject any applies_to rather than crash the run."""
+def _draft_performances(draft_text: str) -> list[dict]:
+    """The draft's `performances` mappings, or none. Never raises: an
+    unreadable draft simply has no legs, and every caller's verify step
+    degrades to "knows less" rather than crashing the run."""
     try:
         data = yaml.safe_load(_split_comment_prefix(draft_text)[1])
     except yaml.YAMLError:
         return []
     if not isinstance(data, dict):
         return []
-    labels = []
-    for day in data.get("performances") or []:
-        if isinstance(day, dict):
-            label = str(day.get("label") or "").strip()
-            if label:
-                labels.append(label)
-    return labels
+    return [day for day in data.get("performances") or [] if isinstance(day, dict)]
+
+
+def draft_leg_labels(draft_text: str) -> list[str]:
+    """The `performances` labels an `applies_to` may name. Never raises: an
+    unreadable draft simply has no legs to bind to, and the caller's verify
+    step will reject any applies_to rather than crash the run."""
+    return [
+        label
+        for day in _draft_performances(draft_text)
+        if (label := str(day.get("label") or "").strip())
+    ]
+
+
+def draft_leg_dates(draft_text: str) -> list[date]:
+    """The `performances` DATES `verify_rounds` resolves a yearless deadline
+    against -- see `round_evidence`'s three-branch year rule.
+
+    Its sibling above, and deliberately shaped like it: same tolerance (an
+    unreadable draft has no dates), same never-raises promise, and NOT aligned
+    with the labels. A leg whose `starts_at_jst` is missing or unreadable drops
+    out of the list rather than becoming a placeholder, because the one
+    consumer wants the EARLIEST real date and a hole is not one -- pairing them
+    up would only invite a caller to index a date by a label's position and get
+    the wrong leg.
+
+    `doors_jst` is not consulted. It is the same day as `starts_at_jst` on
+    every real draft, so it would add nothing to the minimum, and a second
+    source for the same fact is a second thing to keep honest.
+    """
+    dates = []
+    for day in _draft_performances(draft_text):
+        value = day.get("starts_at_jst")
+        # PyYAML resolves `2026-08-20 18:30` to a datetime and a bare date to a
+        # date; an agent-authored draft may quote it as a string. `datetime` is
+        # a `date` subclass, so the order of these two branches matters.
+        if isinstance(value, datetime):
+            dates.append(value.date())
+        elif isinstance(value, date):
+            dates.append(value)
+        elif value is not None:
+            try:
+                dates.append(datetime.fromisoformat(str(value).strip().replace(" ", "T")).date())
+            except ValueError:
+                continue
+    return dates

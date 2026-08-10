@@ -5,16 +5,16 @@ and app.domain.yaml_import the same way the runner (a later task) will."""
 import pytest
 import yaml
 
+from app.domain.page_text import PAGE_TEXT_CAP
 from app.domain.prune_list import parse_prune_list
 from app.domain.triage_prompts import (
-    PAGE_CHAR_CAP,
     LeadLine,
     Survivor,
     TriageResponseError,
     classify_prompt,
     draft_prompt,
+    merge_classify_results,
     parse_classify_response,
-    strip_rounds,
 )
 from app.domain.types import DismissReason
 
@@ -112,23 +112,122 @@ def test_unusable_response_raises():
         parse_classify_response("I'm sorry, I can't help with that.")
 
 
-def test_strip_rounds_removes_what_the_model_invented():
-    text = (
-        "title: ライブ\ntitle_en: Live\ntitle_zh: 演唱会\n"
-        "rounds:\n  - label: 最速先行\n    apply_closes_jst: 2026-09-15 23:59\n"
-    )
-    stripped = strip_rounds(text)
-    assert "最速先行" not in stripped
-    assert "apply_closes_jst" not in stripped
-    data = yaml.safe_load(stripped)
-    assert data["rounds"] == []
-    assert data["title_zh"] == "演唱会"   # unicode survives the round-trip
-
-
-def test_draft_prompt_caps_page_size_and_forbids_rounds():
+def test_draft_prompt_caps_the_page_at_the_verifier_s_own_cap():
+    """The one cap, `PAGE_TEXT_CAP`, because `verify_rounds` re-normalizes to
+    exactly it: a prompt built under a LARGER cap can show the model text no
+    quote from it could ever be verified against."""
     system, user = draft_prompt(
         Survivor(title="t", lead_ids=("1",), representative="1"),
-        [_lead()], page_html="x" * (PAGE_CHAR_CAP + 50_000),
+        [_lead()], page_text="x" * (PAGE_TEXT_CAP + 50_000),
     )
-    assert len(user) < PAGE_CHAR_CAP + 10_000
-    assert "rounds: []" in system
+    assert len(user) < PAGE_TEXT_CAP + 10_000
+    assert str(PAGE_TEXT_CAP) in user
+
+
+def test_draft_prompt_labels_the_payload_as_eventernote_page_text():
+    # run_triage fetches EVENT_URL = eventernote.com/events/{id} for this
+    # pass -- never an official ticket page -- and hands it over as TEXT, the
+    # same shape the completion pass uses, so the user message must not call
+    # the payload something it isn't.
+    _system, user = draft_prompt(
+        Survivor(title="t", lead_ids=("1",), representative="1"),
+        [_lead()], page_text="開催日時 2027-04-24",
+    )
+    assert "Eventernote page, as text" in user
+    assert "HTML" not in user
+    assert "Official ticket page" not in user
+
+
+def test_the_draft_prompt_asks_for_evidence_instead_of_forbidding_rounds():
+    """The owner's 2026-08-10 ruling: an Eventernote page routinely carries the
+    whole ladder, so the rule is no longer "never write a round" but "quote the
+    line you read it from". The prompt has to say so the way the completion
+    prompt does, including that an invented quote COSTS a round."""
+    system, _user = draft_prompt(
+        Survivor(title="t", lead_ids=("1",), representative="1"),
+        [_lead()], page_text="x",
+    )
+    assert "evidence" in system
+    assert "VERBATIM" in system
+    assert "an invented quote does not get you a round" in system
+    assert "NEVER infer" in system
+    # The old unconditional rule is GONE, not merely softened: leaving it in
+    # beside the evidence rule tells the model both things at once.
+    assert "`rounds: []` is the rule here, unconditionally" not in system
+
+
+# -- Merging the per-batch classify results --------------------------------
+#
+# The classify pass is sliced into batches of TRIAGE_CLASSIFY_BATCH leads
+# (app/triage.py), so the runner gets one ClassifyResult per batch and needs
+# exactly one back. The merge is here, not there, for the reason every other
+# piece of response handling is here: the runner is the run ORDER only.
+
+
+def test_merge_concatenates_survivors_warnings_and_dismissals():
+    first = parse_classify_response(
+        "dismiss:\n  stage: ['1']\n"
+        "survivors:\n  - title: a\n    lead_ids: ['2']\n    representative: '2'\n"
+    )
+    second = parse_classify_response(
+        "dismiss:\n  stage: ['3']\n  release: ['4']\n"
+        "survivors:\n  - title: b\n    lead_ids: ['5']\n    representative: null\n"
+        "  - lead_ids: 'not-a-list'\n"          # a warning, not a failure
+    )
+    merged = merge_classify_results([first, second])
+
+    assert [s.title for s in merged.survivors] == ["a", "b"]
+    assert merged.warnings == second.warnings
+    # THE property the runner leans on: the merged text is still a prune list.
+    parsed = parse_prune_list(merged.prune_yaml)
+    assert {e.event_id: e.reason.value for e in parsed.entries} == {
+        "1": "stage", "3": "stage", "4": "release",
+    }
+
+
+def test_merge_folds_one_reason_split_across_batches_into_one_key():
+    """Two batches dismissing for the same reason must produce ONE key with
+    both ids -- a repeated `stage:` key is exactly what parse_prune_list's
+    _UniqueKeyLoader refuses, so a naive text concatenation would round-trip
+    into a PruneListError and take the whole press down."""
+    results = [
+        parse_classify_response(f"dismiss:\n  stage: ['{i}']\nsurvivors: []\n")
+        for i in range(1, 4)
+    ]
+    merged = merge_classify_results(results)
+    assert yaml.safe_load(merged.prune_yaml) == {"dismiss": {"stage": ["1", "2", "3"]}}
+    assert len(parse_prune_list(merged.prune_yaml).entries) == 3
+
+
+def test_merge_keeps_the_first_reason_when_two_batches_name_one_id():
+    """It cannot happen honestly -- a lead sits in exactly ONE batch, so no two
+    batches are ever shown the same id -- which means a repeat is an id the
+    model made up. parse_prune_list treats one id under two reasons as fatal
+    for the WHOLE list, so the merge resolves it here (first wins) and warns,
+    rather than letting one hallucinated id cost every real dismissal."""
+    first = parse_classify_response("dismiss:\n  stage: ['9']\nsurvivors: []\n")
+    second = parse_classify_response("dismiss:\n  release: ['9']\nsurvivors: []\n")
+    merged = merge_classify_results([first, second])
+
+    parsed = parse_prune_list(merged.prune_yaml)   # must not raise
+    assert [(e.event_id, e.reason.value) for e in parsed.entries] == [("9", "stage")]
+    assert any("9" in w for w in merged.warnings)
+
+
+def test_merge_of_results_with_nothing_dismissed_is_the_empty_string():
+    merged = merge_classify_results(
+        [parse_classify_response("survivors: []\n") for _ in range(3)]
+    )
+    assert merged.prune_yaml == ""      # "" is absence, as everywhere else
+    assert merged.survivors == ()
+
+
+def test_merging_one_result_returns_it_unchanged():
+    only = parse_classify_response(
+        "dismiss:\n  stage: ['1']\nsurvivors:\n  - title: a\n"
+        "    lead_ids: ['2']\n    representative: '2'\n"
+    )
+    merged = merge_classify_results([only])
+    assert merged.survivors == only.survivors
+    assert parse_prune_list(merged.prune_yaml).entries == \
+        parse_prune_list(only.prune_yaml).entries

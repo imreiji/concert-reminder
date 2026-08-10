@@ -12,7 +12,7 @@ into rejecting things that are actually fine.
 
 from datetime import date
 
-from app.domain.round_evidence import ProposedRound, normalize_numbers, verify_rounds
+from app.domain.round_evidence import ProposedRound, verify_rounds
 
 PAGE = (
     "チケット情報 1次先行抽選 受付開始 2026年1月5日(月)12:00 "
@@ -31,19 +31,20 @@ def _round(**over):
 
 
 def test_a_grounded_round_is_accepted():
-    v = verify_rounds([_round()], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([_round()], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert len(v.accepted) == 1 and not v.rejected
 
 
 def test_a_round_with_no_quote_for_its_timestamp_is_rejected():
-    v = verify_rounds([_round(evidence={"apply_closes_jst": ""})], PAGE, ["Day 1"], TODAY)
+    r = _round(evidence={"apply_closes_jst": ""})
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "no evidence" in v.rejected[0]
 
 
 def test_a_quote_that_is_not_on_the_page_is_rejected():
     r = _round(evidence={"apply_closes_jst": "申込締切 2026年2月28日(土)23:59"})
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "not on the page" in v.rejected[0]
 
@@ -53,28 +54,41 @@ def test_a_real_quote_that_does_not_contain_its_own_timestamp_is_rejected():
     # something else. Finding the quote is not enough -- the quote has to be
     # about this timestamp.
     r = _round(evidence={"apply_closes_jst": "当落発表 2026年1月15日(木)18:00"})
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "does not carry" in v.rejected[0]
 
 
 def test_loose_spacing_in_a_quote_still_matches():
     r = _round(evidence={"apply_closes_jst": "申込締切　2026年1月10日(土)23:59"})
-    assert len(verify_rounds([r], PAGE, ["Day 1"], TODAY).accepted) == 1
+    assert len(verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=()).accepted) == 1
 
 
-def test_a_year_missing_from_the_quote_may_come_from_the_page():
+def test_a_year_missing_from_the_quote_comes_from_the_first_performance():
     # Japanese pages routinely put the year in a heading and omit it from the
-    # deadline line. Requiring it in the quote would reject the common case.
+    # deadline line -- 29% of the real corpus does. Requiring it in the quote
+    # would reject the common case, so a yearless date is resolved by
+    # arithmetic instead: the latest year in which 1月10日 falls before the
+    # first performance (2026-03-08) is 2026.
     page = "2026年 チケット情報 申込締切 1月10日(土)23:59"
     r = _round(evidence={"apply_closes_jst": "申込締切 1月10日(土)23:59"})
-    assert len(verify_rounds([r], page, ["Day 1"], TODAY).accepted) == 1
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=[date(2026, 3, 8)])
+    assert len(v.accepted) == 1
+
+
+def test_a_year_stated_only_on_the_page_no_longer_proves_a_yearless_quote():
+    # The page is NOT a fallback for the year any more, whatever it says: the
+    # same heading that carries a real year on one page carries next year's
+    # SHOW date on the next one. With no leg dates this is branch 3.
+    page = "2026年 チケット情報 申込締切 1月10日(土)23:59"
+    r = _round(evidence={"apply_closes_jst": "申込締切 1月10日(土)23:59"})
+    assert not verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=()).accepted
 
 
 def test_a_year_on_neither_the_quote_nor_the_page_is_rejected():
     page = "申込締切 1月10日(土)23:59"
     r = _round(evidence={"apply_closes_jst": "申込締切 1月10日(土)23:59"})
-    assert not verify_rounds([r], page, ["Day 1"], TODAY).accepted
+    assert not verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=()).accepted
 
 
 def test_a_zero_minute_written_as_20時_is_accepted():
@@ -83,7 +97,7 @@ def test_a_zero_minute_written_as_20時_is_accepted():
         data={"apply_closes_jst": "2026-01-10 20:00"},
         evidence={"apply_closes_jst": "申込締切 2026年1月10日(土)20時"},
     )
-    assert len(verify_rounds([r], page, ["Day 1"], TODAY).accepted) == 1
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=()).accepted) == 1
 
 
 def test_out_of_order_anchors_are_rejected():
@@ -94,7 +108,7 @@ def test_out_of_order_anchors_are_rejected():
             "apply_closes_jst": "申込締切 2026年1月10日(土)23:59",
         },
     )
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "out of order" in v.rejected[0]
 
@@ -105,21 +119,21 @@ def test_an_implausible_year_is_rejected():
         data={"apply_closes_jst": "2126-01-10 23:59"},
         evidence={"apply_closes_jst": "申込締切 2126年1月10日(土)23:59"},
     )
-    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "implausible" in v.rejected[0]
 
 
 def test_applies_to_naming_a_leg_the_draft_does_not_have_is_rejected():
     r = _round(data={"applies_to": ["Day 9"]})
-    v = verify_rounds([r], PAGE, ["Day 1", "Day 2"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1", "Day 2"], TODAY, leg_dates=())
     assert not v.accepted
     assert "Day 9" in v.rejected[0]
 
 
 def test_applies_to_matching_a_leg_is_kept():
     r = _round(data={"applies_to": ["Day 2"]})
-    v = verify_rounds([r], PAGE, ["Day 1", "Day 2"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1", "Day 2"], TODAY, leg_dates=())
     assert len(v.accepted) == 1
 
 
@@ -127,7 +141,7 @@ def test_a_round_with_no_timestamps_at_all_is_rejected():
     # A round with no deadline is not a round -- it is a label. Keeping it
     # would put an empty rung on the ladder for a human to wonder about.
     r = ProposedRound(data={"label": "2次先行", "kind": "lottery"}, evidence={}, label="2次先行")
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "no timestamps" in v.rejected[0]
 
@@ -149,7 +163,7 @@ def test_the_earlier_field_in_ladder_order_is_named_when_two_timestamps_are_ungr
         evidence={},
         label="1次先行抽選",
     )
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "apply_opens_jst" in v.rejected[0]
     assert "apply_closes_jst" not in v.rejected[0]
@@ -157,7 +171,7 @@ def test_the_earlier_field_in_ladder_order_is_named_when_two_timestamps_are_ungr
 
 def test_one_bad_round_does_not_cost_a_good_one():
     good, bad = _round(), _round(evidence={"apply_closes_jst": "存在しない行"})
-    v = verify_rounds([good, bad], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([good, bad], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert len(v.accepted) == 1 and len(v.rejected) == 1
 
 
@@ -168,7 +182,7 @@ def test_evidence_never_rides_into_the_accepted_data():
     # downstream strips it again; a fixture that never had the key in the
     # first place would prove nothing about that stripping actually running.
     r = _round(data={"evidence": "should never reach the committed document"})
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert len(v.accepted) == 1
     assert "evidence" not in v.accepted[0].data
 
@@ -184,7 +198,7 @@ def test_an_hour_that_only_matches_the_dates_own_month_digit_is_rejected():
         data={"apply_closes_jst": "2026-01-10 01:00"},
         evidence={"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"},
     )
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "does not carry" in v.rejected[0]
 
@@ -194,7 +208,7 @@ def test_an_hour_that_only_matches_the_dates_own_day_digit_is_rejected():
         data={"apply_closes_jst": "2026-01-10 10:00"},
         evidence={"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"},
     )
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "does not carry" in v.rejected[0]
 
@@ -209,7 +223,7 @@ def test_a_quote_spanning_two_real_lines_does_not_recombine_into_a_third_stamp()
         data={"apply_closes_jst": "2026-01-05 23:59"},
         evidence={"apply_closes_jst": quote},
     )
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
 
 
@@ -218,7 +232,7 @@ def test_quoting_the_whole_page_grants_no_stamp_assembled_from_its_digits():
         data={"apply_closes_jst": "2026-01-20 12:00"},
         evidence={"apply_closes_jst": PAGE},
     )
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
 
 
@@ -231,7 +245,7 @@ def test_a_quote_over_200_characters_is_rejected_on_length_alone():
     quote = page  # a real substring of the page -- rejected for its length, not its truth
     assert len(quote) > 200
     r = _round(evidence={"apply_closes_jst": quote})
-    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "characters" in v.rejected[0]
     assert "does not carry" not in v.rejected[0]
@@ -242,14 +256,14 @@ def test_a_date_and_time_more_than_60_characters_apart_is_rejected():
     filler = "これは注意事項です" * 6  # digit-free padding between date and time
     page = f"申込締切 2026年1月10日 {filler} 23:59"
     r = _round(evidence={"apply_closes_jst": page})
-    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
 
 
 def test_a_close_date_and_time_within_60_characters_is_still_accepted():
     page = "申込締切 2026年1月10日(土)23:59"
     r = _round(evidence={"apply_closes_jst": page})
-    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
     assert len(v.accepted) == 1
 
 
@@ -261,7 +275,7 @@ def test_a_nonzero_minute_does_not_get_the_zero_waiver():
         data={"apply_closes_jst": "2026-01-10 12:00"},
         evidence={"apply_closes_jst": page},
     )
-    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
 
 
@@ -279,7 +293,7 @@ def test_a_T_separated_stamp_that_is_genuinely_out_of_order_is_rejected():
             "apply_closes_jst": "申込締切 2026年1月10日(土)12:00",
         },
     )
-    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "out of order" in v.rejected[0]
 
@@ -296,7 +310,7 @@ def test_a_stamp_with_a_leading_prefix_that_is_genuinely_in_order_is_kept():
             "apply_closes_jst": "申込締切 2026年1月10日(土)23:59",
         },
     )
-    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
     assert len(v.accepted) == 1
 
 
@@ -308,7 +322,7 @@ def test_applies_to_as_a_bare_scalar_is_rejected_not_skipped():
     # entirely ordinary way for a model to answer wrong. It must not fall
     # through the `isinstance(..., list)` guard unexamined.
     r = _round(data={"applies_to": "Day 9"})
-    v = verify_rounds([r], PAGE, ["Day 1", "Day 2"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1", "Day 2"], TODAY, leg_dates=())
     assert not v.accepted
     assert "applies_to" in v.rejected[0]
     assert "list" in v.rejected[0]
@@ -323,7 +337,7 @@ def test_a_nonexistent_calendar_date_is_rejected():
         data={"apply_closes_jst": "2026-02-30 23:59"},
         evidence={"apply_closes_jst": "申込締切 2026年2月30日(月)23:59"},
     )
-    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
     assert not v.accepted
     assert "calendar date" in v.rejected[0]
 
@@ -342,7 +356,7 @@ def test_an_extra_unverified_evidence_key_is_stripped_from_an_accepted_round():
             "results_jst": "当落発表は2026年2月30日(未定) ← never on the page",
         }
     )
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert len(v.accepted) == 1
     assert v.accepted[0].evidence == {"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"}
     assert "results_jst" not in v.accepted[0].evidence
@@ -354,17 +368,515 @@ def test_evidence_for_a_field_the_round_does_not_carry_is_dropped_even_when_the_
     # doesn't have at all -- not merely blank. That key is not in
     # TIMESTAMP_FIELDS-present-on-this-round, so it must be filtered too.
     r = _round(evidence={"payment_deadline_jst": "made up, not on the page"})
-    v = verify_rounds([r], PAGE, ["Day 1"], TODAY)
+    v = verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=())
     assert len(v.accepted) == 1
     assert set(v.accepted[0].evidence) == {"apply_closes_jst"}
 
 
+# -- English-language pages: the second shape of the locality rule -----------
+#
+# An international page carries its overseas-package section in ENGLISH, and
+# English states a deadline in an order the Japanese rule cannot see: the time
+# FIRST, the month as a WORD, the year AFTER the day. The quote below is
+# verbatim from the LoveLive! Series 15th Anniversary page (2026-08-10), was
+# proposed correctly by a model, and was rejected -- the one false reject in a
+# 39-round live run. Everything here pins the new matcher: the true cases it
+# must now accept, and the splices it must still refuse.
+
+EN_PAGE = (
+    "LoveLive! Series 15th Anniversary Overseas Tour Package "
+    "Application period: From 19:00 on Wednesday, August 5, 2026 JST "
+    "to 23:59 on Monday, August 17, 2026 JST. "
+    "Winners are announced at 18:00 on Friday, August 21, 2026 JST."
+)
+EN_QUOTE = (
+    "From 19:00 on Wednesday, August 5, 2026 JST "
+    "to 23:59 on Monday, August 17, 2026 JST"
+)
+
+
+def test_an_english_quote_proves_both_of_the_timestamps_it_states():
+    # The motivating case. ONE quote, TWO English dates, and each anchor is
+    # proved against its own half of it.
+    r = ProposedRound(
+        data={
+            "label": "Overseas package",
+            "kind": "lottery",
+            "apply_opens_jst": "2026-08-05 19:00",
+            "apply_closes_jst": "2026-08-17 23:59",
+        },
+        evidence={"apply_opens_jst": EN_QUOTE, "apply_closes_jst": EN_QUOTE},
+        label="Overseas package",
+    )
+    v = verify_rounds([r], EN_PAGE, ["Day 1"], TODAY, leg_dates=())
+    assert v.rejected == ()
+    assert len(v.accepted) == 1
+
+
+def test_an_english_quote_does_not_lend_the_second_dates_time_to_the_first():
+    # The splice the two-date case makes possible, and the likeliest way this
+    # matcher could go wrong: the FIRST date with the SECOND date's time. Every
+    # digit is in the quote, and the two are only 9 characters apart -- what
+    # refuses it is that the text between them ("JST to ") is not a connective
+    # that binds a time to the date before it. "to" starts the next clause.
+    r = _round(
+        data={"apply_closes_jst": "2026-08-05 23:59"},
+        evidence={"apply_closes_jst": EN_QUOTE},
+    )
+    v = verify_rounds([r], EN_PAGE, ["Day 1"], TODAY, leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_english_quote_does_not_lend_the_first_dates_time_to_the_second():
+    # The mirror splice: the SECOND date with the FIRST date's time. The whole
+    # first half of the quote, another date included, sits between them.
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 19:00"},
+        evidence={"apply_closes_jst": EN_QUOTE},
+    )
+    v = verify_rounds([r], EN_PAGE, ["Day 1"], TODAY, leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_english_quote_grants_no_stamp_merely_assembled_from_its_digits():
+    # 17 and 00 are both in the quote (a day, and the minute of 19:00), so a
+    # flat "are these digits present" test would call 17:00 proved. No time in
+    # this quote reads 17:00, so nothing is.
+    r = _round(
+        data={"apply_closes_jst": "2026-08-05 17:00"},
+        evidence={"apply_closes_jst": EN_QUOTE},
+    )
+    v = verify_rounds([r], EN_PAGE, ["Day 1"], TODAY, leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_english_time_after_its_date_is_accepted():
+    page = "Overseas package sales open on August 5, 2026 at 19:00 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-05 19:00"},
+        evidence={"apply_closes_jst": "sales open on August 5, 2026 at 19:00 JST"},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=()).accepted) == 1
+
+
+def test_an_english_time_separated_from_its_date_by_a_clause_is_rejected():
+    # A real page line, a real date, a real time, and they are about different
+    # things -- the English analogue of the two-real-lines splice.
+    page = "Entries close at 23:59, and the winners for August 17, 2026 are drawn later."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_month_and_year_with_no_day_is_not_read_as_a_date():
+    # "August 2026" names a month, not a day, and the digits of its YEAR must
+    # never be read as one: without the digit fence around the day, this quote
+    # offers "August 20" with an allowed connective and a real time after it,
+    # and proves a deadline the page does not state anywhere.
+    page = "The August 2026 lottery closes at 19:00 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-20 19:00"},
+        evidence={"apply_closes_jst": "The August 2026 lottery closes at 19:00 JST"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_the_minute_of_one_time_is_not_read_as_the_day_of_the_date_after_it():
+    # Found by probing the day-first form ("5 August 2026") rather than by
+    # reasoning about it: that form reads a number standing in front of a month
+    # name, and the number in front of the month name here is the MINUTE of an
+    # earlier time. Unfenced, this quote hands over a date of "05 August, 2026"
+    # -- a day the page states nowhere -- with a real time bound to it by a
+    # real connective, and 2026-08-05 19:00 was ACCEPTED. The day is now fenced
+    # against a preceding ':' as well as a digit, so the tail of a clock time
+    # is never a day.
+    page = "Doors 18:05 August, 2026 at 19:00 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-05 19:00"},
+        evidence={"apply_closes_jst": "Doors 18:05 August, 2026 at 19:00 JST"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_english_time_in_the_sentence_before_the_date_is_rejected():
+    # Adjacent, both real, and about different things -- the connective
+    # whitelist has no sentence boundary in it, so the two never join.
+    page = "Doors open at 18:00. August 5, 2026 tickets go on sale later."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-05 18:00"},
+        evidence={"apply_closes_jst": "Doors open at 18:00. August 5, 2026 tickets go on sale"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_abbreviated_english_month_and_an_ordinal_day_are_accepted():
+    page = "Applications close Aug. 17th, 2026 at 23:59 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 23:59"},
+        evidence={"apply_closes_jst": "Applications close Aug. 17th, 2026 at 23:59 JST"},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=()).accepted) == 1
+
+
+def test_a_day_first_english_date_is_accepted():
+    page = "Applications close at 23:59 on 17 August 2026 (JST)."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 23:59"},
+        evidence={"apply_closes_jst": "Applications close at 23:59 on 17 August 2026"},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=()).accepted) == 1
+
+
+def test_an_english_year_that_contradicts_the_claim_is_rejected():
+    # English writes the year next to the day, so unlike the Japanese shape it
+    # is USABLE evidence and gets held to it: 2027 is on the page (in a
+    # heading), which is all the broad year rule ever asks for, but the quote's
+    # own date says 2026 and the claim says otherwise.
+    page = "Ticket calendar 2027 season. Applications close on August 17, 2026 at 23:59 JST."
+    r = _round(
+        data={"apply_closes_jst": "2027-08-17 23:59"},
+        evidence={"apply_closes_jst": "Applications close on August 17, 2026 at 23:59 JST"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_an_english_date_without_a_year_takes_it_from_the_first_performance():
+    # The other half of that rule, and the English twin of the Japanese
+    # year-in-a-heading case: no year beside the date and none anywhere in the
+    # quote, so the three-branch year rule falls to the arithmetic. The "2026"
+    # in the page heading is not what proves it -- the show on 2026-10-03 is.
+    page = "2026 tour information. Applications close on August 17 at 23:59 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 23:59"},
+        evidence={"apply_closes_jst": "Applications close on August 17 at 23:59 JST"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=[date(2026, 10, 3)])
+    assert len(v.accepted) == 1
+
+
+def test_a_twelve_hour_english_time_is_never_read_as_a_24_hour_one():
+    # "7:00 PM" is 19:00, and a claimed 07:00 is 12 hours wrong. Rather than
+    # teach the matcher to convert -- and own every way that conversion can be
+    # got backwards -- an am/pm time is not evidence of anything: the round is
+    # rejected and a human types it in. A false reject, deliberately.
+    page = "Applications close at 7:00 PM on August 17, 2026 JST."
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 07:00"},
+        evidence={"apply_closes_jst": "Applications close at 7:00 PM on August 17, 2026 JST"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_lowercase_may_is_not_read_as_a_month():
+    # "may" is a modal verb far more often than it is a month, and it is the
+    # one month name that is also an ordinary English word. A lowercase month
+    # is therefore not a month here, which costs this all-lowercase page its
+    # round -- the cheap side of the trade, and the reason the rule exists.
+    page = "entries close may 5, 2026 at 23:59 jst."
+    r = _round(
+        data={"apply_closes_jst": "2026-05-05 23:59"},
+        evidence={"apply_closes_jst": "entries close may 5, 2026 at 23:59 jst"},
+    )
+    assert not verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=()).accepted
+
+
+def test_an_upper_case_english_date_is_accepted():
+    page = "APPLICATIONS CLOSE AUGUST 17, 2026 AT 23:59 JST"
+    r = _round(
+        data={"apply_closes_jst": "2026-08-17 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=()).accepted) == 1
+
+
+def test_the_japanese_shape_is_untouched_by_the_english_matcher():
+    # The English matcher is a second, separate reader -- the Japanese rule was
+    # not loosened to make room for it, so its own false-accept cases must
+    # still fail exactly as they did before.
+    r = _round(
+        data={"apply_closes_jst": "2026-01-10 01:00"},
+        evidence={"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"},
+    )
+    assert not verify_rounds([r], PAGE, ["Day 1"], TODAY, leg_dates=()).accepted
+
+
+# -- A Japanese range whose closing day omits its month ----------------------
+#
+# 「2026年7月14日（火）21:00 ～ 28日（火）23:59」 is how a Japanese ticket page
+# writes a window: the closing half drops 月 (and 年) because they repeat the
+# opening's. Rule 4 wants the month as the number token immediately before the
+# day, so the OPENING anchor of this very line verified and the CLOSING one was
+# rejected -- a false reject in the 2026-08-10 live press, on an abbreviation
+# more common than the English shape already handled. Everything below pins the
+# carryover: the true readings it must now accept, and the splices, rollovers
+# and bare numbers it must still refuse.
+
+JP_RANGE_PAGE = "抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）23:59"
+
+
+def test_a_japanese_range_proves_both_of_the_timestamps_it_states():
+    # The motivating case. ONE quote, one full date and one month-less day, and
+    # each anchor proved against its own half of it.
+    r = ProposedRound(
+        data={
+            "label": "抽選応募",
+            "kind": "lottery",
+            "apply_opens_jst": "2026-07-14 21:00",
+            "apply_closes_jst": "2026-07-28 23:59",
+        },
+        evidence={
+            "apply_opens_jst": JP_RANGE_PAGE,
+            "apply_closes_jst": JP_RANGE_PAGE,
+        },
+        label="抽選応募",
+    )
+    v = verify_rounds([r], JP_RANGE_PAGE, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert v.rejected == ()
+    assert len(v.accepted) == 1
+
+
+def test_a_carried_over_day_does_not_borrow_the_opening_halfs_time():
+    # The splice the range makes possible: the CLOSING date with the OPENING
+    # time. Both halves are real, and 21:00 sits closer to 28日 than 23:59 does
+    # to 14日 -- what refuses it is that 21:00 precedes the day it would have to
+    # follow, so it is not that day's next number token.
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 21:00"},
+        evidence={"apply_closes_jst": JP_RANGE_PAGE},
+    )
+    v = verify_rounds([r], JP_RANGE_PAGE, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_the_opening_date_does_not_borrow_the_closing_halfs_time():
+    # The mirror splice, and the one carryover must not open up in reverse: the
+    # anchor date with the abbreviated half's time.
+    r = _round(
+        data={"apply_closes_jst": "2026-07-14 23:59"},
+        evidence={"apply_closes_jst": JP_RANGE_PAGE},
+    )
+    v = verify_rounds([r], JP_RANGE_PAGE, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_bare_day_with_no_earlier_date_in_the_quote_proves_nothing():
+    # The quote must stay self-sufficient evidence: 28日 alone says nothing
+    # about which month it is in, and the month stated ELSEWHERE on the page is
+    # not this quote's to inherit.
+    page = "受付は2026年7月14日より。 詳細は下記 ～ 28日（火）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": "詳細は下記 ～ 28日（火）23:59"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_carried_over_day_is_never_rolled_over_into_the_next_month():
+    # 「7月28日 ～ 3日」 means August 3, and inferring that is a guess about
+    # rollover rather than a reading -- so BOTH readings are refused: the one
+    # the carryover could mechanically produce (July 3, which is simply wrong)
+    # and the one a human knows is meant (August 3, which the quote never says).
+    page = "抽選応募期間：2026年7月28日（火）21:00 ～ 3日（月）23:59"
+    for claimed in ("2026-07-03 23:59", "2026-08-03 23:59"):
+        r = _round(
+            data={"apply_closes_jst": claimed},
+            evidence={"apply_closes_jst": page},
+        )
+        v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+        assert not v.accepted, claimed
+        assert "does not carry" in v.rejected[0]
+
+
+def test_a_carried_over_day_must_climb_and_not_merely_match():
+    # The boundary of the same rule: a bare day EQUAL to the anchor's is not
+    # unambiguous either -- a month later reads exactly the same -- so the day
+    # must climb, not merely not fall.
+    page = "抽選応募期間：2026年7月14日（火）21:00 ～ 14日（火）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-14 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_month_restated_between_the_anchor_and_the_bare_day_breaks_the_carry():
+    # The hole a "last date wins" rule would leave open: a bare day under a
+    # heading that names its own month. 20日 here is AUGUST 20, and the July
+    # anchor before it must not reach across the 【8月】 that re-anchors it.
+    page = "2026年7月14日（火）21:00 受付開始 【8月】 20日（木）23:59 まで"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-20 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_full_date_between_the_anchor_and_the_bare_day_breaks_the_carry():
+    # The same rule with the intervening month spelled out as a whole date.
+    page = "2026年7月14日（火）21:00 ～ 8月28日（金）23:59 追加受付 30日（日）12:00"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-30 12:00"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_number_not_written_as_a_day_is_never_carried_a_month():
+    # Probed rather than reasoned about: without requiring the 日 marker, the
+    # HOUR of the opening time reads as a bare day (21), its MINUTE as the
+    # following hour (00) and the closing day as that hour's minute (28) --
+    # a stamp of 2026-07-21 00:28 assembled entirely out of a real line, with
+    # every digit adjacent in exactly the order the locality rule wants.
+    r = _round(
+        data={"apply_closes_jst": "2026-07-21 00:28"},
+        evidence={"apply_closes_jst": JP_RANGE_PAGE},
+    )
+    v = verify_rounds([r], JP_RANGE_PAGE, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_duration_counted_in_days_is_not_a_day_of_the_month():
+    # Found by probing rather than by reasoning: 「28日間」 is a SPAN of 28 days,
+    # not the 28th, and 「〜日間」/「〜日目」/「〜日分」 are ordinary Japanese a
+    # ticket page reaches for constantly. Unfenced, the duration reads as a
+    # carried-over day with a real time immediately after it, and this quote --
+    # which states no closing date at all -- proved 2026-07-28 23:59.
+    for counter in ("28日間", "28日目", "28日分", "28日以降"):
+        page = f"2026年7月14日（火）21:00 開始、先着{counter}、23:59 締切"
+        r = _round(
+            data={"apply_closes_jst": "2026-07-28 23:59"},
+            evidence={"apply_closes_jst": page},
+        )
+        v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+        assert not v.accepted, counter
+        assert "does not carry" in v.rejected[0]
+
+
+def test_a_year_restated_between_the_anchor_and_the_bare_day_breaks_the_carry():
+    # The year carries over on the same terms as the month, which means it is
+    # re-anchored on the same terms too: something restating 年 between the two
+    # halves is stating a date this quote's opening does not govern.
+    page = "2026年7月14日（火）21:00 ～ 2027年28日（火）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_carried_over_day_far_from_its_time_is_rejected():
+    # `_MAX_STAMP_SPAN_CHARS` applies to the abbreviated half exactly as it does
+    # to a full date: a day and a time with a paragraph between them are two
+    # statements, not one deadline.
+    filler = "これは注意事項です" * 6  # digit-free padding
+    page = f"2026年7月14日（火）21:00 ～ 28日 {filler} 23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_carried_over_day_takes_the_anchors_year_and_not_a_contradicting_claim():
+    # The year rides along with the month, on the same terms: the anchor states
+    # 2026, so a round claiming the same day in 2027 -- a year the page does
+    # carry, in a heading, which is all the broad year rule ever asks -- is not
+    # proved by this quote.
+    page = "2027年シーズン案内 抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2027-07-28 23:59"},
+        evidence={"apply_closes_jst": "抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）23:59"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_carried_over_day_still_takes_a_year_the_anchor_does_not_state():
+    # The other half of that rule: an anchor with no year of its own leaves the
+    # caller's three-branch year rule standing, exactly as it does for a
+    # Japanese page that puts the year in a heading. The quote states no year at
+    # all, so the year is the arithmetic one -- the show is 2026-09-05.
+    page = "2026年 チケット情報 抽選応募期間：7月14日（火）21:00 ～ 28日（火）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": "抽選応募期間：7月14日（火）21:00 ～ 28日（火）23:59"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=[date(2026, 9, 5)])
+    assert len(v.accepted) == 1
+
+
+def test_a_full_width_carried_over_day_is_read_the_same_way():
+    # The folding this module already promises, on the new path too: a page
+    # writing the abbreviated half zenkaku must not read as absent evidence.
+    page = "抽選応募期間：２０２６年７月１４日（火）２１：００ ～ ２８日（火）２３：５９"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=()).accepted) == 1
+
+
+def test_a_carried_over_day_may_not_reach_backwards_for_its_anchor():
+    # Only an EARLIER date may anchor a bare day. Japanese states the month
+    # before the day it governs, so a date sitting after one says nothing about
+    # it -- and reading it backwards is how a quote listing a day and then an
+    # unrelated later date would manufacture a deadline.
+    page = "28日（火）23:59 まで受付（詳細は2026年7月14日発表）"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
 # -- Item 6 & 7: full-width folding ------------------------------------------
+#
+# `normalize_numbers` was the direct pin here until the page-wide year fallback
+# it existed to build was removed; the folding contract it stood for is the same
+# one these two cases exercise end to end.
 
 
-def test_normalize_numbers_folds_full_width_digits_and_colon():
-    assert normalize_numbers("２０２６年１月１０日(土)２３：５９") == [2026, 1, 10, 23, 59]
-    assert normalize_numbers("2026-01-10 23:59") == [2026, 1, 10, 23, 59]
+def test_a_full_width_quote_proves_the_stamp_it_states():
+    # The folding promise on its own: a page written entirely zenkaku states a
+    # real deadline, and reading it as ASCII must not be needed for it to count.
+    page = "申込締切　２０２６年１月１０日(土)２３：５９"
+    r = _round(evidence={"apply_closes_jst": page})
+    assert len(verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=()).accepted) == 1
 
 
 def test_a_full_width_page_still_matches_a_half_width_quote():
@@ -374,5 +886,174 @@ def test_a_full_width_page_still_matches_a_half_width_quote():
     # fold both sides the same way or this reads as "not on the page".
     page = "申込締切　２０２６年１月１０日(土)２３：５９"
     r = _round(evidence={"apply_closes_jst": "申込締切 2026年1月10日(土)23:59"})
-    v = verify_rounds([r], page, ["Day 1"], TODAY)
+    v = verify_rounds([r], page, ["Day 1"], TODAY, leg_dates=())
+    assert len(v.accepted) == 1
+
+
+# -- 12-hour Japanese clocks are refused, never converted -------------------
+#
+# Found 2026-08-10 while probing the carryover matcher, and it was LIVE: a
+# 午後 time was accepted as its bare digits -- twelve hours early -- while the
+# true 24-hour value was refused, so a misreading reached a user as a real
+# reminder and a correct reading was thrown away. Mirrors `_EN_TIME`'s refusal
+# of am/pm, which had the same reasoning and simply got written first.
+
+
+def _carries(quote: str, claimed: str) -> bool:
+    """Would a round claiming `claimed`, quoting `quote`, survive on a page
+    that contains that quote? The quote IS the page here, which keeps each
+    case to the one thing it is about."""
+    r = ProposedRound(
+        data={"label": "x", "kind": "lottery", "apply_closes_jst": claimed},
+        evidence={"apply_closes_jst": quote},
+        label="x",
+    )
+    return bool(verify_rounds([r], quote, [], TODAY, leg_dates=()).accepted)
+
+
+def test_a_12_hour_japanese_time_proves_nothing():
+    # BOTH readings must fail: the naive one because it is wrong, and the
+    # correct one because this module does not do the conversion that would
+    # make it right. A refusal costs one round typed by hand; an acceptance is
+    # a deadline twelve hours early.
+    quote = "申込締切：2026年7月28日午後11時59分"
+    for claimed in ("2026-07-28 11:59", "2026-07-28 23:59"):
+        assert not _carries(quote, claimed), claimed
+
+
+def test_gozen_is_refused_too():
+    assert not _carries("受付開始：2026年7月28日午前10時00分", "2026-07-28 10:00")
+
+
+def test_a_24_hour_time_still_passes_when_the_word_appears_elsewhere():
+    # The guard is anchored to the hour's own position, so a page that merely
+    # mentions 午後 -- 午後の部 is an ordinary session name -- keeps its
+    # perfectly good 24-hour deadline.
+    assert _carries("午後の部 申込締切：2026年7月28日 23:59", "2026-07-28 23:59")
+
+
+def test_the_carryover_matcher_refuses_a_12_hour_time_too():
+    # The second reader inherits the main loop's downstream rules, so it has to
+    # inherit this one as well or the fix is only half applied.
+    quote = "抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）午後11時59分"
+    assert not _carries(quote, "2026-07-28 11:59")
+    assert not _carries(quote, "2026-07-28 23:59")
+
+
+# -- The year: stated in the quote, or arithmetic off the first performance --
+#
+# The year used to be the one part of a stamp that was not localised at all: a
+# claim's year passed if that number appeared ANYWHERE on the page. A mutation
+# harness over the real evidence corpus (129 timestamp claims three models
+# produced across the real catalogue) shifted every claim forward one year and
+# 111 of 129 were still ACCEPTED -- the worst hole this module has had, and the
+# one whose consequence is a reminder that fires AFTER the real deadline.
+#
+# The page cannot be the fallback because this catalogue is full of pages whose
+# SHOW is next year and whose DEADLINES are this year. It also cannot simply be
+# required in the quote: measured over the same 129 claims, 92 (71%) carry the
+# year in the quote and 37 (29%) do not. So: stated in the quote, or resolved
+# from the first performance, or refused.
+
+ZOMBIE_PAGE = (
+    "ゾンビランドサガ ライブ 2027年4月24日（土）幕張メッセ "
+    "受付期間：2026年7月24日（金）18:00～9月13日（日）23:59"
+)
+
+
+def test_a_year_that_is_only_the_show_date_never_proves_a_deadline():
+    # The real page this was reproduced on: a 2027 show with 2026 deadlines,
+    # where 2027 appears ONLY as the performance date. The quote plainly reads
+    # 2026, and under the old page-wide rule it proved 2027-07-24 18:00 -- a
+    # deadline a year late, which is a reminder that arrives after the fact.
+    r = _round(
+        data={"apply_closes_jst": "2027-07-24 18:00"},
+        evidence={"apply_closes_jst": "受付期間：2026年7月24日（金）18:00～9月13日（日）23:59"},
+    )
+    v = verify_rounds(
+        [r], ZOMBIE_PAGE, ["Day 1"], date(2026, 6, 1), leg_dates=[date(2027, 4, 24)]
+    )
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_the_same_quote_still_proves_the_year_it_does_state():
+    # The other half: nothing above may cost the quote its real reading.
+    r = _round(
+        data={"apply_closes_jst": "2026-07-24 18:00"},
+        evidence={"apply_closes_jst": "受付期間：2026年7月24日（金）18:00～9月13日（日）23:59"},
+    )
+    v = verify_rounds(
+        [r], ZOMBIE_PAGE, ["Day 1"], date(2026, 6, 1), leg_dates=[date(2027, 4, 24)]
+    )
+    assert len(v.accepted) == 1
+
+
+def test_a_yearless_deadline_takes_the_year_before_the_first_performance():
+    # 「9月13日」 with no year, and a show on 2027-04-24: an application
+    # deadline precedes the show it is for, so the only reading is 2026-09-13.
+    page = "ゾンビランドサガ ライブ 幕張メッセ 申込締切 9月13日（日）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-09-13 23:59"},
+        evidence={"apply_closes_jst": "申込締切 9月13日（日）23:59"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=[date(2027, 4, 24)])
+    assert len(v.accepted) == 1
+
+
+def test_the_same_yearless_deadline_is_refused_for_any_other_year():
+    # 2027-09-13 falls AFTER the show, so it is not the year that bare date
+    # resolves to -- and the arithmetic is an equality, not a window.
+    page = "ゾンビランドサガ ライブ 幕張メッセ 申込締切 9月13日（日）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2027-09-13 23:59"},
+        evidence={"apply_closes_jst": "申込締切 9月13日（日）23:59"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=[date(2027, 4, 24)])
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_yearless_deadline_on_a_draft_with_no_leg_dates_is_refused():
+    # Branch 3: a dateless skeleton (`duplicate_concert` legitimately creates
+    # them) gives the arithmetic nothing to stand on, and there is no third
+    # source of a year. Refusing costs a human one round typed by hand.
+    page = "ゾンビランドサガ ライブ 幕張メッセ 申込締切 9月13日（日）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-09-13 23:59"},
+        evidence={"apply_closes_jst": "申込締切 9月13日（日）23:59"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=())
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_the_earliest_leg_is_the_one_the_year_is_resolved_against():
+    # "first performance", not "some performance": the legs arrive in whatever
+    # order the draft lists them, and a tour's later dates would resolve a
+    # deadline sitting between two legs to the wrong year.
+    page = "ツアー 申込締切 9月13日（日）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-09-13 23:59"},
+        evidence={"apply_closes_jst": "申込締切 9月13日（日）23:59"},
+    )
+    legs = [date(2027, 6, 5), date(2026, 11, 1), date(2027, 9, 20)]
+    assert len(
+        verify_rounds([r], page, ["Day 1"], date(2026, 6, 1), leg_dates=legs).accepted
+    ) == 1
+
+
+def test_a_deadline_after_the_show_is_still_proved_by_a_stated_year():
+    # The show date RESOLVES an absent year; it never overrules a stated one.
+    # A goods_sale or a stream_ticket_sale legitimately opens after the live
+    # date (archive access), and refusing those would be a new false-reject
+    # class -- so the arithmetic runs only when the quote states nothing.
+    page = "アーカイブ配信チケット 販売期間 2027年5月10日（月）12:00 まで"
+    r = _round(
+        data={"apply_closes_jst": "2027-05-10 12:00"},
+        evidence={"apply_closes_jst": "販売期間 2027年5月10日（月）12:00 まで"},
+    )
+    v = verify_rounds(
+        [r], page, ["Day 1"], date(2026, 6, 1), leg_dates=[date(2027, 4, 24)]
+    )
     assert len(v.accepted) == 1

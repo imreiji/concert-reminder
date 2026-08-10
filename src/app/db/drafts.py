@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
+import yaml
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +25,7 @@ from app.db.models import (
     TriageRun,
 )
 from app.domain.prune_list import PruneList
+from app.domain.round_completion import TRIAGE_PASS
 from app.domain.timezones import utc_to_jst
 from app.domain.types import (
     DismissReason,
@@ -751,19 +753,50 @@ async def decide_fetch_domain(
     return True
 
 
+def _phase_two_already_ran(record: str) -> bool:
+    """Has the OFFICIAL-page pass already spent a call on this draft?
+
+    `completion_yaml` used to have exactly one writer, so its mere presence
+    answered this. Since 2026-08-10 the triage pass writes one too -- it grounds
+    the rounds an Eventernote page states -- and those two passes read DIFFERENT
+    PAGES: a draft phase 1 could not ground is precisely one that still wants
+    its official page read, so treating a phase-1 record as an attempt would
+    silently retire the feature for every such draft.
+
+    The record therefore says which pass wrote it (`round_completion.py`'s
+    `TRIAGE_PASS`/`COMPLETION_PASS`), and everything else reads as phase 2:
+    a record written before this key existed, and one that no longer parses at
+    all. That default withholds an attempt rather than paying for a second one,
+    which is the cheaper way to be wrong here.
+    """
+    if not record:
+        return False
+    try:
+        data = yaml.safe_load(record)
+    except yaml.YAMLError:
+        return True
+    if not isinstance(data, dict):
+        return True
+    return str(data.get("pass") or "") != TRIAGE_PASS
+
+
 async def completion_candidates(session: AsyncSession, user_id: int) -> list[PendingDraft]:
     """This user's open drafts that an AI completion pass should try.
 
     Three filters, and the third is the containment rule: still open, no rounds
-    yet, and not already attempted. `completion_yaml` is written only when an
-    LLM call actually happened, so a draft skipped for a missing URL, an
-    unapproved domain or a dead fetch stays a candidate and the next press
-    retries it once the reason is fixed.
+    yet, and phase 2 has not already been paid for on this row
+    (`_phase_two_already_ran`). A draft skipped for a missing URL, an
+    unapproved domain or a dead fetch writes no record at all, so it stays a
+    candidate and the next press retries it once the reason is fixed.
 
     "No rounds yet" is decided by parsing, because that is where the answer
     lives -- the pending list already re-parses every row for its counts, and
     caching a flag at write time would freeze today's parser against
-    tomorrow's (PendingDraft's own reason for storing text, not a parse).
+    tomorrow's (PendingDraft's own reason for storing text, not a parse). It is
+    also what keeps a triage-grounded ladder safe from this pass:
+    `merge_rounds` REPLACES the whole `rounds:` key, and an official page
+    routinely stops stating a round once it closes, so re-reading a draft that
+    already has rounds would delete exactly the deadlines phase 1 rescued.
     """
     rows = await session.execute(
         select(PendingDraft)
@@ -771,12 +804,13 @@ async def completion_candidates(session: AsyncSession, user_id: int) -> list[Pen
             PendingDraft.created_by == user_id,
             PendingDraft.committed_at.is_(None),
             PendingDraft.discarded_at.is_(None),
-            PendingDraft.completion_yaml == "",
         )
         .order_by(PendingDraft.id)
     )
     candidates = []
     for row in rows.scalars():
+        if _phase_two_already_ran(row.completion_yaml):
+            continue
         try:
             if not parse_draft(row.draft_text).rounds:
                 candidates.append(row)

@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     # would silently start billing a model nobody chose the moment the flag
     # flips on.
     deepseek_model: str = ""
+    # The output ceiling sent with EVERY call. Set here rather than left to
+    # DeepSeek's own default, which is also 8,192: on 2026-08-09 an unbatched
+    # classify reply hit that default exactly, came back `finish_reason:
+    # length`, and killed the press -- a ceiling nobody in this app had chosen
+    # had become a design constraint. Batched, the same queue's largest reply
+    # was 1,473 output tokens, so this is a GUARD against a runaway reply, not
+    # a limit anything is expected to reach.
+    deepseek_max_tokens: int = 8192
 
     # Access control: comma-separated Discord user IDs with edit rights
     editor_whitelist: str = ""

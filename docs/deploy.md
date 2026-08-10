@@ -417,12 +417,20 @@ order:
   been dismissed at that point - the plan → apply screen is still the only
   thing that dismisses a lead, exactly as when an agent wrote the file. A
   dismissal has no undo anywhere in the app, so this is the step that matters.
-- **Open `/concerts/import/pending` and read one skeleton draft.** Judge the
-  trilingual titles and leg labels; that is the quality question. Its `rounds`
-  list is empty by design and stays empty whatever the model returned - rounds
-  are stripped in code - so the draft is a starting point a human still
-  completes, not a finished event. (Phase 2's completion pass is what fills
-  them, on a separate press and under a separate rule; see the next section.)
+- **Open `/concerts/import/pending` and read one draft.** Judge the trilingual
+  titles and leg labels; that is the quality question. Since 2026-08-10 the
+  draft may also arrive WITH rounds: an Eventernote page routinely states the
+  whole ladder in its free text, and every timestamp that survives had to be
+  quotable off that page, checked in code by the same `verify_rounds` phase 2
+  uses (rounds are no longer stripped). Anything it proposed and could not
+  quote is listed on that draft's own preview, under "The AI proposed these and
+  I could not find them on the page" - read those, because a rejected line is
+  sometimes a real deadline the checker was right to distrust and you are right
+  to type in. The run's DM names both counts. A draft that came back with no
+  rounds is still a candidate for phase 2, which reads the OFFICIAL page on a
+  separate press; a draft that came back WITH rounds is deliberately left
+  alone by it, since completing it would replace the ladder wholesale and an
+  official page drops a round once it closes.
 - **Note which productions got drafted.** `open_leads` orders by
   `event_date DESC`, so on a backlog longer than the 25-draft cap the
   FURTHEST-FUTURE events are drafted first and the most imminent ones wait for

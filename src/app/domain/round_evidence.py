@@ -27,7 +27,10 @@ of them a way a fabricated deadline could otherwise reach a real user:
      not merely present later in the quote. The date-to-time span is
      additionally capped at 60 characters, so a real deadline line still
      passes while a quote padding a lot of irrelevant text between the two
-     does not;
+     does not. That rule reads the JAPANESE shape written in full; the
+     abbreviated Japanese shape and the English one each get their own,
+     equally strict reader -- see `_carryover_stamp_in` and
+     `_english_stamp_in`;
   5. an implausible year, or a month/day that isn't a real calendar date;
   6. anchors out of order (results before the deadline they announce),
      compared as PARSED (year, month, day, hour, minute) tuples -- never as
@@ -38,6 +41,99 @@ of them a way a fabricated deadline could otherwise reach a real user:
   7. an `applies_to` naming a leg the draft lacks, OR not shaped like a list
      of leg names at all -- an unrecognized shape gets no free pass, it gets
      a reason.
+
+TWO LANGUAGES, TWO MATCHERS -- NEVER ONE LOOSE ONE. Rule 4 above encodes the
+Japanese order (`2026年8月5日（水）19:00`: date first, month as a NUMBER, time
+immediately after). English states the same fact in an order that rule cannot
+see -- the time FIRST, the month as a WORD, the year AFTER the day -- and the
+overseas-package section of an international page is written in it. A live run
+over the real catalogue (2026-08-10) accepted 39 rounds with no invented
+timestamps and false-rejected exactly one: the LoveLive! Series 15th
+Anniversary page's
+
+    "From 19:00 on Wednesday, August 5, 2026 JST to 23:59 on Monday,
+     August 17, 2026 JST"
+
+quoted verbatim, both anchors correct, and discarded. So `_english_stamp_in`
+is a SECOND matcher tried after the Japanese one fails, never a loosening of
+it: the Japanese path is byte-for-byte what it was, and each matcher stays the
+strictest reading of the one shape it knows. Widening one rule to cover both
+orders is how a rule that catches "a real date and someone else's real time"
+stops catching it -- note that the quote above states TWO deadlines nine
+characters apart, so it is itself the splice a loose reader would fall for.
+
+THREE SHAPES, THREE MATCHERS -- same principle, one more time. The same live
+run rejected
+
+    抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）23:59
+
+for the OPPOSITE half of the same line it had just accepted: in a Japanese
+range the closing date drops 月 (and 年) because they repeat the opening's, so
+the closing day has no month beside it to be adjacent to. That abbreviation is
+the ordinary way a Japanese ticket page states a window -- more common than the
+English shape above -- and `_carryover_stamp_in` reads it as a THIRD matcher,
+tried after the first fails. It lets a bare day inherit a month from an EARLIER
+date IN THE SAME QUOTE, and every extra thing it demands (the day written as
+`日`, no `月` re-anchoring in between, the day climbing rather than rolling
+over) exists because the abbreviation removes evidence the full shape supplied
+-- a matcher that reads less of the page must not therefore ask less of it.
+
+THE YEAR IS STATED EVIDENCE OR IT IS ARITHMETIC -- NEVER "SOMEWHERE ON THE
+PAGE". Rule 4's locality covers month, day, hour and minute. The year was
+checked apart from all of them, and until 2026-08-10 it was checked against the
+WHOLE PAGE: a claim's year passed if that number appeared anywhere on it. A
+mutation harness over the real evidence corpus (129 timestamp claims three
+models produced across the real catalogue, each with its page) shifted every
+claim forward one year and measured how many the checker still proved: 111 of
+129 ACCEPTED. That is the worst hole this module has had, and its consequence
+is precisely the one the module exists to prevent -- a deadline claimed a year
+late fires its reminder AFTER the real deadline has passed, silently.
+
+The page cannot be the fallback, because this catalogue is full of pages whose
+SHOW is next year and whose DEADLINES are this year:
+
+    2027年4月24日（土）公演 … 受付期間：2026年7月24日（金）18:00～
+
+`2027` is on that page as the performance date and nothing else, so a quote
+plainly reading 2026 proved a claim of `2027-07-24 18:00`.
+
+Nor can the year simply be REQUIRED in the quote: Japanese pages routinely put
+it in a heading and omit it from the deadline line. Measured over the same 129
+accepted claims, 92 (71%) carry the year in the quote and 37 (29%) do not
+(「9月13日（日）23:59」). Requiring it would false-reject nearly a third of real
+deadlines, which is not a trade this module gets to make at that size.
+
+So the year is decided in three branches, and the page is not one of them:
+
+  1. THE QUOTE STATES A YEAR -- any 4-digit number inside the same
+     plausibility window rule 5 applies to the claim itself. Then the claimed
+     year must be one of them, full stop, with no fallback anywhere. This is
+     what closes the 92-claim half of the hole.
+  2. THE QUOTE STATES NONE, and the draft's legs have dates. Then the year is
+     ARITHMETIC rather than evidence: an application deadline precedes the
+     performance it is for, so a bare 9月13日 in front of a 2027-04-24 show is
+     2026-09-13 -- the LATEST year in which that month-day falls strictly
+     before the FIRST performance. Any other year is refused. Measured over
+     the 37 yearless claims: 37 resolved correctly, 0 wrong.
+  3. THE QUOTE STATES NONE AND THERE ARE NO LEG DATES -- a dateless skeleton,
+     which `duplicate_concert` legitimately creates. Refused. Strictness
+     scaling with how little is known is the safe direction, and this case has
+     no evidence at all to reason from.
+
+Two things that look like omissions and are not. Branch 1 is deliberately
+BROAD about what counts as a stated year (a 4-digit number in the window, not
+one written 年 or sitting beside the date), and that breadth can only ever cost
+a REJECT: it pulls a quote out of branch 2's arithmetic and holds it to a
+number it did state, never inventing one it lacks. And the show date only ever
+RESOLVES an absent year -- it never overrules a stated one. Refusing every
+deadline that falls after the show is the tempting next step and would be
+wrong: a `goods_sale` or a `stream_ticket_sale` legitimately opens after the
+live date (archive access), so that would be a new false-rejection class.
+
+`leg_dates` is consequently a REQUIRED argument of `verify_rounds` with no
+default. A caller reaches branch 3 only by SAYING it has no dates; there is no
+signature a future caller can fill in halfway and land back in the permissive
+behaviour this replaced.
 
 NOTHING IS DROPPED SILENTLY. Every rejection carries a human-readable reason
 that reaches the preview, because a real deadline quietly discarded is exactly
@@ -53,7 +149,8 @@ Digits are compared as NUMBERS after normalizing full-width forms and
 quote on the page at all" substring test -- a page (or a model's
 transcription of it) writing 23:59 as ２３：５９ must not read as absent
 evidence, or the very tolerance this module claims to have would be false in
-one direction.
+one direction. The page's own DIGITS are read for exactly one purpose, that
+substring test; nothing is ever proved by a number's mere presence on it.
 
 An accepted round's `data` never carries an `evidence` key -- that field is
 proofreading scaffolding, stripped here as one of two layers (the draft
@@ -114,7 +211,141 @@ _TIME_SEPARATORS = (":", "：", "分")
 
 _FULLWIDTH = str.maketrans("０１２３４５６７８９：", "0123456789:")
 _NUMBER = re.compile(r"\d+")
+# A number that could be a year AS WRITTEN -- four digits standing alone, so
+# the 2026 of "2026-01-10" counts and the 202 of no such thing does. Whether it
+# actually IS one is `_plausible_year`'s question, not this pattern's.
+_FOUR_DIGITS = re.compile(r"(?<!\d)\d{4}(?!\d)")
+# A Japanese 12-hour clock is REFUSED, never converted -- the same policy
+# `_EN_TIME` applies to `PM`, and it was missing here for no better reason than
+# that nobody had written it. Found 2026-08-10 while probing the carryover
+# matcher, and it was live: 「申込締切：2026年7月28日午後11時59分」 ACCEPTED a claim
+# of `2026-07-28 11:59` -- twelve hours early -- while REFUSING the true 23:59,
+# so both a misreading and a correct reading came out wrong, and the misreading
+# was the one that reached a user as a real reminder. Converting instead would
+# mean owning every way a conversion can be got backwards inside the module
+# whose job is checking somebody else's arithmetic, so a 12-hour time is simply
+# not evidence here: a deliberate, VISIBLE false reject, one line typed by hand.
+# Anchored at the end, so it fires only when the marker is the hour's own --
+# 「午後の部 … 2026年7月28日 23:59」 states a 24-hour time and still passes.
+_MERIDIEM_BEFORE = re.compile(r"(?:午前|午後)\s*$")
+
+
+def _meridiem_marked(quote: str, hour_start: int) -> bool:
+    """Is the hour token at `hour_start` written on a 12-hour clock?
+
+    Indexes the ORIGINAL quote, which it may do because every transformation
+    between the two is length-preserving (`_fold_digits` is a 1:1 character
+    translation, `_blank_era_words` replaces one character with one) -- the
+    same property `_number_tokens` documents and relies on.
+    """
+    return _MERIDIEM_BEFORE.search(quote[:hour_start]) is not None
 _STAMP = re.compile(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})")
+
+# -- The abbreviated Japanese shape -----------------------------------------
+#
+# 「2026年7月14日（火）21:00 ～ 28日（火）23:59」. In a range, the closing date
+# routinely drops 月 (and 年) because they repeat the opening's -- see
+# `_carryover_stamp_in`. These read the ERA MARKERS, which is exactly what the
+# main loop cannot do: `_blank_era_words` erases 年月日 before it counts number
+# tokens, so to the main loop a day and a minute look alike. The whole safety
+# of the carryover rests on telling them apart, so it works on the marked text.
+# Each leading `(?<!\d)` stops a longer number being read as a short one from
+# its tail ("2026月" would otherwise offer month 26).
+_JP_FULL_DATE = re.compile(
+    r"(?<!\d)(?:(?P<year>\d{4})\s*年\s*)?(?P<month>\d{1,2})\s*月\s*(?P<day>\d{1,2})\s*日"
+)
+_JP_MONTH_MARK = re.compile(r"(?<!\d)\d{1,2}\s*月")
+# The day must be WRITTEN as a day. The ':' and '.' in the leading fence are
+# the same fence `_EN_DAY` carries and for the same reason -- a number that is
+# the tail of something else is not a day. The TRAILING fence is what keeps 日
+# meaning "the Nth" rather than "days": 「28日間」 is a span of 28 days, 「28日
+# 目」 the 28th day OF something, 「28日分」 28 days' worth, and a page saying
+# 「先着28日間、23:59 締切」 states no closing date at all -- but the counter
+# sits exactly where a carried-over day would, with a real time after it.
+_JP_BARE_DAY = re.compile(r"(?<![\d:.])(?P<day>\d{1,2})\s*日(?![間目分後前以程])")
+
+# -- The English shape ------------------------------------------------------
+#
+# Month names TITLE-CASED and ALL-CAPS only, never lowercase, and the reason is
+# "May": it is the one month that is also an ordinary English word, and a page
+# reading "winners may 5 days later, from 23:59" would otherwise offer a date.
+# Requiring a capital costs an all-lowercase page its round (a visible false
+# reject, one line typed by hand) and buys the modal verb out of the grammar
+# entirely -- the trade this module makes everywhere.
+_EN_MONTHS: dict[str, int] = {
+    "January": 1, "Jan": 1,
+    "February": 2, "Feb": 2,
+    "March": 3, "Mar": 3,
+    "April": 4, "Apr": 4,
+    "May": 5,
+    "June": 6, "Jun": 6,
+    "July": 7, "Jul": 7,
+    "August": 8, "Aug": 8,
+    "September": 9, "Sept": 9, "Sep": 9,
+    "October": 10, "Oct": 10,
+    "November": 11, "Nov": 11,
+    "December": 12, "Dec": 12,
+}
+# Longest first, so "September" is tried before "Sept" before "Sep" -- with the
+# short form first, `Sep` would match and the rest of the word would be left to
+# the trailing `(?![A-Za-z])` to reject, losing a perfectly good date.
+_MONTH_ALT = "|".join(
+    form
+    for name in sorted(_EN_MONTHS, key=len, reverse=True)
+    for form in (name, name.upper())
+)
+_WEEKDAY_ALT = "|".join(
+    sorted(
+        (
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+            "Mon", "Tue", "Tues", "Wed", "Weds", "Thu", "Thur", "Thurs", "Fri", "Sat", "Sun",
+        ),
+        key=len,
+        reverse=True,
+    )
+)
+
+# The day is fenced on BOTH sides so it can never be part of a longer number
+# that means something else -- each half of this fence was a false accept
+# before it was a lookaround:
+#   trailing: without it "5 August 2026" ALSO reads month-first as "August 20"
+#     (the "20" of 2026), a date the page states nowhere;
+#   leading: a bare `(?<!\d)` still lets the day-first form take the MINUTE of
+#     a clock time as its day, so "Doors 18:05 August, 2026 at 19:00" offered
+#     "05 August, 2026" with a real connective and a real time after it, and
+#     proved 2026-08-05 19:00. A ':' or '.' in front means this number is the
+#     tail of something, not a day.
+_EN_DAY = r"(?<![\d:.])(?P<day>\d{1,2})(?!\d)(?i:st|nd|rd|th)?"
+# Ordinal suffixes are accepted and NOT checked for agreement -- "5th" and the
+# typo "5st" are the same evidence about the same day, and a grammar check here
+# would only ever turn a real page into a rejection.
+_EN_YEAR = r"(?:,?\s*(?P<year>\d{4})(?!\d))?"
+_EN_MONTH = rf"(?P<month>{_MONTH_ALT})\.?(?![A-Za-z])"
+_EN_DATES = (
+    re.compile(rf"{_EN_MONTH}\s+{_EN_DAY}{_EN_YEAR}"),  # August 5, 2026
+    re.compile(rf"{_EN_DAY}\s+{_EN_MONTH}{_EN_YEAR}"),  # 5 August 2026
+)
+
+# A 12-hour time is refused outright rather than converted: "7:00 PM" is 19:00,
+# a model claiming 07:00 from it is twelve hours wrong, and matching the digits
+# would call that proved. Teaching this module to convert means owning every
+# way the conversion can be got backwards on evidence it is supposed to be
+# checking, so am/pm is simply not evidence here -- a visible false reject.
+_EN_TIME = re.compile(r"(?<![\d:])(?P<hour>\d{1,2}):(?P<minute>\d{2})(?![\d:])(?!\s*[APap]\.?[Mm])")
+
+# What may sit between a date and its time, and NOTHING else. This is the
+# English locality guarantee: not a character budget (a budget is what lets
+# "August 5, 2026 JST to 23:59" read as one statement -- nine characters, two
+# different deadlines) but an exhaustive list of the connectives that actually
+# bind a time to a date. "to", "until", "and", or any other word that starts a
+# new clause is absent by construction, so a splice fails on the words between
+# its halves rather than on how far apart they are.
+_EN_GAP_TIME_BEFORE = re.compile(  # "19:00 [JST] on [Wednesday,] August 5"
+    rf"\s*(?:\(?JST\)?)?\s*(?:on\s+)?(?:(?:{_WEEKDAY_ALT})\.?,?\s*)?", re.IGNORECASE
+)
+_EN_GAP_TIME_AFTER = re.compile(  # "August 5, 2026 [JST][,] [at|from] 19:00"
+    r"\s*(?:\(?JST\)?)?\s*,?\s*(?:(?:at|from)\s+)?", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True)
@@ -168,13 +399,87 @@ def _number_tokens(text: str) -> list[tuple[int, int, int]]:
     return [(int(m.group()), m.start(), m.end()) for m in _NUMBER.finditer(folded)]
 
 
-def normalize_numbers(text: str) -> list[int]:
-    """Every number in `text`, after folding the Japanese ways of writing one.
+def _plausible_year(year: int, today: date) -> bool:
+    """Could this number be a year at all, given when we are asking?
 
-    ２０２６年１月１０日(土)２３：５９ and 2026-01-10 23:59 must yield the same
-    list, or the check would reject a page for its typography.
+    One definition, two users: the claim's own year (module docstring point 5)
+    and what counts as a year STATED IN A QUOTE (branch 1 of the year rule).
+    Deliberately the same window -- a quote cannot state a year the claim
+    would be refused for holding, so a second, looser notion of "looks like a
+    year" would only ever open a gap between them.
     """
-    return [value for value, _, _ in _number_tokens(text)]
+    return today.year - _PAST_YEARS <= year <= today.year + _FUTURE_YEARS
+
+
+def _years_stated_in(quote: str, today: date) -> set[int]:
+    """The years this quote states, for branch 1 of the year rule.
+
+    Broad on purpose: any standalone 4-digit number inside the plausibility
+    window, not only one written 年 or sitting beside a date. A number that is
+    NOT a year but lands in the window (a price, a capacity) can only pull the
+    quote out of branch 2's arithmetic and hold it to the years it does carry
+    -- which is a refusal, the cheap direction. Nothing here can invent a year
+    the quote does not contain.
+    """
+    stated = set()
+    for match in _FOUR_DIGITS.finditer(_fold_digits(quote)):
+        value = int(match.group())
+        if _plausible_year(value, today):
+            stated.add(value)
+    return stated
+
+
+def _year_before(month: int, day: int, first_performance: date) -> int | None:
+    """Branch 2: the latest year in which `month`/`day` falls strictly before
+    the first performance, or None if there isn't one nearby.
+
+    This is the whole of the arithmetic, and its one assumption is the one the
+    domain guarantees: you apply for a ticket before the show. Searching
+    BACKWARDS from the performance's own year rather than forwards from today
+    is what makes it independent of when the draft happens to be processed.
+
+    The search is bounded because it does not need to be unbounded: a year
+    further back than the plausibility window would be refused by
+    `_reject_reason` anyway, so walking past it could only ever turn one
+    refusal into another. 29 February is why this SKIPS rather than stops --
+    date(2027, 2, 29) does not exist, and the next year down does.
+    """
+    for year in range(first_performance.year, first_performance.year - _PAST_YEARS - 2, -1):
+        try:
+            candidate = date(year, month, day)
+        except ValueError:
+            continue
+        if candidate < first_performance:
+            return year
+    return None
+
+
+def _year_is_grounded(
+    quote: str,
+    parts: tuple[int, int, int, int, int],
+    *,
+    today: date,
+    first_performance: date | None,
+) -> bool:
+    """The three-branch year rule -- see the module docstring.
+
+    Kept apart from the three stamp matchers because it is the one part of a
+    timestamp none of them can localise: Japanese omits the year from a
+    deadline line as a matter of course, so requiring it beside the date would
+    reject 29% of real deadlines while the page-wide fallback it replaces
+    accepted 86% of year-shifted fakes. The matchers stay STRICTER than this
+    where their own grammar gives them something to be strict with -- an
+    English date states its year next to the day, a carryover anchor states
+    it or doesn't -- and both of those checks are on top of this one, never
+    instead of it.
+    """
+    year, month, day, _hour, _minute = parts
+    stated = _years_stated_in(quote, today)
+    if stated:
+        return year in stated
+    if first_performance is None:
+        return False
+    return year == _year_before(month, day, first_performance)
 
 
 def _stamp_parts(stamp: str) -> tuple[int, int, int, int, int] | None:
@@ -187,9 +492,18 @@ def _stamp_parts(stamp: str) -> tuple[int, int, int, int, int] | None:
 
 
 def _quote_carries_stamp(
-    quote: str, page_numbers: set[int], parts: tuple[int, int, int, int, int]
+    quote: str,
+    parts: tuple[int, int, int, int, int],
+    *,
+    today: date,
+    first_performance: date | None,
 ) -> bool:
     """Does this quote actually say this timestamp, IN ONE PLACE?
+
+    In JAPANESE, below; in ENGLISH, in `_english_stamp_in`, which this falls
+    through to and which is a separate matcher for a separate grammar -- an
+    international page writes its overseas section in English, and neither
+    reader is loosened to cover the other's shape.
 
     Locality, not just presence: month must be immediately followed by day as
     the next number token, and hour must be the VERY NEXT number token after
@@ -203,23 +517,23 @@ def _quote_carries_stamp(
     deadline line still passes while a quote padding a lot of irrelevant text
     between the two does not.
 
-    The YEAR is checked once, broadly -- anywhere in this quote's own numbers
-    or anywhere on the page -- not required adjacent to the date: Japanese
-    ticket pages routinely put it in a heading and omit it from the deadline
-    line, and this half of the old, unlocalized rule stays unchanged.
+    The YEAR is checked once, by `_year_is_grounded`, and is still not
+    required adjacent to the date: Japanese ticket pages routinely put it in a
+    heading and omit it from the deadline line. What it may no longer come
+    from is THE PAGE -- see the module docstring's three branches, and the 111
+    of 129 year-shifted fakes the page-wide fallback used to prove.
 
     The MINUTE is waived when it is 0 AND the quote carries no time separator
     at all (no ':', '：', '分') -- '20時' is how a page writes 20:00 and has
     no zero to find. '12:00' gets no such waiver and needs none:
-    `normalize_numbers("12:00")` already yields `[12, 0]`, so a quote whose
+    `_number_tokens("12:00")` already yields a 12 and a 0, so a quote whose
     real minute is not 0 (e.g. "12:30") is compared against 0 for real, and
     correctly fails to match rather than being waved through.
     """
     year, month, day, hour, minute = parts
-    tokens = _number_tokens(quote)
-    quote_numbers = {value for value, _, _ in tokens}
-    if year not in quote_numbers and year not in page_numbers:
+    if not _year_is_grounded(quote, parts, today=today, first_performance=first_performance):
         return False
+    tokens = _number_tokens(quote)
 
     minute_waived = minute == 0 and not any(sep in quote for sep in _TIME_SEPARATORS)
 
@@ -232,8 +546,10 @@ def _quote_carries_stamp(
         time_index = i + 2
         if time_index >= len(tokens):
             continue
-        hour_value, _, hour_end = tokens[time_index]
+        hour_value, hour_start, hour_end = tokens[time_index]
         if hour_value != hour:
+            continue
+        if _meridiem_marked(quote, hour_start):
             continue
 
         if minute_waived:
@@ -252,6 +568,192 @@ def _quote_carries_stamp(
             start = tokens[i - 1][1]
         if time_end - start <= _MAX_STAMP_SPAN_CHARS:
             return True
+
+    # Nothing in the Japanese shape as written in full. Try the two other
+    # matchers -- each a separate reader of a separate shape, tried after this
+    # loop, never a relaxation of it: the loop above is unchanged.
+    if _carryover_stamp_in(quote, parts, minute_waived=minute_waived):
+        return True
+    return _english_stamp_in(quote, parts)
+
+
+def _carryover_stamp_in(
+    quote: str, parts: tuple[int, int, int, int, int], *, minute_waived: bool
+) -> bool:
+    """Does this quote say this timestamp with the month left to carry over?
+
+    A Japanese range writes its closing date without 月 (and without 年),
+    because they repeat the opening's:
+
+        抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）23:59
+
+    The loop above wants the month as the number token immediately before the
+    day, so it proves the OPENING anchor of that line and rejects the CLOSING
+    one -- the abbreviation is not a corner case but the ordinary way a
+    Japanese ticket page states a window, and the 2026-08-10 live press
+    false-rejected a correct round on exactly this line. So: a THIRD matcher,
+    for the abbreviated shape only, holding every guarantee the full shape has
+    plus the ones the abbreviation itself needs.
+
+    A bare day is a date only when ALL of this holds, and each clause is a way
+    a fabricated deadline would otherwise get through:
+
+      * it is WRITTEN as a day -- `\\d+日`, not merely a number, and not 日 as
+        a COUNTER (「28日間」, 「28日目」, 「28日分」). Without the marker the
+        opening time of the line above donates a day (21), an hour (00) and a
+        minute (28) that are adjacent in exactly the order this rule wants,
+        and 2026-07-21 00:28 -- a stamp the page states nowhere -- reads as
+        local, contiguous evidence; without the counter fence 「先着28日間、
+        23:59 締切」 proves a closing date that line never states;
+      * an ANCHOR date precedes it IN THIS QUOTE: a full 「M月D日」 whose month
+        is the claimed one. Never a later date (Japanese states the month
+        before the day it governs, so a date after one says nothing about it),
+        and never one from elsewhere on the page -- a quote that needs the rest
+        of the page to be read is not self-sufficient evidence;
+      * NOTHING RE-ANCHORS THE MONTH IN BETWEEN. The anchor must be the last
+        `\\d+月` before the bare day, so a heading like 【8月】 -- which names a
+        month without naming a day, and would slip past a rule that only
+        looked for whole dates -- breaks the carry instead of being stepped
+        over. This is what makes "the LAST date before it" safe to rely on;
+      * the anchor's day is STRICTLY EARLIER than the bare one. 「7月28日 ～
+        3日」 means August 3, but that is an inference about rollover, not a
+        reading, and this module never infers: requiring the day to climb
+        leaves the same month as the only consistent reading of what is
+        actually written. Both answers are refused there -- the mechanical
+        July 3 because it is wrong, the intended August 3 because the quote
+        does not say it -- and a human types that round in.
+
+    The YEAR carries on the same terms as the month, which means it is
+    re-anchored on the same terms too: an intervening 年 breaks the carry just
+    as an intervening 月 does. Where the anchor states one it gets the
+    treatment English already gets from a date that states its year -- an
+    anchor saying 2026 refuses a claim of 2027 outright -- and where it states
+    none, the caller's three-branch year rule stands, which is the
+    Japanese-page-with-the-year-in-a-heading case.
+
+    Everything downstream of the day is the main loop's rule verbatim: the
+    hour is the VERY NEXT number token after the day, the minute immediately
+    after it (unless waived), and the span from the day to the end of the time
+    is capped at `_MAX_STAMP_SPAN_CHARS`. Measured from the BARE DAY, not from
+    the anchor: the anchor is what makes the day a date, but the deadline
+    itself is stated in the abbreviated half, and that half is as short as any
+    other real deadline line.
+    """
+    year, month, day, hour, minute = parts
+    text = _fold_digits(quote)
+    tokens = _number_tokens(quote)  # positions align with `text`; folding is 1:1
+    dates = {m.start("month"): m for m in _JP_FULL_DATE.finditer(text)}
+    marks = list(_JP_MONTH_MARK.finditer(text))
+
+    for bare in _JP_BARE_DAY.finditer(text):
+        start = bare.start("day")
+        if int(bare.group("day")) != day:
+            continue
+
+        preceding = [m for m in marks if m.start() < start]
+        if not preceding:
+            continue  # a bare day with no month before it in this quote
+        anchor = dates.get(preceding[-1].start())
+        if anchor is None:
+            continue  # the nearest month names no day: 【8月】 anchors nothing
+        if anchor.end() > start:
+            continue  # this "bare" day is the anchor's own -- the main loop's job
+        if int(anchor.group("month")) != month or int(anchor.group("day")) >= day:
+            continue
+        if anchor.group("year") is not None and int(anchor.group("year")) != year:
+            continue
+        if "年" in text[anchor.end() : start]:
+            continue  # something restated the year in between; it re-anchors too
+
+        time_index = next((i for i, (_, s, _) in enumerate(tokens) if s == start), None)
+        if time_index is None:
+            continue
+        time_index += 1
+        if time_index >= len(tokens):
+            continue
+        hour_value, hour_start, hour_end = tokens[time_index]
+        if hour_value != hour:
+            continue
+        if _meridiem_marked(quote, hour_start):
+            continue
+
+        if minute_waived:
+            time_end = hour_end
+        else:
+            minute_index = time_index + 1
+            if minute_index >= len(tokens):
+                continue
+            minute_value, _, minute_end = tokens[minute_index]
+            if minute_value != minute:
+                continue
+            time_end = minute_end
+
+        if time_end - start <= _MAX_STAMP_SPAN_CHARS:
+            return True
+
+    return False
+
+
+def _english_stamp_in(quote: str, parts: tuple[int, int, int, int, int]) -> bool:
+    """Does this quote say this timestamp in ENGLISH, IN ONE PLACE?
+
+    Same guarantee as the Japanese loop, expressed in the grammar English
+    actually uses. A date is a month WORD and a day adjacent to each other in
+    either order, with only whitespace between them ("August 5", "5 August").
+    A time is `HH:MM`. The two are one statement only when the text BETWEEN
+    them is a connective that binds them -- `_EN_GAP_TIME_BEFORE` when the time
+    leads ("19:00 on Wednesday, August 5, 2026"), `_EN_GAP_TIME_AFTER` when it
+    follows ("August 5, 2026 at 19:00") -- matched in FULL, so anything else
+    there is a refusal rather than a tolerated gap.
+
+    That whitelist, not the character span, is what makes the motivating quote
+    safe. "From 19:00 on Wednesday, August 5, 2026 JST to 23:59 on Monday,
+    August 17, 2026 JST" states two deadlines whose halves interleave: the
+    second time sits NINE characters after the first date, nearer to it than to
+    its own. Any distance rule pairs them and proves a deadline the page never
+    states; the words between them ("JST to ") do not bind, so this one
+    doesn't. `_MAX_STAMP_SPAN_CHARS` is applied on top -- the same number the
+    Japanese path uses, unreachable while the whitelist stays this short, and
+    there precisely so that adding a connective to it later cannot quietly buy
+    an unbounded one.
+
+    The YEAR is the one place this is STRICTER than the Japanese path, because
+    English gives it something to be strict with: the year is written beside
+    the day, so when the date states one it must be the claimed one. Where the
+    date states none, the three-branch rule the caller already applied stands,
+    exactly as it does for a Japanese page that puts the year in a heading.
+    """
+    year, month, day, hour, minute = parts
+    text = _fold_digits(quote)
+
+    dates = [
+        match
+        for pattern in _EN_DATES
+        for match in pattern.finditer(text)
+        if _EN_MONTHS[match.group("month").title()] == month
+        and int(match.group("day")) == day
+        and (match.group("year") is None or int(match.group("year")) == year)
+    ]
+    if not dates:
+        return False
+    times = [
+        match
+        for match in _EN_TIME.finditer(text)
+        if int(match.group("hour")) == hour and int(match.group("minute")) == minute
+    ]
+
+    for stated_date in dates:
+        for stated_time in times:
+            if stated_time.end() <= stated_date.start():
+                gap = text[stated_time.end() : stated_date.start()]
+                bound, span = _EN_GAP_TIME_BEFORE, stated_date.end() - stated_time.start()
+            elif stated_time.start() >= stated_date.end():
+                gap = text[stated_date.end() : stated_time.start()]
+                bound, span = _EN_GAP_TIME_AFTER, stated_time.end() - stated_date.start()
+            else:
+                continue  # overlapping: the "time" is part of the date's digits
+            if bound.fullmatch(gap) and span <= _MAX_STAMP_SPAN_CHARS:
+                return True
 
     return False
 
@@ -300,6 +802,8 @@ def verify_rounds(
     page_text: str,
     leg_labels: Sequence[str],
     today: date,
+    *,
+    leg_dates: Sequence[date],
 ) -> Verdict:
     """Split proposed rounds into the grounded and the rejected-with-a-reason.
 
@@ -311,17 +815,30 @@ def verify_rounds(
     applies the SAME 60k cap the model's own prompt is built under, so a quote
     can never verify against text the model was never shown. It is idempotent,
     so this costs nothing when the caller already normalized.
+
+    `leg_dates` are the draft's performance dates, and only their EARLIEST is
+    ever used: an application deadline precedes the first show it sells, which
+    is what lets a quote that states no year still be read (module docstring,
+    branch 2). Required and un-defaulted, so the one way to reach the refusing
+    branch 3 is to pass no dates on purpose -- a dateless skeleton really does
+    have nothing here to reason from, and everything else would be a caller
+    quietly re-opening the page-wide fallback this replaced. Unordered and
+    possibly ragged: a draft lists its legs however it likes and a leg may
+    carry no time at all, so this takes the minimum of what it is given rather
+    than trusting position.
     """
     page = normalize_page_text(page_text)
     folded_page = _fold_digits(page)
-    page_numbers = set(normalize_numbers(page))
     known_legs = {label.strip() for label in leg_labels}
+    first_performance = min(leg_dates, default=None)
     accepted: list[ProposedRound] = []
     rejected: list[str] = []
 
     for proposed in rounds:
         label = proposed.label or "(unlabelled round)"
-        reason = _reject_reason(proposed, folded_page, page_numbers, known_legs, today)
+        reason = _reject_reason(
+            proposed, folded_page, known_legs, today, first_performance=first_performance
+        )
         if reason is None:
             # `evidence` is proofreading scaffolding and must never ride into
             # the document that gets committed -- stripped here as one of two
@@ -347,9 +864,10 @@ def verify_rounds(
 def _reject_reason(
     proposed: ProposedRound,
     folded_page: str,
-    page_numbers: set[int],
     known_legs: set[str],
     today: date,
+    *,
+    first_performance: date | None,
 ) -> str | None:
     """The first reason this round cannot be trusted, or None."""
     # Built by walking TIMESTAMP_FIELDS itself, not `present` directly: that
@@ -383,13 +901,15 @@ def _reject_reason(
         if parts is None:
             return f"{name} ({stamp}) is not a 'YYYY-MM-DD HH:MM' timestamp"
         year, month, day, _hour, _minute = parts
-        if not (today.year - _PAST_YEARS <= year <= today.year + _FUTURE_YEARS):
+        if not _plausible_year(year, today):
             return f"{name} ({stamp}) has an implausible year"
         try:
             date(year, month, day)
         except ValueError:
             return f"{name} ({stamp}) is not a real calendar date"
-        if not _quote_carries_stamp(quote, page_numbers, parts):
+        if not _quote_carries_stamp(
+            quote, parts, today=today, first_performance=first_performance
+        ):
             return f"the quote for {name} does not carry {stamp}: {quote!r}"
 
     order_problem = _check_order(stamps)

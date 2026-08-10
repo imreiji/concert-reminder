@@ -1,5 +1,7 @@
 """The completion prompt's reply, and the surgical merge back into a draft."""
 
+from datetime import date
+
 import pytest
 import yaml
 
@@ -7,6 +9,7 @@ from app.domain.round_completion import (
     CompletionResponseError,
     DraftMergeError,
     completion_prompt,
+    draft_leg_dates,
     draft_leg_labels,
     merge_rounds,
     parse_completion_response,
@@ -21,9 +24,11 @@ performances:
 - label: Day 1
   label_en: Day 1
   venue: Zepp Haneda
+  starts_at_jst: 2026-03-08 18:00
 - label: Day 2
   label_en: Day 2
   venue: Zepp Namba
+  starts_at_jst: 2026-03-09 17:00
 rounds: []
 """
 
@@ -114,6 +119,43 @@ def test_merge_survives_a_draft_with_no_comment_prefix():
 
 def test_leg_labels_come_off_the_draft():
     assert draft_leg_labels(SKELETON) == ["Day 1", "Day 2"]
+
+
+def test_leg_dates_come_off_the_draft():
+    # PyYAML resolves `2026-03-08 18:00` to a datetime; `verify_rounds` wants
+    # the calendar day, and only the earliest of them.
+    assert draft_leg_dates(SKELETON) == [date(2026, 3, 8), date(2026, 3, 9)]
+
+
+def test_a_leg_with_no_start_time_contributes_no_date():
+    # Not aligned with the labels on purpose: a hole is not a date, and the one
+    # consumer wants the earliest REAL performance.
+    draft = "performances:\n- label: Day 1\n- label: Day 2\n  starts_at_jst: 2026-03-09 17:00\n"
+    assert draft_leg_labels(draft) == ["Day 1", "Day 2"]
+    assert draft_leg_dates(draft) == [date(2026, 3, 9)]
+
+
+def test_a_quoted_or_date_only_start_is_still_a_date():
+    # An agent-authored draft may quote the value, and a leg may carry only the
+    # day. Both are ordinary; neither may cost the year rule its arithmetic.
+    draft = (
+        "performances:\n"
+        "- label: Day 1\n  starts_at_jst: '2026-03-08 18:00'\n"
+        "- label: Day 2\n  starts_at_jst: 2026-03-09\n"
+    )
+    assert draft_leg_dates(draft) == [date(2026, 3, 8), date(2026, 3, 9)]
+
+
+def test_an_unreadable_start_is_skipped_rather_than_raising():
+    # Same warns-and-skips promise the labels make: a third party's junk in one
+    # leg must not crash a scheduler tick, it must leave that leg dateless.
+    draft = "performances:\n- label: Day 1\n  starts_at_jst: 未定\n"
+    assert draft_leg_dates(draft) == []
+
+
+def test_an_unreadable_draft_has_no_leg_dates():
+    assert draft_leg_dates("- just\n- a list\n") == []
+    assert draft_leg_dates("title: [unclosed\n") == []
 
 
 def test_merge_refuses_a_non_mapping_body_rather_than_wiping_it():
