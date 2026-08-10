@@ -78,6 +78,63 @@ date IN THE SAME QUOTE, and every extra thing it demands (the day written as
 over) exists because the abbreviation removes evidence the full shape supplied
 -- a matcher that reads less of the page must not therefore ask less of it.
 
+THE YEAR IS STATED EVIDENCE OR IT IS ARITHMETIC -- NEVER "SOMEWHERE ON THE
+PAGE". Rule 4's locality covers month, day, hour and minute. The year was
+checked apart from all of them, and until 2026-08-10 it was checked against the
+WHOLE PAGE: a claim's year passed if that number appeared anywhere on it. A
+mutation harness over the real evidence corpus (129 timestamp claims three
+models produced across the real catalogue, each with its page) shifted every
+claim forward one year and measured how many the checker still proved: 111 of
+129 ACCEPTED. That is the worst hole this module has had, and its consequence
+is precisely the one the module exists to prevent -- a deadline claimed a year
+late fires its reminder AFTER the real deadline has passed, silently.
+
+The page cannot be the fallback, because this catalogue is full of pages whose
+SHOW is next year and whose DEADLINES are this year:
+
+    2027年4月24日（土）公演 … 受付期間：2026年7月24日（金）18:00～
+
+`2027` is on that page as the performance date and nothing else, so a quote
+plainly reading 2026 proved a claim of `2027-07-24 18:00`.
+
+Nor can the year simply be REQUIRED in the quote: Japanese pages routinely put
+it in a heading and omit it from the deadline line. Measured over the same 129
+accepted claims, 92 (71%) carry the year in the quote and 37 (29%) do not
+(「9月13日（日）23:59」). Requiring it would false-reject nearly a third of real
+deadlines, which is not a trade this module gets to make at that size.
+
+So the year is decided in three branches, and the page is not one of them:
+
+  1. THE QUOTE STATES A YEAR -- any 4-digit number inside the same
+     plausibility window rule 5 applies to the claim itself. Then the claimed
+     year must be one of them, full stop, with no fallback anywhere. This is
+     what closes the 92-claim half of the hole.
+  2. THE QUOTE STATES NONE, and the draft's legs have dates. Then the year is
+     ARITHMETIC rather than evidence: an application deadline precedes the
+     performance it is for, so a bare 9月13日 in front of a 2027-04-24 show is
+     2026-09-13 -- the LATEST year in which that month-day falls strictly
+     before the FIRST performance. Any other year is refused. Measured over
+     the 37 yearless claims: 37 resolved correctly, 0 wrong.
+  3. THE QUOTE STATES NONE AND THERE ARE NO LEG DATES -- a dateless skeleton,
+     which `duplicate_concert` legitimately creates. Refused. Strictness
+     scaling with how little is known is the safe direction, and this case has
+     no evidence at all to reason from.
+
+Two things that look like omissions and are not. Branch 1 is deliberately
+BROAD about what counts as a stated year (a 4-digit number in the window, not
+one written 年 or sitting beside the date), and that breadth can only ever cost
+a REJECT: it pulls a quote out of branch 2's arithmetic and holds it to a
+number it did state, never inventing one it lacks. And the show date only ever
+RESOLVES an absent year -- it never overrules a stated one. Refusing every
+deadline that falls after the show is the tempting next step and would be
+wrong: a `goods_sale` or a `stream_ticket_sale` legitimately opens after the
+live date (archive access), so that would be a new false-rejection class.
+
+`leg_dates` is consequently a REQUIRED argument of `verify_rounds` with no
+default. A caller reaches branch 3 only by SAYING it has no dates; there is no
+signature a future caller can fill in halfway and land back in the permissive
+behaviour this replaced.
+
 NOTHING IS DROPPED SILENTLY. Every rejection carries a human-readable reason
 that reaches the preview, because a real deadline quietly discarded is exactly
 as harmful as a fake one quietly kept -- the operator has no way to know to look
@@ -92,7 +149,8 @@ Digits are compared as NUMBERS after normalizing full-width forms and
 quote on the page at all" substring test -- a page (or a model's
 transcription of it) writing 23:59 as ２３：５９ must not read as absent
 evidence, or the very tolerance this module claims to have would be false in
-one direction.
+one direction. The page's own DIGITS are read for exactly one purpose, that
+substring test; nothing is ever proved by a number's mere presence on it.
 
 An accepted round's `data` never carries an `evidence` key -- that field is
 proofreading scaffolding, stripped here as one of two layers (the draft
@@ -153,6 +211,10 @@ _TIME_SEPARATORS = (":", "：", "分")
 
 _FULLWIDTH = str.maketrans("０１２３４５６７８９：", "0123456789:")
 _NUMBER = re.compile(r"\d+")
+# A number that could be a year AS WRITTEN -- four digits standing alone, so
+# the 2026 of "2026-01-10" counts and the 202 of no such thing does. Whether it
+# actually IS one is `_plausible_year`'s question, not this pattern's.
+_FOUR_DIGITS = re.compile(r"(?<!\d)\d{4}(?!\d)")
 # A Japanese 12-hour clock is REFUSED, never converted -- the same policy
 # `_EN_TIME` applies to `PM`, and it was missing here for no better reason than
 # that nobody had written it. Found 2026-08-10 while probing the carryover
@@ -337,13 +399,87 @@ def _number_tokens(text: str) -> list[tuple[int, int, int]]:
     return [(int(m.group()), m.start(), m.end()) for m in _NUMBER.finditer(folded)]
 
 
-def normalize_numbers(text: str) -> list[int]:
-    """Every number in `text`, after folding the Japanese ways of writing one.
+def _plausible_year(year: int, today: date) -> bool:
+    """Could this number be a year at all, given when we are asking?
 
-    ２０２６年１月１０日(土)２３：５９ and 2026-01-10 23:59 must yield the same
-    list, or the check would reject a page for its typography.
+    One definition, two users: the claim's own year (module docstring point 5)
+    and what counts as a year STATED IN A QUOTE (branch 1 of the year rule).
+    Deliberately the same window -- a quote cannot state a year the claim
+    would be refused for holding, so a second, looser notion of "looks like a
+    year" would only ever open a gap between them.
     """
-    return [value for value, _, _ in _number_tokens(text)]
+    return today.year - _PAST_YEARS <= year <= today.year + _FUTURE_YEARS
+
+
+def _years_stated_in(quote: str, today: date) -> set[int]:
+    """The years this quote states, for branch 1 of the year rule.
+
+    Broad on purpose: any standalone 4-digit number inside the plausibility
+    window, not only one written 年 or sitting beside a date. A number that is
+    NOT a year but lands in the window (a price, a capacity) can only pull the
+    quote out of branch 2's arithmetic and hold it to the years it does carry
+    -- which is a refusal, the cheap direction. Nothing here can invent a year
+    the quote does not contain.
+    """
+    stated = set()
+    for match in _FOUR_DIGITS.finditer(_fold_digits(quote)):
+        value = int(match.group())
+        if _plausible_year(value, today):
+            stated.add(value)
+    return stated
+
+
+def _year_before(month: int, day: int, first_performance: date) -> int | None:
+    """Branch 2: the latest year in which `month`/`day` falls strictly before
+    the first performance, or None if there isn't one nearby.
+
+    This is the whole of the arithmetic, and its one assumption is the one the
+    domain guarantees: you apply for a ticket before the show. Searching
+    BACKWARDS from the performance's own year rather than forwards from today
+    is what makes it independent of when the draft happens to be processed.
+
+    The search is bounded because it does not need to be unbounded: a year
+    further back than the plausibility window would be refused by
+    `_reject_reason` anyway, so walking past it could only ever turn one
+    refusal into another. 29 February is why this SKIPS rather than stops --
+    date(2027, 2, 29) does not exist, and the next year down does.
+    """
+    for year in range(first_performance.year, first_performance.year - _PAST_YEARS - 2, -1):
+        try:
+            candidate = date(year, month, day)
+        except ValueError:
+            continue
+        if candidate < first_performance:
+            return year
+    return None
+
+
+def _year_is_grounded(
+    quote: str,
+    parts: tuple[int, int, int, int, int],
+    *,
+    today: date,
+    first_performance: date | None,
+) -> bool:
+    """The three-branch year rule -- see the module docstring.
+
+    Kept apart from the three stamp matchers because it is the one part of a
+    timestamp none of them can localise: Japanese omits the year from a
+    deadline line as a matter of course, so requiring it beside the date would
+    reject 29% of real deadlines while the page-wide fallback it replaces
+    accepted 86% of year-shifted fakes. The matchers stay STRICTER than this
+    where their own grammar gives them something to be strict with -- an
+    English date states its year next to the day, a carryover anchor states
+    it or doesn't -- and both of those checks are on top of this one, never
+    instead of it.
+    """
+    year, month, day, _hour, _minute = parts
+    stated = _years_stated_in(quote, today)
+    if stated:
+        return year in stated
+    if first_performance is None:
+        return False
+    return year == _year_before(month, day, first_performance)
 
 
 def _stamp_parts(stamp: str) -> tuple[int, int, int, int, int] | None:
@@ -356,7 +492,11 @@ def _stamp_parts(stamp: str) -> tuple[int, int, int, int, int] | None:
 
 
 def _quote_carries_stamp(
-    quote: str, page_numbers: set[int], parts: tuple[int, int, int, int, int]
+    quote: str,
+    parts: tuple[int, int, int, int, int],
+    *,
+    today: date,
+    first_performance: date | None,
 ) -> bool:
     """Does this quote actually say this timestamp, IN ONE PLACE?
 
@@ -377,23 +517,23 @@ def _quote_carries_stamp(
     deadline line still passes while a quote padding a lot of irrelevant text
     between the two does not.
 
-    The YEAR is checked once, broadly -- anywhere in this quote's own numbers
-    or anywhere on the page -- not required adjacent to the date: Japanese
-    ticket pages routinely put it in a heading and omit it from the deadline
-    line, and this half of the old, unlocalized rule stays unchanged.
+    The YEAR is checked once, by `_year_is_grounded`, and is still not
+    required adjacent to the date: Japanese ticket pages routinely put it in a
+    heading and omit it from the deadline line. What it may no longer come
+    from is THE PAGE -- see the module docstring's three branches, and the 111
+    of 129 year-shifted fakes the page-wide fallback used to prove.
 
     The MINUTE is waived when it is 0 AND the quote carries no time separator
     at all (no ':', '：', '分') -- '20時' is how a page writes 20:00 and has
     no zero to find. '12:00' gets no such waiver and needs none:
-    `normalize_numbers("12:00")` already yields `[12, 0]`, so a quote whose
+    `_number_tokens("12:00")` already yields a 12 and a 0, so a quote whose
     real minute is not 0 (e.g. "12:30") is compared against 0 for real, and
     correctly fails to match rather than being waved through.
     """
     year, month, day, hour, minute = parts
-    tokens = _number_tokens(quote)
-    quote_numbers = {value for value, _, _ in tokens}
-    if year not in quote_numbers and year not in page_numbers:
+    if not _year_is_grounded(quote, parts, today=today, first_performance=first_performance):
         return False
+    tokens = _number_tokens(quote)
 
     minute_waived = minute == 0 and not any(sep in quote for sep in _TIME_SEPARATORS)
 
@@ -488,8 +628,8 @@ def _carryover_stamp_in(
     as an intervening 月 does. Where the anchor states one it gets the
     treatment English already gets from a date that states its year -- an
     anchor saying 2026 refuses a claim of 2027 outright -- and where it states
-    none, the caller's broad "in this quote or anywhere on the page" rule
-    stands, which is the Japanese-page-with-the-year-in-a-heading case.
+    none, the caller's three-branch year rule stands, which is the
+    Japanese-page-with-the-year-in-a-heading case.
 
     Everything downstream of the day is the main loop's rule verbatim: the
     hour is the VERY NEXT number token after the day, the minute immediately
@@ -580,9 +720,8 @@ def _english_stamp_in(quote: str, parts: tuple[int, int, int, int, int]) -> bool
     The YEAR is the one place this is STRICTER than the Japanese path, because
     English gives it something to be strict with: the year is written beside
     the day, so when the date states one it must be the claimed one. Where the
-    date states none, the broad "in this quote or anywhere on the page" rule
-    the caller already applied stands, exactly as it does for a Japanese page
-    that puts the year in a heading.
+    date states none, the three-branch rule the caller already applied stands,
+    exactly as it does for a Japanese page that puts the year in a heading.
     """
     year, month, day, hour, minute = parts
     text = _fold_digits(quote)
@@ -663,6 +802,8 @@ def verify_rounds(
     page_text: str,
     leg_labels: Sequence[str],
     today: date,
+    *,
+    leg_dates: Sequence[date],
 ) -> Verdict:
     """Split proposed rounds into the grounded and the rejected-with-a-reason.
 
@@ -674,17 +815,30 @@ def verify_rounds(
     applies the SAME 60k cap the model's own prompt is built under, so a quote
     can never verify against text the model was never shown. It is idempotent,
     so this costs nothing when the caller already normalized.
+
+    `leg_dates` are the draft's performance dates, and only their EARLIEST is
+    ever used: an application deadline precedes the first show it sells, which
+    is what lets a quote that states no year still be read (module docstring,
+    branch 2). Required and un-defaulted, so the one way to reach the refusing
+    branch 3 is to pass no dates on purpose -- a dateless skeleton really does
+    have nothing here to reason from, and everything else would be a caller
+    quietly re-opening the page-wide fallback this replaced. Unordered and
+    possibly ragged: a draft lists its legs however it likes and a leg may
+    carry no time at all, so this takes the minimum of what it is given rather
+    than trusting position.
     """
     page = normalize_page_text(page_text)
     folded_page = _fold_digits(page)
-    page_numbers = set(normalize_numbers(page))
     known_legs = {label.strip() for label in leg_labels}
+    first_performance = min(leg_dates, default=None)
     accepted: list[ProposedRound] = []
     rejected: list[str] = []
 
     for proposed in rounds:
         label = proposed.label or "(unlabelled round)"
-        reason = _reject_reason(proposed, folded_page, page_numbers, known_legs, today)
+        reason = _reject_reason(
+            proposed, folded_page, known_legs, today, first_performance=first_performance
+        )
         if reason is None:
             # `evidence` is proofreading scaffolding and must never ride into
             # the document that gets committed -- stripped here as one of two
@@ -710,9 +864,10 @@ def verify_rounds(
 def _reject_reason(
     proposed: ProposedRound,
     folded_page: str,
-    page_numbers: set[int],
     known_legs: set[str],
     today: date,
+    *,
+    first_performance: date | None,
 ) -> str | None:
     """The first reason this round cannot be trusted, or None."""
     # Built by walking TIMESTAMP_FIELDS itself, not `present` directly: that
@@ -746,13 +901,15 @@ def _reject_reason(
         if parts is None:
             return f"{name} ({stamp}) is not a 'YYYY-MM-DD HH:MM' timestamp"
         year, month, day, _hour, _minute = parts
-        if not (today.year - _PAST_YEARS <= year <= today.year + _FUTURE_YEARS):
+        if not _plausible_year(year, today):
             return f"{name} ({stamp}) has an implausible year"
         try:
             date(year, month, day)
         except ValueError:
             return f"{name} ({stamp}) is not a real calendar date"
-        if not _quote_carries_stamp(quote, page_numbers, parts):
+        if not _quote_carries_stamp(
+            quote, parts, today=today, first_performance=first_performance
+        ):
             return f"the quote for {name} does not carry {stamp}: {quote!r}"
 
     order_problem = _check_order(stamps)

@@ -307,20 +307,59 @@ def merge_rounds(draft_text: str, rounds: Sequence[dict]) -> str:
     return prefix + yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
 
 
-def draft_leg_labels(draft_text: str) -> list[str]:
-    """The `performances` labels an `applies_to` may name. Never raises: an
-    unreadable draft simply has no legs to bind to, and the caller's verify
-    step will reject any applies_to rather than crash the run."""
+def _draft_performances(draft_text: str) -> list[dict]:
+    """The draft's `performances` mappings, or none. Never raises: an
+    unreadable draft simply has no legs, and every caller's verify step
+    degrades to "knows less" rather than crashing the run."""
     try:
         data = yaml.safe_load(_split_comment_prefix(draft_text)[1])
     except yaml.YAMLError:
         return []
     if not isinstance(data, dict):
         return []
-    labels = []
-    for day in data.get("performances") or []:
-        if isinstance(day, dict):
-            label = str(day.get("label") or "").strip()
-            if label:
-                labels.append(label)
-    return labels
+    return [day for day in data.get("performances") or [] if isinstance(day, dict)]
+
+
+def draft_leg_labels(draft_text: str) -> list[str]:
+    """The `performances` labels an `applies_to` may name. Never raises: an
+    unreadable draft simply has no legs to bind to, and the caller's verify
+    step will reject any applies_to rather than crash the run."""
+    return [
+        label
+        for day in _draft_performances(draft_text)
+        if (label := str(day.get("label") or "").strip())
+    ]
+
+
+def draft_leg_dates(draft_text: str) -> list[date]:
+    """The `performances` DATES `verify_rounds` resolves a yearless deadline
+    against -- see `round_evidence`'s three-branch year rule.
+
+    Its sibling above, and deliberately shaped like it: same tolerance (an
+    unreadable draft has no dates), same never-raises promise, and NOT aligned
+    with the labels. A leg whose `starts_at_jst` is missing or unreadable drops
+    out of the list rather than becoming a placeholder, because the one
+    consumer wants the EARLIEST real date and a hole is not one -- pairing them
+    up would only invite a caller to index a date by a label's position and get
+    the wrong leg.
+
+    `doors_jst` is not consulted. It is the same day as `starts_at_jst` on
+    every real draft, so it would add nothing to the minimum, and a second
+    source for the same fact is a second thing to keep honest.
+    """
+    dates = []
+    for day in _draft_performances(draft_text):
+        value = day.get("starts_at_jst")
+        # PyYAML resolves `2026-08-20 18:30` to a datetime and a bare date to a
+        # date; an agent-authored draft may quote it as a string. `datetime` is
+        # a `date` subclass, so the order of these two branches matters.
+        if isinstance(value, datetime):
+            dates.append(value.date())
+        elif isinstance(value, date):
+            dates.append(value)
+        elif value is not None:
+            try:
+                dates.append(datetime.fromisoformat(str(value).strip().replace(" ", "T")).date())
+            except ValueError:
+                continue
+    return dates

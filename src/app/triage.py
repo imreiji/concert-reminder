@@ -133,6 +133,7 @@ from app.domain.prune_list import parse_prune_list
 from app.domain.round_completion import (
     TRIAGE_PASS,
     completion_record,
+    draft_leg_dates,
     draft_leg_labels,
     merge_rounds,
     parse_completion_response,
@@ -241,10 +242,22 @@ def _ground_rounds(
     `now` supplies `verify_rounds`' plausibility date. The run's own clock, not
     a fresh `datetime.now()`: this module already takes `now` from the caller,
     and the window it feeds is +/- years wide, so nothing turns on which.
+
+    The labels AND the dates come off the model's own fresh draft, which is the
+    only document that exists at this point -- pass 1 wrote the legs in the same
+    reply. `draft_leg_dates` is what lets a deadline quoting 「9月13日」 with no
+    year be read at all; without it every such round is refused, which is why
+    `verify_rounds` makes it impossible to forget rather than optional.
     """
     proposed, warnings = parse_completion_response(reply_text)
     draft_yaml = extract_yaml(reply_text)
-    verdict = verify_rounds(proposed, page, draft_leg_labels(draft_yaml), now.date())
+    verdict = verify_rounds(
+        proposed,
+        page,
+        draft_leg_labels(draft_yaml),
+        now.date(),
+        leg_dates=draft_leg_dates(draft_yaml),
+    )
     text = merge_rounds(draft_yaml, [r.data for r in verdict.accepted])
     return text, verdict, warnings
 

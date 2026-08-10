@@ -580,9 +580,38 @@ measurement or an incident that a reasonable-looking edit would undo.
   page is not evidence, whatever it contains. Two deliberate looseners inside
   that tight rule: the minute is waived only when it is 0 AND the quote
   carries no time separator (`:`/`：`/`分`), because `10時` states no zero to
-  find; and the YEAR is checked broadly — anywhere in the quote's numbers or
-  anywhere on the page — never adjacent, since Japanese ticket pages put it in
-  a heading and omit it from the deadline line.
+  find; and the YEAR is not required adjacent to the date, since Japanese
+  ticket pages put it in a heading and omit it from the deadline line.
+  **The YEAR is the one part of a stamp that is not localised, and until
+  2026-08-10 it was not localised AT ALL** — it passed if the number appeared
+  anywhere on the page. A mutation harness over the real evidence corpus (129
+  timestamp claims three models produced across the real catalogue, each with
+  its page) shifted every claim forward one year: **111 of 129 were still
+  ACCEPTED, an 86% false-accept rate**, the worst hole this module has had, and
+  the one whose consequence is a reminder that fires AFTER the real deadline.
+  The page cannot be the fallback because this catalogue is full of pages whose
+  SHOW is next year and whose DEADLINES are this year (`2027年4月24日 公演 …
+  受付期間：2026年7月24日（金）18:00～`, reproduced on the real zombieland page),
+  and the year cannot simply be required in the quote either: measured over the
+  same 129 claims, 92 (71%) carry it and 37 (29%) do not (`9月13日（日）23:59`).
+  So `verify_rounds` now takes the draft's LEG DATES beside its leg labels
+  (`draft_leg_dates`, `domain/round_completion.py`) and decides the year in
+  three branches — (1) the quote states one or more years, and the claim must
+  be one of them, no fallback; (2) it states none, and the year is ARITHMETIC:
+  the latest year in which that month-day falls strictly before the FIRST
+  performance, since an application deadline precedes its show; (3) it states
+  none and there are no leg dates (a dateless skeleton, which
+  `duplicate_concert` legitimately creates), refused. Measured after: **year
+  shift 111 → 0 with every other mutation column still 0 and all 129 real
+  claims still accepted** (branch 1 carries 92, branch 2 the other 37, all
+  resolved correctly). Two things that look like omissions and are not: the
+  show date only ever RESOLVES an absent year and never overrules a stated one
+  — a `goods_sale` or `stream_ticket_sale` legitimately opens after the live
+  date (archive access), so refusing every post-show deadline would be a new
+  false-rejection class — and `leg_dates` is REQUIRED with no default, so a
+  caller reaches the refusing branch 3 only by saying it has no dates, never by
+  forgetting. `page_numbers` went with the fallback: the page's digits are now
+  read for exactly one purpose, the on-page substring test.
   **That rule reads the Japanese shape only, and ENGLISH gets a SECOND matcher
   rather than a looser first one** (2026-08-10, after a live run over the real
   catalogue accepted 39 rounds with zero invented timestamps and false-rejected
@@ -599,8 +628,9 @@ measurement or an incident that a reasonable-looking edit would undo.
   nearer to it than to its own, and any distance rule proves a deadline the
   page never states. Two deliberate divergences from the Japanese path, both
   strictly tighter: a year written beside the day MUST equal the claimed one
-  (English gives the year a place, so it is usable evidence; absent, the broad
-  rule stands), and 12-hour times and lowercase month words are refused
+  (English gives the year a place, so it is usable evidence; absent, the
+  three-branch rule above stands), and 12-hour times and lowercase month words
+  are refused
   outright — `7:00 PM` claimed as 07:00 is twelve hours wrong, and "may" is a
   modal verb far more often than a month. The accepted cost is false
   rejections on some phrasings, and that trade is the whole feature: a

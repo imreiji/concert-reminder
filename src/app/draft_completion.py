@@ -102,6 +102,7 @@ from app.domain.round_completion import (
     DraftMergeError,
     completion_prompt,
     completion_record,
+    draft_leg_dates,
     draft_leg_labels,
     merge_rounds,
     parse_completion_response,
@@ -265,8 +266,19 @@ async def complete_one(
         # YEARS, so a day's drift at the boundary cannot matter, and a naive
         # datetime.now() in a codebase whose one hard rule is aware-UTC is a
         # bad example to leave lying around (invariant 1).
+        #
+        # The legs come off the STORED draft, labels and dates alike: phase 1
+        # wrote them and a human may have proofread them since, which makes it
+        # the better source than anything in this reply. The dates are what let
+        # a deadline quoting 「9月13日」 with no year be read at all -- a phase-1
+        # skeleton always has its performances, so this is branch 2 in practice
+        # and branch 3 only for a draft that genuinely has no dates yet.
         verdict = verify_rounds(
-            proposed, page, draft_leg_labels(row.draft_text), datetime.now(UTC).date()
+            proposed,
+            page,
+            draft_leg_labels(row.draft_text),
+            datetime.now(UTC).date(),
+            leg_dates=draft_leg_dates(row.draft_text),
         )
         merged_text = merge_rounds(row.draft_text, [r.data for r in verdict.accepted])
     except (CompletionResponseError, DraftMergeError) as exc:
