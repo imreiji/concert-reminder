@@ -27,8 +27,10 @@ of them a way a fabricated deadline could otherwise reach a real user:
      not merely present later in the quote. The date-to-time span is
      additionally capped at 60 characters, so a real deadline line still
      passes while a quote padding a lot of irrelevant text between the two
-     does not. That rule reads the JAPANESE shape; the English shape gets its
-     own, equally strict reader -- see `_english_stamp_in`;
+     does not. That rule reads the JAPANESE shape written in full; the
+     abbreviated Japanese shape and the English one each get their own,
+     equally strict reader -- see `_carryover_stamp_in` and
+     `_english_stamp_in`;
   5. an implausible year, or a month/day that isn't a real calendar date;
   6. anchors out of order (results before the deadline they announce),
      compared as PARSED (year, month, day, hour, minute) tuples -- never as
@@ -59,6 +61,22 @@ strictest reading of the one shape it knows. Widening one rule to cover both
 orders is how a rule that catches "a real date and someone else's real time"
 stops catching it -- note that the quote above states TWO deadlines nine
 characters apart, so it is itself the splice a loose reader would fall for.
+
+THREE SHAPES, THREE MATCHERS -- same principle, one more time. The same live
+run rejected
+
+    抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）23:59
+
+for the OPPOSITE half of the same line it had just accepted: in a Japanese
+range the closing date drops 月 (and 年) because they repeat the opening's, so
+the closing day has no month beside it to be adjacent to. That abbreviation is
+the ordinary way a Japanese ticket page states a window -- more common than the
+English shape above -- and `_carryover_stamp_in` reads it as a THIRD matcher,
+tried after the first fails. It lets a bare day inherit a month from an EARLIER
+date IN THE SAME QUOTE, and every extra thing it demands (the day written as
+`日`, no `月` re-anchoring in between, the day climbing rather than rolling
+over) exists because the abbreviation removes evidence the full shape supplied
+-- a matcher that reads less of the page must not therefore ask less of it.
 
 NOTHING IS DROPPED SILENTLY. Every rejection carries a human-readable reason
 that reaches the preview, because a real deadline quietly discarded is exactly
@@ -136,6 +154,29 @@ _TIME_SEPARATORS = (":", "：", "分")
 _FULLWIDTH = str.maketrans("０１２３４５６７８９：", "0123456789:")
 _NUMBER = re.compile(r"\d+")
 _STAMP = re.compile(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})")
+
+# -- The abbreviated Japanese shape -----------------------------------------
+#
+# 「2026年7月14日（火）21:00 ～ 28日（火）23:59」. In a range, the closing date
+# routinely drops 月 (and 年) because they repeat the opening's -- see
+# `_carryover_stamp_in`. These read the ERA MARKERS, which is exactly what the
+# main loop cannot do: `_blank_era_words` erases 年月日 before it counts number
+# tokens, so to the main loop a day and a minute look alike. The whole safety
+# of the carryover rests on telling them apart, so it works on the marked text.
+# Each leading `(?<!\d)` stops a longer number being read as a short one from
+# its tail ("2026月" would otherwise offer month 26).
+_JP_FULL_DATE = re.compile(
+    r"(?<!\d)(?:(?P<year>\d{4})\s*年\s*)?(?P<month>\d{1,2})\s*月\s*(?P<day>\d{1,2})\s*日"
+)
+_JP_MONTH_MARK = re.compile(r"(?<!\d)\d{1,2}\s*月")
+# The day must be WRITTEN as a day. The ':' and '.' in the leading fence are
+# the same fence `_EN_DAY` carries and for the same reason -- a number that is
+# the tail of something else is not a day. The TRAILING fence is what keeps 日
+# meaning "the Nth" rather than "days": 「28日間」 is a span of 28 days, 「28日
+# 目」 the 28th day OF something, 「28日分」 28 days' worth, and a page saying
+# 「先着28日間、23:59 締切」 states no closing date at all -- but the counter
+# sits exactly where a carried-over day would, with a real time after it.
+_JP_BARE_DAY = re.compile(r"(?<![\d:.])(?P<day>\d{1,2})\s*日(?![間目分後前以程])")
 
 # -- The English shape ------------------------------------------------------
 #
@@ -362,9 +403,127 @@ def _quote_carries_stamp(
         if time_end - start <= _MAX_STAMP_SPAN_CHARS:
             return True
 
-    # Nothing in the Japanese shape. Try the English one -- a second matcher,
-    # not a relaxation of the loop above, which is unchanged.
+    # Nothing in the Japanese shape as written in full. Try the two other
+    # matchers -- each a separate reader of a separate shape, tried after this
+    # loop, never a relaxation of it: the loop above is unchanged.
+    if _carryover_stamp_in(quote, parts, minute_waived=minute_waived):
+        return True
     return _english_stamp_in(quote, parts)
+
+
+def _carryover_stamp_in(
+    quote: str, parts: tuple[int, int, int, int, int], *, minute_waived: bool
+) -> bool:
+    """Does this quote say this timestamp with the month left to carry over?
+
+    A Japanese range writes its closing date without 月 (and without 年),
+    because they repeat the opening's:
+
+        抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）23:59
+
+    The loop above wants the month as the number token immediately before the
+    day, so it proves the OPENING anchor of that line and rejects the CLOSING
+    one -- the abbreviation is not a corner case but the ordinary way a
+    Japanese ticket page states a window, and the 2026-08-10 live press
+    false-rejected a correct round on exactly this line. So: a THIRD matcher,
+    for the abbreviated shape only, holding every guarantee the full shape has
+    plus the ones the abbreviation itself needs.
+
+    A bare day is a date only when ALL of this holds, and each clause is a way
+    a fabricated deadline would otherwise get through:
+
+      * it is WRITTEN as a day -- `\\d+日`, not merely a number, and not 日 as
+        a COUNTER (「28日間」, 「28日目」, 「28日分」). Without the marker the
+        opening time of the line above donates a day (21), an hour (00) and a
+        minute (28) that are adjacent in exactly the order this rule wants,
+        and 2026-07-21 00:28 -- a stamp the page states nowhere -- reads as
+        local, contiguous evidence; without the counter fence 「先着28日間、
+        23:59 締切」 proves a closing date that line never states;
+      * an ANCHOR date precedes it IN THIS QUOTE: a full 「M月D日」 whose month
+        is the claimed one. Never a later date (Japanese states the month
+        before the day it governs, so a date after one says nothing about it),
+        and never one from elsewhere on the page -- a quote that needs the rest
+        of the page to be read is not self-sufficient evidence;
+      * NOTHING RE-ANCHORS THE MONTH IN BETWEEN. The anchor must be the last
+        `\\d+月` before the bare day, so a heading like 【8月】 -- which names a
+        month without naming a day, and would slip past a rule that only
+        looked for whole dates -- breaks the carry instead of being stepped
+        over. This is what makes "the LAST date before it" safe to rely on;
+      * the anchor's day is STRICTLY EARLIER than the bare one. 「7月28日 ～
+        3日」 means August 3, but that is an inference about rollover, not a
+        reading, and this module never infers: requiring the day to climb
+        leaves the same month as the only consistent reading of what is
+        actually written. Both answers are refused there -- the mechanical
+        July 3 because it is wrong, the intended August 3 because the quote
+        does not say it -- and a human types that round in.
+
+    The YEAR carries on the same terms as the month, which means it is
+    re-anchored on the same terms too: an intervening 年 breaks the carry just
+    as an intervening 月 does. Where the anchor states one it gets the
+    treatment English already gets from a date that states its year -- an
+    anchor saying 2026 refuses a claim of 2027 outright -- and where it states
+    none, the caller's broad "in this quote or anywhere on the page" rule
+    stands, which is the Japanese-page-with-the-year-in-a-heading case.
+
+    Everything downstream of the day is the main loop's rule verbatim: the
+    hour is the VERY NEXT number token after the day, the minute immediately
+    after it (unless waived), and the span from the day to the end of the time
+    is capped at `_MAX_STAMP_SPAN_CHARS`. Measured from the BARE DAY, not from
+    the anchor: the anchor is what makes the day a date, but the deadline
+    itself is stated in the abbreviated half, and that half is as short as any
+    other real deadline line.
+    """
+    year, month, day, hour, minute = parts
+    text = _fold_digits(quote)
+    tokens = _number_tokens(quote)  # positions align with `text`; folding is 1:1
+    dates = {m.start("month"): m for m in _JP_FULL_DATE.finditer(text)}
+    marks = list(_JP_MONTH_MARK.finditer(text))
+
+    for bare in _JP_BARE_DAY.finditer(text):
+        start = bare.start("day")
+        if int(bare.group("day")) != day:
+            continue
+
+        preceding = [m for m in marks if m.start() < start]
+        if not preceding:
+            continue  # a bare day with no month before it in this quote
+        anchor = dates.get(preceding[-1].start())
+        if anchor is None:
+            continue  # the nearest month names no day: 【8月】 anchors nothing
+        if anchor.end() > start:
+            continue  # this "bare" day is the anchor's own -- the main loop's job
+        if int(anchor.group("month")) != month or int(anchor.group("day")) >= day:
+            continue
+        if anchor.group("year") is not None and int(anchor.group("year")) != year:
+            continue
+        if "年" in text[anchor.end() : start]:
+            continue  # something restated the year in between; it re-anchors too
+
+        time_index = next((i for i, (_, s, _) in enumerate(tokens) if s == start), None)
+        if time_index is None:
+            continue
+        time_index += 1
+        if time_index >= len(tokens):
+            continue
+        hour_value, _, hour_end = tokens[time_index]
+        if hour_value != hour:
+            continue
+
+        if minute_waived:
+            time_end = hour_end
+        else:
+            minute_index = time_index + 1
+            if minute_index >= len(tokens):
+                continue
+            minute_value, _, minute_end = tokens[minute_index]
+            if minute_value != minute:
+                continue
+            time_end = minute_end
+
+        if time_end - start <= _MAX_STAMP_SPAN_CHARS:
+            return True
+
+    return False
 
 
 def _english_stamp_in(quote: str, parts: tuple[int, int, int, int, int]) -> bool:

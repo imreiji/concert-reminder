@@ -600,6 +600,251 @@ def test_the_japanese_shape_is_untouched_by_the_english_matcher():
     assert not verify_rounds([r], PAGE, ["Day 1"], TODAY).accepted
 
 
+# -- A Japanese range whose closing day omits its month ----------------------
+#
+# 「2026年7月14日（火）21:00 ～ 28日（火）23:59」 is how a Japanese ticket page
+# writes a window: the closing half drops 月 (and 年) because they repeat the
+# opening's. Rule 4 wants the month as the number token immediately before the
+# day, so the OPENING anchor of this very line verified and the CLOSING one was
+# rejected -- a false reject in the 2026-08-10 live press, on an abbreviation
+# more common than the English shape already handled. Everything below pins the
+# carryover: the true readings it must now accept, and the splices, rollovers
+# and bare numbers it must still refuse.
+
+JP_RANGE_PAGE = "抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）23:59"
+
+
+def test_a_japanese_range_proves_both_of_the_timestamps_it_states():
+    # The motivating case. ONE quote, one full date and one month-less day, and
+    # each anchor proved against its own half of it.
+    r = ProposedRound(
+        data={
+            "label": "抽選応募",
+            "kind": "lottery",
+            "apply_opens_jst": "2026-07-14 21:00",
+            "apply_closes_jst": "2026-07-28 23:59",
+        },
+        evidence={
+            "apply_opens_jst": JP_RANGE_PAGE,
+            "apply_closes_jst": JP_RANGE_PAGE,
+        },
+        label="抽選応募",
+    )
+    v = verify_rounds([r], JP_RANGE_PAGE, ["Day 1"], date(2026, 6, 1))
+    assert v.rejected == ()
+    assert len(v.accepted) == 1
+
+
+def test_a_carried_over_day_does_not_borrow_the_opening_halfs_time():
+    # The splice the range makes possible: the CLOSING date with the OPENING
+    # time. Both halves are real, and 21:00 sits closer to 28日 than 23:59 does
+    # to 14日 -- what refuses it is that 21:00 precedes the day it would have to
+    # follow, so it is not that day's next number token.
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 21:00"},
+        evidence={"apply_closes_jst": JP_RANGE_PAGE},
+    )
+    v = verify_rounds([r], JP_RANGE_PAGE, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_the_opening_date_does_not_borrow_the_closing_halfs_time():
+    # The mirror splice, and the one carryover must not open up in reverse: the
+    # anchor date with the abbreviated half's time.
+    r = _round(
+        data={"apply_closes_jst": "2026-07-14 23:59"},
+        evidence={"apply_closes_jst": JP_RANGE_PAGE},
+    )
+    v = verify_rounds([r], JP_RANGE_PAGE, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_bare_day_with_no_earlier_date_in_the_quote_proves_nothing():
+    # The quote must stay self-sufficient evidence: 28日 alone says nothing
+    # about which month it is in, and the month stated ELSEWHERE on the page is
+    # not this quote's to inherit.
+    page = "受付は2026年7月14日より。 詳細は下記 ～ 28日（火）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": "詳細は下記 ～ 28日（火）23:59"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_carried_over_day_is_never_rolled_over_into_the_next_month():
+    # 「7月28日 ～ 3日」 means August 3, and inferring that is a guess about
+    # rollover rather than a reading -- so BOTH readings are refused: the one
+    # the carryover could mechanically produce (July 3, which is simply wrong)
+    # and the one a human knows is meant (August 3, which the quote never says).
+    page = "抽選応募期間：2026年7月28日（火）21:00 ～ 3日（月）23:59"
+    for claimed in ("2026-07-03 23:59", "2026-08-03 23:59"):
+        r = _round(
+            data={"apply_closes_jst": claimed},
+            evidence={"apply_closes_jst": page},
+        )
+        v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1))
+        assert not v.accepted, claimed
+        assert "does not carry" in v.rejected[0]
+
+
+def test_a_carried_over_day_must_climb_and_not_merely_match():
+    # The boundary of the same rule: a bare day EQUAL to the anchor's is not
+    # unambiguous either -- a month later reads exactly the same -- so the day
+    # must climb, not merely not fall.
+    page = "抽選応募期間：2026年7月14日（火）21:00 ～ 14日（火）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-14 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_month_restated_between_the_anchor_and_the_bare_day_breaks_the_carry():
+    # The hole a "last date wins" rule would leave open: a bare day under a
+    # heading that names its own month. 20日 here is AUGUST 20, and the July
+    # anchor before it must not reach across the 【8月】 that re-anchors it.
+    page = "2026年7月14日（火）21:00 受付開始 【8月】 20日（木）23:59 まで"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-20 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_full_date_between_the_anchor_and_the_bare_day_breaks_the_carry():
+    # The same rule with the intervening month spelled out as a whole date.
+    page = "2026年7月14日（火）21:00 ～ 8月28日（金）23:59 追加受付 30日（日）12:00"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-30 12:00"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_number_not_written_as_a_day_is_never_carried_a_month():
+    # Probed rather than reasoned about: without requiring the 日 marker, the
+    # HOUR of the opening time reads as a bare day (21), its MINUTE as the
+    # following hour (00) and the closing day as that hour's minute (28) --
+    # a stamp of 2026-07-21 00:28 assembled entirely out of a real line, with
+    # every digit adjacent in exactly the order the locality rule wants.
+    r = _round(
+        data={"apply_closes_jst": "2026-07-21 00:28"},
+        evidence={"apply_closes_jst": JP_RANGE_PAGE},
+    )
+    v = verify_rounds([r], JP_RANGE_PAGE, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_duration_counted_in_days_is_not_a_day_of_the_month():
+    # Found by probing rather than by reasoning: 「28日間」 is a SPAN of 28 days,
+    # not the 28th, and 「〜日間」/「〜日目」/「〜日分」 are ordinary Japanese a
+    # ticket page reaches for constantly. Unfenced, the duration reads as a
+    # carried-over day with a real time immediately after it, and this quote --
+    # which states no closing date at all -- proved 2026-07-28 23:59.
+    for counter in ("28日間", "28日目", "28日分", "28日以降"):
+        page = f"2026年7月14日（火）21:00 開始、先着{counter}、23:59 締切"
+        r = _round(
+            data={"apply_closes_jst": "2026-07-28 23:59"},
+            evidence={"apply_closes_jst": page},
+        )
+        v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1))
+        assert not v.accepted, counter
+        assert "does not carry" in v.rejected[0]
+
+
+def test_a_year_restated_between_the_anchor_and_the_bare_day_breaks_the_carry():
+    # The year carries over on the same terms as the month, which means it is
+    # re-anchored on the same terms too: something restating 年 between the two
+    # halves is stating a date this quote's opening does not govern.
+    page = "2026年7月14日（火）21:00 ～ 2027年28日（火）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_carried_over_day_far_from_its_time_is_rejected():
+    # `_MAX_STAMP_SPAN_CHARS` applies to the abbreviated half exactly as it does
+    # to a full date: a day and a time with a paragraph between them are two
+    # statements, not one deadline.
+    filler = "これは注意事項です" * 6  # digit-free padding
+    page = f"2026年7月14日（火）21:00 ～ 28日 {filler} 23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_carried_over_day_takes_the_anchors_year_and_not_a_contradicting_claim():
+    # The year rides along with the month, on the same terms: the anchor states
+    # 2026, so a round claiming the same day in 2027 -- a year the page does
+    # carry, in a heading, which is all the broad year rule ever asks -- is not
+    # proved by this quote.
+    page = "2027年シーズン案内 抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2027-07-28 23:59"},
+        evidence={"apply_closes_jst": "抽選応募期間：2026年7月14日（火）21:00 ～ 28日（火）23:59"},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
+def test_a_carried_over_day_still_takes_a_year_the_anchor_does_not_state():
+    # The other half of that rule: an anchor with no year of its own leaves the
+    # broad "in this quote or anywhere on the page" rule standing, exactly as it
+    # does for a Japanese page that puts the year in a heading.
+    page = "2026年 チケット情報 抽選応募期間：7月14日（火）21:00 ～ 28日（火）23:59"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": "抽選応募期間：7月14日（火）21:00 ～ 28日（火）23:59"},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], date(2026, 6, 1)).accepted) == 1
+
+
+def test_a_full_width_carried_over_day_is_read_the_same_way():
+    # The folding this module already promises, on the new path too: a page
+    # writing the abbreviated half zenkaku must not read as absent evidence.
+    page = "抽選応募期間：２０２６年７月１４日（火）２１：００ ～ ２８日（火）２３：５９"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    assert len(verify_rounds([r], page, ["Day 1"], date(2026, 6, 1)).accepted) == 1
+
+
+def test_a_carried_over_day_may_not_reach_backwards_for_its_anchor():
+    # Only an EARLIER date may anchor a bare day. Japanese states the month
+    # before the day it governs, so a date sitting after one says nothing about
+    # it -- and reading it backwards is how a quote listing a day and then an
+    # unrelated later date would manufacture a deadline.
+    page = "28日（火）23:59 まで受付（詳細は2026年7月14日発表）"
+    r = _round(
+        data={"apply_closes_jst": "2026-07-28 23:59"},
+        evidence={"apply_closes_jst": page},
+    )
+    v = verify_rounds([r], page, ["Day 1"], date(2026, 6, 1))
+    assert not v.accepted
+    assert "does not carry" in v.rejected[0]
+
+
 # -- Item 6 & 7: full-width folding ------------------------------------------
 
 
