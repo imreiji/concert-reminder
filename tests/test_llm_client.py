@@ -32,6 +32,26 @@ async def test_chat_returns_text_and_token_counts(monkeypatch):
     assert seen["body"]["model"] == "deepseek-v4-flash"
     assert seen["body"]["messages"][0] == {"role": "system", "content": "sys"}
     assert seen["body"]["thinking"] == {"type": "disabled"}
+    # Sent EXPLICITLY, never inherited: DeepSeek's own default is 8,192, and on
+    # 2026-08-09 an unbatched classify reply hit it exactly and raised. A
+    # ceiling a third party picked is not a ceiling this app chose.
+    assert seen["body"]["max_tokens"] == settings.deepseek_max_tokens
+
+
+async def test_max_tokens_follows_the_setting(monkeypatch):
+    monkeypatch.setattr(settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(settings, "deepseek_model", "m")
+    monkeypatch.setattr(settings, "deepseek_max_tokens", 1234)
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}],
+        })
+
+    await chat("s", "u", transport=_transport(handler))
+    assert seen["body"]["max_tokens"] == 1234
 
 
 async def test_missing_key_or_model_raises_before_any_network(monkeypatch):

@@ -54,7 +54,9 @@ async def chat(
     (the reply was truncated), or empty `content`. Thinking mode is
     disabled in the request body (see `body` below) precisely so a
     reasoning overrun cannot produce the truncated/empty case in the first
-    place; the check stays as a second line of defense.
+    place; the check stays as a second line of defense. `max_tokens` is
+    likewise sent explicitly (`settings.deepseek_max_tokens`) rather than
+    inherited, so the ceiling a truncated reply hit is one this app picked.
 
     `transport` is test-only (httpx.MockTransport); production always uses
     httpx's default. One client is built per call, mirroring
@@ -74,6 +76,16 @@ async def chat(
         ],
         "temperature": 0.1,
         "stream": False,
+        # Sent EXPLICITLY, never inherited. DeepSeek's default happens to be
+        # 8,192 today, and on 2026-08-09 one unbatched classify call over a
+        # 511-lead queue hit it exactly: `finish_reason: "length"`, LlmError,
+        # the whole press lost after it had already been billed. Nothing had
+        # chosen that number -- a third party had. With the classify pass
+        # batched (see TRIAGE_CLASSIFY_BATCH) the largest reply over that same
+        # queue was 1,473 output tokens, so this is a GUARD against a runaway
+        # reply, not a limit any healthy call approaches. Raise it and the
+        # truncation check below still catches what it cannot hold.
+        "max_tokens": settings.deepseek_max_tokens,
         # deepseek-v4-flash thinks by default, and thinking burns ~50k
         # reasoning tokens on a 216-lead classify call -- ~90% of the call's
         # cost -- with no visible output until it finishes. On 2026-08-05 a
