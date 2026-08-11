@@ -154,16 +154,46 @@ Where it renders, by the branch `_capture_actions.html` is already in:
 | Branch | Renders |
 | --- | --- |
 | `row.outcome is none` | nothing — there is no answer to un-answer |
+| per-day branch, this leg still being asked about | nothing — no answer yet |
 | APPLIED (`can_report_result`) | after "I won" / "I lost" |
 | WON | after "Paid" |
-| settled (PAID / LOST / NOT_APPLIED) | **replacing** "Nothing to do" |
-| per-day branch, this leg resolved | the leg's own clear |
+| terminal (see below) | **replacing** "Nothing to do" |
 
-"Nothing to do" is reached only when the outcome is PAID, LOST or NOT_APPLIED —
-precisely the correctable set — so the sentence becomes false the moment this
-ships. The affordance replaces it rather than sitting beside it; the pill on the
-left already says where the reader stands. Settled rows get quieter, not busier.
-This was caught by building the sketch, not by reading the template.
+**What a clear POSTS is not a property of the branch** (owner ruling,
+2026-08-11; this table originally said it was, and was wrong). The rule:
+
+> A clear posts `day_id` exactly when this card's leg has its **own** answer —
+> a `RoundOutcomeDay` row of its own. Otherwise it posts none and clears the
+> whole round.
+
+The branch a row falls into is an accident of how many legs are still
+unresolved. A fully resolved multi-leg round — won Saturday, lost Sunday —
+has nothing unresolved, so `capture_days` is empty and it **never reaches the
+per-day branch at all**; it lands in WON. Both legs plainly have their own
+answers, so both get their own clear, and Sunday's press must not throw
+Saturday's ticket away. `_capture_actions.html` therefore resolves the
+condition once at the top of the macro (`clear_day`) rather than per branch.
+
+"This leg has its own answer" is `row.leg_result is not None` **and**
+`row.has_day_results`, not the first alone. With zero day rows on the round,
+`_leg_result_for`'s no-rows-means-all convention *derives* a `leg_result` for
+every covered leg from the round's own outcome — the inherited pill. That is
+the round's answer wearing the leg's pill, and §A2's "no materialisation step"
+holds only because the surfaces never post a `day_id` for it.
+
+The confirmation (§D) is scoped the same way: a per-leg clear asks about **this
+leg** (a LOST leg on a WON round forfeits nothing; a WON leg asks even when the
+round is only WON because of it), a whole-round clear about the round.
+
+The final branch is reached whenever there is a recorded outcome and no
+offerable answer: PAID, LOST, NOT_APPLIED — **and also APPLIED while the
+results are still ahead**, which the original wording missed. That last one is
+the same mis-press with more at stake (`record_round_outcome` refuses to
+overwrite a starting state), so it gets the correction too, unconfirmed: an
+APPLIED round forfeits nothing when cleared. The affordance replaces "Nothing
+to do" rather than sitting beside it; the pill on the left already says where
+the reader stands. Settled rows get quieter, not busier. This was caught by
+building the sketch, not by reading the template.
 
 Two branches deliberately render nothing: `row.covered` (the standing comes from
 another round; there is nothing recorded here) and `not row.can_capture`, which

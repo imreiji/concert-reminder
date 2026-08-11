@@ -1576,6 +1576,85 @@ async def test_a_leg_with_no_answer_of_its_own_offers_no_per_leg_clear(client):
     assert clear_forms(sections["Day 3"]) == []
 
 
+async def test_a_fully_resolved_split_round_clears_each_leg_on_its_own(client):
+    """Won Saturday, lost Sunday, nothing left unresolved. `capture_days` is
+    empty, so this round never reaches the per-day branch at all -- it lands in
+    the WON branch, where a whole-round clear under Sunday would delete
+    Saturday's ticket with it. Which leg a clear posts follows the LEG having
+    its own answer, not which branch the row happened to fall into (owner
+    ruling, 2026-08-11).
+
+    Mutation this catches: deciding `day_id` per branch instead of once, so
+    the WON branch posts none and fixing Sunday throws Saturday away."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    await set_day_result(client.db, rid, d2, LegResult.LOST)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    # The round really is in the WON branch on both cards, not the per-day one.
+    assert ">Paid</button>" in sections["Day 1"]
+    assert "day-result" not in sections["Day 1"]
+    assert "day-result" not in sections["Day 2"]
+
+    [sat] = clear_forms(sections["Day 1"])
+    assert f'name="day_id" value="{d1}"' in sat
+    [sun] = clear_forms(sections["Day 2"])
+    assert f'name="day_id" value="{d2}"' in sun
+
+
+async def test_a_split_round_asks_only_on_the_leg_that_holds_the_ticket(client):
+    """The confirmation follows what the press actually drops. Sunday's own
+    result is LOST, so clearing it forfeits nothing even though the ROUND is
+    WON; Saturday's is WON, so it asks even though the round is only WON
+    because of it.
+
+    Mutation this catches: keying the confirm off `row.outcome` (the round)
+    rather than `row.leg_result` -- which asks on both legs, training the
+    reader to click through the one dialog that matters."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    await set_day_result(client.db, rid, d2, LegResult.LOST)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    [sat] = clear_forms(sections["Day 1"])
+    [sun] = clear_forms(sections["Day 2"])
+    assert 'data-clear-confirm="1"' in sat
+    assert 'data-clear-label="Fan club lottery"' in sat
+    assert "data-clear-confirm" not in sun
+
+
+async def test_an_inherited_leg_pill_clears_the_whole_round(client):
+    """The rule the per-leg path rests on, stated from the other side. A
+    single-leg WON round has NO `RoundOutcomeDay` rows, so `_leg_result_for`
+    DERIVES a WON `leg_result` for the leg through the no-rows-means-all
+    convention. That is the round's answer wearing the leg's pill, and the
+    honest correction is a whole-round clear.
+
+    `has_day_results` is the switch that turns that fallback off, and it is
+    why `row.leg_result is not none` alone is NOT "this leg has its own row".
+    Without it this press would post a `day_id`, `clear_round_outcome` would
+    delete nothing, and its unconditional re-derivation would land the round
+    on APPLIED instead of unrecorded -- a silent wrong answer to "Change".
+
+    Mutation this catches: dropping `row.has_day_results` from `clear_day`."""
+    cid = await seed_concert(client.db)
+    d1, _rid = await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    section = leg_sections(client.get("/concerts/np").text)["Day 1"]
+    # The leg really is showing a derived WON pill, not one of its own.
+    assert '<span class="pill p-danger">Won</span>' in section
+    [form] = clear_forms(section)
+    assert "day_id" not in form
+    assert f'value="{d1}"' not in form
+    # It still asks: the ROUND holds the ticket.
+    assert 'data-clear-confirm="1"' in form
+
+
 async def test_the_catch_up_dialog_offers_no_clear(client):
     """The dialog is the page's one UNFILTERED capture caller (no `only_day`),
     so a correction offered there could only be a whole-round one presented
