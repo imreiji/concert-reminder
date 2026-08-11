@@ -28,6 +28,10 @@ def test_no_entries_is_silence():
     """Running every tick makes this load-bearing: a 'nothing found' message
     at this cadence would be 1,440 DMs a day."""
     assert build_quiet_ladder_dm([], total=0, base_url=BASE) == ""
+    # The spec requires BOTH functions to answer "" on empty input -- the DM
+    # and the block are two different render paths over the same dataclass,
+    # so silence on one proves nothing about the other.
+    assert build_quiet_ladder_block([]) == ""
 
 
 def test_the_dm_names_the_concerts_and_links_the_page():
@@ -43,13 +47,20 @@ def test_the_dm_reports_the_real_total_when_it_cannot_name_them_all():
     # near the 1900 budget, so the shrink loop never runs and the len()
     # assertion below would pass trivially. With titles this long, the
     # unshrunk 10-entry body measures ~2306 chars, and the shrink loop pops
-    # down to ~8 entries to land under budget -- so this fixture genuinely
+    # down to 8 entries to land under budget -- so this fixture genuinely
     # exercises build_quiet_ladder_dm's shrink-until-it-fits loop.
     long_title = "Concert {n}: " + "A Very Long Concert Title For Testing " * 5
     entries = [entry(i, title=long_title.format(n=i)) for i in range(1, 21)]
     body = build_quiet_ladder_dm(entries, total=20, base_url=BASE)
     assert "20" in body
     assert len(body) <= 1900
+    # "20" in body is satisfied by the head line's total alone, whatever the
+    # drop-count logic does -- it does not pin the "...and N more." line.
+    # Measured: 20 entries shrink to 8 kept, so the honest gap is 20 - 8 = 12.
+    # Assert that exact line, not a loose substring, so a wrong dropped-count
+    # expression (e.g. against len(entries) instead of total, or a stray
+    # off-by-one) fails this test instead of hiding behind the "20" check.
+    assert "…and 12 more." in body
 
 
 def test_the_block_carries_what_a_re_check_needs():
