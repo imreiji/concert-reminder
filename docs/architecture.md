@@ -181,9 +181,16 @@ measurement or an incident that a reasonable-looking edit would undo.
     is checked, recovers a round and later goes quiet again must arrive
     unchecked -- the earlier check answered a different question.
     `quiet_since_utc` is named "first observed quiet", not "went quiet",
-    because the migration backfills it for every already-quiet concert so the
-    first pass after deploy is silent rather than DMing the back catalogue;
-    under the other name every backfilled value would be a lie.
+    because the migration (`0671edabe2ac`) stamps it on EVERY concert with a
+    blanket `UPDATE`, not on the quiet ones. That is deliberate and is the
+    reason to leave it alone: a predicate backfill would mean transliterating
+    `next_anchor_at`/`is_round_cancelled` into SQL, where the copy is free to
+    disagree with the real one -- the same drift the promotion of
+    `next_anchor_at` exists to prevent. A non-quiet concert's stamp is simply
+    cleared by the first pass; what the blanket buys is that NO concert is a
+    newcomer on that pass, so the first tick after deploy DMs nothing instead
+    of announcing the entire back catalogue. Under the name "went quiet" every
+    one of those stamps would be a lie.
   - **Never wrap this in `session.no_autoflush`.** `_all_concerts` loads with
     `execution_options(populate_existing=True)` -- needed because
     `SessionMaker` sets `expire_on_commit=False`, so a session that outlives a

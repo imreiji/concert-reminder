@@ -3198,9 +3198,9 @@ msgstr "沉寂的轮次"
 
 #: src/app/web/templates/preferences.html:491
 msgid ""
-"Concerts you track whose ladder has no deadline left, and whose show has "
-"not happened yet."
-msgstr "你关注的活动中，已经没有剩余的截止时间，但演出日期尚未到来。"
+"Concerts in the catalogue whose ladder has no deadline left, and whose show"
+" has not happened yet."
+msgstr "目录中已经没有剩余截止时间、但演出日期尚未到来的活动。"
 
 #: src/app/web/templates/preferences.html:494
 msgid "Broadcast"

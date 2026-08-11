@@ -2214,9 +2214,14 @@ Checked button. When a concert leaves the list the pass clears BOTH, so a
 concert that goes quiet, is checked, recovers a round and goes quiet again
 arrives unchecked -- the earlier check answered a different question. The first
 column is named "first observed quiet" rather than "went quiet" because the
-migration backfills it for every already-quiet concert, so the first pass after
-deploy is silent instead of DMing the entire back catalogue; under the other
-name every backfilled value would be a lie.
+migration stamps EVERY concert with a blanket `UPDATE` rather than backfilling
+the quiet ones -- a predicate backfill would mean transliterating
+`next_anchor_at` and `is_round_cancelled` into SQL, where the copy is free to
+disagree with the real one, which is the drift the promotion of
+`next_anchor_at` exists to prevent. A non-quiet concert's stamp is cleared by
+the first pass; what the blanket buys is that NO concert is a newcomer on it,
+so the first tick after deploy DMs nothing instead of announcing the entire
+back catalogue. Under the other name every one of those stamps would be a lie.
 
 **The pass runs EVERY TICK, with no cadence clock, and that is the one place it
 departs from the discovery sweep it otherwise copies.** The sweep's 24-hour

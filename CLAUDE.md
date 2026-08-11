@@ -73,11 +73,8 @@ undo.
   Discover status, DM button actions, presets/subscriptions, users,
   adapters); beside it sit `tags`, `venues`, `drafts`, `discovery_events`,
   `setup_flow`, `calendar_feed`, `rehearsal`, `delivery`, `broadcast`,
-  `ops_alerts`, `audit`, `phrases`, `translation_gaps`.
-  `quiet_ladders` is round watch — the one predicate for "this tracked concert
-  holds no future deadline", its two stamps, and the per-tick pass that DMs the
-  admins once when one newly goes quiet; it REUSES `core`'s `next_anchor_at`
-  rather than restating it, and must never gain a cadence clock.
+  `ops_alerts`, `audit`, `phrases`, `translation_gaps`, and `quiet_ladders`
+  (round watch: which concerts in the catalogue hold no future deadline).
   Dependencies point ONE way: feature modules import `core`, `core` imports
   none of them, and the facade imports everything and is imported by nothing.
   **Add a name to a module and you must add it to `service.py` too** —

@@ -3198,9 +3198,9 @@ msgstr "動きのない受付"
 
 #: src/app/web/templates/preferences.html:491
 msgid ""
-"Concerts you track whose ladder has no deadline left, and whose show has "
-"not happened yet."
-msgstr "フォロー中の公演のうち、締切がもう残っていないのに、公演日がまだ先のもの。"
+"Concerts in the catalogue whose ladder has no deadline left, and whose show"
+" has not happened yet."
+msgstr "カタログ内の公演のうち、締切がもう残っていないのに、公演日がまだ先のもの。"
 
 #: src/app/web/templates/preferences.html:494
 msgid "Broadcast"
