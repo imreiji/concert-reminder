@@ -985,7 +985,7 @@ async def record_remaining_days_lost(
 
 
 async def _rederive_round_from_days(
-    session: AsyncSession, user_id: int, round_: Round, now: datetime,
+    session: AsyncSession, user_id: int, round_: Round,
 ) -> None:
     """The round-level answer implied by the day rows that SURVIVE a per-leg
     clear -- the only place that derivation lives.
@@ -1069,7 +1069,7 @@ async def clear_round_outcome(
         RoundOutcomeDay.day_id == day_id,
     ))
     await session.flush()
-    await _rederive_round_from_days(session, user_id, round_, now)
+    await _rederive_round_from_days(session, user_id, round_)
     await reinstate_user_rules(session, user_id, round_.concert_id, now)
 
 
