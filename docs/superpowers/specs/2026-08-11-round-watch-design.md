@@ -230,8 +230,9 @@ longest-quiet. Rows checked recently render dimmed, never hidden -- the stamp
 answers "have I looked at this", and hiding would silently promote it to "is
 this resolved", which it cannot answer.
 
-**Per row:** title, leg dates (or "no dates announced"), how long it has been
-quiet, and the rounds the concert DOES carry with their moments -- a concert
+**Per row:** title, leg dates (or "no dates announced"), the date it went
+quiet (rendered "since DATE"), and the rounds the concert DOES carry with
+their moments -- a concert
 with a closed 最速先行 reads differently from one with nothing at all. Links out
 to `official_url`, `eventernote_url` and the concert's edit page. Plus a
 **Checked** button: `POST /admin/quiet-ladders/{event_id}/checked`, which sets

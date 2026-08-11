@@ -108,8 +108,17 @@ def test_the_block_carries_a_rounds_moments():
         closes_at_utc=datetime(2026, 7, 8, 23, 59, tzinfo=UTC),
     )
     block = build_quiet_ladder_block([entry(1, rounds=(r,))])
-    assert "2026-07-01 10:00" in block
-    assert "2026-07-08 23:59" in block
+    # JST, not UTC (+9h): 2026-07-01 10:00 UTC -> 19:00 JST same day;
+    # 2026-07-08 23:59 UTC -> 08:59 JST the FOLLOWING day. yaml_export._jst_str
+    # writes the identical "%Y-%m-%d %H:%M" shape into an agent's draft
+    # apply_closes_jst/results_jst/payment_deadline_jst fields -- an
+    # unlabelled UTC string here would be indistinguishable from that JST one
+    # and a transcribing agent would silently move the deadline nine hours
+    # earlier into the database. The explicit "JST" suffix is what a
+    # regression to bare UTC (a plausible "simplification" of _moment) would
+    # drop, so it is asserted here rather than left implicit.
+    assert "2026-07-01 19:00 JST" in block
+    assert "2026-07-09 08:59 JST" in block
     assert "opens" in block
     assert "closes" in block
 

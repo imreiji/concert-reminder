@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 from app.domain.discovery_message import DM_CHAR_BUDGET
+from app.domain.timezones import utc_to_jst
 
 DM_LIST_LIMIT = 10
 
@@ -26,8 +27,20 @@ DM_LIST_LIMIT = 10
 class QuietRoundInfo:
     """One round a quiet concert already carries, moments and all.
 
-    Moments render in UTC, ISO-ish (`YYYY-MM-DD HH:MM`) -- the raw form the
-    four `Round` columns are stored in, so the block never has to convert.
+    Moments render in JST, labelled (`YYYY-MM-DD HH:MM JST`), never bare UTC.
+    This block is pasted into an agent whose write-back format --
+    `yaml_export._jst_str`, the `apply_closes_jst`/`results_jst`/
+    `payment_deadline_jst` draft fields it fills in -- is JST and rendered
+    with the IDENTICAL `%Y-%m-%d %H:%M` shape. An unlabelled UTC string here
+    would be silently indistinguishable from that JST one, and an agent
+    transcribing it into a `_jst` field would move a real deadline nine hours
+    earlier with nothing raising -- the mis-comparison against the ticket
+    page would be the mild failure; landing a wrong deadline in the DB is the
+    real one. The `JST` suffix is the point: the one place this app
+    legitimately emits UTC, the agent read API, self-labels via
+    `isoformat()`, and an unlabelled wall-clock string otherwise has no
+    precedent in this codebase.
+
     A round with no moments at all still needs saying: it distinguishes a
     round the catalogue holds with nothing left to happen (fully resolved)
     from a round whose organiser page never gave a date to begin with.
@@ -74,7 +87,7 @@ def _title(entry: QuietEntry) -> str:
 
 
 def _moment(dt: datetime) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M")
+    return utc_to_jst(dt).strftime("%Y-%m-%d %H:%M") + " JST"
 
 
 def _round_line(r: QuietRoundInfo) -> str:
