@@ -4309,6 +4309,14 @@ msgstr "準備完了です。次に、参加予定のイベントを選びます
 msgid "Continue to my events"
 msgstr "イベントの選択へ"
 
+#: src/app/web/templates/_capture_actions.html:82
+msgid "Change"
+msgstr "変更"
+
+#: src/app/web/templates/base.html:357
+msgid "Cleared — you can answer this round again"
+msgstr "取り消しました — このラウンドに再度回答できます"
+
 #~ msgid "Remove this leg"
 #~ msgstr "この公演を削除"
 
