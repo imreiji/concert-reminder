@@ -29,6 +29,11 @@ custom_id namespace:
     dk:lostrest:{round_id}        every leg still unanswered was lost
     dk:paidnow:{round_id}         the payment for it is done
     dk:paylater:{round_id}        not paid yet (records nothing)
+
+    -- taking an answer back, on the REPLY to any of the above:
+    dk:clear:{round_id}       un-answer this round (asks first if secured)
+    dk:clearok:{round_id}     yes, clear the secured round
+    dk:keep:{round_id}        no, leave it as it is (records nothing)
 """
 
 import re
@@ -37,8 +42,11 @@ import discord
 
 from app.db.models import ConcertDay, Round, User
 from app.db.service import (
+    _covered_day_ids,
+    _round_outcome_value,
     all_legs_cancelled,
     apply_default_preset,
+    clear_round_outcome,
     has_day_results,
     is_round_cancelled,
     record_remaining_days_lost,
@@ -272,15 +280,41 @@ class SnoozeButton(
 
 
 async def _handle_outcome_click(
-    interaction: discord.Interaction, round_id: int, outcome: LotteryOutcome, success_msg: str
+    interaction: discord.Interaction, round_id: int, outcome: LotteryOutcome,
+    success_msg: str, *, refuse_if_secured: bool = False,
 ) -> None:
     """`success_msg` arrives as a raw English msgid (an N_() marker at the call
-    site), translated here AFTER the locale is set from the clicking user."""
+    site), translated here AFTER the locale is set from the clicking user.
+
+    `refuse_if_secured` is the flat Won/Lost pair's guard -- the round-level
+    twin of the one `_apply_press` gives the two all-legs shortcuts, and it is
+    here for the same reason: these buttons are persistent, so a months-old DM
+    can be pressed against a round settled (and paid for) on the site since,
+    where WON demotes PAID and re-arms its payment reminder while LOST wipes
+    the ticket outright. A settled win is not something a stale press may undo.
+    It is deliberately NOT set on "I applied"/"Didn't apply" (a CLOSES reminder
+    only carries them while the round is unanswered) or on "Paid" (which IS the
+    write that settles a secured round).
+
+    Every reply carries the backtrack button, refusals included, so the guard is
+    a signpost rather than a dead end and corrections live in one vocabulary.
+    """
     async with SessionMaker() as session:
-        await record_round_outcome(session, interaction.user.id, round_id, outcome)
         await _apply_locale(session, interaction.user.id)
+        if refuse_if_secured and await _round_outcome_value(
+            session, interaction.user.id, round_id
+        ) in (LotteryOutcome.WON, LotteryOutcome.PAID):
+            await interaction.response.send_message(
+                _("This round is already recorded as won. Use the button below to "
+                  "change it."),
+                view=build_backtrack_view(round_id),
+            )
+            return
+        await record_round_outcome(session, interaction.user.id, round_id, outcome)
         await session.commit()
-    await interaction.response.send_message(_(success_msg))
+    await interaction.response.send_message(
+        _(success_msg), view=build_backtrack_view(round_id)
+    )
 
 
 class AppliedButton(
@@ -342,6 +376,7 @@ class WonButton(
         await _handle_outcome_click(
             interaction, self.round_id, LotteryOutcome.WON,
             N_("Congrats! I'll remind you when payment is due."),
+            refuse_if_secured=True,
         )
 
 
@@ -364,6 +399,7 @@ class LostButton(
             interaction, self.round_id, LotteryOutcome.LOST,
             N_("Sorry to hear it — no payment reminder needed, and I'll let you know "
                "when the next round opens if there is one."),
+            refuse_if_secured=True,
         )
 
 
@@ -385,6 +421,157 @@ class PaidButton(
         await _handle_outcome_click(
             interaction, self.round_id, LotteryOutcome.PAID, N_("Marked as paid — all set!")
         )
+
+
+# ── Taking an answer back ────────────────────────────────────────────────
+#
+# Every reply to an outcome press carries "Change my answer", so a mis-press is
+# recoverable where it happened instead of only on the site. It rides on the
+# REPLY and never on the reminder itself, which is why
+# `domain/rehearsal.py:expected_buttons` -- the oracle for what a REMINDER
+# carries -- needs no entry for it.
+#
+# The DM backtrack clears the WHOLE round, day rows included, never one leg. A
+# DM reply is one moment about one press; per-leg surgery needs to see every leg
+# at once, which is the concert page -- one tap away on the "Open on
+# dekimasen.app" button every reminder already carries.
+
+
+async def _covered_leg_count(session, round_) -> int:
+    """How many legs a whole-round clear would take back, for the confirmation
+    to name when there is more than one.
+
+    ORM-only, like the rest of this module: `_covered_day_ids` is the same
+    predicate the service writer itself narrows by, so the number named is the
+    number cleared rather than a second guess at it."""
+    from app.db.models import Concert
+
+    concert = await session.get(Concert, round_.concert_id)
+    if concert is None:
+        return 0
+    await session.refresh(concert, ["days"])
+    return len(_covered_day_ids(round_, {d.id for d in concert.days}))
+
+
+class ClearOutcomeButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:clear:(?P<rid>\d+)"
+):
+    """The un-answer, in the DM where the mis-press happened.
+
+    Persistent, so it can be pressed months later against a round settled on the
+    site since. It therefore re-derives state and never trusts the message it
+    was pressed on, exactly as `_progressive_click` does, and asks first when the
+    press would drop a ticket the reader holds -- a DM has no dialog, so the
+    question has to be a second press. Everything else clears on one press:
+    nothing is forfeited there and a confirmation would be theatre."""
+
+    def __init__(self, round_id: int) -> None:
+        super().__init__(discord.ui.Button(
+            label=_("Change my answer"), style=discord.ButtonStyle.secondary,
+            custom_id=f"dk:clear:{round_id}",
+        ))
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        async with SessionMaker() as session:
+            await _apply_locale(session, interaction.user.id)
+            round_ = await session.get(Round, self.round_id)
+            if round_ is None:
+                await interaction.response.edit_message(
+                    content=_("That round no longer exists."), view=None
+                )
+                return
+            if await _round_outcome_value(
+                session, interaction.user.id, self.round_id
+            ) in (LotteryOutcome.WON, LotteryOutcome.PAID):
+                content = _(
+                    "You hold a ticket from this round. Clearing your answer removes "
+                    "that record and its payment reminder. Clear it?"
+                )
+                legs = await _covered_leg_count(session, round_)
+                if legs > 1:
+                    content += " " + _(
+                        "This round covers {n} performances, and every one of them "
+                        "is cleared."
+                    ).format(n=legs)
+                await interaction.response.edit_message(
+                    content=content, view=build_clear_confirm_view(self.round_id)
+                )
+                return
+            await clear_round_outcome(session, interaction.user.id, self.round_id)
+            await session.commit()
+        await interaction.response.edit_message(
+            content=_("Cleared — you can record this round again."), view=None
+        )
+
+
+class ConfirmClearButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:clearok:(?P<rid>\d+)"
+):
+    """The second press behind a secured round. It re-checks nothing on
+    purpose: the reader has just been told what is being dropped, and
+    `clear_round_outcome` is a no-op on a round with nothing recorded."""
+
+    def __init__(self, round_id: int) -> None:
+        super().__init__(discord.ui.Button(
+            label=_("Clear it"), style=discord.ButtonStyle.danger,
+            custom_id=f"dk:clearok:{round_id}",
+        ))
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        async with SessionMaker() as session:
+            await _apply_locale(session, interaction.user.id)
+            await clear_round_outcome(session, interaction.user.id, self.round_id)
+            await session.commit()
+        await interaction.response.edit_message(
+            content=_("Cleared — you can record this round again."), view=None
+        )
+
+
+class KeepAnswerButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:keep:(?P<rid>\d+)"
+):
+    """"Keep it" is an answer, not a write -- the twin of PayLaterButton."""
+
+    def __init__(self, round_id: int) -> None:
+        super().__init__(discord.ui.Button(
+            label=_("Keep it"), style=discord.ButtonStyle.secondary,
+            custom_id=f"dk:keep:{round_id}",
+        ))
+        self.round_id = round_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match):
+        return cls(int(match["rid"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        async with SessionMaker() as session:
+            await _apply_locale(session, interaction.user.id)
+        await interaction.response.edit_message(
+            content=_("Kept — nothing changed."), view=None
+        )
+
+
+def build_backtrack_view(round_id: int) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    view.add_item(ClearOutcomeButton(round_id))
+    return view
+
+
+def build_clear_confirm_view(round_id: int) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    view.add_item(ConfirmClearButton(round_id))
+    view.add_item(KeepAnswerButton(round_id))
+    return view
 
 
 class RemindLaterModal(discord.ui.Modal):
@@ -559,7 +746,12 @@ async def _apply_press(
 
 
 def _progress_reply(round_id: int, unresolved, any_won: bool, outcome, day_label: str | None):
-    """`(content, view)` for the state a press left behind."""
+    """`(content, view)` for the state a press left behind.
+
+    Every TERMINAL state carries the backtrack button instead of the bare
+    `view=None` it used to: those are exactly the messages a reader looks at
+    after realising they pressed the wrong thing, and the alternative is a DM
+    that says "all set" with no way back from it."""
     if unresolved:
         content = (
             _("{day} recorded — and the other days?").format(day=day_label)
@@ -569,14 +761,14 @@ def _progress_reply(round_id: int, unresolved, any_won: bool, outcome, day_label
     if any_won and outcome is not LotteryOutcome.PAID:
         return _("All recorded — have you paid for it yet?"), build_payment_view(round_id)
     if any_won:
-        return _("Marked as paid — all set!"), None
+        return _("Marked as paid — all set!"), build_backtrack_view(round_id)
     if outcome is LotteryOutcome.LOST:
         return _("Sorry to hear it — no payment reminder needed, and I'll let you know "
-                 "when the next round opens if there is one."), None
+                 "when the next round opens if there is one."), build_backtrack_view(round_id)
     # Every leg answered, none secured, and the round itself not settled as
     # lost: the reader skipped the ones they were not going to. Nothing was
     # lost, so neither the congratulations nor the condolences are true.
-    return _("Nothing left to record for this one."), None
+    return _("Nothing left to record for this one."), build_backtrack_view(round_id)
 
 
 async def _progressive_click(
@@ -811,4 +1003,5 @@ DYNAMIC_ITEMS = [
     RemindLaterButton,
     WonAllButton, LostAllButton, LostRestButton, WonDayButton, LostDayButton, SkipDayButton,
     PaidNowButton, PayLaterButton,
+    ClearOutcomeButton, ConfirmClearButton, KeepAnswerButton,
 ]

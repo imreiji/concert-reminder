@@ -4377,6 +4377,41 @@ msgstr "保留"
 msgid "Clear my answer"
 msgstr "清除我的回答"
 
+#: src/app/bot/views.py:470
+msgid "Change my answer"
+msgstr "更改回答"
+
+#: src/app/bot/views.py:508
+msgid "Cleared — you can record this round again."
+msgstr "已清除 — 你可以重新记录这一轮。"
+
+#: src/app/bot/views.py:560
+msgid "Kept — nothing changed."
+msgstr "保持不变 — 没有任何更改。"
+
+#: src/app/bot/views.py:521
+msgid "Clear it"
+msgstr "清除"
+
+#: src/app/bot/views.py:308
+msgid ""
+"This round is already recorded as won. Use the button below to change "
+"it."
+msgstr ""
+"这一轮已记录为中签。如需更改，请使用下面的按钮。"
+
+#: src/app/bot/views.py:491
+msgid ""
+"You hold a ticket from this round. Clearing your answer removes that "
+"record and its payment reminder. Clear it?"
+msgstr ""
+"你持有这一轮的票。清除回答会移除该记录及其付款提醒。要清除吗？"
+
+#: src/app/bot/views.py:497
+msgid ""
+"This round covers {n} performances, and every one of them is cleared."
+msgstr ""
+"这一轮涵盖 {n} 场演出，全部都会被清除。"
 #~ msgid "Remove this leg"
 #~ msgstr "删除此场次"
 

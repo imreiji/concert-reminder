@@ -4361,6 +4361,43 @@ msgstr "そのままにする"
 msgid "Clear my answer"
 msgstr "回答を取り消す"
 
+#: src/app/bot/views.py:470
+msgid "Change my answer"
+msgstr "回答を変更"
+
+#: src/app/bot/views.py:508
+msgid "Cleared — you can record this round again."
+msgstr "取り消しました — このラウンドを再度記録できます。"
+
+#: src/app/bot/views.py:560
+msgid "Kept — nothing changed."
+msgstr "そのままにしました — 変更はありません。"
+
+#: src/app/bot/views.py:521
+msgid "Clear it"
+msgstr "取り消す"
+
+#: src/app/bot/views.py:308
+msgid ""
+"This round is already recorded as won. Use the button below to change "
+"it."
+msgstr ""
+"このラウンドはすでに当選として記録されています。変更する場合は下のボタンを"
+"使ってください。"
+
+#: src/app/bot/views.py:491
+msgid ""
+"You hold a ticket from this round. Clearing your answer removes that "
+"record and its payment reminder. Clear it?"
+msgstr ""
+"このラウンドのチケットを確保しています。回答を取り消すと、その記録と支払い"
+"リマインダーがなくなります。取り消しますか？"
+
+#: src/app/bot/views.py:497
+msgid ""
+"This round covers {n} performances, and every one of them is cleared."
+msgstr ""
+"このラウンドは{n}公演を対象としており、そのすべてが取り消されます。"
 #~ msgid "Remove this leg"
 #~ msgstr "この公演を削除"
 
