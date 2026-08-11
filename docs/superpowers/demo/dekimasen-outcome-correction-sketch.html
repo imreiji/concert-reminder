@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dekimasen — outcome correction sketch</title>
+<style>
+/* Tokens ported verbatim from style.css :root (which is itself ported from
+   dekimasen-demo.html). Do not invent values here -- a sketch that drifts
+   from the token set is not a reference. */
+:root {
+  --paper: #f7f6f2; --raise: #fffefb; --ink: #1b1b20; --dim: #6d6d78;
+  --line: #dedbd2; --ok: #187a49; --off: #a05a00; --danger: #b3261e;
+  --accent: #4f46b8;
+  --ok-wash: #e8f2ec; --off-wash: #f7eede; --danger-wash: #f8e8e6;
+  --accent-wash: #eceaf7; --chip: #efede6;
+  --shadow: 0 1px 2px rgba(27,27,32,.06), 0 4px 16px rgba(27,27,32,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+    --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+    --accent: #9a92f0; --ok-wash: #1a2a22; --off-wash: #2c2418;
+    --danger-wash: #2e1d1c; --accent-wash: #23204a; --chip: #2a2830;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #17161a; --raise: #201f24; --ink: #e9e7e1; --dim: #97949c;
+  --line: #33313a; --ok: #5fc48c; --off: #d99a3c; --danger: #e97c72;
+  --accent: #9a92f0; --ok-wash: #1a2a22; --off-wash: #2c2418;
+  --danger-wash: #2e1d1c; --accent-wash: #23204a; --chip: #2a2830;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.25);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+
+/* ── sketch chrome (NOT part of the app) ───────────────────────── */
+.sketchbar {
+  position: sticky; top: 0; z-index: 5; background: var(--paper);
+  border-bottom: 1px solid var(--line); margin: 0 0 2rem;
+  padding: .8rem 0; display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
+}
+.sketchbar .sp { margin-left: auto; display: flex; gap: .4rem; }
+h1 { font-size: 1.15rem; margin: 0; font-weight: 700; }
+h2 {
+  font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--dim); margin: 2.75rem 0 .35rem;
+}
+.lede { color: var(--dim); font-size: .875rem; margin: 0 0 1.25rem; max-width: 62ch; }
+.lede code { font-size: .82em; background: var(--chip); padding: .1rem .3rem; border-radius: 3px; }
+.note {
+  font-size: .8125rem; color: var(--dim); border-left: 3px solid var(--accent);
+  background: var(--raise); padding: .6rem .85rem; margin: 1rem 0 0; border-radius: 3px;
+  max-width: 74ch;
+}
+.note b { color: var(--ink); font-weight: 600; }
+.verdict { border-left-color: var(--ok); }
+.verdict.no { border-left-color: var(--danger); }
+
+/* ── ported app CSS, verbatim where it exists ──────────────────── */
+.pill {
+  font-size: .6875rem; font-weight: 700; letter-spacing: .04em; white-space: nowrap;
+  padding: .15rem .45rem; border-radius: 3px; border: 1px solid currentColor;
+}
+.p-danger { color: var(--danger); background: var(--danger-wash); }
+.p-ok { color: var(--ok); background: var(--ok-wash); }
+.p-quiet { color: var(--dim); background: transparent; border-color: var(--line); }
+.act {
+  font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: .03em;
+  padding: .22rem .5rem; border-radius: 3px; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--line); background: var(--raise); color: var(--dim);
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.act:hover { color: var(--ink); border-color: var(--dim); }
+.act.yes:hover { color: var(--ok); border-color: var(--ok); }
+.act.no:hover { color: var(--danger); border-color: var(--danger); }
+.done { font-size: .72rem; font-weight: 700; color: var(--ok); letter-spacing: .03em; }
+.leg { margin-top: 2.25rem; }
+.leghead {
+  display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
+  padding-bottom: .6rem; border-bottom: 1px solid var(--line);
+}
+.leghead h3 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--ink); }
+.leghead .lv { color: var(--dim); font-size: .8125rem; }
+.rnds { display: grid; }
+.rnd2 {
+  display: grid; grid-template-columns: 7rem 1fr 15rem 13rem; gap: 1rem;
+  align-items: center; padding: .75rem .1rem; border-bottom: 1px solid var(--line);
+}
+.rnd2.past { opacity: .55; }
+.rnd2 .nm { font-weight: 600; line-height: 1.3; }
+.rnd2 .nm em { font-style: normal; display: block; font-size: .75rem; color: var(--dim); font-weight: 400; }
+.rnd2 .dts { font-size: .8125rem; color: var(--dim); line-height: 1.4; }
+.rnd2 .dts b { display: block; color: var(--ink); font-weight: 600; }
+.rnd2 .dts .more { display: block; font-size: .75rem; }
+.rnd2 .acts { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+
+/* ── THE NEW THING: two candidate treatments for "Change my answer" ──
+   Both live in .acts, after whatever the row already offers. */
+
+/* Option A -- a full .act button, same weight as every other capture button. */
+.act.undo:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Option B -- a quiet text affordance. No border, no wash: a correction is
+   not a capture action and should not compete with "Paid" for the eye. */
+.reopen {
+  font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: .03em;
+  padding: .22rem .3rem; border: 1px solid transparent; border-radius: 3px;
+  background: none; color: var(--dim); cursor: pointer; white-space: nowrap;
+  text-decoration: underline; text-underline-offset: 2px;
+  text-decoration-color: var(--line);
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+.reopen:hover { color: var(--accent); text-decoration-color: var(--accent); }
+
+/* The dialog shape the app already uses for a heavy confirmation (.prune). */
+dialog.confirm {
+  border: 1px solid var(--line); border-radius: 4px; padding: 0;
+  background: var(--raise); color: var(--ink); box-shadow: var(--shadow);
+  max-width: 26rem; width: calc(100% - 2rem);
+}
+dialog.confirm::backdrop { background: rgba(27,27,32,.35); }
+dialog.confirm .body { padding: 1.1rem 1.25rem; }
+dialog.confirm h4 { margin: 0 0 .5rem; font-size: .95rem; font-weight: 700; }
+dialog.confirm p { margin: 0 0 .5rem; font-size: .8125rem; color: var(--dim); }
+dialog.confirm ul { margin: .35rem 0 .9rem; padding-left: 1.1rem; font-size: .8125rem; color: var(--dim); }
+dialog.confirm li b { color: var(--ink); font-weight: 600; }
+dialog.confirm .row { display: flex; gap: .5rem; justify-content: flex-end; }
+
+@media (max-width: 900px) {
+  .rnd2 { grid-template-columns: 7rem 1fr; }
+  .rnd2 .dts, .rnd2 .acts { grid-column: 1 / -1; justify-content: flex-start; }
+}
+@media (max-width: 700px) {
+  .rnd2 .acts { flex-wrap: wrap; }
+  .rnd2 .acts form { flex: 1 1 8rem; }
+  .rnd2 .acts .act, .rnd2 .acts .done { width: 100%; min-height: 38px; }
+  .rnd2 .acts .reopen { width: 100%; min-height: 38px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="sketchbar">
+  <h1>Outcome correction — UI sketch</h1>
+  <div class="sp">
+    <button class="act" id="opt-a">Option A</button>
+    <button class="act" id="opt-b">Option B</button>
+    <button class="act" id="themer">Dark</button>
+    <button class="act" id="reset">Reset</button>
+  </div>
+</div>
+
+<p class="lede">
+  Concert page round rows only. Press <b>Change</b> on any row below and it returns to
+  unrecorded — the existing capture buttons come back and you re-answer. Nothing here is
+  a new answer button; the whole feature is one <em>un-answer</em>.
+  Toggle <b>Option A / B</b> to compare the two treatments.
+</p>
+
+<!-- ══ 1. TODAY ══════════════════════════════════════════════════ -->
+<h2>1 · Today — the dead ends</h2>
+<p class="lede">
+  Three real rows as the app renders them right now. Every one of them is terminal:
+  <code>capture_gates</code> opens the result buttons only from <code>APPLIED</code>, so a
+  settled round falls through <code>_capture_actions.html</code> to its last two branches.
+</p>
+
+<div class="leg">
+  <div class="leghead">
+    <h3>Day 1 — Saturday</h3>
+    <span class="lv">Sat 14 Mar · 17:00 JST (18:00 your time) · 📍 Nippon Budokan</span>
+  </div>
+  <div class="rnds">
+    <div class="rnd2 past">
+      <span><span class="pill p-quiet">Lost</span></span>
+      <span class="nm">FC先行 (Fan club presale)<em>Lottery</em></span>
+      <span class="dts"><b>Results Tue 20 Jan</b><span class="more">18:00 JST · 19:00 your time</span></span>
+      <span class="acts"><span class="done" style="color:var(--dim)">Nothing to do</span></span>
+    </div>
+    <div class="rnd2 past">
+      <span><span class="pill p-quiet">Not applying</span></span>
+      <span class="nm">一般発売 (General sale)<em>First come</em></span>
+      <span class="dts"><b>Closes Sat 1 Feb</b><span class="more">23:59 JST · 00:59 your time</span></span>
+      <span class="acts"><span class="done" style="color:var(--dim)">Nothing to do</span></span>
+    </div>
+    <div class="rnd2">
+      <span><span class="pill p-ok">Secured</span></span>
+      <span class="nm">プレイガイド先行<em>Lottery</em></span>
+      <span class="dts"><b>Payment Fri 6 Feb</b><span class="more">23:59 JST · 00:59 your time</span></span>
+      <span class="acts"><span class="done" style="color:var(--dim)">Nothing to do</span></span>
+    </div>
+  </div>
+</div>
+
+<p class="note">
+  <b>The trap:</b> row 2. A mis-pressed “Not applying” writes <code>NOT_APPLIED</code>, which
+  <code>record_round_outcome</code> refuses to overwrite — and the planner then drops that
+  round’s results and payment anchors. One slip silently ends the campaign for you.
+</p>
+
+<!-- ══ 2. PROPOSED ═══════════════════════════════════════════════ -->
+<h2>2 · Proposed — one un-answer</h2>
+<p class="lede">
+  The same three rows, with the affordance. Try them.
+</p>
+
+<div class="leg">
+  <div class="leghead">
+    <h3>Day 1 — Saturday</h3>
+    <span class="lv">Sat 14 Mar · 17:00 JST (18:00 your time) · 📍 Nippon Budokan</span>
+  </div>
+  <div class="rnds">
+
+    <div class="rnd2 past" data-row="lost" data-state="lost">
+      <span class="cell-pill"></span>
+      <span class="nm">FC先行 (Fan club presale)<em>Lottery</em></span>
+      <span class="dts"><b>Results Tue 20 Jan</b><span class="more">18:00 JST · 19:00 your time</span></span>
+      <span class="acts"></span>
+    </div>
+
+    <div class="rnd2 past" data-row="notapplied" data-state="not_applied">
+      <span class="cell-pill"></span>
+      <span class="nm">一般発売 (General sale)<em>First come</em></span>
+      <span class="dts"><b>Closes Sat 1 Feb</b><span class="more">23:59 JST · 00:59 your time</span></span>
+      <span class="acts"></span>
+    </div>
+
+    <div class="rnd2" data-row="paid" data-state="paid">
+      <span class="cell-pill"></span>
+      <span class="nm">プレイガイド先行<em>Lottery</em></span>
+      <span class="dts"><b>Payment Fri 6 Feb</b><span class="more">23:59 JST · 00:59 your time</span></span>
+      <span class="acts"></span>
+    </div>
+  </div>
+</div>
+
+<p class="note verdict">
+  <b>What the press does:</b> deletes this user’s <code>RoundOutcome</code> row (and any
+  <code>RoundOutcomeDay</code> rows) for the round, then re-syncs their rules exactly as every
+  other outcome write does. The round goes back to “no row”, which is the common case the whole
+  model is already built around — so every downstream reader (board column, Coming up,
+  <code>.ics</code> feed, Discover pill) is correct with no change to any of them.
+</p>
+
+<!-- ══ 3. THE HEAVY ONE ══════════════════════════════════════════ -->
+<h2>3 · Clearing a ticket you hold</h2>
+<p class="lede">
+  Clearing <b>Lost</b> or <b>Not applying</b> costs nothing — press and re-answer. Clearing
+  <b>Won</b> or <b>Secured</b> throws away the record that you hold a ticket, and the app already
+  has a house rule for that: the per-leg opt-out gates the same loss behind a heavy confirmation
+  naming what goes. Same shape here (press “Change” on the Secured row above to see it).
+</p>
+
+<dialog class="confirm" id="dlg">
+  <div class="body">
+    <h4>Clear your answer for this round?</h4>
+    <p>You recorded a ticket for <b>プレイガイド先行</b>. Clearing it removes:</p>
+    <ul>
+      <li>your <b>Secured</b> record for this round</li>
+      <li>the <b>payment reminder</b> that record is holding open</li>
+      <li>the reason other rounds on this day are marked <b>Covered</b></li>
+    </ul>
+    <p>The round goes back to unrecorded and you can answer it again. Nothing else on the concert changes.</p>
+    <div class="row">
+      <button class="act" value="cancel" id="dlg-no">Keep it</button>
+      <button class="act no" value="ok" id="dlg-yes">Clear my answer</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- ══ 4. PER LEG ════════════════════════════════════════════════ -->
+<h2>4 · Per leg — one round, two nights</h2>
+<p class="lede">
+  One lottery covering Saturday and Sunday, won on Saturday and lost on Sunday. The round renders
+  under each leg and the buttons are already scoped to that leg (<code>only_day</code>), so
+  <b>Change</b> is too: fixing Sunday leaves Saturday’s ticket alone. Press Change under Sunday.
+</p>
+
+<div class="leg">
+  <div class="leghead">
+    <h3>Day 1 — Saturday</h3>
+    <span class="lv">Sat 14 Mar · 17:00 JST (18:00 your time)</span>
+  </div>
+  <div class="rnds">
+    <div class="rnd2" data-row="legsat" data-state="won">
+      <span class="cell-pill"></span>
+      <span class="nm">2次先行 (Second lottery)<em>Lottery · both days</em></span>
+      <span class="dts"><b>Payment Fri 6 Feb</b><span class="more">23:59 JST · 00:59 your time</span></span>
+      <span class="acts"></span>
+    </div>
+  </div>
+</div>
+
+<div class="leg">
+  <div class="leghead">
+    <h3>Day 2 — Sunday</h3>
+    <span class="lv">Sun 15 Mar · 16:00 JST (17:00 your time)</span>
+  </div>
+  <div class="rnds">
+    <div class="rnd2" data-row="legsun" data-state="lost">
+      <span class="cell-pill"></span>
+      <span class="nm">2次先行 (Second lottery)<em>Lottery · both days</em></span>
+      <span class="dts"><b>Payment Fri 6 Feb</b><span class="more">23:59 JST · 00:59 your time</span></span>
+      <span class="acts"></span>
+    </div>
+  </div>
+</div>
+
+<p class="note verdict">
+  <b>Re-derivation after a per-leg clear:</b> delete that leg’s row, then read the round off what
+  survives — any <b>WON</b> row left → the round stays <b>WON</b> (and <b>PAID</b> stays
+  <b>PAID</b>); all remaining rows <b>LOST</b> with nothing open → <b>LOST</b>; some leg now
+  unanswered → back to <b>APPLIED</b>, which is honest (you had a result, so you were in the
+  draw) and is exactly the state the won/lost buttons re-open from; no rows left at all → the
+  round outcome is cleared too.
+</p>
+
+<p class="note verdict no">
+  <b>Rejected treatment:</b> hover-only reveal. It keeps settled rows perfectly clean, but touch
+  has no hover and mobile is a retrofit here — the correction would be unreachable on a phone,
+  which is where the mis-press happens in the first place.
+</p>
+
+<script>
+// ── sketch state. Not the app; just enough to make the press real. ──
+const LABEL = "Change";
+
+const PILL = {
+  applied:     ['p-ok', 'Applied'],
+  won:         ['p-danger', 'Won'],
+  paid:        ['p-ok', 'Secured'],
+  lost:        ['p-quiet', 'Lost'],
+  not_applied: ['p-quiet', 'Not applying'],
+  none:        ['p-quiet', 'Not applied'],
+};
+
+let option = 'b';   // which treatment is showing
+let pending = null; // row awaiting the heavy confirmation
+
+function reopenBtn() {
+  return option === 'a'
+    ? `<button class="act undo" data-do="clear">${LABEL}</button>`
+    : `<button class="reopen" data-do="clear">${LABEL}</button>`;
+}
+
+// What .acts holds for a given state -- deliberately mirrors
+// _capture_actions.html's branch order so the sketch cannot flatter the design.
+function acts(state) {
+  if (state === 'none') {
+    return `<button class="act yes" data-do="set" data-v="applied">I have applied</button>
+            <button class="act no" data-do="set" data-v="not_applied">Not applying</button>`;
+  }
+  if (state === 'applied') {
+    return `<button class="act yes" data-do="set" data-v="won">I won</button>
+            <button class="act no" data-do="set" data-v="lost">I lost</button>
+            ${reopenBtn()}`;
+  }
+  if (state === 'won') {
+    return `<button class="act yes" data-do="set" data-v="paid">Paid</button>${reopenBtn()}`;
+  }
+  // paid / lost / not_applied. These are exactly the three states that read
+  // "Nothing to do" today -- and that sentence becomes FALSE the moment a
+  // correction exists, so the affordance REPLACES it rather than sitting beside
+  // it. The pill on the left already says where you stand.
+  return reopenBtn();
+}
+
+function render(row) {
+  const state = row.dataset.state;
+  const [cls, text] = PILL[state];
+  row.querySelector('.cell-pill').innerHTML = `<span class="pill ${cls}">${text}</span>`;
+  row.querySelector('.acts').innerHTML = acts(state);
+}
+
+function renderAll() { document.querySelectorAll('[data-row]').forEach(render); }
+
+// A clear that costs a held ticket asks first; every other one just goes.
+function clearRow(row) {
+  if (row.dataset.state === 'won' || row.dataset.state === 'paid') {
+    pending = row;
+    document.getElementById('dlg').showModal();
+    return;
+  }
+  commitClear(row);
+}
+
+function commitClear(row) {
+  // Section 4's Sunday leg: clearing it leaves Saturday's WON row standing, so
+  // the ROUND stays won -- the leg simply goes back to unanswered.
+  row.dataset.state = row.dataset.row === 'legsun' ? 'applied' : 'none';
+  render(row);
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-do]');
+  if (!btn) return;
+  const row = btn.closest('[data-row]');
+  if (btn.dataset.do === 'clear') clearRow(row);
+  else { row.dataset.state = btn.dataset.v; render(row); }
+});
+
+document.getElementById('dlg-yes').addEventListener('click', (e) => {
+  e.preventDefault();
+  document.getElementById('dlg').close();
+  if (pending) { commitClear(pending); pending = null; }
+});
+document.getElementById('dlg-no').addEventListener('click', (e) => {
+  e.preventDefault();
+  document.getElementById('dlg').close();
+  pending = null;
+});
+
+// sketch chrome
+const initial = {
+  lost: 'lost', notapplied: 'not_applied', paid: 'paid',
+  legsat: 'won', legsun: 'lost',
+};
+function reset() {
+  document.querySelectorAll('[data-row]').forEach(r => r.dataset.state = initial[r.dataset.row]);
+  renderAll();
+}
+document.getElementById('opt-a').addEventListener('click', () => { option = 'a'; mark(); renderAll(); });
+document.getElementById('opt-b').addEventListener('click', () => { option = 'b'; mark(); renderAll(); });
+function mark() {
+  document.getElementById('opt-a').setAttribute('aria-current', option === 'a');
+  document.getElementById('opt-b').setAttribute('aria-current', option === 'b');
+}
+document.getElementById('reset').addEventListener('click', reset);
+document.getElementById('themer').addEventListener('click', (e) => {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+  e.target.textContent = dark ? 'Dark' : 'Light';
+});
+
+mark();
+reset();
+</script>
+</div>
+</body>
+</html>

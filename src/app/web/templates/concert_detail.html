@@ -231,6 +231,114 @@
 </dialog>
 {% if feed_url %}<script>document.getElementById('caldlg').showModal()</script>{% endif %}
 
+{#- Clearing a ticket you hold. Only forms carrying `data-clear-confirm` are
+    gated: a lost or skipped round forfeits nothing and a confirmation there
+    would be theatre, so those press straight through.
+
+    It must NOT borrow the unfollow dialog's wording. That one promises "does
+    not remove that mark", because an opt-out forfeits the reminder and never
+    the record (invariant 8). This is the first thing in the app that really
+    removes the record, and the copy has to say so.
+
+    TWO copies, because a press under a leg can clear either scope and the
+    difference is not cosmetic. `_capture_actions.html` resolves that once
+    (`clear_day`): a card sitting under a leg that owns no answer of its own
+    posts NO `day_id` and clears the WHOLE round -- so a round that is WON
+    because of Saturday, rendered under Sunday, throws Saturday's ticket away
+    when pressed there. Leg-scoped copy would be a lie exactly there. The
+    presence of the hidden `day_id` input IS the scope; nothing extra is
+    emitted to say so, and the script reads it off the pressed form.
+
+    The LEG copy is deliberately CONDITIONAL where the round copy is flat, and
+    both halves of that are load-bearing. The payment reminder survives a
+    per-leg clear whenever a sibling leg's WON row does: `clear_round_outcome`
+    keeps the round WON/PAID (`_rederive_round_from_days` returns early on a
+    surviving win) and re-plans the same PAYMENT row. And the leg does not
+    reliably come back "unanswered" -- clearing the last leg that could still
+    resolve, on a round whose remaining legs are cancelled or opted out,
+    re-derives the round to LOST, because that derivation reads
+    `unresolved_day_ids`, which excludes both. So the copy promises only what
+    is always true and points at the rule instead of restating one branch of
+    it. Do NOT flatten it back; the re-derivation is correct and specified
+    (spec §A2), the sentence was the thing that was wrong.
+
+    One dialog for the page, filled from that form's dataset. The round label
+    is user-controlled text: it is written with textContent and never touches
+    an inline on* handler (invariant 7). Backdrop-close and Esc come ONLY from
+    base.html's global drag-safe handler -- the local listener below closes on
+    [data-close] buttons and nothing else, per the sweep test in
+    test_theme_and_tokens.py. -#}
+<dialog class="prune" id="clearDlg">
+  <div class="dh">
+    <span id="clearHeadRound">{{ _("Clear your answer for this round?") }}</span>
+    <span id="clearHeadLeg" hidden>{{ _("Clear your answer for this day?") }}</span>
+    <button type="button" data-close aria-label="{{ _('Close') }}">×</button>
+  </div>
+  <p id="clearBodyRound">
+    {% trans %}You recorded a ticket for <b id="clearNameRound">this round</b>. Clearing it removes that record for every day this round covers, the payment reminder it is holding open, and the reason other rounds are marked Covered. The round goes back to unrecorded and you can answer it again.{% endtrans %}
+  </p>
+  <p id="clearBodyLeg" hidden>
+    {% trans %}You recorded a ticket for this day of <b id="clearNameLeg">this round</b>. Clearing it removes that record for this day only — the other days of this round keep theirs — and with it the reason other rounds on this day are marked Covered. The payment reminder goes only if this round has no ticket left afterwards, and where the round stands then follows from the days that remain.{% endtrans %}
+  </p>
+  <div class="da">
+    <button class="btn quiet" type="button" data-close>{{ _("Keep it") }}</button>
+    <button class="btn danger" type="button" id="clearGo">{{ _("Clear my answer") }}</button>
+  </div>
+</dialog>
+
+<script>
+  // Gates the submit rather than following it (the prune dialog on Home opens
+  // AFTER its write and can state what happened; this one asks permission
+  // first). The form stays a real form with a method/action, so with JS off it
+  // posts straight through: the correction still works and only the
+  // confirmation is lost -- the same trade every onsubmit="return confirm(...)"
+  // in this codebase already makes.
+  (function () {
+    var dlg = document.getElementById("clearDlg");
+    var pending = null;
+    // Delegated on document.body, because a form swapped in by htmx is a NEW
+    // element and a per-form binding would never see it. Capture phase,
+    // because htmx also listens for submit and this guard must win the race.
+    document.body.addEventListener("submit", function (e) {
+      var form = e.target;
+      if (!form.dataset || !form.dataset.clearConfirm) return;
+      if (form.dataset.clearConfirmed) return;   // second pass: let it through
+      e.preventDefault();
+      e.stopPropagation();
+      // The hidden day_id input is the scope, resolved server-side by
+      // `clear_day`. No day_id means the press clears the whole round.
+      var perLeg = !!form.querySelector('input[name="day_id"]');
+      var label = form.dataset.clearLabel || "";
+      document.getElementById("clearNameRound").textContent = label;
+      document.getElementById("clearNameLeg").textContent = label;
+      document.getElementById("clearHeadRound").hidden = perLeg;
+      document.getElementById("clearBodyRound").hidden = perLeg;
+      document.getElementById("clearHeadLeg").hidden = !perLeg;
+      document.getElementById("clearBodyLeg").hidden = !perLeg;
+      pending = form;
+      dlg.showModal();
+    }, true);
+    document.getElementById("clearGo").addEventListener("click", function () {
+      dlg.close();
+      if (!pending) return;
+      var form = pending;
+      pending = null;
+      // Mark, then re-submit: requestSubmit re-fires the submit event, which
+      // the guard above now waves past, and htmx picks it up as normal. The
+      // mark is dropped again immediately -- the guard reads it synchronously
+      // during requestSubmit -- so a failed request leaves no ungated form.
+      form.dataset.clearConfirmed = "1";
+      form.requestSubmit();
+      delete form.dataset.clearConfirmed;
+    });
+    // Close BUTTONS only. Backdrop and Esc are base.html's job.
+    dlg.addEventListener("click", function (e) {
+      if (e.target.closest("[data-close]")) dlg.close();
+    });
+    dlg.addEventListener("close", function () { pending = null; });
+  })();
+</script>
+
 {#- The catch-up dialog. Last in the document so the page underneath is fully
     rendered before it opens, and OUTSIDE the article because it is not part of
     this concert's content -- it is a question about it. Present only when

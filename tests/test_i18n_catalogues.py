@@ -88,7 +88,24 @@ def test_zh_catalogue_complete():
     _assert_complete("zh")
 
 
-_PLACEHOLDER = re.compile(r"%\([a-zA-Z_][a-zA-Z0-9_]*\)[sd]|\{[a-zA-Z_][a-zA-Z0-9_.:]*\}")
+# An `id="..."` counts as a placeholder too, and for the same reason: a few
+# msgids carry markup the PAGE addresses by id (concert_detail.html's clear
+# dialog wraps the round label in `<b id="clearNameLeg">` and fills it with
+# `getElementById(...).textContent = label`). A translator reflowing that
+# sentence -- CJK word order moves the label -- can drop the wrapper without
+# dropping any word, and nothing else notices: the id test renders English
+# only, and the capture-phase submit guard has already called preventDefault()
+# by the time `getElementById` returns null, so the button is silently dead for
+# that language alone.
+#
+# It is a guard rather than a hoist because the label is a grammatical
+# constituent inside the sentence in all three languages (a genitive head in
+# ja, the object of 在 in zh), so lifting it out of the trans block would mean
+# rewriting the copy into a label line plus a sentence with no antecedent --
+# and would fix only these two strings, while the guard covers the next one too.
+_PLACEHOLDER = re.compile(
+    r"%\([a-zA-Z_][a-zA-Z0-9_]*\)[sd]|\{[a-zA-Z_][a-zA-Z0-9_.:]*\}|id=\"[^\"]*\""
+)
 
 
 def _assert_placeholders_intact(locale: str) -> None:
@@ -118,3 +135,19 @@ def test_ja_placeholders_intact():
 
 def test_zh_placeholders_intact():
     _assert_placeholders_intact("zh")
+
+
+def test_the_placeholder_pattern_counts_html_ids_and_still_counts_the_rest():
+    """Asserted on the PATTERN itself, because the two catalogue tests above
+    read a variable and cannot see a fault in its definition: with the
+    `id="..."` branch missing they both keep passing, and the only symptom is a
+    dead button in one language.
+
+    Mutation this catches: dropping the `id=\"[^\"]*\"` alternative (the ids go
+    uncounted), and equally dropping either of the two it was added beside --
+    the branch is an ADDITION to the brace/percent forms, not a replacement."""
+    found = set(_PLACEHOLDER.findall(
+        'You recorded a ticket for <b id="clearNameLeg">this round</b>, '
+        "{n} of %(count)s."
+    ))
+    assert found == {'id="clearNameLeg"', "{n}", "%(count)s"}

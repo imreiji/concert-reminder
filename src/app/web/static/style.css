@@ -938,6 +938,25 @@ h3.leg-heading.cancelled { text-decoration: line-through; }
   color: var(--accent); border-color: var(--accent); background: var(--accent-wash);
 }
 
+/* The un-answer (_capture_actions.html's `clear_form`). Deliberately NOT an
+   `.act`: a correction is not a capture action, and on a settled row it is the
+   ONLY thing in the cell -- bordered, it would read as that row's call to
+   action when almost nobody needs it. Quiet text with a hairline underline and
+   the accent on hover, so it is discoverable without competing with "Paid".
+   Same 3px radius as everything else, which is what its focus ring uses.
+   A hover-only reveal was rejected: touch has no hover, and the phone is where
+   the mis-press happens. Every colour is a token, so both dark-mode
+   definitions in this file already carry it. */
+.reopen {
+  font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: .03em;
+  padding: .22rem .3rem; border: 1px solid transparent; border-radius: 3px;
+  background: none; color: var(--dim); cursor: pointer; white-space: nowrap;
+  text-decoration: underline; text-underline-offset: 2px;
+  text-decoration-color: var(--line);
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+.reopen:hover { color: var(--accent); text-decoration-color: var(--accent); }
+
 /* Language row on preferences.html (Time & language) and welcome.html's
    timezone step: the same three `.act` buttons as the header switcher, laid
    out inline to match the timezone row beside it. */
@@ -1994,7 +2013,12 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
   #following-toggle .btn { width: 100%; justify-content: center; min-height: 44px; }
   .rnd2 .acts { flex-wrap: wrap; }
   .rnd2 .acts form { flex: 1 1 8rem; }
-  .rnd2 .acts .act, .rnd2 .acts .done {
+  /* `.reopen` joins the same selector rather than getting a rule of its own:
+     its form is flexed to a full-width row above, so an intrinsically-sized
+     text button inside one would be a small tap target floating in a wide
+     box. Extending the list keeps the top-level media-query count this file
+     pins in test_theme_and_tokens.py. */
+  .rnd2 .acts .act, .rnd2 .acts .done, .rnd2 .acts .reopen {
     width: 100%; min-height: 44px; font-size: .8rem;
     display: inline-flex; align-items: center; justify-content: center;
   }

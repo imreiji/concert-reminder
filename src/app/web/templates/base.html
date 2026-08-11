@@ -340,7 +340,10 @@
     {% if user %}
     // Outcome toast: the outcome POST names what happened in an HX-Trigger
     // header, which htmx re-fires as a DOM event named "toast". Keys are
-    // LotteryOutcome values -- but not_applied is deliberately ABSENT: its
+    // LotteryOutcome values PLUS "cleared", which is not one -- the un-answer
+    // route has no outcome to name, and the map is a lookup rather than an
+    // exhaustive switch, so a key outside the enum is fine and an unmapped one
+    // already yields no toast. not_applied is deliberately ABSENT: its
     // confirmation is the prune follow-up dialog (home.html), and a toast on
     // top of that dialog would be two confirmations for one press. An outcome
     // with no mapping gets no toast, not a wrong one. The whole block renders
@@ -351,6 +354,7 @@
       "won": _("Marked as won — payment reminder set"),
       "lost": _("Recorded — marked as lost"),
       "paid": _("Recorded — ticket secured"),
+      "cleared": _("Cleared — you can answer this round again"),
     } | tojson }};
     document.body.addEventListener("toast", function (e) {
       var msg = TOAST_MSGS[e.detail && e.detail.outcome];

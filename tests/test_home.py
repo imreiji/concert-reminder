@@ -498,6 +498,53 @@ async def test_applied_row_shows_nothing_to_do_and_no_buttons(client):
     assert ">Paid<" not in html
 
 
+async def test_home_rows_offer_no_outcome_correction(client):
+    """The un-answer is a CONCERT-PAGE affordance: `capture_actions` defaults
+    `correctable` to False and only `_round_rows.html` passes True, so Home's
+    rendered markup is byte-identical to what it was before that feature.
+
+    That is not tidiness. Home drops LOST and NOT_APPLIED rounds from "Coming
+    up" entirely, so a correction offered here would be unreachable for
+    exactly the rounds that need one -- and a destructive action does not
+    belong in a one-tap flow.
+
+    Three rows in the three states that WOULD render it on the concert page
+    (applied-with-results-in, won, secured), so the assertion cannot pass
+    merely because nothing was eligible.
+
+    Mutation this catches: defaulting `correctable` to True, or passing it
+    from `_deadline_rows.html`."""
+    now = datetime.now(UTC)
+
+    async def build(seed):
+        for event_id, states in (
+            ("applied-one", (LotteryOutcome.APPLIED,)),
+            ("won-one", (LotteryOutcome.WON,)),
+            ("paid-one", (LotteryOutcome.WON, LotteryOutcome.PAID)),
+        ):
+            c = await seed.concert(event_id, title=event_id)
+            r = await seed.round(
+                c, "FC lottery",
+                opens=now - timedelta(days=30),
+                closes=now - timedelta(days=10),
+                results=now - timedelta(days=1),
+                payment=now + timedelta(days=5),
+            )
+            for state in states:
+                await record_round_outcome(seed.s, USER, r.id, state)
+
+    await seeded(client.db, build)
+    login(client)
+
+    html = client.get("/").text
+    # The three rows really are on the page and really are in those branches.
+    assert ">I won</button>" in html   # applied, results in
+    assert ">Paid</button>" in html    # won
+    assert "Nothing to do" in html     # paid
+    assert "/outcome/clear" not in html
+    assert ">Change</button>" not in html
+
+
 async def test_paid_is_offered_only_from_won(client):
     """Two concerts, identical but for the recorded outcome: only the WON one
     gets a Paid button, and it gets nothing else."""

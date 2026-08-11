@@ -219,6 +219,140 @@ measurement or an incident that a reasonable-looking edit would undo.
     newcomers means NO DM, and at a per-minute cadence that is load-bearing
     rather than tasteful -- a "nothing found" note here would be 1,440 DMs a
     day. Silence is the pass's normal output.
+- **Outcome correction (`clear_round_outcome`)** -- shipped 2026-08-11, design
+  in `docs/superpowers/specs/2026-08-11-outcome-correction-design.md`. The
+  un-answer: one idea on two surfaces, and **no new answer button anywhere**. A
+  correction returns a round (or one leg of it) to the state it was in before
+  anyone pressed anything, and the existing capture buttons -- which already
+  encode which answer is offerable when -- take over from there. It closes
+  WISHLIST's 2026-08-04 entry about an irreversible APPLIED press as a side
+  effect rather than as a second feature.
+  - **It is the ONLY path that deletes a `RoundOutcome` or a
+    `RoundOutcomeDay`**, and `record_round_outcome`'s sibling in every other
+    respect (invariant 2): a missing round returns silently, a day the round
+    does not cover writes nothing, and it calls `reinstate_user_rules` for the
+    concert ITSELF, so no call site can forget the resync. A second deletion
+    path desyncs the materialized queue exactly as a second
+    `record_round_outcome` would. `day_id=None` clears the whole round --
+    outcome row and every day row -- and needs no re-derivation and **no reader
+    change anywhere**, because the round returns to "no row", the common case
+    the entire model is already built around.
+  - **`_rederive_round_from_days` is the per-leg branch's whole tail**, and the
+    order of its three cases is the point. A surviving WON row leaves the round
+    alone: WON stays WON and **PAID stays PAID**, because demoting PAID re-arms
+    a payment reminder for a ticket already paid for (the trap
+    `record_round_day_result` guards). No WON row but a covered leg still
+    unresolved means APPLIED -- the honest word, since a reader with a per-leg
+    result was in the draw, and it is exactly the state the won/lost buttons
+    re-open from. Nothing left to wait on means LOST. It deliberately does NOT
+    auto-arm the next round on that last branch, unlike `record_round_outcome`:
+    a correction is not a new loss, and the arm a genuine loss made is still
+    there.
+  - **The per-leg clear is offered only for a leg that owns its own
+    `RoundOutcomeDay` row, and `row.has_day_results` is the half of that test a
+    reader drops.** `row.leg_result is not None` alone is NOT "this leg has a
+    row": `_leg_result_for` carries the no-rows-means-all convention, so a
+    WON/PAID/LOST round with ZERO day rows DERIVES a leg result for every leg it
+    covers -- the inherited pill, which is the round's answer wearing the leg's
+    badge. Offer a per-leg clear there and the commonest shape in the app (a
+    single-leg WON round, no day rows) posts a `day_id`, `clear_round_outcome`
+    deletes nothing, and `_rederive_round_from_days` then lands the round on
+    APPLIED instead of unrecorded -- a correction that silently answers for the
+    reader. The same rule is what lets the service skip materialization
+    entirely: day rows already exist whenever a per-leg clear runs, so the
+    convention is already off and `_materialize_implicit_won_rows`' LOST-side
+    twin -- which does not exist, and which a naive design would have had to
+    invent -- never came up. If a materialization step ever looks necessary in
+    there, the caller is offering a per-leg clear where it should be offering a
+    whole-round one. `_capture_actions.html` resolves the condition ONCE at the
+    top of the macro (`clear_day`) rather than per branch, because **what a
+    clear posts is not a property of the branch**: a fully resolved multi-leg
+    round -- won Saturday, lost Sunday -- has nothing unresolved, so
+    `capture_days` is empty and it never reaches the per-day branch at all, yet
+    both legs plainly own their answers and Sunday's press must not throw
+    Saturday's ticket away.
+  - **The correction follows the capture buttons: wherever a card lets you
+    record, it lets you un-record** (owner ruling, 2026-08-11). A `leg_off`
+    parameter briefly withheld the clear on a cancelled or opted-out leg; the
+    reasoning was fine and the rule was still wrong, because it was STRICTER
+    THAN THE CAPTURE RULE BESIDE IT -- and that mismatch, not the correction,
+    was the surprise. `capture_gates` takes its `cancelled` input from
+    `all_legs_cancelled`, which is CONCERT-level, so a round whose `applies_to`
+    names only dead legs on an otherwise live concert keeps both gates open and
+    renders under that dead leg alone: measured, the page went from one clear
+    form to zero while the same card still offered "I won" / "I lost".
+    Writable but not un-writable, with no live sibling to correct from and no
+    reader-reversible un-cancel. The opted-out side makes the same point from
+    the other direction -- invariant 8 says an opt-out forfeits the reminder and
+    never the record, so the record is still theirs to correct. Do not re-derive
+    a suppression here; the only gate is `clear_day`, which says what a clear
+    POSTS, never whether it appears.
+  - **`correctable` defaults to False, which keeps Home's markup
+    byte-identical.** `_round_rows.html` is the one caller passing True, and
+    Home's abstention is not mere tidiness: it DROPS LOST and NOT_APPLIED
+    rounds from Coming up (the planner suppresses their anchors), so a
+    correction offered there would be unreachable for exactly the rounds that
+    need it, and a destructive action does not belong in its one-tap flow. The
+    catch-up dialog abstains for the reason it passes no `only_day` -- it is the
+    unfiltered whole-round caller, and a correction wants the leg in front of
+    you. In the terminal branch the affordance REPLACES "Nothing to do" rather
+    than sitting beside it: every row reaching that sentence has a recorded
+    outcome and no offerable answer, which is precisely the set a correction
+    serves, so the sentence became false the moment this shipped. That branch is
+    wider than the design first said -- it also holds an APPLIED round whose
+    results are still ahead, which is the same mis-press with more at stake, and
+    it is why the affordance must survive the results moment rather than
+    vanishing into the per-day branch.
+  - **The confirmation gates with `stopPropagation`, not `preventDefault`
+    alone** (`concert_detail.html`). Verified against the vendored htmx 2.0.4:
+    its submit handler is bound to the FORM in the BUBBLE phase and never
+    consults `defaultPrevented`, so `preventDefault()` by itself stops only the
+    native navigation -- the AJAX delete flies anyway and the dialog asks
+    permission for a write that has already landed. The listener is delegated on
+    `document.body` and registered in the CAPTURE phase to win that race, and
+    delegated at all because an htmx-swapped form is a NEW element a per-form
+    binding would never see. There are TWO head/body copies, chosen by whether
+    the pressed form carries a hidden `day_id` input -- the presence of that
+    input IS the scope -- because a whole-round clear pressed under a leg that
+    owns no answer really does throw a sibling leg's ticket away, and leg-scoped
+    copy would be a lie exactly there. Only forms carrying `data-clear-confirm`
+    are gated: LOST, NOT_APPLIED and APPLIED forfeit nothing and a confirmation
+    there would be theatre. The copy must not borrow `_following_toggle.html`'s
+    wording, which promises "does not remove that mark"; this is the first thing
+    in the app that genuinely removes the record.
+  - **The DM backtrack clears the WHOLE round, deliberately.** "Change my
+    answer" (`dk:clear:`, `bot/views.py`) rides on every REPLY to an outcome
+    press -- including the terminal states that used to return `view=None`, and
+    including the refusals, because those are exactly the messages a reader is
+    looking at when they realise they pressed the wrong thing. Because it lives
+    on the reply and never on the reminder,
+    `domain/rehearsal.py:expected_buttons` -- the oracle for what a REMINDER
+    carries -- needs no entry for it, and must not grow one. A DM reply is one
+    moment about one press; per-leg surgery needs to see every leg at once,
+    which is the concert page, one tap away on the "Open on dekimasen.app"
+    button every reminder already carries. It re-derives state and never trusts
+    the message it was pressed on (a persistent button outlives the state it was
+    built for), and it asks first when the round is WON or PAID, naming how many
+    legs go with it, because a DM has no dialog and the question has to be a
+    second press.
+  - **The flat `WonButton`/`LostButton` pair now refuses a settled round**
+    (`refuse_if_secured`) -- the round-level twin of the guard `_apply_press`
+    gives the all-legs shortcuts, for the same reason: those buttons are
+    persistent, so a months-old DM can be pressed against a round paid for on
+    the site since, where WON demotes PAID and re-arms its payment reminder
+    while LOST wipes the ticket outright. The refusal REPLIES with the backtrack
+    instead of no-opping silently, so the guard is a signpost rather than a dead
+    end and corrections live in one vocabulary. It is deliberately NOT set on
+    the other three presses: `record_round_outcome` already refuses their
+    damaging cases at the write, and guarding "Paid" would make it permanently
+    inert, since the state it needs is exactly the state the guard refuses.
+  - `POST /rounds/{id}/outcome/clear` (`web/routes/outcomes.py`) adds no logic
+    of its own and reuses `_outcome_response` VERBATIM -- the same surface
+    split, the same out-of-band `#board`/`#board-summary` fragments, the same
+    JS-less 303, the same `open_round_id` fold reopening. Its `cleared` toast
+    key joins `TOAST_MSGS` in `base.html` without being a `LotteryOutcome`
+    value, which is fine: that map is a lookup rather than an exhaustive switch,
+    and an unmapped key already yields no toast instead of a wrong one.
 - **Venues live on the LEG, as a tag.** `ConcertDay.venue_tag_id` (FK ->
   `tags.id`, ON DELETE SET NULL, indexed) is the structured venue and the ONLY
   one anything reads for display; SET NULL rather than CASCADE because a VENUE
@@ -289,7 +423,9 @@ measurement or an incident that a reasonable-looking edit would undo.
   ARTIST tags, characters are NEW tags, and a group's member list swaps
   handles. Don't add a kind-change path for this.
 - `src/app/bot/` — thin shell: cogs, embed builders (`messages.py`),
-  persistent buttons (`views.py`).
+  persistent buttons (`views.py` — whose `custom_id` namespace is documented in
+  its module docstring; the `dk:clear`/`dk:clearok`/`dk:keep` trio and the flat
+  pair's `refuse_if_secured` guard are the outcome-correction entry above).
 - `src/app/web/` — thin shell: routes, templates, static. `routes/imports.py`
   (the ramen.events importer, fetches the URL then delegates parsing to
   `domain/ingest.py`) MUST be registered before `routes/concerts.py` in
@@ -375,7 +511,11 @@ measurement or an incident that a reasonable-looking edit would undo.
   returns THREE top-level fragments: the deadline rows as the hx-target,
   plus `#board` and `#board-summary` out-of-band, since one recorded outcome
   changes all three. Don't wrap that response -- htmx only honours OOB
-  elements at the top level.
+  elements at the top level. Its third route,
+  `POST /rounds/{id}/outcome/clear`, is the un-answer and reuses that same
+  `_outcome_response` verbatim; see the outcome-correction entry above before
+  touching it, the `clear_day` gate in `_capture_actions.html`, or the
+  confirmation script in `concert_detail.html`.
   `routes/api.py` is the read-only agent API at `/api/v1`, bearer-token
   authenticated (`User.api_token_hash`, minted at `POST /me/api-token` in
   `routes/preferences.py`), GET only and swept by a test that no route under

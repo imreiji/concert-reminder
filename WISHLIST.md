@@ -1050,8 +1050,46 @@ agent entries (#17, #18) gained one new producer and one newly-named write gap
 respectively. The remaining twelve were re-read and stand as written, with the
 reasoning in the revision-pass note at the end of Proposed.
 
-## Proposed (highest impact first)
+**The second 2026-08-11 pass ships an entry that never had a number**, which is
+a first for this file and worth recording as a pattern rather than as a
+curiosity. Outcome correction was filed at the head of Proposed that morning
+DELIBERATELY UNRANKED -- the entries below kept 1-19 while it was in flight,
+because renumbering nineteen entries for an item already on a branch buys
+nothing and costs cross-references, which this file's own history names as a
+hazard. It shipped the same day on branch `outcome-correction` (five feature
+commits, spec
+`docs/superpowers/specs/2026-08-11-outcome-correction-design.md`), so **the
+renumber that deferral owed resolves to a no-op**: the note leaves the head of
+Proposed, nothing below it was ever displaced by it, and every entry keeps the
+number it had. An item filed while it is already being built does not need one.
+(Something else does move the tail of the list, and it is unrelated to the
+deferral -- next paragraph.)
 
+What the re-rank DOES move is one insertion, on merit and from this build's own
+reviews. **Two narrow edges the build did not close enter at #14** -- a flat
+`dk:won` press that can leave a round WON while it secures nothing, and a
+terminal DM branch whose backtrack truthfully says "Cleared" while clearing
+nothing -- ranked in the low band, above the admin-only discovery-cap entry on
+the plain tiebreak that a user-facing wrong state outranks an admin
+inconvenience, and no higher because both are RARE (the correctness sweep of
+2026-07-29 deferred an entry on exactly that ground). Entries 14-19 renumber to
+15-20 by that one insertion, never on merit; the two live pointers it
+invalidated were made NAME-based rather than renumbered, so neither can break
+again, and the 2026-08-11 round-watch revision note carries a bracketed
+correction instead of being rewritten -- a dated note should record the numbers
+its own pass left.
+
+Everything else was re-read against what shipped and stands. **Minute-level
+offsets HOLDS #1** rather than moving for a sixteenth time -- the first pass in
+its long record where the thing that shipped was never ranked against it at all,
+so there was no rank for it to inherit. One entry grew: minor
+demo-parity cosmetics (#8) takes a SIXTH item, and unusually it is not a
+demo-parity gap at all but a measured CSS defect this build reproduced in
+already-shipped markup -- folded in there because it is one line in the same
+single polish pass, not because it is the same kind of thing. The reasoning for
+the other seventeen is in the revision-pass note at the end of Proposed.
+
+## Proposed (highest impact first)
 
 ### 1. Minute-level reminder offsets
 
@@ -1192,6 +1230,16 @@ block) and untouched in substance for the fifteenth consecutive pass: nothing
 round watch built comes within reach of `PresetItem`, the offset form or the
 sentence builders. Position, never substance -- fifteen moves, fifteen
 identical verdicts.
+
+**HELD at #1 later the same day by outcome correction, which is the first pass
+to leave this entry alone by construction rather than by arithmetic**: that item
+was filed unranked while it was already on a branch, so it never occupied a
+place this entry could inherit or lose. Re-read against what shipped anyway (one
+service writer, one route, one template macro parameter, three Discord buttons)
+and untouched in substance for the sixteenth consecutive pass -- it deletes
+`RoundOutcome` rows and re-plans through `reinstate_user_rules`, which is the
+existing `sync_*` machinery unchanged, and `PresetItem` still has no minutes
+column. Sixteen passes, sixteen identical verdicts.
 
 ### 2. Round watch: the two shapes it did not ship
 
@@ -1608,6 +1656,21 @@ reconstruct. `/admin/fetch-domains` is deliberately NOT on the list: admin
 pages have never had demo frames, exactly as they have never been translated.
 Fifth growth, fifth time not worth doing alone.
 
+Grew a SIXTH on 2026-08-11 (outcome correction) that is **not a demo-parity gap
+at all**, and it is folded in here on cost rather than on kind -- one line, in
+the one polish pass, next to five other one-liners. `style.css`'s `.danger`
+CARD frame (the destructive-section shape on the Account page) matches
+`<button class="btn danger">` as well, so every `.btn danger` in a `.prune`
+dialog inherits `margin-top: 40px` and stretches to 88px tall. Measured during
+this build's dialog work and then reproduced against `_following_toggle.html`'s
+own shipped markup, which is what makes it PRE-EXISTING: all three `.prune`
+dialogs have looked like this since they shipped, and the new clear dialog only
+found it. The fix is one selector made specific enough to mean the card it was
+written for; it touches the Account page and three dialogs at once, which is
+exactly why it wants the batched pass and an owner eyeball rather than a
+drive-by edit inside a feature branch. Sixth growth, sixth time not worth doing
+alone -- and the first item here that is a defect rather than an absence.
+
 ### 9. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
@@ -1812,7 +1875,46 @@ but it does mean the second half of this entry ("promoter-named rounds are
 unreachable by prefix, and always will be") is now routed around rather than
 merely tolerated, which is a further argument for leaving it at `low`.
 
-### 14. Nothing caps the discovery review path
+### 14. Two narrow edges outcome correction left open
+
+Impact: low (both are rare, and one is copy rather than state) - effort: small
+for each, and they are independent. Raised: 2026-08-11 (outcome-correction
+build, Task 5 review; both deferred as minors at the time rather than widened
+into that branch).
+
+Two places where the app states something about the reader's own record that is
+not true. They are filed together because they share a root -- the flat
+`WonButton`/`LostButton` pair and the terminal DM replies are ROUND-level
+statements about a model that has been per-DAY since 2026-07-27 -- not because
+one fix covers both.
+
+**(a) A flat "Won" press can leave a round WON while it secures nothing.**
+Pre-existing, and NOT introduced by outcome correction, which only put a guard
+beside it: `dk:won` on a round whose day rows are all LOST writes round-level
+WON with zero WON day rows, so `secured_day_ids_by_round` reports nothing
+secured while the payment reminder arms off the round. The same family as the
+`refuse_if_secured` guard that build added, one level down -- that guard refuses
+to OVERWRITE a secured round, and this is a press that CREATES an unsecured one.
+Narrow by construction: the flat pair is only ever composed onto single-leg
+rounds, and only when the DM was built while the round was unanswered.
+
+**(b) The one terminal reply where the backtrack truthfully does nothing.**
+"Nothing left to record for this one." is also reached by opting OUT of every
+leg. `clear_round_outcome` never touches `LegOptOut` -- correctly, since an
+opt-out is not an outcome (invariant 8) -- so pressing "Change my answer" there
+deletes nothing, replies "Cleared — you can record this round again", and the
+round stays suppressed. Purely copy: the state is right and the sentence is
+wrong. The honest reply names the opt-out and points at "Going again" on the
+concert page, which is the real way back.
+
+Ranked here rather than higher on RARITY, the same ground the 2026-07-29
+correctness sweep used to defer an entry it agreed was real; ranked above the
+admin-only entries below on the plain tiebreak that a user-facing wrong state
+outranks an admin inconvenience. Neither is worth a branch of its own -- (b) in
+particular is one string and one condition, and belongs in whatever next touches
+`_progress_reply`.
+
+### 15. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1894,7 +1996,7 @@ stops matching the day after a show, so rows leave without anybody dismissing
 them. That is the opposite of the discovery queue's unbounded growth, which is
 the property that made this entry worth filing.
 
-### 15. Nothing notices a calendar feed going quiet
+### 16. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
@@ -1966,7 +2068,7 @@ in `delivery_log` like any other). A per-feed "last future row seen" line is
 still the right first version; what changed is that going further is no longer
 over-built, because the machinery to copy already exists.
 
-### 16. `db/core.py` is one mutually-recursive 4,000-line component
+### 17. `db/core.py` is one mutually-recursive 4,000-line component
 
 Impact: nil for users, real for anyone changing the reminder engine - effort:
 large. Raised: 2026-08-07 (the service.py split; this is the part that
@@ -1998,7 +2100,7 @@ own merits; the file size is a symptom, not the reason.
 
 Do not attempt this as a tidy-up. The engine is the product.
 
-### 17. Teach `add-concert` / `triage-leads` to use the agent read API
+### 18. Teach `add-concert` / `triage-leads` to use the agent read API
 
 Impact: nil for tracked users, real for the owner's own workflow -- effort:
 small (skill-file prompt/instruction edits; no app code, the API already
@@ -2039,7 +2141,7 @@ input that should arrive through the read API rather than a paste:
 page's predicate reuses, so an agent can compute the worklist itself. That is
 this entry's proposal, with a second concrete use.
 
-### 18. Agent write endpoints
+### 19. Agent write endpoints
 
 Impact: potentially high, longer-term -- it would close the loop the read
 API opened -- but explicitly NOT ACTIONABLE today, and gated on evidence
@@ -2062,7 +2164,10 @@ actually observe over real use -- and that observation is what would
 eventually say whether committing unread is safe for any of it. There is no
 evidence yet either way; this entry is logged as a recorded scope boundary,
 not a task queued behind anything. It becomes actionable when the read API
-(and the skills that start using it, see #17) have been used long enough
+(and the skills that start using it -- the "Teach `add-concert` /
+`triage-leads` to use the agent read API" entry directly above, named rather
+than numbered because this pointer has now been renumber-invalidated twice)
+have been used long enough
 that the owner has an opinion about the AGENT's judgment, the same way phase
 2's calibration gate (which ran on 2026-08-09/10; the entry that carried
 it shipped nothing and was deleted on 2026-08-11, its verdict folded into the
@@ -2081,7 +2186,7 @@ amend one (import answers 409 for a concert that already exists, invariant 6),
 so "let an agent add a round to a concert the catalogue already has" is a
 different endpoint from anything discussed here.
 
-### 19. An MCP server in front of the agent read API
+### 20. An MCP server in front of the agent read API
 
 Impact: low -- a convenience wrapper around a capability that already
 exists, not a new capability - effort: small-medium, and explicitly not
@@ -2098,9 +2203,42 @@ a wrapper, deployable separately, and usable only from an MCP client", which
 is exactly why it was the wrong thing to build BEFORE the API it would wrap
 existed. Building the wrapper first would have meant guessing at an
 interface for a resource that didn't exist yet -- the same sequencing
-argument that put reads before writes at #18. Worth a fresh look if the raw
+argument that put reads before writes in the agent-write-endpoints entry
+directly above (named rather than numbered, for the reason that entry's own
+pointer now is). Worth a fresh look if the raw
 HTTP ergonomics prove genuinely annoying inside Claude Code in practice;
 nothing so far says they do, so this stays logged rather than built.
+
+**Revision-pass note (2026-08-11, outcome correction -- the second full pass
+that day, required by CLAUDE.md's WISHLIST rule after every shipped feature):**
+one insertion, no re-rank on merit, and one entry grown. The insertion is #14
+(two narrow edges the build left), which pushes the former #14-#19 to #15-#20 by
+position alone; the growth is #8, and it says in place why a CSS defect is
+sitting in a demo-parity entry. Everything else was re-read against what
+shipped, not skimmed, and the shared answer is that this build is small and
+inward-facing: one service writer plus its private re-derivation helper, one
+route, one macro parameter and one dialog on ONE page, and three Discord
+buttons. It changed no reminder math, no round taxonomy, no tag semantics, no
+catalogue surface, no fetch path and no admin page. Five entries were checked
+more closely than the rest because they look adjacent. **#1 (minute-level
+offsets)**: it re-plans through `reinstate_user_rules`, which is invariant 2's
+existing machinery unchanged, and touches no offset column -- held at #1 and
+recorded in its own entry. **#4 (the cosmetic `RoundKind` members)**: the
+correction is kind-blind by construction (it deletes a `RoundOutcome`, and every
+kind reaches one the same way), and UPGRADE rounds are the one kind with real
+behaviour, which this build inherits through `capture_gates` rather than
+re-deriving -- unchanged. **#8**: grew, above. **#17 (`db/core.py`'s size)**:
+this ADDED ~90 lines to the file it describes, which is a small argument the
+entry's own way, and none of them are a new cut -- `clear_round_outcome` sits
+inside the same strongly-connected component for exactly the reason the entry
+gives (it calls `reinstate_user_rules`, which is the queue-sync section), so the
+shape is unchanged and only the line count moved. **#19 (agent write
+endpoints)**: unchanged and still not actionable -- this is a per-USER write, on
+that user's own record of their own lottery, which is a different animal from
+the catalogue writes that entry contemplates and produces no evidence about an
+agent's judgment either way. Judgement: nothing else moves. Recorded explicitly
+rather than left implicit, per the instruction that a revision pass leaving no
+trace is indistinguishable from one that never happened.
 
 **Revision-pass note (2026-08-11, full pass required by CLAUDE.md's WISHLIST
 rule after every shipped feature):** the five entries round watch genuinely
@@ -2126,6 +2264,13 @@ whole point was that a SECOND copy of the signal outside `core.py` would drift.
 Judgement: nothing else moves. Recorded explicitly rather than left implicit,
 per the instruction that a revision pass leaving no trace is
 indistinguishable from one that never happened.
+
+(The numbers in the paragraph above are the ones THIS pass left, and are kept
+that way deliberately -- a dated note should record the list it actually ranked.
+The outcome-correction pass later the same day inserted one entry at #14, so
+read #14→#15, #15→#16, #16→#17, #17→#18 and #18→#19 against the list as it
+stands now. Every number at or below #13 -- which is all the rest of them --
+means the same entry it did then.)
 
 **Revision-pass note (2026-08-08, full pass required by CLAUDE.md's
 WISHLIST rule after every shipped feature):** every remaining entry (#3-#5,
@@ -2153,6 +2298,89 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Outcome correction: taking a recorded result back (2026-08-11)
+
+Branch `outcome-correction`, six tasks, spec
+`docs/superpowers/specs/2026-08-11-outcome-correction-design.md`, plan
+`docs/superpowers/plans/2026-08-11-outcome-correction.md`, sketch
+`docs/superpowers/demo/dekimasen-outcome-correction-sketch.html`. **No
+migration** -- the feature deletes rows and adds no column, which is most of
+why it is small. Raised by the owner that morning asking whether a user can
+backtrack on their 当選/落選 settings; filed at the head of Proposed deliberately
+UNRANKED because it was already on a branch, and shipped the same day, so it is
+the only entry in this file to ship without ever holding a number.
+
+**It closes the 2026-08-04 irreversible-APPLIED half**, which had outlived the
+entry that raised it. That entry (`Per-leg opt-out suppression reaches every
+surface`, below) was filed at #1 on a correctness argument SHARPENED by
+irreversibility -- Home offered APPLIED, which `record_round_outcome` will not
+take back, on a round whose only leg the reader had already said they were
+skipping -- and the build that emptied it fixed the suppression and left the
+irreversibility standing. This is that half: a mis-pressed "Not applying" no
+longer pins a round forever and no longer silently ends the campaign by dropping
+its RESULTS and PAYMENT anchors.
+
+**One idea, two surfaces, and no new answer button anywhere.** A correction
+returns a round (or one leg of it) to the state it was in before anyone pressed
+anything, and the existing capture buttons -- which already encode which answer
+is offerable when -- take over from there. That is what kept the build small:
+`clear_round_outcome` (`db/core.py`) is the ONE new writer and the only path
+that deletes a `RoundOutcome`/`RoundOutcomeDay`, it owns its own
+`reinstate_user_rules` so no call site can forget the resync (invariant 2), and
+a whole-round clear needs NO downstream reader to change at all, because the
+round returns to "no row" -- the common case the model was already built around.
+`POST /rounds/{id}/outcome/clear` (`web/routes/outcomes.py`) reuses
+`_outcome_response` verbatim. On the concert page a quiet `.reopen` "Change"
+sits on round rows and REPLACES "Nothing to do", which was only ever true while
+there was no way back. In Discord, "Change my answer" rides on every REPLY to an
+outcome press, and the stale flat Won/Lost pair -- the accidental backtrack that
+was the only one that existed -- is now guarded and answers with the real one.
+
+**Three owner rulings came out of the build, all of them corrections to the
+spec.** (1) A fully-answered multi-leg round must clear PER LEG: the spec mapped
+the affordance onto the per-day branch, which such a round never reaches, so the
+rule of record became "a clear posts `day_id` exactly when the leg owns its own
+answer, whatever branch the row fell into" -- resolved once at the top of the
+macro rather than per branch. (2) The correction must survive the results
+moment: an APPLIED multi-leg round offered the clear right up until its results
+were due and then lost it, at exactly the moment somebody goes looking, since
+"results are out" is when you discover you told the app the wrong thing. (3)
+**The correction follows the capture buttons** -- wherever a card lets you
+record, it lets you un-record. A `leg_off` suppression withheld the clear on a
+cancelled or opted-out leg on perfectly good reasoning, and was still wrong
+because it was STRICTER THAN THE CAPTURE RULE BESIDE IT; measured, a round
+applying only to dead legs on a live concert went from one clear form on the
+page to zero while the same card still offered "I won" / "I lost". Writable but
+not un-writable. The root cause is recorded with the ruling: the surprise was
+the mismatch, not the correction.
+
+**Two defects the reviews found that the plan's own code would have shipped.**
+`row.leg_result is not None` is NOT "this leg owns a row" -- `_leg_result_for`
+DERIVES one for every covered leg when a WON/PAID/LOST round has zero day rows,
+so a single-leg WON round (the commonest shape in the app) would have posted a
+`day_id`, deleted nothing, and re-derived itself to APPLIED instead of
+unrecorded; `has_day_results` is the switch that turns that fallback off and is
+now half the gate. And `preventDefault()` alone does not stop htmx: verified
+against the vendored 2.0.4, its submit handler binds to the form in the BUBBLE
+phase and never consults `defaultPrevented`, so the confirmation dialog would
+have asked permission for a write that had already landed. `stopPropagation()`
+in the capture phase is the difference between a dialog and theatre.
+
+Six tasks, ~2,400 lines including tests, 2,786 passing at the end. Every task
+ran its findings to zero across up to three fix rounds, and the mutation
+discipline earned its keep twice: an inverted branch survived the reviewer's own
+suggested assertions, because the inversion lived in the DEFINITION of `perLeg`
+and every assertion that READ `perLeg` was true whatever it meant. Task 4 was
+additionally browser-verified on a throwaway DB -- five gated presses, zero
+POSTs in the server log.
+
+Revision pass: recorded in the narrative above -- one insertion at #14 (two
+narrow edges this build deliberately did not widen into), the former #14-#19
+pushed to #15-#20 by position alone, #8 grown by a measured CSS defect this
+build reproduced in already-shipped markup, and nothing re-ranked on merit. The
+renumber the in-flight note deferred turned out to be a no-op, which is the
+point of having deferred it.
 
 ### Round watch: the quiet-ladders surface (2026-08-11)
 
@@ -2836,6 +3064,14 @@ its rule's own user opted out of) and nothing else -- sent rows are history,
 and round-anchored rows were never stale because the round pass has run at
 write time since per-leg opt-outs shipped. Downgrade is a deliberate no-op:
 re-planning is always safe (invariant 2), so there is nothing to restore.
+
+**The half this build did NOT close was closed on 2026-08-11.** The entry was
+filed at #1 on a correctness argument sharpened by IRREVERSIBILITY -- Home
+offered APPLIED, which `record_round_outcome` will not take back, on a round
+whose only leg the reader had already said they were skipping -- and this build
+fixed the offering while leaving the irreversibility standing, which is why the
+entry stayed half-open in Shipped for a week. Outcome correction (above) is that
+half: `clear_round_outcome` is the way back, on the concert page and in the DM.
 
 Sixteen new tests in `tests/test_leg_opt_out_suppression.py` plus one migration
 test. The property that earns most of them is the PARTIAL case -- one leg of

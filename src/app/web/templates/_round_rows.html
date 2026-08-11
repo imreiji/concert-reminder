@@ -111,7 +111,10 @@
     {% if row.upgrade_locked %}
     <span class="done">{% if row.qualifier_labels %}{% trans names=row.qualifier_labels | join(", ") %}Requires a ticket from: {{ names }}{% endtrans %}{% else %}{{ _("Requires a ticket from an earlier round") }}{% endif %}</span>
     {% else %}
-    {{ capture_actions(row, r.id, "#concert-rounds", is_upgrade=(r.kind.value == "upgrade"), only_day=day_id) }}
+    {# `correctable=True` is passed HERE and nowhere else: this is the only
+       surface that offers the un-answer (design §C). Home's rows and the
+       catch-up dialog take the default and render byte-identical markup. #}
+    {{ capture_actions(row, r.id, "#concert-rounds", is_upgrade=(r.kind.value == "upgrade"), only_day=day_id, correctable=True) }}
     {% endif %}
   </span>
 </div>

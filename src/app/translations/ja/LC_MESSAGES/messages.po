@@ -4309,6 +4309,105 @@ msgstr "準備完了です。次に、参加予定のイベントを選びます
 msgid "Continue to my events"
 msgstr "イベントの選択へ"
 
+#: src/app/web/templates/_capture_actions.html:82
+msgid "Change"
+msgstr "変更"
+
+#: src/app/web/templates/base.html:357
+msgid "Cleared — you can answer this round again"
+msgstr "取り消しました — このラウンドに再度回答できます"
+
+#: src/app/web/templates/concert_detail.html:260
+msgid "Clear your answer for this round?"
+msgstr "このラウンドの回答を取り消しますか？"
+
+#: src/app/web/templates/concert_detail.html:261
+msgid "Clear your answer for this day?"
+msgstr "この公演日の回答を取り消しますか？"
+
+#: src/app/web/templates/concert_detail.html:265
+msgid ""
+"You recorded a ticket for <b id=\"clearNameRound\">this round</b>. "
+"Clearing it removes that record for every day this round covers, the "
+"payment reminder it is holding open, and the reason other rounds are "
+"marked Covered. The round goes back to unrecorded and you can answer it "
+"again."
+msgstr ""
+"<b id=\"clearNameRound\">このラウンド</b>のチケットを確保済みとして記録して"
+"います。取り消すと、このラウンドが対象とするすべての公演日について、その記"
+"録、そのために保持されている支払いリマインダー、そして他のラウンドが「確保済"
+"み」と表示される理由がなくなります。ラウンドは未回答に戻り、再度回答できま"
+"す。"
+
+#: src/app/web/templates/concert_detail.html:268
+msgid ""
+"You recorded a ticket for this day of <b id=\"clearNameLeg\">this "
+"round</b>. Clearing it removes that record for this day only — the other "
+"days of this round keep theirs — and with it the reason other rounds on "
+"this day are marked Covered. The payment reminder goes only if this round "
+"has no ticket left afterwards, and where the round stands then follows "
+"from the days that remain."
+msgstr ""
+"<b id=\"clearNameLeg\">このラウンド</b>のこの公演日についてチケットを確保済み"
+"として記録しています。取り消すと、この公演日の記録だけがなくなり（このラウン"
+"ドの他の公演日の記録はそのまま残ります）、この公演日の他のラウンドが「確保済"
+"み」と表示される理由もなくなります。支払いリマインダーがなくなるのは、このラ"
+"ウンドに確保済みのチケットが1つも残らない場合だけです。その後このラウンドがど"
+"の状態になるかは、残った公演日の記録によって決まります。"
+
+#: src/app/web/templates/concert_detail.html:271
+msgid "Keep it"
+msgstr "そのままにする"
+
+#: src/app/web/templates/concert_detail.html:272
+msgid "Clear my answer"
+msgstr "回答を取り消す"
+
+#: src/app/bot/views.py:470
+msgid "Change my answer"
+msgstr "回答を変更"
+
+#: src/app/bot/views.py:508
+msgid "Cleared — you can record this round again."
+msgstr "取り消しました — このラウンドを再度記録できます。"
+
+#: src/app/bot/views.py:560
+msgid "Kept — nothing changed."
+msgstr "そのままにしました — 変更はありません。"
+
+#: src/app/bot/views.py:521
+msgid "Clear it"
+msgstr "取り消す"
+
+#: src/app/bot/views.py:308
+msgid ""
+"This round is already recorded as won. Use the button below to change "
+"it."
+msgstr ""
+"このラウンドはすでに当選として記録されています。変更する場合は下のボタンを"
+"使ってください。"
+
+#: src/app/bot/views.py:491
+msgid ""
+"You hold a ticket from this round. Clearing your answer removes that "
+"record and its payment reminder. Clear it?"
+msgstr ""
+"このラウンドのチケットを確保しています。回答を取り消すと、その記録と支払い"
+"リマインダーがなくなります。取り消しますか？"
+
+#: src/app/bot/views.py:497
+msgid ""
+"This round covers {n} performances, and every one of them is cleared."
+msgstr ""
+"このラウンドは{n}公演を対象としており、そのすべてが取り消されます。"
+
+#: src/app/bot/views.py:584
+msgid ""
+"Your answer for this round has changed since I asked, so nothing was "
+"cleared. Use \"Change my answer\" to take another look."
+msgstr ""
+"お尋ねした時点から、このラウンドの回答が変わっているため、何も取り消していま"
+"せん。「回答を変更」からもう一度確認してください。"
 #~ msgid "Remove this leg"
 #~ msgstr "この公演を削除"
 

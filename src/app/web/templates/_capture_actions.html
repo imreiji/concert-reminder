@@ -21,6 +21,38 @@
    The caller is responsible for only invoking this where there IS a round: a
    deadline row derived from a ConcertDay has nothing to post against. #}
 
+{# `correctable` adds the un-answer -- the quiet "Change" that posts to
+   /rounds/{id}/outcome/clear and returns the round (or one leg of it) to
+   unrecorded, after which the branches below take over again. It is a
+   CONCERT-PAGE affordance only, so it defaults to False and Home's rendered
+   markup is byte-identical to what it was before the feature.
+
+   That default is not tidiness. Home drops LOST and NOT_APPLIED rounds from
+   "Coming up" entirely (the planner suppresses their anchors), so a
+   correction offered there would be unreachable for exactly the rounds that
+   need it -- and the row a reader taps in Home's one-tap flow is the last
+   place a destructive action belongs. The catch-up dialog
+   (`_result_capture_dialog.html`) leaves it False for the same reason it
+   passes no `only_day`: it is the unfiltered whole-round caller, and a
+   correction wants the leg in front of you.
+
+   Where it renders, by the branch: nothing at all under `covered`, under
+   `not can_capture` (which `capture_gates` also shuts for a cancelled
+   concert -- the show is not happening and correcting the record changes
+   nothing about that), and under `outcome is none` (there is no answer to
+   un-answer). Those three are the WHOLE list -- there is no per-leg
+   suppression, deliberately; see `clear_day` below. Everywhere else it follows
+   the row's real buttons, including beside a leg's own unanswered questions,
+   because the ROUND has an answer to take back even when the leg does not --
+   EXCEPT in the final branch, where it REPLACES "Nothing to do": every row
+   reaching that sentence has a recorded outcome and no offerable answer, which is
+   precisely the set a correction serves, so the sentence becomes false the
+   moment this ships. The pill on the left already says where the reader
+   stands; those rows get quieter, not busier. (The design doc calls that
+   branch "settled -- PAID / LOST / NOT_APPLIED"; it is also where an APPLIED
+   round sits while its results are still ahead, which is the same mis-press
+   with more to lose, so the wider set is deliberate.) #}
+
 {# `is_upgrade` only relabels the two ENTRY buttons for an upgrade round
    ("Entered upgrade" / "Skipping" instead of "I have applied" / "Not
    applying") -- the concept's exact text. Everything else (the forms, the
@@ -37,7 +69,83 @@
    clutter. Left None -- Home's rows, and the catch-up dialog -- the branch
    asks about the whole round, which is where the all-legs shortcuts belong:
    "Lost the rest" scoped to one leg would be a button about the others. #}
-{% macro capture_actions(row, round_id, target, prune_title=None, prune_url=None, is_upgrade=False, only_day=None) -%}
+{# The un-answer. A real form with a method/action so it works with JS off.
+   It is a dumb renderer: WHAT it posts and whether it confirms are decided
+   once at the top of `capture_actions` (`clear_day`, `clear_label`) and
+   handed in, because four branches deciding that separately is how two of
+   them come to disagree. No `day_id` at all is what the route reads as "the
+   whole round".
+
+   `confirm_label` is set ONLY when the press would drop a SECURED record; the
+   dialog reads `data-clear-*` off the form's dataset and gates the submit.
+   Absent, the form submits straight through, which is right: clearing a loss
+   or a skip forfeits nothing and a confirmation would be theatre. The round
+   label is user-controlled text and rides in a data- attribute, never an
+   inline on* handler (invariant 7). #}
+{% macro clear_form(round_id, target, day_id=None, confirm_label=None) -%}
+<form hx-post="/rounds/{{ round_id }}/outcome/clear" hx-target="{{ target }}"
+      hx-swap="outerHTML" method="post" action="/rounds/{{ round_id }}/outcome/clear"
+      {% if confirm_label is not none %}data-clear-confirm="1" data-clear-label="{{ confirm_label }}"{% endif %}>
+  {% if day_id is not none %}<input type="hidden" name="day_id" value="{{ day_id }}">{% endif %}
+  <button class="reopen" type="submit">{{ _("Change") }}</button>
+</form>
+{%- endmacro %}
+
+{% macro capture_actions(row, round_id, target, prune_title=None, prune_url=None, is_upgrade=False, only_day=None, correctable=False) -%}
+{# ── What the un-answer posts, resolved ONCE ───────────────────────────────
+   A clear posts `day_id` exactly when this card sits under a leg that has its
+   OWN answer, whatever branch the row below happens to fall into; otherwise
+   it posts none and clears the whole round. The branch is an accident of how
+   many legs are still unresolved -- a two-leg round won Saturday and lost
+   Sunday has NOTHING unresolved, so `capture_days` is empty and it never
+   reaches the per-day branch at all, yet both legs plainly have their own
+   answers. Resolved here rather than in each branch so two of them cannot
+   drift into disagreeing (owner ruling, 2026-08-11; design §C's branch table
+   was wrong about this and has been corrected).
+
+   `has_day_results` is load-bearing and NOT redundant. `_leg_result_for`
+   carries the no-rows-means-all convention: with ZERO day rows on the round,
+   a WON/PAID/LOST round DERIVES a `leg_result` for every leg it covers, which
+   is the inherited pill the design says must be corrected as a whole round.
+   `has_day_results` is the very switch that turns that fallback off (same set
+   feeds both, `db/core.py`), so the two together are exactly "this leg has a
+   `RoundOutcomeDay` row of its own". Drop it and the commonest case in the
+   app -- a single-leg WON round, no day rows -- would post a `day_id`;
+   `clear_round_outcome` would delete nothing and then re-derive the round
+   from the surviving rows, silently landing on APPLIED instead of unrecorded.
+   `correctable` comes first in the chain so Home's DeadlineRow, which carries
+   neither attribute, is never asked (Jinja short-circuits, and an undefined
+   is not none). #}
+{% set clear_day = only_day if (correctable and only_day is not none
+                                and row.has_day_results and row.leg_result is not none) else none %}
+{# Confirm only where the press drops a SECURED record. Scoped to whatever
+   the press actually clears: a per-leg clear asks about THIS LEG (a LOST leg
+   on a round that is WON overall forfeits nothing, so it must not ask; a WON
+   leg must ask even when the round is only WON because of it), and a
+   whole-round clear asks about the round. #}
+{# WHETHER a clear renders is `correctable` and nothing else. THE CORRECTION
+   FOLLOWS THE CAPTURE BUTTONS: wherever a card lets you record, it lets you
+   un-record (owner ruling, 2026-08-11). Do not re-derive a suppression here.
+
+   A `leg_off` parameter briefly withheld it on a leg that was CANCELLED or
+   opted out, on the reasoning that a correction does not belong under a night
+   that is not happening. That reasoning is fine and the rule was still wrong,
+   because it was STRICTER THAN THE CAPTURE RULE BESIDE IT -- and the mismatch,
+   not the correction, was the surprise. `capture_gates` takes its `cancelled`
+   input from `all_legs_cancelled`, which is CONCERT-level, so a round whose
+   `applies_to` names only dead legs on an otherwise live concert keeps both
+   gates open and renders under that dead leg alone. It offered "I won" /
+   "I lost" there while the suppression removed the only clear on the page:
+   writable but not un-writable, with no live sibling to correct from and no
+   reader-reversible un-cancel. A card still asking you to record on a
+   cancelled or opted-out night has no business refusing to let you take it
+   back.
+
+   The gate that DOES stay is `clear_day` above -- what a clear posts, never
+   whether it appears. #}
+{% set clear_secured = (row.leg_result.value == "won") if clear_day is not none
+     else (correctable and row.outcome is not none and row.outcome.value in ("won", "paid")) %}
+{% set clear_label = loc(row.round_, "label") if clear_secured else none %}
 {# `upcoming_deadlines` emits one row per FUTURE anchor, so one round can
    produce three or four rows. Gating on row.can_capture (the round has
    opened) stops every one of them from offering an independent "I have
@@ -86,9 +194,10 @@
    caller scoped this card to one (see the macro header). Filtering here
    rather than in the service keeps `capture_days` a fact about the ROUND --
    the dialog and Home both need the whole list. An empty result means this
-   leg is answered while its siblings are not: the card renders no forms at
-   all, and the per-leg pill in `_round_rows.html` is what says how it
-   went. #}
+   leg is answered (or cancelled, or opted out) while its siblings are not:
+   the card asks NOTHING, and the per-leg pill in `_round_rows.html` is what
+   says how it went. It may still carry the un-answer below -- that is a
+   correction, not a question, and it is gated separately. #}
 {% set ns = namespace(days=[]) %}
 {% for pair in row.capture_days %}
   {%- if only_day is none or pair[0] == only_day %}{% set ns.days = ns.days + [pair] %}{% endif -%}
@@ -130,6 +239,26 @@
   <button class="act no" type="submit">{{ _("Not going — {day}").format(day=day_label) }}</button>
 </form>
 {% endfor %}
+{# The un-answer, on a per-leg card, WHETHER OR NOT this leg still has
+   questions of its own above it (owner ruling, 2026-08-11).
+
+   It used to require `not ns.days`, and that was a dead end: a two-leg round
+   marked APPLIED offers the clear in the terminal branch right up until its
+   results moment, then lands here and the button vanishes -- at exactly the
+   moment somebody goes looking for it, because "results are out" is when you
+   discover you told the app the wrong thing. The round holds an outcome even
+   when neither leg has answered yet, so there is something to take back; it
+   is simply the ROUND rather than the leg, which is what `clear_day` (none
+   here) already says.
+
+   `only_day is not none` keeps this off the unfiltered callers, which reach
+   the whole-round shortcuts below instead. `row.outcome is not none` is
+   belt-and-braces -- `capture_days` is non-empty only for APPLIED or WON --
+   but it is the condition that actually means "there is an answer to take
+   back", so it is written rather than assumed. #}
+{% if correctable and only_day is not none and row.outcome is not none %}
+{{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}
+{% endif %}
 {% if only_day is none %}
 {% if row.any_day_won %}
 <form hx-post="/rounds/{{ round_id }}/day-result" hx-target="{{ target }}" hx-swap="outerHTML"
@@ -162,6 +291,10 @@
   <input type="hidden" name="outcome" value="lost">
   <button class="act no" type="submit">{{ _("I lost") }}</button>
 </form>
+{# APPLIED forfeits nothing when cleared -- "I have applied" is one press away
+   again -- so `clear_secured` leaves this one unconfirmed, unless the card's
+   own leg is a WON one, which `clear_day`/`clear_label` already handle. #}
+{% if correctable %}{{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}{% endif %}
 {# PAID stays reachable only from WON, matching the service rule. #}
 {% elif row.outcome.value == "won" %}
 <form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
@@ -169,7 +302,21 @@
   <input type="hidden" name="outcome" value="paid">
   <button class="act yes" type="submit">{{ _("Paid") }}</button>
 </form>
+{# It follows "Paid" rather than replacing it: the row still has a real next
+   step and the correction is the footnote. This is where a FULLY resolved
+   multi-leg round lands -- won Saturday, lost Sunday, nothing unresolved --
+   so `clear_day` is what stops Sunday's card from throwing Saturday's ticket
+   away, and `clear_secured` is why Sunday does not ask while Saturday does. #}
+{% if correctable %}{{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}{% endif %}
 {% else %}
-<span class="done">{{ _("Nothing to do") }}</span>
+{# The terminal branch: a recorded outcome with no answer left to offer --
+   PAID, LOST, NOT_APPLIED, and also APPLIED while the results are still
+   ahead. "Nothing to do" was true only while there was no way back, so the
+   affordance REPLACES it rather than sitting beside it. What it clears and
+   whether it asks first are `clear_day`/`clear_label`'s to say, not this
+   branch's: whole round unless this card's leg carries its own answer, and
+   asking only where a held ticket would go. #}
+{% if correctable %}{{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}
+{% else %}<span class="done">{{ _("Nothing to do") }}</span>{% endif %}
 {% endif %}
 {%- endmacro %}

@@ -56,6 +56,7 @@ from app.db.models import ConcertDay, Round, User
 from app.db.service import (
     VISIBLE_BLOCKS,
     board_cards,
+    clear_round_outcome,
     ensure_user,
     my_deadline_blocks,
     record_remaining_days_lost,
@@ -302,3 +303,40 @@ async def record_day_result(
     return await _outcome_response(
         request, session, user, _TOAST_BY_RESULT[result], round_id
     )
+
+
+@router.post("/rounds/{round_id}/outcome/clear", response_class=HTMLResponse)
+async def clear_outcome(
+    request: Request,
+    round_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    day_id: int | None = Form(None),
+):
+    """Take back what this reader recorded -- the un-answer, and the only route
+    that deletes a RoundOutcome or a RoundOutcomeDay.
+
+    The same thin shell as its two siblings above, for the same reasons: the
+    service owns every rule (a missing round writes nothing, an uncovered day
+    writes nothing, `day_id=None` clears the whole round, and the round's
+    rules are re-planned by the writer itself), so a second write path here
+    would desync the queue (invariant 2).
+
+    The `day_id` guard below is NOT load-bearing the way the day-result
+    route's is: `clear_round_outcome` already validates coverage itself (it
+    deletes, never inserts, so an uncovered id is safely a no-op with or
+    without this check) and needs no re-validation. It stays only so a
+    forged or stray id skips the query entirely instead of reaching the
+    service to be told the same thing -- the same shape as its siblings, for
+    a case where the shape is no longer required for correctness.
+    """
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
+        raise HTTPException(status_code=404)
+    # RoundOutcome.user_id and RoundOutcomeDay.user_id are both FKs to
+    # users.discord_id, so the same stale-session guard applies.
+    await ensure_user(session, user.id, user.username)
+    if day_id is None or await _leg_of_concert(session, day_id, round_.concert_id):
+        await clear_round_outcome(session, user.id, round_id, day_id)
+    await session.commit()
+    return await _outcome_response(request, session, user, "cleared", round_id)

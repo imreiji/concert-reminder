@@ -323,7 +323,10 @@ async def test_paid_now_records_paid_and_clears_the_buttons(db):
             select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
         )).scalar_one()
     assert outcome is LotteryOutcome.PAID
-    assert interaction.response.edited["kwargs"]["view"] is None
+    assert custom_ids(interaction.response.edited["kwargs"]["view"]) == [f"dk:clear:{rid}"], (
+        "a settled reply is exactly where a mis-press is noticed, so it carries the "
+        "way back rather than a bare 'all set'"
+    )
 
 
 async def test_pay_later_writes_nothing(db):
@@ -339,7 +342,11 @@ async def test_pay_later_writes_nothing(db):
             select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
         )).scalar_one()
     assert outcome is LotteryOutcome.WON, "'not yet' is an answer, not a write"
-    assert interaction.response.edited["kwargs"]["view"] is None
+    assert custom_ids(interaction.response.edited["kwargs"]["view"]) == [f"dk:clear:{rid}"], (
+        "the end of the branch a mis-pressed 'Won (all)' walks into: the round is "
+        "left WON with its payment reminder armed, so this reply above all needs "
+        "the way back -- and its sibling 'Marked as paid — all set!' has one"
+    )
 
 
 async def test_won_day_press_on_an_already_paid_round_keeps_paid(db):
@@ -361,8 +368,8 @@ async def test_won_day_press_on_an_already_paid_round_keeps_paid(db):
             select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
         )).scalar_one()
     assert outcome is LotteryOutcome.PAID
-    assert interaction.response.edited["kwargs"]["view"] is None, (
-        "nothing is left to ask about a round paid for in full"
+    assert custom_ids(interaction.response.edited["kwargs"]["view"]) == [f"dk:clear:{rid}"], (
+        "nothing is left to ASK about a round paid for in full -- only the way back"
     )
 
 
@@ -388,7 +395,7 @@ async def test_won_all_on_an_already_paid_round_writes_nothing(db):
         )).scalar_one()
     assert row.outcome is LotteryOutcome.PAID
     assert row.updated_at == before, "a stale press must not write at all"
-    assert interaction.response.edited["kwargs"]["view"] is None
+    assert custom_ids(interaction.response.edited["kwargs"]["view"]) == [f"dk:clear:{rid}"]
 
 
 async def test_lost_all_on_an_already_paid_round_writes_nothing(db):
@@ -412,7 +419,7 @@ async def test_lost_all_on_an_already_paid_round_writes_nothing(db):
         )).scalar_one()
     assert row.outcome is LotteryOutcome.PAID
     assert row.updated_at == before
-    assert interaction.response.edited["kwargs"]["view"] is None
+    assert custom_ids(interaction.response.edited["kwargs"]["view"]) == [f"dk:clear:{rid}"]
 
 
 async def test_won_all_after_a_lost_leg_wins_the_legs_still_open(db):
@@ -466,7 +473,7 @@ async def test_lost_day_on_the_last_open_leg_settles_the_round(db):
     assert outcome is LotteryOutcome.LOST
     assert results == [LegResult.LOST] * 3
     edited = interaction.response.edited
-    assert edited["kwargs"]["view"] is None
+    assert custom_ids(edited["kwargs"]["view"]) == [f"dk:clear:{rid}"]
     assert "Sorry to hear it" in edited["kwargs"]["content"]
 
 
@@ -504,7 +511,7 @@ async def test_lost_all_settles_the_round_with_no_further_questions(db):
             select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
         )).scalar_one()
     assert outcome is LotteryOutcome.LOST
-    assert interaction.response.edited["kwargs"]["view"] is None
+    assert custom_ids(interaction.response.edited["kwargs"]["view"]) == [f"dk:clear:{rid}"]
 
 
 async def test_skip_day_opts_out_of_that_leg_only(db):
@@ -599,6 +606,343 @@ def test_dynamic_items_registers_every_progressive_button():
     assert {
         "WonAllButton", "LostAllButton", "WonDayButton", "LostDayButton",
         "SkipDayButton", "LostRestButton", "PaidNowButton", "PayLaterButton",
+        "ClearOutcomeButton", "ConfirmClearButton", "KeepAnswerButton",
     } <= names
-    assert len(views_module.DYNAMIC_ITEMS) == 19
-    assert len(set(views_module.DYNAMIC_ITEMS)) == 19, "no class registered twice"
+    assert len(views_module.DYNAMIC_ITEMS) == 22
+    assert len(set(views_module.DYNAMIC_ITEMS)) == 22, "no class registered twice"
+
+
+# ── Taking an answer back ────────────────────────────────────────────────
+#
+# Two halves: the flat Won/Lost pair may no longer overwrite a secured round,
+# and every reply now carries a button that un-answers it. Each test presses a
+# real button against a real round and asserts on the row that survived (or
+# didn't) plus the reply that came back.
+
+
+async def one_leg_round(db, *, outcome: LotteryOutcome | None = None) -> int:
+    """A single-leg concert with one lottery round -- the shape that gets the
+    FLAT Won/Lost pair rather than the per-leg questions."""
+    async with db() as s:
+        s.add(User(discord_id=42, username="reiji", language="en"))
+        concert = Concert(title="Solo", event_id="solo", created_by=42)
+        s.add(concert)
+        await s.flush()
+        s.add(ConcertDay(concert_id=concert.id, label="Day 1", starts_at_utc=dt(6, 20)))
+        round_ = Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="1st round",
+            results_at_utc=dt(6, 26),
+        )
+        s.add(round_)
+        await s.flush()
+        if outcome is not None:
+            s.add(RoundOutcome(user_id=42, round_id=round_.id, outcome=outcome))
+        await s.commit()
+        return round_.id
+
+
+async def test_flat_lost_button_will_not_overwrite_a_won_round(db):
+    """The unguarded press that existed until now: a months-old results DM
+    wiping a PAID ticket with no confirmation and no way back. LOST is settable
+    from any state by design (the web is the correction path), so nothing below
+    this button refuses it -- `refuse_if_secured` on the LostButton callback is
+    the only thing standing between a stale press and a forfeited ticket."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.WON)
+    async with db() as s:
+        await record_round_outcome(s, 42, rid, LotteryOutcome.PAID)
+        await s.commit()
+        before = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one().updated_at
+
+    interaction = FakeInteraction(42)
+    await views_module.LostButton(rid).callback(interaction)
+
+    async with db() as s:
+        row = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert row.outcome is LotteryOutcome.PAID
+    assert row.updated_at == before, "a refused press must not write at all"
+    assert "already recorded as won" in interaction.response.sent["args"][0]
+    assert custom_ids(interaction.response.sent["kwargs"]["view"]) == [f"dk:clear:{rid}"], (
+        "the refusal is a signpost, not a dead end"
+    )
+
+
+async def test_flat_won_button_will_not_demote_a_paid_round(db):
+    """The same guard from the other direction: WON over PAID demotes the round
+    and re-arms the payment reminder for a ticket already paid for."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.WON)
+    async with db() as s:
+        await record_round_outcome(s, 42, rid, LotteryOutcome.PAID)
+        await s.commit()
+        before = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one().updated_at
+
+    interaction = FakeInteraction(42)
+    await views_module.WonButton(rid).callback(interaction)
+
+    async with db() as s:
+        row = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert row.outcome is LotteryOutcome.PAID
+    assert row.updated_at == before
+
+
+async def test_flat_lost_button_still_records_an_unsecured_round(db):
+    """The guard must not swallow the ordinary press it was added around: a
+    round nobody has secured is exactly what this button is for."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.APPLIED)
+
+    interaction = FakeInteraction(42)
+    await views_module.LostButton(rid).callback(interaction)
+
+    async with db() as s:
+        outcome = (await s.execute(
+            select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert outcome is LotteryOutcome.LOST
+    assert "Sorry to hear it" in interaction.response.sent["args"][0]
+    assert custom_ids(interaction.response.sent["kwargs"]["view"]) == [f"dk:clear:{rid}"], (
+        "the reply to a successful press carries the way back too -- that is where "
+        "a mis-press is noticed"
+    )
+
+
+async def test_paid_button_is_not_caught_by_the_guard(db):
+    """"Paid" writes PAID onto a round that is by definition already WON, so
+    guarding it would make the payment button permanently inert."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.WON)
+
+    await views_module.PaidButton(rid).callback(FakeInteraction(42))
+
+    async with db() as s:
+        outcome = (await s.execute(
+            select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert outcome is LotteryOutcome.PAID
+
+
+async def test_backtrack_clears_an_unsecured_round_immediately(db):
+    """A loss forfeits nothing, so a confirmation there would be theatre and
+    would make the common correction two presses. One press, cleared."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.LOST)
+
+    interaction = FakeInteraction(42)
+    await views_module.ClearOutcomeButton(rid).callback(interaction)
+
+    async with db() as s:
+        rows = (await s.execute(
+            select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
+        )).scalars().all()
+    assert rows == [], "the record is gone, not rewritten"
+    edited = interaction.response.edited
+    assert "Cleared" in edited["kwargs"]["content"]
+    assert edited["kwargs"]["view"] is None, "nothing left to confirm"
+
+
+async def test_backtrack_asks_before_clearing_a_secured_round(db):
+    """A DM has no dialog, so the question has to be a second press -- and the
+    first press must write nothing while it is being asked."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.WON)
+
+    interaction = FakeInteraction(42)
+    await views_module.ClearOutcomeButton(rid).callback(interaction)
+
+    async with db() as s:
+        outcome = (await s.execute(
+            select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert outcome is LotteryOutcome.WON, "not yet cleared -- the reader was only asked"
+    edited = interaction.response.edited
+    assert "You hold a ticket" in edited["kwargs"]["content"]
+    # The confirm button carries the state it is asking ABOUT, which is what
+    # lets the second press tell whether it is still the same question.
+    assert custom_ids(edited["kwargs"]["view"]) == [
+        f"dk:clearok:{rid}:won", f"dk:keep:{rid}"
+    ]
+
+
+async def test_backtrack_asks_before_clearing_a_paid_round(db):
+    """PAID is the state with the most to lose, and it is a different enum
+    member from WON: a guard naming only WON drops a paid-for ticket on one
+    press."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.PAID)
+
+    interaction = FakeInteraction(42)
+    await views_module.ClearOutcomeButton(rid).callback(interaction)
+
+    async with db() as s:
+        outcome = (await s.execute(
+            select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert outcome is LotteryOutcome.PAID
+    assert custom_ids(interaction.response.edited["kwargs"]["view"]) == [
+        f"dk:clearok:{rid}:paid", f"dk:keep:{rid}"
+    ]
+
+
+async def test_the_confirmation_names_every_leg_the_clear_takes(db):
+    """The DM clears the WHOLE round, day rows included, so a reader looking at
+    a three-night tour has to be told that before pressing. The count comes from
+    the legs the round COVERS, not from the day rows recorded: a round won as a
+    whole carries none (no-rows-means-all), and counting those would promise to
+    clear nothing."""
+    rid, _days = await three_leg_round(db, outcome=LotteryOutcome.WON)
+
+    interaction = FakeInteraction(42)
+    await views_module.ClearOutcomeButton(rid).callback(interaction)
+
+    content = interaction.response.edited["kwargs"]["content"]
+    assert "covers 3 performances" in content
+
+
+async def test_the_confirmation_stays_silent_about_legs_on_a_single_leg_round(db):
+    """"This round covers 1 performances" is the sentence a bare .format would
+    ship; the count is named only when there is more than one leg to name."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.WON)
+
+    interaction = FakeInteraction(42)
+    await views_module.ClearOutcomeButton(rid).callback(interaction)
+
+    assert "performances" not in interaction.response.edited["kwargs"]["content"]
+
+
+async def test_confirming_the_clear_removes_the_day_rows_too(db):
+    """The whole round, never one leg: a partial win cleared leg-by-leg from a
+    DM would leave the round WON on the strength of rows the reader thought they
+    had just deleted."""
+    rid, (d1, d2, _d3) = await three_leg_round(db, outcome=LotteryOutcome.APPLIED)
+    async with db() as s:
+        await record_round_day_result(s, 42, rid, d1, LegResult.WON)
+        await record_round_day_result(s, 42, rid, d2, LegResult.LOST)
+        await s.commit()
+
+    interaction = FakeInteraction(42)
+    # WON is what the round reads after the day rows above, so this is the
+    # state the confirmation would have named.
+    await views_module.ConfirmClearButton(rid, LotteryOutcome.WON).callback(interaction)
+
+    async with db() as s:
+        outcomes = (await s.execute(
+            select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
+        )).scalars().all()
+        day_rows = (await s.execute(
+            select(RoundOutcomeDay.id).where(RoundOutcomeDay.round_id == rid)
+        )).scalars().all()
+    assert outcomes == []
+    assert day_rows == [], "a whole-round clear takes every leg's row with it"
+    assert interaction.response.edited["kwargs"]["view"] is None
+
+
+async def test_a_stale_confirm_press_writes_nothing_once_the_answer_moved(db):
+    """The scenario the re-derivation exists for: press "Change my answer" on a
+    WON round, see the confirmation, abandon the DM. Clear and re-record the
+    round on the site later, mark it PAID, then scroll back and press the
+    still-live "Clear it". Without the check `clear_round_outcome` deletes
+    whatever it finds -- a paid-for ticket and its payment reminder -- for a
+    question that was asked about a different record entirely.
+
+    Mutation this catches: deleting the `is not self.described` branch from
+    ConfirmClearButton.callback (the row comes back gone). Asserting on
+    `updated_at` as well as on the outcome pins that the press did not
+    re-write the row either."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.WON)
+    async with db() as s:
+        await record_round_outcome(s, 42, rid, LotteryOutcome.PAID)
+        await s.commit()
+        before = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one().updated_at
+
+    interaction = FakeInteraction(42)
+    # The button as it was minted weeks ago: the round read WON back then.
+    await views_module.ConfirmClearButton(rid, LotteryOutcome.WON).callback(interaction)
+
+    async with db() as s:
+        row = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert row.outcome is LotteryOutcome.PAID, "the record the reader never agreed to drop"
+    assert row.updated_at == before, "a refused press must not write at all"
+    edited = interaction.response.edited
+    assert "has changed since I asked" in edited["kwargs"]["content"]
+    assert custom_ids(edited["kwargs"]["view"]) == [f"dk:clear:{rid}"], (
+        "a signpost, not a dead end -- one press re-opens the correction against "
+        "the state that actually exists"
+    )
+
+
+async def test_confirming_a_clear_on_a_deleted_round_says_so(db):
+    """The twin of the backtrack button's own guard: these buttons outlive the
+    round they name. The outcome row cascades away with it, so what a reader
+    would otherwise be told is that their answer "has changed" -- true in a
+    useless sense, and it hands back a "Change my answer" button that can only
+    say the round is gone. The concrete answer is given at the first press.
+
+    Mutation this catches: dropping the `session.get(Round, ...) is None`
+    branch from ConfirmClearButton.callback -- the reply becomes the
+    state-moved one."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.WON)
+    async with db() as s:
+        await s.delete(await s.get(Round, rid))
+        await s.commit()
+
+    interaction = FakeInteraction(42)
+    await views_module.ConfirmClearButton(rid, LotteryOutcome.WON).callback(interaction)
+
+    edited = interaction.response.edited
+    assert "no longer exists" in edited["kwargs"]["content"]
+    assert edited["kwargs"]["view"] is None
+
+
+async def test_keeping_the_answer_writes_nothing(db):
+    """'Keep it' is an answer, not a write -- the twin of 'Not yet'."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.PAID)
+
+    interaction = FakeInteraction(42)
+    await views_module.KeepAnswerButton(rid).callback(interaction)
+
+    async with db() as s:
+        outcome = (await s.execute(
+            select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert outcome is LotteryOutcome.PAID
+    edited = interaction.response.edited
+    assert "Kept" in edited["kwargs"]["content"]
+    assert edited["kwargs"]["view"] is None
+
+
+async def test_backtrack_on_a_deleted_round_says_so(db):
+    """These buttons outlive the round they name -- a DM sent months ago can be
+    pressed after the concert was deleted, and `clear_round_outcome` returns
+    silently, which alone would render 'Cleared' for a round that never was."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.LOST)
+    async with db() as s:
+        await s.delete(await s.get(Round, rid))
+        await s.commit()
+
+    interaction = FakeInteraction(42)
+    await views_module.ClearOutcomeButton(rid).callback(interaction)
+
+    edited = interaction.response.edited
+    assert "no longer exists" in edited["kwargs"]["content"]
+    assert edited["kwargs"]["view"] is None
+
+
+async def test_backtrack_localizes_its_reply(db):
+    """The button is built and its reply composed under the CLICKING user's
+    language -- `_apply_locale` runs before either."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.LOST)
+    async with db() as s:
+        user = await s.get(User, 42)
+        user.language = "ja"
+        await s.commit()
+
+    interaction = FakeInteraction(42)
+    await views_module.ClearOutcomeButton(rid).callback(interaction)
+
+    assert "取り消しました" in interaction.response.edited["kwargs"]["content"]

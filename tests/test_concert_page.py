@@ -18,6 +18,8 @@ Two things these tests deliberately pin:
     member the group no longer has.
 """
 
+import pathlib
+import re
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -41,6 +43,7 @@ from app.db.service import (
     performer_clusters,
     record_round_day_result,
     record_round_outcome,
+    set_leg_opt_out,
 )
 from app.db.session import get_session
 from app.domain.types import LegResult, LotteryOutcome, RoundKind, TagKind
@@ -1071,7 +1074,16 @@ async def test_an_open_round_with_no_outcome_offers_both_capture_actions(client)
     assert "Not applying" in block
 
 
-async def test_applied_with_the_result_not_due_offers_nothing_to_do(client):
+async def test_applied_with_the_result_not_due_asks_nothing_but_the_clear(client):
+    """While the result moment is still ahead there is nothing to report, so
+    the won/lost pair stays away.
+
+    This row used to read "Nothing to do", and on Home it still does. On the
+    concert page the correction replaced that sentence -- and this is the
+    branch that shows the design doc's claim ("Nothing to do is reached only
+    when the outcome is PAID, LOST or NOT_APPLIED") was too narrow: an APPLIED
+    round whose results are not due lands here too, which is exactly the
+    mis-press the feature exists to undo."""
     cid = await seed_concert(client.db)
     d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
     rid = await add_round(
@@ -1084,8 +1096,11 @@ async def test_applied_with_the_result_not_due_offers_nothing_to_do(client):
     login(client)
 
     block = round_block(client.get("/concerts/np").text, "Waiting round")
-    assert "Nothing to do" in block
     assert "I won" not in block
+    assert "I lost" not in block
+    assert f'action="/rounds/{rid}/outcome/clear"' in block
+    # Nothing is forfeited by un-applying, so no confirmation.
+    assert "data-clear-confirm" not in block
 
 
 async def test_applied_with_the_result_due_offers_won_and_lost(client):
@@ -1280,6 +1295,858 @@ async def test_a_secured_single_leg_round_still_pills_secured(client):
     assert '<span class="pill p-ok">Secured</span>' in leg_sections(
         client.get("/concerts/np").text
     )["Day 1"]
+
+
+# ── body: the un-answer (outcome correction) ─────────────────────────────
+
+
+def clear_forms(block: str) -> list[str]:
+    """Every `/outcome/clear` form in a block, from its `<form` to its `</form>`.
+
+    Asserting on the whole block would let a `day_id` belonging to one of the
+    day-result forms satisfy an assertion about the clear form -- which is the
+    exact confusion these tests exist to rule out."""
+    out = []
+    for chunk in block.split("<form")[1:]:
+        form = chunk.split("</form>", 1)[0]
+        if "/outcome/clear" in form:
+            out.append(form)
+    return out
+
+
+async def settled_round(db, concert_id, label, *outcomes, day_label="Day 1"):
+    """A single-leg round walked to a settled state through the one write
+    path, so the sequence rule applies here exactly as it does in the app."""
+    d1 = await add_day(db, concert_id, day_label, days_ahead=60)
+    rid = await add_round(
+        db, concert_id, label, applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+        results=datetime.now(UTC) - timedelta(hours=1),
+        payment=datetime.now(UTC) + timedelta(days=4),
+    )
+    for o in outcomes:
+        await set_outcome(db, rid, o)
+    return d1, rid
+
+
+async def test_a_settled_round_offers_the_clear_instead_of_nothing_to_do(client):
+    """"Nothing to do" was only ever true because there was no way back. The
+    affordance REPLACES it rather than sitting beside it -- the pill on the
+    left already says where the reader stands, so a settled row gets quieter,
+    not busier.
+
+    Mutation this catches: rendering `clear_form` alongside the sentence
+    instead of in place of it, which leaves the row asserting something false."""
+    cid = await seed_concert(client.db)
+    _d1, rid = await settled_round(client.db, cid, "Lost round", LotteryOutcome.LOST)
+    login(client)
+
+    block = round_block(legs_of(client.get("/concerts/np").text), "Lost round")
+    assert f'action="/rounds/{rid}/outcome/clear"' in block
+    assert ">Change</button>" in block
+    assert "Nothing to do" not in block
+
+
+async def test_clearing_a_loss_is_not_gated_behind_a_confirmation(client):
+    """A LOST round forfeits nothing, so the press goes straight through.
+    `data-clear-confirm` is what Task 4's dialog keys off; emitting it here
+    would make every correction a two-step ceremony.
+
+    Mutation this catches: setting `confirm_label` unconditionally."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Lost round", LotteryOutcome.LOST)
+    login(client)
+
+    block = round_block(legs_of(client.get("/concerts/np").text), "Lost round")
+    assert "data-clear-confirm" not in block
+
+
+async def test_clearing_a_secured_round_asks_first_and_names_the_round(client):
+    """PAID is the one settled state that holds a real ticket, so the press
+    that would drop it carries the confirm flag and the round's own label for
+    the dialog to name. The label rides in a data- attribute, never an inline
+    on* handler (invariant 7).
+
+    Mutation this catches: dropping the PAID arm of the confirm condition, so
+    one tap deletes a held ticket and its payment reminder without asking."""
+    cid = await seed_concert(client.db)
+    await settled_round(
+        client.db, cid, "Secured round", LotteryOutcome.WON, LotteryOutcome.PAID
+    )
+    login(client)
+
+    block = round_block(legs_of(client.get("/concerts/np").text), "Secured round")
+    assert 'data-clear-confirm="1"' in block
+    assert 'data-clear-label="Secured round"' in block
+    # Nothing is interpolated into a handler attribute.
+    assert "onclick" not in block
+
+
+async def test_a_won_round_keeps_paid_and_adds_the_clear(client):
+    """The correction follows "Paid", it does not replace it: a WON round
+    still has a real next step and the un-answer is the footnote.
+
+    Mutation this catches: wiring the clear into the WON branch as an `elif`,
+    or in place of the Paid form, which would strand every won round."""
+    cid = await seed_concert(client.db)
+    _d1, rid = await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    block = round_block(legs_of(client.get("/concerts/np").text), "Won round")
+    assert 'value="paid"' in block
+    assert ">Paid</button>" in block
+    assert f'action="/rounds/{rid}/outcome/clear"' in block
+    # A won round holds a ticket, so this one asks first.
+    assert 'data-clear-confirm="1"' in block
+
+
+async def test_an_applied_round_keeps_its_result_pair_and_clears_freely(client):
+    """APPLIED forfeits nothing when cleared -- "I have applied" is one press
+    away again -- so the clear joins the won/lost pair without a confirmation.
+
+    Mutation this catches: the clear replacing the won/lost pair, which would
+    leave a mis-pressed APPLIED with no way to report a result at all."""
+    cid = await seed_concert(client.db)
+    _d1, rid = await settled_round(
+        client.db, cid, "Applied round", LotteryOutcome.APPLIED
+    )
+    login(client)
+
+    block = round_block(legs_of(client.get("/concerts/np").text), "Applied round")
+    assert ">I won</button>" in block
+    assert ">I lost</button>" in block
+    assert f'action="/rounds/{rid}/outcome/clear"' in block
+    assert "data-clear-confirm" not in block
+
+
+async def test_an_unrecorded_round_offers_no_clear(client):
+    """There is no answer to un-answer.
+
+    Mutation this catches: rendering the affordance in the `outcome is none`
+    branch, where pressing it posts a delete for rows that do not exist."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    await add_round(
+        client.db, cid, "Open round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=15),
+    )
+    login(client)
+
+    block = round_block(legs_of(client.get("/concerts/np").text), "Open round")
+    assert "I have applied" in block
+    assert "/outcome/clear" not in block
+
+
+async def test_a_round_that_has_not_opened_offers_no_clear(client):
+    """`not can_capture` is reached before any outcome exists, and
+    `capture_gates` also shuts it for a CANCELLED concert -- the show is not
+    happening and correcting the record changes nothing about that.
+
+    Mutation this catches: hoisting the affordance above the branch table so
+    it renders on every row."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    await add_round(
+        client.db, cid, "Future round", applies_to=[d1],
+        opens=datetime.now(UTC) + timedelta(days=5),
+        closes=datetime.now(UTC) + timedelta(days=15),
+    )
+    login(client)
+
+    block = round_block(legs_of(client.get("/concerts/np").text), "Future round")
+    assert "Not open yet" in block
+    assert "/outcome/clear" not in block
+
+
+async def test_a_cancelled_concerts_settled_round_offers_no_clear(client):
+    """Every leg cancelled: the round's whole standing is moot, and both
+    capture gates are shut. A correction there would be the one button on a
+    page that asks for nothing.
+
+    Mutation this catches: reading `correctable` before `can_capture`."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=30, cancelled=True)
+    rid = await add_round(
+        client.db, cid, "Dead round", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.LOST)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    assert "This event is cancelled." in body
+    assert "/outcome/clear" not in body
+
+
+async def test_a_covered_round_offers_no_clear(client):
+    """The standing shown on a covered row comes from ANOTHER round; there is
+    nothing recorded on this one to take back.
+
+    Mutation this catches: putting the affordance in the `covered` branch,
+    where its press would clear a round the reader never answered."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    won = await add_round(
+        client.db, cid, "FC lottery", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=30),
+        closes=datetime.now(UTC) - timedelta(days=10),
+        results=datetime.now(UTC) - timedelta(days=5),
+    )
+    await add_round(
+        client.db, cid, "General sale", applies_to=[d1],
+        opens=datetime.now(UTC) - timedelta(days=1),
+        closes=datetime.now(UTC) + timedelta(days=7),
+    )
+    await set_outcome(client.db, won, LotteryOutcome.WON)
+    login(client)
+
+    block = round_block(legs_of(client.get("/concerts/np").text), "General sale")
+    assert "Covered" in block
+    assert "/outcome/clear" not in block
+
+
+async def test_a_resolved_leg_offers_a_per_leg_clear_carrying_its_day_id(client):
+    """Saturday answered, Sunday not. Saturday's card is the one place a
+    per-leg clear is offerable, and it must post THAT leg -- fixing Saturday
+    cannot be allowed to throw Sunday's campaign away with it.
+
+    Mutation this catches: a per-leg card posting no `day_id`, which the route
+    reads as "the whole round"."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+
+    [form] = clear_forms(sections["Day 1"])
+    assert f'name="day_id" value="{d1}"' in form
+    assert f'name="day_id" value="{d2}"' not in form
+    # A WON leg is a held ticket, so this press asks first.
+    assert 'data-clear-confirm="1"' in form
+    assert 'data-clear-label="Fan club lottery"' in form
+
+    # Sunday is still being asked about, so it owns no answer of its own and
+    # its correction is the ROUND's -- no day_id. It DOES confirm, and must:
+    # the round is WON because of Saturday, so clearing it from here drops
+    # Saturday's ticket. Task 4's copy has to name that.
+    [sun] = clear_forms(sections["Day 2"])
+    assert "day_id" not in sun
+    assert 'data-clear-confirm="1"' in sun
+
+
+async def test_a_leg_with_no_answer_of_its_own_offers_no_per_leg_clear(client):
+    """The rule the per-leg path rests on: a leg without its OWN
+    `RoundOutcomeDay` row must never offer a clear that posts its `day_id`.
+
+    A CANCELLED leg is the case that separates "this leg is answered" from
+    "this leg is not being waited on" -- `unresolved_day_ids` drops it, so its
+    card renders no day-result forms either, and the two look identical from
+    inside the template unless `leg_result` is consulted. Clearing it would
+    delete nothing and then RE-DERIVE the round from the surviving day rows
+    (`clear_round_outcome` runs `_rederive_round_from_days` unconditionally),
+    silently demoting a WON round the reader never touched.
+
+    Mutation this catches: dropping `row.leg_result is not none` from the
+    per-day guard."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    d2 = await add_day(client.db, cid, "Day 2", days_ahead=61, cancelled=True)
+    d3 = await add_day(client.db, cid, "Day 3", days_ahead=62)
+    rid = await add_round(
+        client.db, cid, "Fan club lottery", applies_to=[d1, d2, d3],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+        results=datetime.now(UTC) - timedelta(hours=1),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+
+    # Day 1 answered its own question, so it gets the per-leg clear.
+    [form] = clear_forms(sections["Day 1"])
+    assert f'name="day_id" value="{d1}"' in form
+
+    # Day 2 is cancelled, so nothing asks about it -- but the round is still
+    # correctable from here (the correction follows the capture buttons), and
+    # the correction it offers is the ROUND's: this leg owns no row, so nothing
+    # on this card may carry its id.
+    assert "day-result" not in sections["Day 2"]
+    [d2_form] = clear_forms(sections["Day 2"])
+    assert "day_id" not in d2_form
+    assert f'value="{d2}"' not in sections["Day 2"]
+
+    # Day 3 is still being asked about and owns no answer, so its correction is
+    # the ROUND's -- no day_id. What must never happen is Day 3's id on one.
+    assert "Won — Day 3" in sections["Day 3"]
+    [d3_form] = clear_forms(sections["Day 3"])
+    assert "day_id" not in d3_form
+    assert f'value="{d3}"' not in d3_form
+
+
+async def test_a_fully_resolved_split_round_clears_each_leg_on_its_own(client):
+    """Won Saturday, lost Sunday, nothing left unresolved. `capture_days` is
+    empty, so this round never reaches the per-day branch at all -- it lands in
+    the WON branch, where a whole-round clear under Sunday would delete
+    Saturday's ticket with it. Which leg a clear posts follows the LEG having
+    its own answer, not which branch the row happened to fall into (owner
+    ruling, 2026-08-11).
+
+    Mutation this catches: deciding `day_id` per branch instead of once, so
+    the WON branch posts none and fixing Sunday throws Saturday away."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    await set_day_result(client.db, rid, d2, LegResult.LOST)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    # The round really is in the WON branch on both cards, not the per-day one.
+    assert ">Paid</button>" in sections["Day 1"]
+    assert "day-result" not in sections["Day 1"]
+    assert "day-result" not in sections["Day 2"]
+
+    [sat] = clear_forms(sections["Day 1"])
+    assert f'name="day_id" value="{d1}"' in sat
+    [sun] = clear_forms(sections["Day 2"])
+    assert f'name="day_id" value="{d2}"' in sun
+
+
+async def test_a_split_round_asks_only_on_the_leg_that_holds_the_ticket(client):
+    """The confirmation follows what the press actually drops. Sunday's own
+    result is LOST, so clearing it forfeits nothing even though the ROUND is
+    WON; Saturday's is WON, so it asks even though the round is only WON
+    because of it.
+
+    Mutation this catches: keying the confirm off `row.outcome` (the round)
+    rather than `row.leg_result` -- which asks on both legs, training the
+    reader to click through the one dialog that matters."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    await set_day_result(client.db, rid, d2, LegResult.LOST)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    [sat] = clear_forms(sections["Day 1"])
+    [sun] = clear_forms(sections["Day 2"])
+    assert 'data-clear-confirm="1"' in sat
+    assert 'data-clear-label="Fan club lottery"' in sat
+    assert "data-clear-confirm" not in sun
+
+
+async def test_an_inherited_leg_pill_clears_the_whole_round(client):
+    """The rule the per-leg path rests on, stated from the other side. A
+    single-leg WON round has NO `RoundOutcomeDay` rows, so `_leg_result_for`
+    DERIVES a WON `leg_result` for the leg through the no-rows-means-all
+    convention. That is the round's answer wearing the leg's pill, and the
+    honest correction is a whole-round clear.
+
+    `has_day_results` is the switch that turns that fallback off, and it is
+    why `row.leg_result is not none` alone is NOT "this leg has its own row".
+    Without it this press would post a `day_id`, `clear_round_outcome` would
+    delete nothing, and its unconditional re-derivation would land the round
+    on APPLIED instead of unrecorded -- a silent wrong answer to "Change".
+
+    Mutation this catches: dropping `row.has_day_results` from `clear_day`."""
+    cid = await seed_concert(client.db)
+    d1, _rid = await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    section = leg_sections(client.get("/concerts/np").text)["Day 1"]
+    # The leg really is showing a derived WON pill, not one of its own.
+    assert '<span class="pill p-danger">Won</span>' in section
+    [form] = clear_forms(section)
+    assert "day_id" not in form
+    assert f'value="{d1}"' not in form
+    # It still asks: the ROUND holds the ticket.
+    assert 'data-clear-confirm="1"' in form
+
+
+async def test_the_catch_up_dialog_offers_no_clear(client):
+    """The dialog is the page's one UNFILTERED capture caller (no `only_day`).
+    It asks "results are out, how did it go?" and a correction is not an
+    answer to that question, so it takes `correctable`'s default.
+
+    Mutation this catches: passing `correctable=True` from
+    `_result_capture_dialog.html`, or defaulting the parameter to True.
+
+    The fixture is a SINGLE-leg APPLIED round with results due, deliberately.
+    A multi-leg one is the shape this test originally used and it made the
+    assertion vacuous: that row lands in the per-day branch, whose clear site
+    needs `only_day`, which the dialog never passes -- so `correctable` was
+    structurally inert and flipping it changed nothing. A single-leg round
+    lands in the `can_report_result` branch, where the flag really would emit
+    a clear inside the dialog."""
+    cid = await seed_concert(client.db)
+    _d1, rid = await settled_round(
+        client.db, cid, "Decided round", LotteryOutcome.APPLIED
+    )
+    login(client)
+
+    body = client.get("/concerts/np").text
+    dialog = body.split('id="resultDlg"', 1)[1]
+    # The row really is in a branch that WOULD render a clear if the flag were
+    # passed -- without this the negative below proves nothing.
+    assert ">I won</button>" in dialog
+    assert f'action="/rounds/{rid}/outcome/clear"' in body  # the leg card has one
+    assert "/outcome/clear" not in dialog
+
+
+async def test_the_catch_up_dialogs_multi_leg_shape_also_offers_no_clear(client):
+    """The other dialog shape, kept because it is the one the page shows most:
+    a multi-leg round asking all three questions per leg plus the whole-round
+    shortcuts. Weaker than the test above (the flag is inert here), so it is
+    a regression guard rather than the proof."""
+    cid = await seed_concert(client.db)
+    _d1, _d2, _rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    dialog = client.get("/concerts/np").text.split('id="resultDlg"', 1)[1]
+    assert "Won — Day 1" in dialog  # it really is the unfiltered caller
+    assert "Won (all)" in dialog
+    assert "/outcome/clear" not in dialog
+
+
+async def test_the_clear_survives_the_results_moment_on_a_multi_leg_round(client):
+    """The dead end this closes. A two-leg round marked APPLIED offers the
+    correction right up until its results land, then falls into the per-day
+    branch -- which used to render the clear only for a leg that had already
+    answered. So the button vanished at exactly the moment somebody goes
+    looking for it, because "results are out" is when you discover you told
+    the app the wrong thing.
+
+    The round holds an outcome even when neither leg has answered, so there IS
+    something to take back: the round, which is why the form carries no
+    `day_id` (owner ruling, 2026-08-11).
+
+    Mutation this catches: gating the per-day branch's clear on `not ns.days`
+    (or on `clear_day is not none`) -- the results moment passes and the
+    affordance disappears."""
+    cid = await seed_concert(client.db)
+    d1, d2, _rid = await multi_leg_lottery(client.db, cid)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    for day_label, other in (("Day 1", d2), ("Day 2", d1)):
+        section = sections[day_label]
+        # This leg really is still being asked about -- the per-day branch.
+        assert f"Won — {day_label}" in section
+        [form] = clear_forms(section)
+        # A whole-round clear: neither leg owns an answer yet.
+        assert "day_id" not in form
+        assert f'value="{other}"' not in form
+        # APPLIED forfeits nothing.
+        assert "data-clear-confirm" not in form
+
+
+async def test_a_cancelled_leg_still_offers_the_correction(client):
+    """THE CORRECTION FOLLOWS THE CAPTURE BUTTONS: wherever a card lets you
+    record, it lets you un-record (owner ruling, 2026-08-11).
+
+    A `leg_off` parameter briefly withheld it here, on the reasoning that a
+    correction does not belong under a night that is not happening. The rule
+    was stricter than the capture rule beside it, and that mismatch was the
+    surprise: this very card still offers "I won" / "I lost", because
+    `capture_gates` reads cancellation at CONCERT level. Writable but not
+    un-writable is not a defensible state.
+
+    Mutation this catches: re-introducing any per-leg suppression of the
+    affordance."""
+    cid = await seed_concert(client.db)
+    d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
+    d2 = await add_day(client.db, cid, "Day 2", days_ahead=61, cancelled=True)
+    rid = await add_round(
+        client.db, cid, "Fan club lottery", applies_to=[d1, d2],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+        results=datetime.now(UTC) - timedelta(hours=1),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    assert "Cancelled" in sections["Day 2"]
+    # The card is still asking, which is the whole argument.
+    assert ">I won</button>" in sections["Day 2"]
+    [form] = clear_forms(sections["Day 2"])
+    # Still a WHOLE-round clear: the leg owns no RoundOutcomeDay row. That gate
+    # is `clear_day` and it did not move.
+    assert "day_id" not in form
+    assert f'value="{d2}"' not in form
+    assert len(clear_forms(sections["Day 1"])) == 1
+
+
+async def test_an_opted_out_leg_still_offers_the_correction(client):
+    """The same rule for the reader's own "not going to this day". An opt-out
+    forfeits the reminder, never the record (invariant 8) -- so the record is
+    still theirs to correct, and the card that shows it must say so.
+
+    Mutation this catches: suppressing the affordance on an opted-out leg
+    (the half a `day.cancelled`-only suppression would have missed, and which
+    is now not suppressed at all)."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    async with client.db() as s:
+        await set_leg_opt_out(s, USER, d2, True)
+        await s.commit()
+    assert rid
+    login(client)
+
+    sections = leg_sections(client.get("/concerts/np").text)
+    assert "Not going" in sections["Day 2"]
+    [form] = clear_forms(sections["Day 2"])
+    assert "day_id" not in form
+    assert f'value="{d2}"' not in form
+    assert len(clear_forms(sections["Day 1"])) == 1
+
+
+async def test_a_round_on_only_a_cancelled_leg_is_still_correctable(client):
+    """The shape that killed the suppression. A round whose `applies_to` names
+    ONLY cancelled legs, on a concert that still has live ones: `capture_gates`
+    takes its cancellation from `all_legs_cancelled`, which is CONCERT-level,
+    so both gates stay open and the round renders under the dead leg ALONE.
+
+    Suppressing the correction there removed the only one on the page -- there
+    is no live sibling to correct from, and a reader cannot un-cancel a leg.
+    The card kept asking "I won / I lost" while refusing to take the answer
+    back.
+
+    Mutation this catches: re-introducing the `leg_off` suppression. Measured
+    against it: one clear form here becomes zero anywhere on the page."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Day 1", days_ahead=60)  # live, no rounds
+    dead = await add_day(client.db, cid, "Day 2", days_ahead=61, cancelled=True)
+    rid = await add_round(
+        client.db, cid, "Osaka presale", applies_to=[dead],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+        results=datetime.now(UTC) - timedelta(hours=1),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    # Not a concert-level cancellation: the live leg keeps the page alive.
+    assert "This event is cancelled." not in body
+    sections = leg_sections(body)
+    assert "Osaka presale" not in sections["Day 1"]  # it renders nowhere else
+    assert ">I won</button>" in sections["Day 2"]
+    assert len(clear_forms(sections["Day 2"])) == 1
+    assert f'action="/rounds/{rid}/outcome/clear"' in sections["Day 2"]
+
+
+async def test_an_empty_round_label_still_confirms_before_dropping_a_ticket(client):
+    """`data-clear-confirm` is emitted on `confirm_label is not none`, not on
+    its truthiness. A round whose label is empty is odd but legal, and the
+    truthy test would silently drop the dialog on a PAID round: one press, no
+    warning, held ticket gone.
+
+    Mutation this catches: `{% if confirm_label %}`."""
+    cid = await seed_concert(client.db)
+    _d1, _rid = await settled_round(
+        client.db, cid, "", LotteryOutcome.WON, LotteryOutcome.PAID
+    )
+    login(client)
+
+    section = leg_sections(client.get("/concerts/np").text)["Day 1"]
+    [form] = clear_forms(section)
+    assert 'data-clear-confirm="1"' in form
+    assert 'data-clear-label=""' in form
+
+
+async def test_the_clear_form_works_without_js(client):
+    """Every capture form on this page carries a real method/action so the
+    feature degrades with JS off. The correction is no exception.
+
+    Mutation this catches: emitting hx-post alone, which makes the affordance
+    a dead button for a reader without JS."""
+    cid = await seed_concert(client.db)
+    _d1, rid = await settled_round(client.db, cid, "Lost round", LotteryOutcome.LOST)
+    login(client)
+
+    [form] = clear_forms(round_block(legs_of(client.get("/concerts/np").text), "Lost round"))
+    assert 'method="post"' in form
+    assert f'action="/rounds/{rid}/outcome/clear"' in form
+    assert f'hx-post="/rounds/{rid}/outcome/clear"' in form
+    assert 'hx-target="#concert-rounds"' in form
+
+
+async def test_pressing_the_clear_returns_the_round_to_unrecorded(client):
+    """End to end through the real route: the button the page renders posts
+    somewhere that actually takes the answer back, and the swapped-in fragment
+    shows the round asking again.
+
+    Mutation this catches: pointing the form at a path the router does not
+    serve (a 404/405 that no markup assertion above would notice)."""
+    cid = await seed_concert(client.db)
+    _d1, rid = await settled_round(client.db, cid, "Lost round", LotteryOutcome.LOST)
+    login(client)
+
+    r = client.post(
+        f"/rounds/{rid}/outcome/clear",
+        headers={"HX-Request": "true", "HX-Current-URL": "http://x/concerts/np"},
+    )
+    assert r.status_code == 200
+    block = round_block(r.text, "Lost round")
+    assert "I have applied" in block
+    assert "/outcome/clear" not in block
+    assert "cleared" in r.headers["HX-Trigger"]
+
+
+def test_the_clear_affordance_is_styled_for_both_themes():
+    """`.reopen` is deliberately not an `.act` -- quiet text, no border -- and
+    every colour it uses is a token, which is what makes it correct in dark
+    mode without a second rule. The phone rule extends the EXISTING selector
+    list inside the one `@media (max-width: 700px)` block.
+
+    Mutation this catches: hard-coding a literal colour (dead in dark mode),
+    or a 6px/8px radius, or giving the phone rule its own media query."""
+    css = (
+        pathlib.Path(__file__).resolve().parents[1]
+        / "src/app/web/static/style.css"
+    ).read_text(encoding="utf-8")
+    rule = css.split(".reopen {", 1)[1].split("}", 1)[0]
+    assert "var(--dim)" in rule
+    assert "border-radius: 3px" in rule
+    assert "#" not in rule  # no literal colour anywhere in it
+    assert ".rnd2 .acts .act, .rnd2 .acts .done, .rnd2 .acts .reopen {" in css
+
+
+# ── the confirmation that gates a clear (Task 4) ──────────────────────────
+
+
+def clear_confirmation(body: str) -> str:
+    """The confirmation dialog and its script, from `<dialog ... id="clearDlg"`
+    to the `</script>` that follows it.
+
+    Scoped deliberately: the page carries other dialogs and other scripts
+    (base.html's, the calendar dialog's), and an assertion satisfied by one of
+    those would prove nothing about this one."""
+    assert 'id="clearDlg"' in body, "the concert page has no clear confirmation"
+    chunk = body.split('id="clearDlg"', 1)[1]
+    return chunk.split("</script>", 1)[0]
+
+
+async def test_every_id_the_confirmation_script_writes_into_exists(client):
+    """The dialog and the script that fills it are two halves of one thing,
+    joined only by element ids. Jinja does not check them and neither does the
+    browser: `getElementById` on a renamed id returns null, and the failure is
+    either a silent unfilled label or a TypeError nobody sees.
+
+    Mutation this catches: renaming `clearNameLeg` (or the head/body ids, or
+    `clearGo`) on one side of the pair and not the other -- which either leaves
+    the dialog naming no round at all, or throws before `showModal()` and lets
+    the press through to a one-press delete."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    section = clear_confirmation(body)
+    wanted = set(re.findall(r'getElementById\("([^"]+)"\)', section))
+    # The script really does address elements by id -- without this the loop
+    # below is vacuous when someone rewrites it to querySelector.
+    assert len(wanted) >= 5, wanted
+    missing = [name for name in wanted if f'id="{name}"' not in body]
+    assert not missing, f"the script writes into ids no element carries: {missing}"
+
+
+async def test_the_confirmation_copy_is_scoped_to_what_the_press_clears(client):
+    """Two copies, and the difference is correctness rather than polish. A card
+    under a leg that owns no answer of its own posts NO `day_id` and clears the
+    WHOLE round (`clear_day`), so a round that is WON because of Saturday,
+    pressed under Sunday, throws Saturday's ticket away. Leg-scoped wording is
+    a lie exactly there, and round-scoped wording is a lie on a real per-leg
+    press.
+
+    Mutation this catches: one copy serving both scopes, or the per-leg copy
+    losing its promise that the other days keep their records."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    section = clear_confirmation(client.get("/concerts/np").text)
+    round_copy = section.split('id="clearBodyRound"', 1)[1].split("</p>", 1)[0]
+    leg_copy = section.split('id="clearBodyLeg"', 1)[1].split("</p>", 1)[0]
+    assert round_copy != leg_copy
+    # The round copy must never read as leg-scoped.
+    assert "every day this round covers" in round_copy
+    assert "this day only" not in round_copy
+    # The leg copy must say what survives, or it reads like the round one.
+    assert "this day only" in leg_copy
+    assert "the other days of this round keep theirs" in leg_copy
+    # The leg pair ships HIDDEN. Only the script un-hides it, and only for a
+    # press that carries a `day_id`; without the attribute both copies stack on
+    # top of each other until the first press flips them, and the page then
+    # states two contradictory scopes at once.
+    #
+    # Mutation this catches: dropping `hidden` from either leg element. It is
+    # asserted on the `<p>`/`<span>` open tags rather than the copy, because
+    # the copy is byte-identical either way.
+    assert 'id="clearBodyLeg" hidden' in section
+    assert 'id="clearHeadLeg" hidden' in section
+    assert "every day this round covers" not in leg_copy
+
+
+async def test_the_confirmation_says_the_record_goes(client):
+    """It must NOT borrow the unfollow dialog's wording. That one promises
+    "Stopping following does not remove that mark", because an opt-out
+    forfeits the reminder and never the record (invariant 8). This is the
+    first thing in the app that really removes the record.
+
+    Mutation this catches: copying the unfollow copy across, which tells a
+    reader their ticket survives a press that deletes it."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    section = clear_confirmation(client.get("/concerts/np").text)
+    assert "does not remove that mark" not in section
+    for copy in ("clearBodyRound", "clearBodyLeg"):
+        body = section.split(f'id="{copy}"', 1)[1].split("</p>", 1)[0]
+        assert "removes that record" in body
+        # and names the two other things that go with it
+        assert "payment reminder" in body
+        assert "Covered" in body
+
+
+async def test_the_leg_copy_promises_only_what_a_per_leg_clear_guarantees(client):
+    """Both of the per-leg copy's old promises were false in a real branch of
+    `clear_round_outcome`, in the safe direction but false all the same.
+
+    The payment reminder is NOT necessarily released: with a sibling leg's WON
+    row surviving, `_rederive_round_from_days` returns early, the round stays
+    WON/PAID and `reinstate_user_rules` re-plans the very same PAYMENT row. Two
+    legs won, clear one, the reminder stays.
+
+    And the day does NOT reliably go "back to unanswered": clear the last leg
+    that could still resolve on a round whose other covered legs are cancelled
+    or opted out, and the re-derivation reads `unresolved_day_ids` -- which
+    excludes both -- finds nothing unresolved, and writes the round LOST. The
+    pill flips Won -> Lost, not to unanswered.
+
+    Mutation this catches: restoring either promise. Verified by putting the
+    shipped wording back -- "along with the payment reminder it is holding
+    open" and "This day goes back to unanswered and you can answer it again"
+    -- which fails both halves below."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    section = clear_confirmation(client.get("/concerts/np").text)
+    leg_copy = section.split('id="clearBodyLeg"', 1)[1].split("</p>", 1)[0]
+    # The reminder is named (it can go), but only under the condition that
+    # actually releases it -- no ticket left anywhere on the round.
+    assert "payment reminder" in leg_copy
+    assert "no ticket left" in leg_copy
+    assert "along with the payment reminder" not in leg_copy
+    # Where the round lands is stated as derived, never promised as unanswered.
+    assert "unanswered" not in leg_copy
+    assert "follows from the days that remain" in leg_copy
+    # The ROUND copy is unconditional and must stay that way: a whole-round
+    # clear really does delete every row, so its reminder always goes.
+    round_copy = section.split('id="clearBodyRound"', 1)[1].split("</p>", 1)[0]
+    assert "the payment reminder it is holding open" in round_copy
+
+
+async def test_the_confirmation_guard_is_delegated_and_beats_htmx(client):
+    """Three properties of one listener, each silent when lost.
+
+    Delegated on `document.body`: a form swapped in by htmx is a NEW element,
+    so a per-form binding stops gating the moment a row is swapped -- which is
+    every row on this page after the first press.
+
+    Capture phase (`, true`): htmx listens for `submit` on the form itself, so
+    a bubble-phase guard runs second and the POST is already away.
+
+    `stopPropagation`: htmx's submit handler does not consult
+    `defaultPrevented`, so `preventDefault()` alone stops the browser
+    navigation and lets the AJAX delete go anyway -- a dialog rendered on top
+    of a write that already happened.
+
+    Mutation this catches: dropping any one of the three."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    section = clear_confirmation(client.get("/concerts/np").text)
+    guard = section.split('document.body.addEventListener("submit"', 1)
+    assert len(guard) == 2, "the guard is not delegated on document.body"
+    handler = guard[1].split("}, true);", 1)
+    assert len(handler) == 2, "the submit guard does not run in the capture phase"
+    assert "e.preventDefault();" in handler[0]
+    assert "e.stopPropagation();" in handler[0]
+
+
+async def test_the_confirmation_reads_its_scope_off_the_day_id_input(client):
+    """The hidden `day_id` input IS the scope -- `_capture_actions.html`
+    resolves it once in `clear_day` and emits nothing else to say so. A script
+    keying off an attribute the form does not carry reads falsy forever and
+    shows the round copy on every press, including per-leg ones.
+
+    Mutation this catches: switching the scope test to `form.dataset.clearDay`
+    or any other attribute Task 3 never emits -- and, separately, INVERTING the
+    branch. `!!` -> `!` is one character and shows the LEG copy on the press
+    that carries no `day_id`, which is exactly the press that deletes every
+    leg's record: the reader is promised "the other days of this round keep
+    theirs", presses, and the other day's ticket is gone. Reading the input and
+    reading it the right way round are two different claims, so both are
+    asserted."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    await set_day_result(client.db, rid, d2, LegResult.LOST)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    # The per-leg press this scope test exists for really is on the page.
+    [sat] = clear_forms(leg_sections(body)["Day 1"])
+    assert 'data-clear-confirm="1"' in sat
+    assert f'name="day_id" value="{d1}"' in sat
+
+    section = clear_confirmation(body)
+    # The WHOLE statement, `!!` included -- not just the querySelector call.
+    # The inversion this test's docstring names lives in the DEFINITION of
+    # `perLeg`, not in its uses, so a loose substring on the call survives it
+    # and so do the four assertions below (they read `perLeg`, whatever it
+    # means). Verified: with only those, `!!` -> `!` left the selection at
+    # 7 passed.
+    assert 'var perLeg = !!form.querySelector(\'input[name="day_id"]\');' in section
+    # ...and which copy that scope shows. `perLeg` true means a `day_id` rode
+    # along, so the ROUND pair hides and the LEG pair shows; false is the
+    # whole-round press and the reverse. Both pairs are pinned: inverting the
+    # head alone would put "Clear your answer for this day?" over the round
+    # body.
+    assert 'getElementById("clearHeadRound").hidden = perLeg;' in section
+    assert 'getElementById("clearBodyRound").hidden = perLeg;' in section
+    assert 'getElementById("clearHeadLeg").hidden = !perLeg;' in section
+    assert 'getElementById("clearBodyLeg").hidden = !perLeg;' in section
+
+
+async def test_only_the_confirm_flag_gates_a_press(client):
+    """The guard's first act is to wave through every form that is not a
+    secured clear. Clearing a loss forfeits nothing and a confirmation there
+    would be theatre -- and every other form on the page (apply, won, lost,
+    day-result, follow) must reach htmx untouched.
+
+    Mutation this catches: gating on `/outcome/clear` in the action, or on the
+    form's presence in the row at all, rather than on `data-clear-confirm`."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Lost round", LotteryOutcome.LOST)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    [form] = clear_forms(round_block(legs_of(body), "Lost round"))
+    assert "data-clear-confirm" not in form  # the press this must NOT gate
+
+    section = clear_confirmation(body)
+    assert "if (!form.dataset || !form.dataset.clearConfirm) return;" in section
 
 
 async def test_a_concert_with_no_legs_heads_its_rounds_plainly(client):
