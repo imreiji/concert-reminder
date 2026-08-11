@@ -25,11 +25,14 @@
     <tr{% if row.rechecked_at_utc %} class="dim"{% endif %}>
       <td>
         <a href="/concerts/{{ row.event_id }}">{{ row.title }}</a>
+        {#- target="_blank" rel="noopener", matching concert_detail.html:64-66
+            and admin_discoveries.html:165 -- a worklist you work through must
+            not navigate the tab away from the list. -#}
         {% if row.official_url %}
-          <a href="{{ row.official_url }}" rel="noreferrer noopener">official</a>
+          <a href="{{ row.official_url }}" target="_blank" rel="noopener">official</a>
         {% endif %}
         {% if row.eventernote_url %}
-          <a href="{{ row.eventernote_url }}" rel="noreferrer noopener">eventernote</a>
+          <a href="{{ row.eventernote_url }}" target="_blank" rel="noopener">eventernote</a>
         {% endif %}
         <a href="/concerts/{{ row.event_id }}/edit">edit</a>
       </td>
@@ -37,14 +40,20 @@
           utc_to_jst on it, while leg_dates are already JST `date` objects
           (db/core.py's _jst_date). Passing a date would raise.
 
-          De-duplicated for display via a dict-based unique-in-order filter:
-          `leg_dates` can hold the same JST day twice (matinee + evening as
+          De-duplicated for display via Jinja's `unique` filter (order-
+          preserving, so this only folds adjacent equal dates -- the query
+          already sorts): `leg_dates` can hold the same JST day twice
+          (matinee + evening as
           separate legs, matching `_api_concert_row`'s existing behaviour) and
           showing "3 Oct, 3 Oct" would read as a rendering bug rather than the
           two-shows-one-day shape it actually is. The dataclass itself is left
           alone -- this is a display-only fold. -#}
       <td>
-        {% set unique_dates = row.leg_dates | unique %}
+        {#- `| unique` alone returns a generator, which is always truthy --
+            the else branch below would never render without `| list`. Match
+            the codebase's other three uses (concert_detail.html:126,
+            discover.html:86, home.html:40), all of which pipe `| list`. -#}
+        {% set unique_dates = row.leg_dates | unique | list %}
         {% if unique_dates %}
           {% for d in unique_dates %}{{ d.day }} {{ d.strftime('%b') }}{% if not loop.last %}, {% endif %}{% endfor %}
         {% else %}<span class="dim">no dates announced</span>{% endif %}

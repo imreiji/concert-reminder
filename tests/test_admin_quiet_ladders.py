@@ -1,13 +1,16 @@
 """The round-watch worklist: admin-only, and it writes only the recheck stamp."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.config import settings
-from app.db.models import Concert
+from app.db.models import Concert, ConcertDay, Round
 from app.db.service import ensure_user
 from app.db.session import get_session
+from app.domain.types import RoundKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -48,7 +51,18 @@ def login_as(client, discord_id, name):
 
 async def test_the_page_renders_for_an_admin(client):
     """Every page needs a logged-in GET render test: a missing one shipped a
-    500 once, from template context drift."""
+    500 once, from template context drift.
+
+    Asserts on the row's Checked-button form action rather than a bare
+    "bushi" substring: `build_quiet_ladder_block` also emits
+    "- bushi: <title>" into `copy_text`, rendered in the <pre> below the
+    table, so a bare substring check passes even with the whole <tbody> loop
+    deleted -- it did, in review round 1. The form action only the row
+    rendering produces. `'href="/tags"'` is a signed-in-chrome marker: it
+    only renders when `user` reaches base.html's nav (review round 1 also
+    found the route's context missing `"user"`, which silently drops the
+    whole signed-in header on this admin-only page).
+    """
     async with client.db() as s:
         await ensure_user(s, ADMIN_ID, "reiji")
         s.add(Concert(title="ブシロード20周年", event_id="bushi", created_by=ADMIN_ID))
@@ -57,7 +71,68 @@ async def test_the_page_renders_for_an_admin(client):
     login_as(client, ADMIN_ID, "reiji")
     r = client.get("/admin/quiet-ladders")
     assert r.status_code == 200
-    assert "bushi" in r.text
+    assert '/admin/quiet-ladders/bushi/checked' in r.text
+    assert 'href="/tags"' in r.text
+
+
+async def test_a_concert_with_no_legs_shows_no_dates_announced(client):
+    """The canonical case for this whole feature: a zero-leg skeleton import.
+
+    `| unique` alone (without `| list`) is a generator, which Jinja treats as
+    always truthy, so the "no dates announced" branch never rendered -- this
+    is the test that would have caught it, and did not exist before review
+    round 1.
+
+    Asserts the exact `<span class="dim">no dates announced</span>` markup
+    the Dates CELL renders, not a bare substring: `_dates()` in
+    domain/quiet_ladder_message.py emits the same plain-text phrase into
+    `copy_text`, rendered unconditionally in the `<pre>` below the table --
+    a bare `"no dates announced" in r.text` check passed even with the cell's
+    generator bug reintroduced, because the `<pre>` block supplied the string
+    on its own.
+    """
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        s.add(Concert(title="Skeleton", event_id="skeleton", created_by=ADMIN_ID))
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders")
+    assert r.status_code == 200
+    assert '<span class="dim">no dates announced</span>' in r.text
+
+
+async def test_a_concert_with_a_leg_and_a_past_round_shows_both(client):
+    """A quiet concert is not always dateless or round-less: the ladder can
+    hold a future leg and a fully-resolved round (nothing left announced),
+    which is exactly the "went quiet" case this page exists for. Exercises
+    the Dates and Rounds cells -- the only display logic on the page -- with
+    real data, which no test did before review round 1."""
+    now = datetime.now(UTC)
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        c = Concert(title="Legged Show", event_id="legged", created_by=ADMIN_ID)
+        s.add(c)
+        await s.flush()
+        s.add(ConcertDay(
+            concert_id=c.id, label="Day 1", starts_at_utc=now + timedelta(days=30),
+        ))
+        s.add(Round(
+            concert_id=c.id,
+            kind=RoundKind.LOTTERY_ROUND,
+            label="最速先行 Round 1",
+            closes_at_utc=now - timedelta(days=10),
+        ))
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders")
+    assert r.status_code == 200
+    assert "最速先行 Round 1" in r.text
+    assert "no dates announced" not in r.text
+    # The Rounds cell's empty-state text ("none") must not appear -- the
+    # round label above is real data, not the fallback.
+    assert "<span class=\"dim\">none</span>" not in r.text
 
 
 async def test_an_editor_is_forbidden(client):
@@ -67,6 +142,21 @@ async def test_an_editor_is_forbidden(client):
 
 async def test_signed_out_is_redirected_not_an_error(client):
     r = client.get("/admin/quiet-ladders")
+    assert r.status_code == 303
+
+
+async def test_an_editor_is_forbidden_from_checking(client):
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        s.add(Concert(title="Quiet", event_id="quiet", created_by=ADMIN_ID))
+        await s.commit()
+
+    login_as(client, EDITOR_ID, "editor")
+    assert client.post("/admin/quiet-ladders/quiet/checked").status_code == 403
+
+
+async def test_signed_out_checking_is_redirected_not_an_error(client):
+    r = client.post("/admin/quiet-ladders/quiet/checked")
     assert r.status_code == 303
 
 
@@ -89,4 +179,6 @@ async def test_checked_stamps_and_redirects(client):
 
 async def test_checking_an_unknown_concert_is_404(client):
     login_as(client, ADMIN_ID, "reiji")
-    assert client.post("/admin/quiet-ladders/nope/checked").status_code == 404
+    r = client.post("/admin/quiet-ladders/nope/checked")
+    assert r.status_code == 404
+    assert r.json()["detail"] == "no such concert"

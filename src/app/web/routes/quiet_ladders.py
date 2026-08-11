@@ -53,7 +53,7 @@ async def quiet_ladders(
     return templates.TemplateResponse(
         request,
         "admin_quiet_ladders.html",
-        {"rows": rows, "copy_text": block},
+        {"user": user, "rows": rows, "copy_text": block},
     )
 
 
@@ -64,6 +64,6 @@ async def mark_checked(
     session: AsyncSession = Depends(get_session),
 ):
     if not await record_ladder_checked(session, event_id):
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="no such concert")
     await session.commit()
     return RedirectResponse("/admin/quiet-ladders", status_code=303)
