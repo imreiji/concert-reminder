@@ -54,6 +54,7 @@ from app.db.service import (
     queue_delivery_digest,
     record_deliveries,
     record_dm_outcome,
+    run_quiet_ladder_pass,
     stamp_discovery_run,
     sweep_requested,
 )
@@ -304,6 +305,19 @@ async def tick(bot) -> int:
             except Exception:
                 log.exception("discovery: could not record the failed sweep")
                 await session.rollback()
+
+        # Round watch: its own try/except and its own commit, for the same
+        # reason every block above has them -- the least important operation in
+        # the tick must never be able to roll back the most important one.
+        # Every tick, not on the sweep's clock: see run_quiet_ladder_pass.
+        try:
+            went_quiet = await run_quiet_ladder_pass(session, now)
+            await session.commit()
+            if went_quiet:
+                log.info("round watch: %d concert(s) newly quiet", went_quiet)
+        except Exception:
+            log.exception("quiet ladder pass failed; delivery was unaffected")
+            await session.rollback()
 
         # AI triage runs only when an admin pressed the button: a requested
         # TriageRun row is both the request and the record. Its failure

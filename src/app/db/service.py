@@ -271,6 +271,7 @@ from app.db.quiet_ladders import (
     quiet_ladder_rows,
     reconcile_quiet_ladders,
     record_ladder_checked,
+    run_quiet_ladder_pass,
 )
 from app.db.rehearsal import (
     REHEARSAL_EVENT_ID,
@@ -581,6 +582,7 @@ __all__ = [
     "resolve_recipients",
     "round_label_phrases",
     "round_result_state",
+    "run_quiet_ladder_pass",
     "secured_day_ids_by_round",
     "seed_rehearsal",
     "set_concert_subscription",

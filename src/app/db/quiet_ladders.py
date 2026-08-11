@@ -29,8 +29,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.core import _jst_date, _now, all_legs_cancelled, next_anchor_at
-from app.db.models import Concert
+from app.config import settings
+from app.db.core import _jst_date, _now, all_legs_cancelled, ensure_user, next_anchor_at
+from app.db.models import Concert, Notification, User
+from app.domain.quiet_ladder_message import QuietEntry, build_quiet_ladder_dm
 
 
 @dataclass(frozen=True)
@@ -225,3 +227,68 @@ async def record_ladder_checked(
     concert.ladder_rechecked_at_utc = now or _now()
     await session.flush()
     return True
+
+
+async def run_quiet_ladder_pass(session: AsyncSession, now: datetime) -> int:
+    """Stamp concerts whose ladder just went quiet, and DM the admins once.
+
+    Returns how many concerts newly went quiet.
+
+    Same shape as `evaluate_and_alert` (`db/ops_alerts.py`): a db-layer feature
+    module reads `settings.admin_ids`, guards `ensure_user` on absence, and
+    queues one `Notification` row per admin with `concert_id=None`. `loop.py`
+    only calls this through the facade and commits -- it imports no ORM
+    models, matching every other pass wired into `tick`.
+
+    NO CADENCE CLOCK, unlike the discovery sweep the caller sits beneath, and
+    that is deliberate rather than an oversight. The sweep's 24-hour clock
+    protects 86 third-party fetches ending in a DM. This is a query and a diff
+    over the local catalogue, and `reconcile_quiet_ladders` is self-idempotent
+    -- a stamped concert is not a newcomer -- so a clock would protect nothing
+    and would delay a notice by up to a day.
+
+    The stamps and the queued notice are left for the CALLER to commit
+    together in one transaction. That pairing is what makes the notice
+    exactly-once: a crash between them would otherwise either lose the DM or
+    repeat it.
+    """
+    newcomers = await reconcile_quiet_ladders(session, now)
+    if not newcomers:
+        # Silence is the normal output. At this cadence a "nothing found"
+        # note would be 1,440 DMs a day.
+        return 0
+
+    body = build_quiet_ladder_dm(
+        [
+            QuietEntry(
+                title=row.title,
+                event_id=row.event_id,
+                leg_dates=row.leg_dates,
+                round_labels=tuple(r.label for r in row.rounds),
+                official_url=row.official_url,
+                eventernote_url=row.eventernote_url,
+            )
+            for row in newcomers
+        ],
+        total=len(newcomers),
+        base_url=settings.base_url,
+    )
+    if not body:
+        return len(newcomers)
+
+    for admin_id in sorted(settings.admin_ids):
+        # Guarded on absence, never unconditional: ensure_user refreshes the
+        # username, which would overwrite a real admin's name with this
+        # placeholder on every single tick.
+        if await session.get(User, admin_id) is None:
+            await ensure_user(session, admin_id, str(admin_id))
+        session.add(Notification(
+            user_id=admin_id,
+            body=body,
+            kind="quiet_ladder",
+            # NULL means "render the plain body, not a per-concert embed", and
+            # already makes record_deliveries skip the title lookup. A digest
+            # naming several concerts could not be one concert's embed anyway.
+            concert_id=None,
+        ))
+    return len(newcomers)
