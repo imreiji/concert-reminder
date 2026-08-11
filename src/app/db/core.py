@@ -20,7 +20,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -982,6 +982,95 @@ async def record_remaining_days_lost(
         ))
     await session.flush()
     await _settle_lost_days(session, user_id, round_, set(remaining), now)
+
+
+async def _rederive_round_from_days(
+    session: AsyncSession, user_id: int, round_: Round, now: datetime,
+) -> None:
+    """The round-level answer implied by the day rows that SURVIVE a per-leg
+    clear -- the only place that derivation lives.
+
+    Three cases, and the order matters. A surviving WON row means the reader
+    still holds a ticket, so the round keeps whatever it has: WON stays WON and
+    PAID stays PAID, because demoting PAID would re-arm a payment reminder for a
+    ticket already paid for (the same trap `record_round_day_result` guards).
+    Otherwise a leg with nothing recorded means the campaign is open again, and
+    APPLIED is the honest word for it -- the reader had a per-leg result, so
+    they were in the draw, and it is exactly the state the won/lost buttons
+    re-open from. Only when nothing is left to wait on (every remaining leg
+    lost, cancelled or opted out) does the round settle LOST.
+
+    Deliberately does NOT auto-arm the next round on that last branch, unlike
+    `record_round_outcome`: a correction is not a new loss, and the arm that a
+    genuine loss made is still there."""
+    existing = (await session.execute(
+        select(RoundOutcome).where(
+            RoundOutcome.user_id == user_id, RoundOutcome.round_id == round_.id
+        )
+    )).scalar_one_or_none()
+    if existing is None:
+        return  # nothing to re-derive; the day row was all there was
+    if await _won_day_ids(session, user_id, round_.id):
+        return  # a ticket survives -- WON stays WON, PAID stays PAID
+    existing.outcome = (
+        LotteryOutcome.APPLIED
+        if await unresolved_day_ids(session, user_id, round_)
+        else LotteryOutcome.LOST
+    )
+    await session.flush()
+
+
+async def clear_round_outcome(
+    session: AsyncSession, user_id: int, round_id: int, day_id: int | None = None,
+    now: datetime | None = None,
+) -> None:
+    """Take a recorded outcome back -- the ONLY path that deletes a
+    `RoundOutcome` or a `RoundOutcomeDay`, and the sibling of
+    `record_round_outcome` in every other respect (invariant 2): a missing
+    round returns silently, a day the round does not cover writes nothing, and
+    it re-plans this user's rules for the whole concert itself, so no call site
+    can forget to.
+
+    `day_id` None clears the WHOLE round: the outcome and every day row. There
+    is nothing to re-derive, because the round returns to "no row" -- the common
+    case the entire model is built around, which is why no reader downstream
+    needed a change for this feature.
+
+    With a `day_id` it clears ONE leg. The surfaces only offer that for a leg
+    that has its OWN day row, which is what keeps this simple: day rows already
+    exist, so the no-rows-means-all convention is already off and nothing needs
+    materializing first. Do not add a materialization step here -- if one looks
+    necessary, the caller is offering a per-leg clear where it should be
+    offering a whole-round one."""
+    now = now or _now()
+    round_ = await session.get(Round, round_id)
+    if round_ is None:
+        return
+
+    if day_id is None:
+        await session.execute(delete(RoundOutcomeDay).where(
+            RoundOutcomeDay.user_id == user_id, RoundOutcomeDay.round_id == round_id,
+        ))
+        await session.execute(delete(RoundOutcome).where(
+            RoundOutcome.user_id == user_id, RoundOutcome.round_id == round_id,
+        ))
+        await session.flush()
+        await reinstate_user_rules(session, user_id, round_.concert_id, now)
+        return
+
+    all_day_ids = set((await session.execute(
+        select(ConcertDay.id).where(ConcertDay.concert_id == round_.concert_id)
+    )).scalars())
+    if day_id not in _covered_day_ids(round_, all_day_ids):
+        return  # forged, stale, or another concert's leg: a committed no-op
+    await session.execute(delete(RoundOutcomeDay).where(
+        RoundOutcomeDay.user_id == user_id,
+        RoundOutcomeDay.round_id == round_id,
+        RoundOutcomeDay.day_id == day_id,
+    ))
+    await session.flush()
+    await _rederive_round_from_days(session, user_id, round_, now)
+    await reinstate_user_rules(session, user_id, round_.concert_id, now)
 
 
 async def _next_round_for_leg(
