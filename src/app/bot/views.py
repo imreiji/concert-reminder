@@ -32,7 +32,10 @@ custom_id namespace:
 
     -- taking an answer back, on the REPLY to any of the above:
     dk:clear:{round_id}       un-answer this round (asks first if secured)
-    dk:clearok:{round_id}     yes, clear the secured round
+    dk:clearok:{round_id}:{outcome}
+                              yes, clear the secured round -- but only while it
+                              still reads {outcome}, the state that was asked
+                              about
     dk:keep:{round_id}        no, leave it as it is (records nothing)
 """
 
@@ -497,9 +500,10 @@ class ClearOutcomeButton(
                     content=_("That round no longer exists."), view=None
                 )
                 return
-            if await _round_outcome_value(
+            current = await _round_outcome_value(
                 session, interaction.user.id, self.round_id
-            ) in (LotteryOutcome.WON, LotteryOutcome.PAID):
+            )
+            if current in (LotteryOutcome.WON, LotteryOutcome.PAID):
                 content = _(
                     "You hold a ticket from this round. Clearing your answer removes "
                     "that record and its payment reminder. Clear it?"
@@ -511,7 +515,8 @@ class ClearOutcomeButton(
                         "is cleared."
                     ).format(n=legs)
                 await interaction.response.edit_message(
-                    content=content, view=build_clear_confirm_view(self.round_id)
+                    content=content,
+                    view=build_clear_confirm_view(self.round_id, current),
                 )
                 return
             await clear_round_outcome(session, interaction.user.id, self.round_id)
@@ -522,26 +527,67 @@ class ClearOutcomeButton(
 
 
 class ConfirmClearButton(
-    discord.ui.DynamicItem[discord.ui.Button], template=r"dk:clearok:(?P<rid>\d+)"
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=r"dk:clearok:(?P<rid>\d+):(?P<st>[a-z_]+)",
 ):
-    """The second press behind a secured round. It re-checks nothing on
-    purpose: the reader has just been told what is being dropped, and
-    `clear_round_outcome` is a no-op on a round with nothing recorded."""
+    """The second press behind a secured round -- and, like every other
+    persistent callback here, it re-derives before it writes.
 
-    def __init__(self, round_id: int) -> None:
+    A confirm view is a snapshot of one moment; the message it sits on is not.
+    Abandon the DM, clear and re-record the round on the site, mark it paid,
+    scroll back weeks later and press "Clear it": `clear_round_outcome` takes
+    whatever it finds, so that press would delete a record nobody ever asked
+    about, together with the payment reminder holding it open. The reader
+    agreed to drop ONE stated record, not to drop whatever occupies that round
+    forever after.
+
+    So the custom_id carries the outcome the question was asked ABOUT, and the
+    press writes only while the round still reads exactly that. When it has
+    moved, nothing is written and the reply says so, carrying "Change my
+    answer" again -- this module renders what is true NOW rather than what the
+    message said, and one deliberate press re-opens the correction against the
+    state that actually exists (with a fresh confirmation if that state is
+    still secured). Matching on the state rather than on the row's identity is
+    the deliberate limit: a round confirmed at PAID and re-recorded to PAID is
+    the same question with the same forfeit, and that press goes through."""
+
+    def __init__(self, round_id: int, described: LotteryOutcome) -> None:
         super().__init__(discord.ui.Button(
             label=_("Clear it"), style=discord.ButtonStyle.danger,
-            custom_id=f"dk:clearok:{round_id}",
+            custom_id=f"dk:clearok:{round_id}:{described.value}",
         ))
         self.round_id = round_id
+        self.described = described
 
     @classmethod
     async def from_custom_id(cls, interaction, item, match: re.Match):
-        return cls(int(match["rid"]))
+        return cls(int(match["rid"]), LotteryOutcome(match["st"]))
 
     async def callback(self, interaction: discord.Interaction) -> None:
         async with SessionMaker() as session:
             await _apply_locale(session, interaction.user.id)
+            if await session.get(Round, self.round_id) is None:
+                # Same trap ClearOutcomeButton names: the writer returns
+                # silently on a round that is gone, so without this the reply
+                # reads "Cleared" for a round that never was.
+                await interaction.response.edit_message(
+                    content=_("That round no longer exists."), view=None
+                )
+                return
+            # `is not`, not `!=`: LotteryOutcome is a StrEnum, so a bare string
+            # would compare equal and let a press through on identity alone.
+            if await _round_outcome_value(
+                session, interaction.user.id, self.round_id
+            ) is not self.described:
+                await interaction.response.edit_message(
+                    content=_(
+                        "Your answer for this round has changed since I asked, so "
+                        "nothing was cleared. Use \"Change my answer\" to take "
+                        "another look."
+                    ),
+                    view=build_backtrack_view(self.round_id),
+                )
+                return
             await clear_round_outcome(session, interaction.user.id, self.round_id)
             await session.commit()
         await interaction.response.edit_message(
@@ -579,9 +625,14 @@ def build_backtrack_view(round_id: int) -> discord.ui.View:
     return view
 
 
-def build_clear_confirm_view(round_id: int) -> discord.ui.View:
+def build_clear_confirm_view(
+    round_id: int, described: LotteryOutcome
+) -> discord.ui.View:
+    """`described` is the outcome the question is being asked about; it rides
+    in the confirm button's custom_id so a press months later can tell whether
+    it is still the same question (see ConfirmClearButton)."""
     view = discord.ui.View(timeout=None)
-    view.add_item(ConfirmClearButton(round_id))
+    view.add_item(ConfirmClearButton(round_id, described))
     view.add_item(KeepAnswerButton(round_id))
     return view
 

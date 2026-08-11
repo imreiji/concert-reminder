@@ -2016,6 +2016,45 @@ async def test_the_confirmation_says_the_record_goes(client):
         assert "Covered" in body
 
 
+async def test_the_leg_copy_promises_only_what_a_per_leg_clear_guarantees(client):
+    """Both of the per-leg copy's old promises were false in a real branch of
+    `clear_round_outcome`, in the safe direction but false all the same.
+
+    The payment reminder is NOT necessarily released: with a sibling leg's WON
+    row surviving, `_rederive_round_from_days` returns early, the round stays
+    WON/PAID and `reinstate_user_rules` re-plans the very same PAYMENT row. Two
+    legs won, clear one, the reminder stays.
+
+    And the day does NOT reliably go "back to unanswered": clear the last leg
+    that could still resolve on a round whose other covered legs are cancelled
+    or opted out, and the re-derivation reads `unresolved_day_ids` -- which
+    excludes both -- finds nothing unresolved, and writes the round LOST. The
+    pill flips Won -> Lost, not to unanswered.
+
+    Mutation this catches: restoring either promise. Verified by putting the
+    shipped wording back -- "along with the payment reminder it is holding
+    open" and "This day goes back to unanswered and you can answer it again"
+    -- which fails both halves below."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    section = clear_confirmation(client.get("/concerts/np").text)
+    leg_copy = section.split('id="clearBodyLeg"', 1)[1].split("</p>", 1)[0]
+    # The reminder is named (it can go), but only under the condition that
+    # actually releases it -- no ticket left anywhere on the round.
+    assert "payment reminder" in leg_copy
+    assert "no ticket left" in leg_copy
+    assert "along with the payment reminder" not in leg_copy
+    # Where the round lands is stated as derived, never promised as unanswered.
+    assert "unanswered" not in leg_copy
+    assert "follows from the days that remain" in leg_copy
+    # The ROUND copy is unconditional and must stay that way: a whole-round
+    # clear really does delete every row, so its reminder always goes.
+    round_copy = section.split('id="clearBodyRound"', 1)[1].split("</p>", 1)[0]
+    assert "the payment reminder it is holding open" in round_copy
+
+
 async def test_the_confirmation_guard_is_delegated_and_beats_htmx(client):
     """Three properties of one listener, each silent when lost.
 

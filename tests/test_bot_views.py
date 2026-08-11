@@ -759,7 +759,11 @@ async def test_backtrack_asks_before_clearing_a_secured_round(db):
     assert outcome is LotteryOutcome.WON, "not yet cleared -- the reader was only asked"
     edited = interaction.response.edited
     assert "You hold a ticket" in edited["kwargs"]["content"]
-    assert custom_ids(edited["kwargs"]["view"]) == [f"dk:clearok:{rid}", f"dk:keep:{rid}"]
+    # The confirm button carries the state it is asking ABOUT, which is what
+    # lets the second press tell whether it is still the same question.
+    assert custom_ids(edited["kwargs"]["view"]) == [
+        f"dk:clearok:{rid}:won", f"dk:keep:{rid}"
+    ]
 
 
 async def test_backtrack_asks_before_clearing_a_paid_round(db):
@@ -777,7 +781,7 @@ async def test_backtrack_asks_before_clearing_a_paid_round(db):
         )).scalar_one()
     assert outcome is LotteryOutcome.PAID
     assert custom_ids(interaction.response.edited["kwargs"]["view"]) == [
-        f"dk:clearok:{rid}", f"dk:keep:{rid}"
+        f"dk:clearok:{rid}:paid", f"dk:keep:{rid}"
     ]
 
 
@@ -818,7 +822,9 @@ async def test_confirming_the_clear_removes_the_day_rows_too(db):
         await s.commit()
 
     interaction = FakeInteraction(42)
-    await views_module.ConfirmClearButton(rid).callback(interaction)
+    # WON is what the round reads after the day rows above, so this is the
+    # state the confirmation would have named.
+    await views_module.ConfirmClearButton(rid, LotteryOutcome.WON).callback(interaction)
 
     async with db() as s:
         outcomes = (await s.execute(
@@ -830,6 +836,67 @@ async def test_confirming_the_clear_removes_the_day_rows_too(db):
     assert outcomes == []
     assert day_rows == [], "a whole-round clear takes every leg's row with it"
     assert interaction.response.edited["kwargs"]["view"] is None
+
+
+async def test_a_stale_confirm_press_writes_nothing_once_the_answer_moved(db):
+    """The scenario the re-derivation exists for: press "Change my answer" on a
+    WON round, see the confirmation, abandon the DM. Clear and re-record the
+    round on the site later, mark it PAID, then scroll back and press the
+    still-live "Clear it". Without the check `clear_round_outcome` deletes
+    whatever it finds -- a paid-for ticket and its payment reminder -- for a
+    question that was asked about a different record entirely.
+
+    Mutation this catches: deleting the `is not self.described` branch from
+    ConfirmClearButton.callback (the row comes back gone). Asserting on
+    `updated_at` as well as on the outcome pins that the press did not
+    re-write the row either."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.WON)
+    async with db() as s:
+        await record_round_outcome(s, 42, rid, LotteryOutcome.PAID)
+        await s.commit()
+        before = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one().updated_at
+
+    interaction = FakeInteraction(42)
+    # The button as it was minted weeks ago: the round read WON back then.
+    await views_module.ConfirmClearButton(rid, LotteryOutcome.WON).callback(interaction)
+
+    async with db() as s:
+        row = (await s.execute(
+            select(RoundOutcome).where(RoundOutcome.round_id == rid)
+        )).scalar_one()
+    assert row.outcome is LotteryOutcome.PAID, "the record the reader never agreed to drop"
+    assert row.updated_at == before, "a refused press must not write at all"
+    edited = interaction.response.edited
+    assert "has changed since I asked" in edited["kwargs"]["content"]
+    assert custom_ids(edited["kwargs"]["view"]) == [f"dk:clear:{rid}"], (
+        "a signpost, not a dead end -- one press re-opens the correction against "
+        "the state that actually exists"
+    )
+
+
+async def test_confirming_a_clear_on_a_deleted_round_says_so(db):
+    """The twin of the backtrack button's own guard: these buttons outlive the
+    round they name. The outcome row cascades away with it, so what a reader
+    would otherwise be told is that their answer "has changed" -- true in a
+    useless sense, and it hands back a "Change my answer" button that can only
+    say the round is gone. The concrete answer is given at the first press.
+
+    Mutation this catches: dropping the `session.get(Round, ...) is None`
+    branch from ConfirmClearButton.callback -- the reply becomes the
+    state-moved one."""
+    rid = await one_leg_round(db, outcome=LotteryOutcome.WON)
+    async with db() as s:
+        await s.delete(await s.get(Round, rid))
+        await s.commit()
+
+    interaction = FakeInteraction(42)
+    await views_module.ConfirmClearButton(rid, LotteryOutcome.WON).callback(interaction)
+
+    edited = interaction.response.edited
+    assert "no longer exists" in edited["kwargs"]["content"]
+    assert edited["kwargs"]["view"] is None
 
 
 async def test_keeping_the_answer_writes_nothing(db):
