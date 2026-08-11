@@ -40,12 +40,12 @@
    `not can_capture` (which `capture_gates` also shuts for a cancelled
    concert -- the show is not happening and correcting the record changes
    nothing about that), and under `outcome is none` (there is no answer to
-   un-answer), and nothing on a card whose leg is cancelled or opted out
-   (`leg_off`). Everywhere else it follows the row's real buttons -- including
-   beside a leg's own unanswered questions, because the ROUND has an answer to
-   take back even when the leg does not -- EXCEPT in the final branch, where
-   it REPLACES "Nothing to do": every row reaching
-   that sentence has a recorded outcome and no offerable answer, which is
+   un-answer). Those three are the WHOLE list -- there is no per-leg
+   suppression, deliberately; see `clear_day` below. Everywhere else it follows
+   the row's real buttons, including beside a leg's own unanswered questions,
+   because the ROUND has an answer to take back even when the leg does not --
+   EXCEPT in the final branch, where it REPLACES "Nothing to do": every row
+   reaching that sentence has a recorded outcome and no offerable answer, which is
    precisely the set a correction serves, so the sentence becomes false the
    moment this ships. The pill on the left already says where the reader
    stands; those rows get quieter, not busier. (The design doc calls that
@@ -91,7 +91,7 @@
 </form>
 {%- endmacro %}
 
-{% macro capture_actions(row, round_id, target, prune_title=None, prune_url=None, is_upgrade=False, only_day=None, correctable=False, leg_off=False) -%}
+{% macro capture_actions(row, round_id, target, prune_title=None, prune_url=None, is_upgrade=False, only_day=None, correctable=False) -%}
 {# ── What the un-answer posts, resolved ONCE ───────────────────────────────
    A clear posts `day_id` exactly when this card sits under a leg that has its
    OWN answer, whatever branch the row below happens to fall into; otherwise
@@ -123,18 +123,26 @@
    on a round that is WON overall forfeits nothing, so it must not ask; a WON
    leg must ask even when the round is only WON because of it), and a
    whole-round clear asks about the round. #}
-{# WHETHER a clear renders at all on this card, as opposed to what it posts.
-   Two separate questions, both resolved here so no branch re-derives either.
+{# WHETHER a clear renders is `correctable` and nothing else. THE CORRECTION
+   FOLLOWS THE CAPTURE BUTTONS: wherever a card lets you record, it lets you
+   un-record (owner ruling, 2026-08-11). Do not re-derive a suppression here.
 
-   `leg_off` is the caller's statement that this card sits under a leg that is
-   CANCELLED or that the reader has OPTED OUT of. A correction must not appear
-   under a night that is not happening or that they have already declined, and
-   that is a fact about the card rather than about the branch it lands in --
-   so it suppresses the affordance everywhere, not just in the per-day branch
-   (owner ruling, 2026-08-11). It reaches the macro as a parameter because
-   neither fact is on `RoundRow`: cancellation is per-LEG and `RoundRow`
-   carries only the round-level `fully_opted_out`. #}
-{% set clear_offer = correctable and not leg_off %}
+   A `leg_off` parameter briefly withheld it on a leg that was CANCELLED or
+   opted out, on the reasoning that a correction does not belong under a night
+   that is not happening. That reasoning is fine and the rule was still wrong,
+   because it was STRICTER THAN THE CAPTURE RULE BESIDE IT -- and the mismatch,
+   not the correction, was the surprise. `capture_gates` takes its `cancelled`
+   input from `all_legs_cancelled`, which is CONCERT-level, so a round whose
+   `applies_to` names only dead legs on an otherwise live concert keeps both
+   gates open and renders under that dead leg alone. It offered "I won" /
+   "I lost" there while the suppression removed the only clear on the page:
+   writable but not un-writable, with no live sibling to correct from and no
+   reader-reversible un-cancel. A card still asking you to record on a
+   cancelled or opted-out night has no business refusing to let you take it
+   back.
+
+   The gate that DOES stay is `clear_day` above -- what a clear posts, never
+   whether it appears. #}
 {% set clear_secured = (row.leg_result.value == "won") if clear_day is not none
      else (correctable and row.outcome is not none and row.outcome.value in ("won", "paid")) %}
 {% set clear_label = loc(row.round_, "label") if clear_secured else none %}
@@ -248,7 +256,7 @@
    belt-and-braces -- `capture_days` is non-empty only for APPLIED or WON --
    but it is the condition that actually means "there is an answer to take
    back", so it is written rather than assumed. #}
-{% if clear_offer and only_day is not none and row.outcome is not none %}
+{% if correctable and only_day is not none and row.outcome is not none %}
 {{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}
 {% endif %}
 {% if only_day is none %}
@@ -286,7 +294,7 @@
 {# APPLIED forfeits nothing when cleared -- "I have applied" is one press away
    again -- so `clear_secured` leaves this one unconfirmed, unless the card's
    own leg is a WON one, which `clear_day`/`clear_label` already handle. #}
-{% if clear_offer %}{{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}{% endif %}
+{% if correctable %}{{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}{% endif %}
 {# PAID stays reachable only from WON, matching the service rule. #}
 {% elif row.outcome.value == "won" %}
 <form hx-post="/rounds/{{ round_id }}/outcome" hx-target="{{ target }}"
@@ -299,7 +307,7 @@
    multi-leg round lands -- won Saturday, lost Sunday, nothing unresolved --
    so `clear_day` is what stops Sunday's card from throwing Saturday's ticket
    away, and `clear_secured` is why Sunday does not ask while Saturday does. #}
-{% if clear_offer %}{{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}{% endif %}
+{% if correctable %}{{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}{% endif %}
 {% else %}
 {# The terminal branch: a recorded outcome with no answer left to offer --
    PAID, LOST, NOT_APPLIED, and also APPLIED while the results are still
@@ -308,7 +316,7 @@
    whether it asks first are `clear_day`/`clear_label`'s to say, not this
    branch's: whole round unless this card's leg carries its own answer, and
    asking only where a held ticket would go. #}
-{% if clear_offer %}{{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}
+{% if correctable %}{{ clear_form(round_id, target, day_id=clear_day, confirm_label=clear_label) }}
 {% else %}<span class="done">{{ _("Nothing to do") }}</span>{% endif %}
 {% endif %}
 {%- endmacro %}

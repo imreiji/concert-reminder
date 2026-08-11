@@ -159,15 +159,24 @@ Where it renders, by the branch `_capture_actions.html` is already in:
 | WON | after "Paid" |
 | terminal (see below) | **replacing** "Nothing to do" |
 
-One card-level suppression cuts across all of them (owner ruling,
-2026-08-11): **a leg that is CANCELLED or that the reader has OPTED OUT of
-offers no correction at all.** A correction must not appear under a night that
-is not happening or one they have already declined, and that is a fact about
-the card rather than about the branch, so it is a single hoisted condition
-(`clear_offer`) rather than a per-branch test. Neither fact is on `RoundRow` —
-cancellation is per-leg and the row carries only the round-level
-`fully_opted_out` — so `_round_rows.html` passes `leg_off`, read from the same
-two sources its dim/badge treatment uses.
+Those three "nothing" cases are the whole list. **The correction follows the
+capture buttons: wherever a card lets you record, it must let you un-record**
+(owner ruling, 2026-08-11). There is no per-leg suppression — do not re-derive
+one.
+
+A `leg_off` parameter briefly withheld the correction on a leg that was
+cancelled or opted out, on the reasoning that it does not belong under a night
+that is not happening. The reasoning was fine and the rule was still wrong,
+because it was **stricter than the capture rule beside it** — and that
+mismatch, not the correction, was the surprise. `capture_gates` takes its
+`cancelled` input from `all_legs_cancelled`, which is *concert*-level, so a
+round whose `applies_to` names only dead legs on an otherwise live concert
+keeps both gates open and renders under that dead leg alone. Measured: it went
+from one clear form on the page to zero, with no live sibling to correct from
+and no reader-reversible un-cancel, while the same card still offered "I won" /
+"I lost". Writable but not un-writable. An opted-out leg makes the same point
+from the other side: invariant 8 says an opt-out forfeits the reminder and
+never the record, so the record is still theirs to correct.
 
 The per-day branch renders the correction **whether or not this leg still has
 questions of its own above it**, which was also a ruling. It used to require

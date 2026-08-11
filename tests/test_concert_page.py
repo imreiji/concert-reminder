@@ -1571,10 +1571,13 @@ async def test_a_leg_with_no_answer_of_its_own_offers_no_per_leg_clear(client):
     [form] = clear_forms(sections["Day 1"])
     assert f'name="day_id" value="{d1}"' in form
 
-    # Day 2 is cancelled: no day-result forms and no correction at all
-    # (`leg_off`), so nothing here can post its id.
+    # Day 2 is cancelled, so nothing asks about it -- but the round is still
+    # correctable from here (the correction follows the capture buttons), and
+    # the correction it offers is the ROUND's: this leg owns no row, so nothing
+    # on this card may carry its id.
     assert "day-result" not in sections["Day 2"]
-    assert clear_forms(sections["Day 2"]) == []
+    [d2_form] = clear_forms(sections["Day 2"])
+    assert "day_id" not in d2_form
     assert f'value="{d2}"' not in sections["Day 2"]
 
     # Day 3 is still being asked about and owns no answer, so its correction is
@@ -1741,13 +1744,19 @@ async def test_the_clear_survives_the_results_moment_on_a_multi_leg_round(client
         assert "data-clear-confirm" not in form
 
 
-async def test_a_cancelled_leg_offers_no_correction_at_all(client):
-    """A correction must not appear under a night that is not happening. That
-    is a fact about the CARD, not about which branch it lands in, so `leg_off`
-    suppresses it everywhere rather than in one branch.
+async def test_a_cancelled_leg_still_offers_the_correction(client):
+    """THE CORRECTION FOLLOWS THE CAPTURE BUTTONS: wherever a card lets you
+    record, it lets you un-record (owner ruling, 2026-08-11).
 
-    Mutation this catches: dropping `leg_off` from `clear_offer`, which puts a
-    live action under a dimmed, badged, cancelled leg."""
+    A `leg_off` parameter briefly withheld it here, on the reasoning that a
+    correction does not belong under a night that is not happening. The rule
+    was stricter than the capture rule beside it, and that mismatch was the
+    surprise: this very card still offers "I won" / "I lost", because
+    `capture_gates` reads cancellation at CONCERT level. Writable but not
+    un-writable is not a defensible state.
+
+    Mutation this catches: re-introducing any per-leg suppression of the
+    affordance."""
     cid = await seed_concert(client.db)
     d1 = await add_day(client.db, cid, "Day 1", days_ahead=60)
     d2 = await add_day(client.db, cid, "Day 2", days_ahead=61, cancelled=True)
@@ -1762,18 +1771,24 @@ async def test_a_cancelled_leg_offers_no_correction_at_all(client):
 
     sections = leg_sections(client.get("/concerts/np").text)
     assert "Cancelled" in sections["Day 2"]
-    assert clear_forms(sections["Day 2"]) == []
-    # The live leg still has it, so this is suppression and not absence.
+    # The card is still asking, which is the whole argument.
+    assert ">I won</button>" in sections["Day 2"]
+    [form] = clear_forms(sections["Day 2"])
+    # Still a WHOLE-round clear: the leg owns no RoundOutcomeDay row. That gate
+    # is `clear_day` and it did not move.
+    assert "day_id" not in form
+    assert f'value="{d2}"' not in form
     assert len(clear_forms(sections["Day 1"])) == 1
 
 
-async def test_an_opted_out_leg_offers_no_correction_at_all(client):
-    """The same rule for the reader's own "not going to this day": they have
-    declined the night, and the page's answer to a change of heart is "Going
-    again", not a correction to a lottery record.
+async def test_an_opted_out_leg_still_offers_the_correction(client):
+    """The same rule for the reader's own "not going to this day". An opt-out
+    forfeits the reminder, never the record (invariant 8) -- so the record is
+    still theirs to correct, and the card that shows it must say so.
 
-    Mutation this catches: reading only `day.cancelled` into `leg_off` and
-    forgetting the opt-out half."""
+    Mutation this catches: suppressing the affordance on an opted-out leg
+    (the half a `day.cancelled`-only suppression would have missed, and which
+    is now not suppressed at all)."""
     cid = await seed_concert(client.db)
     d1, d2, rid = await multi_leg_lottery(client.db, cid)
     async with client.db() as s:
@@ -1784,8 +1799,45 @@ async def test_an_opted_out_leg_offers_no_correction_at_all(client):
 
     sections = leg_sections(client.get("/concerts/np").text)
     assert "Not going" in sections["Day 2"]
-    assert clear_forms(sections["Day 2"]) == []
+    [form] = clear_forms(sections["Day 2"])
+    assert "day_id" not in form
+    assert f'value="{d2}"' not in form
     assert len(clear_forms(sections["Day 1"])) == 1
+
+
+async def test_a_round_on_only_a_cancelled_leg_is_still_correctable(client):
+    """The shape that killed the suppression. A round whose `applies_to` names
+    ONLY cancelled legs, on a concert that still has live ones: `capture_gates`
+    takes its cancellation from `all_legs_cancelled`, which is CONCERT-level,
+    so both gates stay open and the round renders under the dead leg ALONE.
+
+    Suppressing the correction there removed the only one on the page -- there
+    is no live sibling to correct from, and a reader cannot un-cancel a leg.
+    The card kept asking "I won / I lost" while refusing to take the answer
+    back.
+
+    Mutation this catches: re-introducing the `leg_off` suppression. Measured
+    against it: one clear form here becomes zero anywhere on the page."""
+    cid = await seed_concert(client.db)
+    await add_day(client.db, cid, "Day 1", days_ahead=60)  # live, no rounds
+    dead = await add_day(client.db, cid, "Day 2", days_ahead=61, cancelled=True)
+    rid = await add_round(
+        client.db, cid, "Osaka presale", applies_to=[dead],
+        opens=datetime.now(UTC) - timedelta(days=10),
+        closes=datetime.now(UTC) - timedelta(days=3),
+        results=datetime.now(UTC) - timedelta(hours=1),
+    )
+    await set_outcome(client.db, rid, LotteryOutcome.APPLIED)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    # Not a concert-level cancellation: the live leg keeps the page alive.
+    assert "This event is cancelled." not in body
+    sections = leg_sections(body)
+    assert "Osaka presale" not in sections["Day 1"]  # it renders nowhere else
+    assert ">I won</button>" in sections["Day 2"]
+    assert len(clear_forms(sections["Day 2"])) == 1
+    assert f'action="/rounds/{rid}/outcome/clear"' in sections["Day 2"]
 
 
 async def test_an_empty_round_label_still_confirms_before_dropping_a_ticket(client):
