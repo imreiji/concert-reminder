@@ -193,6 +193,21 @@ class Concert(Base):
         BigInteger, ForeignKey("users.discord_id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    # Round watch (see docs/superpowers/specs/2026-08-11-round-watch-design.md).
+    # Two stamps with two owners, deliberately not one column: "how long has
+    # this ladder been quiet" and "have I looked at it" are different
+    # questions, and one column would have to lie about one of them.
+    #
+    # quiet_since_utc is SYSTEM-owned -- written only by the scheduler's
+    # reconcile pass -- and means FIRST OBSERVED QUIET, not "went quiet": the
+    # migration blanket-stamps every row so the first pass after deploy
+    # announces nothing, and under that name the backfilled value is honest.
+    quiet_since_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # ladder_rechecked_at_utc is the OWNER's, written only by the Checked
+    # button. Cleared with quiet_since_utc when a concert leaves the list:
+    # both belong to the CURRENT quiet spell, so a concert that goes quiet
+    # again arrives unchecked.
+    ladder_rechecked_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     creator: Mapped["User | None"] = relationship()  # also fixes ORM insert ordering
     days: Mapped[list["ConcertDay"]] = relationship(
