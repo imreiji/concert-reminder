@@ -112,18 +112,37 @@ def _row(concert: Concert) -> QuietLadder:
     )
 
 
-async def _quiet_concerts(session: AsyncSession, now: datetime) -> list[Concert]:
-    """Every concert the predicate matches, ORM rows with days/rounds loaded.
+async def _all_concerts(session: AsyncSession) -> list[Concert]:
+    """Every concert in the catalogue, ORM rows with days/rounds loaded.
 
     selectinload, not lazy access: ConcertDay.venue_tag is lazy="raise" and the
     surrounding code runs outside a greenlet-friendly context often enough that
     an accidental lazy load is a 500 rather than a slow query.
+
+    Shared by `_quiet_concerts` (which then filters) and
+    `reconcile_quiet_ladders` (which needs the NOT-quiet rows too, to clear
+    their stamps) so the load itself is written once.
+
+    `populate_existing=True`: without it, a Concert already in this session's
+    identity map keeps whatever `days`/`rounds` collection it loaded LAST
+    time, even though this is a brand new SELECT -- SQLAlchemy does not
+    re-apply eager-loaded collections onto an already-loaded attribute unless
+    told to. `reconcile_quiet_ladders` is called more than once against the
+    same session within a tick's tests (and `quiet_ladder_rows` may run in
+    the same request that just wrote a round), so a stale empty `rounds`
+    collection would make a concert that just grew a round still read as
+    quiet.
     """
-    concerts = (await session.execute(
-        select(Concert).options(
-            selectinload(Concert.days), selectinload(Concert.rounds)
-        )
+    return (await session.execute(
+        select(Concert)
+        .execution_options(populate_existing=True)
+        .options(selectinload(Concert.days), selectinload(Concert.rounds))
     )).scalars().all()
+
+
+async def _quiet_concerts(session: AsyncSession, now: datetime) -> list[Concert]:
+    """Every concert the predicate matches, ORM rows with days/rounds loaded."""
+    concerts = await _all_concerts(session)
     return [c for c in concerts if is_quiet(c, now)]
 
 
@@ -149,3 +168,53 @@ async def quiet_ladder_rows(
         r.quiet_since_utc or far_past,
     ))
     return rows
+
+
+async def reconcile_quiet_ladders(
+    session: AsyncSession, now: datetime | None = None
+) -> list[QuietLadder]:
+    """Bring the stamps in line with the predicate; return the NEWCOMERS.
+
+    SELF-IDEMPOTENT, and that is what lets this run every tick instead of on
+    the sweep's 24-hour clock: a stamped concert is no longer a newcomer, so a
+    re-run announces nothing. The sweep needs a clock because its work is 86
+    third-party fetches ending in a DM; this is a query and a diff.
+
+    The CALLER commits, and must commit the queued notice in the SAME
+    transaction as these stamps -- that pairing is what makes the notice
+    exactly-once. Committing the stamp first would drop the DM on a crash;
+    committing the notice first would repeat it.
+    """
+    now = now or _now()
+    concerts = await _all_concerts(session)
+
+    newcomers: list[Concert] = []
+    for concert in concerts:
+        if is_quiet(concert, now):
+            if concert.quiet_since_utc is None:
+                concert.quiet_since_utc = now
+                newcomers.append(concert)
+        elif concert.quiet_since_utc is not None:
+            # Both stamps belong to the current quiet spell.
+            concert.quiet_since_utc = None
+            concert.ladder_rechecked_at_utc = None
+    await session.flush()
+    return [_row(c) for c in newcomers]
+
+
+async def record_ladder_checked(
+    session: AsyncSession, event_id: str, now: datetime | None = None
+) -> bool:
+    """Stamp "I have re-checked this one". False when no such concert exists.
+
+    Sorts and dims; never hides. A concert whose ladder you checked in March
+    genuinely does grow a 一般発売 in July.
+    """
+    concert = (await session.execute(
+        select(Concert).where(Concert.event_id == event_id)
+    )).scalar_one_or_none()
+    if concert is None:
+        return False
+    concert.ladder_rechecked_at_utc = now or _now()
+    await session.flush()
+    return True

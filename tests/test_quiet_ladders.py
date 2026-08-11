@@ -7,7 +7,12 @@ grow two definitions of "future anchor", it fails."""
 from datetime import UTC, date, datetime
 
 from app.db.models import Concert, ConcertDay, Round
-from app.db.service import ensure_user, quiet_ladder_rows
+from app.db.service import (
+    ensure_user,
+    quiet_ladder_rows,
+    reconcile_quiet_ladders,
+    record_ladder_checked,
+)
 from app.domain.types import RoundKind
 
 NOW = datetime(2026, 8, 11, 12, 0, tzinfo=UTC)
@@ -211,3 +216,72 @@ async def test_the_sort_pins_the_two_within_group_keys_too(session):
     assert max(never_idxs) < min(checked_idxs)
     assert order.index("never-older") < order.index("never-newer")
     assert order.index("checked-older") < order.index("checked-newer")
+
+
+async def test_reconcile_stamps_newcomers_and_returns_them(session):
+    await _concert(session, "newcomer")
+    newcomers = await reconcile_quiet_ladders(session, NOW)
+    assert [r.event_id for r in newcomers] == ["newcomer"]
+
+    rows = await quiet_ladder_rows(session, NOW)
+    assert rows[0].quiet_since_utc == NOW
+
+
+async def test_an_immediate_second_run_announces_nothing(session):
+    """The idempotency the per-tick cadence rests on. If this fails, someone
+    has reintroduced a 24h clock instead of relying on the stamp."""
+    await _concert(session, "newcomer")
+    assert len(await reconcile_quiet_ladders(session, NOW)) == 1
+    assert await reconcile_quiet_ladders(session, NOW) == []
+
+
+async def test_a_stamped_concert_is_never_a_newcomer(session):
+    """What the migration's blanket backfill buys: nothing announces on the
+    first pass after deploy."""
+    c = await _concert(session, "backfilled")
+    c.quiet_since_utc = at(8, 1)
+    await session.flush()
+    assert await reconcile_quiet_ladders(session, NOW) == []
+
+
+async def test_leaving_the_list_clears_both_stamps(session):
+    c = await _concert(session, "recovers")
+    await reconcile_quiet_ladders(session, NOW)
+    await record_ladder_checked(session, "recovers", NOW)
+
+    session.add(Round(
+        concert_id=c.id, kind=RoundKind.LOTTERY_ROUND,
+        label="一般発売", closes_at_utc=at(9, 1),
+    ))
+    await session.flush()
+    await reconcile_quiet_ladders(session, NOW)
+    await session.refresh(c)
+
+    assert c.quiet_since_utc is None
+    assert c.ladder_rechecked_at_utc is None
+
+
+async def test_a_second_quiet_spell_arrives_unchecked(session):
+    """Both stamps belong to the CURRENT spell, so an earlier check does not
+    carry over to a question it was not asked about."""
+    c = await _concert(session, "again")
+    await reconcile_quiet_ladders(session, NOW)
+    await record_ladder_checked(session, "again", NOW)
+
+    round_ = Round(
+        concert_id=c.id, kind=RoundKind.LOTTERY_ROUND,
+        label="一般発売", closes_at_utc=at(9, 1),
+    )
+    session.add(round_)
+    await session.flush()
+    await reconcile_quiet_ladders(session, NOW)
+
+    later = at(10, 1)
+    newcomers = await reconcile_quiet_ladders(session, later)
+    assert [r.event_id for r in newcomers] == ["again"]
+    await session.refresh(c)
+    assert c.ladder_rechecked_at_utc is None
+
+
+async def test_record_ladder_checked_reports_a_missing_concert(session):
+    assert await record_ladder_checked(session, "nope", NOW) is False
