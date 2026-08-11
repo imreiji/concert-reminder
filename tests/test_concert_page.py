@@ -19,6 +19,7 @@ Two things these tests deliberately pin:
 """
 
 import pathlib
+import re
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -1915,6 +1916,167 @@ def test_the_clear_affordance_is_styled_for_both_themes():
     assert "border-radius: 3px" in rule
     assert "#" not in rule  # no literal colour anywhere in it
     assert ".rnd2 .acts .act, .rnd2 .acts .done, .rnd2 .acts .reopen {" in css
+
+
+# ── the confirmation that gates a clear (Task 4) ──────────────────────────
+
+
+def clear_confirmation(body: str) -> str:
+    """The confirmation dialog and its script, from `<dialog ... id="clearDlg"`
+    to the `</script>` that follows it.
+
+    Scoped deliberately: the page carries other dialogs and other scripts
+    (base.html's, the calendar dialog's), and an assertion satisfied by one of
+    those would prove nothing about this one."""
+    assert 'id="clearDlg"' in body, "the concert page has no clear confirmation"
+    chunk = body.split('id="clearDlg"', 1)[1]
+    return chunk.split("</script>", 1)[0]
+
+
+async def test_every_id_the_confirmation_script_writes_into_exists(client):
+    """The dialog and the script that fills it are two halves of one thing,
+    joined only by element ids. Jinja does not check them and neither does the
+    browser: `getElementById` on a renamed id returns null, and the failure is
+    either a silent unfilled label or a TypeError nobody sees.
+
+    Mutation this catches: renaming `clearNameLeg` (or the head/body ids, or
+    `clearGo`) on one side of the pair and not the other -- which either leaves
+    the dialog naming no round at all, or throws before `showModal()` and lets
+    the press through to a one-press delete."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    section = clear_confirmation(body)
+    wanted = set(re.findall(r'getElementById\("([^"]+)"\)', section))
+    # The script really does address elements by id -- without this the loop
+    # below is vacuous when someone rewrites it to querySelector.
+    assert len(wanted) >= 5, wanted
+    missing = [name for name in wanted if f'id="{name}"' not in body]
+    assert not missing, f"the script writes into ids no element carries: {missing}"
+
+
+async def test_the_confirmation_copy_is_scoped_to_what_the_press_clears(client):
+    """Two copies, and the difference is correctness rather than polish. A card
+    under a leg that owns no answer of its own posts NO `day_id` and clears the
+    WHOLE round (`clear_day`), so a round that is WON because of Saturday,
+    pressed under Sunday, throws Saturday's ticket away. Leg-scoped wording is
+    a lie exactly there, and round-scoped wording is a lie on a real per-leg
+    press.
+
+    Mutation this catches: one copy serving both scopes, or the per-leg copy
+    losing its promise that the other days keep their records."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    section = clear_confirmation(client.get("/concerts/np").text)
+    round_copy = section.split('id="clearBodyRound"', 1)[1].split("</p>", 1)[0]
+    leg_copy = section.split('id="clearBodyLeg"', 1)[1].split("</p>", 1)[0]
+    assert round_copy != leg_copy
+    # The round copy must never read as leg-scoped.
+    assert "every day this round covers" in round_copy
+    assert "this day only" not in round_copy
+    # The leg copy must say what survives, or it reads like the round one.
+    assert "this day only" in leg_copy
+    assert "the other days of this round keep theirs" in leg_copy
+    assert "every day this round covers" not in leg_copy
+
+
+async def test_the_confirmation_says_the_record_goes(client):
+    """It must NOT borrow the unfollow dialog's wording. That one promises
+    "Stopping following does not remove that mark", because an opt-out
+    forfeits the reminder and never the record (invariant 8). This is the
+    first thing in the app that really removes the record.
+
+    Mutation this catches: copying the unfollow copy across, which tells a
+    reader their ticket survives a press that deletes it."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    section = clear_confirmation(client.get("/concerts/np").text)
+    assert "does not remove that mark" not in section
+    for copy in ("clearBodyRound", "clearBodyLeg"):
+        body = section.split(f'id="{copy}"', 1)[1].split("</p>", 1)[0]
+        assert "removes that record" in body
+        # and names the two other things that go with it
+        assert "payment reminder" in body
+        assert "Covered" in body
+
+
+async def test_the_confirmation_guard_is_delegated_and_beats_htmx(client):
+    """Three properties of one listener, each silent when lost.
+
+    Delegated on `document.body`: a form swapped in by htmx is a NEW element,
+    so a per-form binding stops gating the moment a row is swapped -- which is
+    every row on this page after the first press.
+
+    Capture phase (`, true`): htmx listens for `submit` on the form itself, so
+    a bubble-phase guard runs second and the POST is already away.
+
+    `stopPropagation`: htmx's submit handler does not consult
+    `defaultPrevented`, so `preventDefault()` alone stops the browser
+    navigation and lets the AJAX delete go anyway -- a dialog rendered on top
+    of a write that already happened.
+
+    Mutation this catches: dropping any one of the three."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Won round", LotteryOutcome.WON)
+    login(client)
+
+    section = clear_confirmation(client.get("/concerts/np").text)
+    guard = section.split('document.body.addEventListener("submit"', 1)
+    assert len(guard) == 2, "the guard is not delegated on document.body"
+    handler = guard[1].split("}, true);", 1)
+    assert len(handler) == 2, "the submit guard does not run in the capture phase"
+    assert "e.preventDefault();" in handler[0]
+    assert "e.stopPropagation();" in handler[0]
+
+
+async def test_the_confirmation_reads_its_scope_off_the_day_id_input(client):
+    """The hidden `day_id` input IS the scope -- `_capture_actions.html`
+    resolves it once in `clear_day` and emits nothing else to say so. A script
+    keying off an attribute the form does not carry reads falsy forever and
+    shows the round copy on every press, including per-leg ones.
+
+    Mutation this catches: switching the scope test to `form.dataset.clearDay`
+    or any other attribute Task 3 never emits."""
+    cid = await seed_concert(client.db)
+    d1, d2, rid = await multi_leg_lottery(client.db, cid)
+    await set_day_result(client.db, rid, d1, LegResult.WON)
+    await set_day_result(client.db, rid, d2, LegResult.LOST)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    # The per-leg press this scope test exists for really is on the page.
+    [sat] = clear_forms(leg_sections(body)["Day 1"])
+    assert 'data-clear-confirm="1"' in sat
+    assert f'name="day_id" value="{d1}"' in sat
+
+    section = clear_confirmation(body)
+    assert 'form.querySelector(\'input[name="day_id"]\')' in section
+
+
+async def test_only_the_confirm_flag_gates_a_press(client):
+    """The guard's first act is to wave through every form that is not a
+    secured clear. Clearing a loss forfeits nothing and a confirmation there
+    would be theatre -- and every other form on the page (apply, won, lost,
+    day-result, follow) must reach htmx untouched.
+
+    Mutation this catches: gating on `/outcome/clear` in the action, or on the
+    form's presence in the row at all, rather than on `data-clear-confirm`."""
+    cid = await seed_concert(client.db)
+    await settled_round(client.db, cid, "Lost round", LotteryOutcome.LOST)
+    login(client)
+
+    body = client.get("/concerts/np").text
+    [form] = clear_forms(round_block(legs_of(body), "Lost round"))
+    assert "data-clear-confirm" not in form  # the press this must NOT gate
+
+    section = clear_confirmation(body)
+    assert "if (!form.dataset || !form.dataset.clearConfirm) return;" in section
 
 
 async def test_a_concert_with_no_legs_heads_its_rounds_plainly(client):

@@ -4336,6 +4336,47 @@ msgstr "更改"
 msgid "Cleared — you can answer this round again"
 msgstr "已清除 — 你可以重新回答这一轮"
 
+#: src/app/web/templates/concert_detail.html:260
+msgid "Clear your answer for this round?"
+msgstr "要清除这一轮的回答吗？"
+
+#: src/app/web/templates/concert_detail.html:261
+msgid "Clear your answer for this day?"
+msgstr "要清除这一场的回答吗？"
+
+#: src/app/web/templates/concert_detail.html:265
+msgid ""
+"You recorded a ticket for <b id=\"clearNameRound\">this round</b>. "
+"Clearing it removes that record for every day this round covers, the "
+"payment reminder it is holding open, and the reason other rounds are "
+"marked Covered. The round goes back to unrecorded and you can answer it "
+"again."
+msgstr ""
+"你已记录在<b id=\"clearNameRound\">这一轮</b>拿到了票。清除后，这一轮覆盖的每"
+"一场的该记录、为它保留的付款提醒，以及其他轮次被标记为「已获票」的依据都会消"
+"失。该轮次会回到未回答状态，你可以重新回答。"
+
+#: src/app/web/templates/concert_detail.html:268
+msgid ""
+"You recorded a ticket for this day of <b id=\"clearNameLeg\">this "
+"round</b>. Clearing it removes that record for this day only — the other "
+"days of this round keep theirs — along with the payment reminder it is "
+"holding open and the reason other rounds on this day are marked Covered. "
+"This day goes back to unanswered and you can answer it again."
+msgstr ""
+"你已记录在<b id=\"clearNameLeg\">这一轮</b>的这一场拿到了票。清除后，只会移除"
+"这一场的记录（这一轮其他场次的记录会保留），同时为它保留的付款提醒，以及这一"
+"场其他轮次被标记为「已获票」的依据也会消失。这一场会回到未回答状态，你可以重"
+"新回答。"
+
+#: src/app/web/templates/concert_detail.html:271
+msgid "Keep it"
+msgstr "保留"
+
+#: src/app/web/templates/concert_detail.html:272
+msgid "Clear my answer"
+msgstr "清除我的回答"
+
 #~ msgid "Remove this leg"
 #~ msgstr "删除此场次"
 
