@@ -5,6 +5,7 @@ what the route wishes it did -- the route is a thin shell and must not diverge
 from `bot/views.py`'s `_handle_outcome_click`, which is the other call site.
 """
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -515,3 +516,117 @@ async def test_day_result_without_htmx_returns_where_it_came_from(client):
     )
     assert r.status_code == 303
     assert r.headers["location"] == "/concerts/two-nights"
+
+
+# ── POST /rounds/{id}/outcome/clear ──────────────────────────────────────
+#
+# The un-answer: takes back what one of the two routes above recorded. Same
+# thin-shell contract, so these assertions are about what `clear_round_outcome`
+# actually does and about the shared `_outcome_response` plumbing already
+# pinned above -- never about which functions the route happened to call.
+
+
+def post_clear(client, round_id: int, **data):
+    """Posts as htmx does, for the same reason post_outcome/post_day_result do."""
+    return client.post(
+        f"/rounds/{round_id}/outcome/clear", data=data, headers={"HX-Request": "true"}
+    )
+
+
+async def test_clear_route_removes_the_outcome(client):
+    # Mutation caught: a route that renders the fragment without writing --
+    # e.g. dropping the call to clear_round_outcome entirely.
+    rid = await seed_round(client.db)
+    login_as(client, USER_A, "reiji")
+    post_outcome(client, rid, "won")
+    assert await outcome_for(client.db, USER_A, rid) is LotteryOutcome.WON
+
+    r = post_clear(client, rid)
+    assert r.status_code == 200
+    assert await outcome_for(client.db, USER_A, rid) is None
+
+
+async def test_clear_route_404s_on_a_missing_round(client):
+    # Mutation caught: dropping the existence check, which makes the route
+    # report success for a write the service silently skipped.
+    await seed_round(client.db)
+    login_as(client, USER_A, "reiji")
+    assert post_clear(client, 987654).status_code == 404
+
+
+async def test_clear_route_clears_only_the_named_leg(client):
+    # Mutation caught: ignoring day_id and always clearing the whole round,
+    # which would also erase a leg the reader never touched.
+    rid, d1, d2 = await seed_multi_leg(client.db)
+    login_as(client, USER_A, "reiji")
+    post_day_result(client, rid, result="won", day_id=d1)
+    post_day_result(client, rid, result="lost", day_id=d2)
+    assert await day_results_for(client.db, USER_A, rid) == {
+        d1: LegResult.WON, d2: LegResult.LOST
+    }
+
+    r = post_clear(client, rid, day_id=d1)
+    assert r.status_code == 200
+    assert await day_results_for(client.db, USER_A, rid) == {d2: LegResult.LOST}
+
+
+async def test_clear_route_ignores_a_day_of_another_concert(client):
+    # Mutation caught: passing day_id straight through with no coverage check
+    # anywhere in the path, which would clear (or corrupt) state for a round
+    # a stray/forged id has no business touching.
+    rid, d1, _d2 = await seed_multi_leg(client.db)
+    login_as(client, USER_A, "reiji")
+    post_day_result(client, rid, result="won", day_id=d1)
+    assert await day_results_for(client.db, USER_A, rid) == {d1: LegResult.WON}
+
+    async with client.db() as s:
+        other = Concert(title="Elsewhere", event_id="elsewhere-clear", created_by=USER_A)
+        s.add(other)
+        await s.flush()
+        stray = ConcertDay(
+            concert_id=other.id, label="Day 1",
+            starts_at_utc=datetime.now(UTC) + timedelta(days=30),
+        )
+        s.add(stray)
+        await s.commit()
+        stray_id = stray.id
+
+    r = post_clear(client, rid, day_id=stray_id)
+    assert r.status_code == 200
+    assert await day_results_for(client.db, USER_A, rid) == {d1: LegResult.WON}
+
+
+async def test_clear_route_redirects_without_htmx(client):
+    # Mutation caught: returning a bare fragment to a JS-less browser, which
+    # renders as the whole document.
+    rid = await seed_round(client.db)
+    login_as(client, USER_A, "reiji")
+    post_outcome(client, rid, "applied")
+    r = client.post(f"/rounds/{rid}/outcome/clear")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"
+
+
+async def test_clear_route_sends_the_cleared_toast(client):
+    # Mutation caught: reusing an existing outcome key (e.g. "lost") for the
+    # toast, which would tell the reader they had been marked lost instead of
+    # confirming the clear.
+    rid = await seed_round(client.db)
+    login_as(client, USER_A, "reiji")
+    post_outcome(client, rid, "applied")
+    r = post_clear(client, rid)
+    assert json.loads(r.headers["HX-Trigger"]) == {"toast": {"outcome": "cleared"}}
+
+
+async def test_clear_route_requires_login(client):
+    # Mutation caught: dropping require_user, which would let an
+    # unauthenticated POST clear someone else's outcome.
+    rid = await seed_round(client.db)
+    async with client.db() as s:
+        await record_round_outcome(s, USER_A, rid, LotteryOutcome.APPLIED)
+        await s.commit()
+
+    r = post_clear(client, rid)
+    assert r.status_code == 204
+    assert r.headers["hx-redirect"] == "/"
+    assert await outcome_for(client.db, USER_A, rid) is LotteryOutcome.APPLIED
