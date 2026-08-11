@@ -208,3 +208,33 @@ async def test_checking_an_unknown_concert_is_404(client):
     r = client.post("/admin/quiet-ladders/nope/checked")
     assert r.status_code == 404
     assert r.json()["detail"] == "no such concert"
+
+
+async def test_preferences_links_an_admin_to_the_page(client):
+    """The page is reachable: nothing in the site nav points at it, so the
+    Preferences "Admin tools" block is the only way in.
+
+    Both halves are load-bearing, and the brief's one-line
+    `"/admin/quiet-ladders" in r.text` had neither:
+
+    - The ANCHOR markup, not the bare path. The path alone would also be
+      satisfied by a comment, a `data-` attribute or a form action, none of
+      which is a link a human can follow.
+    - The EDITOR half first. `test_an_editor_is_forbidden` pins that the route
+      answers 403; this pins that a non-admin is not offered a link into a 403.
+      Without it the test's own name ("an admin") is unpinned -- an
+      unconditional link outside the `{% if user.is_admin %}` block would pass
+      the positive half alone.
+
+    Checked by deleting the two template lines: the positive assertion fails.
+    Checked by moving them outside the admin gate: the editor assertion fails.
+    """
+    login_as(client, EDITOR_ID, "editor")
+    editor_page = client.get("/preferences")
+    assert editor_page.status_code == 200
+    assert '<a href="/admin/quiet-ladders">' not in editor_page.text
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/preferences")
+    assert r.status_code == 200
+    assert '<a href="/admin/quiet-ladders">' in r.text

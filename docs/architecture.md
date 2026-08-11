@@ -104,6 +104,9 @@ measurement or an incident that a reasonable-looking edit would undo.
     `ops_alerts.py` (health checks → admin DMs).
   - `audit.py` (`ConcertAudit`), `phrases.py` (the round-label library),
     `translation_gaps.py` (the edit pages' "what's missing" notice).
+  - `quiet_ladders.py` — round watch: which catalogue concerts hold no future
+    deadline, the two stamps that track them, and the per-tick pass that DMs
+    the admins once when one newly goes quiet. Its own entry below.
   - `tokens.py` — secret tokens at rest: one `hash_token`/`generate_*_token`
     shape shared by the calendar feed and the agent read API's
     `api_token_hash`, so the two never carry two hash implementations that
@@ -114,6 +117,101 @@ measurement or an incident that a reasonable-looking edit would undo.
   A feature module must never `from app.db.service import ...` — that is a
   cycle, and one that surfaces or not depending on which module a process
   imports first. Import `app.db.core` (or the sibling) directly.
+- **Round watch (`db/quiet_ladders.py`)** -- shipped 2026-08-11, design in
+  `docs/superpowers/specs/2026-08-11-round-watch-design.md`. Discovery answers
+  "what exists that you are not tracking"; this answers "what changed about
+  what you already track". A round announced AFTER a concert was imported is
+  otherwise invisible: nothing re-visits a concert's own pages, and the
+  reminder machinery can only plan from rounds it was given. That failure is
+  silent and it is the app's core promise failing -- a user who followed the
+  right artist, got the new-event DM, and still missed the lottery.
+  **The predicate lives here and only here:**
+
+      not all_legs_cancelled(days)
+      and (a live dated leg is in the future  or  no live leg is dated at all)
+      and next_anchor_at(concert, now) is None
+
+  - **`next_anchor_at` is REUSED, never restated.** `db/core.py` already
+    computed "the earliest future moment among live rounds" for the agent read
+    API (`_next_anchor_iso`); it was PROMOTED to
+    `next_anchor_at(concert, now) -> datetime | None` and the ISO version is now
+    a one-line wrapper over it. Two definitions of "future anchor" free to
+    drift apart is the defect this prevents: the page and `/api/v1` answer
+    identically by construction, and the predicate test that pins it is the one
+    asserting a concert WITH a future anchor is absent from the list. Do not
+    re-derive the anchor here, and do not transliterate the predicate into SQL:
+    candidates come from ONE unfiltered `select(Concert)` and every clause runs
+    in Python against the loaded rows, because `is_round_cancelled` is Python.
+    The catalogue is ~157 productions, so a full scan is cheaper than a second
+    copy of the rule that would then be free to disagree with the first.
+  - **"Dateless" means ZERO LEGS, not an undated leg.** `ConcertDay.starts_at_utc`
+    compiles to `DATETIME NOT NULL`, so a leg always carries a date and a
+    concert cannot hold a mix of dated and undated ones. The first draft of the
+    spec ruled on "dated legs decide when a concert has both" -- a state the
+    schema forbids, whose test would have asserted something impossible. What
+    the leg clause actually distinguishes is a concert with no `ConcertDay`
+    rows AT ALL (a skeleton import such as ブシロード20周年記念ライブ, imported with no
+    dates because its page says 出演日程やチケットの詳細は後日発表, and every
+    `duplicate_concert` clone) from one whose legs have all been performed. The
+    LATEST live leg decides, so a tour whose first night has passed and whose
+    last has not is still on the list. Past concerts fall off by themselves --
+    the list drains and never accumulates, so nothing needs to expire it.
+  - **The pass runs EVERY TICK, with NO cadence clock**, which is the one place
+    it departs from the discovery sweep it otherwise copies. The sweep's
+    24-hour clock protects 86 third-party fetches ending in a DM: expensive,
+    rude to repeat, not idempotent. This is a query and a diff over the local
+    catalogue, and `reconcile_quiet_ladders` is SELF-IDEMPOTENT -- once a
+    newcomer is stamped it is no longer a newcomer, so a re-run announces
+    nothing. A clock would therefore protect nothing and would delay a notice
+    by up to a day; it would also make `quiet_since_utc` mean "N days since the
+    pass noticed" instead of a real measurement. Adding one is the edit to
+    refuse, and the test that must fail if someone does is "an immediate second
+    run announces nothing".
+  - **The stamps and the queued notice must commit in ONE transaction.** That
+    pairing is the whole of the notice's exactly-once property: commit the
+    stamps first and a crash loses the DM forever (a stamped concert is never
+    a newcomer again); commit the notice first and a crash repeats it. So
+    `reconcile_quiet_ladders`/`run_quiet_ladder_pass` only FLUSH, and
+    `scheduler/loop.py`'s round-watch block owns the single commit. Do not add
+    a commit inside the db layer here.
+  - **Both stamps clear together.** `quiet_since_utc` is system-owned (set on
+    entry, cleared on exit) and `ladder_rechecked_at_utc` is the admin's
+    Checked button; when a concert LEAVES the list the pass clears both,
+    because both belong to the CURRENT quiet spell. A concert that goes quiet,
+    is checked, recovers a round and later goes quiet again must arrive
+    unchecked -- the earlier check answered a different question.
+    `quiet_since_utc` is named "first observed quiet", not "went quiet",
+    because the migration backfills it for every already-quiet concert so the
+    first pass after deploy is silent rather than DMing the back catalogue;
+    under the other name every backfilled value would be a lie.
+  - **Never wrap this in `session.no_autoflush`.** `_all_concerts` loads with
+    `execution_options(populate_existing=True)` -- needed because
+    `SessionMaker` sets `expire_on_commit=False`, so a session that outlives a
+    commit keeps its identity map and with it a stale `days`/`rounds`
+    collection that a fresh SELECT would not otherwise replace. But
+    `populate_existing` overwrites in-memory attributes even when dirty, so
+    with autoflush suppressed a stamp set just before the call is silently
+    discarded rather than written.
+  - **The page derives membership live on every load** (`quiet_ladder_rows`),
+    so a scheduler failure can never make it wrong; the pass owns only the two
+    things a query cannot, the entry stamp and the DM. That is also why there
+    is no "run now" button -- unlike the sweep, there is nothing to run. Rows
+    sort never-checked first, then longest-since-checked, then longest-quiet,
+    and a checked row DIMS but is never hidden: the stamp answers "have I
+    looked at this", and hiding would silently promote it to "is this
+    resolved", which it cannot answer. A concert checked in March genuinely
+    does grow a 一般発売 in July.
+  - The notice is `kind="quiet_ladder"`, `concert_id=NULL` (a digest naming
+    several concerts is nobody's embed, and NULL already makes
+    `record_deliveries` skip the title lookup), one row per
+    `sorted(settings.admin_ids)`, with `ensure_user` called ONLY when
+    `session.get(User, admin_id)` returns None -- unconditional would overwrite
+    a real admin's username with the numeric placeholder every single tick. It
+    is deliberately NOT in `UNREPORTED_NOTE_KINDS`: that set is for notices
+    that REPORT ON deliveries, and this one reports on the catalogue. No
+    newcomers means NO DM, and at a per-minute cadence that is load-bearing
+    rather than tasteful -- a "nothing found" note here would be 1,440 DMs a
+    day. Silence is the pass's normal output.
 - **Venues live on the LEG, as a tag.** `ConcertDay.venue_tag_id` (FK ->
   `tags.id`, ON DELETE SET NULL, indexed) is the structured venue and the ONLY
   one anything reads for display; SET NULL rather than CASCADE because a VENUE

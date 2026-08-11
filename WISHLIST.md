@@ -1012,193 +1012,48 @@ does not have to be re-litigated from scratch. Entries 1-5 renumber to 2-6 and
 its first displacement ever and minute-level offsets its fourteenth, both
 recorded in their own entries.
 
+**The 2026-08-11 pass empties the top TWO entries at once, by two different
+mechanisms, and that is a first for this file.** Round watch (old #2, and #1 on
+impact throughout its life) shipped on branch `round-watch` -- eight tasks,
+spec `docs/superpowers/specs/2026-08-11-round-watch-design.md` -- and it ships
+the CHEAPEST of the three shapes that entry recorded and only that one: an
+admin worklist of catalogue concerts whose ladder holds no future deadline,
+plus a digest DM when one newly goes quiet. The other two shapes (the
+discovery-matcher round-gap flag, the scheduled re-fetch of each concert's own
+official URL) are NOT built, remain wanted, and are re-filed as the successor
+entry at #2, demoted from #1 on merit -- the original called making the failure
+visible "most of the value", and that half is what shipped. Above it, old #1
+(the phase-2 calibration press) is DELETED rather than moved: the press ran on
+2026-08-09/10, and that entry's own closing instruction was that it comes off
+the list "not into Shipped, since it ships nothing, but deleted with its
+verdict folded into the phase-2 shipped entry". Its verdict -- the model's
+judgment was fine and the CHECKER was not, a mutation harness proving 111 of
+129 year-shifted claims -- and the nine commits the press produced on
+`triage-calibration-fixes` (PR #146) are now in that entry. The one live cross-reference the deletion would have invalidated (#18
+agent write endpoints, pointing at "the item that used to sit at Proposed #1")
+was corrected in place, as were the two renumber-invalidated pointers at #17
+and #18.
+
+Everything below renumbers 1-19 by the two removals and the one insertion, and
+**minute-level offsets returns to #1 on its fifteenth move** -- the first ever
+to arrive by three mechanisms in one pass (a deletion, a ship, and a successor
+ranked below it on merit); the running record continues in its entry. Five
+entries carry genuine dated re-reads from this build and none of them moved:
+the tick's long jobs (#6) gained a FOURTH job that is deliberately NOT a long
+one, and the note says why so nobody re-derives it; the unbounded-admin-list
+entry (#14) gained an exact twin, since `/admin/quiet-ladders` also emits its
+copy block twice; the calendar-feed-silence entry (#15) got the largest effort
+drop on the list, because round watch is a working instance of precisely its
+shape, with the stamp, the backfill, the idempotency and the
+`UNREPORTED_NOTE_KINDS` ruling all already settled in code; and the two
+agent entries (#17, #18) gained one new producer and one newly-named write gap
+respectively. The remaining twelve were re-read and stand as written, with the
+reasoning in the revision-pass note at the end of Proposed.
+
 ## Proposed (highest impact first)
 
 
-### 1. The first live completion run is not calibrated
-
-Impact: n/a -- it delivers no user-visible change - effort: minutes, plus the
-reading. Raised: 2026-08-06 (owner, immediately after AI draft completion
-merged: "I have no time now").
-
-**Phase 2 has never run against a real DeepSeek key.** Every test injects a
-fake client, which is the right shape for CI and says nothing about the model's
-judgment. Two things only a live press can settle, and both decide whether the
-build is worth anything:
-
-- **Does the model reliably emit `evidence` at all?** If it habitually omits
-  the quotes, every proposed round is rejected for "no evidence" and the
-  feature returns nothing while billing full price. Nothing in the design
-  prevents that -- the prompt asks, and only a run answers.
-- **What is the false-rejection rate on real Japanese ticket pages?** The
-  contiguity rule was tightened deliberately, accepting false rejections to buy
-  out four verified false accepts. Whether that trade costs one round in twenty
-  or one in three is the entire economics of the feature, and it is unmeasured.
-
-The first press completes NOTHING, and that is correct rather than a bug: every
-host is unknown, so it records them and stops. Approve the ones you recognise
-at `/admin/fetch-domains`, decline the rest, press again. `docs/deploy.md` says
-so in its own words, so an empty first result does not read as a failure.
-
-What to read afterwards, in this order. The QUOTES, not only the timestamps --
-a quote that does not say what its timestamp says is the exact failure this
-feature exists to make visible, and it stays invisible if you only check that
-the dates look plausible. Then the REJECTION BANNER, because a rejected round
-is more often a real deadline the model quoted loosely than an invented one,
-and those are the ones to type in by hand. Expect at least one known false
-rejection: a same-day window written on a single line
-(`受付期間 2026年1月10日(土)10:00〜23:59`) rejects its closing time, because the
-hour must be the token immediately after the day. A verified refinement exists
-and is deliberately unapplied -- see the phase-2 entry in Shipped.
-
-If the judgment disappoints, the fallback needs no code: stop pressing. Phase
-1's skeletons still arrive and filling their rounds returns to agent work,
-which is where it was the day before.
-
-**It sits at #1 as a GATE, not on impact**, and that is a deliberate departure
-from this file's ordering rule rather than a claim that a calibration press
-matters more to a user than a missed lottery does. It delivers nothing to
-anyone. It is here because it is the only item on the list where a few minutes
-decide whether an entire merged build is worth anything, and an item that cheap
-sitting mid-list is an item that quietly never happens. It comes off the list
-the moment it runs -- not into Shipped, since it ships nothing, but deleted
-with its verdict folded into the phase-2 shipped entry -- and round-watch
-reclaims #1 in the same motion.
-
-Re-read 2026-08-08 against the agent read API and **held at #1, unchanged**.
-The two are explicitly orthogonal by the new build's own design doc: the
-read API is useful "whether or not the in-app LLM passes survive" this
-calibration, because it answers a different friction (the agent cannot see
-the catalogue) than this entry's question (is the model's judgment on real
-Japanese pages any good). Shipping the API neither runs the calibration
-press nor changes what it would find.
-
-### 2. Nothing re-checks a tracked concert for newly opened rounds
-
-Impact: high (correctness family: a tracked concert whose ladder silently
-rots misses the exact lottery the app exists to catch) - effort: medium,
-with an unresolved design fork. Raised: 2026-08-05 (owner ask at the end of
-the first full triage session, filed with the evidence still warm).
-
-Discovery's sweep answers "what exists that you are not tracking"; NOTHING
-answers "what changed about what you already track". A round announced after
-a concert is imported is invisible: no sweep visits the concert's own pages,
-no surface lists ladders that have gone quiet, and the reminder machinery
-can only plan from rounds it has been given. The 2026-08-05 batch shipped
-the evidence in triplicate:
-
-- ブシロード20周年記念ライブ imported with `rounds: []` because its official
-  page says 出演日程やチケットの詳細は後日発表 -- CORRECT today, and silently
-  wrong from the day tickets are announced. ゾンビランドサガ2027 and the
-  九九組 orchestra live likewise have no 一般発売 announced yet; each will
-  grow rounds nobody is watching for.
-- The sharpest instance was only caught by accident: 石川大観光Ⅱ and
-  103期卒業公演 were imported with their 最速先行 alone, and the missing
-  アップグレード rounds (1次 AND 2次 for 103期) surfaced solely because
-  fan-calendar leads happened to name them -- ten leads deliberately held
-  back from that evening's prune as the last pointer to rounds the catalogue
-  does not carry.
-
-Three shapes, cheapest first, recorded rather than decided:
-
-- **A "quiet ladders" admin surface**: tracked concerts whose ladder holds no
-  future anchor, listed as a re-check worklist with a paste-ready agent
-  prompt, exactly the shape /admin/discoveries already has. Pure read -- no
-  fetch, no new trust decision -- and it converts the failure from silent to
-  visible, which is most of the value.
-- **Teach the discovery matcher the round dimension**: a calendar lead that
-  names a round its matched tracked concert lacks should flag "round gap"
-  instead of only the date+venue hint. Covers only feed-covered franchises,
-  but the 蓮ノ空 catch above proves the signal is real and already arriving.
-- **The heavyweight**: a scheduled re-fetch of each concert's own
-  official/source URL. A genuinely new trust decision -- `fetching.py` is
-  host-pinned per caller and this is arbitrary editor-supplied hosts -- and
-  parsing arbitrary ticket pages is agent work, not a parser. Probably stays
-  manual/agent-driven behind whichever surface above ships first.
-
-Filed at #1 on the correctness-family precedent: a stale ladder on a TRACKED
-concert is the app's core promise failing quietly -- a user who followed the
-right artist, got the 🆕 DM, and still misses the lottery because the round
-arrived after import. Unlike the crawler entry that briefly sat here, no
-edge mitigation stands behind this one; the only current defense is the
-owner remembering to re-check.
-
-Re-read the same day against AI triage phase 1 (Shipped below) and **held at
-#1, with its case strengthened rather than weakened**. Phase 1's skeleton
-drafts carry `rounds: []` BY CONSTRUCTION -- rounds are stripped in code
-whatever the model returns, which is the property that makes them honest -- so
-every draft it queues is one more tracked concert whose ladder is empty on
-purpose and will need re-checking later. That is not an argument against phase
-1 (the alternative is an invented deadline, which is worse than a missing one),
-it is an argument that the volume of the failure this entry describes now
-scales with how much the owner presses that button. The cheapest of the three
-shapes above -- the "quiet ladders" admin surface -- gets cheaper in the same
-motion, because a rounds-less concert originating from a skeleton draft is
-exactly what such a list would find first.
-
-Re-read 2026-08-06 against AI triage phase 2 -- the build most likely of any so
-far to have moved this entry -- and **held at #1, but the composition of the
-case has genuinely changed in both directions and that is worth writing down
-rather than leaving to be re-derived.** Weakened: the volume argument added the
-day before is largely ANSWERED. A skeleton's rounds are now filled BEFORE it is
-committed, so pressing the triage button no longer manufactures tracked
-concerts with empty ladders at the rate that paragraph feared -- the drafts
-still arrive empty, but they no longer arrive empty INTO THE CATALOGUE.
-Strengthened, and more than the first point weakens it: the HEAVYWEIGHT of the
-three shapes above -- a scheduled re-fetch of each concert's own official URL
--- was explicitly gated on "a genuinely new trust decision (`fetching.py` is
-host-pinned per caller and this is arbitrary editor-supplied hosts)", and that
-decision has now been MADE and SHIPPED. `ApprovedPublicHosts`, the
-`/admin/fetch-domains` approval queue and evidence-grounded rounds are exactly
-the machinery that shape was waiting on, so its effort drops from "a new
-security posture plus a parser" to "a scheduler pass over concerts instead of
-over pending drafts". Unchanged, and this is why the rank holds: the CORE claim
-is untouched. Phase 2 reads a page only when an admin presses a button, only
-for a PENDING draft (`completion_candidates` filters `committed_at IS NULL`),
-and never revisits a concert already in the catalogue. ブシロード20周年記念ライブ
--- whose page says 詳細は後日発表 -- is the canonical case, and phase 2 reads
-that page, correctly finds nothing, and marks the draft done. Nothing in this
-build notices when that page later grows a round.
-
-Displaced to #2 on 2026-08-06, its FIRST displacement since it was filed, and
-by something that is not a feature at all: the phase-2 calibration press, which
-sits above it as a gate rather than on impact. Position, never substance -- and
-it reclaims #1 the moment that press is done.
-
-Re-read 2026-08-08 against the agent read API, **held at #2 (effectively #1
-on impact, the gate above it delivering nothing to anyone), but the CHEAPEST
-of the three shapes this entry proposes just got cheaper still.** The "quiet
-ladders" admin surface's whole job is finding tracked concerts whose ladder
-holds no future anchor -- and the read API's own design doc names this
-exactly: `_api_concert_row`'s `next_anchor_at` (`db/core.py`) IS that signal,
-computed catalogue-wide already, `null` meaning precisely "no future anchor
-remains." Building the admin surface is now closer to a filtered query over
-already-shipped code than new logic. It goes further than that, too: an
-agent with API access could compute the same "quiet ladders" worklist itself
-by paging `/api/v1/concerts` and collecting `next_anchor_at: null` rows,
-without the admin surface existing at all -- though the owner presumably
-still wants the page for HIS OWN visibility, not only an agent's, so this
-is a reason the cheap shape got cheaper, not a reason to skip it. The other
-two shapes (the discovery-matcher round-gap flag, the scheduled re-fetch)
-are untouched by this build -- neither reads nor needs the catalogue view
-the API adds. Rank unchanged; effort, for the cheap shape specifically, drops
-further.
-
-Re-read 2026-08-10, when phase 1 stopped stripping rounds and started
-GROUNDING them (owner ruling; `strip_rounds` deleted, `verify_rounds` wired
-into the draft loop). **Held, and one sentence of the 2026-08-05 re-read above
-is now historically false and should be read as history**: phase 1's drafts no
-longer carry `rounds: []` by construction. They carry whatever the Eventernote
-page states and the model can quote -- 7 real rounds over 13 productions in the
-run that produced the ruling. That weakens the volume argument a second time
-(fewer drafts arrive empty at all, and the ones that do reach phase 2 as
-before), and it strengthens the core claim in the same motion for a NEW reason:
-some of those rounds exist ONLY on Eventernote, because an official page drops
-a round once it closes. A ladder assembled from two sources that each forget
-different parts of it is exactly a ladder that goes stale in a way only a
-re-fetch pass would notice.
-
-### 3. Minute-level reminder offsets
+### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
 (domain-model review discussion). Re-ranked 2026-07-19.
@@ -1325,7 +1180,78 @@ Displaced to #3 on 2026-08-06 by the two conversation-sourced entries inserted
 above -- the FOURTEENTH move, and the first caused by entries that ship nothing
 and deliver no feature at all. Same verdict as the thirteen before it.
 
-### 4. Franchise-aware round-label suggestions
+**Back at #1 on 2026-08-11 -- the FIFTEENTH move, and the first ever to arrive
+by three mechanisms at once.** The entry above it was DELETED (the calibration
+gate ran, and it shipped nothing, so it left the list rather than moving to
+Shipped); the entry above THAT shipped its cheapest shape; and the successor
+carrying that entry's two unshipped shapes was ranked BELOW this one on merit
+for the first time in their coexistence, because making the round-watch failure
+visible was, by its own filing, most of its value. Re-read against what shipped
+(one db feature module, one pure message builder, one admin page, one scheduler
+block) and untouched in substance for the fifteenth consecutive pass: nothing
+round watch built comes within reach of `PresetItem`, the offset form or the
+sentence builders. Position, never substance -- fifteen moves, fifteen
+identical verdicts.
+
+### 2. Round watch: the two shapes it did not ship
+
+Impact: medium (down from high, on merit -- the failure is now VISIBLE, and the
+entry that filed it called visibility "most of the value") - effort: one small,
+one large. Raised: 2026-08-05; the cheapest of its three shapes shipped
+2026-08-11 and is in Shipped below, these two did not.
+
+The problem statement is the parent entry's and is not repeated here -- it is
+in the Shipped entry, verbatim, with the 2026-08-05 evidence still attached.
+What changed on 2026-08-11 is the DEFENCE. Until then, in that entry's own
+words, "the only current defense is the owner remembering to re-check"; now
+`/admin/quiet-ladders` lists every catalogue concert whose ladder holds no
+future deadline, longest-unattended first, and a digest DM names each one
+within a minute of it going quiet. The failure is still reachable -- it is
+simply no longer silent -- and both shapes below are now automation of a
+problem somebody can SEE rather than the only way to see it at all.
+
+**Teach the discovery matcher the round dimension** (small). A calendar lead
+naming a round its matched tracked concert LACKS should flag "round gap"
+instead of only the date+venue hint. It covers feed-covered franchises only,
+but the catch that filed the parent entry proves the signal is real and already
+arriving: the 蓮ノ空 103期卒業公演's missing アップグレード rounds (1次 AND 2次)
+surfaced SOLELY because fan-calendar leads happened to name them, in a session
+that came close to pruning those leads unread. What it gained on 2026-08-11 is
+a destination it did not have when it was filed -- and, more usefully, a reason
+to exist beside a surface that might have looked like it obsoleted it. It does
+not: the quiet-ladders predicate cannot see this case BY CONSTRUCTION. A
+concert holding a future anchor and a missing round is not quiet, so it is
+absent from that list however long its gap persists, and a round-gap flag is
+the only proposed signal that catches it.
+
+**A scheduled re-fetch of each concert's own official URL** (large). Its
+security blocker is gone and has been since phase 2 (`ApprovedPublicHosts`, the
+`/admin/fetch-domains` approval queue, evidence-grounded rounds), which dropped
+its effort from "a new security posture plus a parser" to "a scheduler pass
+over concerts instead of over pending drafts" -- recorded 2026-08-06 and
+unchanged. Round watch adds the CANDIDATE LIST: a re-fetch pass wants to visit
+the concerts most likely to have grown a round, and `quiet_ladder_rows` already
+computes exactly that set in exactly that order. Build it as a consumer of that
+query rather than a second scan of the catalogue -- a second definition of
+"which concerts are worth re-reading" is the same drift `next_anchor_at`'s
+promotion was made to prevent. One property it must NOT inherit: the
+quiet-ladders page fetches nothing, which is precisely why it needed no trust
+decision; a re-fetch pass reopens that question for every editor-supplied host
+it visits, and the answer has to be the approval queue rather than the fact
+that the page it grew out of was safe.
+
+**Ranked #2, down from #1, on merit rather than by removal**, and the criterion
+is the parent entry's own. It was filed at #1 on the correctness-family
+precedent with the explicit note that "unlike the crawler entry that briefly
+sat here, no edge mitigation stands behind this one". One now does. That
+mitigation is human-dependent -- it works when the owner reads the DM and walks
+the list -- so this is a demotion and not a closure, which is what separates
+medium from low. Minute-level offsets takes #1 above it on the tiebreak that it
+delivers a whole user-visible capability, where what remains here is the
+minority half of one: the parent entry itself judged that making the failure
+visible was "most of the value".
+
+### 3. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1359,7 +1285,7 @@ own phrasing habits rather than by real editorial usage, so whoever builds the
 franchise ranking should look at what the counts actually contain before
 trusting the ORDER BY.
 
-### 5. Ten of eleven `RoundKind` members are purely cosmetic
+### 4. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1405,7 +1331,7 @@ data-driven refactor: this consumer is deliberately NOT the full set
 purpose), so a table generated blindly from the enum would silently re-offer
 them.
 
-### 6. In-app LLM extraction on the import page
+### 5. In-app LLM extraction on the import page
 
 Impact: low-medium - effort: medium, and ACTIONABLE as of 2026-08-05 (the
 budget block lifted). Raised and deliberately deferred 2026-07-22 (owner: no
@@ -1494,7 +1420,7 @@ these endpoints). Whoever eventually builds this should check the catalogue
 via that path before drafting rather than re-inventing a dedup query. Impact
 and rank unchanged; the dedup half of the eventual build just got an answer.
 
-### 7. Three long jobs share the reminder tick
+### 6. Three long jobs share the reminder tick
 
 Impact: low-medium -- no user-visible change today; it removes a false-alarm
 source and a latent outage class - effort: medium. Raised: 2026-08-06 (owner
@@ -1549,7 +1475,23 @@ and the single documented outage, not from production metrics -- no response
 times, request volume or real database size were consulted, and latency creep
 under ordinary traffic would change the picture.
 
-### 8. PWA / installability
+Re-read 2026-08-11 against round watch, **rank unchanged**, and the reason is
+worth stating because the headline reads like a hit on this entry and is not.
+The tick gained a FOURTH job, and unlike the three above it, that one runs on
+EVERY tick with no cadence clock at all. It is nonetheless not a fourth LONG
+job, and the distinction is this entry's whole subject: the three named above
+are long because each does third-party I/O in a loop (86 sequential fetches, or
+15 fetch+LLM pairs at up to ~151s an iteration). Round watch does one local
+`select(Concert)` with two `selectinload`s over ~157 rows plus a Python diff --
+no network, no model call, no wall clock, and nothing that could approach
+`heartbeat.MAX_AGE_SECONDS`. It therefore adds no overshoot risk and needs no
+`beat()` inside itself. What it DOES add is one more caller that had to know
+about the shared loop and the try/except/commit-per-block convention, which is
+this entry's secondary complaint ("every long job added since has had to
+remember it") reaching a SHORT job too. Held here as evidence for the entry,
+not as a reason to move it.
+
+### 7. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -1592,7 +1534,7 @@ AI-completed round is a deadline that reaches the user through the SAME
 channels as any other, so it raises the value of the interrupting half without
 altering what web push would have to build.
 
-### 9. Minor demo-parity cosmetics
+### 8. Minor demo-parity cosmetics
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1666,7 +1608,7 @@ reconstruct. `/admin/fetch-domains` is deliberately NOT on the list: admin
 pages have never had demo frames, exactly as they have never been translated.
 Fifth growth, fifth time not worth doing alone.
 
-### 10. The event classes outside concerts and talk shows
+### 9. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1706,7 +1648,7 @@ this class's actual difficulty, is untouched. Release events stay the honest
 "may not be expressible at all": a completion pass that finds no deadline
 because there is none is not progress on them.
 
-### 11. A/B casts have nowhere to live
+### 10. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1737,7 +1679,7 @@ leg-label-shaped identity too, and a cast convention smuggled into a label would
 be reproduced by it as readily as by a skill. Same verdict either way -- the gap
 stays honest until stage runs come back into scope.
 
-### 12. Discover sort in the content head, plus the catalogue-count note
+### 11. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1776,7 +1718,7 @@ and an admin page, and never went near Discover, its sidebar, the filter sheet
 or the catalogue counts. Recorded only because this file's discipline is that a
 re-read leaves a mark whether or not it found anything.
 
-### 13. Name the destination on the sign-in bounce
+### 12. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1807,7 +1749,7 @@ renders through Jinja's escaping as ordinary content, never into an `on*`
 handler or an inline script (invariant 7). Different surface, same rule,
 already followed.
 
-### 14. The calendar roster's blind spots
+### 13. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1870,7 +1812,7 @@ but it does mean the second half of this entry ("promoter-named rounds are
 unreachable by prefix, and always will be") is now routed around rather than
 merely tolerated, which is a further argument for leaving it at `low`.
 
-### 15. Nothing caps the discovery review path
+### 14. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -1939,7 +1881,20 @@ through the plan/apply screen), so it does not deserve an entry of its own --
 but if this one is ever picked up, the two pages want the same answer, and the
 cheap half of the fix here has an exact twin there.
 
-### 16. Nothing notices a calendar feed going quiet
+Re-read 2026-08-11 against round watch, **rank unchanged**, with one exact twin
+added. `/admin/quiet-ladders` is a THIRD admin worklist with no LIMIT, and it
+emits its copy block TWICE for the same reason `/admin/discoveries` does --
+once in `data-copy` for the button, once in the visible `<pre>` -- so the cheap
+half of the fix this entry has been naming since 2026-07-31 now has two twins
+rather than one, and whoever finally does it should do all three in one pass.
+The urgency does not move, and the arithmetic is recorded so nobody re-derives
+it: this page's row count is bounded by the CATALOGUE (~157 productions, of
+which only the quiet subset renders) and it DRAINS ITSELF -- the leg clause
+stops matching the day after a show, so rows leave without anybody dismissing
+them. That is the opposite of the discovery queue's unbounded growth, which is
+the property that made this entry worth filing.
+
+### 15. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
@@ -1992,7 +1947,26 @@ moves; a feed going quiet is still invisible.
 (2026-07-31) was closed the same day by measuring it -- see its Shipped entry.
 The measurement moved the answer: the hint banner was not the cause.)
 
-### 17. `db/core.py` is one mutually-recursive 4,000-line component
+Re-read 2026-08-11 against round watch, **rank unchanged** (its impact is still
+nil for users), and the 2026-09-03 `imas-tix` re-check still stands and is
+still owned by this entry alone. The EFFORT, though, drops from "small" to
+"copy the pass next door": round watch is a working, shipped instance of
+exactly this entry's shape -- notice something has gone quiet, stamp when it
+first did, DM the admins once. Every question this entry would have had to
+answer from scratch is now settled in code with its reasoning written down
+(`db/quiet_ladders.py`, and its entry in `docs/architecture.md`): a
+system-owned "first observed quiet" stamp with a migration backfill, so the
+first pass after deploy is silent instead of announcing the whole back
+catalogue; a self-idempotent reconcile, which is what lets it run every tick
+with no cadence clock; the stamps and the queued notice committed in ONE
+transaction, which is what makes the notice exactly-once; silence as the normal
+output; and the `UNREPORTED_NOTE_KINDS` question already ruled (a notice that
+reports on a SOURCE rather than on deliveries is an ordinary notice and belongs
+in `delivery_log` like any other). A per-feed "last future row seen" line is
+still the right first version; what changed is that going further is no longer
+over-built, because the machinery to copy already exists.
+
+### 16. `db/core.py` is one mutually-recursive 4,000-line component
 
 Impact: nil for users, real for anyone changing the reminder engine - effort:
 large. Raised: 2026-08-07 (the service.py split; this is the part that
@@ -2024,7 +1998,7 @@ own merits; the file size is a symptom, not the reason.
 
 Do not attempt this as a tidy-up. The engine is the product.
 
-### 18. Teach `add-concert` / `triage-leads` to use the agent read API
+### 17. Teach `add-concert` / `triage-leads` to use the agent read API
 
 Impact: nil for tracked users, real for the owner's own workflow -- effort:
 small (skill-file prompt/instruction edits; no app code, the API already
@@ -2053,7 +2027,19 @@ because it is the most directly actionable of the three follow-ups the design
 doc named, and the cheapest -- no new endpoint, no new trust boundary, just
 teaching two existing prompts to call four already-shipped GETs.
 
-### 19. Agent write endpoints
+Re-read 2026-08-11 against round watch, **rank unchanged**, with one new input
+worth naming. `/admin/quiet-ladders` emits a paste-ready copy block in the same
+shape `/admin/discoveries` does, and it deliberately carries THE ROUNDS THE
+CATALOGUE ALREADY HOLDS beside each concert -- without that, an agent handed
+the list re-proposes rounds that are already there, which is the same class of
+waste this entry exists to remove for tags and concerts. So these skills now
+have a second producer feeding them, and the worklist is exactly the kind of
+input that should arrive through the read API rather than a paste:
+`GET /api/v1/concerts` already serves `next_anchor_at`, the same signal the
+page's predicate reuses, so an agent can compute the worklist itself. That is
+this entry's proposal, with a second concrete use.
+
+### 18. Agent write endpoints
 
 Impact: potentially high, longer-term -- it would close the loop the read
 API opened -- but explicitly NOT ACTIONABLE today, and gated on evidence
@@ -2076,13 +2062,26 @@ actually observe over real use -- and that observation is what would
 eventually say whether committing unread is safe for any of it. There is no
 evidence yet either way; this entry is logged as a recorded scope boundary,
 not a task queued behind anything. It becomes actionable when the read API
-(and the skills that start using it, see #18) have been used long enough
+(and the skills that start using it, see #17) have been used long enough
 that the owner has an opinion about the AGENT's judgment, the same way phase
-2's calibration gate (see the item that used to sit at Proposed #1) is what
+2's calibration gate (which ran on 2026-08-09/10; the entry that carried
+it shipped nothing and was deleted on 2026-08-11, its verdict folded into the
+phase-2 Shipped entry) is what
 decides whether draft-completion's judgment is trustworthy. Don't build this
 speculatively ahead of that evidence.
 
-### 20. An MCP server in front of the agent read API
+Re-read 2026-08-11 against round watch, **still explicitly not actionable and
+unchanged in rank**. It adds one more instance of the friction this entry
+describes, and no evidence at all about the AGENT's judgment, which is the only
+thing that would move it: a quiet-ladders row an agent researches still becomes
+a round only by a human typing it into that concert's edit page. Worth naming
+because it is a gap this entry does not currently propose closing -- the write
+path it contemplates is `import_commit`, which CREATES concerts and cannot
+amend one (import answers 409 for a concert that already exists, invariant 6),
+so "let an agent add a round to a concert the catalogue already has" is a
+different endpoint from anything discussed here.
+
+### 19. An MCP server in front of the agent read API
 
 Impact: low -- a convenience wrapper around a capability that already
 exists, not a new capability - effort: small-medium, and explicitly not
@@ -2099,9 +2098,34 @@ a wrapper, deployable separately, and usable only from an MCP client", which
 is exactly why it was the wrong thing to build BEFORE the API it would wrap
 existed. Building the wrapper first would have meant guessing at an
 interface for a resource that didn't exist yet -- the same sequencing
-argument that put reads before writes at #19. Worth a fresh look if the raw
+argument that put reads before writes at #18. Worth a fresh look if the raw
 HTTP ergonomics prove genuinely annoying inside Claude Code in practice;
 nothing so far says they do, so this stays logged rather than built.
+
+**Revision-pass note (2026-08-11, full pass required by CLAUDE.md's WISHLIST
+rule after every shipped feature):** the five entries round watch genuinely
+touches carry their own dated re-reads above (#6 three long jobs, #14 the
+unbounded admin lists, #15 the calendar-feed silence, #17 the skills, #18 agent
+writes), and none of them moved. The other twelve (#1, #3-#5, #7-#13, #16) were
+re-read against this build specifically rather than skimmed, and the shared
+answer is that round watch touches nothing they describe: it added one db
+feature module, one pure message builder, one admin route and template, and one
+`try`/`except`/commit block in the tick. It changed no reminder math, no round
+taxonomy, no mobile or demo-parity surface, no calendar roster and no
+user-facing page at all. Two were checked more closely than the rest because
+they LOOK adjacent and are not. **#5 (in-app LLM extraction)**: round watch
+fetches nothing and calls no model -- it is deliberately the shape that needed
+no trust decision -- so it neither unblocks nor obsoletes that entry; the one
+contact is via #2 above, whose heavyweight shape would use exactly the
+machinery #5 is about. **#16 (`db/core.py`'s size)**: this build did take one
+function OUT of `core.py`'s orbit by promoting `_next_anchor_iso` to
+`next_anchor_at`, but that is a rename plus a caller, not a cut -- the function
+stays in `core.py` and the mutually-recursive component is the same shape it
+was. If anything it is a small argument the other way, since the promotion's
+whole point was that a SECOND copy of the signal outside `core.py` would drift.
+Judgement: nothing else moves. Recorded explicitly rather than left implicit,
+per the instruction that a revision pass leaving no trace is
+indistinguishable from one that never happened.
 
 **Revision-pass note (2026-08-08, full pass required by CLAUDE.md's
 WISHLIST rule after every shipped feature):** every remaining entry (#3-#5,
@@ -2129,6 +2153,118 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Round watch: the quiet-ladders surface (2026-08-11)
+
+Branch `round-watch`, eight tasks, spec
+`docs/superpowers/specs/2026-08-11-round-watch-design.md`, plan
+`docs/superpowers/plans/2026-08-11-round-watch.md`, migration `0671edabe2ac`
+(`concerts.quiet_since_utc` and `concerts.ladder_rechecked_at_utc`, plus a
+backfill). This was Proposed #2 -- and #1 on impact for its whole life, the
+gate above it delivering nothing to anyone -- filed 2026-08-05 at the end of
+the first full triage session with its evidence still warm. **It ships the
+CHEAPEST of the three shapes that entry recorded, and only that one.** The
+other two are re-filed as Proposed #2 above and remain wanted.
+
+**The problem, kept verbatim because the successor entry points here for it.**
+Discovery's sweep answers "what exists that you are not tracking"; NOTHING
+answered "what changed about what you already track". A round announced after a
+concert is imported was invisible: no sweep visits the concert's own pages, no
+surface listed ladders that had gone quiet, and the reminder machinery can only
+plan from rounds it has been given. That is the app's core promise failing
+silently -- a user who followed the right artist, got the 🆕 DM, and still
+misses the lottery because the round arrived after import. The 2026-08-05 batch
+had the evidence in triplicate: ブシロード20周年記念ライブ imported with `rounds: []`
+because its page says 出演日程やチケットの詳細は後日発表 (correct that day, silently
+wrong from the day tickets are announced), ゾンビランドサガ2027 and the 九九組
+orchestra live likewise; and the sharpest instance caught only by accident,
+石川大観光Ⅱ and the 103期卒業公演 imported with their 最速先行 alone, their missing
+アップグレード rounds surfacing solely because fan-calendar leads happened to name
+them. The 2026-08-10 grounding change sharpened it once more: some rounds now
+exist ONLY on Eventernote, because an official page drops a round once it
+closes, and a ladder assembled from two sources that each forget different
+parts of it is exactly a ladder that goes stale in a way only a re-check
+notices.
+
+**One predicate, in one place, reusing the signal that already shipped.** A
+concert is quiet when it is not dead, its latest live leg is in the future OR
+it has no legs at all, and no round of it holds a future moment. That third
+clause is `next_anchor_at`, PROMOTED out of `db/core.py`'s `_next_anchor_iso`
+-- the agent read API's own catalogue-level "earliest future moment among live
+rounds", whose `null` already meant precisely this -- with the ISO version
+becoming a one-line wrapper over it. Two definitions of "future anchor" free to
+drift apart is the defect that promotion prevents, and the test that pins it is
+the one asserting a concert WITH a future anchor is absent from the list. The
+whole predicate runs in Python over one unfiltered `select(Concert)`, because
+`is_round_cancelled` is Python and ~157 productions is cheaper to scan than a
+SQL transliteration would be to keep honest.
+
+**The spec corrected itself mid-plan on a state the schema forbids**, which is
+worth recording because the test written for it would have asserted something
+impossible. Its first draft ruled that "dated legs decide when a concert has
+both dated and undated ones"; `ConcertDay.starts_at_utc` compiles to
+`DATETIME NOT NULL`, so no leg is ever undated. What the clause actually
+distinguishes is a concert with ZERO `ConcertDay` rows -- a skeleton import,
+or a `duplicate_concert` clone -- from one whose legs have all been performed.
+Past concerts fall off by themselves, so the list drains and never accumulates.
+
+**Two stamps with two different owners, both belonging to the current quiet
+spell.** `quiet_since_utc` is system-owned; `ladder_rechecked_at_utc` is the
+Checked button. When a concert leaves the list the pass clears BOTH, so a
+concert that goes quiet, is checked, recovers a round and goes quiet again
+arrives unchecked -- the earlier check answered a different question. The first
+column is named "first observed quiet" rather than "went quiet" because the
+migration backfills it for every already-quiet concert, so the first pass after
+deploy is silent instead of DMing the entire back catalogue; under the other
+name every backfilled value would be a lie.
+
+**The pass runs EVERY TICK, with no cadence clock, and that is the one place it
+departs from the discovery sweep it otherwise copies.** The sweep's 24-hour
+clock protects 86 third-party fetches ending in a DM. This is a query and a
+diff over the local catalogue, and the reconcile is SELF-IDEMPOTENT -- a
+stamped concert is not a newcomer -- so a clock would protect nothing, would
+delay a notice by up to a day, and would turn `quiet_since_utc` from a
+measurement into "N days since the pass noticed". The stamps and the queued
+notice commit in ONE transaction, which is what makes the notice exactly-once:
+stamps first loses the DM on a crash, notice first repeats it. No newcomers
+means no DM, and at a per-minute cadence that is load-bearing rather than
+tasteful -- a "nothing found" note here would be 1,440 DMs a day.
+
+**The page derives its list live on every load**, so a scheduler failure can
+never make it wrong and there is no "run now" button: unlike the sweep, there
+is nothing to run. It is admin-only, English-only and unwrapped by `_()` like
+every other `/admin/*` page; only the Preferences link is translated, the
+precedent `/admin/discoveries` set. Rows sort never-checked first, then
+longest-since-checked, then longest-quiet, and a checked row DIMS but is never
+hidden -- the stamp answers "have I looked at this", and hiding would silently
+promote it to "is this resolved", which it cannot answer. A concert checked in
+March genuinely does grow a 一般発売 in July. Its copy block carries the rounds
+the catalogue ALREADY holds beside each concert, which is what stops an agent
+handed the list re-proposing rounds that are already there.
+
+**What it deliberately is not**, all three recorded in the spec before a line
+was written: it FETCHES nothing (no third-party request, no new host policy, no
+new trust decision), it WRITES no rounds (whatever a re-check finds is typed
+into the edit page by a human, the same shape `/admin/discoveries` has), and it
+HIDES nothing. `ApprovedPublicHosts` had already made the heavyweight re-fetch
+shape possible, and it was still not what this built: converting the failure
+from silent to visible is most of the value and is the half that needs no
+judgment about arbitrary ticket pages.
+
+**The recurring find across the per-task reviews was the PROXY ASSERTION** --
+nine of them over seven tasks, tests that passed for reasons unrelated to their
+own names. The cause was almost always the same and is worth knowing before
+writing a test against this page: `build_quiet_ladder_block` emits the concert
+titles, leg dates and round labels into a `copy_text` block rendered
+unconditionally in a `<pre>` beneath the table, so any bare substring assertion
+about a ROW is satisfied by the `<pre>` alone -- verified by replacing the
+row loop with `{% for row in [] %}` and watching the old assertions still pass.
+The surviving tests assert row-only discriminators instead (the Checked form's
+action, a `<td>`-wrapped label, an un-padded date behind a `\b` word boundary
+that the block's `%d %b` cannot produce). One real bug hid behind exactly this:
+`| unique` without `| list` is a generator, which Jinja treats as always
+truthy, so the "no dates announced" branch never rendered -- and the bare
+substring test passed anyway, off the `<pre>`.
 
 ### The agent read API (2026-08-08)
 
@@ -2328,6 +2464,57 @@ fourteen paid calls would write nothing at all. No new env vars; it reuses
 half, including the fact that the first press completes nothing on purpose.
 
 Full suite 2462 green.
+
+**The calibration press ran on 2026-08-09/10, and its verdict is folded in
+here** -- the Proposed entry that carried it (#1 from 2026-08-06) shipped
+nothing itself, so per its own closing instruction it was DELETED on 2026-08-11
+rather than moved to Shipped, and this paragraph is where its answers live.
+
+**Both questions it was filed to settle came back positive.** Does the model
+reliably emit `evidence` at all? Yes: across three models over the real
+catalogue, 39 rounds were accepted with ZERO invented timestamps. What is the
+false-rejection rate on real Japanese pages? Livable, and -- the useful finding
+-- its causes turned out to be namable bugs rather than the contiguity trade
+this entry feared. A live press grounded 16 rounds and rejected 8, and SEVEN of
+those eight rejections were CORRECT: the page stated a date only and the model
+supplied a time nobody wrote, which is the fabrication the module exists to
+stop.
+
+**What the press actually found was that the CHECKER was wrong, in one place
+badly.** A mutation harness over the evidence corpus -- 129 real timestamp
+claims, each with its page -- shifted every claim forward one year and measured
+how many the checker still proved: **111 of 129 ACCEPTED**. Rule 4's locality
+covered month, day, hour and minute; the YEAR was checked apart from all of
+them against the WHOLE PAGE, and this catalogue is full of pages whose SHOW is
+next year and whose DEADLINES are this year, so a quote plainly reading 2026
+proved a 2027 claim. A deadline claimed a year late fires its reminder after
+the real deadline has passed, silently, which is the exact failure this module
+exists to prevent. Nine commits shipped on `triage-calibration-fixes`
+(PR #146, merged 2026-08-10). The year is now STATED evidence or ARITHMETIC
+against the leg dates and never "somewhere on the page" -- requiring it in the
+quote was measured and refused, since only 92 of the 129 claims carry it and
+「9月13日（日）23:59」 is the ordinary shape (harness after the fix: 111 accepted →
+0, with zero disagreements over the 129 real claims). A 12-hour Japanese time
+is now REFUSED rather than converted: `申込締切：2026年7月28日午後11時59分` had been
+ACCEPTING a claim of 11:59, twelve hours early, while refusing the true 23:59
+-- both a misreading and a correct reading came out wrong, and the misreading
+was the one that reached a user as a real reminder. A bare closing day now
+inherits its month from earlier in the same quote (`…7月14日（火）21:00 ～ 28日（火）
+23:59`), in a THIRD matcher rather than a looser main loop. Pass 3's rounds are
+GROUNDED instead of deleted, which is what recovered a complete three-round
+ladder surviving only on Eventernote. The classify prompt's input is BOUNDED
+(it failed two ways on a real 511-lead queue, both size rather than judgment)
+and `max_tokens` is sent explicitly. And `lovelive-anime.jp` earned a per-host
+User-Agent exception -- a table of NAMED exceptions, never a global switch --
+because its CDN answered the honest agent 403 and so hid 8 of the 12 exported
+concerts, and 28 of the 47 hand-typed rounds, from the measurement entirely.
+
+**The one known false rejection this entry deferred is still deferred.** The
+same-day window on one line (`受付期間 2026年1月10日(土)10:00〜23:59`) still passes
+its open and rejects its close; the press did not touch it, and the refinement
+recorded above stays verified-but-unapplied for the same reason it did the
+first time -- the failure is visible, carries its reason, and costs one
+timestamp typed by hand.
 
 ### AI triage of discovery leads (phase 1) (2026-08-05)
 
