@@ -1052,6 +1052,23 @@ reasoning in the revision-pass note at the end of Proposed.
 
 ## Proposed (highest impact first)
 
+**In flight (2026-08-11): outcome correction.** Raised by the owner asking
+whether a user can backtrack on their 当選/落選 settings. They cannot: `capture_gates`
+opens the result buttons only from `APPLIED`, so a round reading WON or LOST
+falls through `_capture_actions.html` to "Paid" or "Nothing to do" and stays
+there, and a mis-pressed "Not applying" is pinned forever — which is the
+2026-08-04 irreversible-APPLIED entry in Shipped, still open, and this closes it
+as a side effect. The only working backtrack today is an accident: the flat
+Won/Lost buttons on a stale results DM are unguarded. Design in
+`docs/superpowers/specs/2026-08-11-outcome-correction-design.md`, sketch in
+`docs/superpowers/demo/dekimasen-outcome-correction-sketch.html`, branch
+`outcome-correction`. Filed at the head of Proposed on the correctness-family
+precedent that ranked the onboarding skip and the dead-concert entry, but
+**deliberately not renumbered**: the entries below keep their numbers while this
+is in flight, because the file's own history records renumber-invalidated
+cross-references as a hazard (see the #17 pointers noted in Shipped), and the
+full re-rank is owed on ship anyway.
+
 
 ### 1. Minute-level reminder offsets
 
