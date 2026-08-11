@@ -43,6 +43,7 @@ from app.web.routes import imports as import_routes
 from app.web.routes import outcomes as outcome_routes
 from app.web.routes import preferences as pref_routes
 from app.web.routes import privacy as privacy_routes
+from app.web.routes import quiet_ladders as quiet_ladder_routes
 from app.web.routes import rehearsal as rehearsal_routes
 from app.web.routes import reminders as reminder_routes
 from app.web.routes import setup as setup_routes
@@ -370,6 +371,10 @@ def create_app() -> FastAPI:
     # whole, and this is a fifth unrelated operational concern.
     fetch_domain_routes.templates = templates
     app.include_router(fetch_domain_routes.router)
+    # /admin/quiet-ladders, likewise a literal path plus one {event_id} POST
+    # route that shares no prefix with concerts.py's -- no ordering hazard.
+    quiet_ladder_routes.templates = templates
+    app.include_router(quiet_ladder_routes.router)
     # Gated, not guarded: production leaves rehearsal_enabled false, so these
     # routes are absent from the app entirely rather than merely protected.
     if settings.rehearsal_enabled:
