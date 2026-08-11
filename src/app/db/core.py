@@ -3787,7 +3787,7 @@ def _api_concert_row(concert: Concert, now: datetime | None = None) -> dict:
     }
 
 
-def _next_anchor_iso(concert: Concert, now: datetime) -> str | None:
+def next_anchor_at(concert: Concert, now: datetime) -> datetime | None:
     """CATALOGUE-LEVEL, not per-viewer -- the earliest future moment among live
     rounds.
 
@@ -3805,6 +3805,10 @@ def _next_anchor_iso(concert: Concert, now: datetime) -> str | None:
     ONE dead leg must stay live. The list endpoint never meets this (a dead
     concert fails `discoverable_concert_criterion`); the DETAIL endpoint
     does, deliberately, since a dead concert stays reachable at its own URL.
+
+    Returns the datetime rather than a string because two callers want two
+    shapes of the same fact: the agent read API serialises it, and
+    db/quiet_ladders.py compares it to None. One definition, two renderings.
     """
     if all_legs_cancelled(concert.days):
         return None
@@ -3818,7 +3822,13 @@ def _next_anchor_iso(concert: Concert, now: datetime) -> str | None:
         ):
             if at is not None and at > now:
                 moments.append(at)
-    return min(moments).isoformat() if moments else None
+    return min(moments) if moments else None
+
+
+def _next_anchor_iso(concert: Concert, now: datetime) -> str | None:
+    """The API's serialised form of `next_anchor_at`."""
+    at = next_anchor_at(concert, now)
+    return at.isoformat() if at is not None else None
 
 
 async def api_concert_detail(
