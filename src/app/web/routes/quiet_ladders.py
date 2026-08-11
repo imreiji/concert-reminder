@@ -1,4 +1,4 @@
-"""Round watch: tracked concerts whose ladder has gone quiet.
+"""Round watch: which concerts in the catalogue have a ladder that has gone quiet.
 
   GET  /admin/quiet-ladders                    the worklist, plus one paste block
   POST /admin/quiet-ladders/{event_id}/checked stamp "I re-checked this"
@@ -22,9 +22,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.service import quiet_ladder_rows, record_ladder_checked
+from app.db.service import quiet_entry_from_row, quiet_ladder_rows, record_ladder_checked
 from app.db.session import get_session
-from app.domain.quiet_ladder_message import QuietEntry, build_quiet_ladder_block
+from app.domain.quiet_ladder_message import build_quiet_ladder_block
 from app.web.auth import SessionUser, require_admin
 
 router = APIRouter()
@@ -39,17 +39,7 @@ async def quiet_ladders(
     session: AsyncSession = Depends(get_session),
 ):
     rows = await quiet_ladder_rows(session)
-    block = build_quiet_ladder_block([
-        QuietEntry(
-            title=row.title,
-            event_id=row.event_id,
-            leg_dates=row.leg_dates,
-            round_labels=tuple(r.label for r in row.rounds),
-            official_url=row.official_url,
-            eventernote_url=row.eventernote_url,
-        )
-        for row in rows
-    ])
+    block = build_quiet_ladder_block([quiet_entry_from_row(row) for row in rows])
     return templates.TemplateResponse(
         request,
         "admin_quiet_ladders.html",

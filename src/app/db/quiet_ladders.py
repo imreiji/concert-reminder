@@ -32,7 +32,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.db.core import _jst_date, _now, all_legs_cancelled, ensure_user, next_anchor_at
 from app.db.models import Concert, Notification, User
-from app.domain.quiet_ladder_message import QuietEntry, build_quiet_ladder_dm
+from app.domain.quiet_ladder_message import QuietEntry, QuietRoundInfo, build_quiet_ladder_dm
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,6 @@ class QuietRound:
     """One round the concert DOES carry, so a re-check does not re-propose it."""
 
     label: str
-    kind: str
     opens_at_utc: datetime | None
     closes_at_utc: datetime | None
     results_at_utc: datetime | None
@@ -86,7 +85,7 @@ def is_quiet(concert: Concert, now: datetime) -> bool:
     return next_anchor_at(concert, now) is None
 
 
-def _row(concert: Concert) -> QuietLadder:
+def _quiet_ladder_row(concert: Concert) -> QuietLadder:
     return QuietLadder(
         concert_id=concert.id,
         event_id=concert.event_id,
@@ -101,7 +100,6 @@ def _row(concert: Concert) -> QuietLadder:
         rounds=tuple(
             QuietRound(
                 label=r.label,
-                kind=r.kind.value,
                 opens_at_utc=r.opens_at_utc,
                 closes_at_utc=r.closes_at_utc,
                 results_at_utc=r.results_at_utc,
@@ -114,7 +112,39 @@ def _row(concert: Concert) -> QuietLadder:
     )
 
 
-async def _all_concerts(session: AsyncSession) -> list[Concert]:
+def quiet_entry_from_row(row: QuietLadder) -> QuietEntry:
+    """The ONE adapter from a `QuietLadder` row to the pure `QuietEntry` the
+    domain formatters take.
+
+    Shared by `run_quiet_ladder_pass` (the DM) and `web/routes/quiet_ladders.py`
+    (the page's copy block) so a field added to `QuietEntry` needs updating in
+    exactly one place instead of two verbatim copies quietly drifting apart --
+    which is what happened here before this function existed. Lives in `db/`,
+    not `domain/`, because it takes a `QuietLadder`, which is DB-adjacent
+    (`app.domain.*` may not import `app.db`).
+    """
+    return QuietEntry(
+        title=row.title,
+        title_en=row.title_en,
+        event_id=row.event_id,
+        leg_dates=row.leg_dates,
+        rounds=tuple(
+            QuietRoundInfo(
+                label=r.label,
+                opens_at_utc=r.opens_at_utc,
+                closes_at_utc=r.closes_at_utc,
+                results_at_utc=r.results_at_utc,
+                payment_deadline_at_utc=r.payment_deadline_at_utc,
+            )
+            for r in row.rounds
+        ),
+        official_url=row.official_url,
+        eventernote_url=row.eventernote_url,
+        source_url=row.source_url,
+    )
+
+
+async def _all_concerts_for_quiet_scan(session: AsyncSession) -> list[Concert]:
     """Every concert in the catalogue, ORM rows with days/rounds loaded.
 
     selectinload, not lazy access: ConcertDay.venue_tag is lazy="raise" and the
@@ -146,7 +176,7 @@ async def _all_concerts(session: AsyncSession) -> list[Concert]:
 
 async def _quiet_concerts(session: AsyncSession, now: datetime) -> list[Concert]:
     """Every concert the predicate matches, ORM rows with days/rounds loaded."""
-    concerts = await _all_concerts(session)
+    concerts = await _all_concerts_for_quiet_scan(session)
     return [c for c in concerts if is_quiet(c, now)]
 
 
@@ -164,7 +194,7 @@ async def quiet_ladder_rows(
     reconcile pass having run.
     """
     now = now or _now()
-    rows = [_row(c) for c in await _quiet_concerts(session, now)]
+    rows = [_quiet_ladder_row(c) for c in await _quiet_concerts(session, now)]
     far_past = datetime.min.replace(tzinfo=now.tzinfo)
     rows.sort(key=lambda r: (
         r.rechecked_at_utc is not None,
@@ -189,13 +219,13 @@ async def reconcile_quiet_ladders(
     exactly-once. Committing the stamp first would drop the DM on a crash;
     committing the notice first would repeat it.
 
-    Do not wrap this call in `session.no_autoflush`: `_all_concerts`' SELECT
-    runs with `populate_existing=True`, which overwrites in-memory attributes
-    even when dirty, and with autoflush suppressed an unflushed stamp set
-    just before this call is exactly what gets discarded.
+    Do not wrap this call in `session.no_autoflush`: `_all_concerts_for_quiet_scan`'s
+    SELECT runs with `populate_existing=True`, which overwrites in-memory
+    attributes even when dirty, and with autoflush suppressed an unflushed
+    stamp set just before this call is exactly what gets discarded.
     """
     now = now or _now()
-    concerts = await _all_concerts(session)
+    concerts = await _all_concerts_for_quiet_scan(session)
 
     newcomers: list[Concert] = []
     for concert in concerts:
@@ -208,7 +238,7 @@ async def reconcile_quiet_ladders(
             concert.quiet_since_utc = None
             concert.ladder_rechecked_at_utc = None
     await session.flush()
-    return [_row(c) for c in newcomers]
+    return [_quiet_ladder_row(c) for c in newcomers]
 
 
 async def record_ladder_checked(
@@ -259,17 +289,7 @@ async def run_quiet_ladder_pass(session: AsyncSession, now: datetime) -> int:
         return 0
 
     body = build_quiet_ladder_dm(
-        [
-            QuietEntry(
-                title=row.title,
-                event_id=row.event_id,
-                leg_dates=row.leg_dates,
-                round_labels=tuple(r.label for r in row.rounds),
-                official_url=row.official_url,
-                eventernote_url=row.eventernote_url,
-            )
-            for row in newcomers
-        ],
+        [quiet_entry_from_row(row) for row in newcomers],
         total=len(newcomers),
         base_url=settings.base_url,
     )

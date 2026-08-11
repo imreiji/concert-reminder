@@ -15,7 +15,7 @@ known rounds it exists to carry.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 from app.domain.discovery_message import DM_CHAR_BUDGET
 
@@ -23,21 +23,42 @@ DM_LIST_LIMIT = 10
 
 
 @dataclass(frozen=True)
+class QuietRoundInfo:
+    """One round a quiet concert already carries, moments and all.
+
+    Moments render in UTC, ISO-ish (`YYYY-MM-DD HH:MM`) -- the raw form the
+    four `Round` columns are stored in, so the block never has to convert.
+    A round with no moments at all still needs saying: it distinguishes a
+    round the catalogue holds with nothing left to happen (fully resolved)
+    from a round whose organiser page never gave a date to begin with.
+    """
+
+    label: str
+    opens_at_utc: datetime | None
+    closes_at_utc: datetime | None
+    results_at_utc: datetime | None
+    payment_deadline_at_utc: datetime | None
+
+
+@dataclass(frozen=True)
 class QuietEntry:
     """One concert whose ladder holds no future anchor.
 
-    The seam between this module and its callers: the scheduler pass and the
-    admin route each adapt their own row objects into this shape, so a field
-    added here is visibly unhandled in both `build_quiet_ladder_dm` and
-    `build_quiet_ladder_block` rather than silently missing from one.
+    The seam between this module and its callers: `db/quiet_ladders.py`'s
+    `quiet_entry_from_row` is the ONE adapter from a `QuietLadder` row into
+    this shape, so a field added here is visibly unhandled in both
+    `build_quiet_ladder_dm` and `build_quiet_ladder_block` rather than
+    silently missing from one.
     """
 
     title: str
+    title_en: str | None
     event_id: str
     leg_dates: tuple[date, ...]
-    round_labels: tuple[str, ...]
+    rounds: tuple[QuietRoundInfo, ...]
     official_url: str | None
     eventernote_url: str | None
+    source_url: str | None
 
 
 def _dates(entry: QuietEntry) -> str:
@@ -46,10 +67,35 @@ def _dates(entry: QuietEntry) -> str:
     return ", ".join(d.strftime("%d %b") for d in entry.leg_dates)
 
 
+def _title(entry: QuietEntry) -> str:
+    if entry.title_en and entry.title_en != entry.title:
+        return f"{entry.title} / {entry.title_en}"
+    return entry.title
+
+
+def _moment(dt: datetime) -> str:
+    return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _round_line(r: QuietRoundInfo) -> str:
+    moments = []
+    if r.opens_at_utc:
+        moments.append(f"opens {_moment(r.opens_at_utc)}")
+    if r.closes_at_utc:
+        moments.append(f"closes {_moment(r.closes_at_utc)}")
+    if r.results_at_utc:
+        moments.append(f"results {_moment(r.results_at_utc)}")
+    if r.payment_deadline_at_utc:
+        moments.append(f"payment due {_moment(r.payment_deadline_at_utc)}")
+    if not moments:
+        return f"{r.label} (no moments recorded)"
+    return f"{r.label} — {', '.join(moments)}"
+
+
 def _rounds(entry: QuietEntry) -> str:
-    if not entry.round_labels:
+    if not entry.rounds:
         return "no rounds recorded"
-    return ", ".join(entry.round_labels)
+    return "; ".join(_round_line(r) for r in entry.rounds)
 
 
 def build_quiet_ladder_dm(
@@ -96,9 +142,10 @@ def _compose(kept: Sequence[QuietEntry], total: int, base_url: str) -> str:
 def build_quiet_ladder_block(entries: Sequence[QuietEntry]) -> str:
     """The paste-ready block: everything an agent needs to re-check a ladder.
 
-    The rounds already known are the load-bearing part. Without them the agent
-    re-proposes rounds the catalogue already holds, which is the failure this
-    block exists to avoid.
+    The rounds already known, WITH their moments, are the load-bearing part.
+    Without them the agent re-proposes rounds the catalogue already holds --
+    a bare label is not enough to tell it that a round is fully resolved
+    (every moment past) rather than simply undated.
 
     NO budget: a web page has no character cap, and a block that silently
     dropped concerts on the very page the DM points at would leave them
@@ -109,11 +156,13 @@ def build_quiet_ladder_block(entries: Sequence[QuietEntry]) -> str:
         return ""
     out: list[str] = []
     for e in entries:
-        out.append(f"- {e.event_id}: {e.title}")
+        out.append(f"- {e.event_id}: {_title(e)}")
         out.append(f"  dates: {_dates(e)}")
         out.append(f"  rounds held: {_rounds(e)}")
         if e.official_url:
             out.append(f"  official: {e.official_url}")
         if e.eventernote_url:
             out.append(f"  eventernote: {e.eventernote_url}")
+        if e.source_url:
+            out.append(f"  source: {e.source_url}")
     return "\n".join(out)
