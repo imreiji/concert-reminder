@@ -1,4 +1,4 @@
-"""Round watch: which tracked concerts have a ladder that has gone quiet.
+"""Round watch: which concerts in the catalogue have a ladder that has gone quiet.
 
 Discovery's sweep answers "what exists that you are not tracking". This answers
 "what changed about what you already track" -- a round announced after a concert
@@ -13,11 +13,13 @@ THE PREDICATE, in one place and only here:
     and (a live dated leg is in the future  or  no live leg is dated at all)
     and next_anchor_at(concert, now) is None
 
-Candidates are narrowed in SQL and the anchor clause is applied in Python,
-because `is_round_cancelled` is Python. The catalogue is small enough that a
-scan is cheaper than a second SQL transliteration of a Python predicate -- and
-a transliteration would be free to drift from the original, which is exactly
-what promoting `next_anchor_at` was meant to prevent.
+Candidates come from one unfiltered `select(Concert)`, and every clause of the
+predicate above -- the leg/cancellation checks as much as the anchor clause --
+runs in Python against the loaded rows, because `is_round_cancelled` is
+Python. The catalogue is small enough that a full scan is cheaper than a
+second SQL transliteration of a Python predicate -- and a transliteration
+would be free to drift from the original, which is exactly what promoting
+`next_anchor_at` was meant to prevent.
 """
 
 from dataclasses import dataclass

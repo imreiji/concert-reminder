@@ -100,11 +100,13 @@ already happened is finished, not quiet. Nothing needs to expire it: the leg
 clause stops matching the day after the show, so the list drains itself and
 never accumulates.
 
-**Candidates are narrowed in SQL, then filtered in Python.** The leg and
-cancellation clauses are a query; the anchor clause is `next_anchor_at`, which
-is Python because `is_round_cancelled` is. The catalogue is ~157 productions, so
-a scan is cheap and honest -- cheaper than a second SQL transliteration of a
-Python predicate that would then be free to drift from it.
+**The whole predicate runs in Python, over one unfiltered scan.** Candidates
+come from a plain `select(Concert)` with no WHERE clause; the leg/cancellation
+checks and the anchor clause (`next_anchor_at`, which is Python because
+`is_round_cancelled` is) all run against the loaded rows. The catalogue is
+~157 productions, so a scan is cheap and honest -- cheaper than a SQL
+transliteration of a Python predicate that would then be free to drift from
+it, and it keeps the predicate in exactly one place.
 
 `db/quiet_ladders.py` is a feature module: it imports `core`, never the facade,
 and its public names are re-exported from `db/service.py` or
