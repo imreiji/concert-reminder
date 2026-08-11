@@ -72,7 +72,14 @@
    the capture buttons to this one leg. None is the dateless fallback group,
    where there is no leg to be specific about, so both fall back to the
    round's own outcome. #}
-{% macro round_row(row, tz, day_id=None) %}
+{# `leg_off` says this card's leg is CANCELLED or one the reader has opted out
+   of. It exists only to suppress the outcome-correction affordance: a
+   correction must not appear under a night that is not happening or that they
+   have already declined. It is a parameter rather than something the macro
+   works out, for the same reason `day_id` is -- the leg is the caller's
+   context, and `RoundRow` carries neither fact (cancellation is per-leg, and
+   the row's `fully_opted_out` is a round-level answer). #}
+{% macro round_row(row, tz, day_id=None, leg_off=False) %}
 {% set r = row.round_ %}
 {# `primary_at_utc` is the NEXT moment ahead of now, or the last one behind
    it when they have all passed -- so "in the past" is exactly "the leading
@@ -114,7 +121,7 @@
     {# `correctable=True` is passed HERE and nowhere else: this is the only
        surface that offers the un-answer (design §C). Home's rows and the
        catch-up dialog take the default and render byte-identical markup. #}
-    {{ capture_actions(row, r.id, "#concert-rounds", is_upgrade=(r.kind.value == "upgrade"), only_day=day_id, correctable=True) }}
+    {{ capture_actions(row, r.id, "#concert-rounds", is_upgrade=(r.kind.value == "upgrade"), only_day=day_id, correctable=True, leg_off=leg_off) }}
     {% endif %}
   </span>
 </div>
@@ -167,8 +174,13 @@
    never user text (invariant 7). open_round_id STAYS because it is the half
    that works with JS disabled. #}
 {% macro leg_rounds(group, tz, note, open_round_id=none) %}
+{# Resolved once for the whole leg, not per row, and read from the same two
+   sources the section heading's dim/badge treatment above uses -- a card
+   saying "not happening" while its buttons say otherwise is the drift this
+   avoids. #}
+{% set leg_off = group.day.cancelled or group.day.id in (leg_opted_out or []) %}
 <div class="rnds">
-  {% for row in group.visible %}{{ round_row(row, tz, group.day.id) }}
+  {% for row in group.visible %}{{ round_row(row, tz, group.day.id, leg_off) }}
   {%- else -%}
   {# Only a leg with NO rounds at all gets the note; a leg whose rounds have
      all folded has the summary to say so. #}
@@ -177,7 +189,7 @@
   {% if group.folded %}
   <details class="moreround" data-fold="leg-{{ group.day.id }}"{% if open_round_id is not none and open_round_id in group.folded|map(attribute="round_.id")|list %} open{% endif %}>
     <summary>{% trans count=group.folded|length %}+{{ count }} more round{% pluralize %}+{{ count }} more rounds{% endtrans %}{% for kind, n in group.fold_counts %}<span class="fchip">{{ fold_count_label(kind, n) }}</span>{% endfor %}</summary>
-    {% for row in group.folded %}{{ round_row(row, tz, group.day.id) }}{% endfor %}
+    {% for row in group.folded %}{{ round_row(row, tz, group.day.id, leg_off) }}{% endfor %}
   </details>
   {% endif %}
 </div>

@@ -154,10 +154,30 @@ Where it renders, by the branch `_capture_actions.html` is already in:
 | Branch | Renders |
 | --- | --- |
 | `row.outcome is none` | nothing — there is no answer to un-answer |
-| per-day branch, this leg still being asked about | nothing — no answer yet |
+| per-day branch | after this leg's own questions |
 | APPLIED (`can_report_result`) | after "I won" / "I lost" |
 | WON | after "Paid" |
 | terminal (see below) | **replacing** "Nothing to do" |
+
+One card-level suppression cuts across all of them (owner ruling,
+2026-08-11): **a leg that is CANCELLED or that the reader has OPTED OUT of
+offers no correction at all.** A correction must not appear under a night that
+is not happening or one they have already declined, and that is a fact about
+the card rather than about the branch, so it is a single hoisted condition
+(`clear_offer`) rather than a per-branch test. Neither fact is on `RoundRow` —
+cancellation is per-leg and the row carries only the round-level
+`fully_opted_out` — so `_round_rows.html` passes `leg_off`, read from the same
+two sources its dim/badge treatment uses.
+
+The per-day branch renders the correction **whether or not this leg still has
+questions of its own above it**, which was also a ruling. It used to require
+the leg to be answered already, and that was a dead end: a two-leg round marked
+APPLIED offers the clear in the terminal branch right up until its results
+moment, then falls here and the button vanishes — at exactly the moment
+somebody goes looking for it, since "results are out" is when you discover you
+told the app the wrong thing. The round holds an outcome even when neither leg
+has answered, so there is something to take back; it is simply the round rather
+than the leg, which the rule below already covers.
 
 **What a clear POSTS is not a property of the branch** (owner ruling,
 2026-08-11; this table originally said it was, and was wrong). The rule:
