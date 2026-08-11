@@ -342,7 +342,11 @@ async def test_pay_later_writes_nothing(db):
             select(RoundOutcome.outcome).where(RoundOutcome.round_id == rid)
         )).scalar_one()
     assert outcome is LotteryOutcome.WON, "'not yet' is an answer, not a write"
-    assert interaction.response.edited["kwargs"]["view"] is None
+    assert custom_ids(interaction.response.edited["kwargs"]["view"]) == [f"dk:clear:{rid}"], (
+        "the end of the branch a mis-pressed 'Won (all)' walks into: the round is "
+        "left WON with its payment reminder armed, so this reply above all needs "
+        "the way back -- and its sibling 'Marked as paid — all set!' has one"
+    )
 
 
 async def test_won_day_press_on_an_already_paid_round_keeps_paid(db):

@@ -292,9 +292,13 @@ async def _handle_outcome_click(
     can be pressed against a round settled (and paid for) on the site since,
     where WON demotes PAID and re-arms its payment reminder while LOST wipes
     the ticket outright. A settled win is not something a stale press may undo.
-    It is deliberately NOT set on "I applied"/"Didn't apply" (a CLOSES reminder
-    only carries them while the round is unanswered) or on "Paid" (which IS the
-    write that settles a secured round).
+    It is deliberately NOT set on the other three, because `record_round_outcome`
+    already refuses their damaging cases at the write itself and a second guard
+    here would only be able to get it wrong: APPLIED and NOT_APPLIED are refused
+    whenever ANY row exists (`core.py`, "starting states only apply once"), and
+    PAID is refused unless the round is currently WON ("PAID only reachable from
+    WON") -- which is also why guarding "Paid" would make it permanently inert,
+    since the state it needs is exactly the state this guard refuses.
 
     Every reply carries the backtrack button, refusals included, so the guard is
     a signpost rather than a dead end and corrections live in one vocabulary.
@@ -441,9 +445,17 @@ async def _covered_leg_count(session, round_) -> int:
     """How many legs a whole-round clear would take back, for the confirmation
     to name when there is more than one.
 
-    ORM-only, like the rest of this module: `_covered_day_ids` is the same
-    predicate the service writer itself narrows by, so the number named is the
-    number cleared rather than a second guess at it."""
+    `_covered_day_ids` is borrowed as the definition of the round's SCOPE, not
+    because the writer filters by it: `clear_round_outcome`'s whole-round branch
+    -- the only one this button uses -- deletes every day row of the round
+    unconditionally and narrows by nothing (its per-leg branch is the one that
+    uses this predicate). The two are therefore not pinned together, and this
+    count is a fair statement of the round's reach rather than a mirror of a
+    filter. Deriving it from the day ROWS instead would answer 0 on the common
+    case, since a round won as a whole carries none (no-rows-means-all).
+
+    ORM-only, like the rest of this module -- the bot layer holds no queries of
+    its own."""
     from app.db.models import Concert
 
     concert = await session.get(Concert, round_.concert_id)
@@ -952,7 +964,14 @@ class PayLaterButton(
     discord.ui.DynamicItem[discord.ui.Button], template=r"dk:paylater:(?P<rid>\d+)"
 ):
     """"Not yet" is an answer, not a write: the round stays WON, which is
-    exactly the state its payment reminder is armed from."""
+    exactly the state its payment reminder is armed from.
+
+    That is also why its reply carries the backtrack, like every other terminal
+    reply: this is the end of the branch a mis-pressed "Won (all)" walks into,
+    so the reader is looking at a round left in the highest-value wrong state
+    with its payment reminder armed. Its sibling one step up ("Marked as paid --
+    all set!") ends the same question, and a way back from one end but not the
+    other is the same dead end with better luck."""
 
     def __init__(self, round_id: int, row: int | None = None) -> None:
         super().__init__(discord.ui.Button(
@@ -969,7 +988,8 @@ class PayLaterButton(
         async with SessionMaker() as session:
             await _apply_locale(session, interaction.user.id)
         await interaction.response.edit_message(
-            content=_("No rush — mark it paid whenever you're done."), view=None
+            content=_("No rush — mark it paid whenever you're done."),
+            view=build_backtrack_view(self.round_id),
         )
 
 
