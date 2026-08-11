@@ -21,6 +21,7 @@ It is a FACADE and holds no logic of its own. The work moved to:
     translation_gaps.py  the edit pages' "what's missing" notice
     ops_alerts.py        health checks -> admin DMs
     phrases.py           the round-label phrase library
+    quiet_ladders.py     the round-watch predicate and worklist query
     audit.py             ConcertAudit, the concert edit history
     venues.py            the legs -> concert VENUE tag rollup
     tokens.py            secret tokens at rest -- one hash implementation
@@ -259,6 +260,15 @@ from app.db.phrases import (
     record_round_label_phrase,
     round_label_phrases,
 )
+from app.db.quiet_ladders import (
+    QuietLadder,
+    QuietRound,
+    _not_yet_performed,
+    _quiet_concerts,
+    _row,
+    is_quiet,
+    quiet_ladder_rows,
+)
 from app.db.rehearsal import (
     REHEARSAL_EVENT_ID,
     REHEARSAL_TAG_NAME,
@@ -360,6 +370,8 @@ __all__ = [
     "PlannedDismissal",
     "PrunePlan",
     "PruneReport",
+    "QuietLadder",
+    "QuietRound",
     "REHEARSAL_EVENT_ID",
     "REHEARSAL_TAG_NAME",
     "Recipients",
@@ -409,11 +421,13 @@ __all__ = [
     "_next_moment_key",
     "_next_round_anchor",
     "_next_round_for_leg",
+    "_not_yet_performed",
     "_now",
     "_open_round_criterion",
     "_phase_two_already_ran",
     "_primary_anchor",
     "_qualifiers_by_upgrade_round",
+    "_quiet_concerts",
     "_regroup_gaps",
     "_result_moment",
     "_round_asks_application",
@@ -422,6 +436,7 @@ __all__ = [
     "_round_info",
     "_round_is_open",
     "_round_outcome_value",
+    "_row",
     "_rule_info",
     "_rung_state",
     "_secured_from_outcome_rows",
@@ -506,6 +521,7 @@ __all__ = [
     "handle_newly_tagged",
     "has_day_results",
     "hash_token",
+    "is_quiet",
     "is_round_cancelled",
     "latest_triage_run",
     "leads_matching_existing_legs",
@@ -538,6 +554,7 @@ __all__ = [
     "pull_rehearsal_forward",
     "queue_broadcast",
     "queue_delivery_digest",
+    "quiet_ladder_rows",
     "recent_broadcasts",
     "record_concert_edit",
     "record_deliveries",
