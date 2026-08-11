@@ -41,13 +41,14 @@
           (db/core.py's _jst_date). Passing a date would raise.
 
           De-duplicated for display via Jinja's `unique` filter (order-
-          preserving, so this only folds adjacent equal dates -- the query
-          already sorts): `leg_dates` can hold the same JST day twice
-          (matinee + evening as
-          separate legs, matching `_api_concert_row`'s existing behaviour) and
-          showing "3 Oct, 3 Oct" would read as a rendering bug rather than the
-          two-shows-one-day shape it actually is. The dataclass itself is left
-          alone -- this is a display-only fold. -#}
+          preserving -- it keeps first-occurrence order, it does not merely
+          fold neighbours, though the query's existing sort means every
+          duplicate is already adjacent in practice): `leg_dates` can hold
+          the same JST day twice (matinee + evening as separate legs,
+          matching `_api_concert_row`'s existing behaviour) and showing
+          "3 Oct, 3 Oct" would read as a rendering bug rather than the
+          two-shows-one-day shape it actually is. The dataclass itself is
+          left alone -- this is a display-only fold. -#}
       <td>
         {#- `| unique` alone returns a generator, which is always truthy --
             the else branch below would never render without `| list`. Match

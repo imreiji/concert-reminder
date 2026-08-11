@@ -1,5 +1,6 @@
 """The round-watch worklist: admin-only, and it writes only the recheck stamp."""
 
+import re
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -107,7 +108,33 @@ async def test_a_concert_with_a_leg_and_a_past_round_shows_both(client):
     hold a future leg and a fully-resolved round (nothing left announced),
     which is exactly the "went quiet" case this page exists for. Exercises
     the Dates and Rounds cells -- the only display logic on the page -- with
-    real data, which no test did before review round 1."""
+    real data, which no test did before review round 1.
+
+    Round-1 review flagged this test as the same proxy shape as finding 3:
+    `assert "最速先行 Round 1" in r.text` is satisfied by `copy_text` alone
+    (`_rounds()` in domain/quiet_ladder_message.py emits
+    "  rounds held: 最速先行 Round 1" into the `<pre>`, rendered
+    unconditionally), and the two negative assertions hold trivially with an
+    empty table. Verified: `{% for row in rows %}` -> `{% for row in [] %}`
+    left the old version passing.
+
+    Two row-only discriminators replace it:
+
+    - The date is asserted UN-PADDED (`3 Mar`, from the template's
+      `{{ d.day }} {{ d.strftime('%b') }}`) with a `\\b` word-boundary regex,
+      not a bare substring: `copy_text`'s `_dates()` uses `%d %b` and renders
+      the PADDED `03 Mar`, which contains the literal characters "3 Mar" as a
+      substring -- `"3 Mar" in r.text` would still pass from the `<pre>`
+      alone. `\\b3 Mar\\b` does not match inside "03 Mar" (no boundary
+      between the two digits), only where "3 Mar" is not preceded by another
+      digit, i.e. only the cell's own un-padded rendering. The seeded leg
+      date's day is deliberately single-digit (2035-03-03) -- with a
+      two-digit day the padded and un-padded forms are identical strings and
+      this whole discriminator collapses.
+    - The round label is asserted inside its own `<td>...</td>`, not as a
+      bare substring, so it cannot be satisfied by "rounds held: <label>" in
+      the `<pre>`.
+    """
     now = datetime.now(UTC)
     async with client.db() as s:
         await ensure_user(s, ADMIN_ID, "reiji")
@@ -115,7 +142,8 @@ async def test_a_concert_with_a_leg_and_a_past_round_shows_both(client):
         s.add(c)
         await s.flush()
         s.add(ConcertDay(
-            concert_id=c.id, label="Day 1", starts_at_utc=now + timedelta(days=30),
+            concert_id=c.id, label="Day 1",
+            starts_at_utc=datetime(2035, 3, 3, 12, 0, tzinfo=UTC),
         ))
         s.add(Round(
             concert_id=c.id,
@@ -128,11 +156,9 @@ async def test_a_concert_with_a_leg_and_a_past_round_shows_both(client):
     login_as(client, ADMIN_ID, "reiji")
     r = client.get("/admin/quiet-ladders")
     assert r.status_code == 200
-    assert "最速先行 Round 1" in r.text
-    assert "no dates announced" not in r.text
-    # The Rounds cell's empty-state text ("none") must not appear -- the
-    # round label above is real data, not the fallback.
-    assert "<span class=\"dim\">none</span>" not in r.text
+    assert '/admin/quiet-ladders/legged/checked' in r.text
+    assert re.search(r"\b3 Mar\b", r.text)
+    assert re.search(r"<td>\s*最速先行 Round 1\s*</td>", r.text)
 
 
 async def test_an_editor_is_forbidden(client):
