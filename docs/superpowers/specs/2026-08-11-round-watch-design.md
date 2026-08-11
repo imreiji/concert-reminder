@@ -164,8 +164,8 @@ exactly-once: if the commit fails, neither happened, and the next tick retries
 both.
 
 It also means `quiet_since_utc` is accurate rather than approximate -- a
-concert is stamped within a minute of going quiet, so the page's "quiet for N
-days" column is a real measurement and not "N days since the pass noticed".
+concert is stamped within a minute of going quiet, so the page's "since DATE"
+column is a real measurement and not "the date the pass happened to notice".
 
 A concert cannot oscillate on and off the list by itself; leaving requires
 gaining a future anchor and returning requires losing one. An editor could flap

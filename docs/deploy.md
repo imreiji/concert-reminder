@@ -572,6 +572,20 @@ not the one-liner:
     cd ~/app && git pull && uv sync && uv run alembic upgrade head
     sudo systemctl start concert-reminder
 
+**`0671edabe2ac` (quiet ladder stamps) needs a post-deploy check, not a
+special ritual.** It adds `quiet_since_utc`/`ladder_rechecked_at_utc` to
+`concerts` and blanket-stamps every row with `quiet_since_utc =
+CURRENT_TIMESTAMP`, so that no concert is a NEWCOMER on the first scheduler
+tick after deploy (`db/quiet_ladders.py`'s `reconcile_quiet_ladders` treats a
+stamped concert as already accounted for). The one-liner update is fine for
+this migration - it only adds columns and runs one `UPDATE`. What to check
+AFTER: within a minute of the restart, the admins must receive NO "N concerts
+went quiet" DM. If one arrives, the blanket `UPDATE` did not run (migration
+skipped, or run against the wrong database) and every concert in the
+catalogue got treated as newly quiet - restore from the pre-deploy backup
+rather than trying to reconcile by hand, since there is no way to tell which
+concerts were genuinely already quiet from the DM alone.
+
 Queued reminders are unaffected by the pause: `reminder_queue` is materialized,
 so a tick missed during the stop delivers on the next one. Worth spelling out
 because `git log -p --stat -1 -- alembic/versions/` shows two `add_column`

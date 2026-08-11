@@ -191,7 +191,7 @@ measurement or an incident that a reasonable-looking edit would undo.
     newcomer on that pass, so the first tick after deploy DMs nothing instead
     of announcing the entire back catalogue. Under the name "went quiet" every
     one of those stamps would be a lie.
-  - **Never wrap this in `session.no_autoflush`.** `_all_concerts` loads with
+  - **Never wrap this in `session.no_autoflush`.** `_all_concerts_for_quiet_scan` loads with
     `execution_options(populate_existing=True)` -- needed because
     `SessionMaker` sets `expire_on_commit=False`, so a session that outlives a
     commit keeps its identity map and with it a stale `days`/`rounds`
