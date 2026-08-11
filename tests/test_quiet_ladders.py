@@ -169,6 +169,38 @@ async def test_rows_carry_what_a_re_check_needs(session):
     assert [r.label for r in row.rounds] == ["最速先行"]
 
 
+async def test_a_cancelled_legs_date_is_excluded_from_leg_dates(session):
+    """`_quiet_ladder_row`'s `leg_dates` filters `if not d.cancelled`
+    (db/quiet_ladders.py:96) -- unpinned before this test, per the reviewer's
+    mutation pass: deleting that filter left the whole suite green, because
+    every other fixture here uses either all-live or all-cancelled legs, never
+    a mix whose dates would actually differ once one side is dropped.
+
+    One cancelled leg in the past, one live leg in the future: the concert is
+    still quiet (the live leg decides), and `leg_dates` must carry ONLY the
+    live leg's day. A mutation removing `if not d.cancelled` would additionally
+    surface the cancelled leg's date here.
+    """
+    await ensure_user(session, 42, "reiji")
+    c = Concert(title="mixed-dates", event_id="mixed-dates", created_by=42)
+    session.add(c)
+    await session.flush()
+    session.add_all([
+        ConcertDay(
+            concert_id=c.id, label="Cancelled night",
+            starts_at_utc=at(1, 15), cancelled=True,
+        ),
+        ConcertDay(
+            concert_id=c.id, label="Live night",
+            starts_at_utc=at(12, 20), cancelled=False,
+        ),
+    ])
+    await session.flush()
+
+    row = next(r for r in await quiet_ladder_rows(session, NOW) if r.event_id == "mixed-dates")
+    assert row.leg_dates == (date(2026, 12, 20),)
+
+
 async def test_never_checked_sorts_before_checked(session):
     a = await _concert(session, "checked")
     b = await _concert(session, "never")

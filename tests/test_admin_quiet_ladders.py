@@ -161,6 +161,73 @@ async def test_a_concert_with_a_leg_and_a_past_round_shows_both(client):
     assert re.search(r"<td>\s*最速先行 Round 1\s*</td>", r.text)
 
 
+async def test_the_quiet_cell_shows_the_stamp_or_not_yet_stamped(client):
+    """Pins the Quiet <td> cell (admin_quiet_ladders.html:68-74). Reviewer's
+    mutation pass found this whole cell unpinned: deleting it, along with the
+    row-dim class and the Copy-block button, left the entire 24-test suite
+    green.
+
+    `copy_text` never renders `quiet_since_utc` or `rechecked_at_utc` --
+    `build_quiet_ladder_block` carries no such field -- so, unlike the
+    dates/rounds cells elsewhere in this file, there is no `<pre>` proxy risk
+    here. Still asserted against `<td>` markup rather than a bare substring,
+    so the pin does not quietly degrade if a later change adds either field
+    to the block.
+    """
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        s.add(Concert(
+            title="Stamped", event_id="stamped", created_by=ADMIN_ID,
+            quiet_since_utc=datetime(2026, 5, 1, tzinfo=UTC),
+        ))
+        s.add(Concert(title="Fresh", event_id="fresh", created_by=ADMIN_ID))
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders")
+    assert r.status_code == 200
+    assert re.search(r"<td>\s*since 2026-05-01", r.text)
+    assert re.search(r'<span class="dim">not yet stamped</span>', r.text)
+
+
+async def test_a_rechecked_row_dims_and_an_unchecked_one_does_not(client):
+    """Pins the row's `class="dim"` (admin_quiet_ladders.html:26)."""
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        s.add(Concert(
+            title="Rechecked", event_id="rechecked", created_by=ADMIN_ID,
+            ladder_rechecked_at_utc=datetime(2026, 5, 1, tzinfo=UTC),
+        ))
+        s.add(Concert(title="Never", event_id="never", created_by=ADMIN_ID))
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders")
+    assert r.status_code == 200
+    assert re.search(r'<tr class="dim">\s*<td>\s*<a href="/concerts/rechecked"', r.text)
+    assert re.search(r'<tr>\s*<td>\s*<a href="/concerts/never"', r.text)
+
+
+async def test_the_copy_button_reads_data_copy_via_dataset(client):
+    """Pins the Copy-block button (admin_quiet_ladders.html:89-90): the
+    `data-copy` attribute exists, and `onclick` reads it through
+    `this.dataset.copy` rather than interpolating the value into the handler
+    -- invariant 7, since the browser HTML-decodes an attribute before
+    parsing it as JS, so Jinja's escaping would not protect a title
+    containing an apostrophe.
+    """
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        s.add(Concert(title="Quiet", event_id="quiet", created_by=ADMIN_ID))
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders")
+    assert r.status_code == 200
+    assert 'data-copy="' in r.text
+    assert 'onclick="navigator.clipboard.writeText(this.dataset.copy)"' in r.text
+
+
 async def test_an_editor_is_forbidden(client):
     login_as(client, EDITOR_ID, "editor")
     assert client.get("/admin/quiet-ladders").status_code == 403
