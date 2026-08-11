@@ -273,8 +273,13 @@ async def run_quiet_ladder_pass(session: AsyncSession, now: datetime) -> int:
         total=len(newcomers),
         base_url=settings.base_url,
     )
-    if not body:
-        return len(newcomers)
+    # No `if not body: return` guard here (the brief had one): build_quiet_ladder_dm
+    # returns "" only for an EMPTY entries list, and `newcomers` -- and so the
+    # entries built from it above -- is non-empty by this point, so that branch
+    # is unreachable. Were it ever reached it would be actively wrong: it
+    # returns after `reconcile_quiet_ladders` already set quiet_since_utc on
+    # every newcomer, so a caller hitting it would stamp the concerts and queue
+    # no notice and log nothing -- silently un-announceable forever.
 
     for admin_id in sorted(settings.admin_ids):
         # Guarded on absence, never unconditional: ensure_user refreshes the
@@ -291,4 +296,5 @@ async def run_quiet_ladder_pass(session: AsyncSession, now: datetime) -> int:
             # naming several concerts could not be one concert's embed anyway.
             concert_id=None,
         ))
+    await session.flush()
     return len(newcomers)
