@@ -1981,6 +1981,16 @@ async def test_the_confirmation_copy_is_scoped_to_what_the_press_clears(client):
     # The leg copy must say what survives, or it reads like the round one.
     assert "this day only" in leg_copy
     assert "the other days of this round keep theirs" in leg_copy
+    # The leg pair ships HIDDEN. Only the script un-hides it, and only for a
+    # press that carries a `day_id`; without the attribute both copies stack on
+    # top of each other until the first press flips them, and the page then
+    # states two contradictory scopes at once.
+    #
+    # Mutation this catches: dropping `hidden` from either leg element. It is
+    # asserted on the `<p>`/`<span>` open tags rather than the copy, because
+    # the copy is byte-identical either way.
+    assert 'id="clearBodyLeg" hidden' in section
+    assert 'id="clearHeadLeg" hidden' in section
     assert "every day this round covers" not in leg_copy
 
 
@@ -2042,7 +2052,13 @@ async def test_the_confirmation_reads_its_scope_off_the_day_id_input(client):
     shows the round copy on every press, including per-leg ones.
 
     Mutation this catches: switching the scope test to `form.dataset.clearDay`
-    or any other attribute Task 3 never emits."""
+    or any other attribute Task 3 never emits -- and, separately, INVERTING the
+    branch. `!!` -> `!` is one character and shows the LEG copy on the press
+    that carries no `day_id`, which is exactly the press that deletes every
+    leg's record: the reader is promised "the other days of this round keep
+    theirs", presses, and the other day's ticket is gone. Reading the input and
+    reading it the right way round are two different claims, so both are
+    asserted."""
     cid = await seed_concert(client.db)
     d1, d2, rid = await multi_leg_lottery(client.db, cid)
     await set_day_result(client.db, rid, d1, LegResult.WON)
@@ -2056,7 +2072,22 @@ async def test_the_confirmation_reads_its_scope_off_the_day_id_input(client):
     assert f'name="day_id" value="{d1}"' in sat
 
     section = clear_confirmation(body)
-    assert 'form.querySelector(\'input[name="day_id"]\')' in section
+    # The WHOLE statement, `!!` included -- not just the querySelector call.
+    # The inversion this test's docstring names lives in the DEFINITION of
+    # `perLeg`, not in its uses, so a loose substring on the call survives it
+    # and so do the four assertions below (they read `perLeg`, whatever it
+    # means). Verified: with only those, `!!` -> `!` left the selection at
+    # 7 passed.
+    assert 'var perLeg = !!form.querySelector(\'input[name="day_id"]\');' in section
+    # ...and which copy that scope shows. `perLeg` true means a `day_id` rode
+    # along, so the ROUND pair hides and the LEG pair shows; false is the
+    # whole-round press and the reverse. Both pairs are pinned: inverting the
+    # head alone would put "Clear your answer for this day?" over the round
+    # body.
+    assert 'getElementById("clearHeadRound").hidden = perLeg;' in section
+    assert 'getElementById("clearBodyRound").hidden = perLeg;' in section
+    assert 'getElementById("clearHeadLeg").hidden = !perLeg;' in section
+    assert 'getElementById("clearBodyLeg").hidden = !perLeg;' in section
 
 
 async def test_only_the_confirm_flag_gates_a_press(client):
