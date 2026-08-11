@@ -296,11 +296,18 @@ from app.db.models import Concert
 from app.db.service import ensure_user
 
 
-async def test_every_concert_carries_a_quiet_stamp_after_migration(session):
-    """The test DB is built from Base.metadata, so this asserts the model half:
-    the columns exist, are nullable, and default to NULL for a NEW row. The
-    backfill itself is asserted by the reconcile test in Task 4 -- a concert
-    with a stamp is not a newcomer."""
+async def test_the_stamp_columns_are_nullable_and_round_trip_as_aware_utc(session):
+    """NAMED FOR WHAT IT ASSERTS. Every test DB is built from Base.metadata, so
+    this test cannot see the migration at all -- it pins the MODEL half: the
+    columns exist, default to NULL on a new row, and come back aware (invariant
+    1).
+
+    The backfill's actual effect is asserted where it is observable:
+    test_a_stamped_concert_is_never_a_newcomer (Task 4) proves a stamped row
+    produces no DM, and the manual step in this plan's final verification
+    section runs the real migration against a real DB. A test named
+    'after_migration' that never runs a migration is the proxy-assertion trap:
+    it passes for reasons unrelated to its claim."""
     await ensure_user(session, 42, "reiji")
     concert = Concert(title="Fresh", event_id="fresh", created_by=42)
     session.add(concert)
