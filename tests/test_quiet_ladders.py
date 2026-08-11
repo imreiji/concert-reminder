@@ -285,3 +285,14 @@ async def test_a_second_quiet_spell_arrives_unchecked(session):
 
 async def test_record_ladder_checked_reports_a_missing_concert(session):
     assert await record_ladder_checked(session, "nope", NOW) is False
+
+
+async def test_record_ladder_checked_stamps_the_row(session):
+    """Pins the write itself, not just the surrounding no-op-safe state.
+
+    Without a fixture whose row can only end up stamped by THIS call (not by
+    reconcile's own clearing), a no-op writer that only ever `return`s True
+    would satisfy every other assertion in this file too."""
+    await _concert(session, "checked")
+    assert await record_ladder_checked(session, "checked", NOW) is True
+    assert (await quiet_ladder_rows(session, NOW))[0].rechecked_at_utc == NOW

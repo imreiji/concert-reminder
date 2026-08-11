@@ -127,11 +127,13 @@ async def _all_concerts(session: AsyncSession) -> list[Concert]:
     identity map keeps whatever `days`/`rounds` collection it loaded LAST
     time, even though this is a brand new SELECT -- SQLAlchemy does not
     re-apply eager-loaded collections onto an already-loaded attribute unless
-    told to. `reconcile_quiet_ladders` is called more than once against the
-    same session within a tick's tests (and `quiet_ladder_rows` may run in
-    the same request that just wrote a round), so a stale empty `rounds`
-    collection would make a concert that just grew a round still read as
-    quiet.
+    told to. Defensive, not required by any known production call site: the
+    trigger actually observed was a test calling `reconcile_quiet_ladders`
+    twice on one session, where the second call read a stale empty `rounds`
+    collection for a concert that had just grown a round in between. It
+    matters in production too, not only in tests, because `SessionMaker`
+    sets `expire_on_commit=False` (`db/session.py`) -- a session that survives
+    past a commit keeps its identity map, and with it any stale collection.
     """
     return (await session.execute(
         select(Concert)
@@ -184,6 +186,11 @@ async def reconcile_quiet_ladders(
     transaction as these stamps -- that pairing is what makes the notice
     exactly-once. Committing the stamp first would drop the DM on a crash;
     committing the notice first would repeat it.
+
+    Do not wrap this call in `session.no_autoflush`: `_all_concerts`' SELECT
+    runs with `populate_existing=True`, which overwrites in-memory attributes
+    even when dirty, and with autoflush suppressed an unflushed stamp set
+    just before this call is exactly what gets discarded.
     """
     now = now or _now()
     concerts = await _all_concerts(session)
