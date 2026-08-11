@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{#- Admin-only operational page: English-only and deliberately NOT wrapped in
+    _(), following admin_discoveries.html. -#}
+{% block title %}Quiet ladders — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Quiet ladders</h1>
+<p class="dim">
+  Concerts in the catalogue whose ladder holds no future deadline, and whose
+  show has not happened yet. Either the next round has not been announced, or
+  it was announced somewhere the catalogue never read. Nothing here is
+  fetched — it is a question about what you already hold.
+</p>
+
+{% if not rows %}
+<div class="edgecard ok">
+  Every concert in the catalogue with a future date still has a deadline ahead
+  of it.
+</div>
+{% else %}
+<table class="tagtable">
+  <thead>
+    <tr><th>Concert</th><th>Dates</th><th>Rounds held</th><th>Quiet</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr{% if row.rechecked_at_utc %} class="dim"{% endif %}>
+      <td>
+        <a href="/concerts/{{ row.event_id }}">{{ row.title }}</a>
+        {#- target="_blank" rel="noopener", matching concert_detail.html:64-66
+            and admin_discoveries.html:165 -- a worklist you work through must
+            not navigate the tab away from the list. -#}
+        {% if row.official_url %}
+          <a href="{{ row.official_url }}" target="_blank" rel="noopener">official</a>
+        {% endif %}
+        {% if row.eventernote_url %}
+          <a href="{{ row.eventernote_url }}" target="_blank" rel="noopener">eventernote</a>
+        {% endif %}
+        <a href="/concerts/{{ row.event_id }}/edit">edit</a>
+      </td>
+      {#- NOT the `day_month` global: that takes an aware UTC datetime and runs
+          utc_to_jst on it, while leg_dates are already JST `date` objects
+          (db/core.py's _jst_date). Passing a date would raise.
+
+          De-duplicated for display via Jinja's `unique` filter (order-
+          preserving -- it keeps first-occurrence order, it does not merely
+          fold neighbours, though the query's existing sort means every
+          duplicate is already adjacent in practice): `leg_dates` can hold
+          the same JST day twice (matinee + evening as separate legs,
+          matching `_api_concert_row`'s existing behaviour) and showing
+          "3 Oct, 3 Oct" would read as a rendering bug rather than the
+          two-shows-one-day shape it actually is. The dataclass itself is
+          left alone -- this is a display-only fold. -#}
+      <td>
+        {#- `| unique` alone returns a generator, which is always truthy --
+            the else branch below would never render without `| list`. Match
+            the codebase's other three uses (concert_detail.html:126,
+            discover.html:86, home.html:40), all of which pipe `| list`. -#}
+        {% set unique_dates = row.leg_dates | unique | list %}
+        {% if unique_dates %}
+          {% for d in unique_dates %}{{ d.day }} {{ d.strftime('%b') }}{% if not loop.last %}, {% endif %}{% endfor %}
+        {% else %}<span class="dim">no dates announced</span>{% endif %}
+      </td>
+      <td>
+        {% if row.rounds %}
+          {% for r in row.rounds %}{{ r.label }}{% if not loop.last %}, {% endif %}{% endfor %}
+        {% else %}<span class="dim">none</span>{% endif %}
+      </td>
+      <td>
+        {% if row.quiet_since_utc %}since {{ row.quiet_since_utc.strftime('%Y-%m-%d') }}
+        {% else %}<span class="dim">not yet stamped</span>{% endif %}
+        {% if row.rechecked_at_utc %}
+          <br><span class="dim">checked {{ row.rechecked_at_utc.strftime('%Y-%m-%d') }}</span>
+        {% endif %}
+      </td>
+      <td>
+        <form method="post" action="/admin/quiet-ladders/{{ row.event_id }}/checked">
+          <button type="submit" class="act">Checked</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{#- data-copy read via dataset, never interpolated into the onclick: the
+    browser HTML-decodes an attribute before parsing it as JS, so Jinja's
+    escaping would not protect a title containing an apostrophe (invariant 7).
+    Mirrors admin_discoveries.html. -#}
+<button type="button" class="act" data-copy="{{ copy_text }}"
+        onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy block</button>
+<pre style="white-space:pre-wrap;margin:0">{{ copy_text }}</pre>
+{% endif %}
+{% endblock %}

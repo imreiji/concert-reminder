@@ -653,3 +653,29 @@ async def test_open_leads_excludes_dismissed_and_bound(client, db, monkeypatch):
     assert "open-1" in ids
     assert "dismissed-1" not in ids
     assert "bound-1" not in ids
+
+
+async def test_next_anchor_at_returns_the_datetime_the_iso_form_stringifies(session):
+    """The ISO form is a wrapper. One definition of 'future anchor', so this
+    surface and the quiet-ladders predicate cannot drift apart."""
+    from app.db.service import _next_anchor_iso, next_anchor_at
+
+    await ensure_user(session, 42, "reiji")
+    concert = Concert(title="Anchor", event_id="anchor", created_by=42)
+    session.add(concert)
+    await session.flush()
+    soon = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
+    session.add(Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="1次",
+        closes_at_utc=soon,
+    ))
+    await session.flush()
+    await session.refresh(concert, ["rounds", "days"])
+
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
+    assert next_anchor_at(concert, now) == soon
+    assert _next_anchor_iso(concert, now) == soon.isoformat()
+
+    after = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
+    assert next_anchor_at(concert, after) is None
+    assert _next_anchor_iso(concert, after) is None

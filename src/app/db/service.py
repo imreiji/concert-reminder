@@ -21,6 +21,7 @@ It is a FACADE and holds no logic of its own. The work moved to:
     translation_gaps.py  the edit pages' "what's missing" notice
     ops_alerts.py        health checks -> admin DMs
     phrases.py           the round-label phrase library
+    quiet_ladders.py     the round-watch predicate and worklist query
     audit.py             ConcertAudit, the concert edit history
     venues.py            the legs -> concert VENUE tag rollup
     tokens.py            secret tokens at rest -- one hash implementation
@@ -170,6 +171,7 @@ from app.db.core import (
     my_deadline_blocks,
     my_deadline_rows,
     my_upcoming_deadlines,
+    next_anchor_at,
     notice_context,
     notify_newly_cancelled_legs,
     record_dm_outcome,
@@ -257,6 +259,20 @@ from app.db.phrases import (
     forget_round_label_phrase,
     record_round_label_phrase,
     round_label_phrases,
+)
+from app.db.quiet_ladders import (
+    QuietLadder,
+    QuietRound,
+    _all_concerts_for_quiet_scan,
+    _not_yet_performed,
+    _quiet_concerts,
+    _quiet_ladder_row,
+    is_quiet,
+    quiet_entry_from_row,
+    quiet_ladder_rows,
+    reconcile_quiet_ladders,
+    record_ladder_checked,
+    run_quiet_ladder_pass,
 )
 from app.db.rehearsal import (
     REHEARSAL_EVENT_ID,
@@ -359,6 +375,8 @@ __all__ = [
     "PlannedDismissal",
     "PrunePlan",
     "PruneReport",
+    "QuietLadder",
+    "QuietRound",
     "REHEARSAL_EVENT_ID",
     "REHEARSAL_TAG_NAME",
     "Recipients",
@@ -380,6 +398,7 @@ __all__ = [
     "_DUPLICATE_WINDOW",
     "_FOLD_KINDS",
     "_HANDLE_FIELDS",
+    "_all_concerts_for_quiet_scan",
     "_api_concert_row",
     "_apply_outcome_suppression",
     "_audit_value",
@@ -408,11 +427,14 @@ __all__ = [
     "_next_moment_key",
     "_next_round_anchor",
     "_next_round_for_leg",
+    "_not_yet_performed",
     "_now",
     "_open_round_criterion",
     "_phase_two_already_ran",
     "_primary_anchor",
     "_qualifiers_by_upgrade_round",
+    "_quiet_concerts",
+    "_quiet_ladder_row",
     "_regroup_gaps",
     "_result_moment",
     "_round_asks_application",
@@ -505,6 +527,7 @@ __all__ = [
     "handle_newly_tagged",
     "has_day_results",
     "hash_token",
+    "is_quiet",
     "is_round_cancelled",
     "latest_triage_run",
     "leads_matching_existing_legs",
@@ -522,6 +545,7 @@ __all__ = [
     "my_deadline_blocks",
     "my_deadline_rows",
     "my_upcoming_deadlines",
+    "next_anchor_at",
     "note_fetch_domain",
     "notice_context",
     "notify_newly_cancelled_legs",
@@ -536,11 +560,15 @@ __all__ = [
     "pull_rehearsal_forward",
     "queue_broadcast",
     "queue_delivery_digest",
+    "quiet_entry_from_row",
+    "quiet_ladder_rows",
     "recent_broadcasts",
+    "reconcile_quiet_ladders",
     "record_concert_edit",
     "record_deliveries",
     "record_discovered",
     "record_dm_outcome",
+    "record_ladder_checked",
     "record_remaining_days_lost",
     "record_round_day_result",
     "record_round_label_phrase",
@@ -556,6 +584,7 @@ __all__ = [
     "resolve_recipients",
     "round_label_phrases",
     "round_result_state",
+    "run_quiet_ladder_pass",
     "secured_day_ids_by_round",
     "seed_rehearsal",
     "set_concert_subscription",

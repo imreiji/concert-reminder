@@ -73,7 +73,8 @@ undo.
   Discover status, DM button actions, presets/subscriptions, users,
   adapters); beside it sit `tags`, `venues`, `drafts`, `discovery_events`,
   `setup_flow`, `calendar_feed`, `rehearsal`, `delivery`, `broadcast`,
-  `ops_alerts`, `audit`, `phrases`, `translation_gaps`.
+  `ops_alerts`, `audit`, `phrases`, `translation_gaps`, and `quiet_ladders`
+  (round watch: which concerts in the catalogue hold no future deadline).
   Dependencies point ONE way: feature modules import `core`, `core` imports
   none of them, and the facade imports everything and is imported by nothing.
   **Add a name to a module and you must add it to `service.py` too** —
