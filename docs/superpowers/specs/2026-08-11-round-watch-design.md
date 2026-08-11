@@ -55,14 +55,13 @@ July, and permanent dismissal is the one shape that would hide it.
 
 One definition, in one place, `db/quiet_ladders.py`:
 
-> A concert is on the list when it is not dead, it has at least one live leg
-> dated in the future OR no live leg dated at all, and no round of it holds a
-> future moment.
+> A concert is on the list when it is not dead, its last live leg is in the
+> future OR it has no legs at all, and no round of it holds a future moment.
 
 Formally, against `now`:
 
     not all_legs_cancelled(days)
-    and (any live dated leg is in the future or no live leg is dated)
+    and (no live leg exists or the latest live leg is in the future)
     and next_anchor_at(concert, now) is None
 
 **The third clause reuses the shipped signal literally.** `_next_anchor_iso`
@@ -80,17 +79,21 @@ concert HAS legs and every one is cancelled", so a dateless draft is not dead --
 the same exemption the SQL half (`discoverable_concert_criterion`) makes. That
 is deliberate here too: ブシロード20周年記念ライブ, imported with no dates because
 its page says 出演日程やチケットの詳細は後日発表, is the canonical case this
-feature exists for. A concert with legs that are all undated is treated the same
-way, because the question "has this show happened yet" has no answer for it.
+feature exists for -- a concert with no `ConcertDay` rows at all, which is also
+what `duplicate_concert` produces.
 
-**Dated legs decide it when a concert has both.** A concert with some legs
-dated and some not is judged on the dated ones alone: the "no live leg dated at
-all" branch is for a concert that has announced no dates whatsoever. So a
-concert whose only dated leg is past is OFF the list even if it also carries an
-undated leg. This is the conservative reading -- the show demonstrably happened,
-and the undated leg is more likely a record-keeping remnant than an
-unannounced future date. Stated explicitly because the two clauses otherwise
-leave it to whichever the implementer evaluates first.
+**"Dateless" means NO LEGS, not an undated leg** -- corrected 2026-08-11, after
+the first draft of this spec ruled on a state the schema forbids.
+`ConcertDay.starts_at_utc` compiles to `DATETIME NOT NULL`, so a leg always
+carries a date and a concert cannot hold a mix of dated and undated ones. The
+earlier draft's "dated legs decide when a concert has both" ruling was
+therefore unreachable, and the test written for it would have asserted
+something impossible.
+
+What the second clause actually distinguishes is a concert with ZERO
+`ConcertDay` rows -- which is exactly what a skeleton import and
+`duplicate_concert` produce, and exactly the ブシロード20周年記念ライブ case --
+from one whose legs have all been performed.
 
 **Why past concerts fall off by themselves.** A ladder on a concert that has
 already happened is finished, not quiet. Nothing needs to expire it: the leg
@@ -255,10 +258,10 @@ Two nullable `UTCDateTime` columns on `concerts`, plus a backfill stamping
 
 ## Testing
 
-- **The predicate, case by case:** dateless with no rounds (on), future legs
-  with every round closed (on), all legs past (off), all legs cancelled (off),
-  one dated past leg beside an undated leg (off -- the mixed case above), and a
-  concert holding a future anchor (off). The last pins the reuse of
+- **The predicate, case by case:** no legs at all and no rounds (on), future
+  legs with every round closed (on), all legs past (off), all legs cancelled
+  (off), a past leg beside a live future one (on -- the latest live leg
+  decides), and a concert holding a future anchor (off). The last pins the reuse of
   `next_anchor_at` -- if this surface and the read API ever drift apart, it
   fails.
 - **The pass:** stamps newcomers; **an immediate second run announces nothing**,
