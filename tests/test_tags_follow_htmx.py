@@ -426,6 +426,16 @@ async def test_every_chip_form_on_the_page_can_swap_itself(client):
     Mutation this must fail against: wiring only the plain chip and leaving
     `follow_half` posting the old way -- exactly the shape of this regression,
     where one surface was fixed and the other kept reloading the page.
+
+    HALF THE SEEDED TAGS ARE FOLLOWED BEFORE THE PAGE IS FETCHED, and the two
+    counts below are asserted, because the FOLLOWED branch is the one that
+    carries the risk and this test could not see it. Seeding no subscription
+    made every form here the unfollowed branch -- which structurally cannot
+    contain `/delete` and always carries `tag_id` -- so the two assertions
+    that matter were vacuously true, and reverting either followed branch to
+    `action="/subscriptions/{{ sub.id }}/delete"` left this file green (found
+    in review, 2026-08-12). A sweep that cannot see the branch it guards is
+    worse than no sweep: it reads as coverage.
     """
     from app.db.models import TagMember
 
@@ -438,9 +448,26 @@ async def test_every_chip_form_on_the_page_can_swap_itself(client):
         s.add(TagMember(group_tag_id=group, member_tag_id=chara))
         await s.commit()
 
+    # Follow the character (a pill half) and the group (a plain chip); leave
+    # the seiyuu half and the franchise unfollowed. Both shapes then render in
+    # both states on one page.
+    for tid, shape in ((chara, "cn"), (group, "count")):
+        r = client.post("/subscriptions",
+                        data={"tag_id": tid, "notify": "true", "next": "/tags",
+                              "chip": shape})
+        assert r.status_code == 303
+
     body = client.get("/tags").text
     forms = re.findall(r'<form class="(?:chipform|half)".*?</form>', body, re.DOTALL)
     assert len(forms) >= 4, "franchise + group + both pill halves at least"
+    followed = [f for f in forms if 'action="/subscriptions/unfollow"' in f]
+    unfollowed = [f for f in forms if 'action="/subscriptions"' in f]
+    assert len(followed) >= 2 and len(unfollowed) >= 2, (
+        f"the sweep must see BOTH branches, in both shapes -- "
+        f"{len(followed)} followed / {len(unfollowed)} unfollowed forms"
+    )
+    assert any('class="half"' in f for f in followed), "including a followed HALF"
+    assert any('class="chipform"' in f for f in followed), "and a followed chip"
     for f in forms:
         assert "hx-post=" in f, f"a chip that still reloads the page: {f[:120]}"
         assert 'hx-target="this"' in f and 'hx-swap="outerHTML"' in f

@@ -638,12 +638,25 @@ measurement or an incident that a reasonable-looking edit would undo.
     serves Preferences and the welcome wizard, which render a tag once and
     reload wholly, and one route resolving by id OR by tag depending on which
     field the form sent is two identity schemes wearing one URL. Never point a
-    chip back at the id-keyed route -- a sweep test forbids `/delete` in any
-    chip form. Note what did NOT change: the copies still go stale visually (the
-    other chip still shows ✓ until something re-renders it). Making a press
-    update every copy would need an out-of-band swap keyed on the tag, which is
-    a bigger mechanism than this page has earned; making the press *harmless*
-    is what mattered, and is what shipped.
+    chip back at the id-keyed route -- `test_every_chip_form_on_the_page_can_swap_itself`
+    forbids `/delete` in any chip form, and it FOLLOWS half its seeded tags
+    before fetching the page, because seeded with none it saw only unfollowed
+    forms and both of its load-bearing assertions were vacuous (caught in
+    review, 2026-08-12; the id-keyed URL could be put back in either followed
+    branch with that whole file still green). The id-keyed route keeps its own
+    two tests in `test_presets.py`, beside the other `/subscriptions` route
+    tests: deleting it outright used to leave the suite green while 405-ing
+    three live surfaces.
+    Note what did NOT change: the copies still go stale visually (the other
+    chip still shows ✓ until something re-renders it). Making a press update
+    every copy would need an out-of-band swap keyed on the tag, which is a
+    bigger mechanism than this page has earned. **That trade is acceptable
+    ONLY BECAUSE BOTH DIRECTIONS ARE IDEMPOTENT** -- a stale copy's press is
+    merely redundant, never destructive and never an error. Add a third,
+    NON-idempotent action to these chips (anything where pressing twice differs
+    from pressing once, or where a press depends on the state the chip is
+    displaying) and the trade reopens: that action needs the out-of-band sync,
+    or a confirmation, or it must not live on a duplicated chip at all.
   - **Subunit de-dup is `/tags`-ONLY, and the 2026-08-01 ruling it appears to
     contradict still stands where it was made.** `tag_directory_context`'s
     `group_rows` subtracts every member of a group's subunits from the parent's

@@ -220,7 +220,9 @@
 {% endmacro %}
 
 {#- Every chip on this page is a follow control: a real <form> posting to
-    POST /subscriptions and POST /subscriptions/{id}/delete, so it works with
+    POST /subscriptions and POST /subscriptions/unfollow -- both keyed by TAG,
+    never by subscription id, because this page renders one tag more than once
+    (see _tag_chip.html) -- so it works with
     JS off, with next=/tags so you stay where you are (that value only survives
     because "/tags" is in _ALLOWED_NEXT -- routes/preferences.py -- which is a
     closed internal allowlist, not the open-redirect guard). This generalises
