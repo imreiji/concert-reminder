@@ -27,8 +27,8 @@ from app.db.service import (
     create_tag_row,
     ensure_user,
     find_tags_by_name_and_kind,
-    group_members,
     handle_newly_tagged,
+    members_by_group,
     resolve_group_member,
     tag_directory_context,
     tag_variant_gaps,
@@ -107,7 +107,7 @@ async def tag_directory(
     sub_by_tag = {sub.tag_id: sub for sub in subs}
     by_id = {t.id: t for t in tags}
     groups = [t for t in tags if t.kind is TagKind.GROUP]
-    members = {t.id: await group_members(session, t.id) for t in groups}
+    members = await members_by_group(session, [t.id for t in groups])
     grouped_artist_ids = {m.id for ms in members.values() for m in ms}
     counts = ctx["counts"]
     # Raw Python payload for the new-tag dialog's duplicate warning; the

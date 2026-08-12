@@ -40,8 +40,8 @@ from app.db.service import (
     followed_tag_counts,
     generate_api_token,
     get_default_preset,
-    group_members,
     list_editors,
+    members_by_group,
     record_dm_outcome,
     set_default_preset,
     set_editor,
@@ -130,7 +130,7 @@ async def preferences(
     franchises = [t for t in tags if t.kind is TagKind.FRANCHISE]
     groups = [t for t in tags if t.kind is TagKind.GROUP]
     venues = [t for t in tags if t.kind is TagKind.VENUE]
-    members = {g.id: await group_members(session, g.id) for g in groups}
+    members = await members_by_group(session, [g.id for g in groups])
     grouped_artist_ids = {m.id for ms in members.values() for m in ms}
     solo_artists = [
         t for t in tags if t.kind is TagKind.ARTIST and t.id not in grouped_artist_ids
