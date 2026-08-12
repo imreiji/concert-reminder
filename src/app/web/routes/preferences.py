@@ -26,12 +26,20 @@ from zoneinfo import ZoneInfo
 import discord
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import i18n
 from app.config import settings
-from app.db.models import Concert, PresetItem, ReminderPreset, Tag, TagSubscription, User
+from app.db.models import (
+    Concert,
+    ConcertTag,
+    PresetItem,
+    ReminderPreset,
+    Tag,
+    TagSubscription,
+    User,
+)
 from app.db.service import (
     apply_preset,
     concert_subscription_states,
@@ -311,16 +319,65 @@ async def delete_item(
 # ── Subscriptions ────────────────────────────────────────────────────────
 
 
-@router.post("/subscriptions")
+# `_tag_chip.html` renders four shapes, and the pressed form names its own in a
+# hidden `chip` input: "count" (a directory chip, with its event count),
+# "plain" (a member chip, which has never carried one), and these two -- the
+# character and seiyuu halves of a split pill, where the value doubles as the
+# half's CSS class.
+_PILL_HALVES = {"cn", "cv"}
+
+
+async def _chip_fragment(
+    session: AsyncSession, tag: Tag, sub: TagSubscription | None, chip: str
+) -> HTMLResponse:
+    """ONE follow chip, for an htmx press to swap in place of itself.
+
+    Rendered from `_tag_chip.html` -- the same partial /tags renders every chip
+    from -- because the failure mode of a hand-written fragment is silent: a
+    chip that loses `data-name` is unfindable by the search box, one that loses
+    `data-tag-id` is inert in the editor's Edit mode, and one that loses its
+    `unused` marking lies about a tag attached to nothing. A test compares this
+    output against the page's own markup byte for byte.
+
+    `chip` is the shape the pressed form said it was, and an unknown value
+    lands on the plain chip rather than raising: the value is only ever written
+    by the partial itself, and a fragment of the wrong shape is a cosmetic
+    surprise where a 500 on a follow press would not be.
+
+    The count is looked up HERE rather than trusted from the form, and only for
+    the shape that shows one -- a member chip has never carried a number and
+    must not grow one. It is one COUNT over `concert_tags`, the same figure
+    `tag_directory_context` computes for the whole page in a GROUP BY.
+    """
+    if chip in _PILL_HALVES:
+        html = templates.get_template("_tag_chip.html").module.follow_half(tag, chip, sub)
+    else:
+        count = None
+        if chip == "count":
+            count = await session.scalar(
+                select(func.count())
+                .select_from(ConcertTag)
+                .where(ConcertTag.tag_id == tag.id)
+            )
+        html = templates.get_template("_tag_chip.html").module.tag_chip(tag, count, sub)
+    return HTMLResponse(str(html))
+
+
+@router.post("/subscriptions", response_class=HTMLResponse)
 async def subscribe(
+    request: Request,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
     tag_id: int = Form(...),
     preset_id: int = Form(0),
     notify: bool = Form(False),
     next_url: str = Form("/preferences", alias="next"),
+    # Which chip shape asked, blank from every non-chip caller (Preferences,
+    # the welcome wizard). Only read on the htmx branch.
+    chip: str = Form(""),
 ):
-    if await session.get(Tag, tag_id) is None:
+    tag = await session.get(Tag, tag_id)
+    if tag is None:
         raise HTTPException(status_code=404, detail="tag not found")
     if preset_id:
         await owned_preset(session, user.id, preset_id)
@@ -332,15 +389,25 @@ async def subscribe(
     sub = existing.scalar_one_or_none()
     await ensure_user(session, user.id, user.username)
     if sub is None:
-        session.add(TagSubscription(
+        sub = TagSubscription(
             user_id=user.id, tag_id=tag_id,
             preset_id=preset_id or None, notify=notify,
-        ))
+        )
+        session.add(sub)
     else:  # re-submitting updates the existing subscription
         sub.preset_id = preset_id or None
         sub.notify = notify
     await session.commit()
-    return RedirectResponse(_safe_next(next_url), status_code=303)
+
+    # A chip press on /tags swaps ITSELF (owner report, 2026-08-12: a follow
+    # used to 303 back and re-render the whole directory -- 6.8 MB and 1.6 s at
+    # live scale -- landing the reader back at the top of the page). Anything
+    # else, JS-off chips included, keeps the redirect: htmx would FOLLOW a 303
+    # and swap a whole page into a chip-sized hole, which is worse than the
+    # reload it replaces, so a fragment response must never also redirect.
+    if request.headers.get("HX-Request") != "true":
+        return RedirectResponse(_safe_next(next_url), status_code=303)
+    return await _chip_fragment(session, tag, sub, chip)
 
 
 async def _owned_subscription(
@@ -387,19 +454,29 @@ async def toggle_subscription_autoapply(
     return RedirectResponse("/preferences#p-follow", status_code=303)
 
 
-@router.post("/subscriptions/{sub_id}/delete")
+@router.post("/subscriptions/{sub_id}/delete", response_class=HTMLResponse)
 async def unsubscribe(
+    request: Request,
     sub_id: int,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
     next_url: str = Form("/preferences", alias="next"),
+    chip: str = Form(""),
 ):
     sub = await session.get(TagSubscription, sub_id)
     if sub is None or sub.user_id != user.id:
         raise HTTPException(status_code=404)
+    # Read the tag BEFORE the delete: the swapped-in chip is the same tag,
+    # now offering follow, and after the commit the row is gone.
+    tag = await session.get(Tag, sub.tag_id)
     await session.delete(sub)
     await session.commit()
-    return RedirectResponse(_safe_next(next_url), status_code=303)
+
+    # Same split as `subscribe` above, and for the same reason -- an unfollow
+    # is a press on the same chip.
+    if request.headers.get("HX-Request") != "true":
+        return RedirectResponse(_safe_next(next_url), status_code=303)
+    return await _chip_fragment(session, tag, None, chip)
 
 
 # ── Admin: editors ───────────────────────────────────────────────────────

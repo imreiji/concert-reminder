@@ -1,0 +1,104 @@
+{#- ONE follow control, rendered in two shapes: a whole chip (`tag_chip`) and
+    one half of a split pill (`follow_half`).
+
+    It lives in its own file because POST /subscriptions and POST
+    /subscriptions/{id}/delete swap ONE of these back in after a press
+    (routes/preferences.py), and a route cannot render a macro that closes over
+    a page's context. So both macros take everything they need explicitly --
+    `sub` above all, which used to be a `sub_by_tag.get(t.id)` lookup inside
+    tags.html. tags.html keeps that lookup in one place by wrapping these; the
+    route passes the single subscription row it just wrote or deleted.
+
+    THE PAGE AND THE SWAPPED FRAGMENT COME FROM HERE, BOTH OF THEM. That is the
+    point of the extraction: a chip that differs from the one the page renders
+    is a chip that silently loses `data-name` (unfindable by the search box),
+    `data-tag-id` (inert in the editor's Edit mode) or its `unused` marking the
+    moment it is pressed.
+
+    Every form is a REAL form -- `method`/`action` beside `hx-post` -- so a
+    press works with JavaScript off exactly as it did before htmx entered the
+    picture; the route answers a 303 to a non-htmx post and a fragment to an
+    htmx one. Same shape as `_capture_actions.html`. Do not drop either half.
+
+    The hidden `chip` input is how the route knows WHICH shape to render back:
+    "count" / "plain" for a whole chip (with or without its event count) and
+    "cn" / "cv" for a pill half. It is DERIVED here rather than passed in, so
+    the value can never disagree with the markup it sits in. -#}
+
+{#- A tag chip. `count` is the concert count (None for member chips, which
+    carry no count and never show the unused state).
+
+    Editors get their edit-on-click back through the Follow/Edit mode switch
+    (tags.html's .viewbar), not by branching here -- a chip that means
+    different things to different people is the thing that made this page
+    unusable for everyone who is not an editor.
+
+    data-name carries search_key(t) -- all three of the tag's names -- and is
+    filterChips()'s hook. It goes on the FORM, which is what filterChips hides
+    (it resolves .closest(".chipform")).
+
+    data-tag-id is the mode switch's hook, and it is a data- attribute rather
+    than an interpolated on* handler for invariant 7's reason (the browser
+    HTML-decodes an attribute before parsing it as JS, so Jinja's escaping
+    does not protect an inline handler). data-tag-chip marks what the mode
+    may intercept.
+
+    The tick is its OWN element, not a bare `name ✓` text node, because Edit
+    mode has to remove it and CSS cannot delete a text node -- a chip showing
+    "following" while its click opens an editor is lying about the click. In
+    `.tchip` (inline-flex) the literal space before it collapses away and the
+    .4rem gap does the spacing; in a split-pill half (an ordinary button) the
+    space is what separates them. -#}
+{% macro tag_chip(t, count, sub) %}
+{%- set kcls = {"franchise": " k-franchise", "group": " k-group", "venue": " k-venue"}.get(t.kind.value, "") -%}
+{%- set unused = count is not none and count == 0 -%}
+{%- set shape = "count" if count is not none else "plain" -%}
+{%- if sub -%}
+<form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete"
+      hx-post="/subscriptions/{{ sub.id }}/delete" hx-target="this" hx-swap="outerHTML"
+      data-name="{{ search_key(t) }}">
+  <input type="hidden" name="next" value="/tags">
+  <input type="hidden" name="chip" value="{{ shape }}">
+  <button class="tchip{{ kcls }} on{% if unused %} unused{% endif %}" data-tag-chip data-tag-id="{{ t.id }}"
+          title="{{ _('Following — click to unfollow') }}">{{ loc(t, "name") }} <span class="tick">✓</span>{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+</form>
+{%- else -%}
+<form class="chipform" method="post" action="/subscriptions"
+      hx-post="/subscriptions" hx-target="this" hx-swap="outerHTML"
+      data-name="{{ search_key(t) }}">
+  <input type="hidden" name="tag_id" value="{{ t.id }}">
+  <input type="hidden" name="notify" value="true">
+  <input type="hidden" name="next" value="/tags">
+  <input type="hidden" name="chip" value="{{ shape }}">
+  <button class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-tag-chip data-tag-id="{{ t.id }}"
+          title="{{ _('Follow this tag') }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+</form>
+{%- endif -%}
+{% endmacro %}
+
+{#- One half of a split pill: the same follow form tag_chip emits, without
+    the count and without its own data-name (the pill above carries one for
+    both). `cls` is "cn" (character) or "cv" (seiyuu, the dim half), and it is
+    also this half's `chip` shape -- a swapped half must come back as the same
+    half it was, or a pressed seiyuu returns wearing the character's styling. -#}
+{% macro follow_half(t, cls, sub) %}
+{%- if sub -%}
+<form class="half" method="post" action="/subscriptions/{{ sub.id }}/delete"
+      hx-post="/subscriptions/{{ sub.id }}/delete" hx-target="this" hx-swap="outerHTML">
+  <input type="hidden" name="next" value="/tags">
+  <input type="hidden" name="chip" value="{{ cls }}">
+  <button class="{{ cls }} on" data-tag-chip data-tag-id="{{ t.id }}"
+          title="{{ _('Following — click to unfollow') }}">{{ loc(t, "name") }} <span class="tick">✓</span></button>
+</form>
+{%- else -%}
+<form class="half" method="post" action="/subscriptions"
+      hx-post="/subscriptions" hx-target="this" hx-swap="outerHTML">
+  <input type="hidden" name="tag_id" value="{{ t.id }}">
+  <input type="hidden" name="notify" value="true">
+  <input type="hidden" name="next" value="/tags">
+  <input type="hidden" name="chip" value="{{ cls }}">
+  <button class="{{ cls }}" data-tag-chip data-tag-id="{{ t.id }}"
+          title="{{ _('Follow this tag') }}">{{ loc(t, "name") }}</button>
+</form>
+{%- endif -%}
+{% endmacro %}

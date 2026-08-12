@@ -596,6 +596,32 @@ measurement or an incident that a reasonable-looking edit would undo.
     and until this build the set held only `/preferences`/`/welcome` -- so the
     bell had been bouncing every follow to Preferences since it shipped. Trim
     `/tags` back out and every chip on the page silently does that again.
+  - **A press swaps ITS OWN chip, and the markup for it lives in
+    `_tag_chip.html` for that reason** (2026-08-12, owner report: "the loading
+    time after clicking each follow and unfollow is incredibly slow", and every
+    press scrolled the reader back to the top). The plain forms above were
+    correct and unusable: a follow 303'd back to `/tags`, which re-rendered
+    every chip on the page plus an editor's `<dialog>` per tag. Measured on a
+    735-tag seed of the live shape (1,053 chip forms, 6.98 MB of HTML), one
+    press, both figures from the same run: the redirect path costs **923 ms and
+    6.98 MB**, the htmx press **10.7 ms and 518 bytes** -- the same POST,
+    answered with one chip instead of the whole directory. `tag_chip`/`follow_half` therefore MOVED out of `tags.html`
+    (which keeps two one-line wrappers holding the `sub_by_tag` lookup) and take
+    their subscription row as a parameter, because a route cannot render a macro
+    that closes over a page's context. Three things hold it together and each
+    one is silent when broken: the forms keep `method`/`action` BESIDE
+    `hx-post`/`hx-target="this"`/`hx-swap="outerHTML"`, so JS-off following
+    still works (`_capture_actions.html`'s idiom, deliberately copied rather
+    than reinvented); the routes answer a fragment ONLY to `HX-Request` and
+    otherwise still 303, since htmx FOLLOWS a redirect and would swap the whole
+    page into a chip-sized hole; and the fragment comes from the same partial
+    the page renders, byte for byte, or a swapped chip quietly loses `data-name`
+    (unfindable by the search box), `data-tag-id` (inert in Edit mode) or its
+    `unused` marking. The hidden `chip` input is how the route knows which of
+    the four shapes to send back, and the event count is re-queried server-side
+    rather than trusted from the form -- a member chip must not grow a number it
+    has never had. `tests/test_tags_follow_htmx.py` pins all of it, including
+    the byte-identity in both directions.
   - **Subunit de-dup is `/tags`-ONLY, and the 2026-08-01 ruling it appears to
     contradict still stands where it was made.** `tag_directory_context`'s
     `group_rows` subtracts every member of a group's subunits from the parent's
