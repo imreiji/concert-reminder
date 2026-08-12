@@ -180,11 +180,11 @@ async def test_time_has_two_selects(client):
 
 async def test_account_danger_framing(client):
     """The Account items sit in the danger-framed card (`.banner.dgr` + the
-    `.danger` anatomy class -- G2's callout grammar)."""
+    `.danger-card` anatomy class -- G2's callout grammar)."""
     await seed(client.db)
     login_as(client, USER_A, "reiji")
     r = client.get("/preferences")
-    assert 'class="banner dgr danger"' in r.text
+    assert 'class="banner dgr danger-card"' in r.text
 
 
 async def test_editors_hidden_for_non_admin(client):

@@ -1288,16 +1288,22 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .fld { display: grid; gap: .25rem; }
 .fld > span { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); font-weight: 700; }
 
-/* The danger-card frame (Account items). Shared with the reveal/other pages;
-   `button.danger` above is a different, button-only rule and does not collide.
-   The border+wash come from .banner.dgr in the markup (G2). */
-.danger {
+/* The danger-card frame (Account items). Named `.danger-card`, not `.danger`,
+   for the same reason `.danger-row` is: a bare `.danger` ALSO matched every
+   `<button class="btn danger">`, and beat `.btn` on source order, so each
+   `.prune` dialog's destructive button silently took this card's 2.5rem margin
+   and .9rem padding -- which stretched its quiet sibling to 88px in a `.da`
+   flex row. Measured 2026-08-11; it had been that way in all three dialogs
+   since they shipped. `button.danger` above is the button-only rule and is the
+   one that is meant to reach a button. The border+wash come from .banner.dgr
+   in the markup (G2). */
+.danger-card {
   margin-top: 2.5rem;
   padding: .9rem 1rem; display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
 }
-.danger .t2 { font-weight: 600; font-size: .9rem; }
-.danger .s2 { color: var(--dim); font-size: .8125rem; max-width: 62ch; }
-.danger .sp { margin-left: auto; display: flex; gap: .5rem; }
+.danger-card .t2 { font-weight: 600; font-size: .9rem; }
+.danger-card .s2 { color: var(--dim); font-size: .8125rem; max-width: 62ch; }
+.danger-card .sp { margin-left: auto; display: flex; gap: .5rem; }
 
 @media (max-width: 860px) {
   .plyt { grid-template-columns: 1fr; gap: 1.25rem; }
@@ -1512,7 +1518,7 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
    compose it and keep their own padding/layout.
    Banner (.banner): needs attention -- wash ground, full border in the tone
    colour. Absorbs the old .callout(+warn), .banner-warn, .signin-note,
-   .dupe's colours and the .danger-row/.danger borders. */
+   .dupe's colours and the .danger-row/.danger-card borders. */
 .edgecard {
   border: 1px solid var(--line); border-left: 3px solid var(--accent);
   border-radius: 3px; background: var(--raise); box-shadow: var(--shadow);

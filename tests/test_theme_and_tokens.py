@@ -108,6 +108,44 @@ def test_dupe_banner_hidden_default_outspecifics_banner():
     assert not re.search(r"(?m)^\.dupe\s*\{", style), "bare .dupe rule loses to .banner"
 
 
+def _bare_compound_selectors(cls: str) -> list[str]:
+    """Selectors with `cls` as an UNQUALIFIED compound -- `.x`, `.a .x`, `.a > .x`
+    -- but not `button.x`, `.a.x`, or a different class that merely starts the
+    same way (`.x-card`)."""
+    hits = []
+    for sel in re.findall(r"(?m)^([^{}@/\s][^{}\n]*?)\s*\{", css()):
+        for one in sel.split(","):
+            for compound in re.split(r"[\s>+~]+", one.strip()):
+                if compound == f".{cls}":
+                    hits.append(sel.strip())
+    return hits
+
+
+def test_the_danger_card_frame_cannot_match_a_button():
+    # Third occurrence of this file's recurring failure: an author rule winning
+    # a source-order tie it was never meant to enter. The Account danger card
+    # was `.danger`, which ALSO matches `<button class="btn danger">` -- every
+    # .prune dialog's destructive button -- and sits after `.btn` in this file,
+    # so it won at equal specificity and handed the button `margin-top: 2.5rem`
+    # plus `.9rem` padding. MEASURED in the real app 2026-08-11 at innerWidth
+    # 1568: "Delete my account" 48.5px tall with a 40px margin, which stretched
+    # its quiet sibling to 88.5px in the `.da` flex row (30.9px each once the
+    # rule stops matching). All three dialogs, since each shipped.
+    #
+    # Two mutations this must fail against, which the markup assertion in
+    # test_preferences_page.py cannot see: renaming `.danger-card` back to
+    # `.danger`, and adding a second bare `.danger` rule beside it.
+    assert not _bare_compound_selectors("danger"), (
+        "a bare `.danger` compound also matches `button.btn.danger` and beats"
+        " `.btn` on source order -- qualify it (`.danger-card`) or scope it"
+    )
+    assert re.search(r"(?m)^\.danger-card\s*\{", css()), (
+        "the card frame itself must still exist, or this test passes vacuously"
+    )
+    # The button-only rule is the one that is MEANT to reach a button.
+    assert "button.danger {" in css()
+
+
 def test_style_ports_the_demos_dark_paper_hex():
     # The dark palette is the demo's, not a naive invert -- pin one hex so a
     # future "simplify" can't quietly swap it.
