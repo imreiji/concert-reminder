@@ -318,12 +318,13 @@ def test_display_headings_balance_their_wrap():
     Mutation this must fail against: removing `text-wrap: balance` from any one
     selector in the set, including the three that already had it.
     """
-    style = css()
-    missing = [sel for sel in BALANCED if "text-wrap: balance" not in _decls(sel)]
+    missing = [sel for sel in BALANCED if _decls(sel).get("text-wrap") != "balance"]
     assert not missing, f"display headings not balancing their wrap: {missing}"
 ```
 
 Note `_decls(selector)` already exists in this file and returns the declarations of the rule whose selector is exactly `selector`; it asserts the rule exists, so a renamed selector fails loudly rather than silently passing.
+
+**It returns a dict keyed by bare property name** (`{"text-wrap": "balance"}`), so the check must be `.get("text-wrap") != "balance"`. An earlier draft of this plan wrote `"text-wrap: balance" not in _decls(sel)`, which tests dict-KEY membership against a `prop: value` string and is therefore unconditionally true — the test could never pass, even after the fix. Corrected here after the Task 3 implementer caught it.
 
 - [ ] **Step 2: Run it to make sure it fails**
 
