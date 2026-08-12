@@ -79,13 +79,23 @@ async def test_following_a_tag_makes_its_chip_offer_unfollow(client):
     r = client.get("/tags")
     assert "tchip k-franchise on" in r.text
     assert 'action="/subscriptions/1/delete"' in r.text
+    # Scoped to the chip's own <form>...</form> -- the page's language-switch
+    # form (base.html) also carries a hidden next=/tags input, and unscoped
+    # this assertion would pass against THAT instead of the chip.
+    chip_form = r.text.split('action="/subscriptions/1/delete"', 1)[1].split("</form>", 1)[0]
+    assert 'name="next" value="/tags"' in chip_form, (
+        "the FOLLOWED chip must emit next=/tags too -- the POST below pins the "
+        "route's handling of it, not the template's emission of it"
+    )
 
     r = client.post("/subscriptions/1/delete", data={"next": "/tags"})
     assert r.status_code == 303
     # The `location`, not just the 303. The follow half of this test already
     # pins "/tags"; unpinned, the unfollow half passed while the route sent
-    # the user to /preferences -- the default `next` -- so dropping the
-    # hidden input from tag_chip's FOLLOWED branch was invisible.
+    # the user to /preferences -- the default `next`. And the assertion above
+    # pins the FOLLOWED chip actually emitting the hidden `next` input in the
+    # first place -- without it, this POST's explicit `data={"next": "/tags"}`
+    # would keep passing even if the template stopped emitting it.
     assert r.headers["location"] == "/tags"
 
     r = client.get("/tags")
