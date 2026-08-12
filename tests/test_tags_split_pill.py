@@ -5,6 +5,7 @@ following 秋月律子 and following 若林直美 are different subscriptions.
 """
 
 import re
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +16,7 @@ from app.web import auth
 from app.web.app import create_app
 
 EDITOR_ID = 77
+STYLE = Path(__file__).resolve().parents[1] / "src/app/web/static/style.css"
 
 
 @pytest.fixture()
@@ -157,8 +159,13 @@ async def test_each_half_follows_independently(client):
 
 
 async def test_both_halves_followed_together(client):
-    """The state where `.on` must beat `.cv` by CSS source order -- only a
-    browser session could see that one, so pin the markup here too."""
+    """Pins the markup precondition only: both halves render `on` when both
+    are followed. It does NOT pin that `.on` beats `.cv` by CSS source order
+    -- a reviewer once swapped the two declarations in style.css and this
+    assertion still passed, since it only checks that both classes appear
+    somewhere in the pill's HTML. See
+    test_on_beats_cv_by_css_source_order below for the actual cascade
+    behaviour, which only a real stylesheet (or a browser) can pin."""
     login_as(client, EDITOR_ID, "editor")
     group, imai, chihaya, ritsuko, plain = await _seed_group(client)
     client.post("/subscriptions", data={"tag_id": chihaya.id, "notify": "true", "next": "/tags"})
@@ -166,3 +173,44 @@ async def test_both_halves_followed_together(client):
     body = client.get("/tags").text
     _data_name, pill_html = _mchips(body)[0]
     assert 'class="cn on"' in pill_html and 'class="cv on"' in pill_html
+
+
+def test_on_beats_cv_by_css_source_order():
+    """`.mchip .half button` can carry both `cv` and `on` at once (the
+    followed-seiyuu half) -- both selectors have equal specificity (one
+    class each on the same base), so which wins is decided by which
+    declaration comes LATER in style.css. The design wants the followed
+    (accent) look to win, so `button.on` must be declared after
+    `button.cv`.
+
+    Mutation this must fail against: swapping the two declarations' order
+    in style.css, which test_both_halves_followed_together's markup-only
+    assertion does not catch."""
+    text = STYLE.read_text(encoding="utf-8")
+    cv_match = re.search(r"\.mchip \.half button\.cv\s*\{", text)
+    on_match = re.search(r"\.mchip \.half button\.on\s*\{", text)
+    assert cv_match and on_match, "both rules must exist in style.css"
+    assert on_match.start() > cv_match.start(), (
+        "button.on must be declared AFTER button.cv so the followed look "
+        "wins when a half carries both classes"
+    )
+
+
+async def test_a_character_in_no_group_appears_with_the_ungrouped_performers(client):
+    """"Treated as an individual artist" -- there is no Characters section any
+    more, so a character with no group must not vanish. Zero live characters
+    are ungrouped today, but the catalogue can change and a tag that renders
+    nowhere is unfollowable.
+
+    Mutation this must fail against: deleting the section without widening
+    ungrouped_performers, which drops her off the page entirely.
+    """
+    login_as(client, EDITOR_ID, "editor")
+    lone = await _tag(client, "双葉杏", "character")
+    body = client.get("/tags").text
+    assert "Characters" not in body, "the section itself must be gone"
+    famhead_blocks = re.findall(r'<div class="famhead">(.*?)</div>', body, re.DOTALL)
+    assert any(lone.name in block for block in famhead_blocks), (
+        "an ungrouped character must render somewhere on the page -- the "
+        "'Performers with no group' section is the only row left for her"
+    )

@@ -927,7 +927,10 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
                             omitted, whatever its parent_id says)
       no_franchise_groups-- the same row triples for groups under no franchise
       venue_regions      -- [(region_name, [venue Tag, ...]), ...] alpha, "No region" last
-      ungrouped_performers -- ARTIST tags that are no group's member, name order
+      ungrouped_performers -- ARTIST and CHARACTER tags that are no group's
+                            member, name order (the Characters section is
+                            gone -- this is the only row a lone character
+                            renders in)
       summary            -- {concerts, franchises, groups, performers, venues,
                             untranslated}
       eligible_members   -- {group_id: [(member Tag, n_eligible_concerts), ...]}
@@ -1080,7 +1083,16 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
         for name in sorted(by_region, key=lambda r: (r == "No region", r))
     ]
 
-    ungrouped_performers = [a for a in artists if a.id not in grouped_member_ids]
+    # ARTIST *and* CHARACTER: the Characters section is gone (2026-08-12), so
+    # a character who belongs to no group has no other row to appear in, and a
+    # tag that renders nowhere cannot be followed. `tags` is already in name
+    # order (the select at the top of this function orders by Tag.name), so
+    # the comprehension inherits it exactly as the `artists` one did.
+    ungrouped_performers = [
+        t for t in tags
+        if t.kind in (TagKind.ARTIST, TagKind.CHARACTER)
+        and t.id not in grouped_member_ids
+    ]
 
     # Characters keyed to the performer who voices her, for the split pill.
     # Resolved HERE off the already-loaded tag list: Tag.voiced_by is not a

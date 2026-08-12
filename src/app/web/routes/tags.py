@@ -105,7 +105,6 @@ async def tag_directory(
         select(TagSubscription).where(TagSubscription.user_id == user.id)
     )).scalars())
     sub_by_tag = {sub.tag_id: sub for sub in subs}
-    by_id = {t.id: t for t in tags}
     groups = [t for t in tags if t.kind is TagKind.GROUP]
     members = await members_by_group(session, [t.id for t in groups])
     grouped_artist_ids = {m.id for ms in members.values() for m in ms}
@@ -136,17 +135,6 @@ async def tag_directory(
                 t for t in tags if t.kind is TagKind.ARTIST and t.id not in grouped_artist_ids
             ],
             "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
-            # Each character paired with the ARTIST who voices her, resolved
-            # here off the already-loaded tag list rather than in the template
-            # (Tag.voiced_by is not a loaded relationship, and a lazy load
-            # during async rendering is a MissingGreenlet 500). A character
-            # whose seiyuu is unset -- or whose seiyuu tag was deleted, since
-            # the FK is ON DELETE SET NULL -- pairs with None and says so.
-            "characters": [
-                (t, by_id.get(t.voiced_by_tag_id))
-                for t in tags
-                if t.kind is TagKind.CHARACTER
-            ],
             "venues": [t for t in tags if t.kind is TagKind.VENUE],
             # The kinds whose dialogs render the eventernote field, as plain
             # strings so the template can compare them to `t.kind.value` and

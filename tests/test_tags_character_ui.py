@@ -96,31 +96,16 @@ async def test_the_page_shows_a_character_with_her_seiyuu(client):
     assert "如月千早" in body and "今井麻美" in body
 
 
-async def test_the_character_row_names_her_seiyuu(client):
-    """The pairing, not merely both names on the page.
-
-    A seiyuu is an ARTIST in no group, so she renders in "Performers with no
-    group" whether or not anything links her to the character -- which makes
-    the whole-page assertion above true even with the character section
-    deleted. This one reads the character's own row.
-    """
-    login_as(client, EDITOR_ID, "editor")
-    imai = await _artist(client)
-    _, chihaya = await _tag(client, "如月千早", "character", voiced_by_tag_id=imai.id)
-    body = client.get("/tags").text
-    row = body.split(f'data-character-id="{chihaya.id}"', 1)[1].split("</div>", 1)[0]
-    assert "如月千早" in row
-    assert "今井麻美" in row
-
-
-async def test_a_character_with_no_seiyuu_says_so_in_her_row(client):
-    login_as(client, EDITOR_ID, "editor")
-    _, chihaya = await _tag(client, "如月千早", "character")
-    assert chihaya.voiced_by_tag_id is None
-    body = client.get("/tags").text
-    row = body.split(f'data-character-id="{chihaya.id}"', 1)[1].split("</div>", 1)[0]
-    assert "如月千早" in row
-    assert "no performer set" in row
+# The per-character row that used to name her seiyuu independent of group
+# membership (data-character-id) went with the Characters section
+# (2026-08-12) -- "individual characters should be treated as an individual
+# artist" (owner). An ungrouped character is now a plain chip like any solo
+# artist, no pairing shown; the pairing itself survives only inside a group,
+# as the split pill covered by tests/test_tags_split_pill.py. See
+# test_a_character_in_no_group_appears_with_the_ungrouped_performers there
+# for the replacement coverage. (Formerly
+# test_the_character_row_names_her_seiyuu and
+# test_a_character_with_no_seiyuu_says_so_in_her_row, both removed.)
 
 
 async def test_only_an_artist_may_voice_a_character(client):

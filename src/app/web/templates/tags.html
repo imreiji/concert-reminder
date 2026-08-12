@@ -327,31 +327,6 @@
   </div>
   {% endif %}
 
-  {% if characters %}
-  {#- Characters, each row naming her seiyuu. Its own section rather than a
-      row inside the franchise families: a character may be a member of a
-      group (where she already renders as a member chip) or belong to no
-      group at all, and the seiyuu link is visible nowhere else. The row
-      reuses the group row's layout classes -- a chip beside a chip is a
-      shape this page already has, and the two-shape callout grammar has no
-      third shape to invent here. data-character-id, never data-name: that
-      one is filterChips()'s hook and every chip below already carries it. -#}
-  <div class="tsec" data-filter-container>
-    <h3>{{ _("Characters") }} <span>{{ _("— each with the performer who voices her") }}</span></h3>
-    <div class="fam">
-      {% for c, seiyuu in characters %}
-      <div class="grow2" data-filter-container data-character-id="{{ c.id }}">
-        <span>{{ tag_chip(c, counts[c.id].concerts) }}</span>
-        <span class="memb">
-          {%- if seiyuu %}<span class="dim">{{ _("voiced by") }}</span> {{ tag_chip(seiyuu, none) }}
-          {%- else %}<em class="dim">{{ _("no performer set") }}</em>{% endif -%}
-        </span>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
   {% if ungrouped_performers %}
   <div class="tsec" data-filter-container>
     <h3>{{ _("Performers with no group") }} <span>{{ _("— solo artists, or members not yet attached") }}</span></h3>
