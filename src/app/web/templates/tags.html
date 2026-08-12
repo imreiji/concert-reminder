@@ -239,6 +239,51 @@
 {%- endif -%}
 {% endmacro %}
 
+{#- One half of a split pill: the same follow form tag_chip emits, without
+    the count and without its own data-name (the pill above carries one for
+    both). `cls` is "cn" (character) or "cv" (seiyuu, the dim half). -#}
+{% macro follow_half(t, cls) %}
+{%- set sub = sub_by_tag.get(t.id) -%}
+{%- if sub -%}
+<form class="half" method="post" action="/subscriptions/{{ sub.id }}/delete">
+  <input type="hidden" name="next" value="/tags">
+  <button class="{{ cls }} on" data-tag-chip
+          title="{{ _('Following — click to unfollow') }}">{{ loc(t, "name") }} ✓</button>
+</form>
+{%- else -%}
+<form class="half" method="post" action="/subscriptions">
+  <input type="hidden" name="tag_id" value="{{ t.id }}">
+  <input type="hidden" name="notify" value="true">
+  <input type="hidden" name="next" value="/tags">
+  <button class="{{ cls }}" data-tag-chip
+          title="{{ _('Follow this tag') }}">{{ loc(t, "name") }}</button>
+</form>
+{%- endif -%}
+{% endmacro %}
+
+{#- A member chip. A CHARACTER whose seiyuu is attached renders as ONE chip
+    visibly made of two halves, each half its own follow form; either end
+    alone falls back to a plain chip.
+
+    That fallback is the design, not a shortcut: the merge is CONDITIONAL, so
+    the split shape has to make a one-ended chip read as meaningfully
+    different rather than as inconsistent styling (owner, from four mockups,
+    2026-08-01).
+
+    ONE data-name on the pill carrying BOTH names -- filterChips hides the
+    elements it matches, so a per-half attribute would hide one half of a
+    pill and render the other, which is worse than no result. -#}
+{% macro member_chip(m) %}
+{%- set cv = seiyuu_of.get(m.id) if m.kind.value == "character" else none -%}
+{%- if cv -%}
+<span class="mchip" data-name="{{ search_key(m) }} {{ search_key(cv) }}">
+  {{ follow_half(m, "cn") }}{{ follow_half(cv, "cv") }}
+</span>
+{%- else -%}
+{{ tag_chip(m, none) }}
+{%- endif -%}
+{% endmacro %}
+
 {#- One group row. `depth` is 0 for a group under its franchise (or under
     none) and 1+ for a SUBUNIT -- a group whose parent is another group, which
     the service emits directly beneath its parent. Nested rows sit on an
@@ -248,7 +293,7 @@
 {% macro group_row(g, mems, depth) %}
 <div class="grow2{% if depth %} sub{% endif %}" data-filter-container{% if depth %} style="--d: {{ depth }}" data-subunit-of="{{ g.parent_id }}"{% endif %}>
   <span>{{ tag_chip(g, counts[g.id].concerts) }}</span>
-  <span class="memb">{% for m in mems %}{{ tag_chip(m, none) }}{% else %}<em class="dim">{{ _("no members yet") }}</em>{% endfor %}</span>
+  <span class="memb">{% for m in mems %}{{ member_chip(m) }}{% else %}<em class="dim">{{ _("no members yet") }}</em>{% endfor %}</span>
 </div>
 {% endmacro %}
 

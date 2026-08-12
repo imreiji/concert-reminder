@@ -1113,6 +1113,25 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 }
 .performers .mchip a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
+/* The Tags page's split pill halves are buttons in real <form>s (each half
+   its own follow POST), not links -- and the form wrapper must not introduce
+   a box, or a block-level form between the two halves breaks the seam.
+   `display: contents` on `.half` removes the form from the box tree so its
+   BUTTON becomes the flex child of `.mchip` -- but `.mchip > *` above matches
+   by DOM parentage, not the box tree, so it still targets the (now boxless)
+   form and its padding/line-height land nowhere. The halves' box therefore
+   has to be set on `.mchip .half button` directly, not inherited from
+   `.mchip > *`. Measured in a real browser at 28.72px, identical to a plain
+   chip in the same row and to `.mchip`'s own concert-page box above, in both
+   themes -- do not retune either number without re-measuring both. */
+.mchip .half { display: contents; }
+.mchip .half button {
+  border: 0; background: none; font: inherit; cursor: pointer;
+  padding: .22rem .55rem; line-height: 1.5; color: var(--ink);
+}
+.mchip .half button.cv { color: var(--dim); border-left: 1px solid var(--line); }
+.mchip .half button.on { background: var(--ok-wash); color: var(--ok); font-weight: 600; }
+
 /* A subunit sits beneath its parent. Indent + rail, NOT a nested card: the
    two-shape callout grammar has no third shape and this is not a callout. */
 .pcluster.sub { margin-left: 1rem; padding-left: .85rem; border-left: 2px solid var(--line); }
