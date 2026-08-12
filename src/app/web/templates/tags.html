@@ -276,7 +276,7 @@
     <h3>{{ _("Characters") }} <span>{{ _("— each with the performer who voices her") }}</span></h3>
     <div class="fam">
       {% for c, seiyuu in characters %}
-      <div class="grow2" data-character-id="{{ c.id }}">
+      <div class="grow2" data-filter-container data-character-id="{{ c.id }}">
         <span>{{ tag_chip(c, counts[c.id].concerts) }}</span>
         <span class="memb">
           {%- if seiyuu %}<span class="dim">{{ _("voiced by") }}</span> {{ tag_chip(seiyuu, none) }}
