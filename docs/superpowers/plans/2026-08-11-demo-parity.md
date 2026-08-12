@@ -411,6 +411,11 @@ Every "confirm in both themes" step below means exactly this. Do not skip it —
 
 **Why:** These are the two places the merit review found the **demo** wrong. Both need a comment explaining why, or the next reader "fixes" them back.
 
+**Correction (2026-08-12, written after this task shipped — Steps 2 and 3 below are incomplete as drafted, and are left in place rather than rewritten so the record shows what was missed.)** Two things:
+
+- **`#pickList` is not the only tile block.** `#cap2` ("Already applied to any of these?", around line 1291) is a second `.tile` block, and it is the demo counterpart of `setup.html:116` — which the app *already* renders as a label wrapping a visually-hidden checkbox. So it is a third instance of the same demo-is-wrong bug, one screen over, and it needs the same conversion and its own comment. Step 2 says "every tile in that `#pickList` block"; read "every `.tile` in the file" — the conversion landed 14/14, 9 in `#pickList` and 5 in `#cap2`.
+- **Step 3's "replace their selectors" is wrong while any tile is still a button.** Because `#cap2` shared the `.tile` class, a literal replacement of `.tile[aria-pressed="true"]` / `[aria-pressed="false"]` would have stripped every state style off those five tiles. The correct sequence is **combine, then simplify**: keep the `[aria-pressed]` selectors alongside the new `:has()` ones while a mixed state exists, then delete them once `#cap2` is converted too. The file now carries `:has()`-only, which is where Step 3 meant to end up — it just could not get there in one move.
+
 - [ ] **Step 1: Replace the truncated member list**
 
 At `docs/superpowers/demo/dekimasen-demo.html` around line 2082, the tag edit dialog currently has four member chips then:
