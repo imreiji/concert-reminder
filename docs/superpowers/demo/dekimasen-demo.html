@@ -768,6 +768,20 @@
   .lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 650; text-wrap: balance; }
   .lede p { margin: 0; color: var(--dim); }
 
+  /* Error-page 422 message list. Compound with the plain top-bar .banner
+     above (line 80) rather than a new class, matching the app's current
+     style.css, which folded its old .banner-warn into this same compound --
+     every property the top-bar rule sets is re-declared here so nothing
+     leaks through on the higher-specificity match. */
+  .banner.warn {
+    display: block; text-align: left; border: 1px solid var(--off);
+    border-bottom: 1px solid var(--off); background: var(--off-wash);
+    color: var(--off); border-radius: 3px; padding: .6rem .9rem;
+    font-size: .875rem; margin-top: 1rem;
+  }
+  .banner.warn ul { margin: 0; padding-left: 1.2rem; }
+  .banner.warn li { margin: .2rem 0; }
+
   /* Tiles, not rows: nine is the friendly case and a franchise follower could
      see forty. A grid scans far faster, and selection state reads at a glance
      across the whole set rather than one line at a time. */
@@ -2339,6 +2353,66 @@
     sidebar, the search, the grid, plus a filter for round status. Cards show your standing when you
     have one, so the two pages stay connected without discovery pretending to be a dashboard.
   </p>
+</div>
+
+<!-- ==================== ERROR PAGES ==================== -->
+<!-- One template (web/templates/error.html), four sets of copy. Each code
+     says the one useful thing it can: a 404 has nothing to explain, a 422 is
+     useless without its messages, and a 403 is almost always the wrong
+     Discord account -- which nothing else on the page would tell you.
+     Only ever rendered for a full-page NAVIGATION; an XHR keeps the JSON body
+     it was already parsing, because the quick-create dialogs read .detail off
+     a 409 to offer select-existing.
+     The heading is .lede h1. Shown here as four always-visible frames, not
+     wired into the view-toggle above -- these are reference frames, not app
+     screens to click between. -->
+
+<div class="wrap">
+  <div class="eyebrow">404</div>
+  <div class="lede">
+    <h1>Page not found</h1>
+    <p class="dim">That page doesn't exist. The link may be out of date.</p>
+  </div>
+  <p><a class="btn" href="#">Back to home</a></p>
+</div>
+
+<div class="wrap">
+  <div class="eyebrow">403</div>
+  <div class="lede">
+    <!-- Naming the account is the whole point. When no username is known the
+         body reads "That page needs an account with more access than yours." -->
+    <h1>No access</h1>
+    <p class="dim">You're signed in as reiji, which doesn't have access to that page.</p>
+  </div>
+  <p><a class="btn" href="#">Back to home</a></p>
+</div>
+
+<div class="wrap">
+  <div class="eyebrow">422</div>
+  <div class="lede">
+    <h1>That didn't go through</h1>
+    <p class="dim">Nothing was saved. Here's what needs fixing:</p>
+  </div>
+  <!-- 422 only. Without these the page is strictly worse than the JSON blob it
+       replaces -- the blob at least said what was wrong. -->
+  <div class="banner warn">
+    <ul>
+      <li>Event id "new" is reserved</li>
+      <li>Closes at must be a real date and time</li>
+    </ul>
+  </div>
+  <!-- A real button, not a link: a 422 is almost always a form POST, browsers
+       restore form values on a history back, and there is nothing to bookmark. -->
+  <p><button type="button" class="btn">Go back and fix it</button> <a class="btn" href="#">Back to home</a></p>
+</div>
+
+<div class="wrap">
+  <div class="eyebrow">500</div>
+  <div class="lede">
+    <h1>Something broke</h1>
+    <p class="dim">Something broke on our end, and it's been logged. Nothing you did caused it.</p>
+  </div>
+  <p><a class="btn" href="#">Back to home</a></p>
 </div>
 
 <dialog class="prune" id="pruneDlg">
