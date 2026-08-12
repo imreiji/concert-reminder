@@ -470,7 +470,7 @@
   .rnd2 .nm em { font-style: normal; display: block; font-size: .75rem; color: var(--dim); font-weight: 400; }
   .rnd2 .dts { font-size: .8125rem; color: var(--dim); line-height: 1.4; }
   .rnd2 .dts b { display: block; color: var(--ink); font-weight: 600; }
-  .rnd2 .dts .more { font-size: .75rem; }
+  .rnd2 .dts .more { display: block; font-size: .75rem; }
   .rnd2 .acts { display: flex; gap: .4rem; justify-content: flex-end; }
 
   /* The per-leg fold. Same quiet affordance as Home's .morerounds -- UA marker
@@ -1494,7 +1494,7 @@
         <div class="rnd2">
           <span><span class="pill p-quiet">&mdash;</span></span>
           <span class="nm">一般発売<em>General sale &middot; first come</em></span>
-          <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span></span>
+          <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span><span class="more">🛍️ Requires: Goods pre-order &mdash; sale ends Sat 20 Sep &middot; 23:59 JST, 10:59 ADT</span><span class="more">Needed for: FC presale, General sale</span></span>
           <span class="acts"></span>
         </div>
       </details>
@@ -1716,6 +1716,19 @@
         <span class="eyebrow">Applies to</span>
         <button class="chip on" type="button" aria-pressed="true">Day 1 昼公演</button>
         <button class="chip on" type="button" aria-pressed="true">Day 2 夜公演</button>
+      </div>
+      <!-- Hidden (never removed -- a hidden div still submits its fields)
+           while no item-kind round exists on the concert; a script keeps its
+           options and visibility current as rows change. Shown here in its
+           PRESENT state; with no item-sale round on the concert this whole
+           row is absent from the card. -->
+      <div class="redit-requires">
+        <label class="dim tiny">Requires item from
+          <select>
+            <option value="">No item needed</option>
+            <option selected>Goods pre-order (closes 20 Sep)</option>
+          </select>
+        </label>
       </div>
       <div class="redit-times">
         <label class="f2"><span>Opens (JST)</span><input type="datetime-local" value="2026-08-09T10:00"></label>
