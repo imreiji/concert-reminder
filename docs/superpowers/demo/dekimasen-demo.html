@@ -1478,7 +1478,7 @@
         <span class="acts"><span class="done">Nothing to do</span></span>
       </div>
       <details class="moreround">
-        <summary>+3 more rounds<span class="fchip">2 lost</span><span class="fchip">1 covered</span></summary>
+        <summary>+4 more rounds<span class="fchip">2 lost</span><span class="fchip">1 covered</span><span class="fchip">1 on sale</span></summary>
         <div class="rnd2 past">
           <span><span class="pill p-quiet">Lost</span></span>
           <span class="nm">最速先行<em>Fastest presale &middot; fan club</em></span>
@@ -1494,7 +1494,21 @@
         <div class="rnd2">
           <span><span class="pill p-quiet">&mdash;</span></span>
           <span class="nm">一般発売<em>General sale &middot; first come</em></span>
-          <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span><span class="more">🛍️ Requires: Goods pre-order &mdash; sale ends Sat 20 Sep &middot; 23:59 JST, 10:59 ADT</span><span class="more">Needed for: FC presale, General sale</span></span>
+          <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span><span class="more">🛍️ Requires: Goods pre-order &mdash; sale ends Sat 20 Sep &middot; 23:59 JST &middot; 10:59 ADT</span></span>
+          <span class="acts"></span>
+        </div>
+        <!-- The item-sale round itself (GOODS_SALE): a real round row, not a
+             special shape -- it renders with the same pill/nm/dts/acts anatomy
+             as every other round. Its own primary anchor is its sale close;
+             "Needed for" names the rounds that point at it via
+             required_item_round_id (never itself -- that field is
+             kind-restricted to ITEM_SALE_KINDS, so a round can't require
+             itself). Mirrors the editor card's "Goods pre-order (closes 20
+             Sep)" round so the two views agree. -->
+        <div class="rnd2">
+          <span><span class="pill p-quiet">&mdash;</span></span>
+          <span class="nm">グッズ先行予約<em>Goods sale</em></span>
+          <span class="dts num"><b>Closes Sat 20 Sep</b><span class="more">23:59 JST &middot; 10:59 ADT</span><span class="more">Needed for: FC presale, General sale</span></span>
           <span class="acts"></span>
         </div>
       </details>
