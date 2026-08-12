@@ -135,6 +135,28 @@ async def test_editors_also_get_a_follow_form_not_an_edit_dialog_opener(client):
     assert "showModal" not in chips
 
 
+async def test_a_followed_chip_keeps_its_unused_marking(client):
+    """`.tchip.unused` (opacity .55, dashed border) is the signal that a tag is
+    attached to nothing. Following a tag must not hide that -- the two facts
+    are independent, and the tags most likely to be dead are the ones an
+    editor is watching.
+
+    Mutation this must fail against: dropping `unused` from tag_chip's
+    FOLLOWED branch, which is how it shipped in phase 2.
+    """
+    login_as(client, VIEWER_ID, "viewer")
+    tag_id = await _seed_tag(client)  # zero concerts -> unused
+
+    r = client.post("/subscriptions", data={"tag_id": tag_id, "notify": "true", "next": "/tags"})
+    assert r.status_code == 303
+
+    r = client.get("/tags")
+    # Scoped to the chip's own <button>...</form> -- a page-wide
+    # "unused" in r.text would pass off any other unused chip on the page.
+    chip_form = r.text.split('action="/subscriptions/1/delete"', 1)[1].split("</form>", 1)[0]
+    assert "tchip k-franchise on unused" in chip_form
+
+
 async def test_subscription_row_carries_tag_subscription(client):
     """Sanity: following through the chip's form really writes a
     TagSubscription row, not just a UI flag."""

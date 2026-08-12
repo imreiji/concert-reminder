@@ -662,6 +662,21 @@ def test_tags_page_summary_line_counts_kinds(client):
     assert "1 venue" in r.text
 
 
+async def test_the_performer_tally_counts_characters_too(client):
+    """Owner ruling 2026-08-12: characters and artists are both performers.
+    The "Performers with no group" section beneath the tally renders both
+    kinds, so a tally that counts only ARTIST rows says a number the page
+    contradicts.
+
+    Mutation: reverting `performers` to len(artists).
+    """
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name_en": "A1", "name_zh": "A1", "name": "A1", "kind": "artist"})
+    client.post("/tags", data={"name_en": "C1", "name_zh": "C1", "name": "C1", "kind": "character"})
+    r = client.get("/tags")
+    assert "2 performers" in r.text
+
+
 # ── Per-tag edit dialog: usage strip, kind fields, apply action (Task 4) ──
 
 

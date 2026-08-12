@@ -998,7 +998,6 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
 
     franchises = [t for t in tags if t.kind is TagKind.FRANCHISE]
     groups = [t for t in tags if t.kind is TagKind.GROUP]
-    artists = [t for t in tags if t.kind is TagKind.ARTIST]
     venues = [t for t in tags if t.kind is TagKind.VENUE]
 
     # ── group rows, with subunits nested under their parent group ──
@@ -1122,7 +1121,12 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
         )).scalar_one(),
         "franchises": len(franchises),
         "groups": len(groups),
-        "performers": len(artists),
+        # Owner ruling 2026-08-12: characters are performers too. The
+        # "Performers with no group" section renders both kinds, so counting
+        # only ARTIST here made the tally contradict the page beneath it.
+        "performers": sum(
+            1 for t in tags if t.kind in (TagKind.ARTIST, TagKind.CHARACTER)
+        ),
         "venues": len(venues),
         # How many tags still have a hole in their NAME trio -- the backlog,
         # made countable. Deliberately the name only: a VENUE's city trio is

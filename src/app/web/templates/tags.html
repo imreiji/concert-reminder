@@ -257,7 +257,7 @@
 {%- if sub -%}
 <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete" data-name="{{ search_key(t) }}">
   <input type="hidden" name="next" value="/tags">
-  <button class="tchip{{ kcls }} on" data-tag-chip data-tag-id="{{ t.id }}"
+  <button class="tchip{{ kcls }} on{% if unused %} unused{% endif %}" data-tag-chip data-tag-id="{{ t.id }}"
           title="{{ _('Following — click to unfollow') }}">{{ loc(t, "name") }} <span class="tick">✓</span>{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
 </form>
 {%- else -%}

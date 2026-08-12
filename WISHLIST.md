@@ -1238,6 +1238,21 @@ that away with nothing to replace it. Not a Shipped move: two of four phases are
 outstanding, and the entry stays unranked for the reason above — the rank is
 settled by finishing the scope, not by guessing at it.
 
+**Deferred gap, noted 2026-08-12 while reviewing phase 2: an ungrouped
+character renders as a plain chip, not a split pill.** `/tags`'s "Performers
+with no group" section calls `tag_chip` directly rather than `member_chip`,
+so a lone character's seiyuu is invisible there — the split-pill treatment
+only fires inside a group row. **Zero live instances today**: every one of
+the 318 CHARACTER tags in the catalogue is in a group, so nothing is visibly
+broken yet. Filed as a note here rather than its own ranked entry — it is a
+one-section gap in the surface this very entry is about, not a separate
+feature, and it should be picked up as part of finishing this rework (most
+naturally phase 3's `/following` work, which touches the same chip
+vocabulary) rather than scheduled independently. **Not a one-word fix**:
+`member_chip` hard-codes `count=none` because group-row members carry no
+counts, and the ungrouped-performers section *does* show counts — folding it
+into `member_chip` as-is would silently drop them.
+
 ### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
