@@ -1438,8 +1438,43 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .tchip.unused { opacity: .55; border-style: dashed; border-color: var(--line); }
 span.tchip { cursor: default; }
 /* A followed tag. The ok wash + tick is the same "you have this" vocabulary
-   the round rows use; .tchip keeps its 999px chip radius. */
+   the round rows use; .tchip keeps its 999px chip radius. The tick is its own
+   element so Edit mode below can drop it. */
 .tchip.on { background: var(--ok-wash); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+
+/* ── /tags Edit mode (editor-only) ─────────────────────────────────────
+   The editor's Follow <-> Edit switch puts `.editing` on `.tags-scope`. In
+   Edit a chip's click opens its tag dialog instead of posting a follow, so
+   the chip must stop claiming "following": the tick goes, the ok ground goes,
+   and a dashed accent border says the whole page is in a different mode.
+
+   NO --accent-wash ground here, on purpose: that is `.tchip.k-franchise`'s
+   own background twenty lines up, so washing every chip in it would make the
+   entire directory read as franchises. The dashed border carries the signal
+   alone, and it reads in both themes because --accent is a foreground token
+   in both.
+
+   The kind grounds are then restored at higher specificity. A tag's KIND is a
+   fact about the tag and survives the mode; only the follow state is being
+   undone, and without these three lines a FOLLOWED franchise would flatten to
+   the plain chip ground while the unfollowed one beside it stayed purple. */
+.tags-scope.editing .tchip { border-style: dashed; border-color: var(--accent); }
+.tags-scope.editing .tchip.on { background: var(--chip-bg); color: var(--ink); font-weight: 400; }
+.tags-scope.editing .tchip.on.k-franchise { background: var(--accent-wash); color: var(--accent); font-weight: 700; }
+.tags-scope.editing .tchip.on.k-group { background: var(--ok-wash); color: var(--ok); font-weight: 600; }
+.tags-scope.editing .tchip.on.k-venue { background: var(--off-wash); color: var(--off); }
+.tags-scope.editing .mchip { border-style: dashed; border-color: var(--accent); }
+.tags-scope.editing .mchip .half button.on { background: none; color: var(--ink); font-weight: 400; }
+/* The seiyuu half is the dim one whether or not it is followed. */
+.tags-scope.editing .mchip .half button.on.cv { color: var(--dim); }
+.tags-scope.editing .tick { display: none; }
+/* The section hint follows the mode -- see the comment on the heading. */
+.hint-edit { display: none; }
+.tags-scope.editing .hint-follow { display: none; }
+.tags-scope.editing .hint-edit { display: inline; }
+/* .edgecard already draws the accent left edge; the anatomy class owes it
+   only its own padding, exactly as .upgradebox/.standing do. */
+.editmode { padding: .6rem .9rem; margin: 0 0 .8rem; font-size: .875rem; color: var(--dim); }
 
 /* ── per-tag edit dialog + new-tag dialog ── */
 dialog.tagdlg {

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-12 11:18-0300\n"
+"POT-Creation-Date: 2026-08-12 13:55-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -66,11 +66,11 @@ msgid "{unit} ago"
 msgstr "{unit}前"
 
 #: src/app/bot/messages.py:77 src/app/bot/messages.py:185
-#: src/app/db/core.py:1697 src/app/web/templates/tags.html:505
+#: src/app/db/core.py:1697 src/app/web/templates/tags.html:518
 msgid "event"
 msgstr "活动"
 
-#: src/app/bot/messages.py:111 src/app/web/templates/tags.html:401
+#: src/app/bot/messages.py:111 src/app/web/templates/tags.html:414
 msgid "Venue"
 msgstr "场馆"
 
@@ -663,10 +663,10 @@ msgstr "轮次 {n} 名称"
 #: src/app/web/templates/_venue_create_dialog.html:37
 #: src/app/web/templates/_venue_create_dialog.html:39
 #: src/app/web/templates/preferences.html:242
-#: src/app/web/templates/tags.html:91 src/app/web/templates/tags.html:93
-#: src/app/web/templates/tags.html:96 src/app/web/templates/tags.html:98
-#: src/app/web/templates/tags.html:406 src/app/web/templates/tags.html:410
-#: src/app/web/templates/tags.html:411 src/app/web/templates/tags.html:414
+#: src/app/web/templates/tags.html:105 src/app/web/templates/tags.html:107
+#: src/app/web/templates/tags.html:110 src/app/web/templates/tags.html:112
+#: src/app/web/templates/tags.html:419 src/app/web/templates/tags.html:423
+#: src/app/web/templates/tags.html:424 src/app/web/templates/tags.html:427
 msgid "Name"
 msgstr "名称"
 
@@ -1143,7 +1143,6 @@ msgstr "+还有 %(n)s 项"
 #: src/app/web/templates/preferences.html:16
 #: src/app/web/templates/preferences.html:29
 #: src/app/web/templates/preferences.html:118
-#: src/app/web/templates/tags.html:329
 msgid "Following"
 msgstr "关注中"
 
@@ -1189,7 +1188,8 @@ msgstr "不再关注"
 
 #: src/app/web/templates/_following_toggle.html:114
 #: src/app/web/templates/_tag_follow_bell.html:21
-#: src/app/web/templates/setup.html:9 src/app/web/templates/welcome.html:8
+#: src/app/web/templates/setup.html:9 src/app/web/templates/tags.html:58
+#: src/app/web/templates/welcome.html:8
 msgid "Follow"
 msgstr "关注"
 
@@ -1397,7 +1397,7 @@ msgid "That tag already exists."
 msgstr "该标签已存在。"
 
 #: src/app/web/templates/_tag_create_dialog.html:26
-#: src/app/web/templates/tags.html:382
+#: src/app/web/templates/tags.html:395
 msgid "New tag"
 msgstr "新建标签"
 
@@ -1405,32 +1405,32 @@ msgstr "新建标签"
 #: src/app/web/templates/concert_edit.html:44
 #: src/app/web/templates/concert_new.html:77
 #: src/app/web/templates/import_preview.html:58
-#: src/app/web/templates/tags.html:327 src/app/web/templates/tags.html:395
+#: src/app/web/templates/tags.html:408
 msgid "Kind"
 msgstr "类型"
 
 #: src/app/web/templates/_tag_create_dialog.html:33
-#: src/app/web/templates/tags.html:397
+#: src/app/web/templates/tags.html:410
 msgid "Franchise"
 msgstr "系列"
 
 #: src/app/web/templates/_tag_create_dialog.html:34
-#: src/app/web/templates/tags.html:398
+#: src/app/web/templates/tags.html:411
 msgid "Group"
 msgstr "组合"
 
 #: src/app/web/templates/_tag_create_dialog.html:35
-#: src/app/web/templates/tags.html:399
+#: src/app/web/templates/tags.html:412
 msgid "Performer"
 msgstr "出演者"
 
 #: src/app/web/templates/_tag_create_dialog.html:40
-#: src/app/web/templates/tags.html:400
+#: src/app/web/templates/tags.html:413
 msgid "Character"
 msgstr "角色"
 
 #: src/app/web/templates/_tag_create_dialog.html:51
-#: src/app/web/templates/tags.html:429
+#: src/app/web/templates/tags.html:442
 msgid "Parent franchise"
 msgstr "所属系列"
 
@@ -1438,8 +1438,8 @@ msgstr "所属系列"
 #: src/app/web/templates/concert_edit.html:46
 #: src/app/web/templates/concert_new.html:79
 #: src/app/web/templates/import_preview.html:60
-#: src/app/web/templates/tags.html:117 src/app/web/templates/tags.html:431
-#: src/app/web/templates/tags.html:442
+#: src/app/web/templates/tags.html:131 src/app/web/templates/tags.html:444
+#: src/app/web/templates/tags.html:455
 msgid "— none —"
 msgstr "— 无 —"
 
@@ -1452,22 +1452,22 @@ msgid "Create & select"
 msgstr "创建并选择"
 
 #: src/app/web/templates/_tag_create_dialog.html:76
-#: src/app/web/templates/tags.html:498
+#: src/app/web/templates/tags.html:511
 msgid "A franchise is the top level. It contains groups."
 msgstr "系列是最高层级，其中包含组合。"
 
 #: src/app/web/templates/_tag_create_dialog.html:77
-#: src/app/web/templates/tags.html:499
+#: src/app/web/templates/tags.html:512
 msgid "A group contains performers. Attaching it to an event adds its members."
 msgstr "组合由出演者组成。将组合添加到活动时，会同时添加其成员。"
 
 #: src/app/web/templates/_tag_create_dialog.html:78
-#: src/app/web/templates/tags.html:403 src/app/web/templates/tags.html:500
+#: src/app/web/templates/tags.html:416 src/app/web/templates/tags.html:513
 msgid "A single performer. Can belong to a group, or stand alone."
 msgstr "一位出演者，可以属于某个组合，也可以独立活动。"
 
 #: src/app/web/templates/_tag_create_dialog.html:79
-#: src/app/web/templates/tags.html:501
+#: src/app/web/templates/tags.html:514
 msgid "A character. Events credit her instead of the performer who voices her."
 msgstr "一个角色。活动以角色名义列出，而非配音演员。"
 
@@ -1477,7 +1477,7 @@ msgid "Stop following this tag"
 msgstr "取消关注此标签"
 
 #: src/app/web/templates/_tag_follow_bell.html:21
-#: src/app/web/templates/tags.html:237
+#: src/app/web/templates/tags.html:264 src/app/web/templates/tags.html:286
 msgid "Follow this tag"
 msgstr "关注此标签"
 
@@ -1500,7 +1500,6 @@ msgid "+ Add group"
 msgstr "+ 添加组合"
 
 #: src/app/web/templates/_tag_picker_fields.html:27
-#: src/app/web/templates/tags.html:295
 msgid "Characters"
 msgstr "角色"
 
@@ -1567,7 +1566,7 @@ msgid "New venue"
 msgstr "新建场馆"
 
 #: src/app/web/templates/_venue_create_dialog.html:48
-#: src/app/web/templates/tags.html:137 src/app/web/templates/tags.html:459
+#: src/app/web/templates/tags.html:151 src/app/web/templates/tags.html:472
 msgid "Region"
 msgstr "地区"
 
@@ -1943,7 +1942,7 @@ msgstr "分类（逗号分隔）"
 #: src/app/web/templates/concert_edit.html:111
 #: src/app/web/templates/concert_new.html:84
 #: src/app/web/templates/import_preview.html:192
-#: src/app/web/templates/tags.html:130 src/app/web/templates/tags.html:454
+#: src/app/web/templates/tags.html:144 src/app/web/templates/tags.html:467
 msgid "eventernote URL"
 msgstr "eventernote 链接"
 
@@ -2119,7 +2118,7 @@ msgstr "系列、组合、艺人、场馆 — 可选"
 msgid "Create event"
 msgstr "创建活动"
 
-#: src/app/web/templates/discover.html:15 src/app/web/templates/tags.html:328
+#: src/app/web/templates/discover.html:15
 msgid "Events"
 msgstr "活动"
 
@@ -2161,7 +2160,7 @@ msgstr "%(day)s JST"
 msgid "Open &amp; upcoming"
 msgstr "开放中 &amp; 即将举行"
 
-#: src/app/web/templates/discover.html:124 src/app/web/templates/tags.html:329
+#: src/app/web/templates/discover.html:124
 msgid "Upcoming"
 msgstr "即将举行"
 
@@ -2910,7 +2909,7 @@ msgid "Solo artists"
 msgstr "个人艺人"
 
 #: src/app/web/templates/preferences.html:157
-#: src/app/web/templates/tags.html:274 src/app/web/templates/welcome.html:72
+#: src/app/web/templates/tags.html:356 src/app/web/templates/welcome.html:72
 msgid "Venues"
 msgstr "场馆"
 
@@ -2971,7 +2970,7 @@ msgstr "删除"
 
 #: src/app/web/templates/preferences.html:219
 #: src/app/web/templates/preferences.html:269
-#: src/app/web/templates/tags.html:179
+#: src/app/web/templates/tags.html:193
 msgid "Save"
 msgstr "保存"
 
@@ -3834,167 +3833,152 @@ msgstr "关注标签后，你也会关注所有带有该标签的未来活动。
 msgid "Search franchises, groups, performers, venues…"
 msgstr "搜索系列、组合、出演者、场馆…"
 
-#: src/app/web/templates/tags.html:49
-msgid "Chips"
-msgstr "碎片"
+#: src/app/web/templates/tags.html:59
+msgid "Edit"
+msgstr "编辑"
 
-#: src/app/web/templates/tags.html:50
-msgid "Table"
-msgstr "表格"
+#: src/app/web/templates/tags.html:65
+msgid "Editing — a chip opens its tag editor. Following is off while this is on."
+msgstr "编辑模式 — 点击标签会打开其编辑窗口。开启期间无法关注。"
 
-#: src/app/web/templates/tags.html:76 src/app/web/templates/tags.html:506
+#: src/app/web/templates/tags.html:90 src/app/web/templates/tags.html:519
 msgid "events"
 msgstr "活动"
 
-#: src/app/web/templates/tags.html:77 src/app/web/templates/tags.html:508
+#: src/app/web/templates/tags.html:91 src/app/web/templates/tags.html:521
 msgid "followers"
 msgstr "关注者"
 
-#: src/app/web/templates/tags.html:78
+#: src/app/web/templates/tags.html:92
 msgid "members"
 msgstr "成员"
 
-#: src/app/web/templates/tags.html:79
+#: src/app/web/templates/tags.html:93
 msgid "upcoming"
 msgstr "即将举行"
 
-#: src/app/web/templates/tags.html:105
+#: src/app/web/templates/tags.html:119
 msgid "Handle"
 msgstr "标识符"
 
-#: src/app/web/templates/tags.html:115 src/app/web/templates/tags.html:440
+#: src/app/web/templates/tags.html:129 src/app/web/templates/tags.html:453
 msgid "Voiced by"
 msgstr "配音演员"
 
-#: src/app/web/templates/tags.html:135
+#: src/app/web/templates/tags.html:149
 msgid "Location link"
 msgstr "地点链接"
 
-#: src/app/web/templates/tags.html:149
+#: src/app/web/templates/tags.html:163
 msgid "Members"
 msgstr "成员"
 
-#: src/app/web/templates/tags.html:157
+#: src/app/web/templates/tags.html:171
 msgid "none yet"
 msgstr "还没有"
 
-#: src/app/web/templates/tags.html:165
+#: src/app/web/templates/tags.html:179
 msgid "+ Add member"
 msgstr "+ 添加成员"
 
-#: src/app/web/templates/tags.html:171
+#: src/app/web/templates/tags.html:185
 msgid ""
 "<b>Apply to existing events.</b> Adding a member does not update events "
 "that already have this group. Group members are added when the group is "
 "first attached. Use this to add the new member to active events."
 msgstr "<b>应用到现有活动。</b>添加成员不会更新已经带有此组合标签的活动。组合成员只会在首次添加组合时加入。使用此功能可将新成员添加到进行中的活动。"
 
-#: src/app/web/templates/tags.html:173
+#: src/app/web/templates/tags.html:187
 #, python-format
 msgid "Apply %(name)s to %(count)s upcoming event"
 msgid_plural "Apply %(name)s to %(count)s upcoming events"
 msgstr[0] "将 %(name)s 应用到 %(count)s 场即将到来的活动"
 
-#: src/app/web/templates/tags.html:180 src/app/web/templates/tags.html:486
+#: src/app/web/templates/tags.html:194 src/app/web/templates/tags.html:499
 msgid "Cancel"
 msgstr "取消"
 
-#: src/app/web/templates/tags.html:197
+#: src/app/web/templates/tags.html:211
 msgid "Check eventernote now"
 msgstr "立即检查 eventernote"
 
-#: src/app/web/templates/tags.html:202
+#: src/app/web/templates/tags.html:216
 msgid "Delete tag"
 msgstr "删除标签"
 
-#: src/app/web/templates/tags.html:229 src/app/web/templates/welcome.html:32
+#: src/app/web/templates/tags.html:256 src/app/web/templates/tags.html:278
+#: src/app/web/templates/welcome.html:32
 msgid "Following — click to unfollow"
 msgstr "关注中 — 点击以取消关注"
 
-#: src/app/web/templates/tags.html:251
+#: src/app/web/templates/tags.html:323
 msgid "no members yet"
 msgstr "还没有成员"
 
-#: src/app/web/templates/tags.html:257
+#: src/app/web/templates/tags.html:337
 msgid "Franchises and groups"
 msgstr "系列与组合"
 
-#: src/app/web/templates/tags.html:257
+#: src/app/web/templates/tags.html:338
+msgid "— click any tag to follow"
+msgstr "— 点击任一标签进行关注"
+
+#: src/app/web/templates/tags.html:339
 msgid "— click any tag to edit"
 msgstr "— 点击任一标签进行编辑"
 
-#: src/app/web/templates/tags.html:266
+#: src/app/web/templates/tags.html:348
 msgid "No franchise"
 msgstr "无系列"
 
-#: src/app/web/templates/tags.html:274
+#: src/app/web/templates/tags.html:356
 msgid "— grouped by the region used in the Discover sidebar"
 msgstr "— 按“发现”侧栏使用的地区分组"
 
-#: src/app/web/templates/tags.html:295
-msgid "— each with the performer who voices her"
-msgstr "— 每位角色及其配音演员"
-
-#: src/app/web/templates/tags.html:301
-msgid "voiced by"
-msgstr "配音"
-
-#: src/app/web/templates/tags.html:302
-msgid "no performer set"
-msgstr "尚未设置配音演员"
-
-#: src/app/web/templates/tags.html:312
+#: src/app/web/templates/tags.html:369
 msgid "Performers with no group"
 msgstr "未归属组合的出演者"
 
-#: src/app/web/templates/tags.html:312
+#: src/app/web/templates/tags.html:369
 msgid "— solo artists, or members not yet attached"
 msgstr "— 独立艺人，或尚未加入组合的成员"
 
-#: src/app/web/templates/tags.html:327
-msgid "Tag"
-msgstr "标签"
-
-#: src/app/web/templates/tags.html:328
-msgid "Followers"
-msgstr "关注者"
-
-#: src/app/web/templates/tags.html:408
+#: src/app/web/templates/tags.html:421
 msgid "As it is written on the official site"
 msgstr "按官方网站上的写法"
 
-#: src/app/web/templates/tags.html:420
+#: src/app/web/templates/tags.html:433
 msgid "Already exists."
 msgstr "已存在。"
 
-#: src/app/web/templates/tags.html:440 src/app/web/templates/tags.html:454
-#: src/app/web/templates/tags.html:470
+#: src/app/web/templates/tags.html:453 src/app/web/templates/tags.html:467
+#: src/app/web/templates/tags.html:483
 msgid "(optional)"
 msgstr "（可选）"
 
-#: src/app/web/templates/tags.html:466
+#: src/app/web/templates/tags.html:479
 msgid ""
 "The Discover page groups venues by region. A venue without a region "
 "appears under “No region” and cannot be found with a region filter."
 msgstr "“发现”页面会按地区对场馆分组。未设置地区的场馆会显示在“无地区”下，且无法通过地区筛选找到。"
 
-#: src/app/web/templates/tags.html:470
+#: src/app/web/templates/tags.html:483
 msgid "Map or venue URL"
 msgstr "地图或场馆链接"
 
-#: src/app/web/templates/tags.html:475
+#: src/app/web/templates/tags.html:488
 msgid "A franchise is just a parent for groups — nothing else to set."
 msgstr "系列只是组合的上级分类，无需设置其他内容。"
 
-#: src/app/web/templates/tags.html:485
+#: src/app/web/templates/tags.html:498
 msgid "Create tag"
 msgstr "创建标签"
 
-#: src/app/web/templates/tags.html:502
+#: src/app/web/templates/tags.html:515
 msgid "A place. Discover filters venues by region, not individually."
 msgstr "一个地点。发现页只能按地区筛选场馆，不能逐个筛选。"
 
-#: src/app/web/templates/tags.html:504
+#: src/app/web/templates/tags.html:517
 #, python-brace-format
 msgid ""
 "A {kind} tag with this name is already used by {concerts} and followed by"
@@ -4002,9 +3986,13 @@ msgid ""
 "cannot be merged yet."
 msgstr "同名的 {kind} 标签已用于 {concerts}，并由 {followers} 关注。再创建一个会使两者保持分开，因为目前无法合并标签。"
 
-#: src/app/web/templates/tags.html:507
+#: src/app/web/templates/tags.html:520
 msgid "follower"
 msgstr "关注者"
+
+#: src/app/web/templates/tags.html:580
+msgid "Edit this tag"
+msgstr "编辑此标签"
 
 #: src/app/web/templates/terms.html:12
 msgid ""
@@ -4453,4 +4441,25 @@ msgstr "前往我的活动"
 
 #~ msgid "Add it in Google Calendar, Apple Calendar, or Outlook."
 #~ msgstr "请在 Google 日历、Apple 日历或 Outlook 中添加。"
+
+#~ msgid "Chips"
+#~ msgstr "碎片"
+
+#~ msgid "Table"
+#~ msgstr "表格"
+
+#~ msgid "— each with the performer who voices her"
+#~ msgstr "— 每位角色及其配音演员"
+
+#~ msgid "voiced by"
+#~ msgstr "配音"
+
+#~ msgid "no performer set"
+#~ msgstr "尚未设置配音演员"
+
+#~ msgid "Tag"
+#~ msgstr "标签"
+
+#~ msgid "Followers"
+#~ msgstr "关注者"
 

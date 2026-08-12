@@ -79,8 +79,14 @@ async def _seed_group(client):
 
 
 def _mchips(body):
+    # Anchored on the pill's LAST </form>, not on the first </span> it sees:
+    # a followed half carries its tick in a <span class="tick">, so a
+    # `(.*?)</span>` capture stops inside the first half and silently drops
+    # the second (Task 6, 2026-08-12).
     return re.findall(
-        r'<span class="mchip"[^>]*data-name="([^"]*)"[^>]*>(.*?)</span>', body, re.DOTALL
+        r'<span class="mchip"[^>]*data-name="([^"]*)"[^>]*>(.*?</form>)\s*</span>',
+        body,
+        re.DOTALL,
     )
 
 
