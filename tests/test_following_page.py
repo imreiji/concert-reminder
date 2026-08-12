@@ -13,13 +13,23 @@ pair) and tests/test_tags.py (the tag seeding).
 """
 
 import re
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.db.models import ReminderPreset, Tag, TagMember, TagSubscription, User
+from app.db.models import (
+    Concert,
+    ConcertDay,
+    ConcertTag,
+    ReminderPreset,
+    Tag,
+    TagMember,
+    TagSubscription,
+    User,
+)
 from app.db.session import get_session
 from app.domain.types import TagKind
 from app.web import auth
@@ -84,7 +94,13 @@ async def seed(db) -> SimpleNamespace:
     `muted` follows with notify off; `other_preset` follows with the non-default
     preset; `plain` and `venue` conform (notify on, default preset). `stranger`
     is followed by nobody.
+
+    ONE of the four followed tags carries a concert with a future leg, so the
+    head's two tallies are three different numbers (4 followed, 1 upcoming, 0
+    neither): equal numbers would let `followed_count` and `live_count` be
+    swapped for each other, or for a constant, with nothing noticing.
     """
+    now = datetime.now(UTC)
     async with db() as s:
         s.add_all([User(discord_id=USER_A, username="reiji"),
                    User(discord_id=USER_B, username="someone")])
@@ -127,6 +143,14 @@ async def seed(db) -> SimpleNamespace:
             # must be scoped to the viewer, not to the table.
             TagSubscription(user_id=USER_B, tag_id=stranger.id, notify=True),
         ])
+        concert = Concert(title="Big show", event_id="big-show", created_by=USER_A)
+        s.add(concert)
+        await s.flush()
+        s.add_all([
+            ConcertTag(concert_id=concert.id, tag_id=plain.id),
+            ConcertDay(concert_id=concert.id, label="Day 1",
+                       starts_at_utc=now + timedelta(days=60)),
+        ])
         await s.commit()
         return SimpleNamespace(
             love=love.id, imas=imas.id, hasu=hasu.id, cinderella=cinderella.id,
@@ -152,6 +176,21 @@ async def test_page_renders_and_lists_the_followed_tags(client):
     for tag_id in (ids.muted, ids.other_preset, ids.plain, ids.venue):
         assert f'data-tag-id="{tag_id}"' in html
     assert "Kozue Otomune" in html
+
+
+async def test_the_head_states_both_tallies(client):
+    """The context line is two DIFFERENT counts -- tags followed, and how many
+    of those have an event coming up -- and the seed makes them 4 and 1 so they
+    cannot stand in for each other. Mutations: `followed_count` -> 0 (or a
+    concert count), `live_count` -> `len(counts)` (every followed tag claiming
+    an upcoming event, which is what a `sum()` over the map or a copied key
+    would give). Nothing else on the page renders either number.
+    """
+    await seed(client.db)
+    login_as(client, USER_A, "reiji")
+    html = client.get("/following").text
+    assert "4 tags" in html
+    assert "1 with an event coming up" in html
 
 
 async def test_a_tag_you_do_not_follow_is_absent(client):
@@ -274,6 +313,12 @@ async def test_empty_state_points_at_the_tag_directory(client):
     """A new user follows nothing, so this is the page's most common first
     render. Mutation: a bare `{% for %}` loop with no `{% else %}` renders a
     blank page with a heading and no way forward.
+
+    Asserted on the SENTENCE and on the link's own text, never on
+    `href="/tags"` alone: base.html renders that href three times as chrome
+    (Tags is a permanent header nav item and a tab-bar entry), so the obvious
+    assertion passes with the whole empty state deleted -- found in review,
+    2026-08-12, by deleting it.
     """
     async with client.db() as s:
         s.add(User(discord_id=USER_A, username="reiji"))
@@ -281,7 +326,38 @@ async def test_empty_state_points_at_the_tag_directory(client):
     login_as(client, USER_A, "reiji")
     r = client.get("/following")
     assert r.status_code == 200
-    assert 'href="/tags"' in r.text
+    assert "You are not following anything yet." in r.text
+    assert ">tags page</a>" in r.text
+
+
+async def test_a_user_with_no_presets_at_all_gets_no_marker(client):
+    """The state of EVERY brand-new account: no presets, so no default preset,
+    so a subscription holding none conforms and its chip must be bare.
+
+    Mutation (found in review, 2026-08-12): comparing
+    `(sub.preset_id or 0) != (default_preset_id or -1)`, which is the shape
+    somebody reaches for to "handle" the None cases -- it makes None-vs-None
+    unequal and badges "No preset" onto every chip of every new account. The
+    whole seed above gives all four subscriptions a preset, so nothing there
+    ever renders this pairing and all ten tests survived that mutation.
+    """
+    async with client.db() as s:
+        s.add(User(discord_id=USER_A, username="reiji"))
+        await s.flush()
+        tag = Tag(name="Aqours", kind=TagKind.GROUP, created_by=USER_A)
+        s.add(tag)
+        await s.flush()
+        s.add(TagSubscription(user_id=USER_A, tag_id=tag.id, preset_id=None, notify=True))
+        await s.commit()
+        tag_id = tag.id
+    login_as(client, USER_A, "reiji")
+    html = client.get("/following").text
+    chip = chip_for(html, tag_id)
+    assert "No preset" not in chip
+    assert "🔕" not in chip
+    # The chip is genuinely there and genuinely bare -- name and nothing else.
+    assert "Aqours" in chip
+    assert "<span" not in chip[chip.index(">") + 1 :]
 
 
 async def test_signed_out_goes_home_not_to_an_error(client):
