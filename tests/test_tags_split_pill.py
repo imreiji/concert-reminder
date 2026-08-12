@@ -153,8 +153,13 @@ async def test_each_half_follows_independently(client):
     forms = re.findall(r'<form class="half".*?</form>', pill_html, re.DOTALL)
     assert len(forms) == 2
     cn_form, cv_form = forms
-    assert "/subscriptions/" in cn_form and "/delete" in cn_form, (
+    assert 'action="/subscriptions/unfollow"' in cn_form, (
         "the character half is followed -- its form must unfollow"
+    )
+    assert f'name="tag_id" value="{chihaya.id}"' in cn_form, (
+        "keyed by TAG: a half is one of several copies of the same tag on this "
+        "page, and a subscription id in here goes stale the moment another "
+        "copy is pressed (test_tags_follow_htmx.py)"
     )
     assert 'class="cn on"' in cn_form
     assert 'action="/subscriptions"' in cv_form, (

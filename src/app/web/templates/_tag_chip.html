@@ -2,12 +2,27 @@
     one half of a split pill (`follow_half`).
 
     It lives in its own file because POST /subscriptions and POST
-    /subscriptions/{id}/delete swap ONE of these back in after a press
+    /subscriptions/unfollow swap ONE of these back in after a press
     (routes/preferences.py), and a route cannot render a macro that closes over
     a page's context. So both macros take everything they need explicitly --
     `sub` above all, which used to be a `sub_by_tag.get(t.id)` lookup inside
     tags.html. tags.html keeps that lookup in one place by wrapping these; the
     route passes the single subscription row it just wrote or deleted.
+
+    BOTH DIRECTIONS ARE KEYED BY TAG, NEVER BY SUBSCRIPTION ID, and that is
+    what makes a press idempotent (found in review, 2026-08-12). This page
+    renders the same tag MORE THAN ONCE -- a performer in two groups gets a
+    chip in each, a seiyuu can be a direct member chip and a pill half at the
+    same time -- and a one-chip swap cannot keep the copies in step the way the
+    old full-page reload did. With `/subscriptions/{sub_id}/delete` in the
+    action (as this shipped for a day), unfollowing via one copy left the other
+    pointing at a deleted row: pressing it answered 404, htmx does not swap a
+    4xx, and the reader got nothing at all until a full reload. Keyed by tag,
+    "already unfollowed" is simply nothing to delete and the answer is the
+    follow chip either way. `sub` is still what decides WHICH branch renders;
+    it just never reaches a URL. The id-keyed route still exists for
+    Preferences and the welcome wizard, which re-render whole pages and cannot
+    go stale -- do not point a chip back at it.
 
     THE PAGE AND THE SWAPPED FRAGMENT COME FROM HERE, BOTH OF THEM. That is the
     point of the extraction: a chip that differs from the one the page renders
@@ -54,9 +69,10 @@
 {%- set unused = count is not none and count == 0 -%}
 {%- set shape = "count" if count is not none else "plain" -%}
 {%- if sub -%}
-<form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete"
-      hx-post="/subscriptions/{{ sub.id }}/delete" hx-target="this" hx-swap="outerHTML"
+<form class="chipform" method="post" action="/subscriptions/unfollow"
+      hx-post="/subscriptions/unfollow" hx-target="this" hx-swap="outerHTML"
       data-name="{{ search_key(t) }}">
+  <input type="hidden" name="tag_id" value="{{ t.id }}">
   <input type="hidden" name="next" value="/tags">
   <input type="hidden" name="chip" value="{{ shape }}">
   <button class="tchip{{ kcls }} on{% if unused %} unused{% endif %}" data-tag-chip data-tag-id="{{ t.id }}"
@@ -83,8 +99,9 @@
     half it was, or a pressed seiyuu returns wearing the character's styling. -#}
 {% macro follow_half(t, cls, sub) %}
 {%- if sub -%}
-<form class="half" method="post" action="/subscriptions/{{ sub.id }}/delete"
-      hx-post="/subscriptions/{{ sub.id }}/delete" hx-target="this" hx-swap="outerHTML">
+<form class="half" method="post" action="/subscriptions/unfollow"
+      hx-post="/subscriptions/unfollow" hx-target="this" hx-swap="outerHTML">
+  <input type="hidden" name="tag_id" value="{{ t.id }}">
   <input type="hidden" name="next" value="/tags">
   <input type="hidden" name="chip" value="{{ cls }}">
   <button class="{{ cls }} on" data-tag-chip data-tag-id="{{ t.id }}"

@@ -622,6 +622,28 @@ measurement or an incident that a reasonable-looking edit would undo.
     rather than trusted from the form -- a member chip must not grow a number it
     has never had. `tests/test_tags_follow_htmx.py` pins all of it, including
     the byte-identity in both directions.
+  - **BOTH directions are keyed by TAG, because this page renders the same tag
+    more than once.** A performer in two groups gets a chip in each row; a
+    seiyuu can be a direct member chip AND the `cv` half of a pill at the same
+    time. A full-page 303 re-rendered every copy in step, and a one-chip swap
+    cannot -- so `POST /subscriptions/{sub_id}/delete` in a chip's action meant
+    that unfollowing via one copy left the other pointing at a deleted row:
+    pressing it answered 404, htmx does not swap a 4xx, and the reader got
+    NOTHING until a full reload (found in review, 2026-08-12, one day after the
+    swap shipped). Chips post to **`POST /subscriptions/unfollow`** with
+    `tag_id` instead: no row is nothing to delete, not an error, and the answer
+    is the follow chip either way -- matching the idempotence `POST
+    /subscriptions` already had, since it upserts by (user, tag). It is a
+    SECOND route, not a widened one: `/subscriptions/{sub_id}/delete` still
+    serves Preferences and the welcome wizard, which render a tag once and
+    reload wholly, and one route resolving by id OR by tag depending on which
+    field the form sent is two identity schemes wearing one URL. Never point a
+    chip back at the id-keyed route -- a sweep test forbids `/delete` in any
+    chip form. Note what did NOT change: the copies still go stale visually (the
+    other chip still shows ✓ until something re-renders it). Making a press
+    update every copy would need an out-of-band swap keyed on the tag, which is
+    a bigger mechanism than this page has earned; making the press *harmless*
+    is what mattered, and is what shipped.
   - **Subunit de-dup is `/tags`-ONLY, and the 2026-08-01 ruling it appears to
     contradict still stands where it was made.** `tag_directory_context`'s
     `group_rows` subtracts every member of a group's subunits from the parent's

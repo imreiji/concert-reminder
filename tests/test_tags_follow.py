@@ -78,17 +78,23 @@ async def test_following_a_tag_makes_its_chip_offer_unfollow(client):
 
     r = client.get("/tags")
     assert "tchip k-franchise on" in r.text
-    assert 'action="/subscriptions/1/delete"' in r.text
+    # BY TAG, never by subscription id: /tags renders the same tag more than
+    # once, and a stale id in the second copy 404s once a press swaps only its
+    # own chip (see test_tags_follow_htmx.py).
+    assert 'action="/subscriptions/unfollow"' in r.text
     # Scoped to the chip's own <form>...</form> -- the page's language-switch
     # form (base.html) also carries a hidden next=/tags input, and unscoped
     # this assertion would pass against THAT instead of the chip.
-    chip_form = r.text.split('action="/subscriptions/1/delete"', 1)[1].split("</form>", 1)[0]
+    chip_form = r.text.split('action="/subscriptions/unfollow"', 1)[1].split("</form>", 1)[0]
     assert 'name="next" value="/tags"' in chip_form, (
         "the FOLLOWED chip must emit next=/tags too -- the POST below pins the "
         "route's handling of it, not the template's emission of it"
     )
+    assert f'name="tag_id" value="{tag_id}"' in chip_form, (
+        "and the tag it unfollows, which is what makes the press idempotent"
+    )
 
-    r = client.post("/subscriptions/1/delete", data={"next": "/tags"})
+    r = client.post("/subscriptions/unfollow", data={"tag_id": tag_id, "next": "/tags"})
     assert r.status_code == 303
     # The `location`, not just the 303. The follow half of this test already
     # pins "/tags"; unpinned, the unfollow half passed while the route sent
@@ -153,7 +159,7 @@ async def test_a_followed_chip_keeps_its_unused_marking(client):
     r = client.get("/tags")
     # Scoped to the chip's own <button>...</form> -- a page-wide
     # "unused" in r.text would pass off any other unused chip on the page.
-    chip_form = r.text.split('action="/subscriptions/1/delete"', 1)[1].split("</form>", 1)[0]
+    chip_form = r.text.split('action="/subscriptions/unfollow"', 1)[1].split("</form>", 1)[0]
     assert "tchip k-franchise on unused" in chip_form
 
 

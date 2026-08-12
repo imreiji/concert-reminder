@@ -130,7 +130,8 @@ async def test_a_follow_without_htmx_still_redirects(client):
     assert r.headers["location"] == "/tags"
 
     # ...and the unfollow half of the pair, which has its own branch.
-    r = client.post("/subscriptions/1/delete", data={"next": "/tags", "chip": "count"})
+    r = client.post("/subscriptions/unfollow",
+                    data={"tag_id": tag_id, "next": "/tags", "chip": "count"})
     assert r.status_code == 303
     assert r.headers["location"] == "/tags"
 
@@ -145,12 +146,13 @@ async def test_the_swapped_chip_carries_the_opposite_action(client):
                     data={"tag_id": tag_id, "notify": "true", "next": "/tags",
                           "chip": "count"},
                     headers=HX)
-    assert 'action="/subscriptions/1/delete"' in r.text
-    assert 'hx-post="/subscriptions/1/delete"' in r.text
+    assert 'action="/subscriptions/unfollow"' in r.text
+    assert 'hx-post="/subscriptions/unfollow"' in r.text
+    assert f'name="tag_id" value="{tag_id}"' in r.text, "keyed by tag, not by sub id"
     assert "tchip k-franchise on" in r.text
 
-    r = client.post("/subscriptions/1/delete",
-                    data={"next": "/tags", "chip": "count"}, headers=HX)
+    r = client.post("/subscriptions/unfollow",
+                    data={"tag_id": tag_id, "next": "/tags", "chip": "count"}, headers=HX)
     assert r.status_code == 200
     assert 'action="/subscriptions"' in r.text
     assert 'hx-post="/subscriptions"' in r.text
@@ -180,8 +182,9 @@ async def test_the_swapped_chip_is_the_chip_the_page_renders(client):
     assert 'data-name="aqours aqours aqours"' in frag, "still findable by search"
     assert f'data-tag-id="{tag_id}"' in frag, "still openable in Edit mode"
 
-    frag = client.post("/subscriptions/1/delete",
-                       data={"next": "/tags", "chip": "count"}, headers=HX).text
+    frag = client.post("/subscriptions/unfollow",
+                       data={"tag_id": tag_id, "next": "/tags", "chip": "count"},
+                       headers=HX).text
     page_chip = _form_on(client.get("/tags").text, f'data-tag-id="{tag_id}"', "chipform")
     assert frag.strip() == page_chip, "unfollowed chip must match the page's"
 
@@ -202,8 +205,8 @@ async def test_the_swapped_chip_speaks_the_readers_language(client):
                      data={"tag_id": tag_id, "notify": "true", "next": "/tags",
                            "chip": "count"}, headers=HX)
     assert "Following — click to unfollow" in en.text
-    client.post("/subscriptions/1/delete", data={"next": "/tags", "chip": "count"},
-                headers=HX)
+    client.post("/subscriptions/unfollow",
+                data={"tag_id": tag_id, "next": "/tags", "chip": "count"}, headers=HX)
 
     client.cookies.set("lang", "ja")
     ja = client.post("/subscriptions",
@@ -302,6 +305,121 @@ async def test_the_page_and_the_partial_agree_on_a_pill_half(client):
     assert frag.strip() == page_half
 
 
+async def test_the_same_tag_really_does_render_twice(client):
+    """The premise of the test below, pinned separately so it cannot rot into
+    a duplicate-free page that passes for the wrong reason. A performer in two
+    groups gets a chip in each group's row."""
+    from app.db.models import TagMember
+
+    login_as(client, EDITOR_ID, "editor")
+    artist = await _seed_tag(client, "中村繪里子", kind=TagKind.ARTIST)
+    a = await _seed_tag(client, "765PRO", kind=TagKind.GROUP)
+    b = await _seed_tag(client, "竜宮小町", kind=TagKind.GROUP)
+    async with client.db() as s:
+        s.add(TagMember(group_tag_id=a, member_tag_id=artist))
+        s.add(TagMember(group_tag_id=b, member_tag_id=artist))
+        await s.commit()
+
+    body = client.get("/tags").text
+    assert body.count(f'data-tag-id="{artist}"') == 2
+
+
+async def test_unfollowing_one_copy_leaves_the_other_copy_pressable(client):
+    """THE STALE-COPY BUG (found in review, 2026-08-12). /tags renders the same
+    tag more than once -- a performer in two groups, a seiyuu who is both a
+    direct member and a pill half. A full-page 303 kept every copy in step; a
+    one-chip swap cannot.
+
+    Keyed by SUBSCRIPTION ID, the second copy still showed ✓ pointing at a row
+    the first copy had just deleted, so pressing it answered 404 -- and htmx
+    does not swap a 4xx, so the reader got NOTHING: a chip that lies and then
+    refuses to work until a full reload.
+
+    Keyed by TAG the press is idempotent: already unfollowed means there is
+    nothing to delete, and the answer is the follow chip either way.
+
+    Mutation this must fail against: an unfollow that resolves the row by id
+    (or one that 404s when no row is found) -- both leave the second copy dead.
+    """
+    from app.db.models import TagMember
+
+    login_as(client, EDITOR_ID, "editor")
+    artist = await _seed_tag(client, "中村繪里子", kind=TagKind.ARTIST)
+    a = await _seed_tag(client, "765PRO", kind=TagKind.GROUP)
+    b = await _seed_tag(client, "竜宮小町", kind=TagKind.GROUP)
+    async with client.db() as s:
+        s.add(TagMember(group_tag_id=a, member_tag_id=artist))
+        s.add(TagMember(group_tag_id=b, member_tag_id=artist))
+        await s.commit()
+
+    follow = {"tag_id": artist, "notify": "true", "next": "/tags", "chip": "plain"}
+    unfollow = {"tag_id": artist, "next": "/tags", "chip": "plain"}
+
+    r = client.post("/subscriptions", data=follow, headers=HX)
+    assert r.status_code == 200 and "on" in r.text
+
+    # Copy A unfollows.
+    r = client.post("/subscriptions/unfollow", data=unfollow, headers=HX)
+    assert r.status_code == 200
+    assert 'action="/subscriptions"' in r.text
+
+    # Copy B is still showing ✓ from the page load. Pressing it must hand back
+    # a usable chip, not a 404 with an empty body.
+    r = client.post("/subscriptions/unfollow", data=unfollow, headers=HX)
+    assert r.status_code == 200, "the stale copy must not 404 into silence"
+    assert r.text.strip(), "and it must not answer with an empty body"
+    assert 'action="/subscriptions"' in r.text, "it comes back offering follow"
+    assert f'name="tag_id" value="{artist}"' in r.text, "and it is pressable"
+
+
+async def test_following_from_a_stale_copy_is_idempotent_too(client):
+    """The other direction, so the pair behaves alike. Two copies both showing
+    "follow": pressing the second after the first already followed must answer
+    with the followed chip, not a second row or an error. /subscriptions has
+    always upserted by (user, tag); this pins that the CHIP relies on it."""
+    login_as(client, VIEWER_ID, "viewer")
+    tag_id = await _seed_tag(client)
+    follow = {"tag_id": tag_id, "notify": "true", "next": "/tags", "chip": "count"}
+
+    first = client.post("/subscriptions", data=follow, headers=HX)
+    second = client.post("/subscriptions", data=follow, headers=HX)
+    assert first.status_code == second.status_code == 200
+    assert first.text == second.text, "the same chip, whichever copy pressed it"
+    assert "tchip k-franchise on" in second.text
+
+    from sqlalchemy import select
+
+    from app.db.models import TagSubscription
+
+    async with client.db() as s:
+        rows = (await s.execute(select(TagSubscription))).scalars().all()
+    assert len(rows) == 1, "and no duplicate subscription row"
+
+
+async def test_a_hostile_chip_value_cannot_escape_the_whitelist(client):
+    """`chip` arrives from the form, so it is user-controlled. `_PILL_HALVES`
+    is the whitelist that decides whether it becomes a CSS class on a pill
+    half; everything else must fall to the plain chip and the value must reach
+    no attribute at all.
+
+    Mutation this must fail against: turning the whitelist into a blacklist
+    (`chip not in {"count", "plain"}` -> render a half), which every other test
+    here survives. Autoescape keeps today's blast radius cosmetic, but nothing
+    else names the defence.
+    """
+    login_as(client, VIEWER_ID, "viewer")
+    tag_id = await _seed_tag(client)
+
+    r = client.post("/subscriptions",
+                    data={"tag_id": tag_id, "notify": "true", "next": "/tags",
+                          "chip": 'cn" onclick="x'}, headers=HX)
+    assert r.status_code == 200
+    assert '<form class="chipform"' in r.text, "an unknown shape is a plain chip"
+    assert 'class="half"' not in r.text
+    assert "onclick" not in r.text
+    assert 'cn"' not in r.text
+
+
 async def test_every_chip_form_on_the_page_can_swap_itself(client):
     """The whole-page guarantee: no chip is left behind as a full-reload form.
 
@@ -330,3 +448,9 @@ async def test_every_chip_form_on_the_page_can_swap_itself(client):
             "and it must still be a real form for JS-off following"
         )
         assert 'name="chip"' in f, "the shape the swap comes back as"
+        assert "/delete" not in f, (
+            "no chip may post to the id-keyed unfollow: this page renders the "
+            "same tag more than once, and the second copy's id goes stale the "
+            "moment the first is pressed"
+        )
+        assert 'name="tag_id"' in f, "both directions are keyed by tag"

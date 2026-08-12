@@ -6,9 +6,10 @@
   POST /presets/{id}/items                   add an item to a preset
   POST /presets/{id}/items/{item_id}/delete
   POST /subscriptions                        subscribe to a tag (+preset, notify)
+  POST /subscriptions/unfollow               unfollow BY TAG, idempotent (chips)
   POST /subscriptions/{id}/notify            toggle the per-tag Notify flag
   POST /subscriptions/{id}/auto-apply        toggle default-preset auto-apply
-  POST /subscriptions/{id}/delete
+  POST /subscriptions/{id}/delete            unfollow BY SUBSCRIPTION ID
   POST /concerts/{event_id}/presets/{pid}/apply   one-click apply (rules fragment swap)
   POST /me/timezone                          manual timezone choice
   POST /me/timezone/auto                     browser-detected timezone
@@ -454,29 +455,76 @@ async def toggle_subscription_autoapply(
     return RedirectResponse("/preferences#p-follow", status_code=303)
 
 
-@router.post("/subscriptions/{sub_id}/delete", response_class=HTMLResponse)
-async def unsubscribe(
+@router.post("/subscriptions/unfollow", response_class=HTMLResponse)
+async def unfollow_tag(
     request: Request,
-    sub_id: int,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
+    tag_id: int = Form(...),
     next_url: str = Form("/preferences", alias="next"),
     chip: str = Form(""),
 ):
-    sub = await session.get(TagSubscription, sub_id)
-    if sub is None or sub.user_id != user.id:
-        raise HTTPException(status_code=404)
-    # Read the tag BEFORE the delete: the swapped-in chip is the same tag,
-    # now offering follow, and after the commit the row is gone.
-    tag = await session.get(Tag, sub.tag_id)
-    await session.delete(sub)
-    await session.commit()
+    """Unfollow a TAG -- idempotent, and that is the whole point of it existing
+    beside `unsubscribe` below (found in review, 2026-08-12).
+
+    `/tags` renders the same tag more than once: a performer in two groups gets
+    a chip in each, and a seiyuu can be a direct member chip AND a pill half at
+    once. While a follow press reloaded the page, every copy was re-rendered in
+    step. A one-chip swap cannot do that -- so with the unfollow keyed by
+    SUBSCRIPTION ID, pressing the second copy posted an id the first copy had
+    just deleted, got a 404, and htmx does not swap a 4xx: the reader saw a chip
+    that lied and then did nothing at all until a full reload. Keyed by tag
+    there is no id to go stale. No row means nothing to delete, NOT an error,
+    and the answer is the follow chip either way -- the same idempotence
+    `POST /subscriptions` has always had on the follow side, where re-pressing
+    upserts.
+
+    A missing TAG is still a 404: that is a bad request about the catalogue, not
+    a race between two copies of a chip.
+
+    This is a SECOND route rather than a widening of `unsubscribe`, deliberately.
+    That one is posted by Preferences and the welcome wizard, which render a tag
+    once and reload wholly, so they cannot go stale and gain nothing here; and a
+    single route resolving the row by id OR by tag depending on which field the
+    form happened to send is two identity schemes wearing one URL, with a path
+    segment that is sometimes ignored. Chips post here; nothing else does.
+    """
+    tag = await session.get(Tag, tag_id)
+    if tag is None:
+        raise HTTPException(status_code=404, detail="tag not found")
+    sub = (await session.execute(
+        select(TagSubscription).where(
+            TagSubscription.user_id == user.id, TagSubscription.tag_id == tag_id
+        )
+    )).scalar_one_or_none()
+    if sub is not None:
+        await session.delete(sub)
+        await session.commit()
 
     # Same split as `subscribe` above, and for the same reason -- an unfollow
     # is a press on the same chip.
     if request.headers.get("HX-Request") != "true":
         return RedirectResponse(_safe_next(next_url), status_code=303)
     return await _chip_fragment(session, tag, None, chip)
+
+
+@router.post("/subscriptions/{sub_id}/delete")
+async def unsubscribe(
+    sub_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    next_url: str = Form("/preferences", alias="next"),
+):
+    """Unfollow by SUBSCRIPTION ID -- Preferences' Following rows and its tag
+    picker, and the welcome wizard. Each renders a given tag once and answers
+    with a whole re-rendered page, so no copy of a chip can be left holding a
+    deleted id; see `unfollow_tag` above for the surface where that mattered."""
+    sub = await session.get(TagSubscription, sub_id)
+    if sub is None or sub.user_id != user.id:
+        raise HTTPException(status_code=404)
+    await session.delete(sub)
+    await session.commit()
+    return RedirectResponse(_safe_next(next_url), status_code=303)
 
 
 # ── Admin: editors ───────────────────────────────────────────────────────
