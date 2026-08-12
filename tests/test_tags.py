@@ -878,8 +878,14 @@ def test_rename_across_kinds_is_allowed_too(client):
 def test_new_tag_dialog_replaces_details_form(client):
     login_as(client, EDITOR_ID, "reiji")
     r = client.get("/tags")
-    # the old inline <details> create form is gone
-    assert 'id="new-tag-form"' not in r.text
+    # The old inline <details> create form is gone. It used to be the thing
+    # called new-tag-form, so "that id is absent" was the marker; the id is now
+    # legitimately back on the DIALOG's form (its footer was hoisted out and
+    # the submit needs form="new-tag-form"). The honest marker is therefore
+    # that there is exactly one such form and it lives inside the dialog.
+    assert r.text.count('id="new-tag-form"') == 1
+    dialog = r.text.split('id="new-tag-dialog"', 1)[1].split("</dialog>", 1)[0]
+    assert 'id="new-tag-form"' in dialog, "the only create form is the dialog's"
     assert "syncParentVisibility" not in r.text
     # replaced by the dialog + its opener button, editor-only
     assert 'id="new-tag-dialog"' in r.text
@@ -2503,3 +2509,58 @@ async def test_no_disambiguators_when_nothing_collides(client):
     body = client.get("/concerts/new").text
     assert '<small class="dis">' not in body
     assert "const TAG_DIS = {}" in body, "empty map, not absent -- the JS reads it"
+
+
+def test_new_tag_footer_submit_still_submits(client):
+    """The create button was hoisted OUT of its <form> so the dialog footer can
+    span the dialog (demo parity), and only still works because of the
+    form="new-tag-form" attribute.
+
+    Mutation this must fail against: dropping that attribute. The button then
+    renders identically, the page renders identically, and pressing it does
+    NOTHING -- which a "does the page render" test sails straight past.
+    """
+    login_as(client, EDITOR_ID, "reiji")
+    page = client.get("/tags")
+    assert 'id="new-tag-form"' in page.text, "the form must carry the id"
+    assert 'form="new-tag-form"' in page.text, (
+        "the submit button lives outside the form and needs this to submit"
+    )
+    r = client.post("/tags", data={
+        "name_en": "Hoisted", "name_zh": "Hoisted", "name": "Hoisted", "kind": "artist",
+    })
+    assert r.status_code in (200, 303)
+
+
+async def test_edit_dialog_save_points_at_its_own_tags_form(client):
+    """The edit dialog's footer was ALREADY a sibling of its form, so its Save
+    is outside the form it submits and lives on form="tag-edit-{id}". It renders
+    per tag in a loop, so it carries a second failure mode the create dialog
+    cannot have: an id that is not unique, or a button pointing at another tag's
+    form, saves the wrong tag while looking perfectly correct.
+
+    Mutations this must fail against: dropping the form= attribute (Save goes
+    inert), and hardcoding one id across the loop (every Save hits one tag).
+    """
+    login_as(client, EDITOR_ID, "reiji")
+    for name in ("Alpha", "Beta"):
+        client.post("/tags", data={
+            "name": name, "name_en": name, "name_zh": name, "kind": "artist",
+        })
+    body = client.get("/tags").text
+
+    async with client.db() as s:
+        ids = sorted((await s.execute(select(Tag.id))).scalars())
+    assert len(ids) == 2, "two tags, so a shared id would show up"
+
+    # Each dialog is self-contained: the form id it defines is the id its Save
+    # names, and no two dialogs share one.
+    for tag_id in ids:
+        dialog = body.split(f'id="tag-dialog-{tag_id}"', 1)[1].split("</dialog>", 1)[0]
+        assert f'<form id="tag-edit-{tag_id}"' in dialog, tag_id
+        assert f'form="tag-edit-{tag_id}"' in dialog, (
+            f"tag {tag_id}: Save sits outside the form and needs this to submit"
+        )
+    assert len(set(re.findall(r'<form id="(tag-edit-\d+)"', body))) == len(ids), (
+        "one form id per tag -- a duplicate saves the wrong tag"
+    )
