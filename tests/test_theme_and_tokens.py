@@ -152,6 +152,28 @@ def test_style_ports_the_demos_dark_paper_hex():
     assert "#17161a" in css()
 
 
+BALANCED = (".hero .promise", ".ctafoot h2", ".chead h1", ".lede h1", ".legal h1")
+
+
+def test_display_headings_balance_their_wrap():
+    """Every display heading 1.6rem and up balances its line breaks; the
+    generic `h1` (1.4rem, a fallback) deliberately does not.
+
+    Deliberately a PINNED SET, not a sweep over every h1 rule: only one of the
+    three selectors that already carried this is an h1, so "every h1 balances"
+    is not the real pattern and a sweep would fail on the 1.4rem fallback.
+
+    Two were missing it (owner ruling 2026-08-11 to fix both): `.lede h1`, the
+    403/404/422/500 heading, and `.legal h1`, which is the same 1.7rem as
+    `.chead h1` beside it.
+
+    Mutation this must fail against: removing `text-wrap: balance` from any one
+    selector in the set, including the three that already had it.
+    """
+    missing = [sel for sel in BALANCED if _decls(sel).get("text-wrap") != "balance"]
+    assert not missing, f"display headings not balancing their wrap: {missing}"
+
+
 # ── Tablet band (701–1040px): one bounded section, no scattered breakpoints ──
 
 
