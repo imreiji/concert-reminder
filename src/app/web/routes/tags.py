@@ -99,15 +99,18 @@ async def tag_directory(
 ):
     tags = await all_tags(session)
     ctx = await tag_directory_context(session)
-    # The viewer's own subscriptions, for the table view's follow bell (E2) --
-    # the same tag_id->sub map Preferences builds inline (preferences.py).
+    # The viewer's own subscriptions -- the same tag_id->sub map Preferences
+    # builds inline (preferences.py). EVERY chip on this page is a follow form
+    # now, so `tag_chip`/`follow_half` read this for all of them; it used to
+    # serve only the table view's follow bell, which is gone.
     subs = list((await session.execute(
         select(TagSubscription).where(TagSubscription.user_id == user.id)
     )).scalars())
     sub_by_tag = {sub.tag_id: sub for sub in subs}
     groups = [t for t in tags if t.kind is TagKind.GROUP]
+    # Still live: the per-group EDIT dialogs list and remove members from this.
+    # The directory's own rows come from ctx's franchise_families instead.
     members = await members_by_group(session, [t.id for t in groups])
-    grouped_artist_ids = {m.id for ms in members.values() for m in ms}
     counts = ctx["counts"]
     # Raw Python payload for the new-tag dialog's duplicate warning; the
     # template embeds it via `| tojson` (never json.dumps first, never | safe)
@@ -131,9 +134,6 @@ async def tag_directory(
             "franchise_tags": [t for t in tags if t.kind is TagKind.FRANCHISE],
             "franchises": [t for t in tags if t.kind is TagKind.FRANCHISE],
             "groups": groups,
-            "solo_artists": [
-                t for t in tags if t.kind is TagKind.ARTIST and t.id not in grouped_artist_ids
-            ],
             "artist_tags": [t for t in tags if t.kind is TagKind.ARTIST],
             "venues": [t for t in tags if t.kind is TagKind.VENUE],
             # The kinds whose dialogs render the eventernote field, as plain

@@ -325,7 +325,16 @@
 {% macro group_row(g, mems, depth) %}
 <div class="grow2{% if depth %} sub{% endif %}" data-filter-container{% if depth %} style="--d: {{ depth }}" data-subunit-of="{{ g.parent_id }}"{% endif %}>
   <span>{{ tag_chip(g, counts[g.id].concerts) }}</span>
-  <span class="memb">{% for m in mems %}{{ member_chip(m) }}{% else %}<em class="dim">{{ _("no members yet") }}</em>{% endfor %}</span>
+  {#- `mems` is DE-DUPED (subunit members leave their parent's row), so an
+      empty list means one of two different things and only one of them is
+      "no members yet". `counts[g.id].members` is the RAW TagMember count and
+      tells them apart: 0 is a genuinely empty group, >0 with an empty `mems`
+      is a parent whose whole membership renders in the subunit rows directly
+      below -- 6 live groups, SideM (49) and Shiny Colors (28) among them,
+      which read "no members yet" above their own 49 members before this
+      gate. The row still RENDERS either way; only the fallback copy is
+      gated. -#}
+  <span class="memb">{% for m in mems %}{{ member_chip(m) }}{% else %}{% if counts[g.id].members == 0 %}<em class="dim">{{ _("no members yet") }}</em>{% endif %}{% endfor %}</span>
 </div>
 {% endmacro %}
 

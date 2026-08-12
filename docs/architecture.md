@@ -612,7 +612,14 @@ measurement or an incident that a reasonable-looking edit would undo.
     Do not "unify" the two. Measured on the live catalogue: 485 member chips ->
     343, and 6 parent rows go empty and still render (empty rows render
     silently; there are no per-group folds, and search is how you reach a name
-    in a large group).
+    in a large group). "Silently" is what the TEMPLATE has to be told:
+    `group_row`'s `{% else %}` fallback is gated on `counts[g.id].members == 0`
+    -- the RAW `TagMember` count -- because a de-duped empty list means two
+    different things and only one of them is "no members yet". Ungated, SideM
+    (49 members) and Shiny Colors (28) captioned themselves "no members yet"
+    directly above the subunit rows listing every one of them. The count in the
+    dialog's stat block is the same raw number, so the two agree by
+    construction.
   - **`seiyuu_of` exists because `Tag.voiced_by` is not a loaded relationship.**
     `tag_directory_context` resolves each CHARACTER's performer off the tag list
     it has ALREADY loaded and hands the template a `{character_id: Tag | None}`
@@ -627,8 +634,13 @@ measurement or an incident that a reasonable-looking edit would undo.
     filed, not fixed.** `.mchip .half button` measures 28.72px against `.tchip`'s
     29.52px, because `.tchip` differs from the `.chip`/`.mchip` family on BOTH
     axes -- font-size (`.8rem` vs `.82rem`) AND line-height (inherited 1.6 vs an
-    explicit 1.5). Closing it with line-height alone OVERSHOOTS to 28.24px,
-    which is the fix to refuse; either number moves only with both re-measured.
+    explicit 1.5). Closing it with line-height alone would OVERSHOOT to
+    28.24px, which is the fix to refuse. **28.24 is COMPUTED, not measured** --
+    it is what the box works out to under a change nobody made, and a change
+    nobody made cannot be measured. 28.72 and 29.52 are browser readings of the
+    shipped page. Anyone acting on the 28.24 must make the change and re-measure
+    both boxes first (the standing rule at the top of "UI conventions"); do not
+    read it as a third measurement.
     The real argument for leaving it is that `.memb` is `align-items: center`,
     so 0.78px splits to 0.39px above and below and is invisible. Two things
     around it ARE deliberate and measured: `.half { display: contents }` removes

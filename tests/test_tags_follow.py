@@ -82,6 +82,11 @@ async def test_following_a_tag_makes_its_chip_offer_unfollow(client):
 
     r = client.post("/subscriptions/1/delete", data={"next": "/tags"})
     assert r.status_code == 303
+    # The `location`, not just the 303. The follow half of this test already
+    # pins "/tags"; unpinned, the unfollow half passed while the route sent
+    # the user to /preferences -- the default `next` -- so dropping the
+    # hidden input from tag_chip's FOLLOWED branch was invisible.
+    assert r.headers["location"] == "/tags"
 
     r = client.get("/tags")
     assert "tchip k-franchise on" not in r.text
