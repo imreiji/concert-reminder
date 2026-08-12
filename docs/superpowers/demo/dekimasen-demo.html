@@ -786,18 +786,27 @@
   .tile:hover { transform: translateY(-1px); }
   .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+
   /* ON: lit. Accent-washed ground and a solid edge, so a kept tile reads as
-     claimed rather than merely default. */
-  .tile[aria-pressed="true"] {
+     claimed rather than merely default.
+     Two selector shapes on purpose: the setup pick tiles (#pickList) are a
+     label wrapping a checkbox (:has(input:checked)); the "already applied"
+     tiles below them are still <button aria-pressed> and are not part of
+     this task's conversion. Both need to keep their contrast. */
+  .tile[aria-pressed="true"], .tile:has(input:checked) {
     border-color: var(--ok); background: var(--ok-wash);
   }
   /* OFF: dimmed right down. Still legible so it can be brought back, but it
      visibly leaves the set. */
-  .tile[aria-pressed="false"] {
+  .tile[aria-pressed="false"], .tile:has(input:not(:checked)) {
     opacity: .38; box-shadow: none; background: transparent;
     border-style: dashed;
   }
-  .tile[aria-pressed="false"]:hover { opacity: .62; }
+  .tile[aria-pressed="false"]:hover, .tile:has(input:not(:checked)):hover { opacity: .62; }
 
   .tile .tick {
     position: absolute; top: .6rem; right: .6rem; width: 1.15rem; height: 1.15rem;
@@ -806,7 +815,7 @@
     border: 1.5px solid var(--line); color: transparent; background: transparent;
     transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
   }
-  .tile[aria-pressed="true"] .tick {
+  .tile[aria-pressed="true"] .tick, .tile:has(input:checked) .tick {
     background: var(--ok); border-color: var(--ok); color: var(--raise);
   }
   .tile .who-t { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
@@ -1130,70 +1139,86 @@
       </p>
     </div>
 
+    <!-- A label wrapping a visually-hidden checkbox, NOT <button aria-pressed>
+         (changed 2026-08-11). They render identically; the difference is that a
+         real form control submits with JavaScript disabled and a button cannot
+         -- aria-pressed needs a script to track state and a hidden input to
+         carry it, and this app keeps its forms working without JS. Screen
+         readers announce "checked" rather than "pressed"; both are fine.
+         Do not "fix" this back to a button. -->
     <div class="pick" id="pickList">
-      <button class="tile" type="button" aria-pressed="true">
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Liella!</span>
         <span class="t">5th Live Tour &mdash; Yokohama</span>
         <span class="v">横浜アリーナ &middot; Sun 12 Oct</span>
         <span class="rnd"><b>FC presale</b> closes in 6h</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Liella!</span>
         <span class="t">5th Live Tour &mdash; Osaka</span>
         <span class="v">大阪城ホール &middot; Sat 1 Nov</span>
         <span class="rnd"><b>FC presale</b> opens 3 Aug</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Liella!</span>
         <span class="t">5th Live Tour &mdash; Fukuoka</span>
         <span class="v">マリンメッセ福岡 &middot; Sat 25 Oct</span>
         <span class="rnd"><b>FC presale</b> opens 3 Aug</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Aqours</span>
         <span class="t">9th LoveLive! &mdash; Day 1</span>
         <span class="v">さいたまスーパーアリーナ &middot; Sat 23 Aug</span>
         <span class="rnd"><b>Lottery R1</b> closes in 3d</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Aqours</span>
         <span class="t">9th LoveLive! &mdash; Day 2</span>
         <span class="v">さいたまスーパーアリーナ &middot; Sun 24 Aug</span>
         <span class="rnd"><b>Lottery R1</b> result 21 Jul</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Aqours</span>
         <span class="t">9th &mdash; Osaka Day 1</span>
         <span class="v">京セラドーム大阪 &middot; Sat 8 Nov</span>
         <span class="rnd"><b>Upgrade round</b> closes in 3d</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Roselia</span>
         <span class="t">Rausch und/oder Craziness</span>
         <span class="v">幕張メッセ &middot; Sat 6 Sep</span>
         <span class="rnd"><b>FC lottery</b> result 2 Aug</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Poppin&rsquo;Party</span>
         <span class="t">Bloom in the Summer</span>
         <span class="v">日本ガイシホール &middot; Sun 17 Aug</span>
         <span class="rnd"><b>FC lottery R2</b> result 14 Jul</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Roselia</span>
         <span class="t">Yokohama Final</span>
         <span class="v">ぴあアリーナMM &middot; Sun 23 Nov</span>
         <span class="rnd"><b>General sale</b> opens 12 Aug</span>
-      </button>
+      </label>
     </div>
 
     <div class="bar">
@@ -2077,9 +2102,13 @@
 
     <div class="fld">
       <span>Members</span>
+      <!-- No "+N more" truncation, deliberately (2026-08-11). This is the EDIT
+           dialog: every chip carries a delete x and you opened it to change
+           membership, so an inert "+N more" with no way to expand makes those
+           members unreachable on the one surface built for reaching them.
+           Truncation is right for a DISPLAY of members; this is not one. -->
       <div class="memb" style="margin-top:.15rem">
-        <span class="chip">伊波杏樹 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">逢田梨香子 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">諏訪ななか <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">小宮有紗 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span>
-        <span class="chip">+5 more</span>
+        <span class="chip">伊波杏樹 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">逢田梨香子 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">諏訪ななか <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">小宮有紗 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">斉藤朱夏 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">鈴木愛奈 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">降幡愛 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">高槻かなこ <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span><span class="chip">法元明菜 <button class="x" type="button" style="background:none;border:0;cursor:pointer;color:var(--dim)">&times;</button></span>
         <button class="legchip" type="button">+ Add member</button>
       </div>
     </div>
@@ -2349,19 +2378,25 @@
 
   document.addEventListener('click', (e) => {
     const t = e.target.closest('.tile');
-    if (!t) return;
+    // #pickList tiles are now a label wrapping a checkbox (see the comment
+    // above #pickList) -- the browser's native label behaviour toggles them,
+    // and the change listener below keeps the tally in sync. This handler is
+    // for the OTHER .tile block ("already applied to any of these?"), which
+    // is still a <button aria-pressed> and was not part of this conversion.
+    if (!t || t.querySelector('input[type="checkbox"]')) return;
     const on = t.getAttribute('aria-pressed') === 'true';
     t.setAttribute('aria-pressed', String(!on));
-    const list = document.getElementById('pickList');
-    if (list && list.contains(t)) {
-      document.getElementById('keepCount').textContent =
-        list.querySelectorAll('.tile[aria-pressed="true"]').length;
-    }
+  });
+
+  document.getElementById('pickList').addEventListener('change', (e) => {
+    if (!e.target.matches('input[type="checkbox"]')) return;
+    document.getElementById('keepCount').textContent =
+      document.querySelectorAll('#pickList input[type="checkbox"]:checked').length;
   });
 
   document.getElementById('allOff').addEventListener('click', () => {
-    document.querySelectorAll('#pickList .tile')
-      .forEach(t => t.setAttribute('aria-pressed', 'false'));
+    document.querySelectorAll('#pickList input[type="checkbox"]')
+      .forEach(cb => { cb.checked = false; });
     document.getElementById('keepCount').textContent = '0';
   });
 
