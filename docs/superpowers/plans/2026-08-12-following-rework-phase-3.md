@@ -45,7 +45,7 @@
 | `filterChips(input, scope)` with container hiding | `base.html` |
 | `_safe_next` and its `_ALLOWED_NEXT` allowlist | `routes/preferences.py:82` |
 
-**There is no route that sets a specific preset on a subscription.** `/subscriptions/{id}/auto-apply` only links the default or clears it. Task 3 adds one.
+**There is no route that sets a specific preset on a subscription.** `/subscriptions/{id}/auto-apply` only links the default or clears it. Task 4 adds one.
 
 ---
 
@@ -168,7 +168,90 @@ EOF
 
 ---
 
-### Task 2: the `/following` page
+### Task 2: a follow press swaps its own chip
+
+**Files:**
+- Create: `src/app/web/templates/_tag_chip.html` (the macro, extracted so a route can render one chip)
+- Modify: `src/app/web/templates/tags.html`
+- Modify: `src/app/web/routes/preferences.py` (the four `/subscriptions*` routes)
+- Test: `tests/test_tags_follow_htmx.py` (new)
+
+**Interfaces:**
+- Produces: the follow/unfollow routes return **one rendered chip** to an htmx request and keep their 303 redirect otherwise. Task 3's `/following` page reuses this exactly.
+
+**Why — owner report, 2026-08-12:** *"whenever a user clicks a tag to follow, the website will post the follow and refresh the entire website. This will bring the page back to top, not where the user is currently scrolled at, and the loading time after clicking each follow and unfollow is incredibly slow."*
+
+Phase 2 shipped plain forms that POST and 303 back to `/tags`. On the live catalogue that re-renders **878 chips plus a `<dialog>` per tag for editors**, and throws away scroll position, on every single press. It is correct and unusable.
+
+**This is a live regression on merged code and takes priority over the rest of this plan.** It also has to land before `/following` is built, or that page ships the same defect.
+
+**The pattern already exists — copy it.** `src/app/web/templates/_capture_actions.html` puts `hx-post` / `hx-target` / `hx-swap="outerHTML"` on a form that *also* carries `method="post" action="..."`. htmx swaps one element in place; with JavaScript off the same markup is an ordinary form and the 303 still works. **Read that file before writing anything.** Do not invent a different mechanism, and do not drop the plain-form attributes — JS-off following is a property phase 2 was built to have and there is a test pinning it.
+
+- [ ] **Step 1: Measure the current cost**
+
+Before changing anything, seed a catalogue at realistic scale — **735 tags, 65 groups, 318 characters** is the live shape; a few hundred is enough to be honest — and record: the wall-clock time of `GET /tags`, and the response size. Then time a follow round-trip. **Report the numbers.** Without them "better" is unfalsifiable, and this project has a standing rule against reasoning about performance instead of measuring it.
+
+- [ ] **Step 2: Write the failing tests**
+
+```python
+async def test_a_follow_from_htmx_returns_only_the_chip(client):
+    """An htmx follow must swap one chip, not re-render 878 of them.
+
+    Mutation this must fail against: the route ignoring HX-Request and
+    redirecting, which still "works" and is what shipped in phase 2.
+    """
+    # POST with headers={"HX-Request": "true"}; assert 200 (not 303),
+    # assert the body contains the chip's form and does NOT contain the page
+    # shell (e.g. the search box or the section headings).
+
+
+async def test_a_follow_without_htmx_still_redirects(client):
+    """JS off keeps working. Mutation: making the htmx branch unconditional,
+    which leaves a non-JS user staring at a bare chip fragment."""
+
+
+async def test_the_swapped_chip_carries_the_opposite_action(client):
+    """Following returns a chip offering unfollow, and vice versa -- otherwise
+    the swapped chip is a dead end until a full reload."""
+```
+
+Plus: the returned fragment must carry `data-name="{{ search_key(t) }}"` so a swapped chip is still findable by search, and its `data-tag-id` so editor mode still works on it.
+
+- [ ] **Step 3: Extract the chip macro to a partial**
+
+`tag_chip` currently lives inside `tags.html` and closes over page context (`sub_by_tag`, `counts`, `user`). A route cannot render it there. Move it to `src/app/web/templates/_tag_chip.html` taking everything it needs as explicit parameters, and have `tags.html` import it. **The split-pill halves (`follow_half`) need the same treatment** — a pill half is also a follow control and must swap too.
+
+Keep the rendered markup **byte-identical** to what phase 2 ships, or the existing tests will tell you (they pin the form action, the hidden fields, `data-name`, `data-tag-id` and the `unused` class). That is the point of having them.
+
+- [ ] **Step 4: Make the routes htmx-aware**
+
+The four routes are in `routes/preferences.py`: `/subscriptions` (:314), `/subscriptions/{id}/notify` (:355), `/subscriptions/{id}/auto-apply` (:371), `/subscriptions/{id}/delete` (:390).
+
+Follow and unfollow are the two that matter here. On an htmx request (`HX-Request` header present) they return the re-rendered chip; otherwise they keep the existing `RedirectResponse`. Grep for how other routes in this codebase detect htmx — **there is an established way, use it** rather than reading the header raw if a helper exists.
+
+**A route that returns a fragment must not also 303** — htmx would follow the redirect and swap the whole page in, which is worse than what we started with.
+
+- [ ] **Step 5: Wire the template**
+
+Add `hx-post`, `hx-target="this"`, `hx-swap="outerHTML"` to the chip forms, keeping `method="post"` and `action` exactly as they are.
+
+- [ ] **Step 6: Measure again and compare**
+
+Same seeded catalogue. Report the follow round-trip before and after, and the response size before and after. State plainly whether it is better and by how much.
+
+- [ ] **Step 7: Confirm scroll position survives**
+
+The original complaint. In a real browser: scroll to a chip well down the page, follow it, and confirm the page does **not** jump to the top and the chip updates in place. This is the acceptance criterion — a faster response that still scrolls to the top has not fixed the reported problem.
+
+- [ ] **Step 8: Confirm JS-off still works**
+
+Disable JavaScript, follow a tag, confirm the 303 path still lands you back on `/tags` with the chip updated.
+
+- [ ] **Step 9: Full suite, lint, commit**
+
+---
+
+### Task 3: the `/following` page
 
 **Files:**
 - Create: `src/app/web/templates/following.html`
@@ -243,7 +326,7 @@ Seed a user following several tags across two franchises, with one `notify=False
 
 ---
 
-### Task 3: the per-tag config dialog
+### Task 4: the per-tag config dialog
 
 **Files:**
 - Modify: `src/app/web/templates/following.html`
@@ -252,7 +335,7 @@ Seed a user following several tags across two franchises, with one `notify=False
 - Test: `tests/test_following_dialog.py` (new)
 
 **Interfaces:**
-- Consumes: Task 2's page and context.
+- Consumes: Task 3's page and context.
 - Produces: `POST /subscriptions/{sub_id}/settings`.
 
 **The dialog holds three things, because three is all a subscription has:**
@@ -312,7 +395,7 @@ A capture-phase delegated listener, `stopPropagation()`, reading `dataset`. Note
 
 ---
 
-### Task 4: link `/tags` to `/following`
+### Task 5: link `/tags` to `/following`
 
 **Files:**
 - Modify: `src/app/web/templates/tags.html`
@@ -329,7 +412,7 @@ Put it where the follow counts already are — the page head is the natural home
 
 ---
 
-### Task 5: bookkeeping
+### Task 6: bookkeeping
 
 **Files:** `docs/architecture.md`, `WISHLIST.md`
 
@@ -353,6 +436,6 @@ Dated note under the unranked entry: phase 3 shipped, phase 4 remains, and the s
 
 **The `_ALLOWED_NEXT` trap is called out twice on purpose.** Its absence for `/tags` silently bounced every follow to `/preferences` from the 2026-07-24 UX pass until phase 2 found it. The same bug is one omitted line away here, and only a redirect-target assertion catches it.
 
-**Task independence.** Task 1 is fully independent and could ship alone. Tasks 2 → 3 are sequential (the dialog lives in the page). Task 4 needs Task 2's route to exist. Task 5 is last.
+**Task independence.** Task 1 is fully independent and could ship alone. Task 2 must land before Task 3, or /following ships the same full-page-reload defect. Tasks 3 → 4 are sequential (the dialog lives in the page). Task 5 needs Task 3's route to exist. Task 6 is last.
 
-**Where this plan is deliberately less prescriptive than phase 1's.** Tasks 2 and 3 give the required behaviours, the mutations each test must catch, and the traps — but not full test bodies, because they depend on fixture shapes the implementer must read anyway. What must not be improvised is the list of mutations.
+**Where this plan is deliberately less prescriptive than phase 1's.** Tasks 3 and 4 give the required behaviours, the mutations each test must catch, and the traps — but not full test bodies, because they depend on fixture shapes the implementer must read anyway. What must not be improvised is the list of mutations.
