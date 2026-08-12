@@ -23,10 +23,12 @@
   <div class="picker-body">
   <input type="search" placeholder="Search…" oninput="filterChips(this, '#picker-{{ kindname }}')">
   <div class="taglist">
-    {#- data-name stays exactly as it is: base.html's filterChips() reads it, and
-        data-name is deliberately NOT data-tag-name (invariant 7's collision
-        note). The handle renders only for a tag whose (name, kind) collides, so
-        two otherwise-identical chips can be told apart. -#}
+    {#- The ATTRIBUTE NAME stays data-name, deliberately NOT data-tag-name
+        (invariant 7's collision note): base.html's filterChips() reads it. Its
+        VALUE is search_key(t) -- all three name columns joined -- so a viewer
+        can find a tag by the name they are looking at. The handle renders only
+        for a tag whose (name, kind) collides, so two otherwise-identical chips
+        can be told apart. -#}
     {% for t in by_kind.get(kindname, []) %}
     <button type="button" class="chip kind-{{ kindname }}" data-name="{{ search_key(t) }}"
             data-id="{{ t.id }}" onclick="togglePick('{{ kindname }}', this)">{{ t.name }}{%

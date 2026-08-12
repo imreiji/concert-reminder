@@ -237,13 +237,13 @@
   <div class="tsec" data-filter-container>
     <h3>{{ _("Franchises and groups") }} <span>{{ _("— click any tag to edit") }}</span></h3>
     {% for f, group_pairs in franchise_families %}
-    <div class="fam">
+    <div class="fam" data-filter-container>
       <div class="famhead">{{ tag_chip(f, counts[f.id].concerts) }}</div>
       {% for g, mems, depth in group_pairs %}{{ group_row(g, mems, depth) }}{% endfor %}
     </div>
     {% endfor %}
     {% if no_franchise_groups %}
-    <div class="fam">
+    <div class="fam" data-filter-container>
       <div class="famhead"><span class="eyebrow">{{ _("No franchise") }}</span></div>
       {% for g, mems, depth in no_franchise_groups %}{{ group_row(g, mems, depth) }}{% endfor %}
     </div>
@@ -254,7 +254,7 @@
   <div class="tsec" data-filter-container>
     <h3>{{ _("Venues") }} <span>{{ _("— grouped by the region used in the Discover sidebar") }}</span></h3>
     {% for region_name, region_venues in venue_regions %}
-    <div class="fam">
+    <div class="fam" data-filter-container>
       <div class="famhead"><span class="eyebrow region-label">{{ region_name }}</span>
         {% for v in region_venues %}{{ tag_chip(v, counts[v.id].concerts) }}{% endfor %}
       </div>

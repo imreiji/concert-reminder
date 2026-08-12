@@ -187,8 +187,12 @@
         target.style.display = (!q || el.dataset.name.includes(q)) ? "" : "none";
       });
       document.querySelectorAll(scope + " [data-filter-container]").forEach(box => {
-        // offsetParent is null for a hidden element, which is what makes this
-        // read the FIRST pass's result rather than re-testing the query.
+        // Reads the FIRST pass's own style.display rather than re-testing the
+        // query, which is what makes nested containers order-independent: an
+        // inner container already hidden here still reports its chips' real
+        // per-chip state, so the outer one sees the same answer whichever ran
+        // first. Don't swap this for an offsetParent/visibility test -- those
+        // are also falsy inside an already-hidden ancestor.
         const alive = [...box.querySelectorAll("[data-name]")].some(el => {
           const target = el.closest(".chipform") || el;
           return target.style.display !== "none";

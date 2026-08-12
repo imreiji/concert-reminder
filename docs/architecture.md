@@ -528,6 +528,49 @@ measurement or an incident that a reasonable-looking edit would undo.
   offset}` envelope, with `limit` over its cap answering 422 rather than a
   silent clamp -- the module's own docstring states why (an agent that asked
   for 5000 and silently got 500 back would conclude it had read everything).
+- **Tag search: `search_key` + `filterChips`'s two passes** -- shipped
+  2026-08-12, phase 1 of WISHLIST's "Following is due a rework".
+  - **`search_key(obj)` (`web/app.py`) is the `data-name` value, and it DROPS
+    empties.** It joins `name`/`name_en`/`name_zh` lowercased, because the chip
+    beside the hook renders `loc(obj, "name")` and keying the hook on `name`
+    alone meant an English viewer could not find a tag by the name they were
+    looking at (681 of 735 live tags have a `name_en` that differs from
+    `name`). `name_en`/`name_zh` are NULLABLE -- 109 live tags have no
+    `name_zh` -- and Jinja renders None as the literal `"None"`, so a naive
+    `" ".join(...)` makes every one of them match a search for "none". The
+    display rule beside it is unchanged and still narrower: form values and
+    URLs keep the original field; display and this search key do not.
+  - **`filterChips` (`base.html`) runs TWO passes, and pass 2 reads pass 1's
+    result, not the query.** Pass 1 shows or hides each `[data-name]` chip;
+    pass 2 hides any container that now holds no visible chip, so a search
+    returns a result list instead of the page skeleton with one chip left in
+    it. Containers opt IN via `data-filter-container` -- a selector list would
+    have to be edited every time a template adds a level. Pass 2 tests each
+    chip's own `style.display`, which is what makes NESTED containers
+    order-independent: an inner container already hidden by an earlier
+    iteration still reports its chips' real per-chip state. An
+    `offsetParent`/`visibility` test looks equivalent and is not -- both are
+    also falsy inside an already-hidden ancestor, which reintroduces the
+    ordering dependency. It cannot be CSS either: `:empty` does not match,
+    because template indentation leaves whitespace text nodes inside these
+    elements (the same trap documented on `.chiprow:empty` in
+    `concert_detail.html`). On `tags.html` the opt-in must reach `.fam` as well
+    as `.tsec`: `.fam` carries its own padding and bottom border, so an
+    unmarked one leaves an empty bordered region row per region under a
+    one-hit venue search. `.famhead` is deliberately NOT a container -- keeping
+    a franchise chip visible as context while only its groups match is a
+    design call.
+  - **`members_by_group` (`db/tags.py`) gives EVERY requested id an entry.** It
+    replaced a per-group `group_members` loop at four sites -- `/tags`,
+    `/preferences`, `/welcome` and `tag_picker_context` (which is on
+    `GET /concerts/new`, `GET /concerts/{id}/edit` and the import preview) --
+    each ~65 round trips on the live catalogue. A group with no members must
+    yield `[]`, not a missing key, because every caller indexes the map per
+    group; building the dict only from the returned rows silently drops
+    memberless groups, which is a different bug in each caller. `group_members`
+    itself stays and is still right for ONE group -- `attach_tag`'s expansion
+    step and `routes/concerts.py`'s performer rollup both iterate one concert's
+    tags, not the catalogue, so neither is an N+1 to convert.
 - `src/app/domain/board.py` -- pure column precedence for Home's campaign
   board. `column_for(outcomes, has_open_round)` returns the ONE column a
   concert shows in; PAID > WON > APPLIED > open, deliberately, because money

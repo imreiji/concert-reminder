@@ -1227,8 +1227,14 @@ async def tag_picker_context(session: AsyncSession) -> dict:
     for t in tags:
         by_kind.setdefault(t.kind.value, []).append(t)
     groups_data = {}
-    for g in by_kind.get("group", []):
-        members = await group_members(session, g.id)
+    # ONE query for every group's members, not one per group: this ran ~65 round
+    # trips on the live catalogue, on every GET /concerts/new, /concerts/{id}/edit
+    # and import preview. members_by_group guarantees an entry per requested id,
+    # so the per-group indexing below cannot KeyError on a memberless group.
+    group_tags = by_kind.get("group", [])
+    members_map = await members_by_group(session, [g.id for g in group_tags])
+    for g in group_tags:
+        members = members_map[g.id]
         groups_data[g.id] = {
             "name": g.name,
             "franchise": g.parent_id,

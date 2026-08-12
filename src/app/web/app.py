@@ -153,8 +153,9 @@ def search_key(obj) -> str:
 
 
 # UGC parallel-column display: {{ loc(concert, "title") }} / {{ loc(tag, "name") }}
-# renders the viewer-locale variant, falling back to the original. Display
-# ONLY -- form values, data-* filter keys and URLs keep the original field.
+# renders the viewer-locale variant, falling back to the original. Display and
+# the data-name SEARCH key (search_key below, which joins all three names)
+# only -- form values and URLs still keep the original field.
 templates.env.globals["loc"] = lambda obj, field: i18n.loc_field(obj, field, i18n.get_locale())
 templates.env.globals["search_key"] = search_key
 # Filter form for `| map("loc_name")` over a tag list (the "F · G" eyebrow joins).
