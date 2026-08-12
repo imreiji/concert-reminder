@@ -84,6 +84,13 @@
   .langtoggle:hover { color: var(--ink); border-color: var(--dim); }
   .langtoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+  /* Concept-nav bar only. `.banner.warn` (down near .edgecard, line ~543) is
+     a DIFFERENT thing riding the same class name -- the G2 callout box the
+     app's current style.css defines, used by the import preview's rejection
+     list. It re-declares every property this rule sets so nothing here leaks
+     into it, but that only holds for properties BOTH rules know about: a
+     property added here later with no counterpart down there would leak
+     straight into that callout. */
   .banner {
     background: var(--chip); border-bottom: 1px solid var(--line);
     text-align: center; padding: .4rem 1rem; font-size: .78rem; color: var(--dim);
@@ -1356,7 +1363,7 @@
     <p>The AI proposed these and I could not find them on the page — check them by
       hand before trusting them:</p>
     <ul>
-      <li class="tiny">2次抽選 closes — no quote found for "2025年10月5日"</li>
+      <li class="tiny">round '2次抽選': no evidence for apply_closes_jst (2025-10-05 23:59)</li>
     </ul>
     <p class="tiny">Source: <a href="#" onclick="return false" rel="nofollow noopener">eplus.jp/aqours-5th</a></p>
   </div>

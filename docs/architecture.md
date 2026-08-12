@@ -1135,4 +1135,5 @@ measurement or an incident that a reasonable-looking edit would undo.
   - `dekimasen-ux-pass-demo.html` — the 2026-07-24 UX pass's 20 changes,
     including the two-shape callout grammar.
   - `_tablet_harness.html` — not a demo: the measuring rig the tablet band
-    was built against (see the measure-don't-reason rule below).
+    was built against (the measure-don't-reason rule lives in CLAUDE.md's
+    "UI conventions" and in full in `docs/ui-conventions.md`).

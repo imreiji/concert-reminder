@@ -848,7 +848,12 @@
                 background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
   }
   .tile:hover { transform: translateY(-1px); }
-  .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* Keyboard-operable: the tile is a <label>, which is not focusable, so the
+     focus lands on the visually-hidden checkbox INSIDE it (visually hidden,
+     not display:none/`hidden`, which would drop it from the tab order
+     entirely). :focus-visible on the label can therefore never match --
+     :focus-within is what puts a visible ring on the tile Tab landed on. */
+  .tile:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .visually-hidden {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -1409,7 +1414,7 @@
        and has no "links go to eventernote" rider any more; the hover state on
        a chip is the affordance. -->
   <div class="performers">
-    <div class="plabel">Performing <span>&mdash; 10 performers</span></div>
+    <div class="plabel">Performing <span>&mdash; 15 performers</span></div>
     <div class="pcluster">
       <div class="pclabel"><a class="chip grp" href="#" target="_blank" rel="noopener" title="Aqours on eventernote">Aqours</a></div>
       <div class="chiprow">
@@ -1478,7 +1483,7 @@
         <span class="acts"><span class="done">Nothing to do</span></span>
       </div>
       <details class="moreround">
-        <summary>+4 more rounds<span class="fchip">2 lost</span><span class="fchip">1 covered</span></summary>
+        <summary>+4 more rounds<span class="fchip">2 lost</span><span class="fchip">1 covered</span><span class="fchip">1 upcoming</span></summary>
         <div class="rnd2 past">
           <span><span class="pill p-quiet">Lost</span></span>
           <span class="nm">最速先行<em>Fastest presale &middot; fan club</em></span>
@@ -1494,7 +1499,7 @@
         <div class="rnd2">
           <span><span class="pill p-quiet">&mdash;</span></span>
           <span class="nm">一般発売<em>General sale &middot; first come</em></span>
-          <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span><span class="more">🛍️ Requires: Goods pre-order &mdash; sale ends Sat 20 Sep &middot; 23:59 JST &middot; 10:59 ADT</span></span>
+          <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span><span class="more">🛍️ Requires: グッズ先行予約 &mdash; sale ends Sat 20 Sep &middot; 23:59 JST &middot; 10:59 AST</span></span>
           <span class="acts"></span>
         </div>
         <!-- The item-sale round itself (GOODS_SALE): a real round row, not a
@@ -1503,12 +1508,14 @@
              "Needed for" names the rounds that point at it via
              required_item_round_id (never itself -- that field is
              kind-restricted to ITEM_SALE_KINDS, so a round can't require
-             itself). Mirrors the editor card's "Goods pre-order (closes 20
-             Sep)" round so the two views agree. -->
+             itself). Both lines name a round by its LABEL -- requires_label
+             and needed_for_labels are the same loc_field(round, "label") the
+             bold .nm is, so a round reads under ONE name everywhere. Mirrors
+             the editor card's グッズ先行予約 round so the two views agree. -->
         <div class="rnd2">
           <span><span class="pill p-quiet">&mdash;</span></span>
           <span class="nm">グッズ先行予約<em>Goods sale</em></span>
-          <span class="dts num"><b>Closes Sat 20 Sep</b><span class="more">23:59 JST &middot; 10:59 ADT</span><span class="more">Needed for: FC presale, General sale</span></span>
+          <span class="dts num"><b>Closes Sat 20 Sep</b><span class="more">23:59 JST &middot; 10:59 AST</span><span class="more">Needed for: 一般発売</span></span>
           <span class="acts"></span>
         </div>
       </details>
@@ -1550,7 +1557,7 @@
         <div class="rnd2">
           <span><span class="pill p-quiet">&mdash;</span></span>
           <span class="nm">一般発売<em>General sale &middot; first come</em></span>
-          <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span></span>
+          <span class="dts num"><b>Opens Sat 9 Aug</b><span class="more">10:00 JST &middot; 21:00 AST</span><span class="more">🛍️ Requires: グッズ先行予約 &mdash; sale ends Sat 20 Sep &middot; 23:59 JST &middot; 10:59 AST</span></span>
           <span class="acts"></span>
         </div>
       </details>
@@ -1606,7 +1613,7 @@
   </div>
 
   <div class="bar" style="margin:0 0 .5rem; padding-top:0; border-top:0">
-    <span class="tally">2 legs &middot; 4 rounds</span>
+    <span class="tally">2 legs &middot; 5 rounds</span>
     <button class="btn" type="button">Add a round</button>
     <button class="btn quiet" type="button">Add a leg</button>
   </div>
@@ -1617,7 +1624,7 @@
     <div class="redit">
       <div class="cardtop">
         <input class="cardname" value="最速先行">
-        <select><option selected>Fan-club presale</option><option>Lottery</option><option>First come, first served</option><option>General sale</option><option>Upgrade</option></select>
+        <select><option selected>Fan-club presale</option><option>Lottery</option><option>First come, first served</option><option>General sale</option><option>Goods sale</option><option>Upgrade</option></select>
         <details class="kebab"><summary>&#8943;</summary>
           <div class="kmenu"><button class="kitem danger" type="button">Remove this round</button></div>
         </details>
@@ -1647,7 +1654,7 @@
     <div class="redit">
       <div class="cardtop">
         <input class="cardname" value="先行抽選 R1">
-        <select><option>Fan-club presale</option><option selected>Lottery</option><option>First come, first served</option><option>General sale</option><option>Upgrade</option></select>
+        <select><option>Fan-club presale</option><option selected>Lottery</option><option>First come, first served</option><option>General sale</option><option>Goods sale</option><option>Upgrade</option></select>
         <details class="kebab"><summary>&#8943;</summary>
           <div class="kmenu"><button class="kitem danger" type="button">Remove this round</button></div>
         </details>
@@ -1677,7 +1684,7 @@
     <div class="redit">
       <div class="cardtop">
         <input class="cardname" value="アップグレード">
-        <select><option>Fan-club presale</option><option>Lottery</option><option>First come, first served</option><option>General sale</option><option selected>Upgrade</option></select>
+        <select><option>Fan-club presale</option><option>Lottery</option><option>First come, first served</option><option>General sale</option><option>Goods sale</option><option selected>Upgrade</option></select>
         <details class="kebab"><summary>&#8943;</summary>
           <div class="kmenu"><button class="kitem danger" type="button">Remove this round</button></div>
         </details>
@@ -1716,7 +1723,7 @@
     <div class="redit">
       <div class="cardtop">
         <input class="cardname" value="一般発売">
-        <select><option>Fan-club presale</option><option>Lottery</option><option selected>First come, first served</option><option>General sale</option><option>Upgrade</option></select>
+        <select><option>Fan-club presale</option><option>Lottery</option><option selected>First come, first served</option><option>General sale</option><option>Goods sale</option><option>Upgrade</option></select>
         <details class="kebab"><summary>&#8943;</summary>
           <div class="kmenu"><button class="kitem danger" type="button">Remove this round</button></div>
         </details>
@@ -1734,19 +1741,59 @@
       <!-- Hidden (never removed -- a hidden div still submits its fields)
            while no item-kind round exists on the concert; a script keeps its
            options and visibility current as rows change. Shown here in its
-           PRESENT state; with no item-sale round on the concert this whole
-           row is absent from the card. -->
+           PRESENT state, because the グッズ先行予約 card below is an item-kind
+           round on this concert. Each option is the target round's ja label
+           and nothing else -- the select is a single line, so it carries no
+           translation and no close date. -->
       <div class="redit-requires">
         <label class="dim tiny">Requires item from
           <select>
             <option value="">No item needed</option>
-            <option selected>Goods pre-order (closes 20 Sep)</option>
+            <option selected>グッズ先行予約</option>
           </select>
         </label>
       </div>
       <div class="redit-times">
         <label class="f2"><span>Opens (JST)</span><input type="datetime-local" value="2026-08-09T10:00"></label>
         <label class="f2"><span>Closes (JST)</span><input type="datetime-local" value="2026-08-20T23:59"></label>
+        <label class="f2"><span>Results (JST)</span><input type="datetime-local" value=""></label>
+        <label class="f2"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
+      </div>
+      <div class="redit-extra">
+        <input type="url" placeholder="Apply URL (optional)" value="">
+        <input placeholder="Notes (optional)" value="">
+      </div>
+    </div>
+
+    <!-- The item-sale round the card above points at. It is an ORDINARY round
+         card -- an item round has no special editor shape; only its kind puts
+         it in ITEM_SALE_KINDS, which is what makes it offerable in another
+         round's "Requires item from" select. It carries no requires row of
+         its own: that select excludes the card it sits on, and this is the
+         concert's only item-kind round, so the box has nothing to offer and
+         stays hidden. Day 1 only, which is what makes it COVERED on the
+         concert page once Day 1 is secured. -->
+    <div class="redit">
+      <div class="cardtop">
+        <input class="cardname" value="グッズ先行予約">
+        <select><option>Fan-club presale</option><option>Lottery</option><option>First come, first served</option><option>General sale</option><option selected>Goods sale</option><option>Upgrade</option></select>
+        <details class="kebab"><summary>&#8943;</summary>
+          <div class="kmenu"><button class="kitem danger" type="button">Remove this round</button></div>
+        </details>
+      </div>
+      <div class="vary">
+        <label class="vfld"><span class="vfld-tag">English</span><input value="Goods pre-order"></label>
+        <label class="vfld"><span class="vfld-tag">中文</span><input value="周边预售"></label>
+        <button class="chip add" type="button">Remembered</button>
+      </div>
+      <div class="leg-chips">
+        <span class="eyebrow">Applies to</span>
+        <button class="chip on" type="button" aria-pressed="true">Day 1 昼公演</button>
+        <button class="chip" type="button" aria-pressed="false">Day 2 夜公演</button>
+      </div>
+      <div class="redit-times">
+        <label class="f2"><span>Opens (JST)</span><input type="datetime-local" value=""></label>
+        <label class="f2"><span>Closes (JST)</span><input type="datetime-local" value="2026-09-20T23:59"></label>
         <label class="f2"><span>Results (JST)</span><input type="datetime-local" value=""></label>
         <label class="f2"><span>Payment (JST)</span><input type="datetime-local" value=""></label>
       </div>
@@ -1830,7 +1877,7 @@
   </details>
 
   <details class="fold">
-    <summary>Tags <span class="hint">Love Live! Sunshine!! &middot; Aqours &middot; 10 performers &middot; Kanto</span></summary>
+    <summary>Tags <span class="hint">Love Live! Sunshine!! &middot; Aqours &middot; 15 performers &middot; Kanto</span></summary>
     <div class="foldbody">
       <div class="applies"><span class="lbl3">Franchise</span><span class="chip">Love Live! Sunshine!!</span><button class="legchip" type="button">+ Add</button></div>
       <div class="applies"><span class="lbl3">Group</span><span class="chip">Aqours</span><button class="legchip" type="button">+ Add</button></div>
@@ -2155,6 +2202,37 @@
     <div class="fam">
       <div class="famhead"><span class="eyebrow" style="width:5rem">No region</span>
         <button class="tchip k-venue unused" type="button" data-tag="マリンメッセ福岡">マリンメッセ福岡<span class="n2">2</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Characters, each row naming her seiyuu. Its own section rather than a
+       row inside the franchise families: a character may be a member of a
+       group (where she already renders as a member chip above) or belong to
+       no group at all, and the seiyuu link is visible nowhere else. The rows
+       reuse .grow2, the group row's layout -- a chip beside a chip is a shape
+       this page already has. A character with no voiced_by_tag_id set says so
+       rather than showing an empty cell; that is the branch 三浦あずさ is here
+       to demonstrate, and it is why she is a PLAIN chip on the concert page
+       while the other three merge into split pills. -->
+  <div class="tsec">
+    <h3>Characters <span>&mdash; each with the performer who voices her</span></h3>
+    <div class="fam">
+      <div class="grow2">
+        <span><button class="tchip" type="button" data-tag="天海春香">天海春香<span class="n2">4</span></button></span>
+        <span class="memb"><span class="clock">voiced by</span> <button class="tchip" type="button" data-tag="中村繪里子">中村繪里子</button></span>
+      </div>
+      <div class="grow2">
+        <span><button class="tchip" type="button" data-tag="如月千早">如月千早<span class="n2">4</span></button></span>
+        <span class="memb"><span class="clock">voiced by</span> <button class="tchip" type="button" data-tag="今井麻美">今井麻美</button></span>
+      </div>
+      <div class="grow2">
+        <span><button class="tchip" type="button" data-tag="秋月律子">秋月律子<span class="n2">3</span></button></span>
+        <span class="memb"><span class="clock">voiced by</span> <button class="tchip" type="button" data-tag="若林直美">若林直美</button></span>
+      </div>
+      <div class="grow2">
+        <span><button class="tchip" type="button" data-tag="三浦あずさ">三浦あずさ<span class="n2">3</span></button></span>
+        <span class="memb"><em class="clock">no performer set</em></span>
       </div>
     </div>
   </div>
@@ -2521,11 +2599,18 @@
       <p class="dim">Nothing was saved. Here's what needs fixing:</p>
     </div>
     <!-- 422 only. Without these the page is strictly worse than the JSON blob it
-         replaces -- the blob at least said what was wrong. -->
+         replaces -- the blob at least said what was wrong.
+         Two shapes reach this list and nothing else does. A raised
+         HTTPException contributes exactly ONE item, str(detail), and every
+         422 detail in this app is a lowercase fragment ("event id 'new' is
+         reserved"). A pydantic RequestValidationError contributes one item
+         PER FIELD, always "field: msg" -- shown here, because a multi-item
+         list can come from nowhere else. Never a mix, and never sentence-case
+         prose: neither handler writes any. -->
     <div class="banner warn">
       <ul>
-        <li>Event id "new" is reserved</li>
-        <li>Closes at must be a real date and time</li>
+        <li>event_id: Field required</li>
+        <li>title: Field required</li>
       </ul>
     </div>
     <!-- A real button, not a link: a 422 is almost always a form POST, browsers
