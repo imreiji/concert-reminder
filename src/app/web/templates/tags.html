@@ -227,14 +227,14 @@
     (.pcluster.sub), never a nested card. `--d` carries the depth so a subunit
     of a subunit indents again; it is a server-computed integer, never text. -#}
 {% macro group_row(g, mems, depth) %}
-<div class="grow2{% if depth %} sub{% endif %}"{% if depth %} style="--d: {{ depth }}" data-subunit-of="{{ g.parent_id }}"{% endif %}>
+<div class="grow2{% if depth %} sub{% endif %}" data-filter-container{% if depth %} style="--d: {{ depth }}" data-subunit-of="{{ g.parent_id }}"{% endif %}>
   <span>{{ tag_chip(g, counts[g.id].concerts) }}</span>
   <span class="memb">{% for m in mems %}{{ tag_chip(m, none) }}{% else %}<em class="dim">{{ _("no members yet") }}</em>{% endfor %}</span>
 </div>
 {% endmacro %}
 
 <div class="tags-page">
-  <div class="tsec">
+  <div class="tsec" data-filter-container>
     <h3>{{ _("Franchises and groups") }} <span>{{ _("— click any tag to edit") }}</span></h3>
     {% for f, group_pairs in franchise_families %}
     <div class="fam">
@@ -251,7 +251,7 @@
   </div>
 
   {% if venue_regions %}
-  <div class="tsec">
+  <div class="tsec" data-filter-container>
     <h3>{{ _("Venues") }} <span>{{ _("— grouped by the region used in the Discover sidebar") }}</span></h3>
     {% for region_name, region_venues in venue_regions %}
     <div class="fam">
@@ -272,7 +272,7 @@
       shape this page already has, and the two-shape callout grammar has no
       third shape to invent here. data-character-id, never data-name: that
       one is filterChips()'s hook and every chip below already carries it. -#}
-  <div class="tsec">
+  <div class="tsec" data-filter-container>
     <h3>{{ _("Characters") }} <span>{{ _("— each with the performer who voices her") }}</span></h3>
     <div class="fam">
       {% for c, seiyuu in characters %}
@@ -289,7 +289,7 @@
   {% endif %}
 
   {% if ungrouped_performers %}
-  <div class="tsec">
+  <div class="tsec" data-filter-container>
     <h3>{{ _("Performers with no group") }} <span>{{ _("— solo artists, or members not yet attached") }}</span></h3>
     <div class="fam">
       <div class="famhead">{% for a in ungrouped_performers %}{{ tag_chip(a, counts[a.id].concerts) }}{% endfor %}</div>
