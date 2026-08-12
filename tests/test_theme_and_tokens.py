@@ -17,6 +17,7 @@ from app.db.session import get_session
 from app.web.app import create_app
 
 STYLE = Path(__file__).resolve().parents[1] / "src/app/web/static/style.css"
+TEMPLATES = Path(__file__).resolve().parents[1] / "src/app/web/templates"
 
 
 def css():
@@ -299,6 +300,31 @@ def test_no_template_hand_rolls_a_naive_backdrop_close():
     assert offenders == [], (
         f"{offenders} hand-roll a backdrop-close click handler; delete it -- "
         "base.html's global drag-safe handler already closes on backdrop click"
+    )
+
+
+def test_filter_chips_hides_containers_that_empty():
+    """A filtered list must look like a list.
+
+    filterChips only ever set display on [data-name] elements, so a search left
+    every heading and row on the page with nothing inside them. Phase 2 of the
+    Following rework deletes per-group folds and makes search the only way to
+    reach a name inside a 99-member group, so an unusable result shape stops
+    being cosmetic.
+
+    Pinned as source text rather than behaviour because there is no JS runtime
+    in this suite. Mutation this must fail against: deleting the container pass
+    and leaving only the per-chip loop.
+    """
+    js = (TEMPLATES / "base.html").read_text(encoding="utf-8")
+    assert "data-filter-container" in js, (
+        "containers opt in by attribute; filterChips must not guess at selectors"
+    )
+    assert "filterChips" in js
+    body = js.split("function filterChips", 1)[1].split("\n    }", 1)[0]
+    assert "querySelectorAll" in body
+    assert body.count("style.display") >= 2, (
+        "one pass for chips, one for the containers holding them"
     )
 
 

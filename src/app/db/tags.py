@@ -645,6 +645,34 @@ async def group_members(session: AsyncSession, group_tag_id: int) -> list[Tag]:
     return list(res.scalars())
 
 
+async def members_by_group(
+    session: AsyncSession, group_tag_ids: Sequence[int]
+) -> dict[int, list[Tag]]:
+    """Every listed group's members in ONE query, ordered by name.
+
+    The per-group `group_members` above is still correct for a single group;
+    this exists because /tags and /preferences each wanted the map for every
+    group at once and built it with a dict comprehension -- 65 round trips on
+    the live catalogue.
+
+    Every requested id gets an entry: a group with no members yields an empty
+    list, because callers index this map per group and a missing key is a
+    different bug in each of them.
+    """
+    out: dict[int, list[Tag]] = {gid: [] for gid in group_tag_ids}
+    if not out:
+        return out
+    res = await session.execute(
+        select(TagMember.group_tag_id, Tag)
+        .join(Tag, Tag.id == TagMember.member_tag_id)
+        .where(TagMember.group_tag_id.in_(list(out)))
+        .order_by(TagMember.group_tag_id, Tag.name)
+    )
+    for group_id, tag in res:
+        out[group_id].append(tag)
+    return out
+
+
 @dataclass(frozen=True)
 class PerformerEntry:
     """One chip. `seiyuu` is set ONLY when the tag is a CHARACTER and her voice
@@ -1199,8 +1227,14 @@ async def tag_picker_context(session: AsyncSession) -> dict:
     for t in tags:
         by_kind.setdefault(t.kind.value, []).append(t)
     groups_data = {}
-    for g in by_kind.get("group", []):
-        members = await group_members(session, g.id)
+    # ONE query for every group's members, not one per group: this ran ~65 round
+    # trips on the live catalogue, on every GET /concerts/new, /concerts/{id}/edit
+    # and import preview. members_by_group guarantees an entry per requested id,
+    # so the per-group indexing below cannot KeyError on a memberless group.
+    group_tags = by_kind.get("group", [])
+    members_map = await members_by_group(session, [g.id for g in group_tags])
+    for g in group_tags:
+        members = members_map[g.id]
         groups_data[g.id] = {
             "name": g.name,
             "franchise": g.parent_id,

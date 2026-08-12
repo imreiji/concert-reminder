@@ -114,7 +114,7 @@
           {%- set sub = sub_by_tag.get(t.id) -%}
           {%- if sub -%}
           <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete">
-            <button class="chip kind-{{ t.kind.value }} on" data-name="{{ t.name | lower }}"
+            <button class="chip kind-{{ t.kind.value }} on" data-name="{{ search_key(t) }}"
               title="{{ _('Following') }}{% if sub.preset_id %} · {{ _('preset linked') }}{% endif %}{% if sub.notify %} · 🔔{% endif %} {{ _('— click to unfollow') }}">{{ t.name }} ✓</button>
           </form>
           {%- else -%}
@@ -122,7 +122,7 @@
             <input type="hidden" name="tag_id" value="{{ t.id }}">
             <input type="hidden" name="preset_id" value="0" class="sub-preset-field">
             <input type="hidden" name="notify" value="" class="sub-notify-field">
-            <button class="chip kind-{{ t.kind.value }}" data-name="{{ t.name | lower }}">{{ t.name }}</button>
+            <button class="chip kind-{{ t.kind.value }}" data-name="{{ search_key(t) }}">{{ t.name }}</button>
           </form>
           {%- endif -%}
         {%- endmacro %}

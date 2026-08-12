@@ -213,10 +213,10 @@
 {%- set kcls = {"franchise": " k-franchise", "group": " k-group", "venue": " k-venue"}.get(t.kind.value, "") -%}
 {%- set unused = count is not none and count == 0 -%}
 {%- if user.is_editor -%}
-<button type="button" class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}"
+<button type="button" class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ search_key(t) }}"
         onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
 {%- else -%}
-<span class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</span>
+<span class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ search_key(t) }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</span>
 {%- endif -%}
 {% endmacro %}
 
@@ -227,23 +227,23 @@
     (.pcluster.sub), never a nested card. `--d` carries the depth so a subunit
     of a subunit indents again; it is a server-computed integer, never text. -#}
 {% macro group_row(g, mems, depth) %}
-<div class="grow2{% if depth %} sub{% endif %}"{% if depth %} style="--d: {{ depth }}" data-subunit-of="{{ g.parent_id }}"{% endif %}>
+<div class="grow2{% if depth %} sub{% endif %}" data-filter-container{% if depth %} style="--d: {{ depth }}" data-subunit-of="{{ g.parent_id }}"{% endif %}>
   <span>{{ tag_chip(g, counts[g.id].concerts) }}</span>
   <span class="memb">{% for m in mems %}{{ tag_chip(m, none) }}{% else %}<em class="dim">{{ _("no members yet") }}</em>{% endfor %}</span>
 </div>
 {% endmacro %}
 
 <div class="tags-page">
-  <div class="tsec">
+  <div class="tsec" data-filter-container>
     <h3>{{ _("Franchises and groups") }} <span>{{ _("— click any tag to edit") }}</span></h3>
     {% for f, group_pairs in franchise_families %}
-    <div class="fam">
+    <div class="fam" data-filter-container>
       <div class="famhead">{{ tag_chip(f, counts[f.id].concerts) }}</div>
       {% for g, mems, depth in group_pairs %}{{ group_row(g, mems, depth) }}{% endfor %}
     </div>
     {% endfor %}
     {% if no_franchise_groups %}
-    <div class="fam">
+    <div class="fam" data-filter-container>
       <div class="famhead"><span class="eyebrow">{{ _("No franchise") }}</span></div>
       {% for g, mems, depth in no_franchise_groups %}{{ group_row(g, mems, depth) }}{% endfor %}
     </div>
@@ -251,10 +251,10 @@
   </div>
 
   {% if venue_regions %}
-  <div class="tsec">
+  <div class="tsec" data-filter-container>
     <h3>{{ _("Venues") }} <span>{{ _("— grouped by the region used in the Discover sidebar") }}</span></h3>
     {% for region_name, region_venues in venue_regions %}
-    <div class="fam">
+    <div class="fam" data-filter-container>
       <div class="famhead"><span class="eyebrow region-label">{{ region_name }}</span>
         {% for v in region_venues %}{{ tag_chip(v, counts[v.id].concerts) }}{% endfor %}
       </div>
@@ -272,11 +272,11 @@
       shape this page already has, and the two-shape callout grammar has no
       third shape to invent here. data-character-id, never data-name: that
       one is filterChips()'s hook and every chip below already carries it. -#}
-  <div class="tsec">
+  <div class="tsec" data-filter-container>
     <h3>{{ _("Characters") }} <span>{{ _("— each with the performer who voices her") }}</span></h3>
     <div class="fam">
       {% for c, seiyuu in characters %}
-      <div class="grow2" data-character-id="{{ c.id }}">
+      <div class="grow2" data-filter-container data-character-id="{{ c.id }}">
         <span>{{ tag_chip(c, counts[c.id].concerts) }}</span>
         <span class="memb">
           {%- if seiyuu %}<span class="dim">{{ _("voiced by") }}</span> {{ tag_chip(seiyuu, none) }}
@@ -289,7 +289,7 @@
   {% endif %}
 
   {% if ungrouped_performers %}
-  <div class="tsec">
+  <div class="tsec" data-filter-container>
     <h3>{{ _("Performers with no group") }} <span>{{ _("— solo artists, or members not yet attached") }}</span></h3>
     <div class="fam">
       <div class="famhead">{% for a in ungrouped_performers %}{{ tag_chip(a, counts[a.id].concerts) }}{% endfor %}</div>
@@ -312,7 +312,7 @@
     <tbody>
       {% for t in all_tags %}
       {% set c = counts[t.id] %}
-      <tr data-name="{{ t.name | lower }}">
+      <tr data-name="{{ search_key(t) }}">
         <td><button type="button" class="tchip"
               onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ loc(t, "name") }}</button></td>
         <td><span class="dim">{{ KIND_LABELS.get(t.kind.value, t.kind.value) }}</span></td>

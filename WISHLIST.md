@@ -1201,6 +1201,18 @@ cross-references on the strength of a single sentence. What settles the rank is
 a brainstorm, not a guess. Whoever picks it up should start there and give it a
 number on the way out.
 
+**Update 2026-08-12 — phase 1 shipped; the entry STAYS here.** The search defect
+this entry describes is fixed, not the rework: the catalogue fold's search now
+matches all three name columns (a `search_key` global joining
+`name`/`name_en`/`name_zh` into `data-name`, so an English or Chinese viewer can
+find a tag by the name they are looking at), the filtered list now hides
+containers left holding no visible chip instead of showing the whole skeleton
+around one hit, and the per-group members N+1 is gone from all four sites
+(`/tags`, `/preferences`, `/welcome`, the tag picker) via one batched
+`members_by_group`. Phases 2-4 — the macro rewrite, the surface redesign and
+whatever the brainstorm settles on — remain, so this is not a Shipped move and
+the entry is still unranked for exactly the reason above.
+
 ### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18

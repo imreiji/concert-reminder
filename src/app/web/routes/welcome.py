@@ -21,7 +21,7 @@ from app.db.models import Tag, TagSubscription
 from app.db.service import (
     create_preset_from_rules,
     ensure_user,
-    group_members,
+    members_by_group,
     set_default_preset,
 )
 from app.db.session import get_session
@@ -145,7 +145,7 @@ async def welcome(
         franchises = [t for t in tags if t.kind is TagKind.FRANCHISE]
         groups = [t for t in tags if t.kind is TagKind.GROUP]
         venues = [t for t in tags if t.kind is TagKind.VENUE]
-        members = {g.id: await group_members(session, g.id) for g in groups}
+        members = await members_by_group(session, [g.id for g in groups])
         grouped_artist_ids = {m.id for ms in members.values() for m in ms}
         solo_artists = [
             t for t in tags if t.kind is TagKind.ARTIST and t.id not in grouped_artist_ids
