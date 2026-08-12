@@ -2201,6 +2201,38 @@ That is the cheapest failure mode this file tracks, which is exactly why it
 belongs down here rather than anywhere it would displace work someone is
 waiting on.
 
+**A worklist for whoever takes this**, gathered by the demo-parity build's final
+two review passes and recorded here so it is not re-derived. None of it blocked
+that merge; all of it is the same drift.
+
+The one with actual parity consequences: **the editor frame's Tags fold BODY is
+a branch behind its own hint.** The hint now says 15 performers while the body
+enumerates 9 chips, with no Characters row and no 765PRO ALLSTARS / 竜宮小町
+group chips -- on a demo whose concert frame directly above carries the full
+roster. The app's picker demonstrably HAS that row
+(`_tag_picker_fields.html:27`, "Characters (their voice actors are added for you
+when you save)"), so its absence is a real gap on the very surface character
+tags shipped through. The hint's SHAPE is not app-producible either:
+`concert_edit.html:143` renders `tag_summary[:6] | join(' · ')` -- tag NAMES,
+never "N performers · Kanto".
+
+The rest are smaller and all pre-existing: the round-kind select offers a
+five-item invented list where `LABEL_BY_ROUND_KIND` has eleven and names them
+differently ("Lottery round", "Eligibility item sale", not "Lottery"); leg 2's
+先行抽選 R2 shows a `—` pill where `leg_status_pill` falls through to
+`status_pill(PAID)` -> "Secured", and leg 1's says "Paid" where
+`_round_rows.html:29` renders "Secured"; a single `opens_at_utc` renders as
+"Opens Wed 30 Jul" on one leg and "Won 18 Jul" on the other; the editor's time
+labels say "Opens (JST)" where the app says "Apply opens (JST)"; and the demo's
+tile off-state opacity is `.38/.62` against the app's `.4/.65`, with the demo's
+rules unscoped where the app scopes under `.pick`.
+
+Worth noting what this list is evidence FOR, since it is the argument for doing
+the migration as one bounded pass rather than opportunistically: every item was
+found by a reviewer checking a demo string against the app's source, and none of
+them was found by anyone reading the demo. A reference nobody can check by
+reading is exactly the failure this entry describes.
+
 ### 18. Teach `add-concert` / `triage-leads` to use the agent read API
 
 Impact: nil for tracked users, real for the owner's own workflow -- effort:
