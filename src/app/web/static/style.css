@@ -1403,6 +1403,9 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 .tchip.k-venue { background: var(--off-wash); color: var(--off); }
 .tchip.unused { opacity: .55; border-style: dashed; border-color: var(--line); }
 span.tchip { cursor: default; }
+/* A followed tag. The ok wash + tick is the same "you have this" vocabulary
+   the round rows use; .tchip keeps its 999px chip radius. */
+.tchip.on { background: var(--ok-wash); border-color: var(--ok); color: var(--ok); font-weight: 600; }
 
 /* ── per-tag edit dialog + new-tag dialog ── */
 dialog.tagdlg {

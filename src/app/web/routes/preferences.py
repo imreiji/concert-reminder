@@ -79,7 +79,7 @@ async def owned_preset(
     return preset
 
 
-_ALLOWED_NEXT = {"/preferences", "/welcome"}
+_ALLOWED_NEXT = {"/preferences", "/welcome", "/tags"}
 
 
 def _safe_next(next_url: str) -> str:

@@ -99,6 +99,11 @@ async def test_tags_page_data_name_carries_the_english_name(client):
     chip -- the actual interactive element -- regressed back to `t.name |
     lower` and only the hidden row carried the fix. Each site is asserted on
     independently so a regression in either one fails on its own.
+
+    `data-name` lives on the chip's `.chipform` wrapper, not on the `<button>`
+    inside it -- that's what `filterChips()` hides (it resolves
+    `.closest(".chipform")`), and every chip is a follow `<form>` now, not a
+    bare button/span.
     """
     login_as(client, EDITOR_ID, "reiji")
     async with client.db() as s:
@@ -106,7 +111,7 @@ async def test_tags_page_data_name_carries_the_english_name(client):
                   kind=TagKind.ARTIST, slug="aina-aiba"))
         await s.commit()
     r = client.get("/tags")
-    chips = re.findall(r'<(?:button|span)[^>]*class="tchip[^"]*"[^>]*data-name="([^"]*)"', r.text)
+    chips = re.findall(r'<form[^>]*class="chipform"[^>]*data-name="([^"]*)"', r.text)
     rows = re.findall(r'<tr data-name="([^"]*)"', r.text)
     assert any("aina aiba" in c for c in chips), (
         "the CHIP must be findable by the name an EN viewer is shown"

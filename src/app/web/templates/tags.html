@@ -205,18 +205,37 @@
 </dialog>
 {% endmacro %}
 
-{#- A tag chip. `count` is the concert count (None for member chips, which
-    carry no count and never show the unused state). Editors get a button that
-    opens the tag's dialog; everyone else gets a plain span. `data-name` is the
-    search-filter hook (filterChips) -- its one sanctioned job on this page. -#}
+{#- A tag chip. Every chip is a follow control: a real <form> posting to the
+    same routes _tag_follow_bell.html uses, so it works with JS off, with
+    next=/tags so you stay where you are. `count` is the concert count (None
+    for member chips, which carry no count and never show the unused state).
+
+    Editors get their edit-on-click back through the Follow/Edit mode switch
+    (the .viewbar), not by branching here -- a chip that means different
+    things to different people is the thing that made this page unusable for
+    everyone who is not an editor.
+
+    data-name carries search_key(t) -- all three of the tag's names -- and is
+    filterChips()'s hook. It goes on the FORM, which is what filterChips hides
+    (it resolves .closest(".chipform")). -#}
 {% macro tag_chip(t, count) %}
 {%- set kcls = {"franchise": " k-franchise", "group": " k-group", "venue": " k-venue"}.get(t.kind.value, "") -%}
 {%- set unused = count is not none and count == 0 -%}
-{%- if user.is_editor -%}
-<button type="button" class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ search_key(t) }}"
-        onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+{%- set sub = sub_by_tag.get(t.id) -%}
+{%- if sub -%}
+<form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete" data-name="{{ search_key(t) }}">
+  <input type="hidden" name="next" value="/tags">
+  <button class="tchip{{ kcls }} on" data-tag-chip
+          title="{{ _('Following — click to unfollow') }}">{{ loc(t, "name") }} ✓{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+</form>
 {%- else -%}
-<span class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ search_key(t) }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</span>
+<form class="chipform" method="post" action="/subscriptions" data-name="{{ search_key(t) }}">
+  <input type="hidden" name="tag_id" value="{{ t.id }}">
+  <input type="hidden" name="notify" value="true">
+  <input type="hidden" name="next" value="/tags">
+  <button class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-tag-chip
+          title="{{ _('Follow this tag') }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+</form>
 {%- endif -%}
 {% endmacro %}
 

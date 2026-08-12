@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-11 07:05-0300\n"
+"POT-Creation-Date: 2026-08-12 11:18-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh\n"
@@ -15,22 +15,22 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/app/bot/cogs/reminders.py:55 src/app/bot/cogs/reminders.py:104
-#: src/app/bot/messages.py:33 src/app/bot/views.py:221 src/app/db/core.py:1604
+#: src/app/bot/messages.py:33 src/app/bot/views.py:232 src/app/db/core.py:1693
 msgid "opens"
 msgstr "申请开始"
 
 #: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:34
-#: src/app/bot/views.py:223 src/app/db/core.py:1605
+#: src/app/bot/views.py:234 src/app/db/core.py:1694
 msgid "closes"
 msgstr "截止"
 
 #: src/app/bot/cogs/reminders.py:106 src/app/bot/messages.py:35
-#: src/app/db/core.py:1606
+#: src/app/db/core.py:1695
 msgid "results announced"
 msgstr "结果公布"
 
 #: src/app/bot/cogs/reminders.py:107 src/app/bot/messages.py:36
-#: src/app/bot/views.py:228 src/app/db/core.py:1607
+#: src/app/bot/views.py:239 src/app/db/core.py:1696
 #: src/app/web/templates/setup.html:155
 msgid "payment due"
 msgstr "付款截止"
@@ -66,11 +66,11 @@ msgid "{unit} ago"
 msgstr "{unit}前"
 
 #: src/app/bot/messages.py:77 src/app/bot/messages.py:185
-#: src/app/db/core.py:1608 src/app/web/templates/tags.html:481
+#: src/app/db/core.py:1697 src/app/web/templates/tags.html:505
 msgid "event"
 msgstr "活动"
 
-#: src/app/bot/messages.py:111 src/app/web/templates/tags.html:382
+#: src/app/bot/messages.py:111 src/app/web/templates/tags.html:401
 msgid "Venue"
 msgstr "场馆"
 
@@ -111,47 +111,47 @@ msgstr "在此申请"
 msgid "Ticket page"
 msgstr "购票页面"
 
-#: src/app/bot/views.py:76
+#: src/app/bot/views.py:87
 msgid "Set my reminders"
 msgstr "设置我的提醒"
 
-#: src/app/bot/views.py:94
+#: src/app/bot/views.py:105
 #, python-brace-format
 msgid "Done — {n} reminder(s) set from your default preset."
 msgstr "完成 — 已按你的默认预设设置了 {n} 条提醒。"
 
-#: src/app/bot/views.py:95
+#: src/app/bot/views.py:106
 msgid "You already have reminders on this event."
 msgstr "你已经为这场活动设置了提醒。"
 
-#: src/app/bot/views.py:96
+#: src/app/bot/views.py:107
 msgid "You have no default preset — mark one with ★ in Preferences."
 msgstr "你还没有默认预设 — 请在“偏好设置”中用★标记一个。"
 
-#: src/app/bot/views.py:106
+#: src/app/bot/views.py:117
 msgid "Remove these reminders"
 msgstr "删除这些提醒"
 
-#: src/app/bot/views.py:122
+#: src/app/bot/views.py:133
 #, python-brace-format
 msgid "Removed {n} reminder(s) for this event — you won't be pinged about it."
 msgstr "已删除这场活动的 {n} 条提醒 — 你不会再收到相关通知。"
 
-#: src/app/bot/views.py:123
+#: src/app/bot/views.py:134
 msgid "You had no reminders on this event."
 msgstr "你没有为这场活动设置提醒。"
 
-#: src/app/bot/views.py:133
+#: src/app/bot/views.py:144
 msgid "Turn my reminders back on"
 msgstr "重新开启提醒"
 
-#: src/app/bot/views.py:163
+#: src/app/bot/views.py:174
 msgid ""
 "This event is cancelled, so there are no reminders to turn back on. Your "
 "settings are still saved — if it comes back, they'll work again."
 msgstr "本次活动已取消，没有可以重新开启的提醒。你的设置仍会保留，活动如果恢复，它们会再次生效。"
 
-#: src/app/bot/views.py:167
+#: src/app/bot/views.py:178
 #, python-brace-format
 msgid ""
 "Turned {n} reminder back on. You'll be notified again for any active ones"
@@ -161,179 +161,220 @@ msgid_plural ""
 "ones using your existing settings."
 msgstr[0] "已重新开启 {n} 条提醒。仍有效的提醒会按照你当前的设置再次通知你。"
 
-#: src/app/bot/views.py:174
+#: src/app/bot/views.py:185
 msgid "You had no reminders set up on this event."
 msgstr "你没有为这场活动设置过提醒。"
 
-#: src/app/bot/views.py:183
+#: src/app/bot/views.py:194
 msgid "Show all deadlines"
 msgstr "显示所有截止时间"
 
-#: src/app/bot/views.py:201
+#: src/app/bot/views.py:212
 msgid "That event no longer exists."
 msgstr "这场活动已不存在。"
 
-#: src/app/bot/views.py:216
+#: src/app/bot/views.py:227
 msgid "cancelled"
 msgstr "已取消"
 
-#: src/app/bot/views.py:225
+#: src/app/bot/views.py:236
 msgid "results"
 msgstr "结果"
 
-#: src/app/bot/views.py:241
+#: src/app/bot/views.py:252
 msgid "No deadlines entered yet."
 msgstr "尚未录入任何截止时间。"
 
-#: src/app/bot/views.py:250
+#: src/app/bot/views.py:261
 msgid "Snooze 1 day"
 msgstr "1 天后再提醒"
 
-#: src/app/bot/views.py:266
+#: src/app/bot/views.py:277
 msgid "Snoozed — I'll remind you again in 24 hours."
 msgstr "已延后 — 我会在 24 小时后再次提醒你。"
 
-#: src/app/bot/views.py:267
+#: src/app/bot/views.py:278
 msgid "Can't snooze — the deadline is less than a day away. ⏳"
 msgstr "无法延后 — 距离截止不到一天。⏳"
 
-#: src/app/bot/views.py:268 src/app/bot/views.py:419
+#: src/app/bot/views.py:279 src/app/bot/views.py:669
 msgid "That reminder isn't yours."
 msgstr "那条提醒不是你的。"
 
-#: src/app/bot/views.py:269 src/app/bot/views.py:420
+#: src/app/bot/views.py:280 src/app/bot/views.py:670
 msgid "That reminder no longer exists."
 msgstr "那条提醒已不存在。"
 
-#: src/app/bot/views.py:291
+#: src/app/bot/views.py:315
+msgid "This round is already recorded as won. Use the button below to change it."
+msgstr "这一轮已记录为中签。如需更改，请使用下面的按钮。"
+
+#: src/app/bot/views.py:332
 msgid "I applied"
 msgstr "我已申请"
 
-#: src/app/bot/views.py:302
+#: src/app/bot/views.py:343
 msgid "Got it — marked as applied!"
 msgstr "收到 — 已标记为已申请！"
 
-#: src/app/bot/views.py:311
+#: src/app/bot/views.py:352
 msgid "Didn't apply"
 msgstr "我没申请"
 
-#: src/app/bot/views.py:323
+#: src/app/bot/views.py:364
 msgid "No worries — you won't get results/payment reminders for this one."
 msgstr "没问题 — 你不会收到这个活动的结果或付款提醒。"
 
-#: src/app/bot/views.py:332 src/app/bot/views.py:716
+#: src/app/bot/views.py:373 src/app/bot/views.py:971
 #: src/app/web/templates/_deadline_rows.html:34
 #: src/app/web/templates/_round_rows.html:28
 msgid "Won"
 msgstr "中签"
 
-#: src/app/bot/views.py:344
+#: src/app/bot/views.py:385
 msgid "Congrats! I'll remind you when payment is due."
 msgstr "恭喜！我会在付款截止临近时提醒你。"
 
-#: src/app/bot/views.py:353 src/app/bot/views.py:727
+#: src/app/bot/views.py:395 src/app/bot/views.py:982
 #: src/app/web/templates/_deadline_rows.html:36
 #: src/app/web/templates/_round_rows.html:30
 msgid "Lost"
 msgstr "落选"
 
-#: src/app/bot/views.py:365 src/app/bot/views.py:574
+#: src/app/bot/views.py:407 src/app/bot/views.py:829
 msgid ""
 "Sorry to hear it — no payment reminder needed, and I'll let you know when"
 " the next round opens if there is one."
 msgstr "很遗憾 — 无需付款提醒；如果还有下一轮，我会在开放申请时通知你。"
 
-#: src/app/bot/views.py:375 src/app/web/templates/_capture_actions.html:170
+#: src/app/bot/views.py:418 src/app/web/templates/_capture_actions.html:303
 #: src/app/web/templates/home.html:161 src/app/web/templates/home.html:167
 msgid "Paid"
 msgstr "已付款"
 
-#: src/app/bot/views.py:386 src/app/bot/views.py:572
+#: src/app/bot/views.py:429 src/app/bot/views.py:827
 msgid "Marked as paid — all set!"
 msgstr "已标记为已付款 — 全部搞定！"
 
-#: src/app/bot/views.py:395 src/app/bot/views.py:430
+#: src/app/bot/views.py:485
+msgid "Change my answer"
+msgstr "更改回答"
+
+#: src/app/bot/views.py:500 src/app/bot/views.py:574 src/app/bot/views.py:848
+msgid "That round no longer exists."
+msgstr "该轮次已不存在。"
+
+#: src/app/bot/views.py:508
+msgid ""
+"You hold a ticket from this round. Clearing your answer removes that "
+"record and its payment reminder. Clear it?"
+msgstr "你持有这一轮的票。清除回答会移除该记录及其付款提醒。要清除吗？"
+
+#: src/app/bot/views.py:514
+#, python-brace-format
+msgid "This round covers {n} performances, and every one of them is cleared."
+msgstr "这一轮涵盖 {n} 场演出，全部都会被清除。"
+
+#: src/app/bot/views.py:525 src/app/bot/views.py:594
+msgid "Cleared — you can record this round again."
+msgstr "已清除 — 你可以重新记录这一轮。"
+
+#: src/app/bot/views.py:556
+msgid "Clear it"
+msgstr "清除"
+
+#: src/app/bot/views.py:584
+msgid ""
+"Your answer for this round has changed since I asked, so nothing was "
+"cleared. Use \"Change my answer\" to take another look."
+msgstr "自上次询问以来，这一轮的回答已经改变，因此没有清除任何内容。请用「更改回答」重新查看。"
+
+#: src/app/bot/views.py:605 src/app/web/templates/concert_detail.html:284
+msgid "Keep it"
+msgstr "保留"
+
+#: src/app/bot/views.py:618
+msgid "Kept — nothing changed."
+msgstr "保持不变 — 没有任何更改。"
+
+#: src/app/bot/views.py:645 src/app/bot/views.py:680
 msgid "Remind me later"
 msgstr "稍后提醒我"
 
-#: src/app/bot/views.py:397
+#: src/app/bot/views.py:647
 msgid "How many days?"
 msgstr "几天后？"
 
-#: src/app/bot/views.py:411
+#: src/app/bot/views.py:661
 msgid "Enter a whole number of days greater than 0."
 msgstr "请输入大于 0 的整数天数。"
 
-#: src/app/bot/views.py:417
+#: src/app/bot/views.py:667
 #, python-brace-format
 msgid "Got it — I'll remind you again in {n} day(s)."
 msgstr "收到 — 我会在 {n} 天后再次提醒你。"
 
-#: src/app/bot/views.py:418
+#: src/app/bot/views.py:668
 msgid "Can't snooze that far — the deadline is too close. ⏳"
 msgstr "无法延后那么久 — 距离截止太近了。⏳"
 
-#: src/app/bot/views.py:565
+#: src/app/bot/views.py:820
 #, python-brace-format
 msgid "{day} recorded — and the other days?"
 msgstr "已记录{day}。其他日期呢？"
 
-#: src/app/bot/views.py:566
+#: src/app/bot/views.py:821
 msgid "Got it — and the other days?"
 msgstr "收到 — 其他日期呢？"
 
-#: src/app/bot/views.py:570
+#: src/app/bot/views.py:825
 msgid "All recorded — have you paid for it yet?"
 msgstr "全部记录完成 — 已经付款了吗？"
 
-#: src/app/bot/views.py:579
+#: src/app/bot/views.py:834
 msgid "Nothing left to record for this one."
 msgstr "这一轮没有需要记录的了。"
 
-#: src/app/bot/views.py:593
-msgid "That round no longer exists."
-msgstr "该轮次已不存在。"
-
-#: src/app/bot/views.py:615 src/app/web/templates/_capture_actions.html:110
+#: src/app/bot/views.py:870 src/app/web/templates/_capture_actions.html:219
 msgid "Won (all)"
 msgstr "全场中签"
 
-#: src/app/bot/views.py:633 src/app/web/templates/_capture_actions.html:144
+#: src/app/bot/views.py:888 src/app/web/templates/_capture_actions.html:273
 msgid "Lost (all)"
 msgstr "全场落选"
 
-#: src/app/bot/views.py:654 src/app/web/templates/_capture_actions.html:138
+#: src/app/bot/views.py:909 src/app/web/templates/_capture_actions.html:267
 msgid "Lost the rest"
 msgstr "其余落选"
 
-#: src/app/bot/views.py:716 src/app/web/templates/_capture_actions.html:118
+#: src/app/bot/views.py:971 src/app/web/templates/_capture_actions.html:227
 #, python-brace-format
 msgid "Won — {day}"
 msgstr "中签 — {day}"
 
-#: src/app/bot/views.py:727 src/app/web/templates/_capture_actions.html:124
+#: src/app/bot/views.py:982 src/app/web/templates/_capture_actions.html:233
 #, python-brace-format
 msgid "Lost — {day}"
 msgstr "落选 — {day}"
 
-#: src/app/bot/views.py:738 src/app/web/templates/_capture_actions.html:130
+#: src/app/bot/views.py:993 src/app/web/templates/_capture_actions.html:239
 #, python-brace-format
 msgid "Not going — {day}"
 msgstr "不参加 — {day}"
 
-#: src/app/bot/views.py:738 src/app/web/templates/_round_rows.html:211
+#: src/app/bot/views.py:993 src/app/web/templates/_round_rows.html:214
 msgid "Not going"
 msgstr "不参加"
 
-#: src/app/bot/views.py:746
+#: src/app/bot/views.py:1001
 msgid "Paid already"
 msgstr "已付款"
 
-#: src/app/bot/views.py:767
+#: src/app/bot/views.py:1029
 msgid "Not yet"
 msgstr "还没有"
 
-#: src/app/bot/views.py:780
+#: src/app/bot/views.py:1042
 msgid "No rush — mark it paid whenever you're done."
 msgstr "不着急 — 付款后再来标记就好。"
 
@@ -452,130 +493,130 @@ msgstr "当天"
 msgid "From dekimasen.app"
 msgstr "来自 dekimasen.app"
 
-#: src/app/db/core.py:1612
+#: src/app/db/core.py:1701
 msgid "Lottery round"
 msgstr "抽选轮次"
 
-#: src/app/db/core.py:1613
+#: src/app/db/core.py:1702
 msgid "Eligibility item sale"
 msgstr "抽选资格商品发售"
 
-#: src/app/db/core.py:1614
+#: src/app/db/core.py:1703
 msgid "Stream ticket sale"
 msgstr "直播票发售"
 
-#: src/app/db/core.py:1615
+#: src/app/db/core.py:1704
 msgid "General sale"
 msgstr "一般发售"
 
-#: src/app/db/core.py:1616
+#: src/app/db/core.py:1705
 msgid "Result announcement"
 msgstr "结果公布"
 
-#: src/app/db/core.py:1617
+#: src/app/db/core.py:1706
 msgid "Payment deadline"
 msgstr "付款截止"
 
-#: src/app/db/core.py:1618
+#: src/app/db/core.py:1707
 msgid "First come, first served"
 msgstr "先到先得"
 
-#: src/app/db/core.py:1619
+#: src/app/db/core.py:1708
 msgid "Overseas tour package"
 msgstr "海外观演旅行套餐"
 
-#: src/app/db/core.py:1620
+#: src/app/db/core.py:1709
 msgid "Goods sale"
 msgstr "周边贩售"
 
-#: src/app/db/core.py:1621
+#: src/app/db/core.py:1710
 msgid "Upgrade round"
 msgstr "升级抽选"
 
-#: src/app/db/core.py:1622
+#: src/app/db/core.py:1711
 msgid "Other"
 msgstr "其他"
 
-#: src/app/db/core.py:2623 src/app/db/core.py:4209 src/app/db/setup_flow.py:107
+#: src/app/db/core.py:2712 src/app/db/core.py:4298 src/app/db/setup_flow.py:107
 #: src/app/web/templates/_board.html:73 src/app/web/templates/discover.html:79
 #: src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "多个"
 
-#: src/app/db/core.py:3450
+#: src/app/db/core.py:3539
 #, python-brace-format
 msgid "{n}d"
 msgstr "{n}天"
 
-#: src/app/db/core.py:3452
+#: src/app/db/core.py:3541
 #, python-brace-format
 msgid "{n}h"
 msgstr "{n}小时"
 
-#: src/app/db/core.py:3453
+#: src/app/db/core.py:3542
 #, python-brace-format
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/core.py:3550
+#: src/app/db/core.py:3639
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "升级中签 — 最迟于 {day} 付款"
 
-#: src/app/db/core.py:3551
+#: src/app/db/core.py:3640
 msgid "Upgrade won — payment due"
 msgstr "升级中签 — 付款截止"
 
-#: src/app/db/core.py:3570
+#: src/app/db/core.py:3659
 msgid "Upgrade · Applied"
 msgstr "升级 · 已申请"
 
-#: src/app/db/core.py:3573
+#: src/app/db/core.py:3662
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "升级 · {n}后截止"
 
-#: src/app/db/core.py:3576
+#: src/app/db/core.py:3665
 msgid "Upgrade · Open now"
 msgstr "升级 · 申请开放中"
 
-#: src/app/db/core.py:3582 src/app/web/templates/_board.html:23
+#: src/app/db/core.py:3671 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:35
 #: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "已获票"
 
-#: src/app/db/core.py:3593
+#: src/app/db/core.py:3682
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "中签 — 最迟于 {day} 付款"
 
-#: src/app/db/core.py:3594
+#: src/app/db/core.py:3683
 msgid "Won — payment due"
 msgstr "中签 — 付款截止"
 
-#: src/app/db/core.py:3603
+#: src/app/db/core.py:3692
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind} · 已申请"
 
-#: src/app/db/core.py:3623
+#: src/app/db/core.py:3712
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind} · {n}后截止"
 
-#: src/app/db/core.py:3628
+#: src/app/db/core.py:3717
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind} · 开放中"
 
-#: src/app/db/core.py:3634
+#: src/app/db/core.py:3723
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind} · {n}后开放"
 
-#: src/app/db/core.py:3641
+#: src/app/db/core.py:3730
 msgid "All rounds closed"
 msgstr "所有轮次均已截止"
 
@@ -624,8 +665,8 @@ msgstr "轮次 {n} 名称"
 #: src/app/web/templates/preferences.html:242
 #: src/app/web/templates/tags.html:91 src/app/web/templates/tags.html:93
 #: src/app/web/templates/tags.html:96 src/app/web/templates/tags.html:98
-#: src/app/web/templates/tags.html:387 src/app/web/templates/tags.html:391
-#: src/app/web/templates/tags.html:392 src/app/web/templates/tags.html:395
+#: src/app/web/templates/tags.html:406 src/app/web/templates/tags.html:410
+#: src/app/web/templates/tags.html:411 src/app/web/templates/tags.html:414
 msgid "Name"
 msgstr "名称"
 
@@ -661,40 +702,40 @@ msgid "%(count)s upcoming"
 msgid_plural "%(count)s upcoming"
 msgstr[0] "尚未开放 %(count)s 个"
 
-#: src/app/web/app.py:245
+#: src/app/web/app.py:268
 msgid "Page not found"
 msgstr "找不到页面"
 
-#: src/app/web/app.py:246
+#: src/app/web/app.py:269
 msgid "That page doesn't exist. The link may be out of date."
 msgstr "该页面不存在，链接可能已过期。"
 
-#: src/app/web/app.py:248
+#: src/app/web/app.py:271
 msgid "No access"
 msgstr "没有访问权限"
 
-#: src/app/web/app.py:254
+#: src/app/web/app.py:277
 #, python-format
 msgid "You're signed in as %(name)s, which doesn't have access to that page."
 msgstr "你当前以 %(name)s 登录，该账户没有访问那个页面的权限。"
 
-#: src/app/web/app.py:258
+#: src/app/web/app.py:281
 msgid "That page needs an account with more access than yours."
 msgstr "该页面需要权限更高的账户。"
 
-#: src/app/web/app.py:261
+#: src/app/web/app.py:284
 msgid "That didn't go through"
 msgstr "提交未成功"
 
-#: src/app/web/app.py:262
+#: src/app/web/app.py:285
 msgid "Nothing was saved. Here's what needs fixing:"
 msgstr "没有保存任何内容。需要修正以下问题："
 
-#: src/app/web/app.py:264
+#: src/app/web/app.py:287
 msgid "Something broke"
 msgstr "出问题了"
 
-#: src/app/web/app.py:266
+#: src/app/web/app.py:289
 msgid ""
 "Something broke on our end, and it's been logged. Nothing you did caused "
 "it."
@@ -834,13 +875,13 @@ msgstr "开放中"
 
 #: src/app/web/templates/_board.html:89
 #: src/app/web/templates/_editor_leg_card.html:55
-#: src/app/web/templates/_round_rows.html:211
+#: src/app/web/templates/_round_rows.html:214
 msgid "Cancelled"
 msgstr "已取消"
 
 #: src/app/web/templates/_board.html:115
 #: src/app/web/templates/_deadline_rows.html:115
-#: src/app/web/templates/_round_rows.html:176
+#: src/app/web/templates/_round_rows.html:179
 #, python-format
 msgid "+%(count)s more round"
 msgid_plural "+%(count)s more rounds"
@@ -883,41 +924,45 @@ msgstr "%(n)s 项待付款"
 msgid "%(n)s secured"
 msgstr "%(n)s 项已获票"
 
-#: src/app/web/templates/_capture_actions.html:54
+#: src/app/web/templates/_capture_actions.html:90
+msgid "Change"
+msgstr "更改"
+
+#: src/app/web/templates/_capture_actions.html:162
 msgid "Covered — you already hold this day"
 msgstr "已获票 — 这一场你已经有票了"
 
-#: src/app/web/templates/_capture_actions.html:56
+#: src/app/web/templates/_capture_actions.html:164
 msgid "Not open yet"
 msgstr "尚未开放"
 
-#: src/app/web/templates/_capture_actions.html:61
+#: src/app/web/templates/_capture_actions.html:169
 msgid "Entered upgrade"
 msgstr "已申请升级"
 
-#: src/app/web/templates/_capture_actions.html:61
+#: src/app/web/templates/_capture_actions.html:169
 msgid "I have applied"
 msgstr "我已申请"
 
-#: src/app/web/templates/_capture_actions.html:71
+#: src/app/web/templates/_capture_actions.html:179
 msgid "Skipping"
 msgstr "跳过"
 
-#: src/app/web/templates/_capture_actions.html:71
+#: src/app/web/templates/_capture_actions.html:179
 #: src/app/web/templates/_deadline_rows.html:37
 #: src/app/web/templates/_round_rows.html:31
 msgid "Not applying"
 msgstr "不申请"
 
-#: src/app/web/templates/_capture_actions.html:158
+#: src/app/web/templates/_capture_actions.html:287
 msgid "I won"
 msgstr "我中签了"
 
-#: src/app/web/templates/_capture_actions.html:163
+#: src/app/web/templates/_capture_actions.html:292
 msgid "I lost"
 msgstr "我落选了"
 
-#: src/app/web/templates/_capture_actions.html:173
+#: src/app/web/templates/_capture_actions.html:320
 msgid "Nothing to do"
 msgstr "无需操作"
 
@@ -1098,7 +1143,7 @@ msgstr "+还有 %(n)s 项"
 #: src/app/web/templates/preferences.html:16
 #: src/app/web/templates/preferences.html:29
 #: src/app/web/templates/preferences.html:118
-#: src/app/web/templates/tags.html:310
+#: src/app/web/templates/tags.html:329
 msgid "Following"
 msgstr "关注中"
 
@@ -1108,6 +1153,7 @@ msgstr "不再关注此活动吗？"
 
 #: src/app/web/templates/_following_toggle.html:59
 #: src/app/web/templates/_result_capture_dialog.html:25
+#: src/app/web/templates/concert_detail.html:275
 #: src/app/web/templates/home.html:289
 #: src/app/web/templates/preferences.html:436
 msgid "Close"
@@ -1246,28 +1292,28 @@ msgstr "需要持有以下轮次的门票：%(names)s"
 msgid "Requires a ticket from an earlier round"
 msgstr "需要持有前一轮次的门票"
 
-#: src/app/web/templates/_round_rows.html:213
+#: src/app/web/templates/_round_rows.html:216
 #, python-format
 msgid "doors %(when)s"
 msgstr "入场 %(when)s"
 
-#: src/app/web/templates/_round_rows.html:228
+#: src/app/web/templates/_round_rows.html:231
 msgid "Going again"
 msgstr "再次参加"
 
-#: src/app/web/templates/_round_rows.html:228
+#: src/app/web/templates/_round_rows.html:231
 msgid "Not going to this day"
 msgstr "不参加这一场"
 
-#: src/app/web/templates/_round_rows.html:232
+#: src/app/web/templates/_round_rows.html:235
 msgid "No rounds yet for this leg."
 msgstr "这个场次还没有轮次。"
 
-#: src/app/web/templates/_round_rows.html:249
+#: src/app/web/templates/_round_rows.html:252
 msgid "Rounds"
 msgstr "轮次"
 
-#: src/app/web/templates/_round_rows.html:255
+#: src/app/web/templates/_round_rows.html:258
 msgid "No performances yet."
 msgstr "还没有场次。"
 
@@ -1351,7 +1397,7 @@ msgid "That tag already exists."
 msgstr "该标签已存在。"
 
 #: src/app/web/templates/_tag_create_dialog.html:26
-#: src/app/web/templates/tags.html:363
+#: src/app/web/templates/tags.html:382
 msgid "New tag"
 msgstr "新建标签"
 
@@ -1359,32 +1405,32 @@ msgstr "新建标签"
 #: src/app/web/templates/concert_edit.html:44
 #: src/app/web/templates/concert_new.html:77
 #: src/app/web/templates/import_preview.html:58
-#: src/app/web/templates/tags.html:308 src/app/web/templates/tags.html:376
+#: src/app/web/templates/tags.html:327 src/app/web/templates/tags.html:395
 msgid "Kind"
 msgstr "类型"
 
 #: src/app/web/templates/_tag_create_dialog.html:33
-#: src/app/web/templates/tags.html:378
+#: src/app/web/templates/tags.html:397
 msgid "Franchise"
 msgstr "系列"
 
 #: src/app/web/templates/_tag_create_dialog.html:34
-#: src/app/web/templates/tags.html:379
+#: src/app/web/templates/tags.html:398
 msgid "Group"
 msgstr "组合"
 
 #: src/app/web/templates/_tag_create_dialog.html:35
-#: src/app/web/templates/tags.html:380
+#: src/app/web/templates/tags.html:399
 msgid "Performer"
 msgstr "出演者"
 
 #: src/app/web/templates/_tag_create_dialog.html:40
-#: src/app/web/templates/tags.html:381
+#: src/app/web/templates/tags.html:400
 msgid "Character"
 msgstr "角色"
 
 #: src/app/web/templates/_tag_create_dialog.html:51
-#: src/app/web/templates/tags.html:410
+#: src/app/web/templates/tags.html:429
 msgid "Parent franchise"
 msgstr "所属系列"
 
@@ -1392,8 +1438,8 @@ msgstr "所属系列"
 #: src/app/web/templates/concert_edit.html:46
 #: src/app/web/templates/concert_new.html:79
 #: src/app/web/templates/import_preview.html:60
-#: src/app/web/templates/tags.html:117 src/app/web/templates/tags.html:412
-#: src/app/web/templates/tags.html:423
+#: src/app/web/templates/tags.html:117 src/app/web/templates/tags.html:431
+#: src/app/web/templates/tags.html:442
 msgid "— none —"
 msgstr "— 无 —"
 
@@ -1406,22 +1452,22 @@ msgid "Create & select"
 msgstr "创建并选择"
 
 #: src/app/web/templates/_tag_create_dialog.html:76
-#: src/app/web/templates/tags.html:474
+#: src/app/web/templates/tags.html:498
 msgid "A franchise is the top level. It contains groups."
 msgstr "系列是最高层级，其中包含组合。"
 
 #: src/app/web/templates/_tag_create_dialog.html:77
-#: src/app/web/templates/tags.html:475
+#: src/app/web/templates/tags.html:499
 msgid "A group contains performers. Attaching it to an event adds its members."
 msgstr "组合由出演者组成。将组合添加到活动时，会同时添加其成员。"
 
 #: src/app/web/templates/_tag_create_dialog.html:78
-#: src/app/web/templates/tags.html:384 src/app/web/templates/tags.html:476
+#: src/app/web/templates/tags.html:403 src/app/web/templates/tags.html:500
 msgid "A single performer. Can belong to a group, or stand alone."
 msgstr "一位出演者，可以属于某个组合，也可以独立活动。"
 
 #: src/app/web/templates/_tag_create_dialog.html:79
-#: src/app/web/templates/tags.html:477
+#: src/app/web/templates/tags.html:501
 msgid "A character. Events credit her instead of the performer who voices her."
 msgstr "一个角色。活动以角色名义列出，而非配音演员。"
 
@@ -1431,6 +1477,7 @@ msgid "Stop following this tag"
 msgstr "取消关注此标签"
 
 #: src/app/web/templates/_tag_follow_bell.html:21
+#: src/app/web/templates/tags.html:237
 msgid "Follow this tag"
 msgstr "关注此标签"
 
@@ -1453,7 +1500,7 @@ msgid "+ Add group"
 msgstr "+ 添加组合"
 
 #: src/app/web/templates/_tag_picker_fields.html:27
-#: src/app/web/templates/tags.html:276
+#: src/app/web/templates/tags.html:295
 msgid "Characters"
 msgstr "角色"
 
@@ -1520,7 +1567,7 @@ msgid "New venue"
 msgstr "新建场馆"
 
 #: src/app/web/templates/_venue_create_dialog.html:48
-#: src/app/web/templates/tags.html:137 src/app/web/templates/tags.html:440
+#: src/app/web/templates/tags.html:137 src/app/web/templates/tags.html:459
 msgid "Region"
 msgstr "地区"
 
@@ -1618,31 +1665,35 @@ msgstr "隐私政策"
 msgid "Terms of service"
 msgstr "服务条款"
 
-#: src/app/web/templates/base.html:187
+#: src/app/web/templates/base.html:212
 #, python-brace-format
 msgid "Delete tag {name} everywhere?"
 msgstr "确定在所有位置删除标签 {name} 吗？"
 
-#: src/app/web/templates/base.html:188
+#: src/app/web/templates/base.html:213
 #, python-brace-format
 msgid "Delete preset {name}?"
 msgstr "确定删除预设 {name} 吗？"
 
-#: src/app/web/templates/base.html:350
+#: src/app/web/templates/base.html:378
 msgid "Recorded — moved to Applied"
 msgstr "已记录 — 移至已申请"
 
-#: src/app/web/templates/base.html:351
+#: src/app/web/templates/base.html:379
 msgid "Marked as won — payment reminder set"
 msgstr "已标记中签 — 已设置付款提醒"
 
-#: src/app/web/templates/base.html:352
+#: src/app/web/templates/base.html:380
 msgid "Recorded — marked as lost"
 msgstr "已记录 — 标记为未中签"
 
-#: src/app/web/templates/base.html:353
+#: src/app/web/templates/base.html:381
 msgid "Recorded — ticket secured"
 msgstr "已记录 — 已获票"
+
+#: src/app/web/templates/base.html:382
+msgid "Cleared — you can answer this round again"
+msgstr "已清除 — 你可以重新回答这一轮"
 
 #: src/app/web/templates/concert_detail.html:43
 msgid ""
@@ -1739,6 +1790,41 @@ msgstr "一个订阅链接让日历始终最新：你关注的所有演出，以
 #: src/app/web/templates/concert_detail.html:227
 msgid "Turn on my calendar feed"
 msgstr "开启我的日历订阅"
+
+#: src/app/web/templates/concert_detail.html:273
+msgid "Clear your answer for this round?"
+msgstr "要清除这一轮的回答吗？"
+
+#: src/app/web/templates/concert_detail.html:274
+msgid "Clear your answer for this day?"
+msgstr "要清除这一场的回答吗？"
+
+#: src/app/web/templates/concert_detail.html:278
+msgid ""
+"You recorded a ticket for <b id=\"clearNameRound\">this round</b>. "
+"Clearing it removes that record for every day this round covers, the "
+"payment reminder it is holding open, and the reason other rounds are "
+"marked Covered. The round goes back to unrecorded and you can answer it "
+"again."
+msgstr ""
+"你已记录在<b "
+"id=\"clearNameRound\">这一轮</b>拿到了票。清除后，这一轮覆盖的每一场的该记录、为它保留的付款提醒，以及其他轮次被标记为「已获票」的依据都会消失。该轮次会回到未回答状态，你可以重新回答。"
+
+#: src/app/web/templates/concert_detail.html:281
+msgid ""
+"You recorded a ticket for this day of <b id=\"clearNameLeg\">this "
+"round</b>. Clearing it removes that record for this day only — the other "
+"days of this round keep theirs — and with it the reason other rounds on "
+"this day are marked Covered. The payment reminder goes only if this round"
+" has no ticket left afterwards, and where the round stands then follows "
+"from the days that remain."
+msgstr ""
+"你已记录在<b "
+"id=\"clearNameLeg\">这一轮</b>的这一场拿到了票。清除后，只会移除这一场的记录（这一轮其他场次的记录会保留），这一场其他轮次被标记为「已获票」的依据也会一并消失。只有当这一轮不再有任何已确保的票时，付款提醒才会消失；此后这一轮处于什么状态，取决于余下场次的记录。"
+
+#: src/app/web/templates/concert_detail.html:285
+msgid "Clear my answer"
+msgstr "清除我的回答"
 
 #: src/app/web/templates/concert_edit.html:2
 msgid "edit"
@@ -1857,7 +1943,7 @@ msgstr "分类（逗号分隔）"
 #: src/app/web/templates/concert_edit.html:111
 #: src/app/web/templates/concert_new.html:84
 #: src/app/web/templates/import_preview.html:192
-#: src/app/web/templates/tags.html:130 src/app/web/templates/tags.html:435
+#: src/app/web/templates/tags.html:130 src/app/web/templates/tags.html:454
 msgid "eventernote URL"
 msgstr "eventernote 链接"
 
@@ -2033,7 +2119,7 @@ msgstr "系列、组合、艺人、场馆 — 可选"
 msgid "Create event"
 msgstr "创建活动"
 
-#: src/app/web/templates/discover.html:15 src/app/web/templates/tags.html:309
+#: src/app/web/templates/discover.html:15 src/app/web/templates/tags.html:328
 msgid "Events"
 msgstr "活动"
 
@@ -2075,7 +2161,7 @@ msgstr "%(day)s JST"
 msgid "Open &amp; upcoming"
 msgstr "开放中 &amp; 即将举行"
 
-#: src/app/web/templates/discover.html:124 src/app/web/templates/tags.html:310
+#: src/app/web/templates/discover.html:124 src/app/web/templates/tags.html:329
 msgid "Upcoming"
 msgstr "即将举行"
 
@@ -2824,7 +2910,7 @@ msgid "Solo artists"
 msgstr "个人艺人"
 
 #: src/app/web/templates/preferences.html:157
-#: src/app/web/templates/tags.html:255 src/app/web/templates/welcome.html:72
+#: src/app/web/templates/tags.html:274 src/app/web/templates/welcome.html:72
 msgid "Venues"
 msgstr "场馆"
 
@@ -3198,8 +3284,8 @@ msgstr "沉寂的轮次"
 
 #: src/app/web/templates/preferences.html:491
 msgid ""
-"Concerts in the catalogue whose ladder has no deadline left, and whose show"
-" has not happened yet."
+"Concerts in the catalogue whose ladder has no deadline left, and whose "
+"show has not happened yet."
 msgstr "目录中已经没有剩余截止时间、但演出日期尚未到来的活动。"
 
 #: src/app/web/templates/preferences.html:494
@@ -3756,11 +3842,11 @@ msgstr "碎片"
 msgid "Table"
 msgstr "表格"
 
-#: src/app/web/templates/tags.html:76 src/app/web/templates/tags.html:482
+#: src/app/web/templates/tags.html:76 src/app/web/templates/tags.html:506
 msgid "events"
 msgstr "活动"
 
-#: src/app/web/templates/tags.html:77 src/app/web/templates/tags.html:484
+#: src/app/web/templates/tags.html:77 src/app/web/templates/tags.html:508
 msgid "followers"
 msgstr "关注者"
 
@@ -3776,7 +3862,7 @@ msgstr "即将举行"
 msgid "Handle"
 msgstr "标识符"
 
-#: src/app/web/templates/tags.html:115 src/app/web/templates/tags.html:421
+#: src/app/web/templates/tags.html:115 src/app/web/templates/tags.html:440
 msgid "Voiced by"
 msgstr "配音演员"
 
@@ -3809,7 +3895,7 @@ msgid "Apply %(name)s to %(count)s upcoming event"
 msgid_plural "Apply %(name)s to %(count)s upcoming events"
 msgstr[0] "将 %(name)s 应用到 %(count)s 场即将到来的活动"
 
-#: src/app/web/templates/tags.html:180 src/app/web/templates/tags.html:461
+#: src/app/web/templates/tags.html:180 src/app/web/templates/tags.html:486
 msgid "Cancel"
 msgstr "取消"
 
@@ -3821,90 +3907,94 @@ msgstr "立即检查 eventernote"
 msgid "Delete tag"
 msgstr "删除标签"
 
-#: src/app/web/templates/tags.html:232
+#: src/app/web/templates/tags.html:229 src/app/web/templates/welcome.html:32
+msgid "Following — click to unfollow"
+msgstr "关注中 — 点击以取消关注"
+
+#: src/app/web/templates/tags.html:251
 msgid "no members yet"
 msgstr "还没有成员"
 
-#: src/app/web/templates/tags.html:238
+#: src/app/web/templates/tags.html:257
 msgid "Franchises and groups"
 msgstr "系列与组合"
 
-#: src/app/web/templates/tags.html:238
+#: src/app/web/templates/tags.html:257
 msgid "— click any tag to edit"
 msgstr "— 点击任一标签进行编辑"
 
-#: src/app/web/templates/tags.html:247
+#: src/app/web/templates/tags.html:266
 msgid "No franchise"
 msgstr "无系列"
 
-#: src/app/web/templates/tags.html:255
+#: src/app/web/templates/tags.html:274
 msgid "— grouped by the region used in the Discover sidebar"
 msgstr "— 按“发现”侧栏使用的地区分组"
 
-#: src/app/web/templates/tags.html:276
+#: src/app/web/templates/tags.html:295
 msgid "— each with the performer who voices her"
 msgstr "— 每位角色及其配音演员"
 
-#: src/app/web/templates/tags.html:282
+#: src/app/web/templates/tags.html:301
 msgid "voiced by"
 msgstr "配音"
 
-#: src/app/web/templates/tags.html:283
+#: src/app/web/templates/tags.html:302
 msgid "no performer set"
 msgstr "尚未设置配音演员"
 
-#: src/app/web/templates/tags.html:293
+#: src/app/web/templates/tags.html:312
 msgid "Performers with no group"
 msgstr "未归属组合的出演者"
 
-#: src/app/web/templates/tags.html:293
+#: src/app/web/templates/tags.html:312
 msgid "— solo artists, or members not yet attached"
 msgstr "— 独立艺人，或尚未加入组合的成员"
 
-#: src/app/web/templates/tags.html:308
+#: src/app/web/templates/tags.html:327
 msgid "Tag"
 msgstr "标签"
 
-#: src/app/web/templates/tags.html:309
+#: src/app/web/templates/tags.html:328
 msgid "Followers"
 msgstr "关注者"
 
-#: src/app/web/templates/tags.html:389
+#: src/app/web/templates/tags.html:408
 msgid "As it is written on the official site"
 msgstr "按官方网站上的写法"
 
-#: src/app/web/templates/tags.html:401
+#: src/app/web/templates/tags.html:420
 msgid "Already exists."
 msgstr "已存在。"
 
-#: src/app/web/templates/tags.html:421 src/app/web/templates/tags.html:435
-#: src/app/web/templates/tags.html:451
+#: src/app/web/templates/tags.html:440 src/app/web/templates/tags.html:454
+#: src/app/web/templates/tags.html:470
 msgid "(optional)"
 msgstr "（可选）"
 
-#: src/app/web/templates/tags.html:447
+#: src/app/web/templates/tags.html:466
 msgid ""
 "The Discover page groups venues by region. A venue without a region "
 "appears under “No region” and cannot be found with a region filter."
 msgstr "“发现”页面会按地区对场馆分组。未设置地区的场馆会显示在“无地区”下，且无法通过地区筛选找到。"
 
-#: src/app/web/templates/tags.html:451
+#: src/app/web/templates/tags.html:470
 msgid "Map or venue URL"
 msgstr "地图或场馆链接"
 
-#: src/app/web/templates/tags.html:456
+#: src/app/web/templates/tags.html:475
 msgid "A franchise is just a parent for groups — nothing else to set."
 msgstr "系列只是组合的上级分类，无需设置其他内容。"
 
-#: src/app/web/templates/tags.html:460
+#: src/app/web/templates/tags.html:485
 msgid "Create tag"
 msgstr "创建标签"
 
-#: src/app/web/templates/tags.html:478
+#: src/app/web/templates/tags.html:502
 msgid "A place. Discover filters venues by region, not individually."
 msgstr "一个地点。发现页只能按地区筛选场馆，不能逐个筛选。"
 
-#: src/app/web/templates/tags.html:480
+#: src/app/web/templates/tags.html:504
 #, python-brace-format
 msgid ""
 "A {kind} tag with this name is already used by {concerts} and followed by"
@@ -3912,7 +4002,7 @@ msgid ""
 "cannot be merged yet."
 msgstr "同名的 {kind} 标签已用于 {concerts}，并由 {followers} 关注。再创建一个会使两者保持分开，因为目前无法合并标签。"
 
-#: src/app/web/templates/tags.html:483
+#: src/app/web/templates/tags.html:507
 msgid "follower"
 msgstr "关注者"
 
@@ -4099,10 +4189,6 @@ msgstr "搜索系列、组合、出演者…"
 #: src/app/web/templates/welcome.html:24
 msgid "Search tags"
 msgstr "搜索标签"
-
-#: src/app/web/templates/welcome.html:32
-msgid "Following — click to unfollow"
-msgstr "关注中 — 点击以取消关注"
 
 #: src/app/web/templates/welcome.html:81
 #, python-format
@@ -4328,99 +4414,6 @@ msgstr "准备完成。接下来，请选择你计划参加的活动。"
 msgid "Continue to my events"
 msgstr "前往我的活动"
 
-#: src/app/web/templates/_capture_actions.html:82
-msgid "Change"
-msgstr "更改"
-
-#: src/app/web/templates/base.html:357
-msgid "Cleared — you can answer this round again"
-msgstr "已清除 — 你可以重新回答这一轮"
-
-#: src/app/web/templates/concert_detail.html:260
-msgid "Clear your answer for this round?"
-msgstr "要清除这一轮的回答吗？"
-
-#: src/app/web/templates/concert_detail.html:261
-msgid "Clear your answer for this day?"
-msgstr "要清除这一场的回答吗？"
-
-#: src/app/web/templates/concert_detail.html:265
-msgid ""
-"You recorded a ticket for <b id=\"clearNameRound\">this round</b>. "
-"Clearing it removes that record for every day this round covers, the "
-"payment reminder it is holding open, and the reason other rounds are "
-"marked Covered. The round goes back to unrecorded and you can answer it "
-"again."
-msgstr ""
-"你已记录在<b id=\"clearNameRound\">这一轮</b>拿到了票。清除后，这一轮覆盖的每"
-"一场的该记录、为它保留的付款提醒，以及其他轮次被标记为「已获票」的依据都会消"
-"失。该轮次会回到未回答状态，你可以重新回答。"
-
-#: src/app/web/templates/concert_detail.html:268
-msgid ""
-"You recorded a ticket for this day of <b id=\"clearNameLeg\">this "
-"round</b>. Clearing it removes that record for this day only — the other "
-"days of this round keep theirs — and with it the reason other rounds on "
-"this day are marked Covered. The payment reminder goes only if this round "
-"has no ticket left afterwards, and where the round stands then follows "
-"from the days that remain."
-msgstr ""
-"你已记录在<b id=\"clearNameLeg\">这一轮</b>的这一场拿到了票。清除后，只会移除"
-"这一场的记录（这一轮其他场次的记录会保留），这一场其他轮次被标记为「已获票」"
-"的依据也会一并消失。只有当这一轮不再有任何已确保的票时，付款提醒才会消失；此"
-"后这一轮处于什么状态，取决于余下场次的记录。"
-
-#: src/app/web/templates/concert_detail.html:271
-msgid "Keep it"
-msgstr "保留"
-
-#: src/app/web/templates/concert_detail.html:272
-msgid "Clear my answer"
-msgstr "清除我的回答"
-
-#: src/app/bot/views.py:470
-msgid "Change my answer"
-msgstr "更改回答"
-
-#: src/app/bot/views.py:508
-msgid "Cleared — you can record this round again."
-msgstr "已清除 — 你可以重新记录这一轮。"
-
-#: src/app/bot/views.py:560
-msgid "Kept — nothing changed."
-msgstr "保持不变 — 没有任何更改。"
-
-#: src/app/bot/views.py:521
-msgid "Clear it"
-msgstr "清除"
-
-#: src/app/bot/views.py:308
-msgid ""
-"This round is already recorded as won. Use the button below to change "
-"it."
-msgstr ""
-"这一轮已记录为中签。如需更改，请使用下面的按钮。"
-
-#: src/app/bot/views.py:491
-msgid ""
-"You hold a ticket from this round. Clearing your answer removes that "
-"record and its payment reminder. Clear it?"
-msgstr ""
-"你持有这一轮的票。清除回答会移除该记录及其付款提醒。要清除吗？"
-
-#: src/app/bot/views.py:497
-msgid ""
-"This round covers {n} performances, and every one of them is cleared."
-msgstr ""
-"这一轮涵盖 {n} 场演出，全部都会被清除。"
-
-#: src/app/bot/views.py:584
-msgid ""
-"Your answer for this round has changed since I asked, so nothing was "
-"cleared. Use \"Change my answer\" to take another look."
-msgstr ""
-"自上次询问以来，这一轮的回答已经改变，因此没有清除任何内容。请用「更改回答」"
-"重新查看。"
 #~ msgid "Remove this leg"
 #~ msgstr "删除此场次"
 
