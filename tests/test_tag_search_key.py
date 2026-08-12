@@ -5,6 +5,8 @@ chip rendered `loc(t, "name")` (the viewer's locale), so on the live catalogue
 681 of 735 tags could not be found by the name they displayed.
 """
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -89,11 +91,27 @@ def login_as(client, discord_id: int, name: str):
 async def test_tags_page_data_name_carries_the_english_name(client):
     """The unit test above proves the helper. This proves it is WIRED -- the
     mutation being a template left on `t.name | lower`, which no unit test can
-    see."""
+    see.
+
+    /tags renders every tag TWICE: once as a chip (tag_chip macro) and again
+    as a hidden `#tag-table-wrap` row. A page-wide `"aina aiba" in r.text`
+    assertion is satisfied by either site alone, so it would pass even if the
+    chip -- the actual interactive element -- regressed back to `t.name |
+    lower` and only the hidden row carried the fix. Each site is asserted on
+    independently so a regression in either one fails on its own.
+    """
     login_as(client, EDITOR_ID, "reiji")
     async with client.db() as s:
         s.add(Tag(name="相羽あいな", name_en="Aina Aiba", name_zh="相羽爱菜",
                   kind=TagKind.ARTIST, slug="aina-aiba"))
         await s.commit()
     r = client.get("/tags")
-    assert "aina aiba" in r.text, "findable by the name an EN viewer is shown"
+    chips = re.findall(r'<(?:button|span)[^>]*class="tchip[^"]*"[^>]*data-name="([^"]*)"', r.text)
+    rows = re.findall(r'<tr data-name="([^"]*)"', r.text)
+    assert any("aina aiba" in c for c in chips), (
+        "the CHIP must be findable by the name an EN viewer is shown"
+    )
+    assert any("aina aiba" in row for row in rows), (
+        "and so must the table row -- asserting on r.text as a whole passes "
+        "when either one alone is correct, which is what made this a proxy"
+    )
