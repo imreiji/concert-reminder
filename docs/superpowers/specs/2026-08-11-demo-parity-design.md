@@ -121,9 +121,24 @@ is it being left behind *accidentally*.
 
 ### A3. `text-wrap: balance` on `.lede h1`
 
-`style.css:1512`. Three sibling `h1` rules already carry it (lines 187, 224,
-1008) and this one was missed, so it is closer to an oversight than a
-demo-parity gap.
+`style.css:1512`.
+
+**Corrected 2026-08-11, after checking rather than asserting.** The claim that
+"three sibling `h1` rules already carry it" is wrong. The three selectors
+carrying `text-wrap: balance` are `.hero .promise` (3.5rem), `.ctafoot h2`
+(1.6rem) and `.chead h1` (1.7rem) — only one is an `h1`. The real pattern is
+**large display headings balance their wrap**, not "h1 rules do". Two
+consequences:
+
+- A sweep test over every `h1` rule cannot be written honestly: the bare `h1`
+  (1.4rem, line 230) is a generic fallback and `.legal h1` is discussed below.
+  Pin the specific set instead.
+- **`.legal h1` (line 98) is 1.7rem and also lacks it** — the same size as
+  `.chead h1`, which has it. So `.lede h1` may not be the only oversight.
+  **This is raised for the owner, not decided here**: including it is a
+  one-word widening of an approved change, and excluding it leaves the set
+  looking arbitrary to whoever reads the test. Ask before implementing; the
+  plan's task carries both variants.
 
 Worth more than it looks: `.lede h1` is the **error pages' heading** — so this
 one word visibly improves all four of the frames Branch B is about to draw.
@@ -192,9 +207,10 @@ Branch A only. Each test is named against the mutation it must fail.
   silently makes the submit button inert. This is the one change here that can
   break a working feature, and it is exactly the failure a "does the page
   render" test sails past.
-- **A3** — extend the existing sweep in `test_theme_and_tokens.py`: every `h1`
-  rule in `style.css` carries `text-wrap: balance`. **Mutation: removing it from
-  any one of the four**, including the three that already have it.
+- **A3** — a pinned-set test in `test_theme_and_tokens.py`: the named display
+  headings each carry `text-wrap: balance`. **Not** a sweep over every `h1`, for
+  the reason recorded above. **Mutation: removing it from any one selector in
+  the set**, including the three that already had it.
 
 Branch B gets no tests. It is documentation.
 
