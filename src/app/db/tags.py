@@ -931,6 +931,9 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
       summary            -- {concerts, franchises, groups, performers, venues,
                             untranslated}
       eligible_members   -- {group_id: [(member Tag, n_eligible_concerts), ...]}
+      seiyuu_of          -- {character tag_id: performer Tag | None}, resolved
+                            off the loaded tag list (Tag.voiced_by is not a
+                            loaded relationship)
     """
     now = now or _now()
     tags = list((await session.execute(select(Tag).order_by(Tag.name))).scalars())
@@ -1019,11 +1022,37 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
             children_of.setdefault(parent.id, []).append(g)
     walked: set[int] = set()
 
+    def subunit_member_ids(g: Tag, seen: set[int] | None = None) -> set[int]:
+        """Every member of g's subunits, transitively.
+
+        Its own `seen` set, not the walk's `walked`: this runs BEFORE the walk
+        reaches those children, and sharing the set would make a parent's
+        de-dup depend on visit order. A parent cycle is reachable (rows predate
+        `would_create_tag_cycle`), so this needs its own guard or it recurses
+        forever.
+        """
+        seen = set() if seen is None else seen
+        if g.id in seen:
+            return set()
+        seen.add(g.id)
+        out: set[int] = set()
+        for child in children_of.get(g.id, []):
+            out |= {m.id for m in members_of.get(child.id, [])}
+            out |= subunit_member_ids(child, seen)
+        return out
+
     def group_rows(g: Tag, depth: int = 0) -> list[tuple[Tag, list[Tag], int]]:
         if g.id in walked:
             return []
         walked.add(g.id)
-        rows = [(g, members_of.get(g.id, []), depth)]
+        # A member who also belongs to one of this group's subunits renders
+        # under the subunit and nowhere else (owner, 2026-08-12, THIS PAGE
+        # ONLY -- the concert page keeps the repetition, because a bill is a
+        # lineup and a catalogue is not). Measured on the live catalogue:
+        # 485 member chips -> 343, and 6 parent rows become empty.
+        absorbed = subunit_member_ids(g)
+        own = [m for m in members_of.get(g.id, []) if m.id not in absorbed]
+        rows = [(g, own, depth)]
         for child in children_of.get(g.id, []):
             rows.extend(group_rows(child, depth + 1))
         return rows
@@ -1052,6 +1081,18 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
     ]
 
     ungrouped_performers = [a for a in artists if a.id not in grouped_member_ids]
+
+    # Characters keyed to the performer who voices her, for the split pill.
+    # Resolved HERE off the already-loaded tag list: Tag.voiced_by is not a
+    # loaded relationship, and a lazy load during async template rendering is
+    # a MissingGreenlet 500. A character whose seiyuu is unset -- or whose
+    # seiyuu tag was deleted, since the FK is ON DELETE SET NULL -- maps to
+    # None and renders as a plain chip.
+    seiyuu_of = {
+        t.id: by_id.get(t.voiced_by_tag_id)
+        for t in tags
+        if t.kind is TagKind.CHARACTER
+    }
 
     # ── eligible members per group (powers the apply-to-existing links) ──
     eligible_members: dict[int, list[tuple[Tag, int]]] = {}
@@ -1093,6 +1134,7 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
         "ungrouped_performers": ungrouped_performers,
         "summary": summary,
         "eligible_members": eligible_members,
+        "seiyuu_of": seiyuu_of,
     }
 
 
