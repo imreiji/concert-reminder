@@ -1089,6 +1089,20 @@ already-shipped markup -- folded in there because it is one line in the same
 single polish pass, not because it is the same kind of thing. The reasoning for
 the other seventeen is in the revision-pass note at the end of Proposed.
 
+**A third 2026-08-11 pass ships one ITEM out of an entry rather than an entry**,
+which is new for this file and is why it gets a note despite being one CSS
+selector. #8's sixth item -- the `.danger` card frame also styling every
+`.btn danger` -- shipped on its own branch hours after it was filed, leaving the
+other five in place. Nothing renumbers: an entry that loses one of six folded
+items does not move, and #8 keeps its rank, which the entry itself now explains.
+The pass is recorded there rather than in a Shipped section entry, since what
+shipped was never an entry. It also CORRECTED its own filing in two places (the
+stretched element was the sibling, not the button; the offending margin was
+already overridden at both of the card's real sites) -- both errors of a
+description written from the stylesheet instead of from the page, which is the
+measure-don't-reason rule catching a miss in the very entry that records
+measured defects.
+
 ## Proposed (highest impact first)
 
 ### 1. Minute-level reminder offsets
@@ -1656,20 +1670,39 @@ reconstruct. `/admin/fetch-domains` is deliberately NOT on the list: admin
 pages have never had demo frames, exactly as they have never been translated.
 Fifth growth, fifth time not worth doing alone.
 
-Grew a SIXTH on 2026-08-11 (outcome correction) that is **not a demo-parity gap
-at all**, and it is folded in here on cost rather than on kind -- one line, in
-the one polish pass, next to five other one-liners. `style.css`'s `.danger`
-CARD frame (the destructive-section shape on the Account page) matches
-`<button class="btn danger">` as well, so every `.btn danger` in a `.prune`
-dialog inherits `margin-top: 40px` and stretches to 88px tall. Measured during
-this build's dialog work and then reproduced against `_following_toggle.html`'s
-own shipped markup, which is what makes it PRE-EXISTING: all three `.prune`
-dialogs have looked like this since they shipped, and the new clear dialog only
-found it. The fix is one selector made specific enough to mean the card it was
-written for; it touches the Account page and three dialogs at once, which is
-exactly why it wants the batched pass and an owner eyeball rather than a
-drive-by edit inside a feature branch. Sixth growth, sixth time not worth doing
-alone -- and the first item here that is a defect rather than an absence.
+Grew a SIXTH on 2026-08-11 (outcome correction) that was **not a demo-parity
+gap at all** -- the only defect this entry ever carried -- and it **SHIPPED
+SEPARATELY the same day**, which is the one item here ever to leave without the
+batched pass. `style.css`'s `.danger` CARD frame (the destructive-section shape
+on the Account page) matched `<button class="btn danger">` as well and sat
+after `.btn` in the file, so at equal specificity it won and handed every
+`.btn danger` in a `.prune` dialog the card's `margin-top: 2.5rem` and `.9rem`
+padding. It is `.danger-card` now, named for the `.danger-row` 600 lines above
+it, with a CSS-level sweep test (`test_the_danger_card_frame_cannot_match_a_button`)
+checked against three mutations.
+
+Two things the separate build corrected in the filing above, both worth keeping
+because they are the kind of error a description written from the CSS rather
+than from the page makes. **The stretched element was the wrong one**: the
+danger button rendered 48.5px, and it was its QUIET SIBLING that reached 88.5px,
+because `.da` is a flex row at default `align-items: stretch` and the button's
+40px margin set the line height. So the visible symptom was an oversized empty
+"Keep my account" box, not a fat red button -- which is likely why it read as a
+dialog quirk for as long as it did. And **the margin was already dead at both of
+the card's own sites**: `preferences.html` overrides it inline at each
+(`margin-top:0`, `margin-top:1rem`), so the declaration was live only where it
+was never meant to apply, which is what made the fix provably safe -- both cards
+measured identical to main on margin, padding, display, gap, align-items, width
+and height.
+
+Why it left alone rather than waiting: the batched-pass argument is about SIX
+items sharing one review and one owner eyeball, and it holds for the five that
+remain, which are demo frames with no app code and two open design questions
+(which split-pill shape won; what an error-page frame contains). This one was
+app CSS with a regression test, a different review surface entirely. **Five
+items left, all demo-parity absences again**, and the entry's rank is unchanged
+-- it lost the only part of itself that was ever a bug, which argues for the
+batch being LOWER, not higher, but it was already ranked as polish.
 
 ### 9. The event classes outside concerts and talk shows
 

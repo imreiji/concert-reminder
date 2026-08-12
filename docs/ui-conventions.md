@@ -65,8 +65,12 @@ The design source of truth remains the concept demos in
 - Callouts come in two shapes (G2, 2026-07-24): `.edgecard` (raise ground,
   left edge in the tone colour -- ongoing state; `.dg`/`.ok`) and `.banner`
   (wash ground, full border -- needs attention; `.warn`/`.dgr`). Anatomy
-  classes (`.standing`, `.next`, `.upgradebox`, `.feedbox`, `.danger`,
-  `.danger-row`) compose the shape and keep only their layout. Don't invent
+  classes (`.standing`, `.next`, `.upgradebox`, `.feedbox`, `.danger-card`,
+  `.danger-row`) compose the shape and keep only their layout. An anatomy
+  class must be specific enough that it cannot match something else wearing
+  the same tone word: `.danger-card` was `.danger` until 2026-08-11, which
+  also matched every `<button class="btn danger">` and beat `.btn` on source
+  order. Don't invent
   a third callout shape. Radiuses: 3px default, 999px chips, 4px overlay
   cards, 50% circles, bottom sheets `14px 14px 0 0` (documented at the top
   of `style.css`). Type ramp is 400/600/700 only. Motion budget: one 150ms

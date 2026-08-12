@@ -596,13 +596,13 @@
   .upgradebox .u1 { font-size: .8125rem; }
   .upgradebox .u1 b { font-weight: 650; }
 
-  .danger {
+  .danger-card {
     margin-top: 2.5rem; border: 1px solid var(--danger); border-radius: 3px;
     padding: .9rem 1rem; display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
   }
-  .danger .t2 { font-weight: 600; font-size: .9rem; }
-  .danger .s2 { color: var(--dim); font-size: .8125rem; }
-  .danger .sp { margin-left: auto; display: flex; gap: .5rem; }
+  .danger-card .t2 { font-weight: 600; font-size: .9rem; }
+  .danger-card .s2 { color: var(--dim); font-size: .8125rem; }
+  .danger-card .sp { margin-left: auto; display: flex; gap: .5rem; }
   .btn.warn { background: transparent; color: var(--danger); border-color: var(--danger); }
 
   /* ---- tags page ------------------------------------------------------- */
@@ -1705,7 +1705,7 @@
     </div>
   </details>
 
-  <div class="danger">
+  <div class="danger-card">
     <div>
       <div class="t2">Duplicate or delete</div>
       <div class="s2">Duplicating copies tags and details, not rounds or legs.</div>
@@ -1865,7 +1865,7 @@
       <section class="psec" id="p-account">
         <h3>Account</h3>
         <p class="blurb">Signed in with Discord as <b>reiji</b>.</p>
-        <div class="danger" style="border-color: var(--line); margin-top:0">
+        <div class="danger-card" style="border-color: var(--line); margin-top:0">
           <div>
             <div class="t2">Run first-time setup again</div>
             <div class="s2">
@@ -1876,7 +1876,7 @@
           </div>
           <span class="sp"><button class="btn" type="button" data-view="setup">Run setup</button></span>
         </div>
-        <div class="danger" style="margin-top:1rem">
+        <div class="danger-card" style="margin-top:1rem">
           <div>
             <div class="t2">Delete my account</div>
             <div class="s2">
