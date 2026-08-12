@@ -77,6 +77,12 @@
   .who .av { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: #fff; font-size: .7rem; font-weight: 700; }
   .who .tag { border: 1px solid var(--ok); color: var(--ok); font-size: .7rem; padding: 0 .3em; border-radius: 3px; font-weight: 600; }
 
+  /* Concept-nav bar only. `.banner.warn` (down near .lede, error-pages
+     section) is a DIFFERENT thing riding the same class name -- the G2
+     callout box the app's current style.css defines. It re-declares every
+     property this rule sets so nothing here leaks into it, but that only
+     holds for properties BOTH rules know about: a property added here later
+     with no counterpart down there would leak straight into the 422 callout. */
   .banner {
     background: var(--chip); border-bottom: 1px solid var(--line);
     text-align: center; padding: .4rem 1rem; font-size: .78rem; color: var(--dim);
@@ -765,7 +771,7 @@
   .stepdot.on { color: var(--ink); border-color: var(--ink); }
   .stepdot.done { color: var(--ok); border-color: var(--ok); }
   .lede { max-width: 58ch; }
-  .lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 650; text-wrap: balance; }
+  .lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 700; text-wrap: balance; }
   .lede p { margin: 0; color: var(--dim); }
 
   /* Error-page 422 message list. Compound with the plain top-bar .banner
@@ -883,7 +889,7 @@
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
-<div class="banner">Concept — click <b>Home</b> and <b>Discover</b> in the header to move between the two pages</div>
+<div class="banner">Concept — click <b>Home</b> and <b>Discover</b> in the header to move between the two pages, or see the <a href="#" data-view="error">four error pages</a></div>
 
 <header class="site">
   <div class="site-in">
@@ -2356,63 +2362,73 @@
 </div>
 
 <!-- ==================== ERROR PAGES ==================== -->
-<!-- One template (web/templates/error.html), four sets of copy. Each code
-     says the one useful thing it can: a 404 has nothing to explain, a 422 is
-     useless without its messages, and a 403 is almost always the wrong
-     Discord account -- which nothing else on the page would tell you.
-     Only ever rendered for a full-page NAVIGATION; an XHR keeps the JSON body
-     it was already parsing, because the quick-create dialogs read .detail off
-     a 409 to offer select-existing.
-     The heading is .lede h1. Shown here as four always-visible frames, not
-     wired into the view-toggle above -- these are reference frames, not app
-     screens to click between. -->
+<div class="wrap" id="view-error" hidden>
 
-<div class="wrap">
-  <div class="eyebrow">404</div>
-  <div class="lede">
-    <h1>Page not found</h1>
-    <p class="dim">That page doesn't exist. The link may be out of date.</p>
-  </div>
-  <p><a class="btn" href="#">Back to home</a></p>
-</div>
+  <section style="margin-top:2rem">
+    <div class="head">
+      <h2 style="font-size:1.35rem">Error pages</h2>
+      <span class="note">One template (error.html), four sets of copy</span>
+      <a class="more" href="#" data-view="home">&larr; Back to home</a>
+    </div>
 
-<div class="wrap">
-  <div class="eyebrow">403</div>
-  <div class="lede">
-    <!-- Naming the account is the whole point. When no username is known the
-         body reads "That page needs an account with more access than yours." -->
-    <h1>No access</h1>
-    <p class="dim">You're signed in as reiji, which doesn't have access to that page.</p>
-  </div>
-  <p><a class="btn" href="#">Back to home</a></p>
-</div>
+    <!-- Each code says the one useful thing it can: a 404 has nothing to
+         explain, a 422 is useless without its messages, and a 403 is almost
+         always the wrong Discord account -- which nothing else on the page
+         would tell you. Only ever rendered for a full-page NAVIGATION; an
+         XHR keeps the JSON body it was already parsing, because the
+         quick-create dialogs read .detail off a 409 to offer select-existing.
+         The heading is .lede h1. There is no production nav entry to this
+         page -- you only land here by mis-navigating -- so it's reached from
+         the concept banner up top rather than the header nav, same as
+         Preferences is reached from the account button rather than the nav. -->
 
-<div class="wrap">
-  <div class="eyebrow">422</div>
-  <div class="lede">
-    <h1>That didn't go through</h1>
-    <p class="dim">Nothing was saved. Here's what needs fixing:</p>
-  </div>
-  <!-- 422 only. Without these the page is strictly worse than the JSON blob it
-       replaces -- the blob at least said what was wrong. -->
-  <div class="banner warn">
-    <ul>
-      <li>Event id "new" is reserved</li>
-      <li>Closes at must be a real date and time</li>
-    </ul>
-  </div>
-  <!-- A real button, not a link: a 422 is almost always a form POST, browsers
-       restore form values on a history back, and there is nothing to bookmark. -->
-  <p><button type="button" class="btn">Go back and fix it</button> <a class="btn" href="#">Back to home</a></p>
-</div>
+    <div class="eyebrow">404</div>
+    <div class="lede">
+      <h1>Page not found</h1>
+      <p class="dim">That page doesn't exist. The link may be out of date.</p>
+    </div>
+    <p><a class="btn" href="#" data-view="home">Back to home</a></p>
 
-<div class="wrap">
-  <div class="eyebrow">500</div>
-  <div class="lede">
-    <h1>Something broke</h1>
-    <p class="dim">Something broke on our end, and it's been logged. Nothing you did caused it.</p>
-  </div>
-  <p><a class="btn" href="#">Back to home</a></p>
+    <div class="eyebrow" style="margin-top:2rem">403</div>
+    <div class="lede">
+      <!-- Naming the account is the whole point. When no username is known the
+           body reads "That page needs an account with more access than yours." -->
+      <h1>No access</h1>
+      <p class="dim">You're signed in as reiji, which doesn't have access to that page.</p>
+    </div>
+    <p><a class="btn" href="#" data-view="home">Back to home</a></p>
+
+    <div class="eyebrow" style="margin-top:2rem">422</div>
+    <div class="lede">
+      <h1>That didn't go through</h1>
+      <p class="dim">Nothing was saved. Here's what needs fixing:</p>
+    </div>
+    <!-- 422 only. Without these the page is strictly worse than the JSON blob it
+         replaces -- the blob at least said what was wrong. -->
+    <div class="banner warn">
+      <ul>
+        <li>Event id "new" is reserved</li>
+        <li>Closes at must be a real date and time</li>
+      </ul>
+    </div>
+    <!-- A real button, not a link: a 422 is almost always a form POST, browsers
+         restore form values on a history back, and there is nothing to bookmark. -->
+    <p><button type="button" class="btn">Go back and fix it</button> <a class="btn" href="#" data-view="home">Back to home</a></p>
+
+    <div class="eyebrow" style="margin-top:2rem">500</div>
+    <div class="lede">
+      <h1>Something broke</h1>
+      <p class="dim">Something broke on our end, and it's been logged. Nothing you did caused it.</p>
+    </div>
+    <p><a class="btn" href="#" data-view="home">Back to home</a></p>
+  </section>
+
+  <p class="foot-note">
+    <b>One template, four sets of copy.</b> Each status code says the one useful
+    thing it can and nothing else. There is no production nav entry for this
+    page -- a visitor only lands here by mis-navigating -- so this reference
+    frame is reached from the concept banner at the top of the page.
+  </p>
 </div>
 
 <dialog class="prune" id="pruneDlg">
@@ -2443,6 +2459,7 @@
     editor: document.getElementById('view-editor'),
     prefs: document.getElementById('view-prefs'),
     tags: document.getElementById('view-tags'),
+    error: document.getElementById('view-error'),
   };
   const navBtns = document.querySelectorAll('nav.main button');
 
