@@ -363,7 +363,7 @@
     <h3>{{ _("New tag") }}</h3>
     <button type="button" class="x" onclick="document.getElementById('new-tag-dialog').close()">×</button>
   </div>
-  <form method="post" action="/tags" class="db" data-variant-scope data-variant-guard>
+  <form method="post" action="/tags" class="db" id="new-tag-form" data-variant-scope data-variant-guard>
     {#- Defaults to PERFORMER: it is far and away the kind an editor creates
         most (a franchise or a venue is made once and reused for years, a group
         rarely), and it matches create_tag's own `kind: TagKind = Form(ARTIST)`
@@ -455,12 +455,17 @@
     <div class="fld kf k-franchise">
       <span class="plain">{{ _("A franchise is just a parent for groups — nothing else to set.") }}</span>
     </div>
-
-    <div class="df">
-      <button class="btn">{{ _("Create tag") }}</button>
-      <button class="btn quiet" type="button" onclick="document.getElementById('new-tag-dialog').close()">{{ _("Cancel") }}</button>
-    </div>
   </form>
+  {#- The footer is a SIBLING of the form, not its last child, so its border-top
+      spans the dialog instead of stopping inside the form's 1rem padding (demo
+      parity, and the shape the edit dialog above already had). The submit
+      therefore sits outside the form it submits, which works only because of
+      form="new-tag-form" -- drop that attribute and this button silently
+      becomes inert. -#}
+  <div class="df">
+    <button class="btn" form="new-tag-form">{{ _("Create tag") }}</button>
+    <button class="btn quiet" type="button" onclick="document.getElementById('new-tag-dialog').close()">{{ _("Cancel") }}</button>
+  </div>
 </dialog>
 
 <script>

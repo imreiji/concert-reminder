@@ -84,6 +84,13 @@
   .langtoggle:hover { color: var(--ink); border-color: var(--dim); }
   .langtoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+  /* Concept-nav bar only. `.banner.warn` (down near .edgecard, line ~543) is
+     a DIFFERENT thing riding the same class name -- the G2 callout box the
+     app's current style.css defines, used by the import preview's rejection
+     list. It re-declares every property this rule sets so nothing here leaks
+     into it, but that only holds for properties BOTH rules know about: a
+     property added here later with no counterpart down there would leak
+     straight into that callout. */
   .banner {
     background: var(--chip); border-bottom: 1px solid var(--line);
     text-align: center; padding: .4rem 1rem; font-size: .78rem; color: var(--dim);
@@ -513,6 +520,48 @@
   .callout.warn { border-color: var(--off); background: var(--off-wash); color: var(--off); }
   .callout b { font-weight: 700; }
   .warnlist { display: grid; gap: .45rem; margin: 1.25rem 0; }
+
+  /* AI draft-completion pass (shipped 2026-08-06): the per-round evidence
+     quote and the rejection callout above the rounds section compose the
+     SAME two-shape callout grammar as .callout/.warnlist above rather than
+     inventing a third shape -- .edgecard for ongoing state (the quote),
+     .banner for needs-attention (the rejection list). Ported verbatim from
+     src/app/web/static/style.css, its own comment included: */
+  /* ── Callout grammar (G2): two shapes, three tones each ─────────────────
+     Status card (.edgecard): an ongoing state -- raise ground, left edge in
+     the tone colour. Anatomy classes (.standing/.next/.upgradebox/.feedbox)
+     compose it and keep their own padding/layout.
+     Banner (.banner): needs attention -- wash ground, full border in the tone
+     colour. Absorbs the old .callout(+warn), .banner-warn, .signin-note,
+     .dupe's colours and the .danger-row/.danger-card borders. */
+  .edgecard {
+    border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 3px; background: var(--raise); box-shadow: var(--shadow);
+  }
+  .edgecard.dg { border-left-color: var(--danger); }
+  .edgecard.ok { border-left-color: var(--ok); }
+
+  /* .banner here rides the SAME class as the concept-nav bar under the header
+     (line ~87) -- a different .banner entirely, the app's real callout
+     grammar above. Mirrors the compound fix dekimasen-demo.html already
+     carries for this exact collision: every property the top-bar rule sets
+     is re-declared here so nothing leaks through on the higher-specificity
+     match. */
+  .banner.warn {
+    display: flex; gap: .6rem; align-items: flex-start; text-align: left;
+    border: 1px solid var(--off); border-bottom: 1px solid var(--off);
+    background: var(--off-wash); color: var(--off);
+    border-radius: 3px; padding: .6rem .9rem; font-size: .875rem;
+  }
+  .banner.warn b { font-weight: 700; }
+  .banner.warn a { color: inherit; font-weight: 600; text-decoration: underline; }
+  .banner.warn ul { margin: .4rem 0 0; padding-left: 1.2rem; }
+  .banner.warn li { margin: .2rem 0; }
+
+  /* Small dim text used by the evidence quote and rejection list. Ported
+     verbatim from style.css. */
+  .dim { color: var(--dim); }
+  .tiny { font-size: .78rem; }
 
   /* legal prose */
   .legal { max-width: 62ch; margin-top: 2.5rem; }
@@ -1306,6 +1355,19 @@
     <span class="note">Parsed round kinds and times — leg chips say which days each applies to</span>
   </div>
 
+  <!-- What the completion pass proposed but could not ground on the page it
+       read. A real deadline the checker could not quote is reported rather
+       than silently dropped: a quiet loss is exactly as harmful as a quiet
+       invention. .banner because this needs attention. -->
+  <div class="banner warn">
+    <p>The AI proposed these and I could not find them on the page — check them by
+      hand before trusting them:</p>
+    <ul>
+      <li class="tiny">round '2次抽選': no evidence for apply_closes_jst (2025-10-05 23:59)</li>
+    </ul>
+    <p class="tiny">Source: <a href="#" onclick="return false" rel="nofollow noopener">eplus.jp/aqours-5th</a></p>
+  </div>
+
   <!-- Rounds: flat list, new card anatomy. No upgrade qualifier box in import. -->
   <div class="rowlist">
 
@@ -1367,6 +1429,16 @@
         <input type="url" placeholder="Apply URL (optional)" value="">
         <input placeholder="Notes (optional)" value="">
       </div>
+      <!-- What an AI completion pass quoted for this round's timestamps, when
+           one ran. Optional and absent everywhere else: the create and edit
+           pages pass nothing, so their cards render exactly as they did
+           before the feature existed. .edgecard because it is ongoing state
+           rather than something needing attention (the callout grammar). -->
+      <div class="edgecard ok evidence-quote">
+        <p class="dim tiny">Read from the ticket page:</p>
+        <p class="tiny"><b>apply_opens_jst</b> — 受付期間：2025年9月20日(土)12:00〜</p>
+        <p class="tiny"><b>apply_closes_jst</b> — 2025年9月28日(日)23:59まで</p>
+      </div>
     </div>
 
     <div class="redit" style="border-color:var(--off)">
@@ -1401,6 +1473,22 @@
     </div>
   </div>
   <div class="bar" style="margin-top:1rem"><button class="btn quiet" type="button">Add a round</button></div>
+
+  <!-- Fills the round list from a page pasted by hand. The app shows this
+       only when the parsed draft carries NO rounds yet -- replacing an
+       existing ladder wholesale, with no undo, is exactly what it must not
+       risk -- so it never actually sits below a populated round list the way
+       it does here; shown anyway so every Import preview state appears
+       somewhere in this demo. -->
+  <details class="fold" data-fold="paste-page">
+    <summary>Fill rounds from a page I paste</summary>
+    <div class="foldbody">
+      <p class="dim tiny">Open the official ticket page, select all, and paste it here. Only
+        deadlines quoted from what you paste will be kept.</p>
+      <textarea rows="6" style="width:100%"></textarea>
+      <button class="btn" type="button">Read this page</button>
+    </div>
+  </details>
 
   <details class="fold">
     <summary>Details and links <span class="hint">Title (EN · 中文), organizer, categories, URLs, notes trio</span></summary>

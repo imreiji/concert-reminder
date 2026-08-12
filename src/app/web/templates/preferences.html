@@ -55,7 +55,7 @@
         <form method="post" action="/subscriptions/{{ sub.id }}/auto-apply" style="display:contents">
           <button class="swb" type="submit"
                   aria-pressed="{{ 'true' if sub.preset_id else 'false' }}"
-                  title="{{ _('Add my default preset to new matching events') }}">{{ _("Auto-apply") }}</button>
+                  title="{{ _('Add my default preset to new matching events') }}">{{ _("Auto-apply preset") }}</button>
         </form>
         <form method="post" action="/subscriptions/{{ sub.id }}/delete" style="display:contents">
           <button class="act no" type="submit" title="{{ _('Stop following this tag') }}">{{ _("Unfollow") }}</button>

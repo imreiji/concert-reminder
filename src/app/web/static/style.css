@@ -95,7 +95,7 @@ footer a { color: inherit; }
    for data-dense grids; legal prose needs a much narrower column and its
    own heading rhythm to stay readable. Ported from the onboarding demo. */
 .legal { max-width: 62ch; margin-top: 2.5rem; }
-.legal h1 { font-size: 1.7rem; letter-spacing: -.025em; font-weight: 700; margin: 0 0 .3rem; }
+.legal h1 { font-size: 1.7rem; letter-spacing: -.025em; font-weight: 700; margin: 0 0 .3rem; text-wrap: balance; }
 .legal .updated { color: var(--dim); font-size: .8125rem; margin: 0 0 2.25rem; }
 .legal h2 { font-size: 1rem; font-weight: 700; margin: 2.25rem 0 .5rem; letter-spacing: -.01em; }
 .legal p { margin: 0 0 1rem; font-size: .9375rem; line-height: 1.7; }
@@ -1509,7 +1509,7 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
 .stepdot.done { color: var(--ok); border-color: var(--ok); }
 
 .lede { max-width: 58ch; }
-.lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 700; }
+.lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 700; text-wrap: balance; }
 .lede p { margin: 0; color: var(--dim); }
 
 /* ── Callout grammar (G2): two shapes, three tones each ─────────────────

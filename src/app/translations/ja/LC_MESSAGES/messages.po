@@ -2758,8 +2758,8 @@ msgid "Add my default preset to new matching events"
 msgstr "条件に合う新しいイベントにデフォルトプリセットを適用"
 
 #: src/app/web/templates/preferences.html:58
-msgid "Auto-apply"
-msgstr "自動適用"
+msgid "Auto-apply preset"
+msgstr "プリセットを自動適用"
 
 #: src/app/web/templates/preferences.html:61
 msgid "Unfollow"

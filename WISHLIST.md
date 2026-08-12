@@ -1089,6 +1089,19 @@ already-shipped markup -- folded in there because it is one line in the same
 single polish pass, not because it is the same kind of thing. The reasoning for
 the other seventeen is in the revision-pass note at the end of Proposed.
 
+**A fourth 2026-08-11 pass files an entry by DELETING a gap from another one.**
+Working entry #8 turned its "Follow another tag" cosmetic into an owner ruling
+that the whole Following surface wants reworking, so that gap left #8 without
+being fixed and became an entry of its own at the head of Proposed — unranked,
+for the reasons it gives. Two things worth recording as pattern. First, the
+question that produced it was a genuine 50/50 (the demo's dialog is also what
+the app's own picker convention demands; the shipped fold is the only shape
+that survives JS being off), and putting a real fork to the owner is what
+surfaced that neither answer was wanted. Second, **#8 shrank without shipping
+anything** — five items left, all still demo-parity absences — which is the
+first time this file has recorded that shape. Its rank is unchanged: it was
+already ranked as polish, and losing a polish item does not move polish.
+
 **A third 2026-08-11 pass ships one ITEM out of an entry rather than an entry**,
 which is new for this file and is why it gets a note despite being one CSS
 selector. #8's sixth item -- the `.danger` card frame also styling every
@@ -1103,7 +1116,90 @@ description written from the stylesheet instead of from the page, which is the
 measure-don't-reason rule catching a miss in the very entry that records
 measured defects.
 
+**The 2026-08-12 pass ships an entry that was half wrong about itself**, and
+that -- not the polish -- is what it is worth recording for. Minor demo-parity
+cosmetics (#8, this file's longest-lived entry, raised 2026-07-20 and grown six
+times) shipped on branch `demo-parity`, nine tasks, spec
+`docs/superpowers/specs/2026-08-11-demo-parity-design.md`. Before any of it was
+built the owner replaced the entry's standing assumption -- *the demo is right
+and the app should change* -- with **judge each on merit**. Of the eight items
+the entry tracked, four turned out not to be what it said they were, and **two
+reversed direction**: the Tags member list and the Setup pick tiles now change
+the DEMO, not the app, and **both would have been regressions had the pass run as
+filed** (an inert "+N more" on an edit dialog makes five of nine members
+unreachable; `<button aria-pressed>` cannot submit with JS off, which the app's
+hidden checkbox does). A third item was struck rather than built: it asked for a
+demo frame for `.signin-note`, a class deleted three days after the item was
+filed. The pattern to keep: **a cosmetic list is a set of claims about the app,
+and claims decay** -- and the oldest entry decayed the most.
+
+One insertion, on merit and out of the build's own deferrals: **the demos are one
+grammar-migration behind the app enters at #17**. Their `.banner` is a pre-G2 top
+concept-bar sharing a class name with the app's G2 callout, and two separate
+tasks each had to add a compound rule re-declaring every property of the old one
+just to stop it bleeding through. It is ranked in the nil-for-users band between
+`db/core.py`'s shape and the agent-skills entry, with the case AGAINST ranking it
+higher written into the entry itself: it is a documentation-quality problem with
+no user-visible impact, and every instance of it was found and worked around
+inside the task that met it.
+
+The removal and the insertion cancel, so **the list is 1-20 again**: the former
+#9-#17 renumber to #8-#16 by position alone, and #18-#20 keep the numbers they
+had. Nothing moved on merit, and this build **removed nothing from any other
+entry's path** -- it touched two demo files, one label, one dialog footer and one
+CSS declaration on two selectors. Minute-level offsets holds #1 for the second
+consecutive pass, its seventeenth. Two live pointers were corrected in place
+rather than left to rot: the Following entry's reference to "the entry-#8
+brainstorm" is name-based now, and the sign-in-bounce entry's long-standing
+"ranked below the demo-parity cosmetics batch and the Discover-head entry" lost
+half its comparison and says so instead of quietly meaning less than it did.
+
 ## Proposed (highest impact first)
+
+### Following is due a rework (filed UNRANKED — see below)
+
+Impact: unknown, plausibly high — effort: unknown. Raised: 2026-08-11 (owner,
+during the minor-demo-parity-cosmetics brainstorm, in answer to a cosmetic
+question about the same surface — that entry shipped on 2026-08-12 and is in
+Shipped now, so it is named rather than numbered here). **Owner-raised, which
+matters: the file's own history notes that owner-raised usage pain has led this
+list every time it has appeared.**
+
+His words: he wants to rework how following tags works, "since it's getting
+pretty big". Nothing further is specified yet, and nothing should be invented
+here — what follows is only the evidence a brainstorm starts from, not a
+proposed design.
+
+**What "big" is measurable as, today.** Preferences' Following section renders
+one `.subrow` per followed tag, each with its own Notify and Auto-apply toggles
+and an Unfollow, then a disclosure fold containing the WHOLE tag catalogue —
+`franchises` → `groups` (filtered per franchise) → `members` per group — as
+chips, plus a search box that filters client-side. So the section grows on two
+independent axes at once: the number of tags you follow, and the size of the
+catalogue you might follow from. The second is the one that ran away; the
+catalogue now carries franchises, groups, subunits, characters, seiyuu and
+venues, and every ARTIST/GROUP/CHARACTER in it is a chip in that fold.
+
+**Two things a rework must not lose**, both of which cost real money to
+rediscover:
+- **Subscriptions are OVERRIDES, not records** (invariant 8). "Following" is
+  derived — a followed tag matching, minus an `opted_out` row, plus an explicit
+  `subscribed` row — and `tracked_concert_ids` is the one place that derivation
+  lives. A redesigned surface must not grow a second one.
+- **The section works with JS off**, deliberately. Every toggle is a real POST
+  form and the fold is a native `<details>`. That is precisely what made the
+  cosmetic fold-vs-dialog question a genuine fork rather than a formality, and
+  it is the constraint most likely to be dropped by accident in a rework.
+
+**Deliberately filed UNRANKED**, on the precedent outcome correction set on
+2026-08-11: the entries below keep 1-20 rather than renumbering by one. That
+precedent was for an item already on a branch; the reason here is different but
+no weaker. This entry cannot be honestly ranked yet — its impact reading and
+its whole effort estimate depend on a scope that does not exist, and inserting
+it at #1 on the owner-raised precedent would renumber twenty entries and their
+cross-references on the strength of a single sentence. What settles the rank is
+a brainstorm, not a guess. Whoever picks it up should start there and give it a
+number on the way out.
 
 ### 1. Minute-level reminder offsets
 
@@ -1254,6 +1350,19 @@ and untouched in substance for the sixteenth consecutive pass -- it deletes
 `RoundOutcome` rows and re-plans through `reinstate_user_rules`, which is the
 existing `sync_*` machinery unchanged, and `PresetItem` still has no minutes
 column. Sixteen passes, sixteen identical verdicts.
+
+**HELD at #1 again on 2026-08-12 by the demo-parity build, which is the first
+pass where the entry that shipped was ranked BELOW this one and its replacement
+was ranked below it too** -- a removal at #8 and an insertion at #17 cancel, so
+this entry did not move and could not have. Re-read against what shipped (one
+Preferences label and its two catalogue rows, one dialog footer moved out of its
+form, one CSS declaration on two selectors, and two demo files) and untouched in
+substance for the seventeenth consecutive pass. One point of contact worth
+naming rather than implying, since it is the closest this build came: the label
+that changed is Preferences' Auto-apply toggle, which sits in the same
+`.subrow` a minutes-capable rule would eventually have to render in -- but the
+change was one word of copy, not a control, and `PresetItem` still has no
+minutes column. Seventeen passes, seventeen identical verdicts.
 
 ### 2. Round watch: the two shapes it did not ship
 
@@ -1596,115 +1705,7 @@ AI-completed round is a deadline that reaches the user through the SAME
 channels as any other, so it raises the value of the interrupting half without
 altering what web push would have to build.
 
-### 8. Minor demo-parity cosmetics
-
-Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
-re-review).
-
-Cosmetic gaps the 2026-07-20 reconciliation left unbatched because they are
-pure polish, not correctness: Preferences' "Follow another tag" is a
-disclosure fold rather than the demo's footer `.bar` + button, and its
-second toggle reads "Auto-apply" where the demo says "Auto-apply preset";
-the Tags edit dialog lists every member instead of the demo's "+N more"
-truncation, and its new-tag dialog footer sits slightly detached (nested in
-a grid rather than a sibling of the body); Setup's pick tiles are
-keyboard-reachable now but use a visually-hidden checkbox where the demo
-uses a real `<button aria-pressed>`, and `.lede h1` lacks `text-wrap:
-balance`. The cheapest of the open items - one small pass closes all of it.
-
-Re-reviewed 2026-07-20 (i18n build): every string this entry touches or adds
-now needs both catalogues updated (`tests/test_i18n_catalogues.py` fails
-otherwise), a small but real addition to "small" effort that didn't exist
-when this was raised.
-
-Grew one item on 2026-07-21 (signed-out redirect): the `.signin-note` that
-explains a bounce to the landing page is a new component with no counterpart
-in `dekimasen-onboarding-demo.html`, whose signed-out Home has no such
-state. Per the CLAUDE.md rule that a deliberate move should update the demo
-so it stays the reference, the demo owes this frame -- fold it into this
-entry's single polish pass rather than treating it as its own task.
-
-Grew a second of exactly the same kind on 2026-07-29 (documentation pass):
-the 403/404/422/500 pages shipped on 2026-07-28 as a genuinely new SURFACE --
-a full-page state with its own copy per status code -- and no demo has a
-frame for any of them. That is a bigger gap than the `.signin-note` above,
-because there is no existing frame to amend: whoever next reworks error-page
-copy or chrome has no reference to work against and will invent one. Same
-resolution though -- one frame per code in `dekimasen-demo.html`, folded into
-this entry's single pass, not its own task. Both gaps are now also named in
-CLAUDE.md's demo inventory, so the next person meets them where they look for
-the reference rather than only here.
-
-Grew a THIRD of the same kind on 2026-08-01 (character tags, their seiyuu and
-subunits): the split pill (`.mchip`, a character and her seiyuu rendered as one
-two-halved element) and the subunit rail (`.pcluster.sub` on the concert page,
-`.grow2.sub` on the Tags page) are new components with no frame in any demo.
-Four pill mockups were built and shown to the owner during that design, but they
-lived in the spec discussion rather than in `dekimasen-demo.html`, so the design
-source of truth does not carry the shape that won -- which is worse than a gap,
-because the next person finds four rejected shapes and no record of the choice.
-Same resolution as the `.signin-note` and the error pages: fold it into this
-entry's single polish pass, not its own task.
-
-Grew a FOURTH of the same kind on 2026-08-02 (goods-sale rounds): the editor
-round card's "Requires item from" select row, and the concert page's
-"🛍️ Requires: {label}" / "Needed for: {labels}" lines. Neither exists in any
-demo frame -- `dekimasen-demo.html`'s round card predates the select and its
-concert page predates both lines -- and the select is the more interesting
-omission, because it is the first control on a card that HIDES ITSELF when no
-item-sale round exists, which is a state a static frame has to decide how to
-show. Same resolution as the split pill and the `.signin-note` before it: fold
-it into this entry's single pass rather than spawning a task. Rank unchanged --
-this entry has now grown four times without once being worth doing on its own,
-which is itself the argument for keeping it as one batched pass.
-
-Grew a FIFTH of the same kind on 2026-08-06 (AI draft completion), re-read and
-rank unchanged: the import preview gained an evidence block under each round
-(`.edgecard ok`, "Read from the ticket page:"), a rejection callout above the
-rounds section (`.banner warn`) and a "Fill rounds from a page I paste" fold,
-and no demo frame has any of them. This one is a slightly better-behaved gap
-than the four before it, because all three compose the EXISTING two-shape
-callout grammar (G2, 2026-07-24) rather than inventing a shape -- so what the
-demo owes is a frame showing them in place, not a design decision to
-reconstruct. `/admin/fetch-domains` is deliberately NOT on the list: admin
-pages have never had demo frames, exactly as they have never been translated.
-Fifth growth, fifth time not worth doing alone.
-
-Grew a SIXTH on 2026-08-11 (outcome correction) that was **not a demo-parity
-gap at all** -- the only defect this entry ever carried -- and it **SHIPPED
-SEPARATELY the same day**, which is the one item here ever to leave without the
-batched pass. `style.css`'s `.danger` CARD frame (the destructive-section shape
-on the Account page) matched `<button class="btn danger">` as well and sat
-after `.btn` in the file, so at equal specificity it won and handed every
-`.btn danger` in a `.prune` dialog the card's `margin-top: 2.5rem` and `.9rem`
-padding. It is `.danger-card` now, named for the `.danger-row` 600 lines above
-it, with a CSS-level sweep test (`test_the_danger_card_frame_cannot_match_a_button`)
-checked against three mutations.
-
-Two things the separate build corrected in the filing above, both worth keeping
-because they are the kind of error a description written from the CSS rather
-than from the page makes. **The stretched element was the wrong one**: the
-danger button rendered 48.5px, and it was its QUIET SIBLING that reached 88.5px,
-because `.da` is a flex row at default `align-items: stretch` and the button's
-40px margin set the line height. So the visible symptom was an oversized empty
-"Keep my account" box, not a fat red button -- which is likely why it read as a
-dialog quirk for as long as it did. And **the margin was already dead at both of
-the card's own sites**: `preferences.html` overrides it inline at each
-(`margin-top:0`, `margin-top:1rem`), so the declaration was live only where it
-was never meant to apply, which is what made the fix provably safe -- both cards
-measured identical to main on margin, padding, display, gap, align-items, width
-and height.
-
-Why it left alone rather than waiting: the batched-pass argument is about SIX
-items sharing one review and one owner eyeball, and it holds for the five that
-remain, which are demo frames with no app code and two open design questions
-(which split-pill shape won; what an error-page frame contains). This one was
-app CSS with a regression test, a different review surface entirely. **Five
-items left, all demo-parity absences again**, and the entry's rank is unchanged
--- it lost the only part of itself that was ever a bug, which argues for the
-batch being LOWER, not higher, but it was already ranked as polish.
-
-### 9. The event classes outside concerts and talk shows
+### 8. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1744,7 +1745,7 @@ this class's actual difficulty, is untouched. Release events stay the honest
 "may not be expressible at all": a completion pass that finds no deadline
 because there is none is not progress on them.
 
-### 10. A/B casts have nowhere to live
+### 9. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1775,7 +1776,7 @@ leg-label-shaped identity too, and a cast convention smuggled into a label would
 be reproduced by it as readily as by a skill. Same verdict either way -- the gap
 stays honest until stage runs come back into scope.
 
-### 11. Discover sort in the content head, plus the catalogue-count note
+### 10. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1814,7 +1815,7 @@ and an admin page, and never went near Discover, its sidebar, the filter sheet
 or the catalogue counts. Recorded only because this file's discipline is that a
 re-read leaves a mark whether or not it found anything.
 
-### 12. Name the destination on the sign-in bounce
+### 11. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1834,7 +1835,11 @@ Ranked below the demo-parity cosmetics batch and the Discover-head entry
 because those close several visible gaps each; this refines one sentence that
 is already correct. (Named rather than numbered as of 2026-07-29: this
 pointer has been bumped by renumbering in five separate passes, which is
-five chances to get it wrong for no gain.)
+five chances to get it wrong for no gain.) **Half that pointer went away on
+2026-08-12** when the demo-parity cosmetics batch shipped; the ranking argument
+now rests on the Discover-head entry alone, and it still holds -- that one still
+closes several visible gaps to this one's single sentence. The batch is not
+re-read as a comparison because it no longer exists to compare against.
 
 Re-read 2026-08-06 against AI draft completion: **no contact, rank unchanged.**
 Nothing in that build touches `safe_next`, the bounce copy or the landing page.
@@ -1845,7 +1850,7 @@ renders through Jinja's escaping as ordinary content, never into an `on*`
 handler or an inline script (invariant 7). Different surface, same rule,
 already followed.
 
-### 13. The calendar roster's blind spots
+### 12. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1908,7 +1913,7 @@ but it does mean the second half of this entry ("promoter-named rounds are
 unreachable by prefix, and always will be") is now routed around rather than
 merely tolerated, which is a further argument for leaving it at `low`.
 
-### 14. Two narrow edges outcome correction left open
+### 13. Two narrow edges outcome correction left open
 
 Impact: low (both are rare, and one is copy rather than state) - effort: small
 for each, and they are independent. Raised: 2026-08-11 (outcome-correction
@@ -1947,7 +1952,7 @@ outranks an admin inconvenience. Neither is worth a branch of its own -- (b) in
 particular is one string and one condition, and belongs in whatever next touches
 `_progress_reply`.
 
-### 15. Nothing caps the discovery review path
+### 14. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -2029,7 +2034,7 @@ stops matching the day after a show, so rows leave without anybody dismissing
 them. That is the opposite of the discovery queue's unbounded growth, which is
 the property that made this entry worth filing.
 
-### 16. Nothing notices a calendar feed going quiet
+### 15. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
@@ -2101,7 +2106,7 @@ in `delivery_log` like any other). A per-feed "last future row seen" line is
 still the right first version; what changed is that going further is no longer
 over-built, because the machinery to copy already exists.
 
-### 17. `db/core.py` is one mutually-recursive 4,000-line component
+### 16. `db/core.py` is one mutually-recursive 4,000-line component
 
 Impact: nil for users, real for anyone changing the reminder engine - effort:
 large. Raised: 2026-08-07 (the service.py split; this is the part that
@@ -2132,6 +2137,101 @@ precisely because a materialised table has to stay honest. Worth doing on its
 own merits; the file size is a symptom, not the reason.
 
 Do not attempt this as a tidy-up. The engine is the product.
+
+### 17. The demos are one grammar-migration behind the app
+
+Impact: nil for users, real for anyone doing UI work against the design source
+of truth - effort: medium, and it wants its own bounded pass rather than being
+folded into whatever polish job trips over it next. Raised: 2026-08-12
+(demo-parity build, deferred OUT of it deliberately -- a polish pass should not
+become a demo migration).
+
+`CLAUDE.md` and `docs/architecture.md` both name `docs/superpowers/demo/` the
+**design source of truth**. It is one, and it is also stale in a specific,
+nameable way: the app adopted the two-shape callout grammar (G2) on 2026-07-24
+and the demos never did. They still carry pre-G2 shapes alongside the current
+ones, and in one case they carry a pre-G2 shape under a post-G2 NAME.
+
+**The instance that cost this branch twice.** Both `dekimasen-demo.html`
+(line ~86) and `dekimasen-onboarding-demo.html` (line ~87) define a `.banner`
+that is a **top concept-bar** -- the strip under the header explaining what the
+mockup is. The app's `.banner` is the G2 needs-attention callout (wash ground,
+full border) that absorbed the old `.callout(+warn)`, `.banner-warn` and
+`.signin-note`. Same class name, entirely different component. Two separate
+tasks on the demo-parity branch each needed the app's shape, and each had to add
+a compound `.banner.warn` rule re-declaring **every property the concept-bar
+rule sets**, purely to stop it bleeding through. That workaround holds only for
+properties BOTH rules know about: a property added to the concept-bar rule
+later, with no counterpart in the compound, leaks straight into the callout.
+Both files now carry a comment saying exactly that -- which is a warning
+standing where a fix belongs.
+
+**Smaller instances of the same family**, every one found by tripping over it:
+
+- the demo's `.memb` lacks the `align-items: center` that `style.css:1365` has
+  (spotted by the split-pill task, left alone as out of scope);
+- `.visually-hidden`, `.tiny`, `.dim` and `.edgecard` were each absent from one
+  or both demo files, and were ported piecemeal by **four different tasks** of
+  one nine-task branch -- four separate discoveries of the same underlying fact,
+  which is the tell that the fact is structural and not a list of oversights.
+  Two of the four are still one-sided today: `.visually-hidden` exists only in
+  `dekimasen-demo.html` and `.edgecard` only in `dekimasen-onboarding-demo.html`,
+  because each was added where a task happened to need it.
+
+**What a real pass looks like:** rename the concept-bar to something that is not
+a G2 class name, delete the compound workarounds, port the G2
+`.banner`/`.edgecard` pair verbatim from `style.css` into both files, and diff
+the demos' shared utility classes against the stylesheet ONCE rather than one
+class at a time. That last step is what makes this a migration rather than a
+fix, and it is why the effort reads medium rather than small.
+
+**Ranked #17, and the honest case against ranking it higher is that this is a
+documentation-quality problem with no user-visible impact whatever.** Nothing
+renders wrong for anyone; each demo is self-consistent and looks right. It sits
+above the agent-skills entry beneath it because that one is convenience for a
+workflow that already works, while this one actively misleads -- a reader who
+takes the demo at its word about `.banner` learns a component that does not
+exist. It sits below `db/core.py` (#16) because a stale reference costs an
+assumption a reader can overturn by opening `style.css`, whereas that entry's
+shape constrains the engine, and the engine is the product. And it goes no
+higher than this band because the cost, while real and now twice-paid, is
+bounded and SELF-ANNOUNCING: every instance above was found by the task that
+reached for the class, within minutes and before any of it reached the app.
+That is the cheapest failure mode this file tracks, which is exactly why it
+belongs down here rather than anywhere it would displace work someone is
+waiting on.
+
+**A worklist for whoever takes this**, gathered by the demo-parity build's final
+two review passes and recorded here so it is not re-derived. None of it blocked
+that merge; all of it is the same drift.
+
+The one with actual parity consequences: **the editor frame's Tags fold BODY is
+a branch behind its own hint.** The hint now says 15 performers while the body
+enumerates 9 chips, with no Characters row and no 765PRO ALLSTARS / 竜宮小町
+group chips -- on a demo whose concert frame directly above carries the full
+roster. The app's picker demonstrably HAS that row
+(`_tag_picker_fields.html:27`, "Characters (their voice actors are added for you
+when you save)"), so its absence is a real gap on the very surface character
+tags shipped through. The hint's SHAPE is not app-producible either:
+`concert_edit.html:143` renders `tag_summary[:6] | join(' · ')` -- tag NAMES,
+never "N performers · Kanto".
+
+The rest are smaller and all pre-existing: the round-kind select offers a
+five-item invented list where `LABEL_BY_ROUND_KIND` has eleven and names them
+differently ("Lottery round", "Eligibility item sale", not "Lottery"); leg 2's
+先行抽選 R2 shows a `—` pill where `leg_status_pill` falls through to
+`status_pill(PAID)` -> "Secured", and leg 1's says "Paid" where
+`_round_rows.html:29` renders "Secured"; a single `opens_at_utc` renders as
+"Opens Wed 30 Jul" on one leg and "Won 18 Jul" on the other; the editor's time
+labels say "Opens (JST)" where the app says "Apply opens (JST)"; and the demo's
+tile off-state opacity is `.38/.62` against the app's `.4/.65`, with the demo's
+rules unscoped where the app scopes under `.pick`.
+
+Worth noting what this list is evidence FOR, since it is the argument for doing
+the migration as one bounded pass rather than opportunistically: every item was
+found by a reviewer checking a demo string against the app's source, and none of
+them was found by anyone reading the demo. A reference nobody can check by
+reading is exactly the failure this entry describes.
 
 ### 18. Teach `add-concert` / `triage-leads` to use the agent read API
 
@@ -2242,6 +2342,59 @@ pointer now is). Worth a fresh look if the raw
 HTTP ergonomics prove genuinely annoying inside Claude Code in practice;
 nothing so far says they do, so this stays logged rather than built.
 
+**Revision-pass note (2026-08-12, minor demo-parity cosmetics -- full pass
+required by CLAUDE.md's WISHLIST rule after every shipped feature):** one removal
+(#8, shipped), one insertion (#17, the demos' grammar drift), and no re-rank on
+merit. The two cancel, so #18-#20 keep their numbers while the former #9-#17
+slide to #8-#16 by position alone. The shared answer for everything else is that
+this is the smallest build this file has recorded: two demo files, one Preferences
+label with its two catalogue rows, one dialog footer moved out of its form, and
+one CSS declaration on two selectors. It changed no reminder math, no round
+taxonomy, no tag semantics, no catalogue surface, no fetch path, no admin page
+and no data model, and it **removed nothing from any other entry's path** -- a
+thing worth saying plainly, because a nine-task branch that clears nobody's way
+is exactly what "polish" is supposed to mean and this file should be able to tell
+the difference.
+
+Three entries were read closely rather than skimmed, being the only ones this
+build could plausibly reach.
+
+**#10 (Discover sort in the content head)** is the one that genuinely moved in
+meaning without moving in rank, and it is the most useful thing this pass
+produced. It is the LAST surviving entry of the family the shipped one belonged
+to: a demo-says-X, app-says-Y difference filed as an app debt. The owner's merit
+ruling now governs it too -- the demo is the default answer, not the verdict --
+and the entry had already half-anticipated that in its own filing ("debatable
+whether the sidebar is actually worse"). Whoever picks it up should start by
+deciding which surface is RIGHT rather than by restructuring the DOM. The new #17
+sharpens the same point from the other side: a demo one grammar-migration behind
+the app is a weaker authority than this entry assumed when it was written in
+July. Rank unchanged -- low impact, small effort, and none of the work described
+changed -- but its first step did.
+
+**#11 (name the destination on the sign-in bounce)** lost half of its own ranking
+comparison, corrected in place above: it was ranked below "the demo-parity
+cosmetics batch and the Discover-head entry", and the first of those no longer
+exists. The argument survives on the second alone. No contact with `safe_next`,
+the bounce copy or the landing page -- and worth one line so it is not
+re-derived, the `.lede h1` this build gave `text-wrap: balance` is the ERROR
+pages' heading, not the bounce note's.
+
+**#3 (franchise-aware round-label suggestions)** was checked because this build
+made a msgid change, which is the only thing it has in common with an entry about
+round-label copy. No contact: the string that changed is a Preferences toggle
+label, the phrase library is untouched, and the one transferable lesson is
+already in CLAUDE.md -- editing English copy means both `.po` files by hand.
+
+The unranked Following entry at the head of Proposed stands exactly as filed and
+stays unranked; this build is what removed its sibling gap from #8, which is the
+event that created it, and its one numeric pointer was made name-based here so it
+cannot rot again. The remaining sixteen (#1-#2, #4-#9, #12-#16, #18-#20) were
+re-read against this build specifically and stand as written; #1 records its own
+seventeenth consecutive unchanged verdict in its entry. Judgement: nothing else
+moves. Recorded explicitly rather than left implicit, per the instruction that a
+revision pass leaving no trace is indistinguishable from one that never happened.
+
 **Revision-pass note (2026-08-11, outcome correction -- the second full pass
 that day, required by CLAUDE.md's WISHLIST rule after every shipped feature):**
 one insertion, no re-rank on merit, and one entry grown. The insertion is #14
@@ -2273,6 +2426,12 @@ agent's judgment either way. Judgement: nothing else moves. Recorded explicitly
 rather than left implicit, per the instruction that a revision pass leaving no
 trace is indistinguishable from one that never happened.
 
+(The numbers in the two paragraphs above are the ones THAT pass left, kept
+deliberately. The 2026-08-12 demo-parity pass then shipped #8 and inserted one
+entry at #17, so against the list as it stands now read #14→#13, #17→#16 and
+#19→#19; #8 is no longer a number at all -- it is the demo-parity cosmetics entry
+in Shipped. Every number at or below #7 means the same entry it did then.)
+
 **Revision-pass note (2026-08-11, full pass required by CLAUDE.md's WISHLIST
 rule after every shipped feature):** the five entries round watch genuinely
 touches carry their own dated re-reads above (#6 three long jobs, #14 the
@@ -2301,9 +2460,13 @@ indistinguishable from one that never happened.
 (The numbers in the paragraph above are the ones THIS pass left, and are kept
 that way deliberately -- a dated note should record the list it actually ranked.
 The outcome-correction pass later the same day inserted one entry at #14, so
-read #14→#15, #15→#16, #16→#17, #17→#18 and #18→#19 against the list as it
-stands now. Every number at or below #13 -- which is all the rest of them --
-means the same entry it did then.)
+read #14→#15, #15→#16, #16→#17, #17→#18 and #18→#19 against the list as it stood
+after it. Every number at or below #13 -- which was all the rest of them -- meant
+the same entry it did then. **The 2026-08-12 demo-parity pass then shipped this
+paragraph's #8 and inserted one entry at what is now #17**, so against the list
+as it stands TODAY the chain above resolves to #14→#14, #15→#15, #16→#16, #17→#18
+and #18→#19; this paragraph's #8 is in Shipped; its #9-#13 are #8-#12 now; and
+its #1-#7 still mean what they did.)
 
 **Revision-pass note (2026-08-08, full pass required by CLAUDE.md's
 WISHLIST rule after every shipped feature):** every remaining entry (#3-#5,
@@ -2331,6 +2494,141 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Minor demo-parity cosmetics, judged on merit (2026-08-12)
+
+Branch `demo-parity`, nine tasks, spec
+`docs/superpowers/specs/2026-08-11-demo-parity-design.md`, plan
+`docs/superpowers/plans/2026-08-11-demo-parity.md`. **No migration**, no new
+dependency, and the entire app-side diff is 18 added lines across five files --
+one label (plus its two catalogue entries), one dialog footer, and one CSS
+declaration on each of two selectors. This was Proposed #8, raised 2026-07-20 and
+grown six times in three weeks without ever being worth a branch of its own.
+
+**The owner replaced the entry's standing assumption, and that is the thing to
+carry away from this build.** For its whole life #8 assumed *the demo is right
+and the app should change*. He replaced it with **judge each on merit** -- the
+demo stays the default answer, but where the app moved deliberately or is simply
+better, the demo is what changes. Re-reading eight tracked items against that
+rule found four were not what the entry said they were, and **two reversed
+direction outright**:
+
+- **The Tags member list.** The entry asked the app to adopt the demo's "+5
+  more" truncation. But that is the EDIT dialog: every chip carries a delete
+  `×`, and an inert "+5 more" with no way to expand made five of nine members
+  unreachable on the one surface built for reaching them. Truncation is right
+  for a *display* of members; this is not one. The demo changed.
+- **The Setup pick tiles.** The entry filed the app's label-wrapping-a-hidden-
+  checkbox as an accessibility gap against the demo's `<button aria-pressed>`.
+  They render identically and screen readers handle both (announcing "checked"
+  rather than "pressed"); the difference is that a real form control submits with
+  JavaScript off and a button cannot, since `aria-pressed` needs a script to
+  track state and a hidden input to carry it. The demo changed.
+
+**Both would have been regressions had the pass run as filed**, which is the
+case for the ruling, stated plainly: a three-week-old cosmetic list is a set of
+claims about the app, and claims decay.
+
+**Item 2 was struck, not built.** Filed 2026-07-21, it asked the demo for a frame
+for `.signin-note`. On 2026-07-24 -- three days later -- the UX pass absorbed that
+class into the two-shape callout grammar and it ceased to exist; the signed-out
+bounce is `<p class="banner banner-block">` now, and
+`dekimasen-ux-pass-demo.html` already carried both the replacement shape (line
+724) and the migration map naming what it replaced (line 728). The entry spent
+three weeks asking for a frame for a deleted component.
+
+**The split pill's "open design question" was not open.** The entry called it
+"worse than a gap, because the next person finds four rejected shapes and no
+record of the choice". Half right: the demo carried no frame, but the choice and
+its reasoning were already in
+`docs/superpowers/specs/2026-08-01-character-seiyuu-subunit-design.md` -- the
+split shape was chosen over the inline `如月千早（今井麻美）` form precisely
+because the merge is conditional -- along with the subunit rail's ruling and its
+rejected alternative. That task was a port, not a decision.
+
+**The entry also shrank before the branch existed.** The Following cosmetic
+(a disclosure fold against the demo's footer bar plus dialog) left #8 earlier the
+same day and became its own unranked entry at the head of Proposed, because
+putting it to the owner as a genuine fork surfaced that he wants the whole
+Following surface reworked -- so deciding the cosmetic now would decide it twice.
+And a sixth item -- the only DEFECT the entry ever carried, `style.css`'s
+`.danger` card frame also matching every `<button class="btn danger">` and
+beating `.btn` on source order -- had shipped on its own branch on 2026-08-11,
+hours after it was filed. It is `.danger-card` now with a CSS-level sweep test,
+and the durable half of that lesson lives in `docs/ui-conventions.md`: **an
+anatomy class must be specific enough that it cannot match something else wearing
+the same tone word.**
+
+**What the entry got wrong divides cleanly in two, and both halves are worth
+keeping.** Two were DESCRIPTION errors, written from a stylesheet rather than
+from the page: the `.danger` item named the wrong stretched element (the danger
+button rendered 48.5px; its quiet sibling reached 88.5px, because `.da` is a flex
+row at default `align-items: stretch`) and a margin already overridden inline at
+both of the card's real sites, and the `text-wrap` item asserted that three
+sibling `h1` rules carried the property when only one of the three selectors is
+an `h1` at all. That is the measure-don't-reason rule failing inside the entry
+that collects measured defects. The other two -- the member list and the pick
+tiles -- described the app accurately and judged it wrongly, because the entry's
+standing assumption meant a difference never had to be argued for. Different
+failure, same remedy: look at the thing.
+
+**What actually shipped.** App side: `Auto-apply` → `Auto-apply preset` on
+Preferences with both catalogues filled by hand (measured before accepting, per
+the measure-don't-reason rule, at 365px and 320px in English and Japanese -- all
+eight measured cells came back 119px, no wrap, so the longer label costs the
+phone row nothing); the new-tag dialog footer hoisted out of the
+`<form>` to span the dialog, with `form=` on the submit button; and `text-wrap:
+balance` on `.lede h1`. Demo side: the two reversals above, four error-page
+frames (403/404/422/500, copy verified byte-for-byte against `web/app.py`
+including both 403 variants), the split pill and the subunit rail, the goods-sale
+select and the requires/needed-for lines, and the import preview's evidence
+block, rejection callout and paste fold. The tag EDIT dialog needed **no markup
+change at all** -- it already had the footer-outside-form shape -- but was
+untested, and now is.
+
+**`.legal h1` was found during planning and fixed alongside `.lede h1` by owner
+ruling.** The spec's claim that "three sibling `h1` rules already carry
+`text-wrap: balance`" was wrong: only one of the three selectors carrying it is
+an `h1` (`.hero .promise` 3.5rem, `.ctafoot h2` 1.6rem, `.chead h1` 1.7rem), so
+the real pattern is *large display headings balance their wrap*, not "h1 rules
+do". That made an honest sweep test impossible and left `.legal h1` (1.7rem, the
+same size as `.chead h1`) looking like a second oversight. The owner ruled: fix
+both, so the set the test pins expresses a coherent rule -- every display heading
+1.6rem and up -- rather than an arbitrary list.
+
+**A third instance of the pick-tile bug was found during execution, and the
+design had missed it.** `#cap2` ("Already applied to any of these?") is a second
+`.tile` block in the same demo, and the counterpart of `setup.html:116`, which
+the app already renders as a label plus checkbox. Because it shares the `.tile`
+class, the planned literal replacement of the `[aria-pressed]` state selectors
+would have stripped every state style off those five tiles -- so the conversion
+had to keep both selector families while the file was mixed and simplify to
+`:has()`-only once `cap2` was converted too. 14 tiles converted file-wide, 9 in
+`#pickList` and 5 in `cap2`. The plan document carries a dated correction saying
+so.
+
+**Eight implementation tasks, five of which needed a fix round; Task 7 needed
+two.** Every finding ran to zero. Two of the findings were defects in the PLAN
+rather than in the implementation -- a brief that put both goods-sale lines on
+one round row, producing a self-referential "General sale -- Needed for: FC
+presale, General sale" that `resolve_round_requires` makes structurally
+impossible in production, and a dual-time example using a comma where
+`timezones.py` emits a middot. One fix round then introduced a new defect of
+exactly the class it was fixing: an invented `1 on sale` fold chip naming a state
+`_FOLD_KINDS` -- a closed vocabulary -- cannot produce. And **two task reports
+asserted something their own diff did not contain** -- caught, both times,
+because review here checks the diff and not the report.
+
+**One thing was deferred out on purpose and is now Proposed #17:** the demos are
+one grammar-migration behind the app. Their `.banner` is a pre-G2 top concept-bar
+sharing a class name with the app's G2 callout, and two separate tasks each had
+to work around it with a compound rule. That is a migration, not polish, and
+folding it in would have turned a polish pass into one.
+
+Revision pass: recorded in the narrative above and in the note at the end of
+Proposed -- one removal (this entry), one insertion at #17, the former #9-#17
+renumbered to #8-#16 by position alone, and nothing re-ranked on merit. #18-#20
+keep their numbers, since the removal and the insertion cancel.
 
 ### Outcome correction: taking a recorded result back (2026-08-11)
 

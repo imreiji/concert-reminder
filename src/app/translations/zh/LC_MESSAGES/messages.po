@@ -2756,8 +2756,8 @@ msgid "Add my default preset to new matching events"
 msgstr "为匹配的新活动应用我的默认预设"
 
 #: src/app/web/templates/preferences.html:58
-msgid "Auto-apply"
-msgstr "自动应用"
+msgid "Auto-apply preset"
+msgstr "自动应用预设"
 
 #: src/app/web/templates/preferences.html:61
 msgid "Unfollow"
