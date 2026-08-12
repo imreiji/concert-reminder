@@ -1089,6 +1089,19 @@ already-shipped markup -- folded in there because it is one line in the same
 single polish pass, not because it is the same kind of thing. The reasoning for
 the other seventeen is in the revision-pass note at the end of Proposed.
 
+**A fourth 2026-08-11 pass files an entry by DELETING a gap from another one.**
+Working entry #8 turned its "Follow another tag" cosmetic into an owner ruling
+that the whole Following surface wants reworking, so that gap left #8 without
+being fixed and became an entry of its own at the head of Proposed — unranked,
+for the reasons it gives. Two things worth recording as pattern. First, the
+question that produced it was a genuine 50/50 (the demo's dialog is also what
+the app's own picker convention demands; the shipped fold is the only shape
+that survives JS being off), and putting a real fork to the owner is what
+surfaced that neither answer was wanted. Second, **#8 shrank without shipping
+anything** — five items left, all still demo-parity absences — which is the
+first time this file has recorded that shape. Its rank is unchanged: it was
+already ranked as polish, and losing a polish item does not move polish.
+
 **A third 2026-08-11 pass ships one ITEM out of an entry rather than an entry**,
 which is new for this file and is why it gets a note despite being one CSS
 selector. #8's sixth item -- the `.danger` card frame also styling every
@@ -1104,6 +1117,49 @@ measure-don't-reason rule catching a miss in the very entry that records
 measured defects.
 
 ## Proposed (highest impact first)
+
+### Following is due a rework (filed UNRANKED — see below)
+
+Impact: unknown, plausibly high — effort: unknown. Raised: 2026-08-11 (owner,
+during the entry-#8 brainstorm, in answer to a cosmetic question about the same
+surface). **Owner-raised, which matters: the file's own history notes that
+owner-raised usage pain has led this list every time it has appeared.**
+
+His words: he wants to rework how following tags works, "since it's getting
+pretty big". Nothing further is specified yet, and nothing should be invented
+here — what follows is only the evidence a brainstorm starts from, not a
+proposed design.
+
+**What "big" is measurable as, today.** Preferences' Following section renders
+one `.subrow` per followed tag, each with its own Notify and Auto-apply toggles
+and an Unfollow, then a disclosure fold containing the WHOLE tag catalogue —
+`franchises` → `groups` (filtered per franchise) → `members` per group — as
+chips, plus a search box that filters client-side. So the section grows on two
+independent axes at once: the number of tags you follow, and the size of the
+catalogue you might follow from. The second is the one that ran away; the
+catalogue now carries franchises, groups, subunits, characters, seiyuu and
+venues, and every ARTIST/GROUP/CHARACTER in it is a chip in that fold.
+
+**Two things a rework must not lose**, both of which cost real money to
+rediscover:
+- **Subscriptions are OVERRIDES, not records** (invariant 8). "Following" is
+  derived — a followed tag matching, minus an `opted_out` row, plus an explicit
+  `subscribed` row — and `tracked_concert_ids` is the one place that derivation
+  lives. A redesigned surface must not grow a second one.
+- **The section works with JS off**, deliberately. Every toggle is a real POST
+  form and the fold is a native `<details>`. That is precisely what made the
+  cosmetic fold-vs-dialog question a genuine fork rather than a formality, and
+  it is the constraint most likely to be dropped by accident in a rework.
+
+**Deliberately filed UNRANKED**, on the precedent outcome correction set on
+2026-08-11: the entries below keep 1-20 rather than renumbering by one. That
+precedent was for an item already on a branch; the reason here is different but
+no weaker. This entry cannot be honestly ranked yet — its impact reading and
+its whole effort estimate depend on a scope that does not exist, and inserting
+it at #1 on the owner-raised precedent would renumber twenty entries and their
+cross-references on the strength of a single sentence. What settles the rank is
+a brainstorm, not a guess. Whoever picks it up should start there and give it a
+number on the way out.
 
 ### 1. Minute-level reminder offsets
 
@@ -1602,15 +1658,27 @@ Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
 
 Cosmetic gaps the 2026-07-20 reconciliation left unbatched because they are
-pure polish, not correctness: Preferences' "Follow another tag" is a
-disclosure fold rather than the demo's footer `.bar` + button, and its
-second toggle reads "Auto-apply" where the demo says "Auto-apply preset";
+pure polish, not correctness: Preferences' second toggle reads "Auto-apply"
+where the demo says "Auto-apply preset";
 the Tags edit dialog lists every member instead of the demo's "+N more"
 truncation, and its new-tag dialog footer sits slightly detached (nested in
 a grid rather than a sibling of the body); Setup's pick tiles are
 keyboard-reachable now but use a visually-hidden checkbox where the demo
 uses a real `<button aria-pressed>`, and `.lede h1` lacks `text-wrap:
 balance`. The cheapest of the open items - one small pass closes all of it.
+
+**A sixth gap was REMOVED from this list on 2026-08-11, not fixed**:
+Preferences' "Follow another tag" being a disclosure fold rather than the
+demo's footer `.bar` + button. Put to the owner as a genuine fork -- the
+demo's shape is also what this app's own convention demands ("pickers are
+native `<dialog>` white cards", and this is the only picker that is not one),
+against a fold that is the only shape which survives JS being off -- he
+answered that he wants to rework how following tags works altogether, because
+the surface is getting big. So the cosmetic question is MOOT rather than
+settled: a fold-vs-dialog decision made now would be made twice. It is filed
+as its own entry at the head of Proposed. Do not re-add it here; if the
+rework is ever abandoned, it comes back as a fresh gap against whatever the
+demo says then.
 
 Re-reviewed 2026-07-20 (i18n build): every string this entry touches or adds
 now needs both catalogues updated (`tests/test_i18n_catalogues.py` fails
