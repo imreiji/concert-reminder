@@ -334,3 +334,19 @@ def test_header_emits_theme_toggle_and_pill_nav(client):
     assert 'nav class="main"' in html, "primary nav must render as nav.main for pill styling"
     # The no-flash guard: a synchronous read-and-stamp snippet in <head>.
     assert "localStorage" in html and "data-theme" in html
+
+
+def test_tagtable_css_survives_the_tags_page_losing_its_table():
+    """/tags dropped its table view (2026-08-12), but .tagtable is shared with
+    six admin templates. Deleting the rule with the markup would silently
+    flatten all six.
+
+    Mutation this must fail against: removing the .tagtable rules from
+    style.css as part of "cleaning up" the tags page.
+    """
+    style = css()
+    assert ".tagtable" in style
+    users = [p.name for p in TEMPLATES.glob("*.html")
+             if "tagtable" in p.read_text(encoding="utf-8")]
+    assert "tags.html" not in users, "the tags page's table markup is gone"
+    assert len(users) >= 6, f"still used by the admin pages: {users}"

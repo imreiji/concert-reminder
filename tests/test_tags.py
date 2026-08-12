@@ -462,17 +462,21 @@ def test_tags_page_renders_hierarchy_and_search_box(client):
 
 # ── Subunits in the chips directory (GROUP -> GROUP, 2026-08-01) ─────────
 #
-# The chips directory is the ONLY view a non-editor gets: the table and the
-# per-tag dialogs are both editor-only, so a name that renders in those alone
-# is invisible to most of the site's users. Every assertion here is therefore
-# scoped to the chips directory, never to the whole page body.
+# The chips directory is the ONLY view a non-editor gets: the per-tag dialogs
+# are editor-only (Task 5, 2026-08-12, deleted the table view outright), so a
+# name that renders in a dialog alone is invisible to most of the site's
+# users. Every assertion here is therefore scoped to the chips directory,
+# never to the whole page body.
 
 
 def _chips(body: str) -> str:
-    """Just the chips directory -- the table view and the dialogs hold every
-    tag name on the page and would make any of these assertions vacuous."""
+    """Just the chips directory -- the per-tag edit dialogs that follow it in
+    DOM order hold every tag name on the page too, and would make any of
+    these assertions vacuous. Split on the first dialog's opening tag rather
+    than on `.tags-scope`'s own closing `</div>`, which is indistinguishable
+    from the many other closing divs inside the chips markup."""
     after = body.split('<div class="tags-page">', 1)[1]
-    return after.split('id="tag-table-wrap"', 1)[0]
+    return after.split('<dialog id="tag-dialog-', 1)[0]
 
 
 def _seed_subunit(client):
@@ -524,10 +528,10 @@ def test_a_subunit_row_sits_under_its_parent(client):
 
 
 def test_a_non_editor_sees_the_subunit_and_its_member(client):
-    """The editor-only table view is not a place a reader can stand."""
+    """The chips directory is a non-editor's only view of a subunit -- the
+    per-tag edit dialogs (the table view is gone entirely, Task 5,
+    2026-08-12) are editor-only and never a place a reader can stand."""
     login_as(client, VIEWER_ID, "viewer")
-    body = client.get("/tags").text
-    assert 'id="tag-table-wrap"' not in body  # precondition: no table for them
     login_as(client, EDITOR_ID, "reiji")
     _seed_subunit(client)
     login_as(client, VIEWER_ID, "viewer")

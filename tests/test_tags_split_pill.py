@@ -204,13 +204,19 @@ async def test_a_character_in_no_group_appears_with_the_ungrouped_performers(cli
 
     Mutation this must fail against: deleting the section without widening
     ungrouped_performers, which drops her off the page entirely.
+
+    Scoped to the "Performers with no group" section specifically, not to any
+    famhead on the page -- a page-wide `<div class="famhead">` search would
+    still pass if she surfaced in a group's famhead or a venue's famhead
+    instead, which is not the claim being tested.
     """
     login_as(client, EDITOR_ID, "editor")
     lone = await _tag(client, "双葉杏", "character")
     body = client.get("/tags").text
     assert "Characters" not in body, "the section itself must be gone"
-    famhead_blocks = re.findall(r'<div class="famhead">(.*?)</div>', body, re.DOTALL)
+    section = body.split("Performers with no group", 1)[1]
+    famhead_blocks = re.findall(r'<div class="famhead">(.*?)</div>', section, re.DOTALL)
     assert any(lone.name in block for block in famhead_blocks), (
-        "an ungrouped character must render somewhere on the page -- the "
-        "'Performers with no group' section is the only row left for her"
+        "an ungrouped character must render in the 'Performers with no "
+        "group' section, the only row left for her"
     )

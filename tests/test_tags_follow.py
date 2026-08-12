@@ -100,13 +100,13 @@ async def test_the_follow_form_needs_no_javascript(client):
 
 
 def _chips(body: str) -> str:
-    """Just the chips directory -- the table view and the per-tag edit
-    dialogs both still carry `showModal`/dialog markup after this change (the
-    table's own button still opens the dialog, and Task 6 restores an editor
-    mode switch); scoping to the chips directory keeps this test about the
-    chip specifically, not the rest of the page."""
+    """Just the chips directory -- the per-tag edit dialogs that follow it in
+    DOM order still carry `showModal`/dialog markup (the table view itself is
+    gone as of Task 5, 2026-08-12, and Task 6 restores an editor mode switch);
+    scoping to the chips directory keeps this test about the chip
+    specifically, not the rest of the page."""
     after = body.split('<div class="tags-page">', 1)[1]
-    return after.split('id="tag-table-wrap"', 1)[0]
+    return after.split('<dialog id="tag-dialog-', 1)[0]
 
 
 async def test_editors_also_get_a_follow_form_not_an_edit_dialog_opener(client):

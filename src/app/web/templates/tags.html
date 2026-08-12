@@ -40,15 +40,13 @@
 
 <input class="tag-search" type="search" placeholder="{{ _('Search franchises, groups, performers, venues…') }}" oninput="filterChips(this, '.tags-scope')">
 
-{#- E1: the editor-only chips ⇄ table toggle. Chips are for picking, tables
-    for comparing usage. Both views live inside .tags-scope so the search box
-    above (filterChips, keyed on data-name) filters whichever is visible. -#}
+{#- The editor-only viewbar. Task 5 (2026-08-12) removed the Chips/Table
+    toggle it used to hold -- the table view is gone, editors lose nothing
+    since the per-tag edit dialog already shows events, followers, members
+    and upcoming. Left in place (empty for now) for Task 6, which puts the
+    Follow <-> Edit mode switch here. -#}
 {% if user.is_editor %}
 <div class="viewbar">
-  <div class="viewtoggle" id="tagViewToggle">
-    <button type="button" data-view="chips" aria-pressed="true">{{ _("Chips") }}</button>
-    <button type="button" data-view="table" aria-pressed="false">{{ _("Table") }}</button>
-  </div>
 </div>
 {% endif %}
 <div class="tags-scope">
@@ -336,51 +334,7 @@
   </div>
   {% endif %}
 </div>
-{% if user.is_editor %}
-{#- The table renders AFTER the chips directory in DOM order, deliberately:
-    document-order tests (and any future "first occurrence" logic) keep the
-    chips view's ordering semantics -- the table is a duplicate density view,
-    never the first sighting of a name. -#}
-<div id="tag-table-wrap" hidden>
-  <table class="tagtable">
-    <thead><tr>
-      <th>{{ _("Tag") }}</th><th>{{ _("Kind") }}</th>
-      <th class="r">{{ _("Events") }}</th><th class="r">{{ _("Followers") }}</th>
-      <th class="r">{{ _("Upcoming") }}</th><th>{{ _("Following") }}</th>
-    </tr></thead>
-    <tbody>
-      {% for t in all_tags %}
-      {% set c = counts[t.id] %}
-      <tr data-name="{{ search_key(t) }}">
-        <td><button type="button" class="tchip"
-              onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ loc(t, "name") }}</button></td>
-        <td><span class="dim">{{ KIND_LABELS.get(t.kind.value, t.kind.value) }}</span></td>
-        <td class="r">{{ c.concerts }}</td>
-        <td class="r">{{ c.followers }}</td>
-        <td class="r">{{ c.upcoming }}</td>
-        <td>{% include "_tag_follow_bell.html" %}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
 </div>
-{% endif %}
-</div>
-<script>
-  // E1: chips ⇄ table view toggle (editor-only; the controls render only for
-  // editors). aria-pressed is the state; [hidden] does the hiding.
-  (function () {
-    const toggle = document.getElementById("tagViewToggle");
-    if (!toggle) return;
-    toggle.addEventListener("click", function (e) {
-      const b = e.target.closest("button[data-view]");
-      if (!b) return;
-      toggle.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-      document.querySelector(".tags-page").hidden = b.dataset.view !== "chips";
-      document.getElementById("tag-table-wrap").hidden = b.dataset.view !== "table";
-    });
-  })();
-</script>
 {% if user.is_editor %}{% for t in all_tags %}{{ tag_dialog(t) }}{% endfor %}
 
 {% include "_variant_guard.html" %}
