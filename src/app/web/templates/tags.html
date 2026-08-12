@@ -219,10 +219,15 @@
 </dialog>
 {% endmacro %}
 
-{#- A tag chip. Every chip is a follow control: a real <form> posting to the
-    same routes _tag_follow_bell.html uses, so it works with JS off, with
-    next=/tags so you stay where you are. `count` is the concert count (None
-    for member chips, which carry no count and never show the unused state).
+{#- A tag chip. Every chip is a follow control: a real <form> posting to
+    POST /subscriptions and POST /subscriptions/{id}/delete, so it works with
+    JS off, with next=/tags so you stay where you are (that value only survives
+    because "/tags" is in _ALLOWED_NEXT -- routes/preferences.py -- which is a
+    closed internal allowlist, not the open-redirect guard). This generalises
+    _tag_follow_bell.html, the table view's follow control, which was deleted
+    with the table: this macro is now the pattern, and it is pinned by tests.
+    `count` is the concert count (None for member chips, which carry no count
+    and never show the unused state).
 
     Editors get their edit-on-click back through the Follow/Edit mode switch
     (the .viewbar), not by branching here -- a chip that means different

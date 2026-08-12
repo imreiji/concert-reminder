@@ -571,6 +571,111 @@ measurement or an incident that a reasonable-looking edit would undo.
     itself stays and is still right for ONE group -- `attach_tag`'s expansion
     step and `routes/concerts.py`'s performer rollup both iterate one concert's
     tags, not the catalogue, so neither is an N+1 to convert.
+- **`/tags` is the follow surface** -- shipped 2026-08-12, phase 2 of WISHLIST's
+  "Following is due a rework", design in
+  `docs/superpowers/specs/2026-08-12-following-rework-design.md`. Before it the
+  page's only follow control (`_tag_follow_bell.html`) rendered solely inside
+  the editor-only table view, so a non-editor was shipped 735 hidden rows of
+  follow buttons they could not reveal and, in the view they could see, 878
+  inert `<span>`s. Now every chip follows, for everyone, and the editor's
+  edit-on-click came back as a MODE rather than as a second meaning for the
+  same click. Phases 3-4 (`/following`, the Preferences reduction) are not in
+  this; the Preferences picker is still the other way to follow.
+  - **Every chip is a real `<form>`, and that is the feature, not the
+    implementation.** `tag_chip`/`follow_half` (`tags.html`) each emit a POST to
+    `/subscriptions` or `/subscriptions/{id}/delete` with a hidden `next=/tags`
+    -- the shape `_tag_follow_bell.html` established, which is why that partial
+    was DELETED with the table rather than kept: this macro is the pattern now,
+    and unlike the partial it is pinned by tests -- so following works with
+    JavaScript off. A chip rewritten as a `<button onclick>` renders identically
+    (`.chipform` is `display: inline`, so the wrapper contributes no box of its
+    own) and does nothing without JS, which is the one constraint the WISHLIST
+    entry named as most likely to be dropped by accident in this rework. The `next` field only reaches `/tags` because `_ALLOWED_NEXT`
+    (`routes/preferences.py`) lists it: `_safe_next` there is a CLOSED internal
+    allowlist, not the open-redirect guard (that is `domain/urls.py:safe_next`),
+    and until this build the set held only `/preferences`/`/welcome` -- so the
+    bell had been bouncing every follow to Preferences since it shipped. Trim
+    `/tags` back out and every chip on the page silently does that again.
+  - **Subunit de-dup is `/tags`-ONLY, and the 2026-08-01 ruling it appears to
+    contradict still stands where it was made.** `tag_directory_context`'s
+    `group_rows` subtracts every member of a group's subunits from the parent's
+    own row (`subunit_member_ids`, which carries its OWN `seen` set rather than
+    sharing the walk's `walked` -- it runs before the walk reaches those
+    children, and sharing would make a parent's de-dup depend on visit order;
+    it also needs its own cycle guard, since parent rows predate
+    `would_create_tag_cycle`). The 2026-08-01 character/seiyuu/subunit spec
+    ruled "repetition kept" for the CONCERT page, because a bill must be a
+    truthful lineup and de-duping would make what it displays depend on which
+    OTHER tags happen to be attached -- two shows with identical lineups
+    rendering differently. A catalogue has no "attached" and asserts no lineup,
+    so that objection does not transfer and the reversal is scoped to this page.
+    Do not "unify" the two. Measured on the live catalogue: 485 member chips ->
+    343, and 6 parent rows go empty and still render (empty rows render
+    silently; there are no per-group folds, and search is how you reach a name
+    in a large group).
+  - **`seiyuu_of` exists because `Tag.voiced_by` is not a loaded relationship.**
+    `tag_directory_context` resolves each CHARACTER's performer off the tag list
+    it has ALREADY loaded and hands the template a `{character_id: Tag | None}`
+    map. `Tag` has no `voiced_by` relationship at all -- only the
+    `voiced_by_tag_id` column -- so the hazard is structurally absent rather
+    than merely avoided, and adding the obvious convenience relationship is what
+    would open it: resolving a seiyuu during async template rendering is a
+    `MissingGreenlet` 500. Unset, or a seiyuu tag deleted (the FK is
+    `ON DELETE SET NULL`), maps to None and renders as a plain chip -- the
+    concert page's conditional-merge rule, unchanged.
+  - **The split pill's box does NOT match the plain chip beside it, and that is
+    filed, not fixed.** `.mchip .half button` measures 28.72px against `.tchip`'s
+    29.52px, because `.tchip` differs from the `.chip`/`.mchip` family on BOTH
+    axes -- font-size (`.8rem` vs `.82rem`) AND line-height (inherited 1.6 vs an
+    explicit 1.5). Closing it with line-height alone OVERSHOOTS to 28.24px,
+    which is the fix to refuse; either number moves only with both re-measured.
+    The real argument for leaving it is that `.memb` is `align-items: center`,
+    so 0.78px splits to 0.39px above and below and is invisible. Two things
+    around it ARE deliberate and measured: `.half { display: contents }` removes
+    the form from the box tree so the button becomes `.mchip`'s flex child (but
+    `.mchip > *` still matches the now-boxless FORM, by DOM parentage, which is
+    why the halves' padding/line-height is set on the button directly), and at
+    <=700px the button gets `min-height: 32px`, not 34px -- `.tchip`'s 34px
+    floor includes its own 2px border, while `.mchip`'s border sits on the pill
+    outside the button, so 34 here would ship a 36px pill.
+  - **`.tagtable`'s CSS outlives its `/tags` markup.** The table view is gone
+    from this page, but six admin templates still use the class
+    (`admin_broadcast`, `admin_deliveries`, `admin_discoveries`,
+    `admin_fetch_domains`, `admin_quiet_ladders`, `rehearsal`). Deleting the
+    rule as dead alongside the markup silently flattens six admin pages, which
+    is why a test pins the selector's continued existence in `style.css`.
+  - **Edit mode's chip interceptor listens in the CAPTURE phase and calls both
+    `preventDefault` and `stopPropagation` -- and the reason is ORDERING, not
+    cancellation.** `preventDefault` is what cancels the submit, from any phase:
+    for a native form submit the submission is the submit button's ACTIVATION
+    BEHAVIOUR, which runs only if the click event's canceled flag is unset, and
+    that flag is a property of the EVENT, not of the phase in which it was set.
+    Capture, at-target and bubble cancel alike. (The htmx habit this codebase
+    reaches for here was a DIFFERENT problem: htmx binds on bubble and fires
+    without consulting `defaultPrevented`, so that lesson is about which
+    listener runs first, not about whether cancelling works.) **Capture** is
+    used because this listener must run before anything else can see or swallow
+    the press: a bubble-phase listener can be silently nullified by any earlier
+    `stopPropagation` between the button and the document, and that failure
+    presents as "the dialog just doesn't open", with nothing in the console.
+    **`stopPropagation`** is used because nothing else should act on the press
+    at all. The codebase's own precedent says exactly this in one line --
+    `_variant_guard.html`: *"Capture phase, so the submit is stopped before any
+    other handler acts on it."* Do NOT record this as "preventDefault does not
+    work from the bubble phase"; it does, and writing that down would leave the
+    next reader with a false model of the DOM. One traced consequence, benign:
+    stopping propagation does skip `base.html`'s backdrop-close reset of
+    `pressedOn` -- harmless, because its pointerdown listener is itself capture
+    and overwrites the stale value on the very next press, and the guard it
+    feeds requires an `HTMLDialogElement` target, which a chip button can never
+    be. The mode itself DOES NOT PERSIST (a plain closure variable; no
+    localStorage, no cookie), matching the Chips/Table toggle it replaced: a
+    remembered Edit mode means an editor returning tomorrow silently cannot
+    follow anything by clicking and has no memory of why. In Edit, chips drop
+    their ticks and their followed ground and their title swaps -- a chip
+    claiming "following" while its click opens an editor is lying about the
+    click -- but the KIND grounds are restored at higher specificity, because a
+    tag's kind is a fact about the tag and survives the mode.
 - `src/app/domain/board.py` -- pure column precedence for Home's campaign
   board. `column_for(outcomes, has_open_round)` returns the ONE column a
   concert shows in; PAID > WON > APPLIED > open, deliberately, because money
