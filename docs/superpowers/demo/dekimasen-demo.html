@@ -792,21 +792,17 @@
   }
 
   /* ON: lit. Accent-washed ground and a solid edge, so a kept tile reads as
-     claimed rather than merely default.
-     Two selector shapes on purpose: the setup pick tiles (#pickList) are a
-     label wrapping a checkbox (:has(input:checked)); the "already applied"
-     tiles below them are still <button aria-pressed> and are not part of
-     this task's conversion. Both need to keep their contrast. */
-  .tile[aria-pressed="true"], .tile:has(input:checked) {
+     claimed rather than merely default. */
+  .tile:has(input:checked) {
     border-color: var(--ok); background: var(--ok-wash);
   }
   /* OFF: dimmed right down. Still legible so it can be brought back, but it
      visibly leaves the set. */
-  .tile[aria-pressed="false"], .tile:has(input:not(:checked)) {
+  .tile:has(input:not(:checked)) {
     opacity: .38; box-shadow: none; background: transparent;
     border-style: dashed;
   }
-  .tile[aria-pressed="false"]:hover, .tile:has(input:not(:checked)):hover { opacity: .62; }
+  .tile:has(input:not(:checked)):hover { opacity: .62; }
 
   .tile .tick {
     position: absolute; top: .6rem; right: .6rem; width: 1.15rem; height: 1.15rem;
@@ -815,7 +811,7 @@
     border: 1.5px solid var(--line); color: transparent; background: transparent;
     transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
   }
-  .tile[aria-pressed="true"] .tick, .tile:has(input:checked) .tick {
+  .tile:has(input:checked) .tick {
     background: var(--ok); border-color: var(--ok); color: var(--raise);
   }
   .tile .who-t { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); font-weight: 650; }
@@ -1237,42 +1233,54 @@
       </p>
     </div>
 
+    <!-- A label wrapping a visually-hidden checkbox, NOT <button aria-pressed>
+         (changed 2026-08-11). They render identically; the difference is that a
+         real form control submits with JavaScript disabled and a button cannot
+         -- aria-pressed needs a script to track state and a hidden input to
+         carry it, and this app keeps its forms working without JS. Screen
+         readers announce "checked" rather than "pressed"; both are fine.
+         Do not "fix" this back to a button. -->
     <div class="pick">
-      <button class="tile" type="button" aria-pressed="false">
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden">
         <span class="tick">&check;</span>
         <span class="who-t">Liella!</span>
         <span class="t">5th Live Tour &mdash; Yokohama</span>
         <span class="v">FC presale &middot; closes in 6h</span>
         <span class="rnd">Still open</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Aqours</span>
         <span class="t">9th LoveLive! &mdash; Day 2</span>
         <span class="v">Lottery R1 &middot; result 21 Jul</span>
         <span class="rnd">Awaiting result</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="false">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden">
         <span class="tick">&check;</span>
         <span class="who-t">Aqours</span>
         <span class="t">9th LoveLive! &mdash; Day 1</span>
         <span class="v">Lottery R1 &middot; closes in 3d</span>
         <span class="rnd">Still open</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true">
+      </label>
+      <label class="tile">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Roselia</span>
         <span class="t">Rausch und/oder Craziness</span>
         <span class="v">FC lottery &middot; result 2 Aug</span>
         <span class="rnd">Awaiting result</span>
-      </button>
-      <button class="tile" type="button" aria-pressed="true" style="border-left: 3px solid var(--accent);">
+      </label>
+      <label class="tile" style="border-left: 3px solid var(--accent);">
+        <input type="checkbox" class="visually-hidden" checked>
         <span class="tick">&check;</span>
         <span class="who-t">Aqours &middot; upgrade eligibility</span>
         <span class="t">9th &mdash; Osaka Day 1</span>
         <span class="v">最速先行 &middot; closed 30 Jun</span>
         <span class="rnd">Do you hold this ticket? <b>An upgrade round is open</b> and only holders can enter.</span>
-      </button>
+      </label>
     </div>
 
     <div class="bar">
@@ -2376,18 +2384,11 @@
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
-  document.addEventListener('click', (e) => {
-    const t = e.target.closest('.tile');
-    // #pickList tiles are now a label wrapping a checkbox (see the comment
-    // above #pickList) -- the browser's native label behaviour toggles them,
-    // and the change listener below keeps the tally in sync. This handler is
-    // for the OTHER .tile block ("already applied to any of these?"), which
-    // is still a <button aria-pressed> and was not part of this conversion.
-    if (!t || t.querySelector('input[type="checkbox"]')) return;
-    const on = t.getAttribute('aria-pressed') === 'true';
-    t.setAttribute('aria-pressed', String(!on));
-  });
-
+  // Every .tile (setup's #pickList and the "already applied" screen below
+  // it) is a label wrapping a checkbox -- native label behaviour toggles
+  // them and the :has(input:checked) CSS above tracks the visual state, so
+  // no click handler is needed here. #pickList alone shows a running tally,
+  // which the checkbox's own change event keeps in sync.
   document.getElementById('pickList').addEventListener('change', (e) => {
     if (!e.target.matches('input[type="checkbox"]')) return;
     document.getElementById('keepCount').textContent =
