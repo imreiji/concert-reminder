@@ -28,7 +28,7 @@
         note). The handle renders only for a tag whose (name, kind) collides, so
         two otherwise-identical chips can be told apart. -#}
     {% for t in by_kind.get(kindname, []) %}
-    <button type="button" class="chip kind-{{ kindname }}" data-name="{{ t.name | lower }}"
+    <button type="button" class="chip kind-{{ kindname }}" data-name="{{ search_key(t) }}"
             data-id="{{ t.id }}" onclick="togglePick('{{ kindname }}', this)">{{ t.name }}{%
         if t.id in tag_disambiguators %} <small class="dis">{{ tag_disambiguators[t.id] }}</small>{% endif %}</button>
     {% endfor %}

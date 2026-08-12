@@ -131,10 +131,32 @@ def fold_count_label(kind: str, n: int) -> str:
 
 
 templates.env.globals["fold_count_label"] = fold_count_label
+
+
+def search_key(obj) -> str:
+    """Every name this object can be displayed under, lowercased and joined.
+
+    `data-name` is filterChips()'s hook, and the chip beside it renders
+    `loc(obj, "name")` -- the viewer's locale. Keying the hook on `name` alone
+    meant an English viewer could not find a tag by the name they were looking
+    at: 681 of 735 live tags have a name_en that differs from name.
+
+    Empties are dropped rather than joined: name_en/name_zh are nullable (109
+    live tags have no name_zh) and Jinja renders None as "None", which would
+    make all of them match a search for "none".
+
+    Takes any object with a `.name`, not just a Tag -- Discover's region links
+    carry a bare name and must not raise here.
+    """
+    parts = (obj.name, getattr(obj, "name_en", None), getattr(obj, "name_zh", None))
+    return " ".join(p for p in parts if p).lower()
+
+
 # UGC parallel-column display: {{ loc(concert, "title") }} / {{ loc(tag, "name") }}
 # renders the viewer-locale variant, falling back to the original. Display
 # ONLY -- form values, data-* filter keys and URLs keep the original field.
 templates.env.globals["loc"] = lambda obj, field: i18n.loc_field(obj, field, i18n.get_locale())
+templates.env.globals["search_key"] = search_key
 # Filter form for `| map("loc_name")` over a tag list (the "F · G" eyebrow joins).
 templates.env.filters["loc_name"] = lambda tag: i18n.loc_field(tag, "name", i18n.get_locale())
 # Cache-busting: {{ static_url("style.css") }} -> /static/style.css?v=<hash>.

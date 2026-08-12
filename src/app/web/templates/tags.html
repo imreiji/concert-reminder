@@ -213,10 +213,10 @@
 {%- set kcls = {"franchise": " k-franchise", "group": " k-group", "venue": " k-venue"}.get(t.kind.value, "") -%}
 {%- set unused = count is not none and count == 0 -%}
 {%- if user.is_editor -%}
-<button type="button" class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}"
+<button type="button" class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ search_key(t) }}"
         onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
 {%- else -%}
-<span class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ t.name | lower }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</span>
+<span class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ search_key(t) }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</span>
 {%- endif -%}
 {% endmacro %}
 
@@ -312,7 +312,7 @@
     <tbody>
       {% for t in all_tags %}
       {% set c = counts[t.id] %}
-      <tr data-name="{{ t.name | lower }}">
+      <tr data-name="{{ search_key(t) }}">
         <td><button type="button" class="tchip"
               onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ loc(t, "name") }}</button></td>
         <td><span class="dim">{{ KIND_LABELS.get(t.kind.value, t.kind.value) }}</span></td>
