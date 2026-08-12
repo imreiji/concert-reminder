@@ -293,26 +293,27 @@ EOF
 
 **Why:** `.lede h1` is the heading of the 403/404/422/500 error pages. It is the only 1.6rem+ display heading in the file without balanced wrapping.
 
-**BLOCKING QUESTION — ask the owner before Step 1.** `.legal h1` (line 98) is 1.7rem — the same size as `.chead h1`, which has `text-wrap: balance` — and also lacks it. Either it is a second oversight or legal pages deliberately do not care. Ask which, then implement the matching variant below. Do not decide this alone; the set the test pins has to be defensible to whoever reads it.
+**OWNER RULING (2026-08-11): fix `.legal h1` too.** It is 1.7rem — the same size as `.chead h1`, which already balances — and lacking it was the same oversight. So the rule the pinned set expresses is coherent: **every display heading 1.6rem and up balances its wrap**, and the 1.4rem generic `h1` deliberately does not. No longer blocked.
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `tests/test_theme_and_tokens.py`, next to the other sweeps. **Use the variant the owner chose** — if `.legal h1` is included, add `".legal h1"` to `BALANCED` and fix line 98 in Step 3 as well.
+Add to `tests/test_theme_and_tokens.py`, next to the other sweeps.
 
 ```python
-BALANCED = (".hero .promise", ".ctafoot h2", ".chead h1", ".lede h1")
+BALANCED = (".hero .promise", ".ctafoot h2", ".chead h1", ".lede h1", ".legal h1")
 
 
 def test_display_headings_balance_their_wrap():
-    """Large display headings balance their line breaks; the generic `h1`
-    (1.4rem, a fallback) deliberately does not.
+    """Every display heading 1.6rem and up balances its line breaks; the
+    generic `h1` (1.4rem, a fallback) deliberately does not.
 
     Deliberately a PINNED SET, not a sweep over every h1 rule: only one of the
     three selectors that already carried this is an h1, so "every h1 balances"
     is not the real pattern and a sweep would fail on the 1.4rem fallback.
 
-    `.lede h1` is the 403/404/422/500 heading and was the one 1.6rem+ display
-    heading without it.
+    Two were missing it (owner ruling 2026-08-11 to fix both): `.lede h1`, the
+    403/404/422/500 heading, and `.legal h1`, which is the same 1.7rem as
+    `.chead h1` beside it.
 
     Mutation this must fail against: removing `text-wrap: balance` from any one
     selector in the set, including the three that already had it.
@@ -327,7 +328,7 @@ Note `_decls(selector)` already exists in this file and returns the declarations
 - [ ] **Step 2: Run it to make sure it fails**
 
 Run: `uv run --isolated pytest tests/test_theme_and_tokens.py::test_display_headings_balance_their_wrap -q`
-Expected: FAIL listing `['.lede h1']` (plus `.legal h1` if the owner included it).
+Expected: FAIL listing `['.lede h1', '.legal h1']`.
 
 - [ ] **Step 3: Add the declaration**
 
@@ -343,7 +344,7 @@ Change to:
 .lede h1 { margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.02em; font-weight: 700; text-wrap: balance; }
 ```
 
-If the owner included `.legal h1`, line 98 gets the same treatment:
+And line 98 gets the same treatment:
 
 ```css
 .legal h1 { font-size: 1.7rem; letter-spacing: -.025em; font-weight: 700; margin: 0 0 .3rem; text-wrap: balance; }
@@ -941,7 +942,7 @@ EOF
 
 **Spec coverage.** Every section of the spec maps to a task: A1→Task 1, A2→Task 2, A3→Task 3, B1+B2→Task 4, B3→Task 5, B4→Task 6, B5→Task 7, B6→Task 8, "What gets recorded"→Task 9. The spec's "Out of scope" items appear in no task, correctly.
 
-**Known blocking question.** Task 3 must not start before the owner rules on `.legal h1`. It is the only blocked task; everything else can proceed.
+**No blocked tasks.** The one open question (`.legal h1`) was ruled on 2026-08-11: fix both, so the pinned set expresses a coherent rule rather than an arbitrary list.
 
 **Sequencing.** Tasks 4-7 share one file and must run one at a time. Task 9 runs last. Tasks 1, 2, 3 and 8 touch files nothing else touches.
 
