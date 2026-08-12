@@ -2516,15 +2516,33 @@ def test_new_tag_footer_submit_still_submits(client):
     span the dialog (demo parity), and only still works because of the
     form="new-tag-form" attribute.
 
-    Mutation this must fail against: dropping that attribute. The button then
-    renders identically, the page renders identically, and pressing it does
-    NOTHING -- which a "does the page render" test sails straight past.
+    Three mutations this must fail against:
+
+    1. Dropping that attribute. The button then renders identically, the page
+       renders identically, and pressing it does NOTHING -- which a "does the
+       page render" test sails straight past.
+    2. Moving the footer back INSIDE the form. That is the bug this task fixed
+       (the border-top stops inside the form's 1rem padding), and it survives
+       both of the assertions above it, since adding the id and the attribute
+       to a still-nested button satisfies them exactly.
+    3. Putting form="new-tag-form" on some OTHER element. A page-wide substring
+       search is safe today only because the warning comment beside the button
+       is a Jinja comment and gets stripped; turn it into an HTML comment -- a
+       plausible edit, given the file mixes both -- and a page-wide search goes
+       green forever with the attribute deleted. So pin it to the BUTTON.
     """
     login_as(client, EDITOR_ID, "reiji")
     page = client.get("/tags")
     assert 'id="new-tag-form"' in page.text, "the form must carry the id"
-    assert 'form="new-tag-form"' in page.text, (
-        "the submit button lives outside the form and needs this to submit"
+    assert '<button class="btn" form="new-tag-form">' in page.text, (
+        "the CREATE BUTTON, not just some element, needs the form= association"
+    )
+    # The hoist itself: the footer is a SIBLING of the form, so </form> closes
+    # before it. Without this, moving it back inside is a silent regression.
+    dialog = page.text.split('id="new-tag-dialog"', 1)[1].split("</dialog>", 1)[0]
+    assert dialog.index("</form>") < dialog.index('<div class="df">'), (
+        "the footer must be a SIBLING of the form, or its border-top stops "
+        "inside the form's padding"
     )
     r = client.post("/tags", data={
         "name_en": "Hoisted", "name_zh": "Hoisted", "name": "Hoisted", "kind": "artist",
