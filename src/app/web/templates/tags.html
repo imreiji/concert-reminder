@@ -40,15 +40,29 @@
 
 <input class="tag-search" type="search" placeholder="{{ _('Search franchises, groups, performers, venues…') }}" oninput="filterChips(this, '.tags-scope')">
 
-{#- E1: the editor-only chips ⇄ table toggle. Chips are for picking, tables
-    for comparing usage. Both views live inside .tags-scope so the search box
-    above (filterChips, keyed on data-name) filters whichever is visible. -#}
+{#- The editor-only viewbar. Task 5 (2026-08-12) removed the Chips/Table
+    toggle it used to hold; Task 6 puts the Follow <-> Edit mode switch in the
+    space it left, reusing the same .viewtoggle aria-pressed vocabulary.
+
+    Like the toggle it replaces, the mode DOES NOT PERSIST -- no localStorage,
+    no cookie, no server-rendered pressed state. A remembered Edit mode would
+    mean an editor coming back tomorrow silently cannot follow anything by
+    clicking, with no memory of why; a forgotten one expires on reload.
+
+    Editor-only in all four parts (toggle, strip, class hook, script): the
+    per-tag dialogs the mode opens are themselves editor-gated, so for anyone
+    else the mode would be a switch that turns every chip inert. -#}
 {% if user.is_editor %}
 <div class="viewbar">
-  <div class="viewtoggle" id="tagViewToggle">
-    <button type="button" data-view="chips" aria-pressed="true">{{ _("Chips") }}</button>
-    <button type="button" data-view="table" aria-pressed="false">{{ _("Table") }}</button>
+  <div class="viewtoggle" id="tagModeToggle">
+    <button type="button" data-mode="follow" aria-pressed="true">{{ _("Follow") }}</button>
+    <button type="button" data-mode="edit" aria-pressed="false">{{ _("Edit") }}</button>
   </div>
+</div>
+{#- Ongoing state, so .edgecard (the two-shape callout grammar has no third
+    shape and this is not asking for attention). Hidden until Edit is on. -#}
+<div class="edgecard editmode" id="tagEditStrip" hidden>
+  {{ _("Editing — a chip opens its tag editor. Following is off while this is on.") }}
 </div>
 {% endif %}
 <div class="tags-scope">
@@ -205,18 +219,100 @@
 </dialog>
 {% endmacro %}
 
-{#- A tag chip. `count` is the concert count (None for member chips, which
-    carry no count and never show the unused state). Editors get a button that
-    opens the tag's dialog; everyone else gets a plain span. `data-name` is the
-    search-filter hook (filterChips) -- its one sanctioned job on this page. -#}
+{#- A tag chip. Every chip is a follow control: a real <form> posting to
+    POST /subscriptions and POST /subscriptions/{id}/delete, so it works with
+    JS off, with next=/tags so you stay where you are (that value only survives
+    because "/tags" is in _ALLOWED_NEXT -- routes/preferences.py -- which is a
+    closed internal allowlist, not the open-redirect guard). This generalises
+    _tag_follow_bell.html, the table view's follow control, which was deleted
+    with the table: this macro is now the pattern, and it is pinned by tests.
+    `count` is the concert count (None for member chips, which carry no count
+    and never show the unused state).
+
+    Editors get their edit-on-click back through the Follow/Edit mode switch
+    (the .viewbar), not by branching here -- a chip that means different
+    things to different people is the thing that made this page unusable for
+    everyone who is not an editor.
+
+    data-name carries search_key(t) -- all three of the tag's names -- and is
+    filterChips()'s hook. It goes on the FORM, which is what filterChips hides
+    (it resolves .closest(".chipform")).
+
+    data-tag-id is the mode switch's hook, and it is a data- attribute rather
+    than an interpolated on* handler for invariant 7's reason (the browser
+    HTML-decodes an attribute before parsing it as JS, so Jinja's escaping
+    does not protect an inline handler). data-tag-chip marks what the mode
+    may intercept.
+
+    The tick is its OWN element, not a bare `name ✓` text node, because Edit
+    mode has to remove it and CSS cannot delete a text node -- a chip showing
+    "following" while its click opens an editor is lying about the click. In
+    `.tchip` (inline-flex) the literal space before it collapses away and the
+    .4rem gap does the spacing; in a split-pill half (an ordinary button) the
+    space is what separates them. -#}
 {% macro tag_chip(t, count) %}
 {%- set kcls = {"franchise": " k-franchise", "group": " k-group", "venue": " k-venue"}.get(t.kind.value, "") -%}
 {%- set unused = count is not none and count == 0 -%}
-{%- if user.is_editor -%}
-<button type="button" class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ search_key(t) }}"
-        onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+{%- set sub = sub_by_tag.get(t.id) -%}
+{%- if sub -%}
+<form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete" data-name="{{ search_key(t) }}">
+  <input type="hidden" name="next" value="/tags">
+  <button class="tchip{{ kcls }} on" data-tag-chip data-tag-id="{{ t.id }}"
+          title="{{ _('Following — click to unfollow') }}">{{ loc(t, "name") }} <span class="tick">✓</span>{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+</form>
 {%- else -%}
-<span class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-name="{{ search_key(t) }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</span>
+<form class="chipform" method="post" action="/subscriptions" data-name="{{ search_key(t) }}">
+  <input type="hidden" name="tag_id" value="{{ t.id }}">
+  <input type="hidden" name="notify" value="true">
+  <input type="hidden" name="next" value="/tags">
+  <button class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-tag-chip data-tag-id="{{ t.id }}"
+          title="{{ _('Follow this tag') }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
+</form>
+{%- endif -%}
+{% endmacro %}
+
+{#- One half of a split pill: the same follow form tag_chip emits, without
+    the count and without its own data-name (the pill above carries one for
+    both). `cls` is "cn" (character) or "cv" (seiyuu, the dim half). -#}
+{% macro follow_half(t, cls) %}
+{%- set sub = sub_by_tag.get(t.id) -%}
+{%- if sub -%}
+<form class="half" method="post" action="/subscriptions/{{ sub.id }}/delete">
+  <input type="hidden" name="next" value="/tags">
+  <button class="{{ cls }} on" data-tag-chip data-tag-id="{{ t.id }}"
+          title="{{ _('Following — click to unfollow') }}">{{ loc(t, "name") }} <span class="tick">✓</span></button>
+</form>
+{%- else -%}
+<form class="half" method="post" action="/subscriptions">
+  <input type="hidden" name="tag_id" value="{{ t.id }}">
+  <input type="hidden" name="notify" value="true">
+  <input type="hidden" name="next" value="/tags">
+  <button class="{{ cls }}" data-tag-chip data-tag-id="{{ t.id }}"
+          title="{{ _('Follow this tag') }}">{{ loc(t, "name") }}</button>
+</form>
+{%- endif -%}
+{% endmacro %}
+
+{#- A member chip. A CHARACTER whose seiyuu is attached renders as ONE chip
+    visibly made of two halves, each half its own follow form; either end
+    alone falls back to a plain chip.
+
+    That fallback is the design, not a shortcut: the merge is CONDITIONAL, so
+    the split shape has to make a one-ended chip read as meaningfully
+    different rather than as inconsistent styling (owner, from four mockups,
+    2026-08-01).
+
+    ONE data-name on the pill carrying BOTH names -- filterChips hides the
+    elements it matches, so a per-half attribute would hide one half of a
+    pill and render the other, which is worse than no result. -#}
+{% macro member_chip(m) %}
+{%- set cv = seiyuu_of.get(m.id) if m.kind.value == "character" else none -%}
+{%- if cv -%}
+<span class="mchip" data-name="{{ search_key(m) }} {{ search_key(cv) }}">
+  {{ follow_half(m, "cn") }}{{ follow_half(cv, "cv") }}
+</span>
+{%- else -%}
+{{ tag_chip(m, none) }}
 {%- endif -%}
 {% endmacro %}
 
@@ -229,13 +325,32 @@
 {% macro group_row(g, mems, depth) %}
 <div class="grow2{% if depth %} sub{% endif %}" data-filter-container{% if depth %} style="--d: {{ depth }}" data-subunit-of="{{ g.parent_id }}"{% endif %}>
   <span>{{ tag_chip(g, counts[g.id].concerts) }}</span>
-  <span class="memb">{% for m in mems %}{{ tag_chip(m, none) }}{% else %}<em class="dim">{{ _("no members yet") }}</em>{% endfor %}</span>
+  {#- `mems` is DE-DUPED (subunit members leave their parent's row), so an
+      empty list means one of two different things and only one of them is
+      "no members yet". `counts[g.id].members` is the RAW TagMember count and
+      tells them apart: 0 is a genuinely empty group, >0 with an empty `mems`
+      is a parent whose whole membership renders in the subunit rows directly
+      below -- 6 live groups, SideM (49) and Shiny Colors (28) among them,
+      which read "no members yet" above their own 49 members before this
+      gate. The row still RENDERS either way; only the fallback copy is
+      gated. -#}
+  <span class="memb">{% for m in mems %}{{ member_chip(m) }}{% else %}{% if counts[g.id].members == 0 %}<em class="dim">{{ _("no members yet") }}</em>{% endif %}{% endfor %}</span>
 </div>
 {% endmacro %}
 
 <div class="tags-page">
   <div class="tsec" data-filter-container>
-    <h3>{{ _("Franchises and groups") }} <span>{{ _("— click any tag to edit") }}</span></h3>
+    {#- The hint follows the MODE, because since Task 2 "click any tag to
+        edit" has been false for everyone -- a click follows. Rather than drop
+        the span (the sibling sections both carry one, and a bare heading here
+        would read as an omission) it says what a click actually does right
+        now. The edit variant renders for editors only: nobody else can reach
+        the mode, so shipping them hidden copy that can never become true is
+        the same lie in a quieter form. The msgid is kept byte-identical to
+        the old one so both catalogues keep their translation. -#}
+    <h3>{{ _("Franchises and groups") }}
+      <span class="hint-follow">{{ _("— click any tag to follow") }}</span>
+      {%- if user.is_editor %}<span class="hint-edit">{{ _("— click any tag to edit") }}</span>{% endif %}</h3>
     {% for f, group_pairs in franchise_families %}
     <div class="fam" data-filter-container>
       <div class="famhead">{{ tag_chip(f, counts[f.id].concerts) }}</div>
@@ -263,31 +378,6 @@
   </div>
   {% endif %}
 
-  {% if characters %}
-  {#- Characters, each row naming her seiyuu. Its own section rather than a
-      row inside the franchise families: a character may be a member of a
-      group (where she already renders as a member chip) or belong to no
-      group at all, and the seiyuu link is visible nowhere else. The row
-      reuses the group row's layout classes -- a chip beside a chip is a
-      shape this page already has, and the two-shape callout grammar has no
-      third shape to invent here. data-character-id, never data-name: that
-      one is filterChips()'s hook and every chip below already carries it. -#}
-  <div class="tsec" data-filter-container>
-    <h3>{{ _("Characters") }} <span>{{ _("— each with the performer who voices her") }}</span></h3>
-    <div class="fam">
-      {% for c, seiyuu in characters %}
-      <div class="grow2" data-filter-container data-character-id="{{ c.id }}">
-        <span>{{ tag_chip(c, counts[c.id].concerts) }}</span>
-        <span class="memb">
-          {%- if seiyuu %}<span class="dim">{{ _("voiced by") }}</span> {{ tag_chip(seiyuu, none) }}
-          {%- else %}<em class="dim">{{ _("no performer set") }}</em>{% endif -%}
-        </span>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
   {% if ungrouped_performers %}
   <div class="tsec" data-filter-container>
     <h3>{{ _("Performers with no group") }} <span>{{ _("— solo artists, or members not yet attached") }}</span></h3>
@@ -297,51 +387,7 @@
   </div>
   {% endif %}
 </div>
-{% if user.is_editor %}
-{#- The table renders AFTER the chips directory in DOM order, deliberately:
-    document-order tests (and any future "first occurrence" logic) keep the
-    chips view's ordering semantics -- the table is a duplicate density view,
-    never the first sighting of a name. -#}
-<div id="tag-table-wrap" hidden>
-  <table class="tagtable">
-    <thead><tr>
-      <th>{{ _("Tag") }}</th><th>{{ _("Kind") }}</th>
-      <th class="r">{{ _("Events") }}</th><th class="r">{{ _("Followers") }}</th>
-      <th class="r">{{ _("Upcoming") }}</th><th>{{ _("Following") }}</th>
-    </tr></thead>
-    <tbody>
-      {% for t in all_tags %}
-      {% set c = counts[t.id] %}
-      <tr data-name="{{ search_key(t) }}">
-        <td><button type="button" class="tchip"
-              onclick="document.getElementById('tag-dialog-{{ t.id }}').showModal()">{{ loc(t, "name") }}</button></td>
-        <td><span class="dim">{{ KIND_LABELS.get(t.kind.value, t.kind.value) }}</span></td>
-        <td class="r">{{ c.concerts }}</td>
-        <td class="r">{{ c.followers }}</td>
-        <td class="r">{{ c.upcoming }}</td>
-        <td>{% include "_tag_follow_bell.html" %}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
 </div>
-{% endif %}
-</div>
-<script>
-  // E1: chips ⇄ table view toggle (editor-only; the controls render only for
-  // editors). aria-pressed is the state; [hidden] does the hiding.
-  (function () {
-    const toggle = document.getElementById("tagViewToggle");
-    if (!toggle) return;
-    toggle.addEventListener("click", function (e) {
-      const b = e.target.closest("button[data-view]");
-      if (!b) return;
-      toggle.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-      document.querySelector(".tags-page").hidden = b.dataset.view !== "chips";
-      document.getElementById("tag-table-wrap").hidden = b.dataset.view !== "table";
-    });
-  })();
-</script>
 {% if user.is_editor %}{% for t in all_tags %}{{ tag_dialog(t) }}{% endfor %}
 
 {% include "_variant_guard.html" %}
@@ -530,6 +576,73 @@
       setTagKind(kindInput.value || "artist");
     });
     setTagKind("artist");
+  })();
+</script>
+
+<script>
+  // Follow <-> Edit mode (editor-only; every part of it renders only for
+  // editors, and the dialogs it opens do too).
+  //
+  // NOT PERSISTED, deliberately -- no localStorage, no cookie. `editing` is a
+  // plain closure variable, so a reload is a return to Follow. Same choice the
+  // Chips/Table toggle made before Task 5 removed it.
+  (function () {
+    const toggle = document.getElementById("tagModeToggle");
+    const strip = document.getElementById("tagEditStrip");
+    const scope = document.querySelector(".tags-scope");
+    if (!toggle || !strip || !scope) return;
+    const EDIT_TITLE = {{ _("Edit this tag") | tojson }};
+
+    let editing = false;
+
+    // A chip's title still says "click to unfollow" while the click opens an
+    // editor, which is the same lie the dropped tick was. Swapped here rather
+    // than rendered twice server-side; the follow title is stashed on the
+    // element so switching back restores whichever of the two it had.
+    function retitle() {
+      scope.querySelectorAll("[data-tag-chip]").forEach(function (chip) {
+        if (editing) {
+          if (chip.dataset.followTitle === undefined) chip.dataset.followTitle = chip.title;
+          chip.title = EDIT_TITLE;
+        } else if (chip.dataset.followTitle !== undefined) {
+          chip.title = chip.dataset.followTitle;
+        }
+      });
+    }
+
+    toggle.addEventListener("click", function (e) {
+      const b = e.target.closest("button[data-mode]");
+      if (!b) return;
+      editing = b.dataset.mode === "edit";
+      toggle.querySelectorAll("button").forEach(function (x) {
+        x.setAttribute("aria-pressed", String(x === b));
+      });
+      scope.classList.toggle("editing", editing);
+      strip.hidden = !editing;
+      retitle();
+    });
+
+    // CAPTURE PHASE, and stopPropagation as well as preventDefault. Every chip
+    // is a real <form> whose button is a real submit (that is what makes the
+    // page work with JS off), so this listener is racing the browser's
+    // activation behaviour AND any other click handler on the way down.
+    // preventDefault is what cancels the submit; stopPropagation is what keeps
+    // the press from reaching anything else that would act on it. A
+    // bubble-phase handler runs only after every listener between the button
+    // and the document has already seen the press. Same shape as
+    // _variant_guard.html's submit hook, and for the same reason.
+    //
+    // The tag id arrives through dataset, never through an interpolated on*
+    // attribute (invariant 7).
+    document.addEventListener("click", function (e) {
+      if (!editing) return;
+      const chip = e.target.closest && e.target.closest("[data-tag-chip]");
+      if (!chip || !scope.contains(chip)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const dlg = document.getElementById("tag-dialog-" + chip.dataset.tagId);
+      if (dlg) dlg.showModal();
+    }, true);
   })();
 </script>
 {% endif %}

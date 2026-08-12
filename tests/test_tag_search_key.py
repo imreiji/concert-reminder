@@ -93,12 +93,17 @@ async def test_tags_page_data_name_carries_the_english_name(client):
     mutation being a template left on `t.name | lower`, which no unit test can
     see.
 
-    /tags renders every tag TWICE: once as a chip (tag_chip macro) and again
-    as a hidden `#tag-table-wrap` row. A page-wide `"aina aiba" in r.text`
-    assertion is satisfied by either site alone, so it would pass even if the
-    chip -- the actual interactive element -- regressed back to `t.name |
-    lower` and only the hidden row carried the fix. Each site is asserted on
-    independently so a regression in either one fails on its own.
+    /tags used to render every tag TWICE: once as a chip (tag_chip macro) and
+    again as a hidden `#tag-table-wrap` row, which is why this used to assert
+    on each site independently rather than on `r.text` as a whole (either site
+    alone could satisfy a page-wide assertion). Task 5 (2026-08-12) deleted the
+    table view, so the chip is now the only render site and a direct
+    assertion is no longer a proxy.
+
+    `data-name` lives on the chip's `.chipform` wrapper, not on the `<button>`
+    inside it -- that's what `filterChips()` hides (it resolves
+    `.closest(".chipform")`), and every chip is a follow `<form>` now, not a
+    bare button/span.
     """
     login_as(client, EDITOR_ID, "reiji")
     async with client.db() as s:
@@ -106,12 +111,7 @@ async def test_tags_page_data_name_carries_the_english_name(client):
                   kind=TagKind.ARTIST, slug="aina-aiba"))
         await s.commit()
     r = client.get("/tags")
-    chips = re.findall(r'<(?:button|span)[^>]*class="tchip[^"]*"[^>]*data-name="([^"]*)"', r.text)
-    rows = re.findall(r'<tr data-name="([^"]*)"', r.text)
+    chips = re.findall(r'<form[^>]*class="chipform"[^>]*data-name="([^"]*)"', r.text)
     assert any("aina aiba" in c for c in chips), (
         "the CHIP must be findable by the name an EN viewer is shown"
-    )
-    assert any("aina aiba" in row for row in rows), (
-        "and so must the table row -- asserting on r.text as a whole passes "
-        "when either one alone is correct, which is what made this a proxy"
     )

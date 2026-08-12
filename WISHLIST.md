@@ -1213,6 +1213,31 @@ around one hit, and the per-group members N+1 is gone from all four sites
 whatever the brainstorm settles on — remain, so this is not a Shipped move and
 the entry is still unranked for exactly the reason above.
 
+**Update 2026-08-12 — phase 2 shipped; the entry STILL stays here.** `/tags` is
+now the follow surface: every chip is a real POST form, so following works for
+everyone (it was previously reachable only through the editor-only table view,
+which meant a non-editor could not follow from this page at all) and it works
+with JavaScript off. A character and her seiyuu render as one split pill whose
+two halves are independently followable — the first surface where the app lets
+you act on a distinction its data model has always carried. A subunit's members
+render under the subunit alone (`/tags` only; the concert page keeps its
+repetition, deliberately — see the design spec). The redundant Characters
+section and the whole table view are gone, and editors got their edit-on-click
+back as an explicit Follow ⇄ Edit mode rather than as a second meaning for the
+same click. Design and full reasoning:
+`docs/superpowers/specs/2026-08-12-following-rework-design.md`.
+
+**Phases 3-4 remain, and their ORDER is the load-bearing part.** Phase 3 is
+`/following` — the page listing what you already follow, with the per-tag config
+dialog (preset, notifications, unfollow). Phase 4 is the Preferences reduction:
+the picker, the per-tag `.subrow`s and their toggles all go, leaving a count, a
+standing default and the skipped-events list. **Phase 4 must not land before
+phase 3.** Preferences is still the only place a followed tag's preset and
+notify flags can be changed; removing it before `/following` exists would take
+that away with nothing to replace it. Not a Shipped move: two of four phases are
+outstanding, and the entry stays unranked for the reason above — the rank is
+settled by finishing the scope, not by guessing at it.
+
 ### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
