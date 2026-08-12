@@ -154,3 +154,15 @@ async def test_each_half_follows_independently(client):
     )
     assert f'name="tag_id" value="{imai.id}"' in cv_form
     assert 'class="cv"' in cv_form and "on" not in cv_form.split('class="cv"')[1].split(">")[0]
+
+
+async def test_both_halves_followed_together(client):
+    """The state where `.on` must beat `.cv` by CSS source order -- only a
+    browser session could see that one, so pin the markup here too."""
+    login_as(client, EDITOR_ID, "editor")
+    group, imai, chihaya, ritsuko, plain = await _seed_group(client)
+    client.post("/subscriptions", data={"tag_id": chihaya.id, "notify": "true", "next": "/tags"})
+    client.post("/subscriptions", data={"tag_id": imai.id, "notify": "true", "next": "/tags"})
+    body = client.get("/tags").text
+    _data_name, pill_html = _mchips(body)[0]
+    assert 'class="cn on"' in pill_html and 'class="cv on"' in pill_html

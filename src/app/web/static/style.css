@@ -1121,9 +1121,14 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
    by DOM parentage, not the box tree, so it still targets the (now boxless)
    form and its padding/line-height land nowhere. The halves' box therefore
    has to be set on `.mchip .half button` directly, not inherited from
-   `.mchip > *`. Measured in a real browser at 28.72px, identical to a plain
-   chip in the same row and to `.mchip`'s own concert-page box above, in both
-   themes -- do not retune either number without re-measuring both. */
+   `.mchip > *`. Measured in a real browser at 28.72px -- matching the
+   concert page's `.performers .chip` above (same font-size, same explicit
+   1.5 line-height), which is what `.mchip`'s box has always been derived
+   from. It does NOT match `/tags`'s own plain chip, `.tchip` (29.52px --
+   .8rem font-size + an inherited 1.6 line-height, vs. `.mchip`'s .82rem +
+   explicit 1.5): that gap is `.tchip`'s own pre-existing shape, not
+   something to close by retuning either number here without re-measuring
+   both. */
 .mchip .half { display: contents; }
 .mchip .half button {
   border: 0; background: none; font: inherit; cursor: pointer;
@@ -1131,6 +1136,16 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
 }
 .mchip .half button.cv { color: var(--dim); border-left: 1px solid var(--line); }
 .mchip .half button.on { background: var(--ok-wash); color: var(--ok); font-weight: 600; }
+/* Every neighbouring .tchip in the same row has a hover state; :not(.on)
+   keeps a followed half's --ok-wash intact on hover instead of flattening
+   it to plain --raise. */
+.mchip .half button:hover:not(.on) { background: var(--raise); }
+/* The sitewide `:focus-visible` rule (top of file) draws its ring OUTWARD
+   (outline-offset: 2px) -- clipped to invisible by .mchip's overflow:hidden,
+   exactly the failure mode the concert page's own .mchip halves already
+   avoid with a negative offset. Confirmed by tabbing to a half in a real
+   browser: no ring was visible before this rule. */
+.mchip .half button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* A subunit sits beneath its parent. Indent + rail, NOT a nested card: the
    two-shape callout grammar has no third shape and this is not a callout. */
@@ -2056,6 +2071,14 @@ dialog.tagdlg .fld input, dialog.tagdlg .fld select { width: 100%; }
      collapses to one column so a long member list does not fight the
      fixed label column. */
   .tchip { min-height: 34px; }
+  /* .mchip was link-only before this task (concert page), never a touch
+     target of its own -- the split pill's halves are now the only phone
+     controls on this page below the 34px floor every other chip carries.
+     box-sizing is border-box globally, and .tchip's 34px INCLUDES its own
+     2px border, but .mchip's border sits on the pill, outside the button:
+     32px on the button + the pill's 2px border = 34px, matching .tchip.
+     Using 34px here would ship a 36px pill instead. */
+  .mchip .half button { min-height: 32px; }
   .grow2 { grid-template-columns: 1fr; }
 
   /* ── Editor + import forms (concert_edit/concert_new/import_preview;
