@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ _("following") }} — dekimasen.app{% endblock %}
+{% block content %}
+{#- /following: every tag this viewer follows, as PLAIN chips grouped by
+    franchise.
+
+    A subscription is ONE tag, so a chip is one chip -- not the split pill
+    /tags renders for a character and her seiyuu, which exists there because
+    two tags are being offered at once (owner ruling, 2026-08-12). Nothing here
+    is a follow control either: these chips are `<span>`s, not the `<form>`s
+    _tag_chip.html emits. That partial's forms post `next=/tags` and carry a
+    hidden `chip` shape naming the fragment the route swaps back, and both are
+    facts about the tag directory's markup -- reusing them here would swap a
+    /tags-shaped chip into this page on every press. The per-subscription dialog
+    (Task 4) is what makes these chips actionable; until then this page is a
+    read surface, which is also why nothing here needs to go stale-safe.
+
+    THE CHIP SAYS ONLY HOW THE SUBSCRIPTION DIFFERS FROM THE VIEWER'S DEFAULTS.
+    A muted bell when new-event notices are off, the preset's name when the
+    preset disagrees with the default preset ("No preset" when it holds none
+    while a default exists), and NOTHING at all when it conforms. Scanning forty
+    chips, only the exceptions should draw the eye -- so resist adding a badge
+    that renders on every chip, however useful it looks on one. Both readings
+    are derived in `followed_tag_families` (db/tags.py), never here. -#}
+<div class="tags-head">
+  <h1>{{ _("Following") }}</h1>
+  {%- if families %}
+  <span class="note dim">
+    {%- set n_tags -%}<strong>{% trans count=followed_count %}{{ count }} tag{% pluralize %}{{ count }} tags{% endtrans %}</strong>{%- endset -%}
+    {%- set n_live -%}{% trans count=live_count %}{{ count }} with an event coming up{% pluralize %}{{ count }} with events coming up{% endtrans %}{%- endset -%}
+    {%- trans tags=n_tags, live=n_live %}{{ tags }} followed, {{ live }}{% endtrans -%}
+  </span>
+  {%- endif %}
+</div>
+
+{#- Head note, legend and search box all follow the CHIPS: a "0 tags followed"
+    tally, a legend for markers that cannot appear and a search over nothing are
+    three pieces of furniture explaining an empty room. The empty state below
+    says the one thing that is true and links where it is fixed. -#}
+{% if families %}
+<p class="dim">{% trans %}A chip shows only where it differs from your defaults — a muted bell means no new-event notice, a name means a preset other than your default one.{% endtrans %}</p>
+
+{#- The same search box /tags carries, pointed at THIS page's scope. The msgid
+    is byte-identical to the directory's on purpose: same question, and a
+    second near-identical string is a second thing to translate. -#}
+<input class="tag-search" type="search" placeholder="{{ _('Search franchises, groups, performers, venues…') }}" oninput="filterChips(this, '.following-scope')">
+{% endif %}
+
+{#- One chip. The tag name is user-authored and so is the preset name, so both
+    reach the DOM through Jinja's autoescaping and neither goes anywhere near an
+    inline on* handler (invariant 7). data-name carries search_key(t) -- all
+    three names -- which is filterChips()'s hook; it sits on the chip itself
+    here rather than on a wrapper, because these chips have no `.chipform`
+    around them and filterChips falls back to the matched element. -#}
+{% macro follow_chip(f) %}
+{%- set t = f.tag -%}
+{%- set kcls = {"franchise": " k-franchise", "group": " k-group", "venue": " k-venue"}.get(t.kind.value, "") -%}
+<span class="tchip{{ kcls }}" data-tag-id="{{ t.id }}" data-name="{{ search_key(t) }}">{{ loc(t, "name") }}
+  {%- if f.preset_deviates %}<span class="pdev">{{ f.preset_name or _("No preset") }}</span>{% endif -%}
+  {%- if f.muted %}<span class="mute" title="{{ _('New-event notices are off for this tag') }}">🔕</span>{% endif -%}
+</span>
+{% endmacro %}
+
+<div class="following-scope">
+  {% for franchise, followed in families %}
+  {#- data-filter-container on the section: a franchise whose every chip is
+      filtered out hides its heading too, instead of leaving a row of empty
+      headings behind the search. -#}
+  <div class="tsec" data-filter-container>
+    <h3>{% if franchise %}{{ loc(franchise, "name") }}{% else %}{{ _("Other") }}{% endif %}</h3>
+    <div class="famhead">{% for f in followed %}{{ follow_chip(f) }}{% endfor %}</div>
+  </div>
+  {% else %}
+  {#- The most likely state for a new account, and a page that renders nothing
+      for it reads as broken. Not a callout shape (.edgecard is ongoing state,
+      .banner needs attention; an empty list is neither) -- a sentence and the
+      one link that fixes it. -#}
+  <p class="dim">{% trans %}You are not following anything yet. Pick a franchise, a group or a performer on the <a href="/tags">tags page</a> and every future event with that tag reaches you.{% endtrans %}</p>
+  {% endfor %}
+</div>
+{% endblock %}

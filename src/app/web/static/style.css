@@ -1442,6 +1442,20 @@ span.tchip { cursor: default; }
    element so Edit mode below can drop it. */
 .tchip.on { background: var(--ok-wash); border-color: var(--ok); color: var(--ok); font-weight: 600; }
 
+/* ── /following deviation markers ───────────────────────────────────────
+   Two markers, and a chip that conforms carries neither. `.pdev` is the
+   preset name -- the same secondary reading `.tchip .n2` gives a count, since
+   the tag name is the thing being scanned and the preset is the footnote.
+   `.mute` is the bell, on the --off / --off-wash pair: the app's "attention,
+   not danger" tokens, both declared in every theme direction (:root, the
+   prefers-color-scheme block and [data-theme]) so this needs no dark override
+   of its own. 999px keeps it in the chip radius family. */
+.tchip .pdev { font-size: .72em; color: var(--dim); }
+.tchip .mute {
+  font-size: .72em; color: var(--off); background: var(--off-wash);
+  border-radius: 999px; padding: .05rem .3rem; line-height: 1.4;
+}
+
 /* ── /tags Edit mode (editor-only) ─────────────────────────────────────
    The editor's Follow <-> Edit switch puts `.editing` on `.tags-scope`. In
    Edit a chip's click opens its tag dialog instead of posting a follow, so

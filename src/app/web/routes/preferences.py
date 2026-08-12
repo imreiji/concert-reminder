@@ -1,6 +1,7 @@
 """User preferences: reminder presets, tag subscriptions, and timezone.
 
   GET  /preferences                          the page
+  GET  /following                            followed tags, chips by franchise
   POST /presets                              create preset
   POST /presets/{id}/delete
   POST /presets/{id}/items                   add an item to a preset
@@ -47,6 +48,7 @@ from app.db.service import (
     delete_user,
     ensure_user,
     followed_tag_counts,
+    followed_tag_families,
     generate_api_token,
     get_default_preset,
     list_editors,
@@ -315,6 +317,49 @@ async def delete_item(
         await session.delete(item)
         await session.commit()
     return RedirectResponse("/preferences", status_code=303)
+
+
+# ── The Following page ───────────────────────────────────────────────────
+
+
+@router.get("/following", response_class=HTMLResponse)
+async def following_page(
+    request: Request,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Every tag this viewer follows, grouped by franchise, as plain chips.
+
+    It lives HERE, beside the routes that write `TagSubscription` (the four
+    below), rather than in a router of its own: this is the read surface for
+    exactly those rows, `/following` is a literal path that collides with no
+    path template, and a new module would have to be registered in web/app.py
+    for no separation this file does not already have. `routes/subscriptions.py`
+    is a different feature entirely -- CONCERT subscriptions and leg opt-outs.
+
+    `followed_tag_families` reads the subscription rows directly, which is what
+    they are: explicit user edits, one per followed tag. It is NOT a second
+    definition of "what am I tracking" -- `tracked_concert_ids` (invariant 8)
+    answers the concert-level question and is untouched by this page.
+
+    `my_presets` is loaded for the per-subscription dialog (Task 4), and
+    `followed_tag_counts` for the head's context line -- one entry per followed
+    tag, so "with an event coming up" is a tally of TAGS, not of concerts, which
+    a sum over the map would double-count for anyone following both a group and
+    its members.
+    """
+    families = await followed_tag_families(session, user.id)
+    counts = await followed_tag_counts(session, user.id)
+    presets = await my_presets(session, user.id)
+    default_preset = await get_default_preset(session, user.id)
+    return templates.TemplateResponse(
+        request,
+        "following.html",
+        {"user": user, "families": families, "presets": presets,
+         "default_preset": default_preset,
+         "followed_count": len(counts),
+         "live_count": sum(1 for _total, upcoming in counts.values() if upcoming)},
+    )
 
 
 # ── Subscriptions ────────────────────────────────────────────────────────

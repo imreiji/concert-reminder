@@ -4383,6 +4383,51 @@ msgstr "準備完了です。次に、参加予定のイベントを選びます
 msgid "Continue to my events"
 msgstr "イベントの選択へ"
 
+#: src/app/web/templates/following.html:2
+msgid "following"
+msgstr "フォロー中"
+
+#: src/app/web/templates/following.html:28
+#, python-format
+msgid "%(count)s tag"
+msgid_plural "%(count)s tags"
+msgstr[0] "%(count)s件のタグ"
+
+#: src/app/web/templates/following.html:29
+#, python-format
+msgid "%(count)s with an event coming up"
+msgid_plural "%(count)s with events coming up"
+msgstr[0] "うち%(count)s件は公演予定あり"
+
+#: src/app/web/templates/following.html:30
+#, python-format
+msgid "%(tags)s followed, %(live)s"
+msgstr "%(tags)sをフォロー中、%(live)s"
+
+#: src/app/web/templates/following.html:34
+msgid ""
+"A chip shows only where it differs from your defaults — a muted bell "
+"means no new-event notice, a name means a preset other than your default "
+"one."
+msgstr "チップに出るのは、既定と違うところだけです。消音ベルは新着イベント通知がオフ、名前は既定以外のプリセットを表します。"
+
+#: src/app/web/templates/following.html:51
+msgid "No preset"
+msgstr "プリセットなし"
+
+#: src/app/web/templates/following.html:52
+msgid "New-event notices are off for this tag"
+msgstr "このタグの新着イベント通知はオフです"
+
+#: src/app/web/templates/following.html:70
+msgid ""
+"You are not following anything yet. Pick a franchise, a group or a "
+"performer on the <a href=\"/tags\">tags page</a> and every future event "
+"with that tag reaches you."
+msgstr ""
+"まだ何もフォローしていません。<a "
+"href=\"/tags\">タグページ</a>でフランチャイズ・グループ・出演者を選ぶと、そのタグが付いた今後のイベントがすべて届きます。"
+
 #~ msgid "Remove this leg"
 #~ msgstr "この公演を削除"
 

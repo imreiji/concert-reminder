@@ -4402,6 +4402,49 @@ msgstr "准备完成。接下来，请选择你计划参加的活动。"
 msgid "Continue to my events"
 msgstr "前往我的活动"
 
+#: src/app/web/templates/following.html:2
+msgid "following"
+msgstr "关注中"
+
+#: src/app/web/templates/following.html:28
+#, python-format
+msgid "%(count)s tag"
+msgid_plural "%(count)s tags"
+msgstr[0] "%(count)s 个标签"
+
+#: src/app/web/templates/following.html:29
+#, python-format
+msgid "%(count)s with an event coming up"
+msgid_plural "%(count)s with events coming up"
+msgstr[0] "其中 %(count)s 个有即将到来的活动"
+
+#: src/app/web/templates/following.html:30
+#, python-format
+msgid "%(tags)s followed, %(live)s"
+msgstr "已关注 %(tags)s，%(live)s"
+
+#: src/app/web/templates/following.html:34
+msgid ""
+"A chip shows only where it differs from your defaults — a muted bell "
+"means no new-event notice, a name means a preset other than your default "
+"one."
+msgstr "标签上只显示与你的默认设置不同之处：静音铃铛表示不发送新活动通知，名称表示使用了默认预设以外的预设。"
+
+#: src/app/web/templates/following.html:51
+msgid "No preset"
+msgstr "无预设"
+
+#: src/app/web/templates/following.html:52
+msgid "New-event notices are off for this tag"
+msgstr "此标签的新活动通知已关闭"
+
+#: src/app/web/templates/following.html:70
+msgid ""
+"You are not following anything yet. Pick a franchise, a group or a "
+"performer on the <a href=\"/tags\">tags page</a> and every future event "
+"with that tag reaches you."
+msgstr "你还没有关注任何标签。在<a href=\"/tags\">标签页</a>选择一个系列、团体或出演者，之后带该标签的所有活动都会通知你。"
+
 #~ msgid "Remove this leg"
 #~ msgstr "删除此场次"
 

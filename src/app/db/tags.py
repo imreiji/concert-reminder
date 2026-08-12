@@ -15,11 +15,12 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.core import _now
+from app.db.core import _now, get_default_preset
 from app.db.models import (
     Concert,
     ConcertDay,
     ConcertTag,
+    ReminderPreset,
     Tag,
     TagMember,
     TagSubscription,
@@ -1152,6 +1153,122 @@ async def tag_directory_context(session: AsyncSession, now: datetime | None = No
         "eligible_members": eligible_members,
         "seiyuu_of": seiyuu_of,
     }
+
+
+@dataclass(frozen=True)
+class FollowedTag:
+    """One subscription, as `/following` renders it: the tag, plus how this
+    subscription DIFFERS from the viewer's defaults and nothing else.
+
+    `muted` is `notify` off. `preset_deviates` is `preset_id` disagreeing with
+    the viewer's default preset -- in BOTH directions, which is the part a
+    reasonable-looking `if sub.preset_id and ...` drops: holding no preset while
+    a default exists is a deviation ("no preset"), and holding any named preset
+    while no default exists is a deviation too. `preset_name` is the
+    subscription's own preset name, or None for "no preset"; it is read only
+    when `preset_deviates`, and it is a USER-AUTHORED name, never a translated
+    label -- the label for the None case belongs in the template, where it
+    resolves at render time (CLAUDE.md's i18n footgun: a label copied into a
+    dataclass resolves at the COPY site).
+    """
+
+    tag: Tag
+    muted: bool
+    preset_deviates: bool
+    preset_name: str | None
+
+
+async def followed_tag_families(
+    session: AsyncSession, user_id: int
+) -> list[tuple[Tag | None, list[FollowedTag]]]:
+    """This user's tag subscriptions, grouped by franchise, for `/following`.
+
+    Reads `TagSubscription` DIRECTLY, which is exactly what those rows are --
+    explicit user edits, one per followed tag. This is NOT a second definition
+    of "what am I tracking": `tracked_concert_ids` answers a different question
+    (which CONCERTS a follow reaches, overrides and all, invariant 8) and is
+    untouched here.
+
+    Franchise ancestry is derived, never stored: a tag's own `parent_id` chain
+    first (a GROUP under a franchise, a subunit under a group under one -- the
+    GROUP -> GROUP widening of invariant 3), and failing that, for a performer
+    or character, the franchise of a group they are a member of (name order, so
+    a performer in two franchises lands somewhere stable rather than wherever
+    the row order fell). A tag with no franchise either way -- a venue, a solo
+    artist -- comes back under None, which the page renders as "Other". The
+    parent walk carries its own `seen` guard: `parent_id` cycles are reachable
+    (rows predate `would_create_tag_cycle`) and nothing else here walks it.
+
+    Families come back in franchise name order with the None family LAST, tags
+    inside each in name order.
+    """
+    rows = list((await session.execute(
+        select(TagSubscription, Tag)
+        .join(Tag, TagSubscription.tag_id == Tag.id)
+        .where(TagSubscription.user_id == user_id)
+        .order_by(Tag.name)
+    )).all())
+    if not rows:
+        return []
+
+    default = await get_default_preset(session, user_id)
+    default_preset_id = default.id if default else None
+    preset_names = dict((await session.execute(
+        select(ReminderPreset.id, ReminderPreset.name).where(
+            ReminderPreset.user_id == user_id
+        )
+    )).all())
+
+    # The catalogue, for the ancestry walk. Two queries whatever the follow
+    # count, the same shape tag_directory_context takes.
+    by_id = {t.id: t for t in (await session.execute(select(Tag))).scalars()}
+    groups_of: dict[int, list[Tag]] = {}
+    for group_id, member_id in (await session.execute(
+        select(TagMember.group_tag_id, TagMember.member_tag_id)
+    )).all():
+        group = by_id.get(group_id)
+        if group is not None:
+            groups_of.setdefault(member_id, []).append(group)
+
+    def up_the_parents(tag: Tag) -> Tag | None:
+        seen: set[int] = set()
+        cur: Tag | None = tag
+        while cur is not None and cur.id not in seen:
+            if cur.kind is TagKind.FRANCHISE:
+                return cur
+            seen.add(cur.id)
+            cur = by_id.get(cur.parent_id) if cur.parent_id else None
+        return None
+
+    def franchise_of(tag: Tag) -> Tag | None:
+        found = up_the_parents(tag)
+        if found is not None:
+            return found
+        for group in sorted(groups_of.get(tag.id, []), key=lambda g: g.name):
+            found = up_the_parents(group)
+            if found is not None:
+                return found
+        return None
+
+    families: dict[int | None, list[FollowedTag]] = {}
+    franchise_by_id: dict[int | None, Tag | None] = {None: None}
+    for sub, tag in rows:
+        franchise = franchise_of(tag)
+        key = franchise.id if franchise else None
+        franchise_by_id[key] = franchise
+        families.setdefault(key, []).append(FollowedTag(
+            tag=tag,
+            muted=not sub.notify,
+            preset_deviates=sub.preset_id != default_preset_id,
+            preset_name=preset_names.get(sub.preset_id) if sub.preset_id else None,
+        ))
+    named = sorted(
+        ((franchise_by_id[key], followed) for key, followed in families.items() if key is not None),
+        key=lambda pair: pair[0].name,
+    )
+    if None in families:
+        named.append((None, families[None]))
+    return named
 
 
 def match_tag_ids_by_slug(
