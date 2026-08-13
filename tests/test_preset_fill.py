@@ -406,3 +406,30 @@ async def test_preferences_offers_the_button(client):
     assert 'method="post"' in form.group(0)
     assert "<button" in form.group(1)
     assert "Apply my default preset to all followed tags" in form.group(1)
+
+
+# ── Auth ─────────────────────────────────────────────────────────────────
+
+
+async def test_signed_out_cannot_trigger_the_fill(client):
+    """This is the only BULK write in the app -- one POST can touch every
+    followed tag a user has, with no id in the URL to scope a reviewer's eye
+    to. `require_user`, not `current_user`: being signed out is not an error,
+    so the request 303s to `/` rather than 403ing, but it must still perform
+    NO write.
+
+    `blank_one` is asserted still-None afterwards so "nothing changed" is a
+    real check, not a vacuous one on a seed with nothing to change.
+
+    Mutation, verified by hand: replace `user: SessionUser = Depends(require_user)`
+    with `user: SessionUser | None = None` on `apply_default_to_following`.
+    An anonymous request then reaches the body with `user=None`, and
+    `get_default_preset(session, user.id)` raises `AttributeError` --
+    a 500, not the 303 asserted below, so this test fails loudly rather than
+    silently accepting a write path with no guard on it.
+    """
+    ids = await seed(client.db)
+    r = client.post("/presets/apply-to-following")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"
+    assert await preset_of(client.db, ids.sub["blank_one"]) is None

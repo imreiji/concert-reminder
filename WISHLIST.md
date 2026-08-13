@@ -2398,15 +2398,16 @@ reason already given there.
 has for it -- the 2026-08-11 outcome-correction pass read #19 specifically
 because that build added a per-user write (`RoundOutcome`) and drew the line
 "a different animal from the catalogue writes that entry contemplates". This
-build adds two more per-user writes of the same shape: `POST
-/presets/apply-to-following` (a user's own `TagSubscription` rows) and `POST
-/subscriptions/{id}/settings` (one subscription's preset/notify). Read
-honestly against #19's actual subject, neither moves it, and for a narrower
-reason than round watch got: round watch at least produced new
-catalogue-ADJACENT observations (a quiet ladder) that a human still has to
+build adds one more per-user write of the same shape: `POST
+/presets/apply-to-following` (a user's own `TagSubscription` rows). `POST
+/subscriptions/{id}/settings` (one subscription's preset/notify) is the same
+shape but is not this build's -- it shipped in phase 3; this build only edits
+its docstring. Read honestly against #19's actual subject, neither moves it,
+and for a narrower reason than round watch got: round watch at least produced
+new catalogue-ADJACENT observations (a quiet ladder) that a human still has to
 type into the edit page, which the 2026-08-11 pass called "one more instance
-of the friction this entry describes". Phase 4's writes are not catalogue-
-adjacent at all -- a preset link and a notify flag are per-user configuration
+of the friction this entry describes". Neither write is catalogue-adjacent at
+all -- a preset link and a notify flag are per-user configuration
 with no relationship to `import_commit` or anything an agent would propose
 INTO the catalogue -- and neither route sits behind the agent read API in the
 first place (`docs/agent-api.md`'s surface is GET-only; these are ordinary

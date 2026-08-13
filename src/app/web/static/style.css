@@ -423,7 +423,6 @@ button.x:hover { color: var(--danger); opacity: 1; }
 button.chip { cursor: pointer; }
 .chip.check { cursor: pointer; user-select: none; }
 .chip.check input { accent-color: var(--ink); }
-.sub-defaults { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 
 /* preset editor: every item is live-editable */
 .items > li { flex-wrap: wrap; }

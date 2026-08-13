@@ -913,6 +913,25 @@ measurement or an incident that a reasonable-looking edit would undo.
     concert gets, not only the ones who press the fill button, and
     "simplifying" the loop back to plain earliest-wins reopens the exact bug
     the owner ruled on.
+  - **The welcome wizard's step-0 chip sends an explicit `preset_id=0`, and
+    `subscribe` (the `POST /subscriptions` route this phase's `get_default_preset`
+    change lives in, 41110f5) treats it identically to a `/tags` chip's absent
+    field.** `_tag_chip.html`'s follow forms post no `preset_id` at all;
+    `welcome.html`'s carries `value="0"`. Both are falsy, so both hit the same
+    `if preset_id:` branch and inherit the viewer's standing default. This is
+    deliberate, not an oversight: the wizard's Follow step (step 0) always
+    precedes its Reminders step (step 1) and never regresses, so in the
+    ordinary new-user flow no default preset exists yet at follow time and the
+    value resolves to `None` exactly as it did before this rule. The only case
+    where it now differs is a user who already has a default preset from
+    elsewhere while still sitting at onboarding step 0 -- and inheriting it
+    there is the same "did not choose -> apply default" rule as everywhere
+    else, not a reason to carve out a second meaning for a literal 0. Do not
+    special-case the wizard's `preset_id=0` to mean "no preset": that would
+    reintroduce two meanings for one falsy value, which is exactly what this
+    rule was written to remove. If the wizard ever needs to skip the default,
+    it should stop sending `preset_id=0` at all (matching `/tags`), not grow a
+    branch in `subscribe`.
   - **What Preferences owns now vs `/following`.** Preferences keeps only:
     the followed-tag COUNT with a "Manage →" link, the standing default
     (read-only preset name), the fill button, and the unchanged skipped-events

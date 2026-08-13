@@ -4003,7 +4003,9 @@ async def handle_newly_tagged(
       * otherwise: linked preset auto-applies, and if notify is on, a DM
         notice is queued.
     A user matched by several tags at once (group + members) is handled once;
-    if several matched subscriptions carry presets, the earliest-created wins.
+    if several matched subscriptions carry presets, a preset chosen for one
+    tag beats the catch-all default; ties (two non-default presets, or two
+    defaults) stay earliest-first.
     Returns the number of users processed.
 
     A DEAD concert (`all_legs_cancelled`) does neither, for anybody: no notice

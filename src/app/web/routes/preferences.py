@@ -548,9 +548,12 @@ async def subscribe(
     if sub is None:
         # `preset_id` absent or 0 means "I did not choose" -- inherit the
         # viewer's standing default (or None, if they have none). Every /tags
-        # and welcome-wizard chip sends no preset_id, so this is what makes a
-        # new follow start with the preset the user already told the app they
-        # want, instead of linking none at all.
+        # chip sends no preset_id field at all; the welcome wizard's step-0
+        # chip sends an explicit preset_id=0 (see welcome.html), which lands
+        # in the same branch since the guard below is `if preset_id:`. That
+        # is deliberate, not incidental -- see docs/architecture.md's
+        # "Preferences' Following section is a fixed-height summary now"
+        # entry for why the wizard's literal 0 is not special-cased.
         if preset_id:
             linked_preset_id = preset_id
         else:
