@@ -159,12 +159,14 @@ def test_tag_picker_group_members_still_populate(client):
 #
 # A blanket "no {{ }} inside on*" ban would be useless -- the handlers that
 # exist are legitimate. The rule that separates them is SHAPE: everything
-# interpolated into an on* attribute must be an id (a dotted path whose last
-# segment is `id` or ends in `_id`, so an integer) or explicitly allowlisted
-# below. Names, titles, labels and preset names -- anything an editor or a
-# user typed -- must reach the DOM through a `data-` attribute and be read
-# back via `dataset`, which is what `data-tag-name` / `data-preset-name` and
-# the `data-confirm` handlers already do.
+# interpolated into an on* attribute must be a BARE dotted path whose last
+# segment is in INTEGER_ID_SEGMENTS -- an explicit ALLOWLIST of segments known
+# to be integer columns, today just `id`, and see the note beside it for why a
+# `*_id` SUFFIX rule is not good enough -- or be explicitly allowlisted in
+# ON_HANDLER_ALLOWLIST below. Names, titles, labels and preset names --
+# anything an editor or a user typed -- must reach the DOM through a `data-`
+# attribute and be read back via `dataset`, which is what `data-tag-name` /
+# `data-preset-name` and the `data-confirm` handlers already do.
 
 TEMPLATES = Path(__file__).parent.parent / "src" / "app" / "web" / "templates"
 
