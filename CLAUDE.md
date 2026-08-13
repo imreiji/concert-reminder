@@ -524,6 +524,30 @@ deleting them.
    presentation. Partial opt-out survives everywhere, exactly as partial
    cancellation does.
 
+9. **A TAG follow carries a preset, and `TagSubscription.preset_id = NULL` is
+   OVERLOADED.** This is the tag side of invariant 8 and a different table --
+   don't merge the two. Following a tag links the follower's default preset
+   (`get_default_preset`) whenever the form supplies none; before 2026-08-13
+   `subscribe` wrote `preset_id or None` and the chip forms sent nothing, so
+   EVERY follow linked no preset at all and the per-tag preset UI had nothing
+   flowing into it. NULL now means BOTH "never configured" AND "auto-apply
+   deliberately off" -- `/subscriptions/{id}/settings` still writes it for the
+   dialog's "none" -- and the owner ruled (2026-08-13) that the app WARNS about
+   that ambiguity rather than growing a column for it. So
+   `POST /presets/apply-to-following` fills NULLs ONLY, never overwrites,
+   reports BOTH counts (filled, and left alone), and says in its confirmation
+   that it re-arms auto-apply where you had switched it off. **Never widen that
+   fill**: overwriting a preset somebody deliberately set is silent,
+   irreversible, and looks exactly like success.
+   `handle_newly_tagged` prefers a NON-default preset over the default, ties
+   earliest-first -- a preset chosen for ONE tag beats the catch-all. That is
+   not cosmetic and not the old rule with extra steps: reverting it to plain
+   earliest-created-wins re-opens a measured regression (offsets went -1 to -3
+   once the fill put the default on the oldest rows), and it changes behaviour
+   for every user, not only those who press the fill. The whole four-phase
+   rework shipped with ZERO migrations; `TagSubscription.preset_id`/`notify`
+   and `ReminderPreset.is_default` carry all of it.
+
 ## Migrations (SQLite gotchas — these have bitten before)
 
 - `Base.metadata` has a NAMING_CONVENTION; keep it. SQLite runs migrations
@@ -634,6 +658,12 @@ reference.
   signed out it is the real landing page. `/discover` is the public
   catalogue ("what's on") and is the only content page an anonymous visitor
   can reach. Header nav is Home / Discover / Tags and nothing else.
+  `/following` manages the tags you follow and is deliberately NOT in the nav
+  -- it is reached from Preferences' "Manage →" and from `/tags`' "See what
+  you follow". `/tags` is the surface where you START following (chips toggle
+  follow; an explicit edit-mode toggle switches every chip's click back to
+  the tag editor for editors); `/following` is where you TUNE it, one dialog
+  per followed tag. Preferences keeps only a fixed-height summary of both.
 - **Capture actions live on Coming up rows, never on board cards.** A
   deadline row is one round on one leg, where "I have applied" has a single
   meaning; a board card is a whole campaign, where the same button is

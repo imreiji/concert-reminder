@@ -2581,7 +2581,7 @@ performer chips - see its Shipped entry below.)
 
 Branches `following-rework-phase-1` (PR #151, nine commits), `-phase-2`
 (PR #152, eleven commits), `-phase-3` (PR #153, fourteen commits) and
-`-phase-4` (five tasks), design `docs/superpowers/specs/2026-08-12-following-rework-design.md`,
+`-phase-4` (PR #154, ten commits), design `docs/superpowers/specs/2026-08-12-following-rework-design.md`,
 plans `docs/superpowers/plans/2026-08-12-following-rework-phase-{1,2,3}.md` and
 `docs/superpowers/plans/2026-08-13-following-rework-phase-4.md`. **No migration,
 across any of the four phases** -- `TagSubscription.preset_id`/`.notify` and
