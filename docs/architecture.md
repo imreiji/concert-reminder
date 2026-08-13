@@ -861,8 +861,12 @@ measurement or an incident that a reasonable-looking edit would undo.
   rework", design in
   `docs/superpowers/specs/2026-08-12-following-rework-design.md` (see the
   dated correction on its §Preferences, added by this phase). `is_default`
-  already meant "which preset the concert page's `[Set my reminders]` button
-  applies" (`apply_default_preset`); this phase widens the SAME flag to also
+  already meant "which preset the Discord DM's `[Set my reminders]` button
+  applies" (`apply_default_preset`, whose only caller is
+  `bot/views.py:ApplyDefaultButton` -- a `discord.ui.Button` on a DM view, not
+  a web control; `routes/preferences.py`'s `make_default` and
+  `preferences.html`'s two "Default" pills all describe it the same way);
+  this phase widens the SAME flag to also
   mean "which preset a new follow inherits" (`subscribe`, via
   `get_default_preset` -- shipped earlier on this branch, task 2) and "which
   preset the retroactive fill writes" (`POST /presets/apply-to-following`,
@@ -923,16 +927,23 @@ measurement or an incident that a reasonable-looking edit would undo.
     having and not having a default preset (the button renders taller than
     the pill it replaces). A "helpful" per-tag summary row creeping back in
     here would restore the growth this phase was built to remove.
-  - **The two counts on this row said the same word until this build, and no
-    test could see it.** "N tags followed" (`TagSubscription` rows) sat next
+  - **The two counts on this row read as the same word in English and in
+    Japanese until this build, and no test could see it.** "N tags followed"
+    (`TagSubscription` rows) sat next
     to "N tracked · N upcoming · N skipped" (`tracked_concert_ids`, invariant
     8's derivation) -- the reduction deleted the markup that used to keep them
-    apart, and both used to render as the same word in ja/zh too
-    (フォロー中/关注了 for both). Neither msgid CHANGED, so no i18n or copy
-    test caught the collision; it only showed up in a rendered-page review.
-    Fixed by giving the tracked-concerts clock its own word, "tracked"
-    (`home.html`'s existing "events tracked" vocabulary) -- 追跡中 / 追踪中 in
-    ja/zh. A future change that puts these two numbers back on one line under
+    apart. In JAPANESE this was a true collision: both strings literally
+    contained フォロー中 (`%(sub_count)s件のタグをフォロー中` beside
+    `%(tracked)s件をフォロー中 ...`). In CHINESE it was two near-synonyms,
+    not one repeated word -- the pill said 关注了 (`关注了 %(sub_count)s
+    个标签`) while the clock said 已关注 (`%(tracked)s 场已关注 ...`), related
+    but not identical, so do not describe the two languages as the same
+    failure. Neither msgid CHANGED in either language, so no i18n or copy test
+    caught either version; it only showed up in a rendered-page review. Fixed
+    by giving the tracked-concerts clock its own word, "tracked" (`home.html`'s
+    existing "events tracked" vocabulary) -- 追跡中 / 追踪中 in ja/zh, which
+    resolves the true collision in ja and sharpens the near-synonym in zh.
+    A future change that puts these two numbers back on one line under
     one shared word will be just as invisible to the suite.
   - **The fill button is suppressed, not disabled, when it can only ever
     report a no-op.** With no default preset, or with no followed tags at

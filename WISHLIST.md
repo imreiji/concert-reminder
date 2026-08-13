@@ -1169,10 +1169,12 @@ building the last phase and are recorded in full in the Shipped entry and in
 (no `User` column, matching the rework's zero-migration run), and a
 tag-specific preset now outranks the blanket default in `handle_newly_tagged`
 -- reversing the earliest-wins rule after the retroactive fill made it
-capable of silently outranking a hand-tuned preset. #16 and #17 were read
-closely, both unchanged in rank and both explained in place; the rest were
-re-read and stand as written. Full reasoning at the tail of this Proposed
-section, ahead of the older passes it now sits above.
+capable of silently outranking a hand-tuned preset. #16, #17 and #19 were read
+closely, all three unchanged in rank and all three explained in place -- #19
+on the closest precedent this file has, the 2026-08-11 pass that read it for
+the same reason (a new per-user write) and found the same answer; the rest
+were re-read and stand as written. Full reasoning at the tail of this
+Proposed section, ahead of the older passes it now sits above.
 
 ## Proposed (highest impact first)
 
@@ -2358,8 +2360,8 @@ removes an unranked entry rather than resolving a numbered one, so #1-#20
 keep the numbers they already had. One insertion, #21 above, carrying forward
 the one piece of that entry's content that was NOT resolved by finishing it --
 everything else in it either shipped (phases 1-4) or was superseded by what
-shipped. Two existing entries were read closely because this build touches
-ground they describe; the other eighteen (#1-#15, #18-#20) were re-read
+shipped. Three existing entries were read closely because this build touches
+ground they describe; the other seventeen (#1-#15, #18, #20) were re-read
 against it specifically, not skimmed, and the shared answer is that phase 4 is
 a Preferences template reduction plus two write paths (`POST
 /presets/apply-to-following`, and the `subscribe`/`handle_newly_tagged`
@@ -2392,7 +2394,27 @@ them. Rank unchanged: still a documentation-quality problem with no
 user-visible impact, still self-announcing, and still below #16 for the
 reason already given there.
 
-The other eighteen entries stand as written -- none of them touch tags,
+**#19 (agent write endpoints)**: checked on the closest precedent this file
+has for it -- the 2026-08-11 outcome-correction pass read #19 specifically
+because that build added a per-user write (`RoundOutcome`) and drew the line
+"a different animal from the catalogue writes that entry contemplates". This
+build adds two more per-user writes of the same shape: `POST
+/presets/apply-to-following` (a user's own `TagSubscription` rows) and `POST
+/subscriptions/{id}/settings` (one subscription's preset/notify). Read
+honestly against #19's actual subject, neither moves it, and for a narrower
+reason than round watch got: round watch at least produced new
+catalogue-ADJACENT observations (a quiet ladder) that a human still has to
+type into the edit page, which the 2026-08-11 pass called "one more instance
+of the friction this entry describes". Phase 4's writes are not catalogue-
+adjacent at all -- a preset link and a notify flag are per-user configuration
+with no relationship to `import_commit` or anything an agent would propose
+INTO the catalogue -- and neither route sits behind the agent read API in the
+first place (`docs/agent-api.md`'s surface is GET-only; these are ordinary
+session-authenticated web routes a human clicks). So this build contributes
+no friction instance and no evidence about an agent's judgment either way,
+which is the only thing #19 says would move it. Unchanged in rank.
+
+The other seventeen entries stand as written -- none of them touch tags,
 subscriptions, presets, the reminder queue's materialization or the scheduler
 tick. #6 (three long jobs share the reminder tick) was checked specifically
 for the last of those: `apply_default_to_following` and `subscribe` are
