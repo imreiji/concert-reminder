@@ -269,12 +269,29 @@ async def apply_default_to_following(
     exist. (The `is_not(None)` in that count is redundant in SQL -- `NULL != x`
     is NULL, never true -- and kept for the reader.)
 
+    NULL is OVERLOADED here and the copy has to say so (owner ruling,
+    2026-08-13). `toggle_subscription_autoapply` writes NULL for "auto-apply
+    off", and `/subscriptions/{id}/settings` writes it for the dialog's explicit
+    "none" -- so a blank `preset_id` means EITHER "never configured" OR "I turned
+    this off deliberately", and no column tells them apart. The owner chose to
+    fill both rather than add one (this phase has shipped no migration and is not
+    starting), on the condition that the report names it: `preferences.html`'s
+    banner says plainly that auto-apply comes back on where it had been switched
+    off. Do not quietly drop that sentence -- it is the whole consent for the
+    half of the fill this route cannot distinguish. And note it does NOT go away
+    when Task 4 deletes Preferences' auto-apply switch: `/following`'s dialog
+    writes the same NULL through the same route.
+
     No rule resync, for the same reason `/subscriptions/{id}/settings` states:
     `TagSubscription.preset_id` is read only by `handle_newly_tagged`, when a
-    FUTURE concert picks up a followed tag. It plans nothing now, so
-    `reminder_queue` (invariant 2) is untouched by this write and there is no
-    already-queued row to re-plan. Invariant 8's `reinstate_user_rules` belongs
-    to CONCERT subscriptions and leg opt-outs, which do gate live reminders.
+    FUTURE concert picks up a followed tag. This write DOES change which preset
+    such a concert will get (that is the point of it, and see the same
+    function's ordering comment for the tuned-beats-default rule it forced), but
+    it plans nothing NOW: no `reminder_queue` row (invariant 2) exists yet for a
+    concert that does not exist, so there is nothing to re-plan. Invariant 8's
+    `reinstate_user_rules` is per-CONCERT and belongs to concert subscriptions
+    and leg opt-outs, which do gate live reminders; a tag-level preset write has
+    no concert to give it.
 
     The report rides a one-shot session flash, popped by GET /preferences, as
     NUMBERS rather than a composed sentence -- the sentence is built in the

@@ -4050,12 +4050,34 @@ async def handle_newly_tagged(
         if already.scalar_one_or_none() is not None:
             continue
 
+        # WHICH preset, when several of this user's followed tags land on one
+        # concert. A preset chosen for ONE tag beats the catch-all default:
+        # invariant 3 attaches a group and its members to the same concert, so
+        # following both a group and a member is the ordinary case here, not an
+        # edge. The rule used to be plain earliest-created-wins, which was
+        # arbitrary but harmless while a preset only got onto a subscription by
+        # being picked. `POST /presets/apply-to-following` ended that -- it
+        # writes the default into every blank row, and the blanks are usually
+        # the OLDEST ones -- so earliest-wins would have let a blanket default
+        # outrank a deliberately tuned tag, silently retiming reminders on a
+        # subscription the user never touched (measured: [-1] -> [-3] with the
+        # tuned row byte-identical). Owner ruling, 2026-08-13: the tuned tag
+        # wins. Ties inside either group stay earliest-first, which is where
+        # order is genuinely arbitrary and something has to decide.
         preset = None
-        for sub in subs:  # earliest-created subscription with a preset wins
-            if sub.preset_id is not None:
-                preset = await session.get(ReminderPreset, sub.preset_id)
-                if preset is not None:
-                    break
+        fallback = None  # earliest with ANY preset -- the previous rule, kept
+        for sub in subs:
+            if sub.preset_id is None:
+                continue
+            candidate = await session.get(ReminderPreset, sub.preset_id)
+            if candidate is None:
+                continue
+            if fallback is None:
+                fallback = candidate
+            if not candidate.is_default:
+                preset = candidate
+                break
+        preset = preset or fallback
         n = 0
         if preset is not None:
             n = await apply_preset(session, user_id, concert.id, preset)

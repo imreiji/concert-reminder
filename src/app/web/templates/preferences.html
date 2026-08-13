@@ -26,7 +26,13 @@
            preset_fill.filled, n=preset_fill.filled) }} {{
   ngettext("%(n)s tag kept the preset you set for it.",
            "%(n)s tags kept the presets you set for them.",
-           preset_fill.kept, n=preset_fill.kept) }}</span></p>
+           preset_fill.kept, n=preset_fill.kept) }}{% if preset_fill.filled %}
+  {# The overload the fill cannot see through: "auto-apply off" and "never set
+     a preset" are BOTH a NULL preset_id, so the fill switches the first back
+     on. Owner ruling, 2026-08-13: fill them, and say so plainly rather than
+     add a column. Only shown when something was actually filled -- with
+     nothing filled nothing was switched on. #}
+  {{ _("Auto-apply is back on for those tags — including any you had switched off, which the app stores the same way as never having set a preset.") }}{% endif %}</span></p>
 {% else %}
 <p class="banner warn" style="margin-bottom:1rem"><span>⚠</span> <span>{{
   _("Nothing changed — you have no default preset yet. Make one of your presets the default first.") }}</span></p>

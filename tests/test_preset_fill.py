@@ -24,15 +24,25 @@ is wrong:
   inflates the number the presser is shown.
 """
 
+import re
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.db.models import ReminderPreset, Tag, TagSubscription, User
+from app.db.models import (
+    Concert,
+    PresetItem,
+    ReminderPreset,
+    ReminderRule,
+    Tag,
+    TagSubscription,
+    User,
+)
+from app.db.service import attach_tag, handle_newly_tagged
 from app.db.session import get_session
-from app.domain.types import TagKind
+from app.domain.types import Anchor, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -95,9 +105,23 @@ async def seed(db) -> SimpleNamespace:
         b_tight = ReminderPreset(user_id=USER_B, name="B early")
         s.add_all([standard, tight_preset, b_default, b_tight])
         await s.flush()
+        # Distinguishable offsets: which preset actually fired on a new concert
+        # is otherwise unanswerable, and "a rule was created" is true either way.
+        s.add_all([
+            PresetItem(preset_id=standard.id, anchor=Anchor.CLOSES, offset_days=-3),
+            PresetItem(preset_id=tight_preset.id, anchor=Anchor.CLOSES, offset_days=-1),
+        ])
+        # `notify` differs between the two blank rows on purpose: it is the only
+        # other column on the row the bulk UPDATE could reach, and with both
+        # rows on the same value a stray `notify=...` in `.values()` would be
+        # invisible in one direction. See test_the_fill_touches_only_the_preset.
         subs = {
-            "blank_one": TagSubscription(user_id=USER_A, tag_id=blank_one.id, preset_id=None),
-            "blank_two": TagSubscription(user_id=USER_A, tag_id=blank_two.id, preset_id=None),
+            "blank_one": TagSubscription(
+                user_id=USER_A, tag_id=blank_one.id, preset_id=None, notify=True
+            ),
+            "blank_two": TagSubscription(
+                user_id=USER_A, tag_id=blank_two.id, preset_id=None, notify=False
+            ),
             "tuned": TagSubscription(
                 user_id=USER_A, tag_id=tuned.id, preset_id=tight_preset.id
             ),
@@ -114,6 +138,7 @@ async def seed(db) -> SimpleNamespace:
             standard=standard.id, tight=tight_preset.id,
             b_default=b_default.id, b_tight=b_tight.id,
             sub={name: sub.id for name, sub in subs.items()},
+            tag={"blank_one": blank_one.id, "tuned": tuned.id},
         )
 
 
@@ -121,6 +146,13 @@ async def preset_of(db, sub_id: int) -> int | None:
     async with db() as s:
         return await s.scalar(
             select(TagSubscription.preset_id).where(TagSubscription.id == sub_id)
+        )
+
+
+async def notify_of(db, sub_id: int) -> bool:
+    async with db() as s:
+        return await s.scalar(
+            select(TagSubscription.notify).where(TagSubscription.id == sub_id)
         )
 
 
@@ -175,6 +207,43 @@ async def test_another_users_follows_are_untouched(client):
     assert await preset_of(client.db, ids.sub["b_tuned"]) == ids.b_tight
 
 
+async def test_the_fill_touches_only_the_preset(client):
+    """The UPDATE's `.values()` reaches one column and must keep reaching one.
+
+    Mutation: add `notify=True` (or `False`) to `.values()`. Nothing raises,
+    every other test here stays green, and the notify flag of every preset-less
+    follow is silently rewritten -- which is a DM setting, so the user finds out
+    from Discord. The two blank rows disagree on `notify` in the seed, so both
+    directions of that mutation are caught.
+    """
+    ids = await seed(client.db)
+    login_as(client, USER_A, "reiji")
+    client.post("/presets/apply-to-following")
+    assert await notify_of(client.db, ids.sub["blank_one"]) is True
+    assert await notify_of(client.db, ids.sub["blank_two"]) is False
+
+
+async def test_a_second_press_fills_nothing(client):
+    """Idempotence. The first press leaves every blank row on the default, so
+    the second has nothing to fill and must say so -- 0 filled, the same 1 kept,
+    and NO auto-apply warning, because nothing was switched back on.
+
+    Mutations: a fill that re-writes rows it already wrote would report a
+    non-zero count here; a warning shown unconditionally rather than gated on
+    `filled` would claim a switch was flipped when none was.
+    """
+    ids = await seed(client.db)
+    login_as(client, USER_A, "reiji")
+    client.post("/presets/apply-to-following")
+    client.get("/preferences")  # pop the first report
+    client.post("/presets/apply-to-following")
+    html = client.get("/preferences").text
+    assert "Applied your default preset to 0 followed tags." in html
+    assert "1 tag kept the preset you set for it." in html
+    assert "Auto-apply is back on for those tags" not in html
+    assert await preset_of(client.db, ids.sub["tuned"]) == ids.tight
+
+
 # ── The report ───────────────────────────────────────────────────────────
 
 
@@ -195,6 +264,25 @@ async def test_the_report_names_both_counts(client):
     html = client.get("/preferences").text
     assert "Applied your default preset to 2 followed tags." in html
     assert "1 tag kept the preset you set for it." in html
+
+
+async def test_the_report_admits_it_re_arms_auto_apply(client):
+    """`preset_id IS NULL` means BOTH "never configured" and "I switched
+    auto-apply off for this tag" -- `toggle_subscription_autoapply` and
+    /following's dialog "none" option both write NULL. The fill cannot tell
+    them apart and turns the second back on, so the owner's condition for
+    filling them at all (2026-08-13) is that the report says so.
+
+    Mutation: delete that sentence from the banner. Everything else about the
+    action still reads as correct, and a user who had deliberately switched a
+    tag off is never told it came back on.
+    """
+    await seed(client.db)
+    login_as(client, USER_A, "reiji")
+    client.post("/presets/apply-to-following")
+    html = client.get("/preferences").text
+    assert "Auto-apply is back on for those tags" in html
+    assert "which the app stores the same way as never having set a preset" in html
 
 
 async def test_the_report_is_shown_once(client):
@@ -249,18 +337,72 @@ async def test_no_default_preset_is_a_reported_no_op(client):
     assert "Applied your default preset to" not in html
 
 
+# ── What the fill does to a FUTURE concert ───────────────────────────────
+
+
+async def test_a_tuned_tag_outranks_the_filled_default_on_a_new_concert(client):
+    """The fill must not make a hand-tuned subscription stop applying.
+
+    `handle_newly_tagged` picks ONE preset when several of a user's followed
+    tags land on the same concert -- the common case, since invariant 3
+    attaches a group and its members together. The rule was earliest-created
+    wins, which was arbitrary but harmless while a preset only got onto a row
+    by being picked. This fill writes the default into the blank rows, and the
+    blanks are the OLDEST ones, so earliest-wins handed the concert to the
+    blanket default and the tuned row stopped mattering -- while sitting there
+    byte-identical, which is why nothing surfaced it. Owner ruling,
+    2026-08-13: the tuned tag wins.
+
+    Mutation: revert `handle_newly_tagged` to plain first-with-a-preset. The
+    rules come back at -3 (the default's offset) instead of -1.
+
+    The id ordering is asserted rather than assumed: with the tuned row FIRST
+    this test would pass under the old rule too, for the wrong reason.
+    """
+    ids = await seed(client.db)
+    assert ids.sub["tuned"] > ids.sub["blank_one"], "seed no longer exercises the ordering"
+    login_as(client, USER_A, "reiji")
+    client.post("/presets/apply-to-following")
+
+    async with client.db() as s:
+        concert = Concert(title="6th anniversary", event_id="6th", created_by=USER_A)
+        s.add(concert)
+        await s.flush()
+        added = []
+        for tag_id in (ids.tag["blank_one"], ids.tag["tuned"]):
+            added += await attach_tag(s, concert.id, await s.get(Tag, tag_id))
+        assert await handle_newly_tagged(s, concert, added) == 1
+        await s.commit()
+
+    async with client.db() as s:
+        rules = list((await s.execute(
+            select(ReminderRule).where(ReminderRule.user_id == USER_A)
+        )).scalars())
+    assert [r.offset_days for r in rules] == [-1]
+
+
 # ── The button ───────────────────────────────────────────────────────────
 
 
 async def test_preferences_offers_the_button(client):
-    """The route needs a way in. Scoped to the form's action rather than its
-    label: the page is full of preset forms and the words "default preset"
-    already appear on it, so a label-substring assertion would survive the
-    button being deleted.
+    """The route needs a way in: a POST form carrying a submit control.
 
-    Mutation: remove the form from preferences.html.
+    Scoped INSIDE the form rather than page-wide, because the page is full of
+    preset forms and the words "default preset" already appear on it -- a bare
+    label assertion would pass with this form deleted. And the action alone is
+    not enough either: deleting the `<button>` and leaving the `<form>` would
+    keep the action in the markup while making the feature unreachable.
+
+    Mutations: remove the form (the action match fails); remove the button
+    inside it (the button match fails); change the method to GET.
     """
     await seed(client.db)
     login_as(client, USER_A, "reiji")
     html = client.get("/preferences").text
-    assert 'action="/presets/apply-to-following"' in html
+    form = re.search(
+        r'<form[^>]*action="/presets/apply-to-following"[^>]*>(.*?)</form>', html, re.S
+    )
+    assert form is not None, "no form posts to /presets/apply-to-following"
+    assert 'method="post"' in form.group(0)
+    assert "<button" in form.group(1)
+    assert "Apply my default preset to all followed tags" in form.group(1)
