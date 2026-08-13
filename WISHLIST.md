@@ -1154,161 +1154,29 @@ brainstorm" is name-based now, and the sign-in-bounce entry's long-standing
 "ranked below the demo-parity cosmetics batch and the Discover-head entry" lost
 half its comparison and says so instead of quietly meaning less than it did.
 
+**The 2026-08-13 pass ships the entry that produced #17 above, closing the loop
+this preamble has been tracking since 2026-08-11.** The unranked Following
+entry, filed the same day it deleted a gap from #8, finished its fourth and
+final phase and moved to Shipped -- and being unranked the whole time, it
+takes NO number down with it; #1-#20 are untouched by the move itself, for
+the first time in this file's history that a Shipped move causes zero
+renumbering. One new entry is filed in its place: #21, a deferred sub-gap
+(a lone character on `/tags` rendering as a plain chip, not a split pill)
+that the Following entry had been carrying as a note since phase 2 and that
+finishing the rework did not happen to fix. Two owner rulings came out of
+building the last phase and are recorded in full in the Shipped entry and in
+`docs/architecture.md`: the standing default covers preset only, not notify
+(no `User` column, matching the rework's zero-migration run), and a
+tag-specific preset now outranks the blanket default in `handle_newly_tagged`
+-- reversing the earliest-wins rule after the retroactive fill made it
+capable of silently outranking a hand-tuned preset. #16, #17 and #19 were read
+closely, all three unchanged in rank and all three explained in place -- #19
+on the closest precedent this file has, the 2026-08-11 pass that read it for
+the same reason (a new per-user write) and found the same answer; the rest
+were re-read and stand as written. Full reasoning at the tail of this
+Proposed section, ahead of the older passes it now sits above.
+
 ## Proposed (highest impact first)
-
-### Following is due a rework (filed UNRANKED — see below)
-
-Impact: unknown, plausibly high — effort: unknown. Raised: 2026-08-11 (owner,
-during the minor-demo-parity-cosmetics brainstorm, in answer to a cosmetic
-question about the same surface — that entry shipped on 2026-08-12 and is in
-Shipped now, so it is named rather than numbered here). **Owner-raised, which
-matters: the file's own history notes that owner-raised usage pain has led this
-list every time it has appeared.**
-
-His words: he wants to rework how following tags works, "since it's getting
-pretty big". Nothing further is specified yet, and nothing should be invented
-here — what follows is only the evidence a brainstorm starts from, not a
-proposed design.
-
-**What "big" is measurable as, today.** Preferences' Following section renders
-one `.subrow` per followed tag, each with its own Notify and Auto-apply toggles
-and an Unfollow, then a disclosure fold containing the WHOLE tag catalogue —
-`franchises` → `groups` (filtered per franchise) → `members` per group — as
-chips, plus a search box that filters client-side. So the section grows on two
-independent axes at once: the number of tags you follow, and the size of the
-catalogue you might follow from. The second is the one that ran away; the
-catalogue now carries franchises, groups, subunits, characters, seiyuu and
-venues, and every ARTIST/GROUP/CHARACTER in it is a chip in that fold.
-
-**Two things a rework must not lose**, both of which cost real money to
-rediscover:
-- **Subscriptions are OVERRIDES, not records** (invariant 8). "Following" is
-  derived — a followed tag matching, minus an `opted_out` row, plus an explicit
-  `subscribed` row — and `tracked_concert_ids` is the one place that derivation
-  lives. A redesigned surface must not grow a second one.
-- **The section works with JS off**, deliberately. Every toggle is a real POST
-  form and the fold is a native `<details>`. That is precisely what made the
-  cosmetic fold-vs-dialog question a genuine fork rather than a formality, and
-  it is the constraint most likely to be dropped by accident in a rework.
-
-**Deliberately filed UNRANKED**, on the precedent outcome correction set on
-2026-08-11: the entries below keep 1-20 rather than renumbering by one. That
-precedent was for an item already on a branch; the reason here is different but
-no weaker. This entry cannot be honestly ranked yet — its impact reading and
-its whole effort estimate depend on a scope that does not exist, and inserting
-it at #1 on the owner-raised precedent would renumber twenty entries and their
-cross-references on the strength of a single sentence. What settles the rank is
-a brainstorm, not a guess. Whoever picks it up should start there and give it a
-number on the way out.
-
-**Update 2026-08-12 — phase 1 shipped; the entry STAYS here.** The search defect
-this entry describes is fixed, not the rework: the catalogue fold's search now
-matches all three name columns (a `search_key` global joining
-`name`/`name_en`/`name_zh` into `data-name`, so an English or Chinese viewer can
-find a tag by the name they are looking at), the filtered list now hides
-containers left holding no visible chip instead of showing the whole skeleton
-around one hit, and the per-group members N+1 is gone from all four sites
-(`/tags`, `/preferences`, `/welcome`, the tag picker) via one batched
-`members_by_group`. Phases 2-4 — the macro rewrite, the surface redesign and
-whatever the brainstorm settles on — remain, so this is not a Shipped move and
-the entry is still unranked for exactly the reason above.
-
-**Update 2026-08-12 — phase 2 shipped; the entry STILL stays here.** `/tags` is
-now the follow surface: every chip is a real POST form, so following works for
-everyone (it was previously reachable only through the editor-only table view,
-which meant a non-editor could not follow from this page at all) and it works
-with JavaScript off. A character and her seiyuu render as one split pill whose
-two halves are independently followable — the first surface where the app lets
-you act on a distinction its data model has always carried. A subunit's members
-render under the subunit alone (`/tags` only; the concert page keeps its
-repetition, deliberately — see the design spec). The redundant Characters
-section and the whole table view are gone, and editors got their edit-on-click
-back as an explicit Follow ⇄ Edit mode rather than as a second meaning for the
-same click. Design and full reasoning:
-`docs/superpowers/specs/2026-08-12-following-rework-design.md`.
-
-**Phases 3-4 remain, and their ORDER is the load-bearing part.** Phase 3 is
-`/following` — the page listing what you already follow, with the per-tag config
-dialog (preset, notifications, unfollow). Phase 4 is the Preferences reduction:
-the picker, the per-tag `.subrow`s and their toggles all go, leaving a count, a
-standing default and the skipped-events list. **Phase 4 must not land before
-phase 3.** Preferences is still the only place a followed tag's preset and
-notify flags can be changed; removing it before `/following` exists would take
-that away with nothing to replace it. Not a Shipped move: two of four phases are
-outstanding, and the entry stays unranked for the reason above — the rank is
-settled by finishing the scope, not by guessing at it.
-
-**Deferred gap, noted 2026-08-12 while reviewing phase 2: an ungrouped
-character renders as a plain chip, not a split pill.** `/tags`'s "Performers
-with no group" section calls `tag_chip` directly rather than `member_chip`,
-so a lone character's seiyuu is invisible there — the split-pill treatment
-only fires inside a group row. **Zero live instances today**: every one of
-the 318 CHARACTER tags in the catalogue is in a group, so nothing is visibly
-broken yet. Filed as a note here rather than its own ranked entry — it is a
-one-section gap in the surface this very entry is about, not a separate
-feature, and it should be picked up as part of finishing this rework (most
-naturally phase 3's `/following` work, which touches the same chip
-vocabulary) rather than scheduled independently. **Not a one-word fix**:
-`member_chip` hard-codes `count=none` because group-row members carry no
-counts, and the ungrouped-performers section *does* show counts — folding it
-into `member_chip` as-is would silently drop them.
-
-**Update 2026-08-12 — phase 3 shipped; the entry STILL stays here.**
-`/following` exists: every tag you follow, as plain chips grouped by franchise,
-each marked ONLY where it deviates from your defaults — a muted 🔕 when
-new-event notices are off, the preset's name when it disagrees with your
-default preset, nothing at all when it conforms, so scanning forty chips only
-the exceptions draw the eye. Clicking a chip opens that subscription's config
-dialog holding the three things a subscription has: which preset it links,
-whether it DMs you about new events, and whether it exists at all. Both are
-real POST forms rather than a JS-populated panel, so every write on this page
-is a plain form submit — the constraint this entry named as most likely to be
-dropped by accident, kept as far as a `<dialog>` allows (the dialog itself
-still needs JS to open; the follow chips on `/tags` do not, and still post
-without it). `/tags` gained a "See what you follow" link in its head, the only
-door to the page until phase 4 puts a second one on Preferences. **No
-migration**: `TagSubscription.preset_id`, `.notify` and
-`ReminderPreset.is_default` all already existed, so per-tag presets were
-EXPOSED, not added.
-
-**Two live fixes rode along.** A follow press on `/tags` used to 303 back and
-re-render the whole directory — measured at 923 ms and 6.98 MB on a live-shaped
-735-tag seed, against 10.7 ms and 518 bytes for the one-chip htmx swap that
-replaced it — and it landed the reader back at the top of the page each time.
-That was a regression on merged phase 2, reported by the owner, not planned
-scope; the unfollow half of it is now keyed by TAG rather than by subscription
-id, because 318 of 735 live tags render more than once and a stale copy
-pointing at a deleted row was a dead end. And two owner rulings from reviewing
-phase 2 landed as code: a followed chip keeps its `unused` marking (a tag
-attached to nothing stopped looking dead the moment you followed it), and the
-header's performer tally counts CHARACTER as well as ARTIST, since the section
-beneath it renders both. A third ruling was recorded as policy rather than code
-— state strips carry no `aria-live` (`docs/ui-conventions.md`).
-
-**Phase 4 remains, and the ordering constraint above is now DISCHARGED rather
-than pending.** The reason phase 4 could not land first — as corrected earlier
-in this branch, phase 2 having retired the original one — was that phase 4
-removes Preferences' per-tag notify/preset toggles and nothing replaced them
-until phase 3's dialog existed. That dialog now exists, and it is a superset of
-what it replaces: a select over every preset the viewer owns subsumes the
-Auto-apply boolean, which could only link the default preset or clear it. So
-the reason no longer blocks anything — it has become the checkable precondition
-phase 4 starts from, and nothing else gates it. Phase 4's remaining scope is
-unchanged: Preferences reduced to a count with a "Manage →" door to
-`/following` (today the `/tags` head link is the only door), the standing
-default governing FUTURE follows only, and the separate explicit retroactive
-fill that writes the default into blank subscriptions alone and reports what it
-skipped. Still not a Shipped move: one of four phases is outstanding, and the
-entry stays unranked for the reason above — the rank is settled by finishing
-the scope, not by guessing at it.
-
-**The deferred gap above is still open, and its guess about where it would be
-picked up was wrong.** It expected phase 3's `/following` work to touch the same
-chip vocabulary; `/following` renders PLAIN chips by design — a subscription is
-one tag, and the split pill exists on `/tags` because two tags are being offered
-at once — so phase 3 never went near `/tags`' "Performers with no group"
-section. It stays a `/tags` fix, to be taken with phase 4 or after it, and the
-`member_chip`-drops-counts caveat there still applies unchanged.
 
 ### 1. Minute-level reminder offsets
 
@@ -2451,6 +2319,111 @@ pointer now is). Worth a fresh look if the raw
 HTTP ergonomics prove genuinely annoying inside Claude Code in practice;
 nothing so far says they do, so this stays logged rather than built.
 
+### 21. A lone character on `/tags` renders as a plain chip, not a split pill
+
+Impact: nil today, real the day it stops being nil -- effort: not a one-word
+fix. Raised: 2026-08-12, filed as a deferred note inside the Following-rework
+entry while reviewing its phase 2; carried forward here as its own entry now
+that entry has shipped and moved to Shipped (below) -- an open gap should not
+quietly disappear along with the entry that was tracking it.
+
+`/tags`' "Performers with no group" section calls `tag_chip` directly rather
+than `member_chip`, so a character with no group renders as a plain chip and
+her seiyuu -- if she has one -- is invisible on this page. The split-pill
+treatment (one chip in two independently-followable halves, `character`/`cv`)
+only fires inside a group row, where `member_chip` is what gets called.
+
+**Zero live instances today, measured**: every one of the 318 CHARACTER tags
+in the catalogue is a member of at least one group, so nothing is visibly
+broken yet -- this is a gap in the code path, not an observed defect. It
+becomes live the day a character is catalogued with no group at all, which
+the `add-concert` skill or an editor could do at any time without knowing this
+page has a blind spot for it.
+
+**Not a one-word fix.** `member_chip` hard-codes `count=none`, because a group
+row's members carry no per-tag concert count in that context; the ungrouped
+section DOES show counts. Routing ungrouped characters through `member_chip`
+as-is would silently drop them. Whoever picks this up needs a variant that
+keeps the count `member_chip` currently omits, not a one-line call swap.
+
+Ranked at the bottom, below the MCP server entry, on the same self-announcing
+logic #17 uses: the failure mode is a missing UI element on a page an editor
+is looking directly at, not a silent data or reminder-timing error, and it
+costs nothing until the precondition (an ungrouped character) exists.
+
+**Revision-pass note (2026-08-13, following rework phase 4 -- the final
+phase, full pass required by CLAUDE.md's WISHLIST rule after every shipped
+feature):** the unranked Following entry moves to Shipped (below) and takes
+NO number with it -- it was filed unranked through all four phases precisely
+so a still-open scope would never force a renumber, and finishing the scope
+removes an unranked entry rather than resolving a numbered one, so #1-#20
+keep the numbers they already had. One insertion, #21 above, carrying forward
+the one piece of that entry's content that was NOT resolved by finishing it --
+everything else in it either shipped (phases 1-4) or was superseded by what
+shipped. Three existing entries were read closely because this build touches
+ground they describe; the other seventeen (#1-#15, #18, #20) were re-read
+against it specifically, not skimmed, and the shared answer is that phase 4 is
+a Preferences template reduction plus two write paths (`POST
+/presets/apply-to-following`, and the `subscribe`/`handle_newly_tagged`
+changes from earlier tasks on this branch) -- it changed no round taxonomy, no
+catalogue surface, no fetch path, no admin page and no calendar roster.
+
+**#16 (`db/core.py`'s size)**: this build's only touch to `core.py` is the
+ordering rewrite inside `handle_newly_tagged` (task 5's brief cites the
+measured `[-1]` -> `[-3]` regression that forced it) -- a function the entry's
+own text already places inside the presets/subscriptions section of the
+strongly-connected component. It reads one more attribute
+(`candidate.is_default`) per loop iteration and adds no new caller and no new
+callee, so the shape the entry describes is unchanged; only the line count
+inside an already-SCC function moved, the same verdict the round-watch pass
+recorded here for a different function on 2026-08-11. `apply_default_to_following`
+itself lives in `routes/preferences.py`, not `core.py`, and calls only the
+pre-existing `get_default_preset` -- no new edge into the component at all.
+
+**#17 (the demos are one grammar-migration behind the app)**: its own design
+spec named it explicitly, in the Out-of-scope section written before phase 1
+started -- *"the demos will need frames for these surfaces, but that is that
+entry's pass"* -- so this is a direct, self-declared addition to its
+worklist rather than something this pass had to go looking for. Three
+surfaces now exist with no demo frame at all: `/tags` as a follow surface
+(split pills, the Follow/Edit mode toggle), `/following` (plain chips, the
+per-tag config dialog) and the reduced Preferences section. None of these
+existed when #17 was filed on 2026-08-12, so its worklist -- gathered at the
+time from the demo-parity build's own review passes -- could not have named
+them. Rank unchanged: still a documentation-quality problem with no
+user-visible impact, still self-announcing, and still below #16 for the
+reason already given there.
+
+**#19 (agent write endpoints)**: checked on the closest precedent this file
+has for it -- the 2026-08-11 outcome-correction pass read #19 specifically
+because that build added a per-user write (`RoundOutcome`) and drew the line
+"a different animal from the catalogue writes that entry contemplates". This
+build adds one more per-user write of the same shape: `POST
+/presets/apply-to-following` (a user's own `TagSubscription` rows). `POST
+/subscriptions/{id}/settings` (one subscription's preset/notify) is the same
+shape but is not this build's -- it shipped in phase 3; this build only edits
+its docstring. Read honestly against #19's actual subject, neither moves it,
+and for a narrower reason than round watch got: round watch at least produced
+new catalogue-ADJACENT observations (a quiet ladder) that a human still has to
+type into the edit page, which the 2026-08-11 pass called "one more instance
+of the friction this entry describes". Neither write is catalogue-adjacent at
+all -- a preset link and a notify flag are per-user configuration
+with no relationship to `import_commit` or anything an agent would propose
+INTO the catalogue -- and neither route sits behind the agent read API in the
+first place (`docs/agent-api.md`'s surface is GET-only; these are ordinary
+session-authenticated web routes a human clicks). So this build contributes
+no friction instance and no evidence about an agent's judgment either way,
+which is the only thing #19 says would move it. Unchanged in rank.
+
+The other seventeen entries stand as written -- none of them touch tags,
+subscriptions, presets, the reminder queue's materialization or the scheduler
+tick. #6 (three long jobs share the reminder tick) was checked specifically
+for the last of those: `apply_default_to_following` and `subscribe` are
+synchronous web routes, not tick jobs, and add no `beat()` obligation.
+Judgement: nothing else moves. Recorded explicitly rather than left implicit,
+per the instruction that a revision pass leaving no trace is indistinguishable
+from one that never happened.
+
 **Revision-pass note (2026-08-12, minor demo-parity cosmetics -- full pass
 required by CLAUDE.md's WISHLIST rule after every shipped feature):** one removal
 (#8, shipped), one insertion (#17, the demos' grammar drift), and no re-rank on
@@ -2603,6 +2576,148 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Following is due a rework: the four-phase build (2026-08-13)
+
+Branches `following-rework-phase-1` (PR #151, nine commits), `-phase-2`
+(PR #152, eleven commits), `-phase-3` (PR #153, fourteen commits) and
+`-phase-4` (five tasks), design `docs/superpowers/specs/2026-08-12-following-rework-design.md`,
+plans `docs/superpowers/plans/2026-08-12-following-rework-phase-{1,2,3}.md` and
+`docs/superpowers/plans/2026-08-13-following-rework-phase-4.md`. **No migration,
+across any of the four phases** -- `TagSubscription.preset_id`/`.notify` and
+`ReminderPreset.is_default` already existed and carried the entire redesign.
+This entry was filed UNRANKED on 2026-08-11, the owner's words: he wants to
+rework how following tags works, "since it's getting pretty big" -- nothing
+more specified at filing, deliberately, since a scope that does not exist yet
+cannot be honestly ranked.
+
+**What "big" turned out to measure as, which the entry could not have known
+when it was filed.** Preferences' Following section rendered every followed
+tag as a `.subrow` with its own toggles, above a `<details>` fold holding the
+WHOLE catalogue as chips: **878 chips**, of which 310 were one flat "Solo
+artists" list, behind **65 `group_members` queries per render** -- an N+1, on
+both `/preferences` and `/tags`. Two structural failures hid inside that
+count. Search was broken for **681 of the 735 catalogue tags**: `data-name`
+carried `t.name` (Japanese) while the chip displayed the localized name, so an
+English viewer typing what they could see matched nothing. And following a
+CHARACTER was impossible outright -- `preferences.py` never mentioned
+`CHARACTER`, so all **318 character tags** (43% of the catalogue) could only
+be followed as an unlabelled member chip inside a group, never on their own.
+None of these four numbers were available when the entry was filed; they came
+out of phase 1's brainstorm, reading the live catalogue export against the
+templates.
+
+**Phase 1 -- search and the N+1, alone and first.** Fixed both defects on the
+EXISTING surfaces before touching anything about where following lives:
+`data-name` now joins all three name columns (`name`/`name_en`/`name_zh`),
+`filterChips` hides containers left holding no visible match instead of
+showing the whole skeleton around one hit, and one batched `members_by_group`
+query replaced the per-group loop at all four sites that had it
+(`/tags`, `/preferences`, `/welcome`, the concert-editor tag picker).
+Deliberately first and alone: everything downstream assumes search works,
+since the redesign removes per-group folds and search becomes the only way to
+reach a name in a 99-member group.
+
+**Phase 2 -- `/tags` becomes the follow surface.** Every chip is now a real
+`<form>` posting to `/subscriptions`, for everyone -- the only follow control
+that existed before this, `_tag_follow_bell.html`, rendered solely inside the
+editor-only table view, so a non-editor was shipped 735 hidden rows of follow
+buttons they could not reveal. A character and her seiyuu render as one split
+pill in two independently-followable halves (`character`/`cv`), the first
+surface where the app's own `voiced_by_tag_id` distinction becomes something a
+user can act on directly, rather than only something `attach_tag`'s expansion
+reasons about. A subunit's members render under the subunit alone, `/tags`
+ONLY -- the concert page keeps 2026-08-01's "repetition kept" ruling, because
+that ruling is about a truthful BILL and a catalogue page asserts no lineup.
+The redundant Characters section and the whole table view are deleted (six
+admin pages' shared `.tagtable` CSS rule is kept; only the `/tags` markup
+using it goes). Editors get edit-on-click back as an explicit `Follow ⇄ Edit`
+mode instead of a second meaning riding the same click. **Two live
+regressions rode along and were caught within the same build**: a follow
+press 303ing back and re-rendering the whole directory measured at **923 ms
+and 6.98 MB** on a live-shaped 735-tag seed, fixed by an htmx swap of the
+pressed chip alone (**10.7 ms, 518 bytes** -- the same POST); and the unfollow
+half, initially keyed by subscription id, left a stale duplicate chip pointing
+at a deleted row (318 of 735 tags render more than once on this page), fixed
+by keying unfollow on TAG instead, idempotently.
+
+**Phase 3 -- `/following`, the subscriptions page.** `/tags` owns the
+catalogue (everything you COULD follow); `/following` owns your subscriptions
+(what you DO follow) -- the owner's reasoning for two pages rather than a
+filter on one was that a chip cannot mean "follow" on one surface and
+"configure" on the other. Plain chips, one per subscription, grouped by
+franchise, each marked ONLY where it deviates from the viewer's defaults (a
+muted 🔕 for notify off, a preset's name where it disagrees with the default,
+nothing at all when it conforms) so scanning forty chips only the exceptions
+draw the eye. Clicking a chip opens a dialog holding the three things a
+subscription has: which preset it links, whether it notifies, and whether it
+exists at all (Unfollow). No migration needed because `TagSubscription`
+already carried both columns -- this phase EXPOSED per-tag presets, it did
+not add them.
+
+**Phase 4 -- the Preferences reduction, and the two owner rulings that came
+out of building it.** Preferences' Following section drops the picker and the
+per-tag `.subrow`s entirely, replaced by a fixed-height summary: a followed-tag
+count with a "Manage →" link to `/following`, the standing default (read-only),
+the retroactive-fill button, and the unchanged skipped-events list. Measured
+in-browser at 0 and at 9 followed tags: **218.9px both times** -- the section
+no longer grows with follow count, which was the entire point -- with a 3.1px
+variance depending only on whether a default preset exists (the button is
+taller than the pill it replaces).
+
+Two owner rulings, both 2026-08-13, both load-bearing enough to belong in
+`docs/architecture.md` (see the `db/` and `web/` entries) rather than only
+here:
+
+1. **The standing default covers PRESET only; the NOTIFY half was dropped**
+   rather than add a `User` column for it. `ReminderPreset.is_default` is a
+   per-preset flag with an obvious column to widen; a standing notify default
+   has no equivalent, and the owner chose not to add one for a setting this
+   narrow. This is the reason the whole four-phase rework shipped with zero
+   migrations -- the one place a new column was genuinely tempting is the one
+   place it was ruled out. The design spec's §Preferences said the standing
+   default covers both; it now carries a dated correction rather than a
+   silent edit, matching the format this same document already used once, for
+   phase 4's ordering reason.
+2. **A non-default, tag-specific preset now outranks the default in
+   `handle_newly_tagged`**, reversing the previous earliest-created-wins rule.
+   The retroactive fill (below) writes the default into the OLDEST blank
+   subscriptions, so earliest-wins let a blanket default silently outrank a
+   preset the reader had tuned by hand for one tag on a concert also matching
+   a filled tag -- invariant 3 makes following both a group and one of its
+   members the ordinary case, not an edge. Measured: reminder offsets moved
+   from `-1` to `-3` on such a concert, with the tuned subscription's row
+   byte-identical. This is SHARED code -- it changes which preset every
+   user's future-matching concert gets, not only presses of the fill button.
+
+**"Apply my default preset to all followed tags"** (`POST
+/presets/apply-to-following`) is the retroactive half phase 2's `subscribe`
+fix could not be: task 2 made a NEW follow inherit the default (before it,
+`preset_id or None` meant every chip follow -- which sends no preset_id --
+linked no preset at all, so the standing default never actually reached a
+real follow), but that fixes nothing for follows already on the books, which
+in production is all of them. The fill UPDATEs every subscription the caller
+owns whose `preset_id IS NULL` and touches nothing else; the `is_(None)`
+clause is the entire safety property, and because the failure mode of
+dropping it is silent -- a blanket overwrite raises nothing and renders a
+cheerful count -- the route reports TWO numbers, `filled` and `kept`, not
+one. `preset_id = NULL` is OVERLOADED (it also means "auto-apply switched off
+on purpose", the deleted `toggle_subscription_autoapply`'s and
+`/subscriptions/{id}/settings`'s "none" option's write), so the fill silently
+re-arms switches a reader had turned off; owner ruling, 2026-08-13: fill them
+anyway, but the confirmation banner must say so plainly rather than add a
+column to tell the two NULLs apart. Both `POST /subscriptions/{id}/notify` and
+`.../auto-apply` are deleted outright with the markup that was their only
+caller, not merely left unreachable -- `/subscriptions/{id}/settings` already
+covers the same two fields less ambiguously.
+
+**One deferred gap survives all four phases and is now its own entry, #21
+above**: a character with no group renders as a plain chip on `/tags`, not a
+split pill, because "Performers with no group" calls `tag_chip` rather than
+`member_chip`. Zero live instances (every one of the 318 CHARACTER tags is in
+a group today), which is why it was filed as a note rather than blocking any
+phase, and why finishing the rework did not happen to fix it -- `/following`
+renders plain chips by design and never went near that code path.
 
 ### Minor demo-parity cosmetics, judged on merit (2026-08-12)
 

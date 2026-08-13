@@ -168,7 +168,19 @@ async def test_editors_section_shown_for_admin(client, monkeypatch):
     assert "Editors" in r.text
 
 
-# ── Per-tag toggle routes (Notify / Auto-apply) ──────────────────────────
+# ── Per-tag toggle routes (Notify / Auto-apply) -- DELETED, task 4 ──────────
+#
+# `POST /subscriptions/{id}/notify` and `.../auto-apply` lost their only
+# caller when the Following section's per-tag `.subrow`s were deleted (this
+# file tested them directly, by POSTing the route with no UI in between --
+# there never was a template assertion here to lose). Deleted along with the
+# markup rather than left unreachable: `/subscriptions/{id}/settings` already
+# writes both fields, together, with an explicit "none" preset choice, which
+# is strictly less ambiguous than the NULL "auto-apply off" overload the two
+# deleted routes wrote (see routes/preferences.py's module docstring). That
+# route's equivalent coverage -- the notify flag, linking/clearing a preset,
+# ownership 404 -- lives in test_following_dialog.py's
+# "POST /subscriptions/{id}/settings" section; nothing here duplicates it.
 
 
 async def sub_id_for(db, user_id: int) -> int:
@@ -179,60 +191,15 @@ async def sub_id_for(db, user_id: int) -> int:
         )).scalar_one()
 
 
-async def sub_state(db, sub_id: int):
-    async with db() as s:
-        sub = await s.get(TagSubscription, sub_id)
-        return sub.notify, sub.preset_id
+async def test_deleted_toggle_routes_are_gone(client):
+    """Confirms the deletion decision itself, not just its absence from the
+    UI: a POST to either old path answers like any other unmatched route,
+    rather than a stub silently left registered and unreferenced.
 
-
-async def add_default_preset(db, user_id: int) -> int:
-    from app.db.models import ReminderPreset
-    async with db() as s:
-        p = ReminderPreset(user_id=user_id, name="Standard", is_default=True)
-        s.add(p)
-        await s.commit()
-        return p.id
-
-
-async def test_toggle_notify_flips_the_flag(client):
-    """The Notify `.swb` posts to the notify toggle route, flipping sub.notify."""
-    await seed(client.db)  # seed leaves notify at its default True
+    Mutation: re-add either route (even as a no-op) and this fails.
+    """
+    await seed(client.db)
     login_as(client, USER_A, "reiji")
     sid = await sub_id_for(client.db, USER_A)
-    notify, _ = await sub_state(client.db, sid)
-    assert notify is True
-
-    r = client.post(f"/subscriptions/{sid}/notify")
-    assert r.status_code in (200, 303)
-    notify, _ = await sub_state(client.db, sid)
-    assert notify is False
-
-
-async def test_toggle_autoapply_links_and_unlinks_default_preset(client):
-    """Auto-apply maps to whether a preset is linked: toggling on links the
-    user's default preset, toggling off clears preset_id."""
-    await seed(client.db)
-    default_id = await add_default_preset(client.db, USER_A)
-    login_as(client, USER_A, "reiji")
-    sid = await sub_id_for(client.db, USER_A)
-    _, preset_id = await sub_state(client.db, sid)
-    assert preset_id is None  # seed subscribes with no preset link
-
-    r = client.post(f"/subscriptions/{sid}/auto-apply")
-    assert r.status_code in (200, 303)
-    _, preset_id = await sub_state(client.db, sid)
-    assert preset_id == default_id
-
-    client.post(f"/subscriptions/{sid}/auto-apply")
-    _, preset_id = await sub_state(client.db, sid)
-    assert preset_id is None
-
-
-async def test_toggle_subscription_404_for_other_user(client):
-    """The toggle routes are scoped to the caller -- another user's
-    subscription id 404s, never mutates."""
-    await seed(client.db)
-    sid = await sub_id_for(client.db, USER_A)
-    login_as(client, 9999, "someone-else")
-    r = client.post(f"/subscriptions/{sid}/notify")
-    assert r.status_code == 404
+    assert client.post(f"/subscriptions/{sid}/notify").status_code == 404
+    assert client.post(f"/subscriptions/{sid}/auto-apply").status_code == 404

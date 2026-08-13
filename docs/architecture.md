@@ -855,6 +855,122 @@ measurement or an incident that a reasonable-looking edit would undo.
     here would put /tags-shaped markup into this page on every press. This page
     also renders PLAIN chips, never split pills -- a subscription is one tag,
     and the pill exists on `/tags` because two tags are being offered at once.
+- **Preferences' Following section is a fixed-height summary now, and the
+  standing default is `ReminderPreset.is_default` WIDENED, not a new column**
+  -- shipped 2026-08-13, phase 4 (the last) of WISHLIST's "Following is due a
+  rework", design in
+  `docs/superpowers/specs/2026-08-12-following-rework-design.md` (see the
+  dated correction on its §Preferences, added by this phase). `is_default`
+  already meant "which preset the Discord DM's `[Set my reminders]` button
+  applies" (`apply_default_preset`, whose only caller is
+  `bot/views.py:ApplyDefaultButton` -- a `discord.ui.Button` on a DM view, not
+  a web control; `routes/preferences.py`'s `make_default` and
+  `preferences.html`'s two "Default" pills all describe it the same way);
+  this phase widens the SAME flag to also
+  mean "which preset a new follow inherits" (`subscribe`, via
+  `get_default_preset` -- shipped earlier on this branch, task 2) and "which
+  preset the retroactive fill writes" (`POST /presets/apply-to-following`,
+  below). Nothing was added to the schema for any of it --
+  `TagSubscription.preset_id`/`.notify` and `ReminderPreset.is_default`
+  carried the entire four-phase rework, which is why it shipped with ZERO
+  migrations. **The owner dropped notify from the standing default**
+  (2026-08-13): the design called for the default to cover both preset AND
+  notify, but there is no per-user column for a standing notify default the
+  way `is_default` is a per-preset one to widen, and the owner chose not to
+  add one. Preferences therefore shows only the preset half of "the standing
+  default"; notify is still set per tag, one at a time, on `/following`'s
+  dialog. Do not read the missing notify row here as an omission to fix --
+  adding a column reopens a decision that was made on purpose.
+  - **The retroactive fill (`POST /presets/apply-to-following`,
+    `routes/preferences.py`) is FILL-ONLY, and the report is the only
+    evidence of that.** It UPDATEs every `TagSubscription` the caller owns
+    whose `preset_id IS NULL`; that `is_(None)` clause is the ENTIRE safety
+    property -- drop it and the statement becomes a blanket overwrite that
+    raises nothing, renders a cheerful count, and silently retimes every
+    hand-tuned tag's reminders, with no undo and no audit row. Because the
+    failure is silent, the route reports TWO numbers, `filled` and `kept`,
+    not one -- `kept` is the only thing that tells the reader the fill left
+    something alone rather than clobbering it; a `filled`-only report would
+    look identical either way. `preset_id = NULL` is also OVERLOADED (the
+    deleted `toggle_subscription_autoapply` used to write it for "auto-apply
+    off", and `/subscriptions/{id}/settings`'s "none" option still does), so
+    the fill silently re-arms switches a user had turned off. Owner ruling,
+    2026-08-13: fill them anyway, but the banner MUST say so plainly rather
+    than add a column to tell the two NULLs apart -- losing that sentence
+    from `preferences.html` is a silent regression, not a cosmetic one.
+  - **`handle_newly_tagged` (`db/core.py`) now asks "which preset wins",
+    not "which is oldest."** The fill writes the default into the OLDEST
+    blank rows, so the previous earliest-created-wins rule let a blanket
+    default beat a tag the reader had tuned by hand on the same concert --
+    invariant 3 attaches a group and its members together, so following both
+    is the ordinary case here, not an edge. Measured: reminder offsets moved
+    from `-1` to `-3` on a concert matching both, with the tuned
+    subscription's row byte-identical. The loop now prefers the first
+    candidate whose linked preset is NOT `is_default`, falling back to
+    earliest-first only when every candidate ties on that (all-default or
+    all-non-default) -- which is where order was always genuinely arbitrary.
+    This is SHARED code: it changes which preset every user's future-matching
+    concert gets, not only the ones who press the fill button, and
+    "simplifying" the loop back to plain earliest-wins reopens the exact bug
+    the owner ruled on.
+  - **The welcome wizard's step-0 chip sends an explicit `preset_id=0`, and
+    `subscribe` (the `POST /subscriptions` route this phase's `get_default_preset`
+    change lives in, 41110f5) treats it identically to a `/tags` chip's absent
+    field.** `_tag_chip.html`'s follow forms post no `preset_id` at all;
+    `welcome.html`'s carries `value="0"`. Both are falsy, so both hit the same
+    `if preset_id:` branch and inherit the viewer's standing default. This is
+    deliberate, not an oversight: the wizard's Follow step (step 0) always
+    precedes its Reminders step (step 1) and never regresses, so in the
+    ordinary new-user flow no default preset exists yet at follow time and the
+    value resolves to `None` exactly as it did before this rule. The only case
+    where it now differs is a user who already has a default preset from
+    elsewhere while still sitting at onboarding step 0 -- and inheriting it
+    there is the same "did not choose -> apply default" rule as everywhere
+    else, not a reason to carve out a second meaning for a literal 0. Do not
+    special-case the wizard's `preset_id=0` to mean "no preset": that would
+    reintroduce two meanings for one falsy value, which is exactly what this
+    rule was written to remove. If the wizard ever needs to skip the default,
+    it should stop sending `preset_id=0` at all (matching `/tags`), not grow a
+    branch in `subscribe`.
+  - **What Preferences owns now vs `/following`.** Preferences keeps only:
+    the followed-tag COUNT with a "Manage →" link, the standing default
+    (read-only preset name), the fill button, and the unchanged skipped-events
+    restore list (invariant 8's opted-out overrides -- has no home on a tag
+    catalogue). Everything per-tag -- which preset, notify, unfollow -- lives
+    on `/following`'s dialog only; `POST /subscriptions/{id}/notify` and
+    `.../auto-apply` are DELETED, not merely unreachable, since
+    `/subscriptions/{id}/settings` already covers the same two fields less
+    ambiguously. Measured (browser, seeded at 0 and at 9 followed tags): the
+    section is a fixed **218.9px** regardless of follow count -- the
+    reduction's whole point -- and the only variance is **3.1px**, between
+    having and not having a default preset (the button renders taller than
+    the pill it replaces). A "helpful" per-tag summary row creeping back in
+    here would restore the growth this phase was built to remove.
+  - **The two counts on this row read as the same word in English and in
+    Japanese until this build, and no test could see it.** "N tags followed"
+    (`TagSubscription` rows) sat next
+    to "N tracked · N upcoming · N skipped" (`tracked_concert_ids`, invariant
+    8's derivation) -- the reduction deleted the markup that used to keep them
+    apart. In JAPANESE this was a true collision: both strings literally
+    contained フォロー中 (`%(sub_count)s件のタグをフォロー中` beside
+    `%(tracked)s件をフォロー中 ...`). In CHINESE it was two near-synonyms,
+    not one repeated word -- the pill said 关注了 (`关注了 %(sub_count)s
+    个标签`) while the clock said 已关注 (`%(tracked)s 场已关注 ...`), related
+    but not identical, so do not describe the two languages as the same
+    failure. Neither msgid CHANGED in either language, so no i18n or copy test
+    caught either version; it only showed up in a rendered-page review. Fixed
+    by giving the tracked-concerts clock its own word, "tracked" (`home.html`'s
+    existing "events tracked" vocabulary) -- 追跡中 / 追踪中 in ja/zh, which
+    resolves the true collision in ja and sharpens the near-synonym in zh.
+    A future change that puts these two numbers back on one line under
+    one shared word will be just as invisible to the suite.
+  - **The fill button is suppressed, not disabled, when it can only ever
+    report a no-op.** With no default preset, or with no followed tags at
+    all, a press could report nothing but "0 filled" -- so the button does
+    not render in either case (`{% if default_preset %}` / `{% if
+    followed_count %}` in `preferences.html`), rather than rendering to
+    confirm nothing happened. The row still renders non-empty: the
+    default-preset pill, or its "No default preset yet" absence, stays.
 - **Invariant 7's third rule has a repo-wide sweep now**
   (`tests/test_xss_escaping.py`, 2026-08-12). Never interpolating user text into
   an inline `on*` handler used to be enforced per page, by whoever remembered --

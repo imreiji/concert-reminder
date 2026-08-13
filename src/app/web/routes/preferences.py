@@ -3,14 +3,13 @@
   GET  /preferences                          the page
   GET  /following                            followed tags, chips by franchise
   POST /presets                              create preset
+  POST /presets/apply-to-following           fill the default into preset-less follows
   POST /presets/{id}/delete
   POST /presets/{id}/items                   add an item to a preset
   POST /presets/{id}/items/{item_id}/delete
   POST /subscriptions                        subscribe to a tag (+preset, notify)
   POST /subscriptions/unfollow               unfollow BY TAG, idempotent (chips)
-  POST /subscriptions/{id}/notify            toggle the per-tag Notify flag
   POST /subscriptions/{id}/settings          preset + notify together (/following)
-  POST /subscriptions/{id}/auto-apply        toggle default-preset auto-apply
   POST /subscriptions/{id}/delete            unfollow BY SUBSCRIPTION ID
   POST /concerts/{event_id}/presets/{pid}/apply   one-click apply (rules fragment swap)
   POST /me/timezone                          manual timezone choice
@@ -21,6 +20,17 @@
 
 Everything here is per-user: routes verify ownership and 404 on other
 people's presets/subscriptions rather than admitting they exist.
+
+Following rework phase 4, task 4: Preferences' per-tag `.subrow`s (Notify /
+Auto-apply / Unfollow) are gone -- that management lives on `/following`'s
+per-tag dialog now. `POST /subscriptions/{id}/notify` and
+`POST /subscriptions/{id}/auto-apply` were THAT markup's only callers and are
+deleted with it, not just left unreachable: `/subscriptions/{id}/settings`
+already covers the same ground with an explicit preset choice, which is
+strictly less ambiguous than the NULL "auto-apply off" overload those two
+routes wrote (the overload `apply_default_to_following`'s docstring has to
+warn about). Removing them removes a redundant way into that ambiguity
+rather than merely deleting code.
 """
 
 from datetime import UTC, datetime
@@ -29,7 +39,7 @@ from zoneinfo import ZoneInfo
 import discord
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import i18n
@@ -53,7 +63,6 @@ from app.db.service import (
     generate_api_token,
     get_default_preset,
     list_editors,
-    members_by_group,
     record_dm_outcome,
     set_default_preset,
     set_editor,
@@ -127,31 +136,29 @@ async def preferences(
     session: AsyncSession = Depends(get_session),
     feed_token: str = "",
 ):
-    from app.domain.types import TagKind
-
     # POP, not get: this is what makes the mint's session flash one-shot. A
     # second render of this same page (back button, refresh, a second tab)
     # must show nothing -- see POST /me/api-token's docstring for why the
     # token isn't carried here as a query parameter the way feed_token is.
     api_token = request.session.pop("api_token", None)
+    # Same one-shot discipline, and POP for the same reason: the fill report is
+    # about ONE press, so a refresh or a second tab must not repeat it. Numbers
+    # only -- the sentence is composed in the template so it lands in the
+    # viewer's locale at RENDER time (see apply_default_to_following).
+    preset_fill = request.session.pop("preset_fill", None)
 
     presets = await my_presets(session, user.id)
-    subs = list((await session.execute(
-        select(TagSubscription, Tag)
-        .join(Tag, TagSubscription.tag_id == Tag.id)
+    # Following section, reduced (phase 4 task 4): a count and the standing
+    # default only -- no per-tag rows, so this page's height no longer grows
+    # with how many tags a user follows. Per-tag detail (which preset, which
+    # events, Notify/Unfollow) lives on /following now; followed_tag_families
+    # and followed_tag_counts are THAT route's job, not this one's.
+    followed_count = await session.scalar(
+        select(func.count())
+        .select_from(TagSubscription)
         .where(TagSubscription.user_id == user.id)
-        .order_by(Tag.name)
-    )).all())
-    sub_by_tag = {tag.id: sub for sub, tag in subs}
-    tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
-    franchises = [t for t in tags if t.kind is TagKind.FRANCHISE]
-    groups = [t for t in tags if t.kind is TagKind.GROUP]
-    venues = [t for t in tags if t.kind is TagKind.VENUE]
-    members = await members_by_group(session, [g.id for g in groups])
-    grouped_artist_ids = {m.id for ms in members.values() for m in ms}
-    solo_artists = [
-        t for t in tags if t.kind is TagKind.ARTIST and t.id not in grouped_artist_ids
-    ]
+    )
+    default_preset = await get_default_preset(session, user.id)
     db_user = await session.get(User, user.id)
     tz = db_user.timezone if db_user else "America/Moncton"
     tz_auto = db_user.tz_auto if db_user else True
@@ -159,10 +166,10 @@ async def preferences(
     has_api_token = bool(db_user and db_user.api_token_hash)
     editors = await list_editors(session) if user.is_admin else []
 
-    # Following section: the tracked count, plus the deliberately-invisible
-    # OPTED_OUT overrides surfaced as a review-and-restore list (spec
-    # decision 1). concert_subscription_states is Task 2's read surface;
-    # tracked_concert_ids is the single definition of "tracked".
+    # The tracked count, plus the deliberately-invisible OPTED_OUT overrides
+    # surfaced as a review-and-restore list (spec decision 1).
+    # concert_subscription_states is Task 2's read surface; tracked_concert_ids
+    # is the single definition of "tracked".
     tracked_ids = await tracked_concert_ids(session, user.id)
     tracked_count = len(tracked_ids)
     upcoming_count = await upcoming_concert_count(session, tracked_ids)
@@ -174,8 +181,6 @@ async def preferences(
         pruned_concerts = list((await session.execute(
             select(Concert).where(Concert.id.in_(pruned_ids)).order_by(Concert.title)
         )).scalars())
-    # Per-followed-tag "N concerts, M upcoming" for the Following subrows.
-    tag_counts = await followed_tag_counts(session, user.id)
 
     # A live JST/local sample for the Time section's preview line: the current
     # instant read in both zones (invariant 1: JST first, both always present).
@@ -184,18 +189,18 @@ async def preferences(
     return templates.TemplateResponse(
         request,
         "preferences.html",
-        {"user": user, "presets": presets, "subs": subs, "sub_by_tag": sub_by_tag,
-         "franchises": franchises, "groups": groups, "members": members,
-         "solo_artists": solo_artists, "venues": venues,
+        {"user": user, "presets": presets, "default_preset": default_preset,
+         "followed_count": followed_count,
          "tz": tz, "tz_auto": tz_auto, "tz_preview": tz_preview,
          "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
          "anchors": list(Anchor), "editors": editors,
          "rehearsal_enabled": settings.rehearsal_enabled,
-         "has_calendar_feed": has_calendar_feed, "tag_counts": tag_counts,
+         "has_calendar_feed": has_calendar_feed,
          "tracked_count": tracked_count, "upcoming_count": upcoming_count,
          "pruned_concerts": pruned_concerts,
          "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
          "has_api_token": has_api_token, "api_token": api_token,
+         "preset_fill": preset_fill,
          "bot_enabled": settings.bot_enabled},
     )
 
@@ -226,6 +231,106 @@ async def create_preset(
     ))
     await session.commit()
     return RedirectResponse(_safe_next(next_url), status_code=303)
+
+
+@router.post("/presets/apply-to-following")
+async def apply_default_to_following(
+    request: Request,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Fill the standing default into every followed tag that carries NO preset.
+
+    An ACTION, not a setting. `ReminderPreset.is_default` governs FUTURE follows
+    (`subscribe` reads it when the form names no preset); changing it must never
+    rewrite a row. This is the retroactive half, and it only runs when the reader
+    presses it.
+
+    **It fills NULLs and NOTHING else.** The `preset_id.is_(None)` clause in the
+    UPDATE below is the whole safety property of this route (owner ruling,
+    2026-08-13: "for anything that already have their own preset, remain on the
+    original preset"). Drop it and the statement becomes a blanket overwrite that
+    silently destroys per-tag tuning a user set through `/following`'s dialog --
+    a loss with no undo, no audit row, and a success page indistinguishable from
+    the correct behaviour. That is the reason this route reports TWO numbers
+    rather than one: the count of rows LEFT ALONE is the only evidence the reader
+    gets that the fill was a fill.
+
+    `TagSubscription.user_id == user.id` is the second load-bearing clause. There
+    is no id in the request at all -- the caller is the session, so this can only
+    ever touch the presser's own rows -- but the scope still has to be written,
+    because a bulk UPDATE without it rewrites the whole table.
+
+    "Left alone" counts rows holding a preset that is NOT the default: a follow
+    already sitting on the default was neither filled nor overruled, and
+    reporting it as "kept its own" would be a lie about tuning that does not
+    exist. (The `is_not(None)` in that count is redundant in SQL -- `NULL != x`
+    is NULL, never true -- and kept for the reader.)
+
+    NULL is OVERLOADED here and the copy has to say so (owner ruling,
+    2026-08-13). The now-deleted `toggle_subscription_autoapply` used to write
+    NULL for "auto-apply off", and `/subscriptions/{id}/settings` still writes
+    it for the dialog's explicit "none" -- so a blank `preset_id` means EITHER
+    "never configured" OR "I turned this off deliberately", and no column
+    tells them apart. The owner chose to fill both rather than add one (this
+    phase has shipped no migration and is not starting), on the condition that
+    the report names it: `preferences.html`'s banner says plainly that
+    auto-apply comes back on where it had been switched off. Do not quietly
+    drop that sentence -- it is the whole consent for the half of the fill
+    this route cannot distinguish. Deleting the toggle route (Task 4) did NOT
+    make the overload go away: `/following`'s dialog still writes the same
+    NULL through `/subscriptions/{id}/settings`.
+
+    No rule resync, for the same reason `/subscriptions/{id}/settings` states:
+    `TagSubscription.preset_id` is read only by `handle_newly_tagged`, when a
+    FUTURE concert picks up a followed tag. This write DOES change which preset
+    such a concert will get (that is the point of it, and see the same
+    function's ordering comment for the tuned-beats-default rule it forced), but
+    it plans nothing NOW: no `reminder_queue` row (invariant 2) exists yet for a
+    concert that does not exist, so there is nothing to re-plan. Invariant 8's
+    `reinstate_user_rules` is per-CONCERT and belongs to concert subscriptions
+    and leg opt-outs, which do gate live reminders; a tag-level preset write has
+    no concert to give it.
+
+    The report rides a one-shot session flash, popped by GET /preferences, as
+    NUMBERS rather than a composed sentence -- the sentence is built in the
+    template so it resolves in the LOCALE OF THE PAGE THAT SHOWS IT, not the
+    locale of the POST that queued it (CLAUDE.md's i18n warning: a label copied
+    before it reaches a template resolves at the copy site). The redirect is the
+    bare, hardcoded "/preferences" and takes no `next`: this page is the only one
+    that pops the flash, so any other landing would swallow the report entirely
+    and leave the action looking silent. (`/preferences` is in `_ALLOWED_NEXT`,
+    so a later `next` would work -- it is left out because of the flash, not
+    because the allowlist is missing it.)
+    """
+    default = await get_default_preset(session, user.id)
+    if default is None:
+        request.session["preset_fill"] = {"had_default": False, "filled": 0, "kept": 0}
+        return RedirectResponse("/preferences", status_code=303)
+
+    kept = await session.scalar(
+        select(func.count())
+        .select_from(TagSubscription)
+        .where(
+            TagSubscription.user_id == user.id,
+            TagSubscription.preset_id.is_not(None),
+            TagSubscription.preset_id != default.id,
+        )
+    )
+    result = await session.execute(
+        update(TagSubscription)
+        .where(
+            TagSubscription.user_id == user.id,
+            TagSubscription.preset_id.is_(None),
+        )
+        .values(preset_id=default.id)
+    )
+    filled = result.rowcount
+    await session.commit()
+    request.session["preset_fill"] = {
+        "had_default": True, "filled": filled, "kept": kept or 0,
+    }
+    return RedirectResponse("/preferences", status_code=303)
 
 
 @router.post("/presets/{preset_id}/rename")
@@ -441,13 +546,31 @@ async def subscribe(
     sub = existing.scalar_one_or_none()
     await ensure_user(session, user.id, user.username)
     if sub is None:
+        # `preset_id` absent or 0 means "I did not choose" -- inherit the
+        # viewer's standing default (or None, if they have none). Every /tags
+        # chip sends no preset_id field at all; the welcome wizard's step-0
+        # chip sends an explicit preset_id=0 (see welcome.html), which lands
+        # in the same branch since the guard below is `if preset_id:`. That
+        # is deliberate, not incidental -- see docs/architecture.md's
+        # "Preferences' Following section is a fixed-height summary now"
+        # entry for why the wizard's literal 0 is not special-cased.
+        if preset_id:
+            linked_preset_id = preset_id
+        else:
+            default = await get_default_preset(session, user.id)
+            linked_preset_id = default.id if default else None
         sub = TagSubscription(
             user_id=user.id, tag_id=tag_id,
-            preset_id=preset_id or None, notify=notify,
+            preset_id=linked_preset_id, notify=notify,
         )
         session.add(sub)
     else:  # re-submitting updates the existing subscription
-        sub.preset_id = preset_id or None
+        # Only overwrite the preset when the caller EXPLICITLY chose one.
+        # A bare re-submit (a stale tab, a double chip-press) posts no
+        # preset_id, and must not clear a preset already linked here or set
+        # via /subscriptions/{id}/settings -- that would be silent data loss.
+        if preset_id:
+            sub.preset_id = preset_id
         sub.notify = notify
     await session.commit()
 
@@ -471,22 +594,6 @@ async def _owned_subscription(
     return sub
 
 
-@router.post("/subscriptions/{sub_id}/notify")
-async def toggle_subscription_notify(
-    sub_id: int,
-    user: SessionUser = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    """Flip the per-tag Notify flag -- the demo's Notify `.swb`. Notify is
-    just the new-event DM notice, so this needs no rule resync (unlike a
-    per-concert override); it mirrors the existing /subscriptions upsert,
-    which likewise does not resync when it rewrites notify."""
-    sub = await _owned_subscription(session, user.id, sub_id)
-    sub.notify = not sub.notify
-    await session.commit()
-    return RedirectResponse("/preferences#p-follow", status_code=303)
-
-
 @router.post("/subscriptions/{sub_id}/settings")
 async def update_subscription_settings(
     sub_id: int,
@@ -497,12 +604,10 @@ async def update_subscription_settings(
     next_url: str = Form("/following", alias="next"),
 ):
     """Both of a subscription's settings in ONE submit -- `/following`'s
-    per-tag dialog.
-
-    The two toggles above stay: Preferences' subrows flip one field per press
-    with no form to submit, and this page's dialog holds both fields open at
-    once and saves them together. Writing them separately here would mean a
-    dialog whose Save is two round trips, either of which can land alone.
+    per-tag dialog holds both fields open at once and saves them together.
+    (Preferences used to flip Notify and Auto-apply as two separate one-field
+    toggles; those routes are gone -- see the module docstring -- and this is
+    now the only write path for either field.)
 
     Same field semantics as the `/subscriptions` upsert, deliberately -- this
     is that route's write half addressed BY SUBSCRIPTION ID instead of by tag,
@@ -517,7 +622,7 @@ async def update_subscription_settings(
     No rule resync: `notify` is only the new-event DM notice, and `preset_id`
     is what gets applied to FUTURE matching events, not a rule already planned
     (invariant 2's queue is untouched by either) -- the same reasoning
-    `/subscriptions` and the two toggles above already run on.
+    `/subscriptions` already runs on.
     """
     sub = await _owned_subscription(session, user.id, sub_id)
     if preset_id:
@@ -526,25 +631,6 @@ async def update_subscription_settings(
     sub.notify = notify
     await session.commit()
     return RedirectResponse(_safe_next(next_url), status_code=303)
-
-
-@router.post("/subscriptions/{sub_id}/auto-apply")
-async def toggle_subscription_autoapply(
-    sub_id: int,
-    user: SessionUser = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    """The demo's Auto-apply `.swb`: a preset either IS or ISN'T linked. On
-    links the user's default preset (nothing to link without one, so it stays
-    off); off clears preset_id. Same field the /subscriptions upsert sets."""
-    sub = await _owned_subscription(session, user.id, sub_id)
-    if sub.preset_id is not None:
-        sub.preset_id = None
-    else:
-        default = await get_default_preset(session, user.id)
-        sub.preset_id = default.id if default else None
-    await session.commit()
-    return RedirectResponse("/preferences#p-follow", status_code=303)
 
 
 @router.post("/subscriptions/unfollow", response_class=HTMLResponse)
