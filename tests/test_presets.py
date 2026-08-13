@@ -13,6 +13,7 @@ from app.db.models import (
     Notification,
     ReminderQueue,
     ReminderRule,
+    TagSubscription,
 )
 from app.db.session import get_session
 from app.web import auth
@@ -225,6 +226,97 @@ async def test_subscribe_rejects_an_unrecognized_next_value(client):
     login_as(client, FAN_ID, "fan")
     r = client.post("/subscriptions", data={"tag_id": 1, "next": "https://evil.example"})
     assert r.headers["location"] == "/preferences"
+
+
+async def test_subscribe_refuses_a_preset_the_follower_does_not_own(client):
+    """`POST /subscriptions` takes a `preset_id` straight off the form and links
+    it to the new subscription, so `owned_preset` is the only thing standing
+    between one user and another user's preset. PRE-EXISTING gap: the guard has
+    been there since presets shipped and nothing pinned it -- dropping the call
+    leaves every other test in this file green (45 of them, measured
+    2026-08-12). The chips are now this route's main caller and the same guard
+    on `/subscriptions/{id}/settings` IS pinned (tests/test_following_dialog.py),
+    so this is the unpinned half of a pair.
+
+    A 404 alone would prove nothing (a missing route 404s identically), so the
+    refusal is asserted with the row NOT WRITTEN, and the follower's own
+    identical follow is asserted to succeed and link their OWN preset -- which
+    is also what tells `owned_preset` apart from a route that refuses every
+    preset_id.
+    """
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
+    build_standard_preset(client)  # preset #1 belongs to the EDITOR
+
+    login_as(client, FAN_ID, "fan")
+    r = client.post("/subscriptions", data={"tag_id": 1, "preset_id": 1, "notify": "true"})
+    assert r.status_code == 404
+    assert await _all(client.db, TagSubscription) == [], (
+        "and no subscription row was written on the way to the refusal"
+    )
+
+    client.post("/presets", data={"name": "mine"})
+    r = client.post("/subscriptions", data={"tag_id": 1, "preset_id": 2, "notify": "true"})
+    assert r.status_code == 303, "the fan's OWN preset still links"
+    subs = await _all(client.db, TagSubscription)
+    assert [(s.user_id, s.preset_id) for s in subs] == [(FAN_ID, 2)]
+
+
+async def test_unsubscribe_by_subscription_id_deletes_the_row(client):
+    """POST /subscriptions/{sub_id}/delete -- the ID-KEYED unfollow, which is
+    what Preferences' Following rows, Preferences' tag picker and the welcome
+    wizard post to. (The /tags chips use the tag-keyed /subscriptions/unfollow
+    instead, because that page renders one tag more than once and a subscription
+    id in a chip goes stale -- see tests/test_tags_follow_htmx.py.)
+
+    Mutation this must fail against: DELETING THE ROUTE. Until this test
+    existed, the only test that ever posted this URL was one that got
+    repointed at the tag-keyed route, so removing `unsubscribe` outright left
+    the whole suite green while 405-ing three live surfaces.
+    """
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
+    login_as(client, FAN_ID, "fan")
+    client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
+    subs = await _all(client.db, TagSubscription)
+    assert len(subs) == 1
+
+    r = client.post(f"/subscriptions/{subs[0].id}/delete", data={"next": "/welcome"})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/welcome", "and it still honours `next`"
+    assert await _all(client.db, TagSubscription) == []
+
+
+async def test_unsubscribe_by_id_404s_on_someone_elses_subscription(client):
+    """Ownership, checked as a 404 rather than a 403 -- the house rule for
+    another user's row (invariant 5). Mutation: dropping the `user_id` check,
+    which lets any signed-in user unfollow anyone else's tag by guessing a
+    small integer."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
+    login_as(client, FAN_ID, "fan")
+    client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
+    subs = await _all(client.db, TagSubscription)
+    assert len(subs) == 1 and subs[0].user_id == FAN_ID
+
+    login_as(client, EDITOR_ID, "reiji")
+    r = client.post(f"/subscriptions/{subs[0].id}/delete")
+    assert r.status_code == 404
+    assert len(await _all(client.db, TagSubscription)) == 1, "and the row survives"
+
+    # The same request from the OWNER must succeed. Without this half, a 404
+    # from a route that does not exist at all reads exactly like a 404 from the
+    # ownership check -- so deleting the route would leave this test green.
+    login_as(client, FAN_ID, "fan")
+    r = client.post(f"/subscriptions/{subs[0].id}/delete")
+    assert r.status_code == 303
+    assert await _all(client.db, TagSubscription) == []
 
 
 async def test_create_preset_honors_next_param(client):

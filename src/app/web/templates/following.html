@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}{{ _("following") }} — dekimasen.app{% endblock %}
+{% block content %}
+{#- /following: every tag this viewer follows, as PLAIN chips grouped by
+    franchise.
+
+    A subscription is ONE tag, so a chip is one chip -- not the split pill
+    /tags renders for a character and her seiyuu, which exists there because
+    two tags are being offered at once (owner ruling, 2026-08-12). Nothing here
+    is a follow control either: these chips are `<span>`s, not the `<form>`s
+    _tag_chip.html emits. That partial's forms post `next=/tags` and carry a
+    hidden `chip` shape naming the fragment the route swaps back, and both are
+    facts about the tag directory's markup -- reusing them here would swap a
+    /tags-shaped chip into this page on every press. The per-subscription dialog
+    below is what makes these chips actionable, and it is a real <form> posting
+    a real route, so the page works with JS off apart from the opening itself.
+    Nothing here needs to go stale-safe: one chip per followed tag, and every
+    save answers with a whole re-rendered page.
+
+    THE CHIP SAYS ONLY HOW THE SUBSCRIPTION DIFFERS FROM THE VIEWER'S DEFAULTS.
+    A muted bell when new-event notices are off, the preset's name when the
+    preset disagrees with the default preset ("No preset" when it holds none
+    while a default exists), and NOTHING at all when it conforms. Scanning forty
+    chips, only the exceptions should draw the eye -- so resist adding a badge
+    that renders on every chip, however useful it looks on one. Both readings
+    are derived in `followed_tag_families` (db/tags.py), never here. -#}
+<div class="tags-head">
+  <h1>{{ _("Following") }}</h1>
+  {%- if families %}
+  <span class="note dim">
+    {%- set n_tags -%}<strong>{% trans count=followed_count %}{{ count }} tag{% pluralize %}{{ count }} tags{% endtrans %}</strong>{%- endset -%}
+    {%- set n_live -%}{% trans count=live_count %}{{ count }} with an event coming up{% pluralize %}{{ count }} with events coming up{% endtrans %}{%- endset -%}
+    {%- trans tags=n_tags, live=n_live %}{{ tags }} followed, {{ live }}{% endtrans -%}
+  </span>
+  {%- endif %}
+</div>
+
+{#- Head note, legend and search box all follow the CHIPS: a "0 tags followed"
+    tally, a legend for markers that cannot appear and a search over nothing are
+    three pieces of furniture explaining an empty room. The empty state below
+    says the one thing that is true and links where it is fixed. -#}
+{% if families %}
+<p class="dim">{% trans %}A chip shows only where it differs from your defaults — a muted bell means no new-event notice, a name means a preset other than your default one.{% endtrans %}</p>
+
+{#- The same search box /tags carries, pointed at THIS page's scope. The msgid
+    is byte-identical to the directory's on purpose: same question, and a
+    second near-identical string is a second thing to translate. -#}
+<input class="tag-search" type="search" placeholder="{{ _('Search franchises, groups, performers, venues…') }}" oninput="filterChips(this, '.following-scope')">
+{% endif %}
+
+{#- One chip. The tag name is user-authored and so is the preset name, so both
+    reach the DOM through Jinja's autoescaping and neither goes anywhere near an
+    inline on* handler (invariant 7). data-name carries search_key(t) -- all
+    three names -- which is filterChips()'s hook; it sits on the chip itself
+    here rather than on a wrapper, because these chips have no `.chipform`
+    around them and filterChips falls back to the matched element. -#}
+{#- The chip stays a <span> and gains role/tabindex rather than becoming a
+    <button>: a button here would be a submit-less control inside no form, and
+    the marker spans nested in it are what the page's per-chip tests balance
+    against. data-sub-id is what the opener reads through `dataset` -- the
+    dialog id is derived from it, never interpolated into an on* handler. -#}
+{% macro follow_chip(f) %}
+{%- set t = f.tag -%}
+{%- set kcls = {"franchise": " k-franchise", "group": " k-group", "venue": " k-venue"}.get(t.kind.value, "") -%}
+<span class="tchip{{ kcls }}" role="button" tabindex="0"
+      data-sub-id="{{ f.sub_id }}" title="{{ _('Change how you follow this tag') }}"
+      data-tag-id="{{ t.id }}" data-name="{{ search_key(t) }}">{{ loc(t, "name") }}
+  {%- if f.preset_deviates %}<span class="pdev">{{ f.preset_name or _("No preset") }}</span>{% endif -%}
+  {%- if f.muted %}<span class="mute" title="{{ _('New-event notices are off for this tag') }}">🔕</span>{% endif -%}
+</span>
+{% endmacro %}
+
+<div class="following-scope">
+  {% for franchise, followed in families %}
+  {#- data-filter-container on the section: a franchise whose every chip is
+      filtered out hides its heading too, instead of leaving a row of empty
+      headings behind the search. -#}
+  <div class="tsec" data-filter-container>
+    <h3>{% if franchise %}{{ loc(franchise, "name") }}{% else %}{{ _("Other") }}{% endif %}</h3>
+    <div class="famhead">{% for f in followed %}{{ follow_chip(f) }}{% endfor %}</div>
+  </div>
+  {% else %}
+  {#- The most likely state for a new account, and a page that renders nothing
+      for it reads as broken. Not a callout shape (.edgecard is ongoing state,
+      .banner needs attention; an empty list is neither) -- a sentence and the
+      one link that fixes it. -#}
+  <p class="dim">{% trans %}You are not following anything yet. Pick a franchise, a group or a performer on the <a href="/tags">tags page</a> and every future event with that tag reaches you.{% endtrans %}</p>
+  {% endfor %}
+</div>
+
+{#- One dialog per subscription, the shape /tags renders its per-tag editors in:
+    real <form>s posting real routes, not one JS-populated dialog. THREE things,
+    because three is all a subscription has -- which preset it links, whether it
+    DMs you about new events, and whether it exists at all.
+
+    Unfollow is destructive and sits in the footer as the destructive action,
+    never beside Save where a mis-click lands. It posts the EXISTING
+    /subscriptions/{id}/delete rather than a fourth field on the settings route:
+    deleting the row is not a setting on it, and that route already carries the
+    `next` this page needs. Both forms send next=/following, which only lands
+    here because "/following" is in _ALLOWED_NEXT (routes/preferences.py) -- a
+    closed internal allowlist whose default silently bounces the reader to
+    /preferences.
+
+    Rendered OUTSIDE the `{% if families %}` block above (that gates the head
+    furniture on following something) but inside the same loop, so a viewer who
+    follows nothing renders no dialogs and no empty <dialog> shells.
+
+    NO local backdrop-close handler: base.html's global one is drag-safe (it
+    closes only when pointerdown and click agree on the target), and a local
+    `e.target === dlg` shipped the drag-out-closes bug twice. -#}
+{% macro follow_dialog(f) %}
+{%- set t = f.tag -%}
+{%- set counts = tag_counts.get(t.id, (0, 0)) -%}
+<dialog id="follow-dialog-{{ f.sub_id }}" class="tagdlg">
+  <div class="dh">
+    <h3>{{ loc(t, "name") }}</h3>
+    <button type="button" class="x" data-close="follow-dialog-{{ f.sub_id }}">×</button>
+  </div>
+  <div class="db">
+    {#- The context line: what this tag actually holds, and -- where the tag is
+        one half of a character/seiyuu pair -- who the other half is. The two
+        sentences are NOT the same sentence with the names swapped: attaching a
+        character attaches her performer too (invariant 3), so following the
+        performer reaches strictly more than following the character, and the
+        copy says which way round the reader is standing. The count phrases are
+        byte-identical to Preferences' own, deliberately: same question, and a
+        second near-identical msgid is a second thing to translate. -#}
+    <p class="dlgctx">
+      {% trans count=counts[0] %}<b>{{ count }}</b> event{% pluralize %}<b>{{ count }}</b> events{% endtrans %}
+      &middot; {% trans upcoming=counts[1] %}{{ upcoming }} upcoming{% endtrans %}
+      {%- if f.voiced_by %}<br>{% trans name=loc(f.voiced_by, "name") %}Voiced by {{ name }} — follow the performer too and events credited to her, not to the character, reach you as well.{% endtrans %}
+      {%- elif f.voices %}
+      {%- set voiced_names = [] -%}
+      {#- `__` and not `_`: `_` is gettext, and shadowing it here would make
+          every label below this loop unresolvable. -#}
+      {%- for c in f.voices %}{% set __ = voiced_names.append(loc(c, "name")) %}{% endfor -%}
+      <br>{% trans names=voiced_names | join(", ") %}Performs {{ names }} — events credited to a character she voices already reach you through this tag.{% endtrans %}
+      {%- endif %}
+    </p>
+
+    <form id="follow-settings-{{ f.sub_id }}" method="post"
+          action="/subscriptions/{{ f.sub_id }}/settings" class="stack">
+      <input type="hidden" name="next" value="/following">
+      {#- The viewer's own presets, plus the explicit none. `presets` and
+          `default_preset` are the route's, so this select can never offer
+          another user's row -- and the route re-checks with owned_preset
+          anyway, because a <select> is not a permission. -#}
+      <label class="fld"><span>{{ _("Reminder preset") }}</span>
+        <select name="preset_id">
+          <option value="0"{% if not f.preset_id %} selected{% endif %}>{{ _("— none —") }}</option>
+          {% for p in presets %}<option value="{{ p.id }}"{% if f.preset_id == p.id %} selected{% endif %}>{{ p.name }}{% if default_preset and default_preset.id == p.id %} ★{% endif %}</option>{% endfor %}
+        </select></label>
+      {#- A checkbox, so unticking sends nothing and the route's Form(False)
+          default is what actually turns notices off. -#}
+      <label class="fld chk"><input type="checkbox" name="notify" value="true"{% if not f.muted %} checked{% endif %}>
+        <span class="plain">{{ _("DM me when a new matching event appears") }}</span></label>
+    </form>
+  </div>
+  <div class="df">
+    <button class="btn" form="follow-settings-{{ f.sub_id }}">{{ _("Save") }}</button>
+    <button class="btn quiet" type="button" data-close="follow-dialog-{{ f.sub_id }}">{{ _("Cancel") }}</button>
+    {#- A SIBLING form, never nested inside the settings form (invalid HTML, and
+        it silently breaks the outer submit). It is pushed to the far end of the
+        footer by `.df form:last-child { margin-left: auto }`, which every
+        dialog footer in the app already uses -- LAST child, so if a second form
+        is ever added here it takes the push and this one joins the left group.
+        Read that rule's comment before scoping a copy to one form. -#}
+    <form method="post" action="/subscriptions/{{ f.sub_id }}/delete">
+      <input type="hidden" name="next" value="/following">
+      <button class="btn warn">{{ _("Unfollow") }}</button>
+    </form>
+  </div>
+</dialog>
+{% endmacro %}
+
+{% for _franchise, followed in families %}{% for f in followed %}{{ follow_dialog(f) }}{% endfor %}{% endfor %}
+
+<script>
+  // Open a chip's dialog.
+  //
+  // CAPTURE PHASE with stopPropagation, the same shape /tags' edit-mode opener
+  // uses. Capture is not about cancelling anything -- preventDefault cancels a
+  // native activation from any phase -- it is about running BEFORE anything
+  // else between the chip and the document can see or swallow the press;
+  // stopPropagation is what keeps anything else from acting on it afterwards.
+  //
+  // The subscription id arrives through `dataset`, never through an
+  // interpolated on* attribute: the browser HTML-decodes an attribute before
+  // parsing it as JS, so Jinja's escaping would not protect this (invariant 7).
+  (function () {
+    const scope = document.querySelector(".following-scope");
+    if (!scope) return;
+
+    function open(el) {
+      const dlg = document.getElementById("follow-dialog-" + el.dataset.subId);
+      if (dlg) dlg.showModal();
+    }
+
+    document.addEventListener("click", function (e) {
+      const chip = e.target.closest && e.target.closest("[data-sub-id]");
+      if (!chip || !scope.contains(chip)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      open(chip);
+    }, true);
+
+    // The chips are spans with role=button, so the browser gives them no
+    // activation behaviour of their own -- without this they are reachable by
+    // Tab and inert on Enter, which is worse than not being focusable at all.
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const chip = e.target.closest && e.target.closest("[data-sub-id]");
+      if (!chip || !scope.contains(chip)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      open(chip);
+    }, true);
+
+    // × and Cancel name their own dialog in data-close, for the same reason.
+    document.addEventListener("click", function (e) {
+      const btn = e.target.closest && e.target.closest("[data-close]");
+      if (!btn) return;
+      const dlg = document.getElementById(btn.dataset.close);
+      if (dlg) dlg.close();
+    });
+  })();
+</script>
+{% endblock %}

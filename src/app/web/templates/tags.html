@@ -32,6 +32,13 @@
     {%- trans count=summary.untranslated %}{{ count }} tag is not translated everywhere yet{% pluralize %}{{ count }} tags are not translated everywhere yet{% endtrans -%}
   </span>
   {%- endif %}
+  {#- The only door to /following until phase 4 puts a second one on
+      Preferences. It lives in the head because that is where this page's
+      other tallies are, and it is NOT editor-gated: following is what every
+      signed-in viewer comes here to do, and reviewing what you already
+      follow is the other half of that. A real <a href>, not a JS opener --
+      nothing about it needs a round trip or a dialog. -#}
+  <a class="note followlink" href="/following">{{ _("See what you follow") }}</a>
   {% if user.is_editor %}<button type="button" class="btn" id="newTagBtn"
     onclick="document.getElementById('new-tag-dialog').showModal()">{{ _("+ New tag") }}</button>{% endif %}
 </div>
@@ -219,79 +226,30 @@
 </dialog>
 {% endmacro %}
 
-{#- A tag chip. Every chip is a follow control: a real <form> posting to
-    POST /subscriptions and POST /subscriptions/{id}/delete, so it works with
+{#- Every chip on this page is a follow control: a real <form> posting to
+    POST /subscriptions and POST /subscriptions/unfollow -- both keyed by TAG,
+    never by subscription id, because this page renders one tag more than once
+    (see _tag_chip.html) -- so it works with
     JS off, with next=/tags so you stay where you are (that value only survives
     because "/tags" is in _ALLOWED_NEXT -- routes/preferences.py -- which is a
     closed internal allowlist, not the open-redirect guard). This generalises
     _tag_follow_bell.html, the table view's follow control, which was deleted
-    with the table: this macro is now the pattern, and it is pinned by tests.
-    `count` is the concert count (None for member chips, which carry no count
-    and never show the unused state).
+    with the table: the chip is now the pattern, and it is pinned by tests.
 
-    Editors get their edit-on-click back through the Follow/Edit mode switch
-    (the .viewbar), not by branching here -- a chip that means different
-    things to different people is the thing that made this page unusable for
-    everyone who is not an editor.
+    THE MARKUP ITSELF LIVES IN _tag_chip.html, because the follow routes swap
+    ONE chip back in after a press and a route cannot render a macro defined
+    here (2026-08-12; before that a press reloaded this whole page -- 878 chips
+    and, for an editor, a <dialog> per tag -- and threw away scroll position).
+    Read that file for the chip's anatomy.
 
-    data-name carries search_key(t) -- all three of the tag's names -- and is
-    filterChips()'s hook. It goes on the FORM, which is what filterChips hides
-    (it resolves .closest(".chipform")).
-
-    data-tag-id is the mode switch's hook, and it is a data- attribute rather
-    than an interpolated on* handler for invariant 7's reason (the browser
-    HTML-decodes an attribute before parsing it as JS, so Jinja's escaping
-    does not protect an inline handler). data-tag-chip marks what the mode
-    may intercept.
-
-    The tick is its OWN element, not a bare `name ✓` text node, because Edit
-    mode has to remove it and CSS cannot delete a text node -- a chip showing
-    "following" while its click opens an editor is lying about the click. In
-    `.tchip` (inline-flex) the literal space before it collapses away and the
-    .4rem gap does the spacing; in a split-pill half (an ordinary button) the
-    space is what separates them. -#}
-{% macro tag_chip(t, count) %}
-{%- set kcls = {"franchise": " k-franchise", "group": " k-group", "venue": " k-venue"}.get(t.kind.value, "") -%}
-{%- set unused = count is not none and count == 0 -%}
-{%- set sub = sub_by_tag.get(t.id) -%}
-{%- if sub -%}
-<form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete" data-name="{{ search_key(t) }}">
-  <input type="hidden" name="next" value="/tags">
-  <button class="tchip{{ kcls }} on" data-tag-chip data-tag-id="{{ t.id }}"
-          title="{{ _('Following — click to unfollow') }}">{{ loc(t, "name") }} <span class="tick">✓</span>{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
-</form>
-{%- else -%}
-<form class="chipform" method="post" action="/subscriptions" data-name="{{ search_key(t) }}">
-  <input type="hidden" name="tag_id" value="{{ t.id }}">
-  <input type="hidden" name="notify" value="true">
-  <input type="hidden" name="next" value="/tags">
-  <button class="tchip{{ kcls }}{% if unused %} unused{% endif %}" data-tag-chip data-tag-id="{{ t.id }}"
-          title="{{ _('Follow this tag') }}">{{ loc(t, "name") }}{% if count is not none %}<span class="n2">{{ count }}</span>{% endif %}</button>
-</form>
-{%- endif -%}
-{% endmacro %}
-
-{#- One half of a split pill: the same follow form tag_chip emits, without
-    the count and without its own data-name (the pill above carries one for
-    both). `cls` is "cn" (character) or "cv" (seiyuu, the dim half). -#}
-{% macro follow_half(t, cls) %}
-{%- set sub = sub_by_tag.get(t.id) -%}
-{%- if sub -%}
-<form class="half" method="post" action="/subscriptions/{{ sub.id }}/delete">
-  <input type="hidden" name="next" value="/tags">
-  <button class="{{ cls }} on" data-tag-chip data-tag-id="{{ t.id }}"
-          title="{{ _('Following — click to unfollow') }}">{{ loc(t, "name") }} <span class="tick">✓</span></button>
-</form>
-{%- else -%}
-<form class="half" method="post" action="/subscriptions">
-  <input type="hidden" name="tag_id" value="{{ t.id }}">
-  <input type="hidden" name="notify" value="true">
-  <input type="hidden" name="next" value="/tags">
-  <button class="{{ cls }}" data-tag-chip data-tag-id="{{ t.id }}"
-          title="{{ _('Follow this tag') }}">{{ loc(t, "name") }}</button>
-</form>
-{%- endif -%}
-{% endmacro %}
+    These two wrappers exist only to keep the `sub_by_tag.get(t.id)` lookup in
+    ONE place instead of at each of the seven call sites; the partial takes the row
+    explicitly, which is what lets the route pass the single subscription it
+    just wrote or deleted. They add no whitespace, so the page's chips stay
+    byte-identical to the swapped-in ones. -#}
+{%- from "_tag_chip.html" import tag_chip as chip_partial, follow_half as half_partial -%}
+{% macro tag_chip(t, count) %}{{ chip_partial(t, count, sub_by_tag.get(t.id)) }}{% endmacro %}
+{% macro follow_half(t, cls) %}{{ half_partial(t, cls, sub_by_tag.get(t.id)) }}{% endmacro %}
 
 {#- A member chip. A CHARACTER whose seiyuu is attached renders as ONE chip
     visibly made of two halves, each half its own follow form; either end

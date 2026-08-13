@@ -78,17 +78,23 @@ async def test_following_a_tag_makes_its_chip_offer_unfollow(client):
 
     r = client.get("/tags")
     assert "tchip k-franchise on" in r.text
-    assert 'action="/subscriptions/1/delete"' in r.text
+    # BY TAG, never by subscription id: /tags renders the same tag more than
+    # once, and a stale id in the second copy 404s once a press swaps only its
+    # own chip (see test_tags_follow_htmx.py).
+    assert 'action="/subscriptions/unfollow"' in r.text
     # Scoped to the chip's own <form>...</form> -- the page's language-switch
     # form (base.html) also carries a hidden next=/tags input, and unscoped
     # this assertion would pass against THAT instead of the chip.
-    chip_form = r.text.split('action="/subscriptions/1/delete"', 1)[1].split("</form>", 1)[0]
+    chip_form = r.text.split('action="/subscriptions/unfollow"', 1)[1].split("</form>", 1)[0]
     assert 'name="next" value="/tags"' in chip_form, (
         "the FOLLOWED chip must emit next=/tags too -- the POST below pins the "
         "route's handling of it, not the template's emission of it"
     )
+    assert f'name="tag_id" value="{tag_id}"' in chip_form, (
+        "and the tag it unfollows, which is what makes the press idempotent"
+    )
 
-    r = client.post("/subscriptions/1/delete", data={"next": "/tags"})
+    r = client.post("/subscriptions/unfollow", data={"tag_id": tag_id, "next": "/tags"})
     assert r.status_code == 303
     # The `location`, not just the 303. The follow half of this test already
     # pins "/tags"; unpinned, the unfollow half passed while the route sent
@@ -133,6 +139,28 @@ async def test_editors_also_get_a_follow_form_not_an_edit_dialog_opener(client):
     chips = _chips(client.get("/tags").text)
     assert 'action="/subscriptions"' in chips
     assert "showModal" not in chips
+
+
+async def test_a_followed_chip_keeps_its_unused_marking(client):
+    """`.tchip.unused` (opacity .55, dashed border) is the signal that a tag is
+    attached to nothing. Following a tag must not hide that -- the two facts
+    are independent, and the tags most likely to be dead are the ones an
+    editor is watching.
+
+    Mutation this must fail against: dropping `unused` from tag_chip's
+    FOLLOWED branch, which is how it shipped in phase 2.
+    """
+    login_as(client, VIEWER_ID, "viewer")
+    tag_id = await _seed_tag(client)  # zero concerts -> unused
+
+    r = client.post("/subscriptions", data={"tag_id": tag_id, "notify": "true", "next": "/tags"})
+    assert r.status_code == 303
+
+    r = client.get("/tags")
+    # Scoped to the chip's own <button>...</form> -- a page-wide
+    # "unused" in r.text would pass off any other unused chip on the page.
+    chip_form = r.text.split('action="/subscriptions/unfollow"', 1)[1].split("</form>", 1)[0]
+    assert "tchip k-franchise on unused" in chip_form
 
 
 async def test_subscription_row_carries_tag_subscription(client):

@@ -1372,6 +1372,12 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
    here. */
 .toolbar .note { color: var(--dim); font-size: .85rem; }
 .toolbar .note strong { color: var(--ink); font-weight: 600; }
+/* The head's link to /following. There is no global `a` rule, so without
+   this it renders as the browser's default blue-and-underlined link beside
+   two dim .note spans. Same idiom as .chead .links a: accent, no underline
+   until hover. --accent is a token defined in both theme directions. */
+.tags-head .followlink { color: var(--accent); text-decoration: none; }
+.tags-head .followlink:hover { text-decoration: underline; }
 .tags-head .btn { margin-left: auto; }
 
 .tsec { margin-top: 2rem; }
@@ -1441,6 +1447,52 @@ span.tchip { cursor: default; }
    the round rows use; .tchip keeps its 999px chip radius. The tick is its own
    element so Edit mode below can drop it. */
 .tchip.on { background: var(--ok-wash); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+
+/* ── /following deviation markers ───────────────────────────────────────
+   Two markers, and a chip that conforms carries neither. `.pdev` is the
+   preset name -- the same secondary reading `.tchip .n2` gives a count, since
+   the tag name is the thing being scanned and the preset is the footnote.
+   `.mute` is the bell, on the --off / --off-wash pair: the app's "attention,
+   not danger" tokens, both declared in every theme direction (:root, the
+   prefers-color-scheme block and [data-theme]) so this needs no dark override
+   of its own. 999px keeps it in the chip radius family. */
+.tchip .pdev { font-size: .72em; color: var(--dim); }
+.tchip .mute {
+  font-size: .72em; color: var(--off); background: var(--off-wash);
+  border-radius: 999px; padding: .05rem .3rem; line-height: 1.4;
+}
+
+/* A /following chip OPENS ITS DIALOG, so it has to look pressable. It is a
+   <span> (the markers nested inside it are spans, and the page's per-chip
+   tests balance against that), and `span.tchip { cursor: default }` twenty
+   lines up would otherwise hand it the arrow cursor -- overridden here rather
+   than there, scoped by the data attribute the opener itself keys on, so
+   /tags' non-interactive spans keep the arrow. Hover is inherited from
+   `.tchip:hover`; only the cursor and the focus affordance are new, and the
+   sitewide :focus-visible ring covers the keyboard half. */
+.following-scope span.tchip[data-sub-id] { cursor: pointer; }
+
+/* ── /following config dialog ───────────────────────────────────────────
+   Anatomy only: the dialog itself is `.tagdlg`, which already carries the
+   3px frame, the header/body/footer bands and the phone bottom-sheet rule.
+   Adding a second dialog class for three extra rules would put this page's
+   overlay outside that block's mobile selector list, silently. */
+.dlgctx { margin: 0; font-size: .85rem; color: var(--dim); line-height: 1.6; }
+.dlgctx b { color: var(--ink); font-variant-numeric: tabular-nums; }
+/* The one field here that is a checkbox, so it lays out along the row rather
+   than as .fld's stacked label-over-control. */
+dialog.tagdlg .fld.chk {
+  grid-auto-flow: column; justify-content: start; align-items: center; gap: .5rem;
+}
+dialog.tagdlg .fld.chk input { width: auto; }
+/* Unfollow's push to the far end of the footer needs NO rule here: it is the
+   last child of .df, and `.df form:last-child { margin-left: auto }` (~90
+   lines up) already does it. This block shipped a duplicate of that
+   declaration and it is deleted rather than kept -- read that rule's comment
+   before adding one back. It is :last-child rather than `.df form` because a
+   second footer form once made BOTH resolve to auto and split the free space
+   between them, stranding a button mid-footer (measured at 1440px). A second
+   copy scoped to one form is exactly how that scope gets undone by halves. */
 
 /* ── /tags Edit mode (editor-only) ─────────────────────────────────────
    The editor's Follow <-> Edit switch puts `.editing` on `.tags-scope`. In

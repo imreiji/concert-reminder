@@ -291,11 +291,21 @@ def test_no_template_hand_rolls_a_naive_backdrop_close():
     what was typed. e23943d fixed this globally but two dialogs kept local
     handlers and shipped the bug anyway; this sweep keeps a third from
     reintroducing it. Rely on the global handler; do not hand-roll one.
+
+    Jinja comments are stripped before the grep. This is a literal source
+    search, so a `{# ... #}` block WARNING the next author off the pattern --
+    by quoting it, which is the clearest way to say it -- tripped the sweep and
+    failed the build (2026-08-12). Stripping cannot create a false negative:
+    a Jinja comment never reaches the browser, so the expression cannot run
+    from inside one. A JS `//` comment quoting it still trips, and should:
+    that text IS in the delivered page and is one keystroke from live.
     """
     tpl_dir = Path(__file__).resolve().parents[1] / "src" / "app" / "web" / "templates"
     offenders = [
         p.name for p in sorted(tpl_dir.glob("*.html"))
-        if "e.target === dlg" in p.read_text(encoding="utf-8")
+        if "e.target === dlg" in re.sub(
+            r"\{#.*?#\}", "", p.read_text(encoding="utf-8"), flags=re.S
+        )
     ]
     assert offenders == [], (
         f"{offenders} hand-roll a backdrop-close click handler; delete it -- "

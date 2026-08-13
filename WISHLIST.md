@@ -1238,6 +1238,78 @@ that away with nothing to replace it. Not a Shipped move: two of four phases are
 outstanding, and the entry stays unranked for the reason above — the rank is
 settled by finishing the scope, not by guessing at it.
 
+**Deferred gap, noted 2026-08-12 while reviewing phase 2: an ungrouped
+character renders as a plain chip, not a split pill.** `/tags`'s "Performers
+with no group" section calls `tag_chip` directly rather than `member_chip`,
+so a lone character's seiyuu is invisible there — the split-pill treatment
+only fires inside a group row. **Zero live instances today**: every one of
+the 318 CHARACTER tags in the catalogue is in a group, so nothing is visibly
+broken yet. Filed as a note here rather than its own ranked entry — it is a
+one-section gap in the surface this very entry is about, not a separate
+feature, and it should be picked up as part of finishing this rework (most
+naturally phase 3's `/following` work, which touches the same chip
+vocabulary) rather than scheduled independently. **Not a one-word fix**:
+`member_chip` hard-codes `count=none` because group-row members carry no
+counts, and the ungrouped-performers section *does* show counts — folding it
+into `member_chip` as-is would silently drop them.
+
+**Update 2026-08-12 — phase 3 shipped; the entry STILL stays here.**
+`/following` exists: every tag you follow, as plain chips grouped by franchise,
+each marked ONLY where it deviates from your defaults — a muted 🔕 when
+new-event notices are off, the preset's name when it disagrees with your
+default preset, nothing at all when it conforms, so scanning forty chips only
+the exceptions draw the eye. Clicking a chip opens that subscription's config
+dialog holding the three things a subscription has: which preset it links,
+whether it DMs you about new events, and whether it exists at all. Both are
+real POST forms rather than a JS-populated panel, so every write on this page
+is a plain form submit — the constraint this entry named as most likely to be
+dropped by accident, kept as far as a `<dialog>` allows (the dialog itself
+still needs JS to open; the follow chips on `/tags` do not, and still post
+without it). `/tags` gained a "See what you follow" link in its head, the only
+door to the page until phase 4 puts a second one on Preferences. **No
+migration**: `TagSubscription.preset_id`, `.notify` and
+`ReminderPreset.is_default` all already existed, so per-tag presets were
+EXPOSED, not added.
+
+**Two live fixes rode along.** A follow press on `/tags` used to 303 back and
+re-render the whole directory — measured at 923 ms and 6.98 MB on a live-shaped
+735-tag seed, against 10.7 ms and 518 bytes for the one-chip htmx swap that
+replaced it — and it landed the reader back at the top of the page each time.
+That was a regression on merged phase 2, reported by the owner, not planned
+scope; the unfollow half of it is now keyed by TAG rather than by subscription
+id, because 318 of 735 live tags render more than once and a stale copy
+pointing at a deleted row was a dead end. And two owner rulings from reviewing
+phase 2 landed as code: a followed chip keeps its `unused` marking (a tag
+attached to nothing stopped looking dead the moment you followed it), and the
+header's performer tally counts CHARACTER as well as ARTIST, since the section
+beneath it renders both. A third ruling was recorded as policy rather than code
+— state strips carry no `aria-live` (`docs/ui-conventions.md`).
+
+**Phase 4 remains, and the ordering constraint above is now DISCHARGED rather
+than pending.** The reason phase 4 could not land first — as corrected earlier
+in this branch, phase 2 having retired the original one — was that phase 4
+removes Preferences' per-tag notify/preset toggles and nothing replaced them
+until phase 3's dialog existed. That dialog now exists, and it is a superset of
+what it replaces: a select over every preset the viewer owns subsumes the
+Auto-apply boolean, which could only link the default preset or clear it. So
+the reason no longer blocks anything — it has become the checkable precondition
+phase 4 starts from, and nothing else gates it. Phase 4's remaining scope is
+unchanged: Preferences reduced to a count with a "Manage →" door to
+`/following` (today the `/tags` head link is the only door), the standing
+default governing FUTURE follows only, and the separate explicit retroactive
+fill that writes the default into blank subscriptions alone and reports what it
+skipped. Still not a Shipped move: one of four phases is outstanding, and the
+entry stays unranked for the reason above — the rank is settled by finishing
+the scope, not by guessing at it.
+
+**The deferred gap above is still open, and its guess about where it would be
+picked up was wrong.** It expected phase 3's `/following` work to touch the same
+chip vocabulary; `/following` renders PLAIN chips by design — a subscription is
+one tag, and the split pill exists on `/tags` because two tags are being offered
+at once — so phase 3 never went near `/tags`' "Performers with no group"
+section. It stays a `/tags` fix, to be taken with phase 4 or after it, and the
+`member_chip`-drops-counts caveat there still applies unchanged.
+
 ### 1. Minute-level reminder offsets
 
 Impact: medium (raised from low) - effort: small. Raised: 2026-07-18

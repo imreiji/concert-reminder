@@ -76,6 +76,14 @@ The design source of truth remains the concept demos in
   of `style.css`). Type ramp is 400/600/700 only. Motion budget: one 150ms
   card-lift hover plus the functional `#hxbar` progress bar -- nothing
   decorative (owner ruling, 2026-07-24).
+- **State strips do not announce themselves** (owner ruling, 2026-08-12): a
+  strip that reflects an on-page mode -- e.g. `/tags`'s `.viewtoggle`
+  Follow/Edit strip (`#tagModeToggle`) -- carries no `aria-live`. Not an
+  oversight to fix on sight: no other state strip in the app has one either,
+  and giving this one an announcement a sighted user never sees the peer of
+  would make the app inconsistent in a new way rather than fix an existing
+  one. If a future strip genuinely needs an announcement, that is a decision
+  to raise with the owner and apply app-wide, not a one-off patch.
 - **A `<details>` inside a swappable region carries a `data-fold` key.**
   These regions (`#concert-rounds`, `#deadline-rows`) are swapped whole by
   `outerHTML`, so every fold in one is a NEW element rendered from scratch

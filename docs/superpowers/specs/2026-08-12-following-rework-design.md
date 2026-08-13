@@ -294,10 +294,19 @@ Recorded here so the plan does not have to rediscover it:
    piece; self-contained.
 3. **`/following` and its dialog.** Depends on nothing in step 2 except the link
    between them.
-4. **Preferences reduction**, last — it is the step that *removes* the only
-   working follow path, so it must not land before `/tags` replaces it.
+4. **Preferences reduction**, last — this step removes the per-tag
+   notify/preset toggles from Preferences, and nothing replaces them until
+   this phase's `/following` dialog exists, so it must not land before that
+   dialog does.
 
-Step 4 landing early would leave users with no way to follow anything at all.
+   > **Correction, 2026-08-12**: this originally read *"it is the step that
+   > removes the only working follow path, so it must not land before `/tags`
+   > replaces it."* Phase 2 shipped `/tags` as a working follow surface,
+   > which retired that reason. The ordering is unchanged — only the reason
+   > is corrected here, rather than silently rewritten.
+
+Step 4 landing early would leave Preferences users with no way to set a
+per-tag notify/preset default until `/following`'s dialog exists.
 
 ## Out of scope
 

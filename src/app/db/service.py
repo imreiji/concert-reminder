@@ -305,6 +305,7 @@ from app.db.setup_flow import (
 )
 from app.db.tags import (
     _HANDLE_FIELDS,
+    FollowedTag,
     ImportChoices,
     PerformerCluster,
     PerformerEntry,
@@ -324,6 +325,7 @@ from app.db.tags import (
     current_tag_exports,
     detach_tag,
     find_tags_by_name_and_kind,
+    followed_tag_families,
     group_members,
     match_tag_ids_by_name,
     match_tag_ids_by_slug,
@@ -366,6 +368,7 @@ __all__ = [
     "DiscoverStatus",
     "DiscoveredInput",
     "DueReminder",
+    "FollowedTag",
     "HOLD_SECONDS",
     "ImportChoices",
     "LABEL_BY_ANCHOR",
@@ -520,6 +523,7 @@ __all__ = [
     "fetch_domain_rows",
     "find_tags_by_name_and_kind",
     "followed_tag_counts",
+    "followed_tag_families",
     "forget_round_label_phrase",
     "generate_api_token",
     "generate_calendar_token",

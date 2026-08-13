@@ -1,14 +1,17 @@
 """User preferences: reminder presets, tag subscriptions, and timezone.
 
   GET  /preferences                          the page
+  GET  /following                            followed tags, chips by franchise
   POST /presets                              create preset
   POST /presets/{id}/delete
   POST /presets/{id}/items                   add an item to a preset
   POST /presets/{id}/items/{item_id}/delete
   POST /subscriptions                        subscribe to a tag (+preset, notify)
+  POST /subscriptions/unfollow               unfollow BY TAG, idempotent (chips)
   POST /subscriptions/{id}/notify            toggle the per-tag Notify flag
+  POST /subscriptions/{id}/settings          preset + notify together (/following)
   POST /subscriptions/{id}/auto-apply        toggle default-preset auto-apply
-  POST /subscriptions/{id}/delete
+  POST /subscriptions/{id}/delete            unfollow BY SUBSCRIPTION ID
   POST /concerts/{event_id}/presets/{pid}/apply   one-click apply (rules fragment swap)
   POST /me/timezone                          manual timezone choice
   POST /me/timezone/auto                     browser-detected timezone
@@ -26,18 +29,27 @@ from zoneinfo import ZoneInfo
 import discord
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import i18n
 from app.config import settings
-from app.db.models import Concert, PresetItem, ReminderPreset, Tag, TagSubscription, User
+from app.db.models import (
+    Concert,
+    ConcertTag,
+    PresetItem,
+    ReminderPreset,
+    Tag,
+    TagSubscription,
+    User,
+)
 from app.db.service import (
     apply_preset,
     concert_subscription_states,
     delete_user,
     ensure_user,
     followed_tag_counts,
+    followed_tag_families,
     generate_api_token,
     get_default_preset,
     list_editors,
@@ -79,7 +91,12 @@ async def owned_preset(
     return preset
 
 
-_ALLOWED_NEXT = {"/preferences", "/welcome", "/tags"}
+# A CLOSED allowlist of landing pages, not an open-redirect guard (that is
+# `domain/urls.py:safe_next`). Anything absent silently becomes "/preferences",
+# so a page that posts one of these forms and is NOT listed here bounces its
+# reader off itself on every save -- which is exactly what shipped with /tags
+# and lived unnoticed until it was measured. Add the path WITH the surface.
+_ALLOWED_NEXT = {"/preferences", "/welcome", "/tags", "/following"}
 
 
 def _safe_next(next_url: str) -> str:
@@ -308,19 +325,111 @@ async def delete_item(
     return RedirectResponse("/preferences", status_code=303)
 
 
+# ── The Following page ───────────────────────────────────────────────────
+
+
+@router.get("/following", response_class=HTMLResponse)
+async def following_page(
+    request: Request,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Every tag this viewer follows, grouped by franchise, as plain chips.
+
+    It lives HERE, beside the routes that write `TagSubscription` (the four
+    below), rather than in a router of its own: this is the read surface for
+    exactly those rows, `/following` is a literal path that collides with no
+    path template, and a new module would have to be registered in web/app.py
+    for no separation this file does not already have. `routes/subscriptions.py`
+    is a different feature entirely -- CONCERT subscriptions and leg opt-outs.
+
+    `followed_tag_families` reads the subscription rows directly, which is what
+    they are: explicit user edits, one per followed tag. It is NOT a second
+    definition of "what am I tracking" -- `tracked_concert_ids` (invariant 8)
+    answers the concert-level question and is untouched by this page.
+
+    `my_presets` and `get_default_preset` fill the per-subscription dialog's
+    preset `<select>`, and `followed_tag_counts` serves BOTH the head's context
+    line and each dialog's -- one entry per followed tag, so "with an event
+    coming up" is a tally of TAGS, not of concerts, which a sum over the map
+    would double-count for anyone following both a group and its members.
+    """
+    families = await followed_tag_families(session, user.id)
+    counts = await followed_tag_counts(session, user.id)
+    presets = await my_presets(session, user.id)
+    default_preset = await get_default_preset(session, user.id)
+    return templates.TemplateResponse(
+        request,
+        "following.html",
+        {"user": user, "families": families, "presets": presets,
+         "default_preset": default_preset, "tag_counts": counts,
+         "followed_count": len(counts),
+         "live_count": sum(1 for _total, upcoming in counts.values() if upcoming)},
+    )
+
+
 # ── Subscriptions ────────────────────────────────────────────────────────
 
 
-@router.post("/subscriptions")
+# `_tag_chip.html` renders four shapes, and the pressed form names its own in a
+# hidden `chip` input: "count" (a directory chip, with its event count),
+# "plain" (a member chip, which has never carried one), and these two -- the
+# character and seiyuu halves of a split pill, where the value doubles as the
+# half's CSS class.
+_PILL_HALVES = {"cn", "cv"}
+
+
+async def _chip_fragment(
+    session: AsyncSession, tag: Tag, sub: TagSubscription | None, chip: str
+) -> HTMLResponse:
+    """ONE follow chip, for an htmx press to swap in place of itself.
+
+    Rendered from `_tag_chip.html` -- the same partial /tags renders every chip
+    from -- because the failure mode of a hand-written fragment is silent: a
+    chip that loses `data-name` is unfindable by the search box, one that loses
+    `data-tag-id` is inert in the editor's Edit mode, and one that loses its
+    `unused` marking lies about a tag attached to nothing. A test compares this
+    output against the page's own markup byte for byte.
+
+    `chip` is the shape the pressed form said it was, and an unknown value
+    lands on the plain chip rather than raising: the value is only ever written
+    by the partial itself, and a fragment of the wrong shape is a cosmetic
+    surprise where a 500 on a follow press would not be.
+
+    The count is looked up HERE rather than trusted from the form, and only for
+    the shape that shows one -- a member chip has never carried a number and
+    must not grow one. It is one COUNT over `concert_tags`, the same figure
+    `tag_directory_context` computes for the whole page in a GROUP BY.
+    """
+    if chip in _PILL_HALVES:
+        html = templates.get_template("_tag_chip.html").module.follow_half(tag, chip, sub)
+    else:
+        count = None
+        if chip == "count":
+            count = await session.scalar(
+                select(func.count())
+                .select_from(ConcertTag)
+                .where(ConcertTag.tag_id == tag.id)
+            )
+        html = templates.get_template("_tag_chip.html").module.tag_chip(tag, count, sub)
+    return HTMLResponse(str(html))
+
+
+@router.post("/subscriptions", response_class=HTMLResponse)
 async def subscribe(
+    request: Request,
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
     tag_id: int = Form(...),
     preset_id: int = Form(0),
     notify: bool = Form(False),
     next_url: str = Form("/preferences", alias="next"),
+    # Which chip shape asked, blank from every non-chip caller (Preferences,
+    # the welcome wizard). Only read on the htmx branch.
+    chip: str = Form(""),
 ):
-    if await session.get(Tag, tag_id) is None:
+    tag = await session.get(Tag, tag_id)
+    if tag is None:
         raise HTTPException(status_code=404, detail="tag not found")
     if preset_id:
         await owned_preset(session, user.id, preset_id)
@@ -332,15 +441,25 @@ async def subscribe(
     sub = existing.scalar_one_or_none()
     await ensure_user(session, user.id, user.username)
     if sub is None:
-        session.add(TagSubscription(
+        sub = TagSubscription(
             user_id=user.id, tag_id=tag_id,
             preset_id=preset_id or None, notify=notify,
-        ))
+        )
+        session.add(sub)
     else:  # re-submitting updates the existing subscription
         sub.preset_id = preset_id or None
         sub.notify = notify
     await session.commit()
-    return RedirectResponse(_safe_next(next_url), status_code=303)
+
+    # A chip press on /tags swaps ITSELF (owner report, 2026-08-12: a follow
+    # used to 303 back and re-render the whole directory -- 6.8 MB and 1.6 s at
+    # live scale -- landing the reader back at the top of the page). Anything
+    # else, JS-off chips included, keeps the redirect: htmx would FOLLOW a 303
+    # and swap a whole page into a chip-sized hole, which is worse than the
+    # reload it replaces, so a fragment response must never also redirect.
+    if request.headers.get("HX-Request") != "true":
+        return RedirectResponse(_safe_next(next_url), status_code=303)
+    return await _chip_fragment(session, tag, sub, chip)
 
 
 async def _owned_subscription(
@@ -368,6 +487,47 @@ async def toggle_subscription_notify(
     return RedirectResponse("/preferences#p-follow", status_code=303)
 
 
+@router.post("/subscriptions/{sub_id}/settings")
+async def update_subscription_settings(
+    sub_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    preset_id: int = Form(0),
+    notify: bool = Form(False),
+    next_url: str = Form("/following", alias="next"),
+):
+    """Both of a subscription's settings in ONE submit -- `/following`'s
+    per-tag dialog.
+
+    The two toggles above stay: Preferences' subrows flip one field per press
+    with no form to submit, and this page's dialog holds both fields open at
+    once and saves them together. Writing them separately here would mean a
+    dialog whose Save is two round trips, either of which can land alone.
+
+    Same field semantics as the `/subscriptions` upsert, deliberately -- this
+    is that route's write half addressed BY SUBSCRIPTION ID instead of by tag,
+    which is safe on this page because it renders each followed tag exactly
+    once and answers with a whole re-rendered page (see `unfollow_tag` for the
+    surface where an id could go stale). `preset_id == 0` is the "none" option
+    and stores NULL; any other value must be a preset this viewer owns, so
+    `owned_preset` 404s rather than letting one user link another's preset.
+    `notify` is a checkbox, so its absence is False -- which is what makes
+    unticking it reach the DB at all.
+
+    No rule resync: `notify` is only the new-event DM notice, and `preset_id`
+    is what gets applied to FUTURE matching events, not a rule already planned
+    (invariant 2's queue is untouched by either) -- the same reasoning
+    `/subscriptions` and the two toggles above already run on.
+    """
+    sub = await _owned_subscription(session, user.id, sub_id)
+    if preset_id:
+        await owned_preset(session, user.id, preset_id)
+    sub.preset_id = preset_id or None
+    sub.notify = notify
+    await session.commit()
+    return RedirectResponse(_safe_next(next_url), status_code=303)
+
+
 @router.post("/subscriptions/{sub_id}/auto-apply")
 async def toggle_subscription_autoapply(
     sub_id: int,
@@ -387,6 +547,59 @@ async def toggle_subscription_autoapply(
     return RedirectResponse("/preferences#p-follow", status_code=303)
 
 
+@router.post("/subscriptions/unfollow", response_class=HTMLResponse)
+async def unfollow_tag(
+    request: Request,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    tag_id: int = Form(...),
+    next_url: str = Form("/preferences", alias="next"),
+    chip: str = Form(""),
+):
+    """Unfollow a TAG -- idempotent, and that is the whole point of it existing
+    beside `unsubscribe` below (found in review, 2026-08-12).
+
+    `/tags` renders the same tag more than once: a performer in two groups gets
+    a chip in each, and a seiyuu can be a direct member chip AND a pill half at
+    once. While a follow press reloaded the page, every copy was re-rendered in
+    step. A one-chip swap cannot do that -- so with the unfollow keyed by
+    SUBSCRIPTION ID, pressing the second copy posted an id the first copy had
+    just deleted, got a 404, and htmx does not swap a 4xx: the reader saw a chip
+    that lied and then did nothing at all until a full reload. Keyed by tag
+    there is no id to go stale. No row means nothing to delete, NOT an error,
+    and the answer is the follow chip either way -- the same idempotence
+    `POST /subscriptions` has always had on the follow side, where re-pressing
+    upserts.
+
+    A missing TAG is still a 404: that is a bad request about the catalogue, not
+    a race between two copies of a chip.
+
+    This is a SECOND route rather than a widening of `unsubscribe`, deliberately.
+    That one is posted by Preferences and the welcome wizard, which render a tag
+    once and reload wholly, so they cannot go stale and gain nothing here; and a
+    single route resolving the row by id OR by tag depending on which field the
+    form happened to send is two identity schemes wearing one URL, with a path
+    segment that is sometimes ignored. Chips post here; nothing else does.
+    """
+    tag = await session.get(Tag, tag_id)
+    if tag is None:
+        raise HTTPException(status_code=404, detail="tag not found")
+    sub = (await session.execute(
+        select(TagSubscription).where(
+            TagSubscription.user_id == user.id, TagSubscription.tag_id == tag_id
+        )
+    )).scalar_one_or_none()
+    if sub is not None:
+        await session.delete(sub)
+        await session.commit()
+
+    # Same split as `subscribe` above, and for the same reason -- an unfollow
+    # is a press on the same chip.
+    if request.headers.get("HX-Request") != "true":
+        return RedirectResponse(_safe_next(next_url), status_code=303)
+    return await _chip_fragment(session, tag, None, chip)
+
+
 @router.post("/subscriptions/{sub_id}/delete")
 async def unsubscribe(
     sub_id: int,
@@ -394,6 +607,10 @@ async def unsubscribe(
     session: AsyncSession = Depends(get_session),
     next_url: str = Form("/preferences", alias="next"),
 ):
+    """Unfollow by SUBSCRIPTION ID -- Preferences' Following rows and its tag
+    picker, and the welcome wizard. Each renders a given tag once and answers
+    with a whole re-rendered page, so no copy of a chip can be left holding a
+    deleted id; see `unfollow_tag` above for the surface where that mattered."""
     sub = await session.get(TagSubscription, sub_id)
     if sub is None or sub.user_id != user.id:
         raise HTTPException(status_code=404)

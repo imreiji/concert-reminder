@@ -596,6 +596,88 @@ measurement or an incident that a reasonable-looking edit would undo.
     and until this build the set held only `/preferences`/`/welcome` -- so the
     bell had been bouncing every follow to Preferences since it shipped. Trim
     `/tags` back out and every chip on the page silently does that again.
+  - **A press swaps ITS OWN chip, and the markup for it lives in
+    `_tag_chip.html` for that reason** (2026-08-12, owner report: "the loading
+    time after clicking each follow and unfollow is incredibly slow", and every
+    press scrolled the reader back to the top). The plain forms above were
+    correct and unusable: a follow 303'd back to `/tags`, which re-rendered
+    every chip on the page plus an editor's `<dialog>` per tag. Measured on a
+    735-tag seed of the live shape (1,053 chip forms, 6.98 MB of HTML), one
+    press, both figures from the same run: the redirect path costs **923 ms and
+    6.98 MB**, the htmx press **10.7 ms and 518 bytes** -- the same POST,
+    answered with one chip instead of the whole directory. `tag_chip`/`follow_half` therefore MOVED out of `tags.html`
+    (which keeps two one-line wrappers holding the `sub_by_tag` lookup) and take
+    their subscription row as a parameter, because a route cannot render a macro
+    that closes over a page's context. Three things hold it together and each
+    one is silent when broken: the forms keep `method`/`action` BESIDE
+    `hx-post`/`hx-target="this"`/`hx-swap="outerHTML"`, so JS-off following
+    still works (`_capture_actions.html`'s idiom, deliberately copied rather
+    than reinvented); the routes answer a fragment ONLY to `HX-Request` and
+    otherwise still 303, since htmx FOLLOWS a redirect and would swap the whole
+    page into a chip-sized hole; and the fragment comes from the same partial
+    the page renders, byte for byte, or a swapped chip quietly loses `data-name`
+    (unfindable by the search box), `data-tag-id` (inert in Edit mode) or its
+    `unused` marking. The hidden `chip` input is how the route knows which of
+    the four shapes to send back, and the event count is re-queried server-side
+    rather than trusted from the form -- a member chip must not grow a number it
+    has never had. `tests/test_tags_follow_htmx.py` pins all of it, including
+    the byte-identity in both directions.
+  - **The fragment's SHAPE is supplied by the CLIENT, and a server-derived one
+    is impossible rather than merely expensive.** The same tag renders in two
+    different shapes on one page -- a seiyuu is a plain member chip in one group
+    row and the `cv` half of a split pill in another -- so shape is a function
+    of the chip's POSITION, not of the tag, and no amount of querying the tag
+    can recover which of its chips was pressed. Hence the hidden `chip` field.
+    Two INDEPENDENT layers make that safe, and each was tested by breaking the
+    other (nine crafted values in review, 2026-08-12: template injection,
+    attribute breakout, 2,500 characters): `_PILL_HALVES`
+    (`routes/preferences.py`) is a WHITELIST -- `{"cn", "cv"}`, the only two
+    values that reach an attribute, since a half's shape doubles as its CSS
+    class -- and everything else falls to the plain chip, where Jinja's
+    autoescaping is the second layer. Do not "simplify" the whitelist into a
+    blacklist (`chip not in {"count", "plain"}` -> render a half): every other
+    test in that file survives it, so
+    `test_a_hostile_chip_value_cannot_escape_the_whitelist` is the only thing
+    naming the defence. An unknown value lands on the plain chip rather than
+    raising -- the value is only ever written by the partial itself, and a
+    cosmetic surprise beats a 500 on a follow press.
+  - **BOTH directions are keyed by TAG, because this page renders the same tag
+    more than once.** A performer in two groups gets a chip in each row; a
+    seiyuu can be a direct member chip AND the `cv` half of a pill at the same
+    time. Measured on the live catalogue: **318 of 735 tags render more than
+    once**, so this is the common case, not an edge. A full-page 303 re-rendered
+    every copy in step, and a one-chip swap
+    cannot -- so `POST /subscriptions/{sub_id}/delete` in a chip's action meant
+    that unfollowing via one copy left the other pointing at a deleted row:
+    pressing it answered 404, htmx does not swap a 4xx, and the reader got
+    NOTHING until a full reload (found in review, 2026-08-12, one day after the
+    swap shipped). Chips post to **`POST /subscriptions/unfollow`** with
+    `tag_id` instead: no row is nothing to delete, not an error, and the answer
+    is the follow chip either way -- matching the idempotence `POST
+    /subscriptions` already had, since it upserts by (user, tag). It is a
+    SECOND route, not a widened one: `/subscriptions/{sub_id}/delete` still
+    serves Preferences and the welcome wizard, which render a tag once and
+    reload wholly, and one route resolving by id OR by tag depending on which
+    field the form sent is two identity schemes wearing one URL. Never point a
+    chip back at the id-keyed route -- `test_every_chip_form_on_the_page_can_swap_itself`
+    forbids `/delete` in any chip form, and it FOLLOWS half its seeded tags
+    before fetching the page, because seeded with none it saw only unfollowed
+    forms and both of its load-bearing assertions were vacuous (caught in
+    review, 2026-08-12; the id-keyed URL could be put back in either followed
+    branch with that whole file still green). The id-keyed route keeps its own
+    two tests in `test_presets.py`, beside the other `/subscriptions` route
+    tests: deleting it outright used to leave the suite green while 405-ing
+    three live surfaces.
+    Note what did NOT change: the copies still go stale visually (the other
+    chip still shows ✓ until something re-renders it). Making a press update
+    every copy would need an out-of-band swap keyed on the tag, which is a
+    bigger mechanism than this page has earned. **That trade is acceptable
+    ONLY BECAUSE BOTH DIRECTIONS ARE IDEMPOTENT** -- a stale copy's press is
+    merely redundant, never destructive and never an error. Add a third,
+    NON-idempotent action to these chips (anything where pressing twice differs
+    from pressing once, or where a press depends on the state the chip is
+    displaying) and the trade reopens: that action needs the out-of-band sync,
+    or a confirmation, or it must not live on a duplicated chip at all.
   - **Subunit de-dup is `/tags`-ONLY, and the 2026-08-01 ruling it appears to
     contradict still stands where it was made.** `tag_directory_context`'s
     `group_rows` subtracts every member of a group's subunits from the parent's
@@ -688,6 +770,129 @@ measurement or an incident that a reasonable-looking edit would undo.
     claiming "following" while its click opens an editor is lying about the
     click -- but the KIND grounds are restored at higher specificity, because a
     tag's kind is a fact about the tag and survives the mode.
+- **`/following` is the subscription surface** -- shipped 2026-08-12, phase 3 of
+  WISHLIST's "Following is due a rework", design in
+  `docs/superpowers/specs/2026-08-12-following-rework-design.md`. `/tags` owns
+  the catalogue (everything you COULD follow, where a chip press follows);
+  `/following` owns your subscriptions (what you DO follow, where a chip press
+  opens that subscription's config dialog). The owner's reasoning for two pages
+  rather than a filter on one: a chip cannot mean "follow" on one surface and
+  "configure" on the other. Phase 4 (the Preferences reduction, the standing
+  default and its retroactive fill) is NOT in this.
+  - **It reads `TagSubscription` rows DIRECTLY, and that is not a second
+    derivation of invariant 8.** `followed_tag_families` (`db/tags.py`) selects
+    the viewer's subscription rows and joins their tags, full stop. Invariant 8
+    governs a different question -- which CONCERTS a follow reaches, with
+    `ConcertSubscription`/`LegOptOut` overrides on top -- and
+    `tracked_concert_ids` remains the single place THAT lives, untouched by this
+    page. A subscription row is not a derivation of anything: it is the explicit
+    user edit itself, one per followed tag, which is exactly what a page called
+    "Following" is a list of. Do not "unify" the two by routing this page
+    through `tracked_concert_ids`; it would answer a question nobody asked here
+    and could not name a tag you follow that has no concerts yet.
+  - **The route lives in `routes/preferences.py`**, beside the routes that WRITE
+    `TagSubscription`, rather than in a router of its own: it is the read
+    surface for exactly those rows, `/following` is a literal path that collides
+    with no path template (contrast the `imports.py`-before-`concerts.py`
+    footgun), and a new module would need registering in `web/app.py` for a
+    separation this file does not already have. `routes/subscriptions.py` is a
+    different feature -- CONCERT subscriptions and leg opt-outs.
+  - **A chip states ONLY how its subscription DIFFERS from the viewer's
+    defaults, and the comparison basis is `ReminderPreset.is_default`, which
+    already existed -- which is why this phase needed no migration.**
+    `TagSubscription.preset_id` and `.notify` already existed too; Preferences'
+    Auto-apply boolean was only ever "link my default preset, or clear it". This
+    phase EXPOSED per-tag presets, it did not add them. The deviation reading is
+    derived in `followed_tag_families`, never in the template, and it is a
+    two-sided comparison -- `sub.preset_id != default_preset_id` -- because BOTH
+    directions are deviations:
+
+    | | default preset exists | no default preset |
+    |---|---|---|
+    | **subscription holds a preset** | conforms if it IS the default; otherwise shows that preset's NAME | shows the preset's NAME |
+    | **subscription holds none** | shows "No preset" | **conforms -- no marker at all** |
+
+    The bottom-right cell is the one that shipped a bug in review (2026-08-12):
+    it is the state of every brand-new account, and a reasonable-looking
+    `(sub.preset_id or 0) != (default_preset_id or -1)` puts a spurious "No
+    preset" badge on EVERY chip a new user has, while leaving the whole file
+    green. The top-left "conforms" half is the other easy loss: an
+    `if sub.preset_id and sub.preset_id != default` drops the "No preset" case
+    entirely. `preset_name` is a USER-AUTHORED name and is read only when the
+    subscription deviates; the label for the None case stays in the template,
+    where it resolves at render time (CLAUDE.md's i18n footgun -- a label copied
+    into a dataclass resolves at the COPY site). The point of the whole rule is
+    that scanning forty chips, only the exceptions draw the eye, so resist
+    adding a badge that renders on every chip however useful it looks on one.
+  - **`/following` is in `_ALLOWED_NEXT` (`routes/preferences.py`), and only a
+    redirect-target assertion catches its absence.** That set is a CLOSED
+    internal allowlist of landing pages, not the open-redirect guard
+    (`domain/urls.py:safe_next`); anything absent silently becomes
+    `/preferences`. The precedent is not hypothetical: `/tags` was missing from
+    it from the 2026-07-24 UX pass until phase 2 found it, so every follow press
+    on that page bounced the reader to Preferences for weeks, with nothing
+    failing and nothing logged. Both of this page's dialog forms post
+    `next=/following`. Add the path WITH the surface, and assert where the
+    response redirects TO -- a test that only checks the row was written passes
+    against the bounce.
+  - **The dialog holds THREE things because a subscription has three**: which
+    preset it links (`POST /subscriptions/{id}/settings`, both fields in one
+    submit, so a Save is one round trip rather than two either of which can land
+    alone), whether it DMs you about new events, and whether it exists at all
+    (Unfollow, in the footer as the destructive action, posting the EXISTING
+    `/subscriptions/{id}/delete` -- deleting the row is not a setting on it).
+    The id-keyed unfollow is safe HERE, unlike on `/tags`: this page renders
+    each followed tag exactly once and answers every save with a whole
+    re-rendered page, so no copy can be left holding a deleted id. `preset_id`
+    is re-checked with `owned_preset`, because a `<select>` is not a permission.
+    No rule resync: `notify` is only the new-event notice and `preset_id`
+    governs FUTURE matching events, so invariant 2's queue is untouched by
+    either -- the same reasoning `/subscriptions` and Preferences' two toggles
+    already run on.
+  - **The chips here are `<span>`s, deliberately, and must not reuse
+    `_tag_chip.html`.** That partial's forms hard-code `next=/tags` and a hidden
+    `chip` shape naming the fragment `/tags`' routes swap back; rendering it
+    here would put /tags-shaped markup into this page on every press. This page
+    also renders PLAIN chips, never split pills -- a subscription is one tag,
+    and the pill exists on `/tags` because two tags are being offered at once.
+- **Invariant 7's third rule has a repo-wide sweep now**
+  (`tests/test_xss_escaping.py`, 2026-08-12). Never interpolating user text into
+  an inline `on*` handler used to be enforced per page, by whoever remembered --
+  that file covered only the tag picker's `| tojson`. It is now a property of
+  the whole template directory: every `{{ }}` inside an `on[a-z]+="..."` must be
+  a BARE dotted path whose last segment is in `INTEGER_ID_SEGMENTS`, or be named
+  in a one-entry allowlist (`kindname`, which comes from a literal list three
+  lines above its uses). A filter, a call or an inline expression is not
+  id-shaped BY CONSTRUCTION, so `t.name | e` is judged whole rather than on its
+  last word.
+  - **`INTEGER_ID_SEGMENTS = {"id"}` is an ALLOWLIST, not an `endswith("_id")`
+    suffix rule, and the difference is the whole point.** A suffix rule closes
+    today's one known gap and lets the next one through in silence:
+    `Concert.event_id` is the standing counterexample and is already in this
+    schema -- an editor-TYPED STRING that sails straight through a suffix test,
+    safe in an `href` today only because `EVENT_ID_RE` happens to forbid quotes
+    and parens. Safe by accident is exactly what a repo-wide sweep exists to
+    stop the codebase relying on. Widening the set is a one-line addition, and
+    having to write the line down is the moment to check the column really is an
+    integer.
+  - **The `\b` in `\bon[a-z]+\s*=` is load-bearing, but not for the obvious
+    reason.** `action=` cannot match either way, because `[a-z]+` demands a
+    letter between `on` and `=` and `actiON=` has none. (`on[a-z]*=` with a STAR
+    does match it -- that near-miss produced an early estimate of 58 handlers in
+    this app when the real inventory is 5.) What the boundary excludes is `on`
+    buried mid-word before a real `=` and a real quote, of which this repo has
+    three shapes; only `data-confirm="{{ _('Delete?') }}"` carries an
+    interpolation, and it is the idiom invariant 7 PRESCRIBES -- so dropping the
+    `\b` does not merely add noise, it reports the recommended remedy as the
+    violation.
+  - **A sweep that finds nothing passes vacuously**, so a second test pins the
+    scanner against a synthetic sample carrying one of each case -- a form
+    action that must NOT be seen, an id, a name, a filtered name, the
+    allowlisted value, a commented-out handler, a `data-confirm` line -- and
+    asserts the exact expressions and line numbers, which is also what proves
+    Jinja comments are BLANKED rather than deleted. On its first run the sweep
+    found nothing and no production markup was changed to make it green; there
+    was nothing to change.
 - `src/app/domain/board.py` -- pure column precedence for Home's campaign
   board. `column_for(outcomes, has_open_round)` returns the ONE column a
   concert shows in; PAID > WON > APPLIED > open, deliberately, because money

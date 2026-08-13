@@ -662,6 +662,21 @@ def test_tags_page_summary_line_counts_kinds(client):
     assert "1 venue" in r.text
 
 
+async def test_the_performer_tally_counts_characters_too(client):
+    """Owner ruling 2026-08-12: characters and artists are both performers.
+    The "Performers with no group" section beneath the tally renders both
+    kinds, so a tally that counts only ARTIST rows says a number the page
+    contradicts.
+
+    Mutation: reverting `performers` to len(artists).
+    """
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={"name_en": "A1", "name_zh": "A1", "name": "A1", "kind": "artist"})
+    client.post("/tags", data={"name_en": "C1", "name_zh": "C1", "name": "C1", "kind": "character"})
+    r = client.get("/tags")
+    assert "2 performers" in r.text
+
+
 # ── Per-tag edit dialog: usage strip, kind fields, apply action (Task 4) ──
 
 
@@ -2585,4 +2600,31 @@ async def test_edit_dialog_save_points_at_its_own_tags_form(client):
         )
     assert len(set(re.findall(r'<form id="(tag-edit-\d+)"', body))) == len(ids), (
         "one form id per tag -- a duplicate saves the wrong tag"
+    )
+
+
+def test_the_tags_head_links_a_non_editor_to_following(client):
+    """`/following` has exactly one door until phase 4 opens the Preferences
+    one, and this page's head is it. Two things have to be true at once, so
+    both are asserted here rather than in two tests that could each pass while
+    the other's property is broken.
+
+    SCOPED TO `.tags-head` ON PURPOSE. An earlier test on this branch asserted
+    a bare `href="/tags"` appeared "on the page" and kept passing with the
+    whole feature deleted, because base.html's nav and mobile tab bar already
+    carried that string. base.html carries no `/following` today, so an
+    unscoped assertion would pass now -- and would go quietly worthless the
+    day a nav entry is added. Slicing the head first means the assertion is
+    about the element this task added, whatever the chrome grows later.
+
+    Mutations this must fail against: deleting the link (no match in the
+    head); wrapping it in `{% if user.is_editor %}` (this viewer is not one);
+    and moving it out of the head into the body, which is the placement the
+    task explicitly rejected.
+    """
+    login_as(client, VIEWER_ID, "viewer")
+    body = client.get("/tags").text
+    head = body.split('<div class="tags-head">', 1)[1].split("</div>", 1)[0]
+    assert re.search(r'<a\b[^>]*\bhref="/following"', head), (
+        f"no link to /following in the tags head: {head!r}"
     )
