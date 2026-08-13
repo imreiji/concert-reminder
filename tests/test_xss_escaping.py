@@ -10,6 +10,16 @@ The second half of the file is a repo-wide SWEEP for invariant 7's third
 rule -- never interpolate user-controlled text into an inline `on*` handler.
 That rule was enforced per page by whoever remembered; the sweep makes it a
 property of the template directory.
+
+KNOWN, DELIBERATE LIMIT: the sweep still cannot see an UNQUOTED handler
+(`onclick={{ x }}`) -- `_ON_ATTR` requires a quote character right after the
+`=`. An optional-quote version of the pattern has to decide where the
+attribute value ends without one, and the only terminators available --
+whitespace or `>` -- are trivial for a real payload to embed around, so a
+permissive rewrite trades one blind spot for another rather than closing it.
+No template in the repo writes an unquoted handler today; if one is ever
+added, this sweep will not catch it. A sweep that names what it does not
+cover is honest; one that implies total coverage is not.
 """
 
 import json
@@ -197,7 +207,15 @@ TEMPLATES = Path(__file__).parent.parent / "src" / "app" / "web" / "templates"
 # the sweep found nothing to report. No template uses that quoting today,
 # which is exactly why the sample below carries a single-quoted offender:
 # nothing in the repo would fail if this narrowed back.
-_ON_ATTR = re.compile(r"""\bon[a-z]+\s*=\s*(["'])(.*?)\1""", re.S)
+#
+# CASE-INSENSITIVE, because HTML attribute names are: `onClick="..."` is
+# exactly as live as `onclick="..."` to a browser, and `[a-z]+` without
+# `re.I` never saw it -- the sweep passed on a real handler because it was
+# spelled with a capital letter. `re.I` does not reopen the `\b` exclusion
+# above: word-boundary detection is about word/non-word characters, not
+# case, so `actiON=`, `.dataset.clearConfirmed=` and `data-cONfirm=` are
+# still excluded exactly as before.
+_ON_ATTR = re.compile(r"""\bon[a-z]+\s*=\s*(["'])(.*?)\1""", re.S | re.I)
 _INTERPOLATION = re.compile(r"\{\{(.*?)\}\}", re.S)
 _JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.S)
 # A bare dotted path and nothing else. A filter, a call, a literal or an
@@ -297,6 +315,12 @@ SCANNER_SAMPLE = (
     # comment so its line number also pins the blanking, and it is the only
     # coverage this quoting has: no template in the repo writes one.
     '  <button onclick=\'alert("{{ t.name }}")\'>bad, quoted the other way</button>\n'
+    # MIXED CASE, and no less exploitable for it either -- HTML attribute
+    # names are case-insensitive, so `onClick=` reaches the DOM exactly like
+    # `onclick=`. Appended LAST so it does not shift any line number pinned
+    # above; it is the only coverage this casing has, same reasoning as the
+    # single-quoted line just above it.
+    '  <button onClick="alert(\'{{ t.name }}\')">bad, mixed case</button>\n'
 )
 
 
@@ -314,25 +338,29 @@ def test_the_handler_sweep_sees_handlers_and_tells_names_from_ids():
     very idiom invariant 7 prescribes); scanning `action=` as a handler;
     narrowing _ON_ATTR back to a literal `"` after the `=`, which drops the
     single-quoted handler on the last line -- a whole quoting style the sweep
-    could not fail on, and one no template exercises; reading group(1) (the
-    captured quote) instead of group(2) (the value), which finds nothing at
-    all; loosening _DOTTED_PATH so a filtered expression passes on its last
-    word (`t.name | e` is still free text); letting a bare `.name` through;
-    and stripping Jinja comments in a way that shifts line numbers.
+    could not fail on, and one no template exercises; dropping `re.I`, which
+    drops the mixed-case `onClick=` handler and leaves the sweep blind to a
+    whole spelling HTML treats as identical to `onclick=`; reading group(1)
+    (the captured quote) instead of group(2) (the value), which finds nothing
+    at all; loosening _DOTTED_PATH so a filtered expression passes on its
+    last word (`t.name | e` is still free text); letting a bare `.name`
+    through; and stripping Jinja comments in a way that shifts line numbers.
     """
     seen = handler_interpolations(SCANNER_SAMPLE)
     # The form action and the data-confirm are NOT handlers; the commented-out
     # handler renders nothing.
     assert [expr for _l, _a, expr in seen] == [
-        "t.id", "t.name", "t.name | e", "kindname", "t.name",
+        "t.id", "t.name", "t.name | e", "kindname", "t.name", "t.name",
     ]
     # The allowlisted one still reports as line 5...
     assert seen[3][0] == 5
-    # ...and the single-quoted offender as line 8, which is BELOW the Jinja
-    # comment: so the comment was blanked rather than deleted.
-    assert seen[-1][0] == 8
+    # ...the single-quoted offender as line 8, which is BELOW the Jinja
+    # comment: so the comment was blanked rather than deleted...
+    assert seen[4][0] == 8
+    # ...and the mixed-case onClick= as line 9, found ONLY because of re.I.
+    assert seen[-1][0] == 9
     assert [(line, expr) for line, _a, expr in offending_interpolations(SCANNER_SAMPLE)] == [
-        (3, "t.name"), (4, "t.name | e"), (8, "t.name"),
+        (3, "t.name"), (4, "t.name | e"), (8, "t.name"), (9, "t.name"),
     ]
 
 

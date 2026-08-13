@@ -19,6 +19,7 @@ Fixtures mirror tests/test_following_page.py, which this page's read half uses.
 
 import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -45,6 +46,10 @@ from app.web.app import create_app
 
 USER_A = 7171
 USER_B = 7272
+
+FOLLOWING_TEMPLATE = (
+    Path(__file__).parent.parent / "src" / "app" / "web" / "templates" / "following.html"
+)
 
 
 @pytest.fixture()
@@ -389,6 +394,42 @@ async def test_the_chip_is_reachable_and_activatable_by_keyboard(client):
     login_as(client, USER_A, "reiji")
     chip = chip_for(client.get("/following").text, ids.linked_tag)
     assert 'role="button"' in chip and 'tabindex="0"' in chip, chip
+
+
+_KEYDOWN_BLOCK = re.compile(r'document\.addEventListener\("keydown".*?\}, true\);', re.S)
+
+
+def test_the_keydown_listener_that_makes_the_chip_activatable_is_still_there():
+    """The test above pins `role="button" tabindex="0"` on the chip; this pins
+    the OTHER half -- the capture-phase keydown listener in following.html
+    that is what makes Enter/Space on the chip actually do something. Delete
+    it and every other test in this file and test_following_page.py stays
+    green (measured, 2026-08-12, for the attribute pair itself): the page
+    renders identically, the mouse-driven `click` listener still opens the
+    dialog, and only a keyboard user is left with a chip that is reachable by
+    Tab and inert on Enter -- which the template's own comment beside the
+    listener calls worse than not being focusable at all.
+
+    This suite has no JS runtime, so this pins PRESENCE of the listener (and
+    that it still gates on Enter/Space and still calls the same `open`
+    helper the click listener uses) in the template SOURCE, not that
+    pressing Enter in a real browser opens the dialog. Say that plainly
+    rather than let the docstring imply behavioural coverage this test does
+    not have.
+
+    Mutation this must fail against: deleting the
+    `document.addEventListener("keydown", ...)` block from following.html.
+    """
+    src = FOLLOWING_TEMPLATE.read_text(encoding="utf-8")
+    m = _KEYDOWN_BLOCK.search(src)
+    assert m, 'no addEventListener("keydown", ...) block in following.html'
+    block = m.group(0)
+    # Gutting the body while leaving the registration would still satisfy a
+    # bare "the listener exists" check -- so pin that it still gates on the
+    # right keys and still opens the chip's dialog, not just that the call
+    # to addEventListener is present.
+    assert 'e.key !== "Enter" && e.key !== " "' in block, block
+    assert "open(chip)" in block, block
 
 
 # ── POST /subscriptions/{id}/settings ────────────────────────────────────

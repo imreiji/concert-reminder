@@ -424,6 +424,65 @@ async def test_an_unfollow_press_deletes_only_the_pressers_own_row(client):
     )
 
 
+async def test_an_unfollow_press_deletes_only_the_pressed_tag(client):
+    """The test above pins the `user_id` half of the `(user_id, tag_id)` pair
+    by seeding a SECOND USER on the same tag. This pins the `tag_id` half by
+    seeding a SECOND TAG for the SAME presser -- with only one followed tag,
+    "the presser's row for tag X" and "the presser's only row" are the same
+    row, and dropping `TagSubscription.tag_id == tag_id` from the route's
+    query leaves that test, and every other test in the suite, green.
+
+    UNTOUCHED IS FOLLOWED FIRST, so its row holds the LOWER id -- the same
+    ordering trick as the test above, for the same reason: an unscoped-by-tag
+    query that reaches for the first row it finds must not accidentally reach
+    for the one this test intends to survive.
+
+    Mutation this must fail against: dropping `TagSubscription.tag_id ==
+    tag_id` from the route's query. With `scalar_one_or_none()` left in
+    place, two rows now match `user_id` alone and the call raises
+    `MultipleResultsFound` -- the test client surfaces that as an exception
+    rather than a clean assertion failure, which is still a failure, just not
+    one with this file's own message. Softening the same query to
+    `.scalars().first()` in the same edit -- the plausible cleanup pair named
+    in review -- instead deletes the UNTOUCHED tag's row silently (first by
+    insertion order), which the seed ordering above is what catches: the
+    final assertion below finds the wrong tag gone.
+    """
+    from sqlalchemy import select
+
+    from app.db.models import TagSubscription
+
+    def follow_data(tag_id: int) -> dict:
+        return {"tag_id": tag_id, "notify": "true", "next": "/tags", "chip": "count"}
+
+    login_as(client, VIEWER_ID, "viewer")
+    untouched_id = await _seed_tag(client, "Aqours", kind=TagKind.FRANCHISE)
+    pressed_id = await _seed_tag(client, "Nijigasaki", kind=TagKind.FRANCHISE)
+
+    assert client.post("/subscriptions", data=follow_data(untouched_id)).status_code == 303
+    assert client.post("/subscriptions", data=follow_data(pressed_id)).status_code == 303
+
+    async with client.db() as s:
+        ordered = select(TagSubscription).order_by(TagSubscription.id)
+        rows = (await s.execute(ordered)).scalars().all()
+    assert [r.tag_id for r in rows] == [untouched_id, pressed_id], (
+        "the seed order is the point -- the untouched tag's row must be the "
+        "first one an unscoped-by-tag query would reach"
+    )
+
+    r = client.post("/subscriptions/unfollow",
+                    data={"tag_id": pressed_id, "next": "/tags", "chip": "count"}, headers=HX)
+    assert r.status_code == 200
+    assert 'action="/subscriptions"' in r.text, "the pressed tag really is unfollowed now"
+
+    async with client.db() as s:
+        rows = (await s.execute(select(TagSubscription))).scalars().all()
+    assert [r.tag_id for r in rows] == [untouched_id], (
+        "the press must delete only the pressed tag's row, leaving the other "
+        "followed tag alone"
+    )
+
+
 async def test_following_from_a_stale_copy_is_idempotent_too(client):
     """The other direction, so the pair behaves alike. Two copies both showing
     "follow": pressing the second after the first already followed must answer
