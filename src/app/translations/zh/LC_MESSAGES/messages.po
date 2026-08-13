@@ -4473,6 +4473,10 @@ msgstr "准备完成。接下来，请选择你计划参加的活动。"
 msgid "Continue to my events"
 msgstr "前往我的活动"
 
+#: src/app/web/templates/tags.html:41
+msgid "See what you follow"
+msgstr "查看你的关注"
+
 #~ msgid "Remove this leg"
 #~ msgstr "删除此场次"
 

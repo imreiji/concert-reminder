@@ -1372,6 +1372,12 @@ dialog.prune .da { display: flex; gap: .5rem; padding: 0 1.1rem 1.1rem; flex-wra
    here. */
 .toolbar .note { color: var(--dim); font-size: .85rem; }
 .toolbar .note strong { color: var(--ink); font-weight: 600; }
+/* The head's link to /following. There is no global `a` rule, so without
+   this it renders as the browser's default blue-and-underlined link beside
+   two dim .note spans. Same idiom as .chead .links a: accent, no underline
+   until hover. --accent is a token defined in both theme directions. */
+.tags-head .followlink { color: var(--accent); text-decoration: none; }
+.tags-head .followlink:hover { text-decoration: underline; }
 .tags-head .btn { margin-left: auto; }
 
 .tsec { margin-top: 2rem; }

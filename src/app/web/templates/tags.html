@@ -32,6 +32,13 @@
     {%- trans count=summary.untranslated %}{{ count }} tag is not translated everywhere yet{% pluralize %}{{ count }} tags are not translated everywhere yet{% endtrans -%}
   </span>
   {%- endif %}
+  {#- The only door to /following until phase 4 puts a second one on
+      Preferences. It lives in the head because that is where this page's
+      other tallies are, and it is NOT editor-gated: following is what every
+      signed-in viewer comes here to do, and reviewing what you already
+      follow is the other half of that. A real <a href>, not a JS opener --
+      nothing about it needs a round trip or a dialog. -#}
+  <a class="note followlink" href="/following">{{ _("See what you follow") }}</a>
   {% if user.is_editor %}<button type="button" class="btn" id="newTagBtn"
     onclick="document.getElementById('new-tag-dialog').showModal()">{{ _("+ New tag") }}</button>{% endif %}
 </div>

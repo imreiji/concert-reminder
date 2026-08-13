@@ -4456,6 +4456,10 @@ msgstr "準備完了です。次に、参加予定のイベントを選びます
 msgid "Continue to my events"
 msgstr "イベントの選択へ"
 
+#: src/app/web/templates/tags.html:41
+msgid "See what you follow"
+msgstr "フォロー中の一覧"
+
 #~ msgid "Remove this leg"
 #~ msgstr "この公演を削除"
 

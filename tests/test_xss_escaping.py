@@ -5,6 +5,11 @@ position: inside a <script> block (the shared tag picker's JS constants),
 where plain HTML-escaping is NOT sufficient, so the picker gets dedicated
 tests here rather than relying on the feature tests that only cover the
 happy path.
+
+The second half of the file is a repo-wide SWEEP for invariant 7's third
+rule -- never interpolate user-controlled text into an inline `on*` handler.
+That rule was enforced per page by whoever remembered; the sweep makes it a
+property of the template directory.
 """
 
 import json
@@ -142,3 +147,127 @@ def test_tag_picker_group_members_still_populate(client):
     consts = js_constants(client.get("/concerts/new").text)
     assert consts["NC_GROUPS"]["1"]["members"] == [{"id": 2, "name": "Kozue Otomune"}]
     assert consts["TAG_NAMES"]["1"] == "Hasunosora"
+
+
+# ── Invariant 7, third rule: what may reach an inline on* handler ────────
+#
+# The browser HTML-decodes an attribute BEFORE parsing it as JS, so Jinja's
+# `&#39;` escaping does not protect an `onclick="f('{{ x }}')"`. A tag name
+# containing an apostrophe closes the JS string literal; one containing
+# `')` closes the call. Autoescaping is doing its job and the page is still
+# executing attacker text.
+#
+# A blanket "no {{ }} inside on*" ban would be useless -- the handlers that
+# exist are legitimate. The rule that separates them is SHAPE: everything
+# interpolated into an on* attribute must be an id (a dotted path whose last
+# segment is `id` or ends in `_id`, so an integer) or explicitly allowlisted
+# below. Names, titles, labels and preset names -- anything an editor or a
+# user typed -- must reach the DOM through a `data-` attribute and be read
+# back via `dataset`, which is what `data-tag-name` / `data-preset-name` and
+# the `data-confirm` handlers already do.
+
+TEMPLATES = Path(__file__).parent.parent / "src" / "app" / "web" / "templates"
+
+# `\b` before `on` is load-bearing: without it `on[a-z]+=` matches the tail
+# of `actiON=`, and every form action in the app becomes a false positive
+# (58 of them -- enough that the allowlist would swallow the rule).
+_ON_ATTR = re.compile(r"""\bon[a-z]+\s*=\s*"([^"]*)\"""", re.S)
+_INTERPOLATION = re.compile(r"\{\{(.*?)\}\}", re.S)
+_JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.S)
+# A bare dotted path and nothing else. A filter, a call, a literal or an
+# inline expression is not id-shaped BY CONSTRUCTION and has to be argued
+# for in the allowlist rather than slipping through on its last word.
+_DOTTED_PATH = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\Z")
+
+ON_HANDLER_ALLOWLIST = {
+    # _tag_picker_script.html: `{% for kindname in ["franchise", "group",
+    # "character", "artist"] %}`, a literal list three lines above its uses.
+    # Template-controlled, never a DB value, so it cannot carry a quote or a
+    # paren. If that loop ever iterates something fetched, this entry is wrong.
+    "kindname",
+}
+
+
+def _id_shaped(expr: str) -> bool:
+    if not _DOTTED_PATH.match(expr):
+        return False
+    last = expr.rsplit(".", 1)[-1]
+    return last == "id" or last.endswith("_id")
+
+
+def _blank_comments(src: str) -> str:
+    """Drop Jinja comments, keeping line numbers (they render nothing)."""
+    return _JINJA_COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), src)
+
+
+def handler_interpolations(src: str) -> list[tuple[int, str, str]]:
+    """(line, whole attribute, expression) for every {{ }} inside an on*."""
+    src = _blank_comments(src)
+    found = []
+    for attr in _ON_ATTR.finditer(src):
+        line = src[: attr.start()].count("\n") + 1
+        for raw in _INTERPOLATION.findall(attr.group(1)):
+            found.append((line, attr.group(0), raw.strip()))
+    return found
+
+
+def offending_interpolations(src: str) -> list[tuple[int, str, str]]:
+    return [
+        hit for hit in handler_interpolations(src)
+        if not _id_shaped(hit[2]) and hit[2] not in ON_HANDLER_ALLOWLIST
+    ]
+
+
+def test_no_free_text_is_interpolated_into_an_inline_handler():
+    """The sweep. Read the block above before adding to the allowlist -- and
+    do NOT rewrite a handler just to make this green without saying so: a
+    handler that trips this is either a real finding or an allowlist entry
+    with a reason next to it."""
+    offenders = [
+        f"{path.name}:{line}  {attr[:100]}  ->  {{{{ {expr} }}}}"
+        for path in sorted(TEMPLATES.glob("*.html"))
+        for line, attr, expr in offending_interpolations(
+            path.read_text(encoding="utf-8")
+        )
+    ]
+    assert not offenders, (
+        "free text interpolated into an inline on* handler (invariant 7): the "
+        "browser HTML-decodes the attribute before parsing it as JS, so Jinja's "
+        "escaping does not protect it. Put the value in a data- attribute and "
+        "read it via dataset, or -- if it genuinely cannot contain a quote or a "
+        "paren -- add it to ON_HANDLER_ALLOWLIST with a comment saying why.\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+def test_the_handler_sweep_sees_handlers_and_tells_names_from_ids():
+    """The sweep above passes on an EMPTY scan, so a matcher that silently
+    stopped matching would look exactly like a clean repo. This pins the
+    scanner itself against a sample carrying one of each case.
+
+    Mutations this catches: dropping `\b` from _ON_ATTR (form actions flood
+    in -- the `action=` line below would be reported); loosening _DOTTED_PATH
+    so a filtered expression passes on its last word (`t.name | e` is still
+    free text); letting `.name` through; and stripping Jinja comments in a way
+    that shifts line numbers.
+    """
+    sample = (
+        '<form action="/tags/{{ t.id }}/edit">\n'
+        '  <button onclick="closeDialog(\'{{ t.id }}\')">x</button>\n'
+        '  <button onclick="alert(\'{{ t.name }}\')">bad</button>\n'
+        '  <button onclick="pick(\'{{ t.name | e }}\')">also bad</button>\n'
+        '  <input oninput="filterChips(this, \'#picker-{{ kindname }}\')">\n'
+        "  {# <button onclick=\"alert('{{ t.name }}')\">commented</button> #}\n"
+        '  <button onclick="drop({{ f.sub_id }})">ok</button>\n'
+    )
+    seen = handler_interpolations(sample)
+    # The form action is NOT a handler; the commented-out one renders nothing.
+    assert [expr for _l, _a, expr in seen] == [
+        "t.id", "t.name", "t.name | e", "kindname", "f.sub_id",
+    ]
+    # ...and the last real line still reports as line 7, so the comment was
+    # blanked rather than deleted.
+    assert seen[-1][0] == 7
+    assert [(line, expr) for line, _a, expr in offending_interpolations(sample)] == [
+        (3, "t.name"), (4, "t.name | e"),
+    ]
