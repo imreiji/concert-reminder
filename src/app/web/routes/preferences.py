@@ -441,13 +441,28 @@ async def subscribe(
     sub = existing.scalar_one_or_none()
     await ensure_user(session, user.id, user.username)
     if sub is None:
+        # `preset_id` absent or 0 means "I did not choose" -- inherit the
+        # viewer's standing default (or None, if they have none). Every /tags
+        # and welcome-wizard chip sends no preset_id, so this is what makes a
+        # new follow start with the preset the user already told the app they
+        # want, instead of linking none at all.
+        if preset_id:
+            linked_preset_id = preset_id
+        else:
+            default = await get_default_preset(session, user.id)
+            linked_preset_id = default.id if default else None
         sub = TagSubscription(
             user_id=user.id, tag_id=tag_id,
-            preset_id=preset_id or None, notify=notify,
+            preset_id=linked_preset_id, notify=notify,
         )
         session.add(sub)
     else:  # re-submitting updates the existing subscription
-        sub.preset_id = preset_id or None
+        # Only overwrite the preset when the caller EXPLICITLY chose one.
+        # A bare re-submit (a stale tab, a double chip-press) posts no
+        # preset_id, and must not clear a preset already linked here or set
+        # via /subscriptions/{id}/settings -- that would be silent data loss.
+        if preset_id:
+            sub.preset_id = preset_id
         sub.notify = notify
     await session.commit()
 

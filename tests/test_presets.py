@@ -228,6 +228,72 @@ async def test_subscribe_rejects_an_unrecognized_next_value(client):
     assert r.headers["location"] == "/preferences"
 
 
+async def test_a_new_follow_inherits_the_default_preset(client):
+    """The standing default. Mutation: reverting to `preset_id or None`,
+    which links no preset at all -- what shipped before this phase."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
+    login_as(client, FAN_ID, "fan")
+    client.post("/presets", data={"name": "a", "anchor": "closes", "days": 3})  # preset #1
+    client.post("/presets", data={"name": "b", "anchor": "opens", "days": 1})  # preset #2
+    client.post("/presets/2/default")  # "b" is the default -- NOT the only preset
+
+    r = client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
+    assert r.status_code == 303
+    subs = await _all(client.db, TagSubscription)
+    assert [(s.user_id, s.preset_id) for s in subs] == [(FAN_ID, 2)], (
+        "the default preset (#2), not #1, and not None"
+    )
+
+
+async def test_a_new_follow_links_nothing_when_there_is_no_default(client):
+    """A user with no presets must not get a bogus preset_id. Mutation: a
+    fallback that invents one."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
+    login_as(client, FAN_ID, "fan")
+    client.post("/presets", data={"name": "a", "anchor": "closes", "days": 3})  # preset #1
+    client.post("/presets", data={"name": "b", "anchor": "opens", "days": 1})  # preset #2
+    # neither preset is marked default
+
+    r = client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
+    assert r.status_code == 303
+    subs = await _all(client.db, TagSubscription)
+    assert [(s.user_id, s.preset_id) for s in subs] == [(FAN_ID, None)]
+
+
+async def test_re_following_does_not_clear_a_deliberately_set_preset(client):
+    """Silent data loss. Mutation: the old `sub.preset_id = preset_id or None`
+    on the re-submit branch."""
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
+    login_as(client, FAN_ID, "fan")
+    client.post("/presets", data={"name": "a", "anchor": "closes", "days": 3})  # preset #1
+    client.post("/presets", data={"name": "b", "anchor": "opens", "days": 1})  # preset #2
+    client.post("/presets/1/default")  # "a" is the default -- deliberately NOT what's linked below
+
+    # A deliberate choice of the NON-default preset (#2), same as /following's dialog.
+    client.post("/subscriptions", data={"tag_id": 1, "preset_id": 2, "notify": "true"})
+    subs = await _all(client.db, TagSubscription)
+    assert [(s.user_id, s.preset_id) for s in subs] == [(FAN_ID, 2)]
+
+    # A stale tab or a double chip-press re-submits the same follow with no
+    # preset_id at all.
+    r = client.post("/subscriptions", data={"tag_id": 1, "notify": "true"})
+    assert r.status_code == 303
+    subs = await _all(client.db, TagSubscription)
+    assert [(s.user_id, s.preset_id) for s in subs] == [(FAN_ID, 2)], (
+        "re-submitting must not clear the preset the fan deliberately picked, "
+        "and must not silently replace it with the default either"
+    )
+
+
 async def test_subscribe_refuses_a_preset_the_follower_does_not_own(client):
     """`POST /subscriptions` takes a `preset_id` straight off the form and links
     it to the new subscription, so `owned_preset` is the only thing standing
