@@ -204,6 +204,32 @@ The design source of truth remains the concept demos in
   anonymous visitor can reach. Header nav is Home / Discover / Tags and
   nothing else; the active item carries `aria-current="page"`, which is also
   what the CSS styles off.
+- **Following is split across THREE surfaces, by the question each answers**
+  (the 2026-08-12/13 rework). `/tags` is where you START following: every
+  chip is a follow toggle, a character and the seiyuu who plays her render as
+  one SPLIT pill whose halves follow independently, and an explicit edit-mode
+  toggle switches every chip's click from follow to the tag editor for
+  editors -- one page, two modes, announced by a mode strip, rather than two
+  pages or a per-chip pencil. `/following` (`routes/preferences.py`, not its
+  own module) is where you TUNE it: one chip per followed tag, each opening a
+  dialog that writes notify and the per-tag preset through
+  `POST /subscriptions/{sub_id}/settings`. Preferences keeps only a
+  FIXED-HEIGHT summary of both -- a count, "Manage →", the standing default
+  and its bulk-apply button, and the skipped-events list -- measured 218.9px
+  whether you follow nothing or nine tags. That fixed height is the point:
+  the section it replaced grew one row per followed tag, which is what made
+  the whole surface "pretty big" in the first place. Do not re-add per-tag
+  controls to Preferences; that is what `/following` exists for.
+  Two things a rendered page caught that no test could. A follow press swaps
+  the ONE chip via htmx (`hx-target="this"`, `hx-swap="outerHTML"`) beside a
+  plain `method="post"` form, so it degrades with JS off and does not reload
+  the page -- 923ms and 6.98MB became 10.7ms and 518 bytes. And the summary's
+  two counts must not share a word: the tag count and the concert count sat
+  adjacent reading "N tags followed" beside "N followed", a contradiction in
+  English and a true collision in Japanese (both フォロー中), which no i18n or
+  copy test could see because neither msgid had changed. The concert side is
+  "tracked" / 追跡中 / 追踪中. Putting those two numbers back on one line
+  under one word re-opens it.
 - **Capture actions live on Coming up rows, never on board cards.** A
   deadline row is exactly ONE round on ONE leg, where "I have applied" has a
   single meaning. A board card is a whole campaign with a multi-rung ladder,

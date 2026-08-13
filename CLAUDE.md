@@ -135,18 +135,36 @@ undo.
   implementation plans; substantial features commit one of each before code.
   `docs/codebase-review-2026-07-17.md` records a full-codebase review.
 
-## Feature wishlist
+## Feature wishlist, and the two files a shipped feature updates
 
 `WISHLIST.md` (repo root) tracks every potential feature raised in
 roadmap/UX discussions, ordered by user impact (highest first), with
 impact + effort noted per entry. Read it before any feature-planning or
-roadmap discussion. Every time a new feature is pushed: move the shipped
-entry to its Shipped section (with the date), then do a full revision
-pass over the remaining entries — re-rank by impact and reconsider which
-are still useful, since a shipped feature can raise, lower, or obsolete
-others. Append new ideas from any discussion with their date and context;
-move rejected ideas to the Rejected section with the reason instead of
-deleting them.
+roadmap discussion.
+
+**Every feature updates BOTH files, in the PR that ships it** — not in a
+later sweep. A PR that changes what a user can do and touches neither file
+is incomplete:
+
+- `WISHLIST.md` — move the shipped entry to its Shipped section (with the
+  date), then do a full revision pass over the remaining entries: re-rank by
+  impact and reconsider which are still useful, since a shipped feature can
+  raise, lower, or obsolete others. Append new ideas from any discussion with
+  their date and context; move rejected ideas to the Rejected section with
+  the reason instead of deleting them.
+- `README.md` — one line appended to the "Shipped since Phase 12" list, in
+  merge order, in the same voice as its neighbours: what a USER can now do,
+  and what it cost or closed. Not which modules moved — that is
+  `docs/architecture.md`'s job. Write it from the PR's own description.
+
+Both, every time, because **the README is the one that rots silently.**
+WISHLIST was maintained per-feature for months while the README quietly fell
+seven features behind — `#144` through `#154`, back to the agent read API —
+purely because nothing in this ritual named it (caught and repaired
+2026-08-13, PR #155). Nothing fails when the README is stale: no test reads
+it, CI is happy, and it is the only public description of what this app
+does. If you notice at merge time that a PR missed its line, add it then
+rather than assuming a later pass will.
 
 ## Non-negotiable invariants
 
@@ -524,6 +542,30 @@ deleting them.
    presentation. Partial opt-out survives everywhere, exactly as partial
    cancellation does.
 
+9. **A TAG follow carries a preset, and `TagSubscription.preset_id = NULL` is
+   OVERLOADED.** This is the tag side of invariant 8 and a different table --
+   don't merge the two. Following a tag links the follower's default preset
+   (`get_default_preset`) whenever the form supplies none; before 2026-08-13
+   `subscribe` wrote `preset_id or None` and the chip forms sent nothing, so
+   EVERY follow linked no preset at all and the per-tag preset UI had nothing
+   flowing into it. NULL now means BOTH "never configured" AND "auto-apply
+   deliberately off" -- `/subscriptions/{id}/settings` still writes it for the
+   dialog's "none" -- and the owner ruled (2026-08-13) that the app WARNS about
+   that ambiguity rather than growing a column for it. So
+   `POST /presets/apply-to-following` fills NULLs ONLY, never overwrites,
+   reports BOTH counts (filled, and left alone), and says in its confirmation
+   that it re-arms auto-apply where you had switched it off. **Never widen that
+   fill**: overwriting a preset somebody deliberately set is silent,
+   irreversible, and looks exactly like success.
+   `handle_newly_tagged` prefers a NON-default preset over the default, ties
+   earliest-first -- a preset chosen for ONE tag beats the catch-all. That is
+   not cosmetic and not the old rule with extra steps: reverting it to plain
+   earliest-created-wins re-opens a measured regression (offsets went -1 to -3
+   once the fill put the default on the oldest rows), and it changes behaviour
+   for every user, not only those who press the fill. The whole four-phase
+   rework shipped with ZERO migrations; `TagSubscription.preset_id`/`notify`
+   and `ReminderPreset.is_default` carry all of it.
+
 ## Migrations (SQLite gotchas — these have bitten before)
 
 - `Base.metadata` has a NAMING_CONVENTION; keep it. SQLite runs migrations
@@ -634,6 +676,12 @@ reference.
   signed out it is the real landing page. `/discover` is the public
   catalogue ("what's on") and is the only content page an anonymous visitor
   can reach. Header nav is Home / Discover / Tags and nothing else.
+  `/following` manages the tags you follow and is deliberately NOT in the nav
+  -- it is reached from Preferences' "Manage →" and from `/tags`' "See what
+  you follow". `/tags` is the surface where you START following (chips toggle
+  follow; an explicit edit-mode toggle switches every chip's click back to
+  the tag editor for editors); `/following` is where you TUNE it, one dialog
+  per followed tag. Preferences keeps only a fixed-height summary of both.
 - **Capture actions live on Coming up rows, never on board cards.** A
   deadline row is one round on one leg, where "I have applied" has a single
   meaning; a board card is a whole campaign, where the same button is

@@ -1,10 +1,13 @@
 # WISHLIST.md
 
 Every potential feature raised in roadmap and UX discussions, ordered by
-user impact (highest first). Maintained per the "Feature wishlist" section
-in CLAUDE.md: fully re-evaluated and re-ranked every time a feature ships.
-Each entry notes impact and effort so re-ranking has a basis. Shipped and
-rejected ideas move to the bottom sections instead of being deleted.
+user impact (highest first). Maintained per CLAUDE.md's "Feature wishlist,
+and the two files a shipped feature updates": fully re-evaluated and
+re-ranked every time a feature ships, in the PR that ships it. `README.md`
+is the other of the two -- one user-facing line per shipped feature -- and
+it is the one that rots silently, so update it in the same breath as this
+file. Each entry notes impact and effort so re-ranking has a basis. Shipped
+and rejected ideas move to the bottom sections instead of being deleted.
 
 Two 2026-07-21 builds landed without having been Proposed entries here --
 the mobile parity retrofit (bottom tab bar, FAB, swipeable board, filter
@@ -2581,7 +2584,7 @@ performer chips - see its Shipped entry below.)
 
 Branches `following-rework-phase-1` (PR #151, nine commits), `-phase-2`
 (PR #152, eleven commits), `-phase-3` (PR #153, fourteen commits) and
-`-phase-4` (five tasks), design `docs/superpowers/specs/2026-08-12-following-rework-design.md`,
+`-phase-4` (PR #154, ten commits), design `docs/superpowers/specs/2026-08-12-following-rework-design.md`,
 plans `docs/superpowers/plans/2026-08-12-following-rework-phase-{1,2,3}.md` and
 `docs/superpowers/plans/2026-08-13-following-rework-phase-4.md`. **No migration,
 across any of the four phases** -- `TagSubscription.preset_id`/`.notify` and
