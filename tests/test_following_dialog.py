@@ -367,6 +367,30 @@ async def test_the_chip_opens_its_dialog_through_dataset(client):
     assert dlg.count(f'data-close="follow-dialog-{ids.linked}"') == 2
 
 
+async def test_the_chip_is_reachable_and_activatable_by_keyboard(client):
+    """A `<span>` is not focusable and has no role, so the page's keydown
+    handler -- which listens for Enter and Space on `[data-sub-id]` -- can
+    never fire on one. `role="button"` and `tabindex="0"` are what put the chip
+    in the tab order and tell a screen reader it does something; the handler is
+    what makes the two true rather than a lie.
+
+    Mutation: dropping both attributes from `follow_chip`. Measured
+    (2026-08-12): every other test over this page stayed green, 30 of them
+    across this file and test_following_page.py -- the page renders
+    identically, the mouse still works, and a keyboard reader gets a chip that
+    is either unreachable (no tabindex) or reachable and announced as nothing
+    (no role).
+
+    Asserted on the ONE chip rather than on the page, this file's habit
+    throughout: both attributes must be on the element the handler matches, not
+    merely somewhere in the document.
+    """
+    ids = await seed(client.db)
+    login_as(client, USER_A, "reiji")
+    chip = chip_for(client.get("/following").text, ids.linked_tag)
+    assert 'role="button"' in chip and 'tabindex="0"' in chip, chip
+
+
 # ── POST /subscriptions/{id}/settings ────────────────────────────────────
 
 

@@ -186,7 +186,18 @@ TEMPLATES = Path(__file__).parent.parent / "src" / "app" / "web" / "templates"
 # reports the recommended remedy as the violation. That is why the sample in
 # test_the_handler_sweep_sees_handlers_and_tells_names_from_ids carries a
 # `data-confirm` line.
-_ON_ATTR = re.compile(r"""\bon[a-z]+\s*=\s*"([^"]*)\"""", re.S)
+#
+# THE QUOTE IS CAPTURED AND BACKREFERENCED, so `onclick='...'` is scanned too.
+# HTML gives the two quote characters equal standing and so does the browser's
+# attribute decoder, so a single-quoted handler is every bit as exploitable --
+# but the first version of this pattern demanded a literal `"` after the `=`
+# and could not see one at all. Measured (2026-08-12): with
+# `<button onclick='alert("{{ f.tag.name }}")'>` added to following.html, the
+# old pattern matched only the legitimate `oninput` further down the file --
+# the sweep found nothing to report. No template uses that quoting today,
+# which is exactly why the sample below carries a single-quoted offender:
+# nothing in the repo would fail if this narrowed back.
+_ON_ATTR = re.compile(r"""\bon[a-z]+\s*=\s*(["'])(.*?)\1""", re.S)
 _INTERPOLATION = re.compile(r"\{\{(.*?)\}\}", re.S)
 _JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.S)
 # A bare dotted path and nothing else. A filter, a call, a literal or an
@@ -237,7 +248,9 @@ def handler_interpolations(src: str) -> list[tuple[int, str, str]]:
     found = []
     for attr in _ON_ATTR.finditer(src):
         line = src[: attr.start()].count("\n") + 1
-        for raw in _INTERPOLATION.findall(attr.group(1)):
+        # group(2) is the attribute VALUE -- group(1) is the quote character
+        # the pattern backreferences, and reading it here would scan `"`.
+        for raw in _INTERPOLATION.findall(attr.group(2)):
             found.append((line, attr.group(0), raw.strip()))
     return found
 
@@ -280,6 +293,10 @@ SCANNER_SAMPLE = (
     '  <input oninput="filterChips(this, \'#picker-{{ kindname }}\')">\n'
     "  {# <button onclick=\"alert('{{ t.name }}')\">commented</button> #}\n"
     '  <form data-confirm="{{ _(\'Delete this?\') }}">go</form>\n'
+    # SINGLE-QUOTED, and no less exploitable for it. It sits AFTER the Jinja
+    # comment so its line number also pins the blanking, and it is the only
+    # coverage this quoting has: no template in the repo writes one.
+    '  <button onclick=\'alert("{{ t.name }}")\'>bad, quoted the other way</button>\n'
 )
 
 
@@ -293,23 +310,29 @@ def test_the_handler_sweep_sees_handlers_and_tells_names_from_ids():
     here, and a subset assertion would pass on the empty list.
 
     Mutations this catches: dropping `\b` from _ON_ATTR (`data-cONfirm=` on
-    the last line starts matching, and the sweep begins reporting the very
-    idiom invariant 7 prescribes); scanning `action=` as a handler; loosening
-    _DOTTED_PATH so a filtered expression passes on its last word (`t.name | e`
-    is still free text); letting a bare `.name` through; and stripping Jinja
-    comments in a way that shifts line numbers.
+    the data-confirm line starts matching, and the sweep begins reporting the
+    very idiom invariant 7 prescribes); scanning `action=` as a handler;
+    narrowing _ON_ATTR back to a literal `"` after the `=`, which drops the
+    single-quoted handler on the last line -- a whole quoting style the sweep
+    could not fail on, and one no template exercises; reading group(1) (the
+    captured quote) instead of group(2) (the value), which finds nothing at
+    all; loosening _DOTTED_PATH so a filtered expression passes on its last
+    word (`t.name | e` is still free text); letting a bare `.name` through;
+    and stripping Jinja comments in a way that shifts line numbers.
     """
     seen = handler_interpolations(SCANNER_SAMPLE)
     # The form action and the data-confirm are NOT handlers; the commented-out
     # handler renders nothing.
     assert [expr for _l, _a, expr in seen] == [
-        "t.id", "t.name", "t.name | e", "kindname",
+        "t.id", "t.name", "t.name | e", "kindname", "t.name",
     ]
-    # ...and the allowlisted one still reports as line 5, so the comment above
-    # it was blanked rather than deleted.
-    assert seen[-1][0] == 5
+    # The allowlisted one still reports as line 5...
+    assert seen[3][0] == 5
+    # ...and the single-quoted offender as line 8, which is BELOW the Jinja
+    # comment: so the comment was blanked rather than deleted.
+    assert seen[-1][0] == 8
     assert [(line, expr) for line, _a, expr in offending_interpolations(SCANNER_SAMPLE)] == [
-        (3, "t.name"), (4, "t.name | e"),
+        (3, "t.name"), (4, "t.name | e"), (8, "t.name"),
     ]
 
 

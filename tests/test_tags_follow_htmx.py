@@ -29,7 +29,7 @@ from app.domain.types import TagKind
 from app.web import auth
 from app.web.app import create_app
 
-EDITOR_ID, VIEWER_ID = 42, 777
+EDITOR_ID, VIEWER_ID, OTHER_ID = 42, 777, 888
 HX = {"HX-Request": "true"}
 
 
@@ -370,6 +370,58 @@ async def test_unfollowing_one_copy_leaves_the_other_copy_pressable(client):
     assert r.text.strip(), "and it must not answer with an empty body"
     assert 'action="/subscriptions"' in r.text, "it comes back offering follow"
     assert f'name="tag_id" value="{artist}"' in r.text, "and it is pressable"
+
+
+async def test_an_unfollow_press_deletes_only_the_pressers_own_row(client):
+    """`tag_id` is posted by the caller, and the caller does not own it -- so
+    this route is the branch's one write keyed by a value anyone can type. The
+    `(user_id, tag_id)` pair is what keeps it to the presser's own row; scoped
+    by tag alone, one reader's press deletes another reader's subscription to
+    the same tag and nothing on either page ever says so.
+
+    OTHER_ID FOLLOWS FIRST, so their row holds the LOWER id. That ordering is
+    the test: an unscoped query that takes the first row it finds would take
+    THEIRS, and a seed in the other order would let that mutation through with
+    "the other row survives" still true. (The literal mutation named in review
+    -- deleting `TagSubscription.user_id == user.id` and keeping
+    `scalar_one_or_none()` -- instead raises MultipleResultsFound on two rows
+    for one tag, so the status assertion below fails on that one.)
+
+    VIEWER_ID's own press is asserted to SUCCEED in the same test, per this
+    branch's standing rule: the route answers the follow chip whether or not a
+    row was there, so "the other row survives" is equally true of a route that
+    was deleted, of one that 405s, and of one that stopped deleting anything.
+    """
+    from sqlalchemy import select
+
+    from app.db.models import TagSubscription
+
+    tag_id = await _seed_tag(client)
+    follow = {"tag_id": tag_id, "notify": "true", "next": "/tags", "chip": "count"}
+
+    login_as(client, OTHER_ID, "someone else")
+    assert client.post("/subscriptions", data=follow).status_code == 303
+    login_as(client, VIEWER_ID, "viewer")
+    assert client.post("/subscriptions", data=follow).status_code == 303
+
+    async with client.db() as s:
+        ordered = select(TagSubscription).order_by(TagSubscription.id)
+        rows = (await s.execute(ordered)).scalars().all()
+    assert [r.user_id for r in rows] == [OTHER_ID, VIEWER_ID], (
+        "the seed order is the point -- the other user's row must be the first "
+        "one an unscoped query would reach"
+    )
+
+    r = client.post("/subscriptions/unfollow",
+                    data={"tag_id": tag_id, "next": "/tags", "chip": "count"}, headers=HX)
+    assert r.status_code == 200
+    assert 'action="/subscriptions"' in r.text, "the presser really is unfollowed now"
+
+    async with client.db() as s:
+        rows = (await s.execute(select(TagSubscription))).scalars().all()
+    assert [r.user_id for r in rows] == [OTHER_ID], (
+        "the press must take the presser's row and only the presser's row"
+    )
 
 
 async def test_following_from_a_stale_copy_is_idempotent_too(client):

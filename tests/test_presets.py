@@ -228,6 +228,42 @@ async def test_subscribe_rejects_an_unrecognized_next_value(client):
     assert r.headers["location"] == "/preferences"
 
 
+async def test_subscribe_refuses_a_preset_the_follower_does_not_own(client):
+    """`POST /subscriptions` takes a `preset_id` straight off the form and links
+    it to the new subscription, so `owned_preset` is the only thing standing
+    between one user and another user's preset. PRE-EXISTING gap: the guard has
+    been there since presets shipped and nothing pinned it -- dropping the call
+    leaves every other test in this file green (45 of them, measured
+    2026-08-12). The chips are now this route's main caller and the same guard
+    on `/subscriptions/{id}/settings` IS pinned (tests/test_following_dialog.py),
+    so this is the unpinned half of a pair.
+
+    A 404 alone would prove nothing (a missing route 404s identically), so the
+    refusal is asserted with the row NOT WRITTEN, and the follower's own
+    identical follow is asserted to succeed and link their OWN preset -- which
+    is also what tells `owned_preset` apart from a route that refuses every
+    preset_id.
+    """
+    login_as(client, EDITOR_ID, "reiji")
+    client.post("/tags", data={
+        "name_en": "Gakumas", "name_zh": "Gakumas", "name": "Gakumas", "kind": "franchise",
+    })
+    build_standard_preset(client)  # preset #1 belongs to the EDITOR
+
+    login_as(client, FAN_ID, "fan")
+    r = client.post("/subscriptions", data={"tag_id": 1, "preset_id": 1, "notify": "true"})
+    assert r.status_code == 404
+    assert await _all(client.db, TagSubscription) == [], (
+        "and no subscription row was written on the way to the refusal"
+    )
+
+    client.post("/presets", data={"name": "mine"})
+    r = client.post("/subscriptions", data={"tag_id": 1, "preset_id": 2, "notify": "true"})
+    assert r.status_code == 303, "the fan's OWN preset still links"
+    subs = await _all(client.db, TagSubscription)
+    assert [(s.user_id, s.preset_id) for s in subs] == [(FAN_ID, 2)]
+
+
 async def test_unsubscribe_by_subscription_id_deletes_the_row(client):
     """POST /subscriptions/{sub_id}/delete -- the ID-KEYED unfollow, which is
     what Preferences' Following rows, Preferences' tag picker and the welcome
