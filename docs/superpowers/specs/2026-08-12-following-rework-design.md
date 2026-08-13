@@ -193,6 +193,17 @@ Reduced to fixed height regardless of how many tags are followed:
 - the existing **skipped events** list (concert-level opt-outs — this is the
   visible half of invariant 8's overrides and has no home on a tag catalogue)
 
+> **Correction, 2026-08-13**: this originally said the standing default
+> covers both which preset new follows get AND whether they notify. Phase 4
+> shipped only the preset half. `ReminderPreset.is_default` is a per-PRESET
+> flag that already existed and phase 4 widens rather than adds to, which is
+> how the whole four-phase rework shipped with zero migrations; a standing
+> NOTIFY default has no equivalent column to widen, and the owner chose not
+> to add a `User` column for it (2026-08-13) rather than let the fill-vs-add
+> question reopen. Notify stays a per-tag setting, written one at a time
+> through `/following`'s dialog. The ordering below is unchanged — only this
+> claim is corrected here, rather than silently rewritten.
+
 The picker, the per-tag `.subrow`s and their toggles all go.
 
 ### The standing default, and the retroactive fill — two things, not one
