@@ -111,19 +111,111 @@ async def test_rail_renders_with_active_indicator(client):
     assert 'class="on"' in r.text  # first rail link starts active
 
 
-async def test_following_subrows_and_toggles(client):
-    """Each followed tag is a `.subrow` carrying the two `.swb` toggle buttons
-    (Notify + Auto-apply) with aria-pressed, plus the summary pill."""
+def _p_follow_section(html: str) -> str:
+    """The Following section's own markup, and NOTHING else.
+
+    `base.html` renders a Tags nav link and a mobile tab bar on every page,
+    and the Reminders section right below Following renders its own "Default"
+    pill and "Make default" button carrying similar copy -- an unscoped
+    assertion about Following could pass against either. Both boundary
+    strings are `id="..."` on the `<section>` tags themselves (not the rail's
+    `href="#p-follow"` anchors, which appear earlier in the document and
+    would make the slice start too soon).
+    """
+    start = html.index('id="p-follow"')
+    end = html.index('id="p-remind"', start)
+    return html[start:end]
+
+
+async def test_following_section_reduced_to_count_and_manage_link(client):
+    """Following shrinks to a fixed-height summary (phase 4 task 4): the
+    tags-followed pill plus a "Manage" link to /following, both inside the
+    p-follow section.
+
+    Mutation: drop the summary pill, or point the link somewhere else --
+    either leaves the section without its stated replacement for the
+    deleted per-tag rows.
+    """
     await seed(client.db)
     login_as(client, USER_A, "reiji")
     r = client.get("/preferences")
-    assert 'class="subrow"' in r.text
-    assert 'class="swb"' in r.text
-    assert "aria-pressed" in r.text
-    assert "Notify" in r.text
-    assert "Auto-apply" in r.text
-    assert "tags followed" in r.text  # summary pill copy
-    assert 'class="pill p-ok"' in r.text
+    section = _p_follow_section(r.text)
+    assert 'class="pill p-ok"' in section
+    assert "tags followed" in section
+    assert 'href="/following"' in section
+
+
+async def test_following_section_has_no_per_tag_subrow_or_toggle(client):
+    """The per-tag `.subrow`s and their Notify / Auto-apply / Unfollow `.swb`
+    toggles are gone -- that management moved to /following's per-tag dialog.
+
+    Every one of these strings DOES appear in the pre-change template (see
+    test_preferences_page.py history / the phase-4 task-4 report for the
+    red-first verification), so this is not a check that could never fail.
+
+    Mutation: restore any one of the deleted `<form>`s (e.g. the Notify
+    toggle alone) and this fails, because `aria-pressed` and
+    `/subscriptions/{id}/notify` only ever appeared on the deleted markup --
+    the surviving "Restore" button in the skipped-events list below carries
+    neither.
+    """
+    await seed(client.db)
+    login_as(client, USER_A, "reiji")
+    r = client.get("/preferences")
+    section = _p_follow_section(r.text)
+    assert "aria-pressed" not in section
+    assert "/subscriptions/" not in section
+    assert "Auto-apply preset" not in section
+
+
+async def test_following_section_has_no_tag_picker(client):
+    """The "Follow another tag" disclosure and its sub-defaults control are
+    gone -- following a new tag happens on /tags or /following now.
+
+    Mutation: leave the `<details>` fold in place and this fails, since
+    neither string appears anywhere else on the page.
+    """
+    await seed(client.db)
+    login_as(client, USER_A, "reiji")
+    r = client.get("/preferences")
+    section = _p_follow_section(r.text)
+    assert "Follow another tag" not in section
+    assert "sub-defaults" not in section
+
+
+async def test_following_section_shows_default_preset_and_relocated_apply_button(client):
+    """The standing default (read-only) and Task 3's fill button now live
+    beside each other inside the reduced Following section, not in the
+    Reminders bar where the fill button used to render.
+
+    Mutation: leave the fill button only in Reminders (it would still pass a
+    page-wide search, which is why this asserts on the SCOPED section); or
+    drop the default-preset display entirely.
+    """
+    await seed(client.db)
+    from app.db.models import ReminderPreset
+    async with client.db() as s:
+        s.add(ReminderPreset(user_id=USER_A, name="Standard cover", is_default=True))
+        await s.commit()
+    login_as(client, USER_A, "reiji")
+    r = client.get("/preferences")
+    section = _p_follow_section(r.text)
+    assert "Standard cover" in section
+    assert 'action="/presets/apply-to-following"' in section
+
+
+async def test_following_section_default_preset_pill_is_absent_with_no_default(client):
+    """A user with no default preset sees the no-default state, not a blank
+    or a crash.
+
+    Mutation: render nothing in the `{% else %}` branch, or render the
+    `{% if default_preset %}` branch unconditionally (a NoneType .name access
+    would 500 instead)."""
+    await seed(client.db)
+    login_as(client, USER_A, "reiji")
+    r = client.get("/preferences")
+    section = _p_follow_section(r.text)
+    assert "No default preset yet" in section
 
 
 async def test_delivery_status_pills(client):

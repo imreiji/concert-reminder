@@ -9,9 +9,7 @@
   POST /presets/{id}/items/{item_id}/delete
   POST /subscriptions                        subscribe to a tag (+preset, notify)
   POST /subscriptions/unfollow               unfollow BY TAG, idempotent (chips)
-  POST /subscriptions/{id}/notify            toggle the per-tag Notify flag
   POST /subscriptions/{id}/settings          preset + notify together (/following)
-  POST /subscriptions/{id}/auto-apply        toggle default-preset auto-apply
   POST /subscriptions/{id}/delete            unfollow BY SUBSCRIPTION ID
   POST /concerts/{event_id}/presets/{pid}/apply   one-click apply (rules fragment swap)
   POST /me/timezone                          manual timezone choice
@@ -22,6 +20,17 @@
 
 Everything here is per-user: routes verify ownership and 404 on other
 people's presets/subscriptions rather than admitting they exist.
+
+Following rework phase 4, task 4: Preferences' per-tag `.subrow`s (Notify /
+Auto-apply / Unfollow) are gone -- that management lives on `/following`'s
+per-tag dialog now. `POST /subscriptions/{id}/notify` and
+`POST /subscriptions/{id}/auto-apply` were THAT markup's only callers and are
+deleted with it, not just left unreachable: `/subscriptions/{id}/settings`
+already covers the same ground with an explicit preset choice, which is
+strictly less ambiguous than the NULL "auto-apply off" overload those two
+routes wrote (the overload `apply_default_to_following`'s docstring has to
+warn about). Removing them removes a redundant way into that ambiguity
+rather than merely deleting code.
 """
 
 from datetime import UTC, datetime
@@ -54,7 +63,6 @@ from app.db.service import (
     generate_api_token,
     get_default_preset,
     list_editors,
-    members_by_group,
     record_dm_outcome,
     set_default_preset,
     set_editor,
@@ -128,8 +136,6 @@ async def preferences(
     session: AsyncSession = Depends(get_session),
     feed_token: str = "",
 ):
-    from app.domain.types import TagKind
-
     # POP, not get: this is what makes the mint's session flash one-shot. A
     # second render of this same page (back button, refresh, a second tab)
     # must show nothing -- see POST /me/api-token's docstring for why the
@@ -142,22 +148,17 @@ async def preferences(
     preset_fill = request.session.pop("preset_fill", None)
 
     presets = await my_presets(session, user.id)
-    subs = list((await session.execute(
-        select(TagSubscription, Tag)
-        .join(Tag, TagSubscription.tag_id == Tag.id)
+    # Following section, reduced (phase 4 task 4): a count and the standing
+    # default only -- no per-tag rows, so this page's height no longer grows
+    # with how many tags a user follows. Per-tag detail (which preset, which
+    # events, Notify/Unfollow) lives on /following now; followed_tag_families
+    # and followed_tag_counts are THAT route's job, not this one's.
+    followed_count = await session.scalar(
+        select(func.count())
+        .select_from(TagSubscription)
         .where(TagSubscription.user_id == user.id)
-        .order_by(Tag.name)
-    )).all())
-    sub_by_tag = {tag.id: sub for sub, tag in subs}
-    tags = list((await session.execute(select(Tag).order_by(Tag.kind, Tag.name))).scalars())
-    franchises = [t for t in tags if t.kind is TagKind.FRANCHISE]
-    groups = [t for t in tags if t.kind is TagKind.GROUP]
-    venues = [t for t in tags if t.kind is TagKind.VENUE]
-    members = await members_by_group(session, [g.id for g in groups])
-    grouped_artist_ids = {m.id for ms in members.values() for m in ms}
-    solo_artists = [
-        t for t in tags if t.kind is TagKind.ARTIST and t.id not in grouped_artist_ids
-    ]
+    )
+    default_preset = await get_default_preset(session, user.id)
     db_user = await session.get(User, user.id)
     tz = db_user.timezone if db_user else "America/Moncton"
     tz_auto = db_user.tz_auto if db_user else True
@@ -165,10 +166,10 @@ async def preferences(
     has_api_token = bool(db_user and db_user.api_token_hash)
     editors = await list_editors(session) if user.is_admin else []
 
-    # Following section: the tracked count, plus the deliberately-invisible
-    # OPTED_OUT overrides surfaced as a review-and-restore list (spec
-    # decision 1). concert_subscription_states is Task 2's read surface;
-    # tracked_concert_ids is the single definition of "tracked".
+    # The tracked count, plus the deliberately-invisible OPTED_OUT overrides
+    # surfaced as a review-and-restore list (spec decision 1).
+    # concert_subscription_states is Task 2's read surface; tracked_concert_ids
+    # is the single definition of "tracked".
     tracked_ids = await tracked_concert_ids(session, user.id)
     tracked_count = len(tracked_ids)
     upcoming_count = await upcoming_concert_count(session, tracked_ids)
@@ -180,8 +181,6 @@ async def preferences(
         pruned_concerts = list((await session.execute(
             select(Concert).where(Concert.id.in_(pruned_ids)).order_by(Concert.title)
         )).scalars())
-    # Per-followed-tag "N concerts, M upcoming" for the Following subrows.
-    tag_counts = await followed_tag_counts(session, user.id)
 
     # A live JST/local sample for the Time section's preview line: the current
     # instant read in both zones (invariant 1: JST first, both always present).
@@ -190,14 +189,13 @@ async def preferences(
     return templates.TemplateResponse(
         request,
         "preferences.html",
-        {"user": user, "presets": presets, "subs": subs, "sub_by_tag": sub_by_tag,
-         "franchises": franchises, "groups": groups, "members": members,
-         "solo_artists": solo_artists, "venues": venues,
+        {"user": user, "presets": presets, "default_preset": default_preset,
+         "followed_count": followed_count,
          "tz": tz, "tz_auto": tz_auto, "tz_preview": tz_preview,
          "common_timezones": COMMON_TIMEZONES, "all_timezones": all_timezones(),
          "anchors": list(Anchor), "editors": editors,
          "rehearsal_enabled": settings.rehearsal_enabled,
-         "has_calendar_feed": has_calendar_feed, "tag_counts": tag_counts,
+         "has_calendar_feed": has_calendar_feed,
          "tracked_count": tracked_count, "upcoming_count": upcoming_count,
          "pruned_concerts": pruned_concerts,
          "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
@@ -270,17 +268,18 @@ async def apply_default_to_following(
     is NULL, never true -- and kept for the reader.)
 
     NULL is OVERLOADED here and the copy has to say so (owner ruling,
-    2026-08-13). `toggle_subscription_autoapply` writes NULL for "auto-apply
-    off", and `/subscriptions/{id}/settings` writes it for the dialog's explicit
-    "none" -- so a blank `preset_id` means EITHER "never configured" OR "I turned
-    this off deliberately", and no column tells them apart. The owner chose to
-    fill both rather than add one (this phase has shipped no migration and is not
-    starting), on the condition that the report names it: `preferences.html`'s
-    banner says plainly that auto-apply comes back on where it had been switched
-    off. Do not quietly drop that sentence -- it is the whole consent for the
-    half of the fill this route cannot distinguish. And note it does NOT go away
-    when Task 4 deletes Preferences' auto-apply switch: `/following`'s dialog
-    writes the same NULL through the same route.
+    2026-08-13). The now-deleted `toggle_subscription_autoapply` used to write
+    NULL for "auto-apply off", and `/subscriptions/{id}/settings` still writes
+    it for the dialog's explicit "none" -- so a blank `preset_id` means EITHER
+    "never configured" OR "I turned this off deliberately", and no column
+    tells them apart. The owner chose to fill both rather than add one (this
+    phase has shipped no migration and is not starting), on the condition that
+    the report names it: `preferences.html`'s banner says plainly that
+    auto-apply comes back on where it had been switched off. Do not quietly
+    drop that sentence -- it is the whole consent for the half of the fill
+    this route cannot distinguish. Deleting the toggle route (Task 4) did NOT
+    make the overload go away: `/following`'s dialog still writes the same
+    NULL through `/subscriptions/{id}/settings`.
 
     No rule resync, for the same reason `/subscriptions/{id}/settings` states:
     `TagSubscription.preset_id` is read only by `handle_newly_tagged`, when a
@@ -592,22 +591,6 @@ async def _owned_subscription(
     return sub
 
 
-@router.post("/subscriptions/{sub_id}/notify")
-async def toggle_subscription_notify(
-    sub_id: int,
-    user: SessionUser = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    """Flip the per-tag Notify flag -- the demo's Notify `.swb`. Notify is
-    just the new-event DM notice, so this needs no rule resync (unlike a
-    per-concert override); it mirrors the existing /subscriptions upsert,
-    which likewise does not resync when it rewrites notify."""
-    sub = await _owned_subscription(session, user.id, sub_id)
-    sub.notify = not sub.notify
-    await session.commit()
-    return RedirectResponse("/preferences#p-follow", status_code=303)
-
-
 @router.post("/subscriptions/{sub_id}/settings")
 async def update_subscription_settings(
     sub_id: int,
@@ -618,12 +601,10 @@ async def update_subscription_settings(
     next_url: str = Form("/following", alias="next"),
 ):
     """Both of a subscription's settings in ONE submit -- `/following`'s
-    per-tag dialog.
-
-    The two toggles above stay: Preferences' subrows flip one field per press
-    with no form to submit, and this page's dialog holds both fields open at
-    once and saves them together. Writing them separately here would mean a
-    dialog whose Save is two round trips, either of which can land alone.
+    per-tag dialog holds both fields open at once and saves them together.
+    (Preferences used to flip Notify and Auto-apply as two separate one-field
+    toggles; those routes are gone -- see the module docstring -- and this is
+    now the only write path for either field.)
 
     Same field semantics as the `/subscriptions` upsert, deliberately -- this
     is that route's write half addressed BY SUBSCRIPTION ID instead of by tag,
@@ -638,7 +619,7 @@ async def update_subscription_settings(
     No rule resync: `notify` is only the new-event DM notice, and `preset_id`
     is what gets applied to FUTURE matching events, not a rule already planned
     (invariant 2's queue is untouched by either) -- the same reasoning
-    `/subscriptions` and the two toggles above already run on.
+    `/subscriptions` already runs on.
     """
     sub = await _owned_subscription(session, user.id, sub_id)
     if preset_id:
@@ -647,25 +628,6 @@ async def update_subscription_settings(
     sub.notify = notify
     await session.commit()
     return RedirectResponse(_safe_next(next_url), status_code=303)
-
-
-@router.post("/subscriptions/{sub_id}/auto-apply")
-async def toggle_subscription_autoapply(
-    sub_id: int,
-    user: SessionUser = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    """The demo's Auto-apply `.swb`: a preset either IS or ISN'T linked. On
-    links the user's default preset (nothing to link without one, so it stays
-    off); off clears preset_id. Same field the /subscriptions upsert sets."""
-    sub = await _owned_subscription(session, user.id, sub_id)
-    if sub.preset_id is not None:
-        sub.preset_id = None
-    else:
-        default = await get_default_preset(session, user.id)
-        sub.preset_id = default.id if default else None
-    await session.commit()
-    return RedirectResponse("/preferences#p-follow", status_code=303)
 
 
 @router.post("/subscriptions/unfollow", response_class=HTMLResponse)

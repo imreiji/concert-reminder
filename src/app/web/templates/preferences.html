@@ -53,46 +53,42 @@
   <div>
 
   {# ── Following ─────────────────────────────────────────────────────── #}
+  {# Reduced to a fixed-height summary (Following rework phase 4, task 4):
+     a count with a link to /following, the read-only standing default
+     beside Task 3's fill button, and the unchanged skipped-events list.
+     Per-tag management (which preset, Notify, Unfollow) lives on /following
+     now -- see routes/preferences.py's module docstring for what that
+     removed and why. #}
   <section class="psec" id="p-follow">
     <h3>{{ _("Following") }}</h3>
     <p class="blurb">
-      {% trans %}Follow a tag to add <b>all future events</b> with that tag. Notify sends you a DM when a new event appears. Auto-apply adds your default preset. You can stop following an individual event from its page or a reminder DM.{% endtrans %}
+      {% trans %}Follow a tag to add <b>all future events</b> with that tag. Manage which tags you follow, plus notifications and presets per tag, on the Following page.{% endtrans %}
     </p>
 
     <div class="statline" style="margin-bottom:1rem">
-      <span class="pill p-ok">{% trans sub_count=subs | length %}{{ sub_count }} tags followed{% endtrans %}</span>
+      <span class="pill p-ok">{% trans sub_count=followed_count %}{{ sub_count }} tags followed{% endtrans %}</span>
       <span class="clock">{% trans tracked=tracked_count, upcoming=upcoming_count, pruned=pruned_concerts | length %}{{ tracked }} followed &middot; {{ upcoming }} upcoming
         &middot; {{ pruned }} skipped{% endtrans %}</span>
+      <span class="clock"><a class="more" href="/following">{{ _("Manage →") }}</a></span>
     </div>
 
-    {# One subrow per followed tag. The two `.swb` toggles map to the stored
-       fields: Notify -> TagSubscription.notify, Auto-apply -> whether a preset
-       is linked (preset_id). Each is a real POST form so it works with JS off;
-       aria-pressed reflects current state, the route flips it. #}
-    {% for sub, tag in subs %}
-    {% set counts = tag_counts.get(tag.id, (0, 0)) %}
-    <div class="subrow">
-      <span class="nm3"><span class="tchip k-{{ tag.kind.value }}">{{ tag.name }}</span></span>
-      <span class="cnt">{% trans count=counts[0] %}<b>{{ count }}</b> event{% pluralize %}<b>{{ count }}</b> events{% endtrans %}
-        &middot; {% trans upcoming=counts[1] %}{{ upcoming }} upcoming{% endtrans %}</span>
-      <span class="sw">
-        <form method="post" action="/subscriptions/{{ sub.id }}/notify" style="display:contents">
-          <button class="swb" type="submit" aria-pressed="{{ 'true' if sub.notify else 'false' }}"
-                  title="{{ _('DM me when a new matching event appears') }}">{{ _("Notify") }}</button>
-        </form>
-        <form method="post" action="/subscriptions/{{ sub.id }}/auto-apply" style="display:contents">
-          <button class="swb" type="submit"
-                  aria-pressed="{{ 'true' if sub.preset_id else 'false' }}"
-                  title="{{ _('Add my default preset to new matching events') }}">{{ _("Auto-apply preset") }}</button>
-        </form>
-        <form method="post" action="/subscriptions/{{ sub.id }}/delete" style="display:contents">
-          <button class="act no" type="submit" title="{{ _('Stop following this tag') }}">{{ _("Unfollow") }}</button>
-        </form>
-      </span>
+    {# The standing default, read-only. Task 2 wired the write side (a new
+       follow with no explicit preset inherits get_default_preset); this is
+       the informational half, beside Task 3's fill button. No control here
+       on purpose -- "Make default" in the Reminders section below is still
+       the one place a reader changes which preset is default
+       (set_default_preset); duplicating that control here would be two
+       places doing the same write. #}
+    <div class="statline" style="margin-bottom:1rem">
+      {% if default_preset %}
+      <span class="pill p-ok" title="{{ _("New follows use this preset, and so does the Discord 'Set my reminders' button.") }}">{% trans name=default_preset.name %}Default preset: {{ name }}{% endtrans %}</span>
+      {% else %}
+      <span class="pill p-quiet">{{ _("No default preset yet") }}</span>
+      {% endif %}
+      <form method="post" action="/presets/apply-to-following" style="display:contents">
+        <button class="act" type="submit">{{ _("Apply my default preset to all followed tags") }}</button>
+      </form>
     </div>
-    {% else %}
-    <p class="clock" style="display:block">{{ _("You are not following any tags yet.") }}</p>
-    {% endfor %}
 
     {% if pruned_concerts %}
     <div style="margin-top:1.25rem">
@@ -116,89 +112,6 @@
       {% endfor %}
     </div>
     {% endif %}
-
-    {# The follow-more surface: the tag picker (chips). Kept as a disclosure so
-       the Following section leads with the subrows and the picker reads as
-       "add another". The picker filters on data-name (base.html filterChips),
-       which is deliberate here -- it is a chip filter, not a delete confirm. #}
-    <details class="fold" style="margin-top:1.25rem">
-      <summary>{{ _("Follow another tag") }}</summary>
-      <div class="fold-body">
-        <div class="sub-defaults">
-          <span class="clock">{{ _("When I follow a tag:") }}</span>
-          <form id="sub-defaults" class="inline">
-            <label>{{ _("Apply preset") }}
-              <select id="sub-preset">
-                <option value="0">{{ _("None") }}</option>
-                {% for p in presets %}<option value="{{ p.id }}" {% if loop.first %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
-              </select></label>
-            <label><input type="checkbox" id="sub-notify" checked> {{ _("DM me on new events") }}</label>
-          </form>
-        </div>
-
-        <input class="tag-search" type="search" placeholder="{{ _('Search tags…') }}" oninput="filterChips(this, '.sub-box')">
-
-        {% macro subchip(t) -%}
-          {%- set sub = sub_by_tag.get(t.id) -%}
-          {%- if sub -%}
-          <form class="chipform" method="post" action="/subscriptions/{{ sub.id }}/delete">
-            <button class="chip kind-{{ t.kind.value }} on" data-name="{{ search_key(t) }}"
-              title="{{ _('Following') }}{% if sub.preset_id %} · {{ _('preset linked') }}{% endif %}{% if sub.notify %} · 🔔{% endif %} {{ _('— click to unfollow') }}">{{ t.name }} ✓</button>
-          </form>
-          {%- else -%}
-          <form class="chipform" method="post" action="/subscriptions">
-            <input type="hidden" name="tag_id" value="{{ t.id }}">
-            <input type="hidden" name="preset_id" value="0" class="sub-preset-field">
-            <input type="hidden" name="notify" value="" class="sub-notify-field">
-            <button class="chip kind-{{ t.kind.value }}" data-name="{{ search_key(t) }}">{{ t.name }}</button>
-          </form>
-          {%- endif -%}
-        {%- endmacro %}
-
-        <div class="sub-box">
-          {% for f in franchises %}
-            <details open class="tag-section">
-              <summary>{{ f.name }} {{ subchip(f) }}</summary>
-              {% for g in groups if g.parent_id == f.id %}
-                <div class="group-row">
-                  {{ subchip(g) }}
-                  <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span>
-                </div>
-              {% endfor %}
-            </details>
-          {% endfor %}
-          {% set orphan_groups = groups | selectattr("parent_id", "none") | list %}
-          {% if orphan_groups %}
-          <details open class="tag-section"><summary>{{ _("Other groups") }}</summary>
-            {% for g in orphan_groups %}
-            <div class="group-row">{{ subchip(g) }}
-              <span class="member-chips">{% for m in members.get(g.id, []) %}{{ subchip(m) }}{% endfor %}</span></div>
-            {% endfor %}
-          </details>
-          {% endif %}
-          {% if solo_artists %}
-          <details open class="tag-section"><summary>{{ _("Solo artists") }}</summary>
-            <div class="taglist">{% for a in solo_artists %}{{ subchip(a) }}{% endfor %}</div>
-          </details>
-          {% endif %}
-          {% if venues %}
-          <details class="tag-section"><summary>{{ _("Venues") }}</summary>
-            <div class="taglist">{% for v in venues %}{{ subchip(v) }}{% endfor %}</div>
-          </details>
-          {% endif %}
-        </div>
-
-        <script>
-          // Stamp the follow-defaults into every follow form at submit time.
-          document.querySelectorAll(".chipform").forEach(f => f.addEventListener("submit", () => {
-            const p = f.querySelector(".sub-preset-field");
-            const n = f.querySelector(".sub-notify-field");
-            if (p) p.value = document.getElementById("sub-preset").value;
-            if (n) n.value = document.getElementById("sub-notify").checked ? "true" : "";
-          }));
-        </script>
-      </div>
-    </details>
   </section>
 
   {# ── Reminders (presets) ───────────────────────────────────────────── #}
@@ -230,9 +143,9 @@
           <input class="nm4" name="name" value="{{ p.name }}" maxlength="100" required>
           <button class="act" type="submit" title="{{ _('Rename') }}">{{ _("Rename") }}</button>
         </form>
-        {% if p.is_default %}<span class="pill p-ok" title="{{ _("The Discord 'Set my reminders' button applies this preset") }}">{{ _("Default") }}</span>{% endif %}
+        {% if p.is_default %}<span class="pill p-ok" title="{{ _("New follows use this preset, and so does the Discord 'Set my reminders' button.") }}">{{ _("Default") }}</span>{% endif %}
         <span class="sp">
-          {% if not p.is_default %}<form method="post" action="/presets/{{ p.id }}/default" style="display:contents"><button class="act" type="submit" title="{{ _('Make this the preset the Discord button applies') }}">{{ _("Make default") }}</button></form>{% endif %}
+          {% if not p.is_default %}<form method="post" action="/presets/{{ p.id }}/default" style="display:contents"><button class="act" type="submit" title="{{ _('Make this the preset new follows and the Discord button use') }}">{{ _("Make default") }}</button></form>{% endif %}
           <form method="post" action="/presets/{{ p.id }}/delete"
                 data-preset-name="{{ p.name }}" style="display:contents"
                 onsubmit="return confirmDeletePreset(this)"><button class="act no" type="submit" title="{{ _('Delete preset') }}">{{ _("Delete") }}</button></form>
@@ -263,14 +176,9 @@
 
     <div class="bar stacked">
       <span class="tally">{{ _("Presets apply to future events. Existing ones keep the rules they already have.") }}</span>
-      {# The retroactive half of the default preset. An ACTION beside the
-         setting, never the setting itself: making a preset default governs
-         future follows only, and this button is the one thing that reaches
-         back. It fills the follows that carry no preset and leaves the ones
-         you tuned yourself untouched -- see the route's docstring. #}
-      <form method="post" action="/presets/apply-to-following">
-        <button class="act" type="submit">{{ _("Apply my default preset to all followed tags") }}</button>
-      </form>
+      {# The retroactive fill button that used to sit here (Task 3) now lives
+         in the reduced Following section above, beside the standing-default
+         display it explains -- Task 4. #}
       <details class="fold" {% if not presets %}open{% endif %}>
         <summary>{{ _("New preset") }}</summary>
         <div class="fold-body">
