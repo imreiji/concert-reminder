@@ -1,10 +1,13 @@
 # WISHLIST.md
 
 Every potential feature raised in roadmap and UX discussions, ordered by
-user impact (highest first). Maintained per the "Feature wishlist" section
-in CLAUDE.md: fully re-evaluated and re-ranked every time a feature ships.
-Each entry notes impact and effort so re-ranking has a basis. Shipped and
-rejected ideas move to the bottom sections instead of being deleted.
+user impact (highest first). Maintained per CLAUDE.md's "Feature wishlist,
+and the two files a shipped feature updates": fully re-evaluated and
+re-ranked every time a feature ships, in the PR that ships it. `README.md`
+is the other of the two -- one user-facing line per shipped feature -- and
+it is the one that rots silently, so update it in the same breath as this
+file. Each entry notes impact and effort so re-ranking has a basis. Shipped
+and rejected ideas move to the bottom sections instead of being deleted.
 
 Two 2026-07-21 builds landed without having been Proposed entries here --
 the mobile parity retrofit (bottom tab bar, FAB, swipeable board, filter

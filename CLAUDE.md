@@ -135,18 +135,36 @@ undo.
   implementation plans; substantial features commit one of each before code.
   `docs/codebase-review-2026-07-17.md` records a full-codebase review.
 
-## Feature wishlist
+## Feature wishlist, and the two files a shipped feature updates
 
 `WISHLIST.md` (repo root) tracks every potential feature raised in
 roadmap/UX discussions, ordered by user impact (highest first), with
 impact + effort noted per entry. Read it before any feature-planning or
-roadmap discussion. Every time a new feature is pushed: move the shipped
-entry to its Shipped section (with the date), then do a full revision
-pass over the remaining entries — re-rank by impact and reconsider which
-are still useful, since a shipped feature can raise, lower, or obsolete
-others. Append new ideas from any discussion with their date and context;
-move rejected ideas to the Rejected section with the reason instead of
-deleting them.
+roadmap discussion.
+
+**Every feature updates BOTH files, in the PR that ships it** — not in a
+later sweep. A PR that changes what a user can do and touches neither file
+is incomplete:
+
+- `WISHLIST.md` — move the shipped entry to its Shipped section (with the
+  date), then do a full revision pass over the remaining entries: re-rank by
+  impact and reconsider which are still useful, since a shipped feature can
+  raise, lower, or obsolete others. Append new ideas from any discussion with
+  their date and context; move rejected ideas to the Rejected section with
+  the reason instead of deleting them.
+- `README.md` — one line appended to the "Shipped since Phase 12" list, in
+  merge order, in the same voice as its neighbours: what a USER can now do,
+  and what it cost or closed. Not which modules moved — that is
+  `docs/architecture.md`'s job. Write it from the PR's own description.
+
+Both, every time, because **the README is the one that rots silently.**
+WISHLIST was maintained per-feature for months while the README quietly fell
+seven features behind — `#144` through `#154`, back to the agent read API —
+purely because nothing in this ritual named it (caught and repaired
+2026-08-13, PR #155). Nothing fails when the README is stale: no test reads
+it, CI is happy, and it is the only public description of what this app
+does. If you notice at merge time that a PR missed its line, add it then
+rather than assuming a later pass will.
 
 ## Non-negotiable invariants
 
