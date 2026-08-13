@@ -30,12 +30,16 @@ from app.db.models import (
     ConcertDay,
     ConcertTag,
     ReminderPreset,
+    ReminderQueue,
+    ReminderRule,
+    Round,
     Tag,
     TagSubscription,
     User,
 )
+from app.db.service import sync_rule
 from app.db.session import get_session
-from app.domain.types import TagKind
+from app.domain.types import Anchor, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -148,19 +152,31 @@ async def seed(db) -> SimpleNamespace:
         stranger_sub = TagSubscription(user_id=USER_B, tag_id=stranger_tag.id,
                                        preset_id=theirs.id, notify=True)
         s.add_all([linked, bare, stranger_sub])
-        concert = Concert(title="Big show", event_id="big-show", created_by=USER_A)
-        s.add(concert)
+        # TWO concerts on `linked_tag`, one past and one future, so its pair of
+        # counts is ASYMMETRIC -- 2 events, 1 upcoming. With a symmetric (1, 1)
+        # the dialog's two numbers can be swapped for each other in the template
+        # with nothing failing (found in review, 2026-08-12, by swapping them).
+        upcoming = Concert(title="Big show", event_id="big-show", created_by=USER_A)
+        past = Concert(title="Old show", event_id="old-show", created_by=USER_A)
+        s.add_all([upcoming, past])
         await s.flush()
+        round_ = Round(concert_id=upcoming.id, kind=RoundKind.LOTTERY_ROUND, label="Round 1",
+                       closes_at_utc=datetime.now(UTC) + timedelta(days=30))
+        s.add(round_)
         s.add_all([
-            ConcertTag(concert_id=concert.id, tag_id=linked_tag.id),
-            ConcertDay(concert_id=concert.id, label="Day 1",
+            ConcertTag(concert_id=upcoming.id, tag_id=linked_tag.id),
+            ConcertTag(concert_id=past.id, tag_id=linked_tag.id),
+            ConcertDay(concert_id=upcoming.id, label="Day 1",
                        starts_at_utc=datetime.now(UTC) + timedelta(days=60)),
+            ConcertDay(concert_id=past.id, label="Day 1",
+                       starts_at_utc=datetime.now(UTC) - timedelta(days=60)),
         ])
         await s.commit()
         return SimpleNamespace(
             linked_tag=linked_tag.id, bare_tag=bare_tag.id,
             linked=linked.id, bare=bare.id, stranger_sub=stranger_sub.id,
             standard=standard.id, heavy=heavy.id, theirs=theirs.id,
+            concert=upcoming.id, round=round_.id,
         )
 
 
@@ -246,18 +262,24 @@ async def test_the_notify_box_reflects_the_stored_flag(client):
 
 async def test_the_dialog_states_this_tag_s_event_counts(client):
     """The context line, so the decision needs no second page. `linked_tag`
-    carries one concert with a future leg; `bare_tag` carries none, and the two
-    dialogs must not show the same numbers.
+    carries TWO concerts of which ONE is still upcoming; `bare_tag` carries
+    none.
 
-    Mutation: passing the whole map's totals (or the head's `followed_count`)
-    instead of `tag_counts.get(t.id)` gives every dialog the same pair.
+    The asymmetry is the test. Mutations: passing the whole map's totals (or
+    the head's `followed_count`) instead of `tag_counts.get(t.id)` gives every
+    dialog the same pair -- and SWAPPING `counts[0]` with `counts[1]` in the
+    template, which a symmetric (1, 1) seed could not see at all (found in
+    review, 2026-08-12: the swap left 30 tests green).
     """
     ids = await seed(client.db)
     login_as(client, USER_A, "reiji")
     html = client.get("/following").text
     linked = dialog_for(html, ids.linked)
-    assert "<b>1</b> event" in linked
+    assert "<b>2</b> events" in linked
     assert "1 upcoming" in linked
+    # And not the other way round, which is the whole point of seeding 2 vs 1.
+    assert "<b>1</b> event<" not in linked
+    assert "2 upcoming" not in linked
     bare = dialog_for(html, ids.bare)
     assert "<b>0</b> events" in bare
     assert "0 upcoming" in bare
@@ -321,17 +343,28 @@ async def test_the_chip_opens_its_dialog_through_dataset(client):
 
     Mutation: `onclick="document.getElementById('follow-dialog-{{ f.sub_id }}')
     .showModal()"` on the chip -- which works perfectly and is exactly the
-    pattern this codebase forbids. Asserted on the CHIP element (scoped by
-    data-tag-id, the attribute only chips carry), not on the page: the page
-    legitimately holds on* attributes in base.html's chrome.
+    pattern this codebase forbids. There is no repo-wide inline-on* sweep
+    (test_xss_escaping.py covers only the picker's `| tojson`), so this test is
+    the only guard on this page.
+
+    It scopes to the WHOLE chip and the WHOLE dialog, and matches any `on*`
+    attribute rather than the string "onclick". The first version sliced only
+    the attributes BEFORE `data-tag-id` and never looked at the dialog at all:
+    review put an `onclick` one attribute later and all 18 tests passed. Both
+    halves are needed -- the dialog's own buttons carry the same id and are
+    exactly where an interpolated handler would be reached for next.
     """
     ids = await seed(client.db)
     login_as(client, USER_A, "reiji")
     html = client.get("/following").text
-    anchor = html.index(f'data-tag-id="{ids.linked_tag}"')
-    chip = html[html.rindex("<span", 0, anchor) : anchor]
-    assert "onclick" not in chip
+    chip = chip_for(html, ids.linked_tag)
+    assert re.search(r"\son[a-z]+=", chip) is None, chip
     assert f'data-sub-id="{ids.linked}"' in chip
+    dlg = dialog_for(html, ids.linked)
+    assert re.search(r"\son[a-z]+=", dlg) is None, dlg
+    # The close controls really are there -- so "no on* attribute" is not
+    # passing because the buttons are missing.
+    assert dlg.count(f'data-close="follow-dialog-{ids.linked}"') == 2
 
 
 # ── POST /subscriptions/{id}/settings ────────────────────────────────────
@@ -375,6 +408,11 @@ async def test_a_preset_the_viewer_does_not_own_is_refused(client):
     """`owned_preset` 404s, and -- the part that matters -- the row is left
     exactly as it was. Mutation: dropping the `owned_preset` call links USER_B's
     preset to USER_A's subscription, which no later render would question.
+
+    The owned preset is posted straight after, for the reason the module
+    docstring gives: a 404 from an ownership check and a 404 from a route that
+    does not exist are byte-identical, so the refusal alone proves only that
+    SOMETHING said no.
     """
     ids = await seed(client.db)
     login_as(client, USER_A, "reiji")
@@ -383,6 +421,11 @@ async def test_a_preset_the_viewer_does_not_own_is_refused(client):
     assert r.status_code == 404
     row = await sub_row(client.db, ids.linked)
     assert row.preset_id == ids.heavy
+
+    mine = client.post(f"/subscriptions/{ids.linked}/settings",
+                       data={"preset_id": ids.standard, "next": "/following"})
+    assert mine.status_code == 303
+    assert (await sub_row(client.db, ids.linked)).preset_id == ids.standard
 
 
 async def test_another_user_s_subscription_404s_and_is_untouched(client):
@@ -508,21 +551,38 @@ async def test_the_settings_route_leaves_the_reminder_queue_alone(client):
     """No resync, deliberately: `notify` is only the new-event DM notice and
     `preset_id` is what future matching events get -- neither is a rule already
     planned (invariant 2). This pins that the route does not quietly grow one,
-    which would make a preset change rewrite already-planned reminders.
-    """
-    from app.db.models import ReminderRule
-    from app.domain.types import Anchor
+    which would make a preset change rewrite reminders already in the outbox.
 
+    It asserts on `reminder_queue`, and it asserts on a queue that is actually
+    POPULATED -- both learned in review, 2026-08-12. The first version counted
+    `ReminderRule` rows, but `reinstate_user_rules` documents that it never
+    deletes or recreates a rule, so the very mutation this test names was
+    invisible to it by construction: a body that deleted every one of this
+    user's queue rows left all 18 tests green. It was worse than that -- the
+    rule was inserted raw, without `sync_rule`, so the fixture held ZERO queue
+    rows and a correctly-aimed assertion would still have been vacuous.
+    """
     ids = await seed(client.db)
     async with client.db() as s:
-        concert = (await s.execute(select(Concert))).scalars().first()
-        s.add(ReminderRule(user_id=USER_A, concert_id=concert.id,
-                           anchor=Anchor.CLOSES, offset_days=-3, offset_hours=0))
+        rule = ReminderRule(user_id=USER_A, concert_id=ids.concert,
+                            anchor=Anchor.CLOSES, offset_days=-3, offset_hours=0)
+        s.add(rule)
+        await s.flush()
+        await sync_rule(s, rule)
         await s.commit()
+
+    async def queue_snapshot():
+        async with client.db() as s:
+            return sorted(
+                (q.id, q.rule_id, q.round_id, q.fire_at_utc, q.sent_at_utc)
+                for q in (await s.execute(select(ReminderQueue))).scalars()
+            )
+
+    before = await queue_snapshot()
+    assert before, "fixture planned no reminders -- the assertion below is vacuous"
+
     login_as(client, USER_A, "reiji")
-    client.post(f"/subscriptions/{ids.linked}/settings",
-                data={"preset_id": ids.standard, "next": "/following"})
-    async with client.db() as s:
-        rules = list((await s.execute(select(ReminderRule))).scalars())
-    assert len(rules) == 1
-    assert rules[0].offset_days == -3
+    r = client.post(f"/subscriptions/{ids.linked}/settings",
+                    data={"preset_id": ids.standard, "next": "/following"})
+    assert r.status_code == 303
+    assert await queue_snapshot() == before

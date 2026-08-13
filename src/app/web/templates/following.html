@@ -107,11 +107,8 @@
     follows nothing renders no dialogs and no empty <dialog> shells.
 
     NO local backdrop-close handler: base.html's global one is drag-safe (it
-    closes only when pointerdown and click agree on the target), and the naive
-    local check -- the click target being the dialog itself -- shipped the
-    drag-out-closes bug twice. A sweep test forbids it, and it matches on the
-    literal source text, so do not quote the offending expression here either.
-    -#}
+    closes only when pointerdown and click agree on the target), and a local
+    `e.target === dlg` shipped the drag-out-closes bug twice. -#}
 {% macro follow_dialog(f) %}
 {%- set t = f.tag -%}
 {%- set counts = tag_counts.get(t.id, (0, 0)) -%}
@@ -164,8 +161,12 @@
     <button class="btn" form="follow-settings-{{ f.sub_id }}">{{ _("Save") }}</button>
     <button class="btn quiet" type="button" data-close="follow-dialog-{{ f.sub_id }}">{{ _("Cancel") }}</button>
     {#- A SIBLING form, never nested inside the settings form (invalid HTML, and
-        it silently breaks the outer submit). Pushed to the far end by .dfend. -#}
-    <form class="dfend" method="post" action="/subscriptions/{{ f.sub_id }}/delete">
+        it silently breaks the outer submit). It is pushed to the far end of the
+        footer by `.df form:last-child { margin-left: auto }`, which every
+        dialog footer in the app already uses -- LAST child, so if a second form
+        is ever added here it takes the push and this one joins the left group.
+        Read that rule's comment before scoping a copy to one form. -#}
+    <form method="post" action="/subscriptions/{{ f.sub_id }}/delete">
       <input type="hidden" name="next" value="/following">
       <button class="btn warn">{{ _("Unfollow") }}</button>
     </form>
