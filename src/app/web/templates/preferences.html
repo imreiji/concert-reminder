@@ -66,8 +66,15 @@
     </p>
 
     <div class="statline" style="margin-bottom:1rem">
+      {# "followed" (TAGS) and "tracked" (CONCERTS) are deliberately different
+         words -- the pill counts subscriptions, the clock counts concerts,
+         and with the picker/subrows gone these two numbers now sit on one
+         line with nothing between them. Reusing "followed" for both read as
+         a contradiction (two different numbers, same word) and was worse in
+         ja/zh, where both rendered as フォロー中/关注 -- "tracked" already
+         has its own distinct translation (home.html's "events tracked"). #}
       <span class="pill p-ok">{% trans sub_count=followed_count %}{{ sub_count }} tags followed{% endtrans %}</span>
-      <span class="clock">{% trans tracked=tracked_count, upcoming=upcoming_count, pruned=pruned_concerts | length %}{{ tracked }} followed &middot; {{ upcoming }} upcoming
+      <span class="clock">{% trans tracked=tracked_count, upcoming=upcoming_count, pruned=pruned_concerts | length %}{{ tracked }} tracked &middot; {{ upcoming }} upcoming
         &middot; {{ pruned }} skipped{% endtrans %}</span>
       <span class="clock"><a class="more" href="/following">{{ _("Manage →") }}</a></span>
     </div>
@@ -82,12 +89,19 @@
     <div class="statline" style="margin-bottom:1rem">
       {% if default_preset %}
       <span class="pill p-ok" title="{{ _("New follows use this preset, and so does the Discord 'Set my reminders' button.") }}">{% trans name=default_preset.name %}Default preset: {{ name }}{% endtrans %}</span>
-      {% else %}
-      <span class="pill p-quiet">{{ _("No default preset yet") }}</span>
-      {% endif %}
+      {# The fill button is a genuine no-op with no default preset (the route
+         itself no-ops and reports "you have no default preset yet") OR no
+         follows at all (there is nothing a NULL-preset_id row could belong
+         to) -- suppress it in either case rather than offer a press that can
+         only ever confirm nothing happened. #}
+      {% if followed_count %}
       <form method="post" action="/presets/apply-to-following" style="display:contents">
         <button class="act" type="submit">{{ _("Apply my default preset to all followed tags") }}</button>
       </form>
+      {% endif %}
+      {% else %}
+      <span class="pill p-quiet">{{ _("No default preset yet") }}</span>
+      {% endif %}
     </div>
 
     {% if pruned_concerts %}

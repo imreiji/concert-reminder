@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 02:45-0300\n"
+"POT-Creation-Date: 2026-08-13 03:18-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -397,7 +397,7 @@ msgstr "**{name}**はEDITOR_WHITELISTで管理されています。変更する�
 msgid "**{name}** is no longer an editor."
 msgstr "**{name}** はエディターではなくなりました。"
 
-#: src/app/bot/cogs/admin.py:87 src/app/web/templates/preferences.html:410
+#: src/app/bot/cogs/admin.py:87 src/app/web/templates/preferences.html:424
 msgid "No editors yet."
 msgstr "エディターはまだいません。"
 
@@ -475,12 +475,12 @@ msgstr "ルールはまだありません。`/remindme`で作成できます。"
 msgid "round #{n}"
 msgstr "第{n}次受付"
 
-#: src/app/bot/cogs/reminders.py:204 src/app/web/templates/preferences.html:131
+#: src/app/bot/cogs/reminders.py:204 src/app/web/templates/preferences.html:145
 #: src/app/web/templates/welcome.html:149
 msgid "before"
 msgstr "前"
 
-#: src/app/bot/cogs/reminders.py:204 src/app/web/templates/preferences.html:131
+#: src/app/bot/cogs/reminders.py:204 src/app/web/templates/preferences.html:145
 #: src/app/web/templates/welcome.html:149
 msgid "after"
 msgstr "後"
@@ -662,7 +662,7 @@ msgstr "受付{n}の名称"
 #: src/app/web/templates/_venue_create_dialog.html:36
 #: src/app/web/templates/_venue_create_dialog.html:37
 #: src/app/web/templates/_venue_create_dialog.html:39
-#: src/app/web/templates/preferences.html:186
+#: src/app/web/templates/preferences.html:200
 #: src/app/web/templates/tags.html:112 src/app/web/templates/tags.html:114
 #: src/app/web/templates/tags.html:117 src/app/web/templates/tags.html:119
 #: src/app/web/templates/tags.html:391 src/app/web/templates/tags.html:395
@@ -976,7 +976,7 @@ msgid "Your status"
 msgstr "あなたの申込状況"
 
 #: src/app/web/templates/_deadline_rows.html:128
-#: src/app/web/templates/preferences.html:134
+#: src/app/web/templates/preferences.html:148
 msgid "Closes"
 msgstr "締切"
 
@@ -1155,7 +1155,7 @@ msgstr "このイベントのフォローをやめますか？"
 #: src/app/web/templates/_result_capture_dialog.html:25
 #: src/app/web/templates/concert_detail.html:275
 #: src/app/web/templates/home.html:289
-#: src/app/web/templates/preferences.html:380
+#: src/app/web/templates/preferences.html:394
 msgid "Close"
 msgstr "閉じる"
 
@@ -1346,8 +1346,8 @@ msgid "DM &middot; applies to every round above"
 msgstr "DM &middot; 上記すべての受付に適用"
 
 #: src/app/web/templates/_rules.html:22
-#: src/app/web/templates/preferences.html:162
-#: src/app/web/templates/preferences.html:406
+#: src/app/web/templates/preferences.html:176
+#: src/app/web/templates/preferences.html:420
 msgid "Remove"
 msgstr "削除"
 
@@ -1606,7 +1606,7 @@ msgid "Toggle dark mode"
 msgstr "ダークモード切替"
 
 #: src/app/web/templates/base.html:72
-#: src/app/web/templates/preferences.html:240
+#: src/app/web/templates/preferences.html:254
 #: src/app/web/templates/welcome.html:377
 msgid "Language"
 msgstr "言語"
@@ -2302,8 +2302,8 @@ msgid "DM me when a new matching event appears"
 msgstr "条件に合う新しいイベントが追加されたらDMで通知"
 
 #: src/app/web/templates/following.html:161
-#: src/app/web/templates/preferences.html:160
-#: src/app/web/templates/preferences.html:213
+#: src/app/web/templates/preferences.html:174
+#: src/app/web/templates/preferences.html:227
 #: src/app/web/templates/tags.html:200
 msgid "Save"
 msgstr "保存"
@@ -2897,7 +2897,7 @@ msgid ""
 msgstr "変更はありません — デフォルトプリセットがまだありません。まず、いずれかのプリセットをデフォルトに設定してください。"
 
 #: src/app/web/templates/preferences.html:45
-#: src/app/web/templates/preferences.html:119
+#: src/app/web/templates/preferences.html:133
 #: src/app/web/templates/setup.html:11 src/app/web/templates/welcome.html:8
 msgid "Reminders"
 msgstr "リマインダー"
@@ -2907,22 +2907,22 @@ msgid "Time"
 msgstr "時刻"
 
 #: src/app/web/templates/preferences.html:47
-#: src/app/web/templates/preferences.html:255
+#: src/app/web/templates/preferences.html:269
 msgid "Delivery"
 msgstr "配信"
 
 #: src/app/web/templates/preferences.html:48
-#: src/app/web/templates/preferences.html:312
+#: src/app/web/templates/preferences.html:326
 msgid "API access"
 msgstr "APIアクセス"
 
 #: src/app/web/templates/preferences.html:49
-#: src/app/web/templates/preferences.html:348
+#: src/app/web/templates/preferences.html:362
 msgid "Account"
 msgstr "アカウント"
 
 #: src/app/web/templates/preferences.html:50
-#: src/app/web/templates/preferences.html:396
+#: src/app/web/templates/preferences.html:410
 msgid "Editors"
 msgstr "エディター"
 
@@ -2933,461 +2933,461 @@ msgid ""
 " page."
 msgstr "タグをフォローすると、そのタグが付いた<b>今後のすべてのイベント</b>が追加されます。フォロー中のタグ、通知、タグごとのプリセットの管理は「フォロー中」ページで行えます。"
 
-#: src/app/web/templates/preferences.html:69
+#: src/app/web/templates/preferences.html:76
 #, python-format
 msgid "%(sub_count)s tags followed"
 msgstr "%(sub_count)s件のタグをフォロー中"
 
-#: src/app/web/templates/preferences.html:70
+#: src/app/web/templates/preferences.html:77
 #, python-format
 msgid ""
-"%(tracked)s followed &middot; %(upcoming)s upcoming\n"
+"%(tracked)s tracked &middot; %(upcoming)s upcoming\n"
 "        &middot; %(pruned)s skipped"
-msgstr "%(tracked)s件をフォロー中 &middot; 今後のイベント%(upcoming)s件 &middot; スキップ%(pruned)s件"
+msgstr "%(tracked)s件を追跡中 &middot; 今後のイベント%(upcoming)s件 &middot; スキップ%(pruned)s件"
 
-#: src/app/web/templates/preferences.html:72
+#: src/app/web/templates/preferences.html:79
 msgid "Manage →"
 msgstr "管理 →"
 
-#: src/app/web/templates/preferences.html:84
-#: src/app/web/templates/preferences.html:146
+#: src/app/web/templates/preferences.html:91
+#: src/app/web/templates/preferences.html:160
 msgid ""
 "New follows use this preset, and so does the Discord 'Set my reminders' "
 "button."
 msgstr "新しくフォローしたタグにはこのプリセットが使われ、Discordの「リマインダーを設定」ボタンでも同じプリセットが適用されます。"
 
-#: src/app/web/templates/preferences.html:84
+#: src/app/web/templates/preferences.html:91
 #, python-format
 msgid "Default preset: %(name)s"
 msgstr "デフォルトプリセット: %(name)s"
 
-#: src/app/web/templates/preferences.html:86
-msgid "No default preset yet"
-msgstr "デフォルトプリセットはまだありません"
-
-#: src/app/web/templates/preferences.html:89
+#: src/app/web/templates/preferences.html:99
 msgid "Apply my default preset to all followed tags"
 msgstr "フォロー中のすべてのタグにデフォルトプリセットを適用"
 
-#: src/app/web/templates/preferences.html:95
+#: src/app/web/templates/preferences.html:103
+msgid "No default preset yet"
+msgstr "デフォルトプリセットはまだありません"
+
+#: src/app/web/templates/preferences.html:109
 msgid "Skipped events"
 msgstr "スキップしたイベント"
 
-#: src/app/web/templates/preferences.html:96
+#: src/app/web/templates/preferences.html:110
 msgid ""
 "These are events you stopped following one at a time. Add one back to use"
 " its tag settings again."
 msgstr "個別にフォローを解除したイベントです。もう一度追加すると、タグの設定が再び適用されます。"
 
-#: src/app/web/templates/preferences.html:108
+#: src/app/web/templates/preferences.html:122
 msgid "Restore to the tag default"
 msgstr "タグのデフォルト設定に戻す"
 
-#: src/app/web/templates/preferences.html:108
+#: src/app/web/templates/preferences.html:122
 msgid "Restore"
 msgstr "復元"
 
-#: src/app/web/templates/preferences.html:121
+#: src/app/web/templates/preferences.html:135
 msgid ""
 "A preset is a group of reminder rules for events you follow. If you "
 "change the rules for one event, those rules are used instead."
 msgstr "プリセットは、フォロー中のイベントに使うリマインダー設定のセットです。個別のイベントで設定を変更した場合は、そちらが使われます。"
 
-#: src/app/web/templates/preferences.html:134
+#: src/app/web/templates/preferences.html:148
 msgid "Opens"
 msgstr "受付開始"
 
-#: src/app/web/templates/preferences.html:134
+#: src/app/web/templates/preferences.html:148
 msgid "Results"
 msgstr "当落発表"
 
-#: src/app/web/templates/preferences.html:134
+#: src/app/web/templates/preferences.html:148
 msgid "Payment"
 msgstr "入金"
 
-#: src/app/web/templates/preferences.html:134
+#: src/app/web/templates/preferences.html:148
 msgid "Event start"
 msgstr "開演"
 
-#: src/app/web/templates/preferences.html:136
+#: src/app/web/templates/preferences.html:150
 #, python-brace-format
 msgid "Remind me {days} day(s) {hours} hour(s) {direction} each {anchor}."
 msgstr "各{anchor}の{days}日{hours}時間{direction}に通知。"
 
-#: src/app/web/templates/preferences.html:144
+#: src/app/web/templates/preferences.html:158
 msgid "Rename"
 msgstr "名前を変更"
 
-#: src/app/web/templates/preferences.html:146
+#: src/app/web/templates/preferences.html:160
 msgid "Default"
 msgstr "デフォルト"
 
-#: src/app/web/templates/preferences.html:148
+#: src/app/web/templates/preferences.html:162
 msgid "Make this the preset new follows and the Discord button use"
 msgstr "新しいフォローとDiscordボタンの両方で使うプリセットに設定"
 
-#: src/app/web/templates/preferences.html:148
+#: src/app/web/templates/preferences.html:162
 msgid "Make default"
 msgstr "デフォルトにする"
 
-#: src/app/web/templates/preferences.html:151
+#: src/app/web/templates/preferences.html:165
 msgid "Delete preset"
 msgstr "プリセットを削除"
 
-#: src/app/web/templates/preferences.html:151
+#: src/app/web/templates/preferences.html:165
 msgid "Delete"
 msgstr "削除"
 
-#: src/app/web/templates/preferences.html:162
+#: src/app/web/templates/preferences.html:176
 msgid "Remove rule"
 msgstr "ルールを削除"
 
-#: src/app/web/templates/preferences.html:166
+#: src/app/web/templates/preferences.html:180
 msgid "Add a rule"
 msgstr "ルールを追加"
 
-#: src/app/web/templates/preferences.html:170
+#: src/app/web/templates/preferences.html:184
 msgid "Add rule"
 msgstr "ルールを追加"
 
-#: src/app/web/templates/preferences.html:178
+#: src/app/web/templates/preferences.html:192
 msgid ""
 "Presets apply to future events. Existing ones keep the rules they already"
 " have."
 msgstr "プリセットは今後のイベントに適用されます。既存のイベントには、現在のルールがそのまま残ります。"
 
-#: src/app/web/templates/preferences.html:183
+#: src/app/web/templates/preferences.html:197
 msgid "New preset"
 msgstr "新規プリセット"
 
-#: src/app/web/templates/preferences.html:186
+#: src/app/web/templates/preferences.html:200
 msgid "standard lottery coverage"
 msgstr "標準の抽選リマインダー"
 
-#: src/app/web/templates/preferences.html:188
+#: src/app/web/templates/preferences.html:202
 msgid "Create preset"
 msgstr "プリセットを作成"
 
-#: src/app/web/templates/preferences.html:189
+#: src/app/web/templates/preferences.html:203
 msgid "Created with this first rule — add more after."
 msgstr "最初のルールを使って作成します。ルールは後から追加できます。"
 
-#: src/app/web/templates/preferences.html:198
+#: src/app/web/templates/preferences.html:212
 msgid "Time & language"
 msgstr "時刻と言語"
 
-#: src/app/web/templates/preferences.html:199
+#: src/app/web/templates/preferences.html:213
 msgid "Every deadline shows JST first, then yours. This sets the second one."
 msgstr "すべての締切には、JSTに続けて現地時刻を表示します。ここでは現地時刻のタイムゾーンを設定します。"
 
-#: src/app/web/templates/preferences.html:204
+#: src/app/web/templates/preferences.html:218
 #: src/app/web/templates/welcome.html:334
 msgid "Your timezone"
 msgstr "現地のタイムゾーン"
 
-#: src/app/web/templates/preferences.html:206
+#: src/app/web/templates/preferences.html:220
 #: src/app/web/templates/welcome.html:336
 msgid "Common"
 msgstr "よく使うタイムゾーン"
 
-#: src/app/web/templates/preferences.html:209
+#: src/app/web/templates/preferences.html:223
 #: src/app/web/templates/welcome.html:339
 msgid "All zones (IANA)"
 msgstr "すべてのゾーン（IANA）"
 
-#: src/app/web/templates/preferences.html:220
+#: src/app/web/templates/preferences.html:234
 #: src/app/web/templates/welcome.html:345
 msgid "Detection"
 msgstr "検出"
 
-#: src/app/web/templates/preferences.html:221
+#: src/app/web/templates/preferences.html:235
 #: src/app/web/templates/welcome.html:346
 msgid "Timezone detection mode"
 msgstr "タイムゾーン検出モード"
 
-#: src/app/web/templates/preferences.html:222
+#: src/app/web/templates/preferences.html:236
 #: src/app/web/templates/welcome.html:347
 msgid "Follow my browser"
 msgstr "ブラウザの設定に合わせる"
 
-#: src/app/web/templates/preferences.html:223
+#: src/app/web/templates/preferences.html:237
 #: src/app/web/templates/welcome.html:348
 msgid "Keep what I picked"
 msgstr "選択した設定を使う"
 
-#: src/app/web/templates/preferences.html:232
+#: src/app/web/templates/preferences.html:246
 #, python-format
 msgid "Detected <b>%(tz)s</b> from your browser."
 msgstr "ブラウザから<b>%(tz)s</b>を検出しました。"
 
-#: src/app/web/templates/preferences.html:232
+#: src/app/web/templates/preferences.html:246
 #, python-format
 msgid "Using <b>%(tz)s</b>."
 msgstr "<b>%(tz)s</b>を使用中。"
 
-#: src/app/web/templates/preferences.html:233
+#: src/app/web/templates/preferences.html:247
 #, python-format
 msgid "Right now that reads <span class=\"num\">%(tz_preview)s</span>."
 msgstr "現在の表示は<span class=\"num\">%(tz_preview)s</span>です。"
 
-#: src/app/web/templates/preferences.html:256
+#: src/app/web/templates/preferences.html:270
 msgid "Where reminders actually arrive."
 msgstr "リマインダーの送信先を設定します。"
 
-#: src/app/web/templates/preferences.html:262
+#: src/app/web/templates/preferences.html:276
 msgid "Discord DMs blocked"
 msgstr "DiscordのDMがブロックされています"
 
-#: src/app/web/templates/preferences.html:263
+#: src/app/web/templates/preferences.html:277
 msgid "Check your Discord privacy settings to allow DMs from server members."
 msgstr "サーバーメンバーからのDMを許可するよう、Discordのプライバシー設定を確認してください。"
 
-#: src/app/web/templates/preferences.html:265
+#: src/app/web/templates/preferences.html:279
 msgid "Discord DMs reaching you"
 msgstr "DiscordのDMを受信できます"
 
-#: src/app/web/templates/preferences.html:268
+#: src/app/web/templates/preferences.html:282
 #: src/app/web/templates/welcome.html:403
 msgid "Send a test DM"
 msgstr "テストDMを送信"
 
-#: src/app/web/templates/preferences.html:271
+#: src/app/web/templates/preferences.html:285
 msgid "Bot not running here (dev mode) — DMs can't be tested."
 msgstr "ここではボットが稼働していません（開発モード）— DMをテストできません。"
 
-#: src/app/web/templates/preferences.html:279
+#: src/app/web/templates/preferences.html:293
 msgid "Calendar feed active"
 msgstr "カレンダーフィードが有効"
 
-#: src/app/web/templates/preferences.html:280
+#: src/app/web/templates/preferences.html:294
 msgid "Your shows and the deadlines that still need you, always current."
 msgstr "フォロー中の公演と、まだ対応が必要な締切を常に最新で。"
 
-#: src/app/web/templates/preferences.html:282
+#: src/app/web/templates/preferences.html:296
 msgid "No calendar feed"
 msgstr "カレンダーフィードなし"
 
-#: src/app/web/templates/preferences.html:293
+#: src/app/web/templates/preferences.html:307
 msgid ""
 "Your current feed link will stop working. Add the new link to your "
 "calendar app."
 msgstr "現在のフィードリンクは使えなくなります。新しいリンクをカレンダーアプリに追加してください。"
 
-#: src/app/web/templates/preferences.html:294
+#: src/app/web/templates/preferences.html:308
 msgid "Generate a new one"
 msgstr "新しく生成する"
 
-#: src/app/web/templates/preferences.html:297
+#: src/app/web/templates/preferences.html:311
 #: src/app/web/templates/welcome.html:452
 msgid "Generate feed link"
 msgstr "フィードリンクを生成"
 
-#: src/app/web/templates/preferences.html:300
+#: src/app/web/templates/preferences.html:314
 msgid ""
 "Creating a new link makes the old one stop working right away. Anyone "
 "using the old link will stop getting updates."
 msgstr "新しいリンクを作成すると、古いリンクはすぐに使えなくなります。古いリンクを使っている人には更新が届かなくなります。"
 
-#: src/app/web/templates/preferences.html:313
+#: src/app/web/templates/preferences.html:327
 msgid "A personal token so an agent can read your data over the API."
 msgstr "エージェントがAPI経由でデータを読み取るための個人用トークンです。"
 
-#: src/app/web/templates/preferences.html:317
+#: src/app/web/templates/preferences.html:331
 msgid "API token active"
 msgstr "APIトークン有効"
 
-#: src/app/web/templates/preferences.html:318
+#: src/app/web/templates/preferences.html:332
 msgid "Read-only access to your concerts and drafts, scoped to your account."
 msgstr "あなたのアカウントに限定した、コンサートと下書きへの読み取り専用アクセスです。"
 
-#: src/app/web/templates/preferences.html:320
+#: src/app/web/templates/preferences.html:334
 msgid "No API token"
 msgstr "APIトークンなし"
 
-#: src/app/web/templates/preferences.html:327
+#: src/app/web/templates/preferences.html:341
 msgid "Your API token is ready — save it now, it won't be shown again."
 msgstr "APIトークンを作成しました。今すぐ保存してください。この画面には再表示されません。"
 
-#: src/app/web/templates/preferences.html:330
+#: src/app/web/templates/preferences.html:344
 msgid "Copy token"
 msgstr "トークンをコピー"
 
-#: src/app/web/templates/preferences.html:338
+#: src/app/web/templates/preferences.html:352
 msgid ""
 "Your current token will stop working. Any agent using it will need the "
 "new one."
 msgstr "現在のトークンは使えなくなります。これを使っているエージェントには新しいトークンが必要です。"
 
-#: src/app/web/templates/preferences.html:339
+#: src/app/web/templates/preferences.html:353
 msgid "Generate a new token"
 msgstr "新しいトークンを生成する"
 
-#: src/app/web/templates/preferences.html:342
+#: src/app/web/templates/preferences.html:356
 msgid "Generate API token"
 msgstr "APIトークンを生成"
 
-#: src/app/web/templates/preferences.html:349
+#: src/app/web/templates/preferences.html:363
 #, python-format
 msgid "Signed in with Discord as <b>%(username)s</b>."
 msgstr "Discordで<b>%(username)s</b>としてサインイン中。"
 
-#: src/app/web/templates/preferences.html:356
+#: src/app/web/templates/preferences.html:370
 msgid "Re-run first-time setup"
 msgstr "初回セットアップを再実行"
 
-#: src/app/web/templates/preferences.html:357
+#: src/app/web/templates/preferences.html:371
 msgid ""
 "Review your events again. Turn off any you are not going to, and mark the"
 " rounds you have already applied to. Your current choices stay selected."
 msgstr "イベントをもう一度確認します。参加しないイベントはオフにし、申込済みの受付を記録できます。現在の選択内容はそのまま引き継がれます。"
 
-#: src/app/web/templates/preferences.html:359
+#: src/app/web/templates/preferences.html:373
 msgid "Run setup"
 msgstr "セットアップを実行"
 
-#: src/app/web/templates/preferences.html:370
-#: src/app/web/templates/preferences.html:387
+#: src/app/web/templates/preferences.html:384
+#: src/app/web/templates/preferences.html:401
 msgid "Delete my account"
 msgstr "アカウントを削除"
 
-#: src/app/web/templates/preferences.html:371
+#: src/app/web/templates/preferences.html:385
 msgid ""
 "Your reminders, subscriptions, and settings are deleted. Events and tags "
 "you created stay, but your name is removed from them."
 msgstr "リマインダー、フォロー、設定は削除されます。作成したイベントとタグは残りますが、作成者名は削除されます。"
 
-#: src/app/web/templates/preferences.html:375
+#: src/app/web/templates/preferences.html:389
 msgid "Delete account"
 msgstr "アカウントを削除"
 
-#: src/app/web/templates/preferences.html:379
+#: src/app/web/templates/preferences.html:393
 msgid "Delete your account?"
 msgstr "アカウントを削除しますか？"
 
-#: src/app/web/templates/preferences.html:382
+#: src/app/web/templates/preferences.html:396
 msgid ""
 "Your reminders, subscriptions, and settings will be deleted. Events and "
 "tags you created will stay, but your name will be removed from them. You "
 "cannot undo this."
 msgstr "リマインダー、フォロー、設定は削除されます。作成したイベントとタグは残りますが、作成者名は削除されます。この操作は元に戻せません。"
 
-#: src/app/web/templates/preferences.html:385
+#: src/app/web/templates/preferences.html:399
 msgid "Keep my account"
 msgstr "アカウントを削除しない"
 
-#: src/app/web/templates/preferences.html:396
-#: src/app/web/templates/preferences.html:423
+#: src/app/web/templates/preferences.html:410
+#: src/app/web/templates/preferences.html:437
 msgid "admin only"
 msgstr "管理者のみ"
 
-#: src/app/web/templates/preferences.html:397
+#: src/app/web/templates/preferences.html:411
 msgid ""
 "These Discord users can create and edit events, rounds, and tags. Editors"
 " listed in <code>EDITOR_WHITELIST</code> must be changed in "
 "<code>.env</code>."
 msgstr "これらのDiscordユーザーは、イベント、受付、タグを作成・編集できます。<code>EDITOR_WHITELIST</code>に登録されているエディターは、<code>.env</code>で変更してください。"
 
-#: src/app/web/templates/preferences.html:403
+#: src/app/web/templates/preferences.html:417
 msgid "from env"
 msgstr "環境変数から"
 
-#: src/app/web/templates/preferences.html:405
+#: src/app/web/templates/preferences.html:419
 msgid "cannot be removed here"
 msgstr "ここでは削除できません"
 
-#: src/app/web/templates/preferences.html:406
+#: src/app/web/templates/preferences.html:420
 msgid "Remove editor"
 msgstr "エディターを削除"
 
-#: src/app/web/templates/preferences.html:413
+#: src/app/web/templates/preferences.html:427
 msgid "Some editors are set on the server and cannot be removed here."
 msgstr "一部のエディターはサーバー側で設定されているため、ここから削除できません。"
 
-#: src/app/web/templates/preferences.html:415
+#: src/app/web/templates/preferences.html:429
 msgid "Discord user ID"
 msgstr "DiscordユーザーID"
 
-#: src/app/web/templates/preferences.html:416
+#: src/app/web/templates/preferences.html:430
 msgid "Add an editor"
 msgstr "エディターを追加"
 
-#: src/app/web/templates/preferences.html:423
+#: src/app/web/templates/preferences.html:437
 msgid "Admin tools"
 msgstr "管理ツール"
 
-#: src/app/web/templates/preferences.html:424
+#: src/app/web/templates/preferences.html:438
 msgid ""
 "Operational pages. They are not linked from the site navigation, so this "
 "is where to find them."
 msgstr "運用向けのページです。サイトのナビゲーションからはリンクされていないため、ここから開いてください。"
 
-#: src/app/web/templates/preferences.html:426
+#: src/app/web/templates/preferences.html:440
 msgid "Deliveries"
 msgstr "配信履歴"
 
-#: src/app/web/templates/preferences.html:427
+#: src/app/web/templates/preferences.html:441
 msgid "Every DM the scheduler attempted, and recent failures."
 msgstr "スケジューラーが送信を試みたすべてのDMと、最近の失敗。"
 
-#: src/app/web/templates/preferences.html:430
+#: src/app/web/templates/preferences.html:444
 msgid "Discoveries"
 msgstr "新着候補"
 
-#: src/app/web/templates/preferences.html:431
+#: src/app/web/templates/preferences.html:445
 msgid ""
 "Performances your artists' Eventernote pages list that the catalogue does"
 " not have."
 msgstr "登録アーティストのEventernoteページに載っていて、カタログにまだない公演。"
 
-#: src/app/web/templates/preferences.html:434
+#: src/app/web/templates/preferences.html:448
 msgid "Quiet ladders"
 msgstr "動きのない受付"
 
-#: src/app/web/templates/preferences.html:435
+#: src/app/web/templates/preferences.html:449
 msgid ""
 "Concerts in the catalogue whose ladder has no deadline left, and whose "
 "show has not happened yet."
 msgstr "カタログ内の公演のうち、締切がもう残っていないのに、公演日がまだ先のもの。"
 
-#: src/app/web/templates/preferences.html:438
+#: src/app/web/templates/preferences.html:452
 msgid "Broadcast"
 msgstr "一斉送信"
 
-#: src/app/web/templates/preferences.html:439
+#: src/app/web/templates/preferences.html:453
 msgid "Message a chosen set of users. Held two minutes so it can be cancelled."
 msgstr "選んだユーザーにメッセージを送ります。2分間保留されるので取り消せます。"
 
-#: src/app/web/templates/preferences.html:442
+#: src/app/web/templates/preferences.html:456
 msgid "Fetch domains"
 msgstr "取得を許可するサイト"
 
-#: src/app/web/templates/preferences.html:443
+#: src/app/web/templates/preferences.html:457
 msgid "Websites the AI draft completion may read pages from."
 msgstr "AIによる下書き補完がページを読み込んでよいウェブサイト。"
 
-#: src/app/web/templates/preferences.html:446
+#: src/app/web/templates/preferences.html:460
 msgid "Export catalogue"
 msgstr "カタログをエクスポート"
 
-#: src/app/web/templates/preferences.html:447
+#: src/app/web/templates/preferences.html:461
 msgid "Every concert and tag as YAML, zipped. No personal data."
 msgstr "すべてのイベントとタグをYAMLでZIP出力します。個人データは含まれません。"
 
-#: src/app/web/templates/preferences.html:450
+#: src/app/web/templates/preferences.html:464
 msgid "Import tags"
 msgstr "タグをインポート"
 
-#: src/app/web/templates/preferences.html:451
+#: src/app/web/templates/preferences.html:465
 msgid ""
 "Restore a tags.yaml from a catalogue export. Existing tags are skipped, "
 "never overwritten."
 msgstr "カタログエクスポートの tags.yaml を復元します。既存のタグはスキップされ、上書きされません。"
 
-#: src/app/web/templates/preferences.html:458
+#: src/app/web/templates/preferences.html:472
 msgid "Rehearsal"
 msgstr "リハーサル"
 
-#: src/app/web/templates/preferences.html:459
+#: src/app/web/templates/preferences.html:473
 msgid ""
 "Local harness: seed a concert, pull its reminders forward, send any DM "
 "shape."

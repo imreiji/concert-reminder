@@ -1,13 +1,16 @@
 """Preferences rebuilt on the demo's vocabulary (Task 8).
 
 The page is a left-rail layout (`.plyt`/`.prail`) whose sections carry the
-demo's component classes: `.subrow`/`.swb` Following toggles, `.presetcard`/
+demo's component classes: a fixed-height Following summary (Following rework
+phase 4, task 4 -- no more per-tag `.subrow`/`.swb` toggles; the surviving
+`.swb` is the skipped-events list's Restore button), `.presetcard`/
 `.ruleline` Reminders, a two-select Time block, Delivery status pills, and a
 `.danger`-framed Account. These tests pin the *markup surface* renders (the
 "every page a logged-in GET render test" rule); the toggle behaviour lives in
 test_preferences_following.py, and the shared token CSS in test_theme_and_tokens.
 """
 
+import re
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -19,6 +22,7 @@ from app.db.models import (
     Concert,
     ConcertDay,
     ConcertTag,
+    ReminderPreset,
     Round,
     Tag,
     TagSubscription,
@@ -64,7 +68,7 @@ def login_as(client, discord_id: int, name: str):
 
 async def seed(db) -> SimpleNamespace:
     """One followed GROUP tag on one upcoming concert, so the Following
-    section has a subrow with a real concert count."""
+    section's tags-followed and concerts-tracked counts are both non-zero."""
     now = datetime.now(UTC)
     async with db() as s:
         s.add(User(discord_id=USER_A, username="reiji"))
@@ -132,17 +136,60 @@ async def test_following_section_reduced_to_count_and_manage_link(client):
     tags-followed pill plus a "Manage" link to /following, both inside the
     p-follow section.
 
+    Follows TWO tags but tracks only ONE concert (seed()'s GROUP tag, plus a
+    second tag matching no concert), so the pill's number and the tracked-
+    concert clock's number differ on purpose. With a single followed tag the
+    two counts would coincide at 1 regardless of which context variable fed
+    which span, and a `followed_count`/`tracked_count` mix-up in the route
+    would pass unnoticed -- reviewer finding, fix round 1.
+
     Mutation: drop the summary pill, or point the link somewhere else --
-    either leaves the section without its stated replacement for the
-    deleted per-tag rows.
+    either leaves the section without its stated replacement for the deleted
+    per-tag rows. Swapping `followed_count` for `tracked_count` in the route
+    (or the reverse) also fails now: the pill would read "1 tags followed"
+    instead of "2".
+    """
+    await seed(client.db)  # 1 followed GROUP tag, 1 tracked concert
+    async with client.db() as s:
+        untracked = Tag(name="Untracked Solo Artist", kind=TagKind.ARTIST)
+        s.add(untracked)
+        await s.flush()
+        s.add(TagSubscription(user_id=USER_A, tag_id=untracked.id))
+        await s.commit()
+    login_as(client, USER_A, "reiji")
+    r = client.get("/preferences")
+    section = _p_follow_section(r.text)
+    assert 'class="pill p-ok"' in section
+    assert "2 tags followed" in section
+    assert "1 tracked" in section  # the concert count, deliberately different
+    assert 'href="/following"' in section
+
+
+async def test_following_section_disambiguates_tracked_from_followed(client):
+    """The pill counts TAGS ("N tags followed"); the tracked-concert clock
+    must use a DIFFERENT word, or the two numbers sit side by side under the
+    same word and read as a contradiction -- reviewer finding 1, fix round 1.
+    Worse in ja/zh before the fix: both spans rendered the identical
+    フォロー中 / 关注.
+
+    Scoped to the specific clock span (the one containing "skipped"), not
+    the whole section -- "followed" legitimately appears elsewhere in
+    p-follow (the pill itself, and the apply button's "all followed tags"),
+    so an unscoped `"followed" not in section` could never pass.
+
+    Mutation: revert the clock span's "tracked" back to "followed" -- the
+    captured span then reads "...followed &middot; ... upcoming...", so
+    `"followed" not in clock_text` fails.
     """
     await seed(client.db)
     login_as(client, USER_A, "reiji")
     r = client.get("/preferences")
     section = _p_follow_section(r.text)
-    assert 'class="pill p-ok"' in section
-    assert "tags followed" in section
-    assert 'href="/following"' in section
+    m = re.search(r'<span class="clock">(.*?skipped.*?)</span>', section, re.S)
+    assert m is not None, "no clock span carries the tracked/upcoming/skipped summary"
+    clock_text = m.group(1)
+    assert "tracked" in clock_text
+    assert "followed" not in clock_text
 
 
 async def test_following_section_has_no_per_tag_subrow_or_toggle(client):
@@ -193,7 +240,6 @@ async def test_following_section_shows_default_preset_and_relocated_apply_button
     drop the default-preset display entirely.
     """
     await seed(client.db)
-    from app.db.models import ReminderPreset
     async with client.db() as s:
         s.add(ReminderPreset(user_id=USER_A, name="Standard cover", is_default=True))
         await s.commit()
@@ -216,6 +262,48 @@ async def test_following_section_default_preset_pill_is_absent_with_no_default(c
     r = client.get("/preferences")
     section = _p_follow_section(r.text)
     assert "No default preset yet" in section
+
+
+async def test_apply_button_suppressed_with_no_default_preset(client):
+    """The fill button is a genuine no-op with no default preset -- the
+    route itself would just report "you have no default preset yet" for the
+    press. Reviewer finding 2, fix round 1: suppress it rather than offer a
+    press that can only ever confirm nothing happened. The row stays
+    non-empty: the "No default preset yet" pill still renders alone.
+
+    Mutation: render the button unconditionally, outside the
+    `{% if default_preset %}` guard -- this fails because the button would
+    then sit beside the "No default preset yet" pill.
+    """
+    await seed(client.db)  # follows a tag; seed() creates no preset at all
+    login_as(client, USER_A, "reiji")
+    r = client.get("/preferences")
+    section = _p_follow_section(r.text)
+    assert "No default preset yet" in section
+    assert 'action="/presets/apply-to-following"' not in section
+
+
+async def test_apply_button_suppressed_with_no_follows(client):
+    """The fill button is also a genuine no-op with zero follows -- there is
+    no preset-less subscription row it could possibly fill. Reviewer finding
+    2, fix round 1. The row stays non-empty: the default-preset pill still
+    renders alone.
+
+    Mutation: drop (or invert) the `{% if followed_count %}` guard around the
+    button -- dropping it fails because the button renders here despite zero
+    follows; inverting it fails the companion test above instead (the button
+    would render with no default preset and vanish with a real one).
+    """
+    async with client.db() as s:
+        s.add(User(discord_id=USER_A, username="reiji"))
+        await s.flush()
+        s.add(ReminderPreset(user_id=USER_A, name="Standard cover", is_default=True))
+        await s.commit()
+    login_as(client, USER_A, "reiji")
+    r = client.get("/preferences")
+    section = _p_follow_section(r.text)
+    assert "Standard cover" in section
+    assert 'action="/presets/apply-to-following"' not in section
 
 
 async def test_delivery_status_pills(client):
