@@ -1170,12 +1170,32 @@ class FollowedTag:
     label -- the label for the None case belongs in the template, where it
     resolves at render time (CLAUDE.md's i18n footgun: a label copied into a
     dataclass resolves at the COPY site).
+
+    The remaining four fields are for the per-subscription DIALOG, not the chip,
+    and each is here rather than re-queried in the route because this function
+    has already paid for it. `sub_id` and `preset_id` are the subscription's
+    IDENTITY and its current value -- the dialog posts to
+    `/subscriptions/{sub_id}/settings` and has to pre-select the right option,
+    neither of which a difference flag can answer. `voiced_by` (this CHARACTER's
+    performer) and `voices` (the CHARACTERS this ARTIST performs) come free off
+    the `by_id` catalogue the ancestry walk already loads; computing them in the
+    route would be a fourth query for a sentence.
+
+    Both directions are carried because the relationship is ASYMMETRIC and that
+    asymmetry is the decision the dialog exists to inform: `attach_tag` attaches
+    a character's seiyuu alongside her (invariant 3), so following the PERFORMER
+    catches character-credited events as well as her own, while following the
+    CHARACTER catches only the former.
     """
 
     tag: Tag
     muted: bool
     preset_deviates: bool
     preset_name: str | None
+    sub_id: int
+    preset_id: int | None
+    voiced_by: Tag | None
+    voices: tuple[Tag, ...]
 
 
 async def followed_tag_families(
@@ -1250,6 +1270,15 @@ async def followed_tag_families(
                 return found
         return None
 
+    # Who voices whom, both ways, off the catalogue already in hand. Built as
+    # one pass over `by_id` rather than a scan per followed tag: a performer may
+    # voice several characters, so the reverse direction is a LIST and one of
+    # them being followed must not hide the others.
+    voices_of: dict[int, list[Tag]] = {}
+    for candidate in by_id.values():
+        if candidate.voiced_by_tag_id:
+            voices_of.setdefault(candidate.voiced_by_tag_id, []).append(candidate)
+
     families: dict[int | None, list[FollowedTag]] = {}
     franchise_by_id: dict[int | None, Tag | None] = {None: None}
     for sub, tag in rows:
@@ -1261,6 +1290,10 @@ async def followed_tag_families(
             muted=not sub.notify,
             preset_deviates=sub.preset_id != default_preset_id,
             preset_name=preset_names.get(sub.preset_id) if sub.preset_id else None,
+            sub_id=sub.id,
+            preset_id=sub.preset_id,
+            voiced_by=by_id.get(tag.voiced_by_tag_id) if tag.voiced_by_tag_id else None,
+            voices=tuple(sorted(voices_of.get(tag.id, []), key=lambda t: t.name)),
         ))
     named = sorted(
         ((franchise_by_id[key], followed) for key, followed in families.items() if key is not None),

@@ -9,6 +9,7 @@
   POST /subscriptions                        subscribe to a tag (+preset, notify)
   POST /subscriptions/unfollow               unfollow BY TAG, idempotent (chips)
   POST /subscriptions/{id}/notify            toggle the per-tag Notify flag
+  POST /subscriptions/{id}/settings          preset + notify together (/following)
   POST /subscriptions/{id}/auto-apply        toggle default-preset auto-apply
   POST /subscriptions/{id}/delete            unfollow BY SUBSCRIPTION ID
   POST /concerts/{event_id}/presets/{pid}/apply   one-click apply (rules fragment swap)
@@ -90,7 +91,12 @@ async def owned_preset(
     return preset
 
 
-_ALLOWED_NEXT = {"/preferences", "/welcome", "/tags"}
+# A CLOSED allowlist of landing pages, not an open-redirect guard (that is
+# `domain/urls.py:safe_next`). Anything absent silently becomes "/preferences",
+# so a page that posts one of these forms and is NOT listed here bounces its
+# reader off itself on every save -- which is exactly what shipped with /tags
+# and lived unnoticed until it was measured. Add the path WITH the surface.
+_ALLOWED_NEXT = {"/preferences", "/welcome", "/tags", "/following"}
 
 
 def _safe_next(next_url: str) -> str:
@@ -342,11 +348,11 @@ async def following_page(
     definition of "what am I tracking" -- `tracked_concert_ids` (invariant 8)
     answers the concert-level question and is untouched by this page.
 
-    `my_presets` is loaded for the per-subscription dialog (Task 4), and
-    `followed_tag_counts` for the head's context line -- one entry per followed
-    tag, so "with an event coming up" is a tally of TAGS, not of concerts, which
-    a sum over the map would double-count for anyone following both a group and
-    its members.
+    `my_presets` and `get_default_preset` fill the per-subscription dialog's
+    preset `<select>`, and `followed_tag_counts` serves BOTH the head's context
+    line and each dialog's -- one entry per followed tag, so "with an event
+    coming up" is a tally of TAGS, not of concerts, which a sum over the map
+    would double-count for anyone following both a group and its members.
     """
     families = await followed_tag_families(session, user.id)
     counts = await followed_tag_counts(session, user.id)
@@ -356,7 +362,7 @@ async def following_page(
         request,
         "following.html",
         {"user": user, "families": families, "presets": presets,
-         "default_preset": default_preset,
+         "default_preset": default_preset, "tag_counts": counts,
          "followed_count": len(counts),
          "live_count": sum(1 for _total, upcoming in counts.values() if upcoming)},
     )
@@ -479,6 +485,47 @@ async def toggle_subscription_notify(
     sub.notify = not sub.notify
     await session.commit()
     return RedirectResponse("/preferences#p-follow", status_code=303)
+
+
+@router.post("/subscriptions/{sub_id}/settings")
+async def update_subscription_settings(
+    sub_id: int,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+    preset_id: int = Form(0),
+    notify: bool = Form(False),
+    next_url: str = Form("/following", alias="next"),
+):
+    """Both of a subscription's settings in ONE submit -- `/following`'s
+    per-tag dialog.
+
+    The two toggles above stay: Preferences' subrows flip one field per press
+    with no form to submit, and this page's dialog holds both fields open at
+    once and saves them together. Writing them separately here would mean a
+    dialog whose Save is two round trips, either of which can land alone.
+
+    Same field semantics as the `/subscriptions` upsert, deliberately -- this
+    is that route's write half addressed BY SUBSCRIPTION ID instead of by tag,
+    which is safe on this page because it renders each followed tag exactly
+    once and answers with a whole re-rendered page (see `unfollow_tag` for the
+    surface where an id could go stale). `preset_id == 0` is the "none" option
+    and stores NULL; any other value must be a preset this viewer owns, so
+    `owned_preset` 404s rather than letting one user link another's preset.
+    `notify` is a checkbox, so its absence is False -- which is what makes
+    unticking it reach the DB at all.
+
+    No rule resync: `notify` is only the new-event DM notice, and `preset_id`
+    is what gets applied to FUTURE matching events, not a rule already planned
+    (invariant 2's queue is untouched by either) -- the same reasoning
+    `/subscriptions` and the two toggles above already run on.
+    """
+    sub = await _owned_subscription(session, user.id, sub_id)
+    if preset_id:
+        await owned_preset(session, user.id, preset_id)
+    sub.preset_id = preset_id or None
+    sub.notify = notify
+    await session.commit()
+    return RedirectResponse(_safe_next(next_url), status_code=303)
 
 
 @router.post("/subscriptions/{sub_id}/auto-apply")

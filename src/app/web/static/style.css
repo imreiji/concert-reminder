@@ -1456,6 +1456,35 @@ span.tchip { cursor: default; }
   border-radius: 999px; padding: .05rem .3rem; line-height: 1.4;
 }
 
+/* A /following chip OPENS ITS DIALOG, so it has to look pressable. It is a
+   <span> (the markers nested inside it are spans, and the page's per-chip
+   tests balance against that), and `span.tchip { cursor: default }` twenty
+   lines up would otherwise hand it the arrow cursor -- overridden here rather
+   than there, scoped by the data attribute the opener itself keys on, so
+   /tags' non-interactive spans keep the arrow. Hover is inherited from
+   `.tchip:hover`; only the cursor and the focus affordance are new, and the
+   sitewide :focus-visible ring covers the keyboard half. */
+.following-scope span.tchip[data-sub-id] { cursor: pointer; }
+
+/* ── /following config dialog ───────────────────────────────────────────
+   Anatomy only: the dialog itself is `.tagdlg`, which already carries the
+   3px frame, the header/body/footer bands and the phone bottom-sheet rule.
+   Adding a second dialog class for three extra rules would put this page's
+   overlay outside that block's mobile selector list, silently. */
+.dlgctx { margin: 0; font-size: .85rem; color: var(--dim); line-height: 1.6; }
+.dlgctx b { color: var(--ink); font-variant-numeric: tabular-nums; }
+/* The one field here that is a checkbox, so it lays out along the row rather
+   than as .fld's stacked label-over-control. */
+dialog.tagdlg .fld.chk {
+  grid-auto-flow: column; justify-content: start; align-items: center; gap: .5rem;
+}
+dialog.tagdlg .fld.chk input { width: auto; }
+/* Unfollow is destructive, so it goes to the FAR END of the footer, away from
+   Save -- the same separation the kebab menu gives destructive actions
+   elsewhere. margin-left:auto inside the flex footer, not a reordered DOM:
+   the tab order stays Save, Cancel, Unfollow. */
+dialog.tagdlg .df .dfend { margin-left: auto; }
+
 /* ── /tags Edit mode (editor-only) ─────────────────────────────────────
    The editor's Follow <-> Edit switch puts `.editing` on `.tags-scope`. In
    Edit a chip's click opens its tag dialog instead of posting a follow, so
