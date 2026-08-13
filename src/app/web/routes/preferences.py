@@ -3,6 +3,7 @@
   GET  /preferences                          the page
   GET  /following                            followed tags, chips by franchise
   POST /presets                              create preset
+  POST /presets/apply-to-following           fill the default into preset-less follows
   POST /presets/{id}/delete
   POST /presets/{id}/items                   add an item to a preset
   POST /presets/{id}/items/{item_id}/delete
@@ -29,7 +30,7 @@ from zoneinfo import ZoneInfo
 import discord
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import i18n
@@ -134,6 +135,11 @@ async def preferences(
     # must show nothing -- see POST /me/api-token's docstring for why the
     # token isn't carried here as a query parameter the way feed_token is.
     api_token = request.session.pop("api_token", None)
+    # Same one-shot discipline, and POP for the same reason: the fill report is
+    # about ONE press, so a refresh or a second tab must not repeat it. Numbers
+    # only -- the sentence is composed in the template so it lands in the
+    # viewer's locale at RENDER time (see apply_default_to_following).
+    preset_fill = request.session.pop("preset_fill", None)
 
     presets = await my_presets(session, user.id)
     subs = list((await session.execute(
@@ -196,6 +202,7 @@ async def preferences(
          "pruned_concerts": pruned_concerts,
          "feed_url": f"{settings.base_url}/calendar/{feed_token}.ics" if feed_token else None,
          "has_api_token": has_api_token, "api_token": api_token,
+         "preset_fill": preset_fill,
          "bot_enabled": settings.bot_enabled},
     )
 
@@ -226,6 +233,88 @@ async def create_preset(
     ))
     await session.commit()
     return RedirectResponse(_safe_next(next_url), status_code=303)
+
+
+@router.post("/presets/apply-to-following")
+async def apply_default_to_following(
+    request: Request,
+    user: SessionUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Fill the standing default into every followed tag that carries NO preset.
+
+    An ACTION, not a setting. `ReminderPreset.is_default` governs FUTURE follows
+    (`subscribe` reads it when the form names no preset); changing it must never
+    rewrite a row. This is the retroactive half, and it only runs when the reader
+    presses it.
+
+    **It fills NULLs and NOTHING else.** The `preset_id.is_(None)` clause in the
+    UPDATE below is the whole safety property of this route (owner ruling,
+    2026-08-13: "for anything that already have their own preset, remain on the
+    original preset"). Drop it and the statement becomes a blanket overwrite that
+    silently destroys per-tag tuning a user set through `/following`'s dialog --
+    a loss with no undo, no audit row, and a success page indistinguishable from
+    the correct behaviour. That is the reason this route reports TWO numbers
+    rather than one: the count of rows LEFT ALONE is the only evidence the reader
+    gets that the fill was a fill.
+
+    `TagSubscription.user_id == user.id` is the second load-bearing clause. There
+    is no id in the request at all -- the caller is the session, so this can only
+    ever touch the presser's own rows -- but the scope still has to be written,
+    because a bulk UPDATE without it rewrites the whole table.
+
+    "Left alone" counts rows holding a preset that is NOT the default: a follow
+    already sitting on the default was neither filled nor overruled, and
+    reporting it as "kept its own" would be a lie about tuning that does not
+    exist. (The `is_not(None)` in that count is redundant in SQL -- `NULL != x`
+    is NULL, never true -- and kept for the reader.)
+
+    No rule resync, for the same reason `/subscriptions/{id}/settings` states:
+    `TagSubscription.preset_id` is read only by `handle_newly_tagged`, when a
+    FUTURE concert picks up a followed tag. It plans nothing now, so
+    `reminder_queue` (invariant 2) is untouched by this write and there is no
+    already-queued row to re-plan. Invariant 8's `reinstate_user_rules` belongs
+    to CONCERT subscriptions and leg opt-outs, which do gate live reminders.
+
+    The report rides a one-shot session flash, popped by GET /preferences, as
+    NUMBERS rather than a composed sentence -- the sentence is built in the
+    template so it resolves in the LOCALE OF THE PAGE THAT SHOWS IT, not the
+    locale of the POST that queued it (CLAUDE.md's i18n warning: a label copied
+    before it reaches a template resolves at the copy site). The redirect is the
+    bare, hardcoded "/preferences" and takes no `next`: this page is the only one
+    that pops the flash, so any other landing would swallow the report entirely
+    and leave the action looking silent. (`/preferences` is in `_ALLOWED_NEXT`,
+    so a later `next` would work -- it is left out because of the flash, not
+    because the allowlist is missing it.)
+    """
+    default = await get_default_preset(session, user.id)
+    if default is None:
+        request.session["preset_fill"] = {"had_default": False, "filled": 0, "kept": 0}
+        return RedirectResponse("/preferences", status_code=303)
+
+    kept = await session.scalar(
+        select(func.count())
+        .select_from(TagSubscription)
+        .where(
+            TagSubscription.user_id == user.id,
+            TagSubscription.preset_id.is_not(None),
+            TagSubscription.preset_id != default.id,
+        )
+    )
+    result = await session.execute(
+        update(TagSubscription)
+        .where(
+            TagSubscription.user_id == user.id,
+            TagSubscription.preset_id.is_(None),
+        )
+        .values(preset_id=default.id)
+    )
+    filled = result.rowcount
+    await session.commit()
+    request.session["preset_fill"] = {
+        "had_default": True, "filled": filled, "kept": kept or 0,
+    }
+    return RedirectResponse("/preferences", status_code=303)
 
 
 @router.post("/presets/{preset_id}/rename")

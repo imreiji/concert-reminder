@@ -11,6 +11,28 @@
   <h1 style="margin:0;font-size:1.35rem">{{ _("Preferences") }}</h1>
 </div>
 
+{# The "apply my default to all followed tags" report. It sits at the TOP of the
+   page rather than beside the button that queued it: the press 303s back here,
+   and a report the reader has to scroll to find is a report they will read as
+   silence. Two numbers, always both -- the count LEFT ALONE is what tells the
+   reader a fill happened instead of an overwrite, which is the entire reason
+   the action is safe to press. Composed here, not in the route, so it renders
+   in the viewer's locale rather than the one the POST happened to carry. #}
+{% if preset_fill %}
+{% if preset_fill.had_default %}
+<p class="banner" style="margin-bottom:1rem"><span>✓</span> <span>{{
+  ngettext("Applied your default preset to %(n)s followed tag.",
+           "Applied your default preset to %(n)s followed tags.",
+           preset_fill.filled, n=preset_fill.filled) }} {{
+  ngettext("%(n)s tag kept the preset you set for it.",
+           "%(n)s tags kept the presets you set for them.",
+           preset_fill.kept, n=preset_fill.kept) }}</span></p>
+{% else %}
+<p class="banner warn" style="margin-bottom:1rem"><span>⚠</span> <span>{{
+  _("Nothing changed — you have no default preset yet. Make one of your presets the default first.") }}</span></p>
+{% endif %}
+{% endif %}
+
 <div class="plyt">
   <nav class="prail">
     <a class="on" href="#p-follow">{{ _("Following") }}</a>
@@ -235,6 +257,14 @@
 
     <div class="bar stacked">
       <span class="tally">{{ _("Presets apply to future events. Existing ones keep the rules they already have.") }}</span>
+      {# The retroactive half of the default preset. An ACTION beside the
+         setting, never the setting itself: making a preset default governs
+         future follows only, and this button is the one thing that reaches
+         back. It fills the follows that carry no preset and leaves the ones
+         you tuned yourself untouched -- see the route's docstring. #}
+      <form method="post" action="/presets/apply-to-following">
+        <button class="act" type="submit">{{ _("Apply my default preset to all followed tags") }}</button>
+      </form>
       <details class="fold" {% if not presets %}open{% endif %}>
         <summary>{{ _("New preset") }}</summary>
         <div class="fold-body">
