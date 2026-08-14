@@ -482,24 +482,87 @@ async def test_one_concert_failing_does_not_stop_the_run(session):
     assert second.ladder_polled_at_utc == NOW
 
 
-async def test_a_round_the_concert_already_holds_is_not_proposed(session):
+async def test_an_identical_round_still_produces_nothing(session):
     """End-to-end over the pure diff: the model re-reads a page it read before
-    and re-offers a round the catalogue already has. Mutation: dropping the
-    `new_proposals` diff, which re-proposes every existing round every day."""
+    and re-offers a round the catalogue already has, IDENTICAL on every field
+    `classify_proposals` compares. Mutation: dropping the `new_proposals`/
+    `changed_proposals` diff, which re-proposes every existing round every
+    day.
+
+    The regression guard on Task 2's HELD bucket: `closes_at_utc` must match
+    too, not only `label`/`opens_at_utc` -- a round matching only the dedupe
+    key but differing elsewhere is CHANGED (see the test below), not held, and
+    this fixture would wrongly land in `skipped_held` under the old
+    fresh-only behaviour if it left `closes_at_utc` unset."""
     await _approve(session)
-    await _concert(session, "held", rounds=[("1次先行抽選", OPENS_UTC)])
+    concert = await _concert(session, "held")
+    session.add(Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND,
+        label="1次先行抽選", opens_at_utc=OPENS_UTC, closes_at_utc=CLOSES_UTC,
+    ))
+    await session.flush()
     fetch, _calls = recording_fetch()
 
     report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
 
     assert await _proposals(session) == []
-    assert report.new_proposals == 0
+    assert (report.new_proposals, report.changed_proposals) == (0, 0)
     # Counted, not merely absent: a grounded round the concert already holds is
     # the commonest outcome of a poll, and with no row and no counter it reads
     # exactly like a page that said nothing at all.
     assert report.skipped_held == 1
     # Grounded, just not new: this must not be reported as a rejection either.
     assert (report.polled, report.rounds_rejected, report.failed) == (1, 0, 0)
+
+
+async def test_a_moved_closing_date_is_stored_as_a_proposal(session):
+    """A concert is quiet precisely because its stored deadlines are in the
+    past, so a postponed closing date is the likeliest true find this pass can
+    make. Mutation: dropping `changed` from what gets upserted -- the pass
+    would find the postponement and throw it away, which is phase 1's
+    behaviour and exactly what the module docstring used to say was
+    deliberately not yet done."""
+    await _approve(session)
+    concert = await _concert(session, "moved", rounds=[("1次先行抽選", OPENS_UTC)])
+    fetch, _calls = recording_fetch()
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert (report.polled, report.changed_proposals, report.new_proposals) == (1, 1, 0)
+    assert report.skipped_held == 0
+    [proposal] = await _proposals(session)
+    assert proposal.concert_id == concert.id
+    assert proposal.label == "1次先行抽選"
+    assert proposal.opens_at_utc == OPENS_UTC
+    # The page's NEW closing time, not the None the row held before.
+    assert proposal.closes_at_utc == CLOSES_UTC
+    assert proposal.first_seen_at == NOW
+
+
+async def test_a_changed_proposal_counts_separately_from_a_new_one(session):
+    """Mutation: summing them into `new_proposals`. Two brand-new concerts and
+    one concert whose closing date moved, so the two counts (2 vs 1) differ --
+    equal counts would let the two counters get swapped without this test
+    noticing."""
+    await _approve(session)
+    await _concert(session, "brand-new-a", official_url="https://eplus.jp/a")
+    await _concert(session, "brand-new-b", official_url="https://eplus.jp/b")
+    await _concert(
+        session, "moved", official_url="https://eplus.jp/moved",
+        rounds=[("1次先行抽選", OPENS_UTC)],
+    )
+    fetch, calls = recording_fetch()
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert sorted(calls) == [
+        "https://eplus.jp/a", "https://eplus.jp/b", "https://eplus.jp/moved",
+    ]
+    assert report.new_proposals == 2
+    assert report.changed_proposals == 1
+    assert report.skipped_held == 0
+    rows = await _proposals(session)
+    assert len(rows) == 3
 
 
 async def test_an_unknown_kind_is_stored_as_other_and_the_reason_reported(session):
