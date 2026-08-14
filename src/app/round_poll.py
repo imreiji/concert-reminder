@@ -85,6 +85,15 @@ owner about a perfectly healthy app.
 `SQLAlchemyError` is the one failure this module does not absorb: a failed
 flush poisons the session, so nothing after it can persist, and stepping over
 it would spend the rest of the run's paid LLM calls writing nothing at all.
+That reasoning is about a WRITE, and the one READ that raises out of the same
+family is carved out rather than swept into it: `concert_export_yaml` opens
+with `session.refresh`, which raises `InvalidRequestError` if the concert has
+gone since the candidate list was built. The session is fine and the rest of
+the run can still be written, so that race costs ONE concert, counted and
+named (`ConcertVanished`) -- exactly as `_candidates` already treats the same
+race one step earlier. Abandoning a whole run, and the digest with it, over a
+concert somebody deleted mid-tick would be the silence this module is built
+against.
 """
 
 import asyncio
@@ -96,7 +105,7 @@ from time import monotonic
 from urllib.parse import urlparse
 
 import yaml
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import llm
@@ -244,6 +253,16 @@ DIGEST_LIST_LIMIT = 10
 # digest is never delivered. `build_discovery_dm`, the precedent this module
 # follows, caps every free-text field it embeds for exactly this reason.
 MAX_REASON_CHARS = 200
+
+
+class ConcertVanished(Exception):
+    """The concert row went away between the candidate list and its read.
+
+    Deliberately NOT a `SQLAlchemyError`, which is the one family
+    `run_round_poll` refuses to absorb: that rule is about a poisoned FLUSH,
+    and this is a failed read that leaves the session entirely usable. See
+    `_poll_one`.
+    """
 
 
 def _plural(n: int, word: str) -> str:
@@ -438,6 +457,40 @@ async def _candidates(
     return pairs
 
 
+def _fold_duplicate_keys(fresh, event_id: str, report: PollReport) -> list:
+    """`fresh` with any second reading of the SAME key dropped, first one kept.
+
+    ONE reply can carry two rounds that collapse to one `dedupe_key` -- same
+    label, same opening time, differing only in `apply_closes_jst` or in which
+    legs they name. `new_proposals` cannot see that: it diffs the proposed
+    rounds against the ones the concert HOLDS, and neither of these is held, so
+    both survive it.
+
+    Unfolded, both reach `upsert_proposal`, whose SELECT finds the row the
+    first one just flushed -- so the second OVERWRITES its closing time and its
+    evidence quotes, and both are counted as new, because the row still carries
+    today's `first_seen_at`. That is a lost claim, not just a tally that reads
+    one too high: the closing date an operator would have reviewed is gone, and
+    nothing anywhere says a second reading existed. Hence the reason line: a
+    collapse is a discard, and this module names every discard.
+    """
+    seen: set[str] = set()
+    kept = []
+    for candidate in fresh:
+        key = dedupe_key(candidate.label, proposed_stamp_utc(candidate, OPENS_AT_FIELD))
+        if key in seen:
+            reason = (
+                f"round {candidate.label!r}: a second reading of the same round in "
+                "one reply; kept the first"
+            )
+            log.info("round poll: %s: %s", event_id, reason)
+            report.rejections.append(f"{event_id}: {reason}")
+            continue
+        seen.add(key)
+        kept.append(candidate)
+    return kept
+
+
 async def _poll_one(
     session: AsyncSession,
     row,
@@ -464,7 +517,17 @@ async def _poll_one(
     # the ONE place ORM rows become this vocabulary (the zip export and the
     # per-concert download share it precisely so they cannot drift), and the
     # prompt's whole contract is that its input is that vocabulary.
-    draft_text = await concert_export_yaml(session, concert)
+    try:
+        draft_text = await concert_export_yaml(session, concert)
+    except InvalidRequestError as exc:
+        # It opens with `session.refresh(concert, [...])`, which raises this --
+        # a SQLAlchemyError -- when the row has gone since `_candidates` loaded
+        # it. That is a failed READ, not the poisoned flush the caller re-raises
+        # on: the session is perfectly usable and the rest of the run can still
+        # be written. Re-raised as something outside the SQLAlchemy tree so the
+        # caller's per-concert handler counts it, which is what `_candidates`
+        # already does with the identical race one step earlier.
+        raise ConcertVanished(f"the concert no longer exists ({exc})") from exc
     system, user = completion_prompt(draft_text, page)
     reply = await chat(system, user)
     report.tokens_in += reply.tokens_in
@@ -498,6 +561,9 @@ async def _poll_one(
     # Grounded, and the concert already has it. The single most common outcome
     # of a poll and the one most easily left uncounted.
     report.skipped_held += len(verdict.accepted) - len(fresh)
+    # BEFORE the dismissed check, not after: a duplicate of a key the owner
+    # refused would otherwise count as two dismissals of one round.
+    fresh = _fold_duplicate_keys(fresh, row.event_id, report)
     dismissed = await dismissed_keys_for(session, row.concert_id)
     for candidate in fresh:
         opens_at_utc = proposed_stamp_utc(candidate, OPENS_AT_FIELD)
@@ -639,6 +705,19 @@ async def run_round_poll(
             await _poll_one(
                 session, row, concert, url, now, report, fetch=fetch, chat=chat
             )
+        except ConcertVanished as exc:
+            # Somebody deleted this concert between the candidate list and its
+            # read. ONE concert, not the run -- and deliberately NOT stamped:
+            # `record_ladder_polled` would find the row still in this session's
+            # identity map, issue an UPDATE matching zero rows and raise
+            # `StaleDataError` at flush, which is the very SQLAlchemyError this
+            # carve-out exists to avoid, arriving by the back door. Expunged so
+            # nothing later in the run can read the phantom back out of the map.
+            log.warning("round poll: %s vanished mid-run", row.event_id)
+            report.failed += 1
+            report.failures.append(f"{row.event_id}: {exc}")
+            session.expunge(concert)
+            continue
         except SQLAlchemyError:
             # NOT one failed concert. A failed flush POISONS the session, so
             # nothing after this point can persist -- absorbing it would spend

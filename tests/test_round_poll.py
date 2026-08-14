@@ -493,3 +493,108 @@ async def test_fetcher_none_binds_the_runs_approved_hosts_to_the_policy(session,
 
     assert report.polled == 1
     assert seen == [(URL, {HOST})]
+
+
+# ── Two readings of one round, and a concert that vanishes ───────────────
+
+# The same page with a SECOND closing line on it, so both readings below are
+# genuinely grounded and `verify_rounds` accepts each on its own merits -- the
+# fold under test must be the reason only one survives, not the evidence rule.
+PAGE_TWO_CLOSES = (
+    "<html><body><p>1次先行抽選 受付開始 2026年1月5日(月)12:00 "
+    "申込締切 2026年1月10日(土)23:59</p>"
+    "<p>申込締切 2026年1月20日(火)23:59</p></body></html>"
+)
+
+# One reply, two rounds, ONE dedupe key: same label, same opening time,
+# different closing time. `new_proposals` cannot filter this -- it diffs
+# against the rounds the concert HOLDS, and neither of these is held.
+DOUBLED_REPLY = """\
+rounds:
+  - label: 1次先行抽選
+    kind: lottery_round
+    apply_opens_jst: 2026-01-05 12:00
+    apply_closes_jst: 2026-01-10 23:59
+    evidence:
+      apply_opens_jst: "受付開始 2026年1月5日(月)12:00"
+      apply_closes_jst: "申込締切 2026年1月10日(土)23:59"
+  - label: 1次先行抽選
+    kind: lottery_round
+    apply_opens_jst: 2026-01-05 12:00
+    apply_closes_jst: 2026-01-20 23:59
+    evidence:
+      apply_opens_jst: "受付開始 2026年1月5日(月)12:00"
+      apply_closes_jst: "申込締切 2026年1月20日(火)23:59"
+"""
+
+
+async def test_two_readings_of_one_round_in_one_reply_keep_the_first(session):
+    """`upsert_proposal` keys on (concert_id, dedupe_key), so an unfolded
+    second reading SELECTs the row the first one just flushed and overwrites
+    its closing time and its evidence -- a lost claim, not just a tally one
+    too high, since nothing anywhere says a second reading existed.
+
+    Mutation: dropping the `_fold_duplicate_keys` call in `_poll_one`. Then
+    `new_proposals` reads 2, `closes_at_utc` is the SECOND reading's, and no
+    reason names the collapse.
+    """
+    await _approve(session)
+    await _concert(session, "doubled")
+
+    async def fetch(url):
+        return PAGE_TWO_CLOSES
+
+    report = await run_round_poll(
+        session, NOW, fetcher=fetch, chat=fake_chat(DOUBLED_REPLY)
+    )
+
+    rows = await _proposals(session)
+    assert len(rows) == 1
+    assert report.new_proposals == 1
+    # The FIRST reading owns the row: its closing time survived intact.
+    assert rows[0].closes_at_utc == CLOSES_UTC
+    assert "2026年1月10日" in rows[0].evidence_yaml
+    # And the discard is named, because this module names every discard.
+    assert any("second reading of the same round" in r for r in report.rejections)
+
+
+async def test_a_concert_deleted_mid_run_costs_one_concert_not_the_run(session):
+    """`concert_export_yaml` opens with `session.refresh`, which raises
+    `InvalidRequestError` -- a SQLAlchemyError -- once the row is gone. The
+    blanket re-raise is about a poisoned FLUSH; this is a failed READ and the
+    session stays perfectly usable.
+
+    Mutation: dropping the `except InvalidRequestError` in `_poll_one` (or the
+    `except ConcertVanished` beside it). The run then aborts on the first
+    concert, the second is never polled, and the digest -- the only record the
+    run happened at all -- is lost with it.
+    """
+    from sqlalchemy import text
+
+    await _approve(session)
+    # `ladder_polled_at_utc` NULL sorts first, so "gone" is read before "kept".
+    await _concert(session, "gone", official_url="https://eplus.jp/gone")
+    await _concert(
+        session, "kept", official_url="https://eplus.jp/kept",
+        polled_at=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+
+    async def fetch(url):
+        if "gone" in url:
+            await session.execute(text("DELETE FROM concerts WHERE event_id = 'gone'"))
+        return PAGE
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert report.polled == 1
+    assert report.failed == 1
+    assert any("gone" in f and "no longer exists" in f for f in report.failures)
+    # The concert behind it was still read, and its proposal still written.
+    [proposal] = await _proposals(session)
+    kept = (await session.execute(
+        select(Concert).where(Concert.event_id == "kept")
+    )).scalar_one()
+    assert proposal.concert_id == kept.id
+    # And the survivor's own stamp was still written -- the vanished one's is
+    # skipped, not the whole tail of the run.
+    assert kept.ladder_polled_at_utc == NOW

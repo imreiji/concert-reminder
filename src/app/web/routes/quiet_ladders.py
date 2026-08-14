@@ -25,6 +25,8 @@ in, same shape as the digest linking straight to a batch under
 /admin/deliveries.
 """
 
+from datetime import UTC, datetime
+
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -87,9 +89,15 @@ def _evidence_lines(evidence_yaml: str) -> list[tuple[str, str]]:
 def _safe_source_url(raw: str) -> str | None:
     """An http(s) `source_url`, or None to render no link at all.
 
-    `source_url` is the model's own text, exactly as untrusted as an editor's
-    per invariant 7: `clean_url` raises on anything that isn't a real http(s)
-    URL, and a bad one just drops the link rather than putting a
+    Defence in depth, and deliberately kept even though today's `source_url` is
+    NOT model-authored: `round_poll.py` stores the concert's own
+    `official_url`, which is editor-supplied and already went through
+    `form_url` at the route boundary. What makes the cleaning worth its two
+    lines is where the column is heading -- the completion prompt already asks
+    the model for a per-round `url:`, phase 1 simply drops it, and the day a
+    proposal starts carrying the model's own URL this href becomes exactly the
+    invariant-7 case it is written for. `clean_url` raises on anything that is
+    not a real http(s) URL, and a bad one drops the link rather than putting a
     `javascript:` href on an admin's screen.
     """
     if not raw:
@@ -98,6 +106,26 @@ def _safe_source_url(raw: str) -> str | None:
         return clean_url(raw)
     except UnsafeURLError:
         return None
+
+
+def _waited(first_seen: datetime, now: datetime) -> str:
+    """How long the oldest proposal in a group has been waiting, in days.
+
+    `first_seen_at` is what `pending_proposals` ORDERS BY -- "the thing nobody
+    has looked at for a week is the thing to look at" -- so without it on the
+    page the operator cannot see the quantity the ordering in front of them is
+    built on, and a queue of five looks the same whether it arrived this
+    morning or a month ago.
+
+    Days, and a plain phrase rather than a timestamp, because that is the
+    question ("has this been ignored?"); the exact sighting renders beside it
+    through `dual_lines` like every other time on the site (invariant 1).
+    Clamped at zero: a clock skew must not print "waiting -1 days".
+    """
+    days = max((now - first_seen).days, 0)
+    if days == 0:
+        return "less than a day"
+    return f"{days} day" if days == 1 else f"{days} days"
 
 
 def _proposal_row(proposal: RoundProposal) -> dict:
@@ -150,14 +178,22 @@ async def round_proposals(
     groups = await pending_proposal_groups(session)
     db_user = await session.get(User, user.id)
     tz = db_user.timezone if db_user else settings.default_timezone
-    view_groups = [
-        {
+    now = datetime.now(UTC)
+    view_groups = []
+    for group in groups:
+        # MIN, not `proposals[0]`: the group's order is inherited from
+        # `pending_proposals` today, but "the oldest one" is the fact the page
+        # states, and reading it off a position would become a lie the moment
+        # anything re-sorted a group.
+        oldest = min(p.first_seen_at for p in group.proposals)
+        view_groups.append({
             "event_id": group.event_id,
             "title": group.title,
             "rows": [_proposal_row(p) for p in group.proposals],
-        }
-        for group in groups
-    ]
+            "count": len(group.proposals),
+            "first_seen": oldest,
+            "waited": _waited(oldest, now),
+        })
     return templates.TemplateResponse(
         request,
         "admin_round_proposals.html",

@@ -1596,7 +1596,7 @@ these endpoints). Whoever eventually builds this should check the catalogue
 via that path before drafting rather than re-inventing a dedup query. Impact
 and rank unchanged; the dedup half of the eventual build just got an answer.
 
-### 6. Three long jobs share the reminder tick
+### 6. Four long jobs share the reminder tick
 
 Impact: low-medium -- no user-visible change today; it removes a false-alarm
 source and a latent outage class - effort: medium. Raised: 2026-08-06 (owner
@@ -1604,9 +1604,12 @@ asked whether a more traditional infrastructure stack would help performance or
 maintenance; the answer was no, with this as the single exception).
 
 One asyncio loop runs discord.py, FastAPI and the 60-second scheduler tick.
-Three long jobs now share that tick -- the Eventernote sweep, AI triage and AI
-draft completion -- each with a 240s wall clock checked only at the TOP of its
-loop, so each can overshoot by one whole iteration. For completion that
+Four long jobs now share that tick -- the Eventernote sweep, AI triage, AI
+draft completion and, since 2026-08-13, the round poll (title updated from
+"three" on that date; see the revision note under the round poll's Shipped
+entry for why the round poll counts and round watch did not) -- each with a
+240s wall clock checked only at the TOP of its loop, so each can overshoot by
+one whole iteration. For completion that
 iteration is worst-case ~151s (`COMPLETION_DELAY_SECONDS` 1 +
 `FETCH_DEADLINE_SECONDS` 30 + `llm.LLM_TIMEOUT_SECONDS` 120), putting a run at
 ~390s against `heartbeat.MAX_AGE_SECONDS` of 180.
@@ -2780,8 +2783,11 @@ recorded in full in `docs/architecture.md`'s Round poll entry:
   inline in the 60-second reminder tick.
 
 **What it deliberately is not, recorded before code was written the way round
-watch's own entry recorded its abstentions:** it writes no `Round` and no
-notification (phase 1's whole surface is a read-only admin list); it never
+watch's own entry recorded its abstentions:** it writes no `Round` and reaches
+no ordinary user at all (phase 1's whole surface is a read-only admin list),
+and `run_round_poll` itself queues nothing -- the ONE notification the feature
+produces is the admins' digest, queued by the scheduler block that owns the
+transaction, never by the pass; it never
 touches `ladder_rechecked_at_utc`, the OWNER's own stamp that orders
 `/admin/quiet-ladders` (a machine writing it would silently mark that
 worklist attended); and its digest DM is sent even on an empty run, the one

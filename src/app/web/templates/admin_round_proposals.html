@@ -22,6 +22,18 @@
 {% else %}
 {% for group in groups %}
 <h2><a href="/concerts/{{ group.event_id }}">{{ group.title }}</a></h2>
+{#- The count and the AGE: first_seen_at is what the queue is ordered by
+    ("the thing nobody has looked at for a week is the thing to look at"),
+    so without it on the page the operator cannot see the quantity the order
+    in front of them is built on. The exact sighting renders dual like every
+    other time on the site (invariant 1); the age beside it is the plain
+    reading of the same fact. -#}
+{% set fs = dual_lines(group.first_seen, tz) %}
+<p class="dim">
+  {{ group.count }} proposal{{ "" if group.count == 1 else "s" }}, oldest
+  waiting {{ group.waited }}.<br>
+  First seen {{ fs[0] }}<br>{{ fs[1] }}
+</p>
 <table class="tagtable">
   <thead>
     <tr><th>Round</th><th>Kind</th><th>Opens</th><th>Closes</th><th>Evidence</th><th></th></tr>
@@ -57,8 +69,10 @@
         {% else %}<span class="dim">no quoted evidence</span>{% endif %}
       </td>
       <td>
-        {#- source_url is model-supplied too (invariant 7): only a cleaned
-            http(s) URL reaches this href, or nothing does -- see
+        {#- Today's source_url is the concert's own editor-supplied
+            official_url, not the model's text. Only a cleaned http(s) URL
+            reaches this href, or nothing does -- defence in depth for the
+            day a proposal carries the model's own per-round url, see
             quiet_ladders.py:_safe_source_url. -#}
         {% if row.source_url %}
         <a href="{{ row.source_url }}" target="_blank" rel="noopener">source</a>

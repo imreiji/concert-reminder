@@ -6,7 +6,7 @@ pin what should be behind it once it exists.
 """
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +15,7 @@ from app.config import settings
 from app.db.service import ensure_user, upsert_proposal
 from app.db.session import get_session
 from app.domain.types import RoundKind
+from app.round_poll import PollReport, build_poll_digest
 from app.web import auth
 from app.web.app import create_app
 
@@ -174,3 +175,137 @@ async def test_a_dismissed_proposal_is_not_listed(client):
     assert "<td>1次先行</td>" in r.text
     assert "<td>2次先行</td>" not in r.text
     assert "Live B" not in r.text  # the dismissed proposal's concert has nothing else pending
+
+
+# ── The digest DM is the only door in ────────────────────────────────────
+
+DIGEST_BASE_URL = "https://dekimasen.app"
+
+
+def _digest_link() -> str:
+    """The path the digest DM actually emits, pulled out of a real digest.
+
+    Read off `build_poll_digest` rather than written down here: the point of
+    both tests below is that the link and the route cannot drift apart, and a
+    second copy of the literal would drift with neither.
+    """
+    body = build_poll_digest(
+        PollReport(concerts_seen=1, polled=1, new_proposals=1),
+        base_url=DIGEST_BASE_URL,
+    )
+    [url] = re.findall(rf"{re.escape(DIGEST_BASE_URL)}(/\S+)", body)
+    return url
+
+
+def test_the_digest_dm_names_this_pages_path():
+    """There is no nav link to this page -- the digest is the ONLY way in
+    (quiet_ladders.py's module docstring). Mutation: editing the path in
+    round_poll.py's digest builder, which leaves the whole suite green and the
+    feature's single door pointing at a 404."""
+    assert _digest_link() == "/admin/quiet-ladders/proposals"
+
+
+async def test_the_link_the_digest_emits_actually_renders(client):
+    """The stronger half: the URL is taken from the digest and fetched, so the
+    two can never drift silently. Mutation: changing EITHER string -- the
+    route's decorator or the digest's literal -- makes this 404."""
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s, "bushi", "ブシロード20周年")
+        await _propose(s, concert, label="1次先行")
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get(_digest_link())
+    assert r.status_code == 200
+    assert "<td>1次先行</td>" in r.text
+
+
+# ── The source link, the page's one injection control ────────────────────
+
+
+def _row_html(html: str, label: str) -> str:
+    """The one `<tr>` carrying `label`. Every assertion below is scoped to it:
+    a page-wide assertion has passed on this repo with the whole feature
+    deleted, because base.html's chrome already contained the string."""
+    match = re.search(rf"<tr>\s*<td>{re.escape(label)}</td>.*?</tr>", html, re.S)
+    assert match, f"no proposal row for {label}"
+    return match.group(0)
+
+
+async def test_a_javascript_source_url_renders_no_link_at_all(client):
+    """Invariant 7: a stored URL lands in an `href`, so a `javascript:` value
+    that slips past executes in-origin. Mutation: `_safe_source_url` returning
+    `raw` -- every existing test on this page stays green, because none of
+    them looks at the source column."""
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s, "live-a", "Live A")
+        await _propose(
+            s, concert, label="1次先行", source_url="javascript:alert(1)"
+        )
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders/proposals")
+    assert r.status_code == 200
+    row = _row_html(r.text, "1次先行")
+    assert "href=" not in row
+    assert "javascript:" not in row
+
+
+async def test_a_real_source_url_does_render_its_link(client):
+    """The other half, and the reason the test above is not satisfied by
+    deleting the column: mutation is dropping `source_url` from
+    `_proposal_row`, which would silence the javascript case for the wrong
+    reason and leave an operator no way to open the page a claim came from."""
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s, "live-a", "Live A")
+        await _propose(
+            s, concert, label="1次先行",
+            source_url="https://eplus.jp/sf/detail/1234",
+        )
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders/proposals")
+    assert r.status_code == 200
+    row = _row_html(r.text, "1次先行")
+    assert 'href="https://eplus.jp/sf/detail/1234"' in row
+
+
+# ── The count and the age the ordering is built on ───────────────────────
+
+
+async def test_each_concert_shows_its_count_and_the_age_of_its_oldest(client):
+    """`first_seen_at` is what `pending_proposals` ORDERS BY, and without it on
+    the page the operator cannot see the quantity the order is built on.
+
+    Mutation: rendering the NEWEST proposal's age (max instead of min), or the
+    number of concerts instead of the number of proposals. The two proposals
+    below are seeded ten days and two days old against the real clock the route
+    reads, so either mutation prints a number this test does not accept.
+    """
+    now = datetime.now(UTC)
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s, "live-a", "Live A")
+        await _propose(
+            s, concert, label="1次先行", now=now - timedelta(days=10, hours=1)
+        )
+        await _propose(
+            s, concert, label="2次先行", now=now - timedelta(days=2, hours=1)
+        )
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders/proposals")
+    assert r.status_code == 200
+    # Scoped to this concert's heading, not the page: the summary must sit
+    # under the group it describes.
+    summary = re.search(r"Live A</a></h2>(.*?)<table", r.text, re.S)
+    assert summary, "no group summary under the concert heading"
+    assert "2 proposals" in summary.group(1)
+    assert "waiting 10 days" in summary.group(1)
+    assert "2 days" not in summary.group(1)
