@@ -47,6 +47,20 @@ from app.domain.timezones import jst_to_utc
 # time -- see its docstring.
 OPENS_AT_FIELD = "apply_opens_jst"
 CLOSES_AT_FIELD = "apply_closes_jst"
+# The other two of `TIMESTAMP_FIELDS`, added 2026-08-14. The prompt has asked
+# for all four since it was written and `verify_rounds` grounds all four
+# against the page, but the poll stored only the first two -- so a results
+# announcement and a payment deadline, two of the three anchors this app exists
+# to remind people about, were parsed, checked and then thrown away. Read
+# through `proposed_stamp_utc` like the other two; a second parse here would be
+# free to disagree with the one the dedupe key is built from.
+RESULTS_AT_FIELD = "results_jst"
+PAYMENT_AT_FIELD = "payment_deadline_jst"
+# NOT a timestamp: a list of the leg LABELS the model named, verbatim. It is a
+# field name rather than a literal at the poll's call site for the same reason
+# as the four above -- the prompt, `verify_rounds` and the poll must all spell
+# it the same way, and none of them raises when they don't.
+APPLIES_TO_FIELD = "applies_to"
 _STAMP_TEXT_FORMAT = "%Y-%m-%d %H:%M"
 
 

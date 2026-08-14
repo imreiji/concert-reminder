@@ -27,6 +27,12 @@ from app.domain.types import RoundKind
 
 NOW = datetime(2026, 8, 13, 3, 0, tzinfo=UTC)
 OPENS = datetime(2026, 9, 1, 3, 0, tzinfo=UTC)
+# The rest of one round's ladder. Four DISTINCT values, deliberately: three of
+# the assertions below are about which column a value landed in, and equal
+# stamps would let a writer put the payment deadline in the results column.
+CLOSES = datetime(2026, 9, 8, 14, 59, tzinfo=UTC)
+RESULTS = datetime(2026, 9, 15, 9, 0, tzinfo=UTC)
+PAYMENT = datetime(2026, 9, 22, 14, 59, tzinfo=UTC)
 SOURCE = "https://example.jp/live/tickets"
 
 
@@ -44,6 +50,10 @@ async def _propose(
     *,
     label: str = "1次先行",
     opens_at_utc: datetime | None = OPENS,
+    closes_at_utc: datetime | None = None,
+    results_at_utc: datetime | None = None,
+    payment_deadline_at_utc: datetime | None = None,
+    applies_to_labels: list[str] | None = None,
     evidence_yaml: str = "",
     now: datetime = NOW,
 ) -> RoundProposal:
@@ -53,7 +63,10 @@ async def _propose(
         label=label,
         kind=RoundKind.LOTTERY_ROUND,
         opens_at_utc=opens_at_utc,
-        closes_at_utc=None,
+        closes_at_utc=closes_at_utc,
+        results_at_utc=results_at_utc,
+        payment_deadline_at_utc=payment_deadline_at_utc,
+        applies_to_labels=[] if applies_to_labels is None else applies_to_labels,
         evidence_yaml=evidence_yaml,
         source_url=SOURCE,
         now=now,
@@ -96,6 +109,116 @@ async def test_a_second_poll_of_the_same_round_updates_rather_than_duplicates(se
     # ...except first_seen_at, which answers "since when has this been proposed"
     # and would be a lie if every re-poll refreshed it.
     assert again.first_seen_at == first_seen
+
+
+async def test_the_three_new_fields_round_trip(session):
+    """A proposal carries the WHOLE round, not the half phase 1 stored.
+
+    Mutation: dropping any ONE of the three from `upsert_proposal`'s write.
+    Hence three SEPARATE assertions on three separate values -- asserting only
+    `results_at_utc`, or asserting them as one tuple that happens to be all
+    that is checked, lets the other two be dropped and stay green.
+
+    Read back after `expire_all`, so this is what SQLite holds rather than what
+    the in-memory object was handed: a column the mapper never persists (or one
+    the migration never added) is otherwise invisible here.
+    """
+    concert = await _concert(session)
+
+    proposal = await _propose(
+        session,
+        concert,
+        closes_at_utc=CLOSES,
+        results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+        applies_to_labels=["Day 1", "Day 2"],
+    )
+    proposal_id = proposal.id
+    await session.flush()
+    session.expire_all()
+
+    stored = await session.get(RoundProposal, proposal_id)
+    assert stored.results_at_utc == RESULTS
+    assert stored.payment_deadline_at_utc == PAYMENT
+    assert stored.applies_to_labels == ["Day 1", "Day 2"]
+    # The two phase 1 already stored, so a widening that broke them is caught
+    # here rather than by the poll's own test.
+    assert stored.opens_at_utc == OPENS
+    assert stored.closes_at_utc == CLOSES
+
+
+async def test_a_refresh_overwrites_the_new_fields_too(session):
+    """Today's reading of the page wins on every field except `first_seen_at`.
+
+    Mutation: setting the three new fields only on the INSERT branch. Nothing
+    else notices -- the row exists, the counts are right, and the proposal
+    simply keeps the first reading forever. A page that corrects its 当落発表
+    date, or adds the second leg it turned out to cover, keeps the same
+    `dedupe_key` (only the OPEN time is part of it), so the corrected value has
+    no other way in.
+
+    Three separate assertions again, for the reason above: one of the three
+    left inside the insert branch would survive a tuple compare that only
+    happened to cover the other two.
+    """
+    concert = await _concert(session)
+    first = await _propose(
+        session,
+        concert,
+        results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+        applies_to_labels=["Day 1"],
+    )
+    first_id, first_seen = first.id, first.first_seen_at
+
+    corrected_results = RESULTS + timedelta(days=3)
+    corrected_payment = PAYMENT + timedelta(days=3)
+    again = await _propose(
+        session,
+        concert,
+        results_at_utc=corrected_results,
+        payment_deadline_at_utc=corrected_payment,
+        applies_to_labels=["Day 1", "Day 2"],
+        now=NOW + timedelta(days=1),
+    )
+
+    assert await _count(session) == 1
+    assert again.id == first_id
+    assert again.results_at_utc == corrected_results
+    assert again.payment_deadline_at_utc == corrected_payment
+    assert again.applies_to_labels == ["Day 1", "Day 2"]
+    # Still the one field a re-poll must never refresh.
+    assert again.first_seen_at == first_seen
+
+
+async def test_applies_to_labels_defaults_to_empty_not_null(session):
+    """No legs named means EVERY leg -- `Round.applies_to`'s own convention.
+
+    Mutation: making the column nullable with no default. Every reader
+    downstream would then have to branch on None as well as on `[]`, and the
+    one convention would have two spellings; the review page would tick every
+    box for one of them and nothing for the other.
+
+    Constructed WITHOUT the field rather than with an empty list, because that
+    is the case the default exists for -- every row written before the column
+    existed. Passing `[]` explicitly would pass with no default at all.
+    """
+    concert = await _concert(session)
+    bare = RoundProposal(
+        concert_id=concert.id,
+        dedupe_key=dedupe_key("先行", None),
+        label="先行",
+        kind=RoundKind.LOTTERY_ROUND,
+        first_seen_at=NOW,
+    )
+    session.add(bare)
+    await session.flush()
+    bare_id = bare.id
+    session.expire_all()
+
+    stored = await session.get(RoundProposal, bare_id)
+    assert stored.applies_to_labels == []
+    assert stored.applies_to_labels is not None
 
 
 async def test_a_dismissed_key_is_reported_so_the_next_poll_can_skip_it(session):

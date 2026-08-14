@@ -136,8 +136,11 @@ from app.domain.round_completion import (
 )
 from app.domain.round_evidence import verify_rounds
 from app.domain.round_proposals import (
+    APPLIES_TO_FIELD,
     CLOSES_AT_FIELD,
     OPENS_AT_FIELD,
+    PAYMENT_AT_FIELD,
+    RESULTS_AT_FIELD,
     HeldRound,
     dedupe_key,
     new_proposals,
@@ -457,6 +460,36 @@ async def _candidates(
     return pairs
 
 
+def _applies_to_labels(candidate) -> list[str]:
+    """The leg LABELS this proposed round names, as a list of strings.
+
+    Labels, never `ConcertDay` ids, and that is not a shortcut: the model is
+    given the concert as a draft-vocabulary document and told to copy names out
+    of its `performances`. It never sees an id, so an id is not a thing it
+    could return. `verify_rounds` has already refused any round naming a leg
+    the draft lacks, so what arrives here matches a real leg by name; the
+    review page does the label -> leg lookup at render time.
+
+    Coerced with `str(...).strip()` -- the SAME normalization `verify_rounds`
+    compares under, so what is stored is what was checked. It is not cosmetic:
+    `parse_completion_response` stringifies only the four TIMESTAMP_FIELDS and
+    passes everything else through as PyYAML resolved it, so a leg labelled
+    `2026-01-05` arrives here as a `datetime.date`, which is not
+    JSON-serializable and would raise inside the flush -- a SQLAlchemyError,
+    the one family `run_round_poll` refuses to absorb, so one such label would
+    abandon the whole run.
+
+    Empty for anything that is not a list. `verify_rounds` rejects a non-list
+    `applies_to` outright, so this cannot happen through the pass; the guard is
+    here so the shape of what reaches a NOT NULL JSON column does not depend on
+    a check made in another module.
+    """
+    raw = candidate.data.get(APPLIES_TO_FIELD)
+    if not isinstance(raw, list):
+        return []
+    return [str(leg).strip() for leg in raw]
+
+
 def _fold_duplicate_keys(fresh, event_id: str, report: PollReport) -> list:
     """`fresh` with any second reading of the SAME key dropped, first one kept.
 
@@ -588,6 +621,14 @@ async def _poll_one(
             kind=kind,
             opens_at_utc=opens_at_utc,
             closes_at_utc=proposed_stamp_utc(candidate, CLOSES_AT_FIELD),
+            # All four anchors, through the ONE parser -- see
+            # `proposed_stamp_utc`. `verify_rounds` has already grounded each
+            # of these against the page and refused the round outright if it
+            # could not, so storing two of them and discarding the other two
+            # threw away work that was already done and checked.
+            results_at_utc=proposed_stamp_utc(candidate, RESULTS_AT_FIELD),
+            payment_deadline_at_utc=proposed_stamp_utc(candidate, PAYMENT_AT_FIELD),
+            applies_to_labels=_applies_to_labels(candidate),
             # The quotes, keyed by the field each one grounds -- already
             # trimmed by `verify_rounds` to the timestamps it actually checked
             # against the page, so nothing unverified can ride onto a review

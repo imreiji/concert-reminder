@@ -63,8 +63,36 @@ rounds:
       apply_closes_jst: "申込締切 2026年2月20日(金)23:59"
 """
 
+# The same round with the rest of its ladder on the page: the 当落発表 and the
+# 入金期限 the prompt has always asked for, plus the leg it names. Every stamp
+# here is quoted verbatim below, because `verify_rounds` throws away a round
+# whose evidence it cannot find on the page.
+PAGE_FULL = (
+    "<html><body><p>1次先行抽選 受付開始 2026年1月5日(月)12:00 "
+    "申込締切 2026年1月10日(土)23:59 当落発表 2026年1月15日(木)18:00 "
+    "入金期限 2026年1月20日(火)23:59</p></body></html>"
+)
+
+FULL_REPLY = """\
+rounds:
+  - label: 1次先行抽選
+    kind: lottery_round
+    applies_to: [Day 1]
+    apply_opens_jst: 2026-01-05 12:00
+    apply_closes_jst: 2026-01-10 23:59
+    results_jst: 2026-01-15 18:00
+    payment_deadline_jst: 2026-01-20 23:59
+    evidence:
+      apply_opens_jst: "受付開始 2026年1月5日(月)12:00"
+      apply_closes_jst: "申込締切 2026年1月10日(土)23:59"
+      results_jst: "当落発表 2026年1月15日(木)18:00"
+      payment_deadline_jst: "入金期限 2026年1月20日(火)23:59"
+"""
+
 OPENS_UTC = datetime(2026, 1, 5, 3, 0, tzinfo=UTC)    # 2026-01-05 12:00 JST
 CLOSES_UTC = datetime(2026, 1, 10, 14, 59, tzinfo=UTC)  # 2026-01-10 23:59 JST
+RESULTS_UTC = datetime(2026, 1, 15, 9, 0, tzinfo=UTC)   # 2026-01-15 18:00 JST
+PAYMENT_UTC = datetime(2026, 1, 20, 14, 59, tzinfo=UTC)  # 2026-01-20 23:59 JST
 
 
 # A non-zero SENTINEL, never 0: the pause test asserts the recorded sleeps
@@ -170,6 +198,67 @@ async def test_a_grounded_round_becomes_a_pending_proposal(session):
     # would silently mark /admin/quiet-ladders' worklist as attended.
     assert concert.ladder_polled_at_utc == NOW
     assert concert.ladder_rechecked_at_utc is None
+
+
+async def test_the_poll_persists_results_payment_and_legs(session):
+    """The whole round reaches the row, not the half phase 1 stored.
+
+    The prompt has asked for `results_jst`, `payment_deadline_jst` and
+    `applies_to` since it was written, and `verify_rounds` grounds each of them
+    against the page BEFORE the pass ever sees the round -- so phase 1's writer
+    was discarding work that had already been done and checked. A results
+    announcement and a payment deadline are two of the anchors this app exists
+    to remind people about.
+
+    Mutation: reverting `_poll_one` to pass only label/kind/opens/closes, which
+    is exactly what shipped in phase 1 -- so this test is what stops a revert.
+    Three separate assertions, because dropping any ONE of the three arguments
+    is a separate edit and a single combined check would let the other two go.
+
+    `applies_to` is asserted as the leg LABEL, not a `ConcertDay` id: the model
+    is handed a draft document and never sees this database, so a label is the
+    only thing it could name.
+    """
+    await _approve(session)
+    await _concert(session, "whole-ladder")
+
+    async def fetch(url):
+        return PAGE_FULL
+
+    report = await run_round_poll(
+        session, NOW, fetcher=fetch, chat=fake_chat(FULL_REPLY)
+    )
+
+    assert (report.polled, report.new_proposals, report.rounds_rejected) == (1, 1, 0)
+    [proposal] = await _proposals(session)
+    assert proposal.results_at_utc == RESULTS_UTC
+    assert proposal.payment_deadline_at_utc == PAYMENT_UTC
+    assert proposal.applies_to_labels == ["Day 1"]
+    # The two phase 1 already stored, so a widening that shuffled the columns
+    # (payment landing in results, say) cannot hide behind the new ones.
+    assert proposal.opens_at_utc == OPENS_UTC
+    assert proposal.closes_at_utc == CLOSES_UTC
+
+
+async def test_a_round_naming_no_legs_stores_an_empty_list(session):
+    """A tour-wide round names no leg, and that is the COMMON case the prompt
+    describes. Mutation: storing None (or the string "None") when `applies_to`
+    is absent -- the convention "empty means every leg" then has two spellings
+    and every reader downstream has to know both.
+
+    `GOOD_REPLY` carries no `applies_to` at all, which is precisely the shape
+    this asserts about.
+    """
+    await _approve(session)
+    await _concert(session, "tour-wide")
+    fetch, _ = recording_fetch()
+
+    await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    [proposal] = await _proposals(session)
+    assert proposal.applies_to_labels == []
+    assert proposal.results_at_utc is None
+    assert proposal.payment_deadline_at_utc is None
 
 
 async def test_a_concert_with_no_official_url_is_skipped_and_counted(session):

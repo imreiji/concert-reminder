@@ -57,6 +57,9 @@ async def upsert_proposal(
     kind: RoundKind,
     opens_at_utc: datetime | None,
     closes_at_utc: datetime | None,
+    results_at_utc: datetime | None,
+    payment_deadline_at_utc: datetime | None,
+    applies_to_labels: list[str],
     evidence_yaml: str,
     source_url: str,
     now: datetime,
@@ -68,6 +71,21 @@ async def upsert_proposal(
     lie if a daily re-poll refreshed it. `dismissed_at`/`applied_at` are
     likewise never cleared here: a re-sighting of a round the owner already
     refused is the normal case, not a reason to un-refuse it.
+
+    THAT RULE IS WHY THE FOUR ANCHORS AND THE LEG LIST ARE WRITTEN BELOW THE
+    INSERT BRANCH RATHER THAN INSIDE IT. Only `opens_at_utc` is part of the
+    key; a page that corrects its 当落発表 date, or names a second leg, keeps
+    the same `dedupe_key` and must reach the row that already exists. Setting
+    the newer fields only on INSERT would mean the first reading of a proposal
+    is the only one that ever counts -- and it would look identical to a page
+    that never changed.
+
+    `results_at_utc`, `payment_deadline_at_utc` and `applies_to_labels` are
+    REQUIRED keyword arguments with no defaults, deliberately, and for
+    `concert_to_yaml`'s reason: a field added after the writer shipped and
+    quietly defaulting to empty is exactly how the three of them were parsed,
+    grounded against the page and then dropped for a whole phase. There is one
+    production caller.
 
     The key comes from `dedupe_key` and only from `dedupe_key` -- see the
     module docstring for what a second derivation costs.
@@ -90,6 +108,12 @@ async def upsert_proposal(
     proposal.kind = kind
     proposal.opens_at_utc = opens_at_utc
     proposal.closes_at_utc = closes_at_utc
+    proposal.results_at_utc = results_at_utc
+    proposal.payment_deadline_at_utc = payment_deadline_at_utc
+    # A NEW list every time, never the caller's own object: the ORM tracks a
+    # JSON column by identity, so mutating a list handed in here would leave a
+    # change SQLAlchemy never flushes.
+    proposal.applies_to_labels = list(applies_to_labels)
     proposal.evidence_yaml = evidence_yaml
     proposal.source_url = source_url
     await session.flush()
