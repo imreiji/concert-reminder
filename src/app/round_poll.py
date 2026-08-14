@@ -33,13 +33,14 @@ proposal seen again rather than found. A truncated run says so
 lists are what makes two different silences distinguishable.
 
 A DAILY PASS RE-PROPOSES EVERYTHING IT HAS NOT BEEN ANSWERED ABOUT, and that
-is why `new_proposals` counts ROWS CREATED rather than sightings. The same
-page yields the same claim tomorrow; `new_proposals` (the pure diff) filters
-only rounds the concert HOLDS and `dismissed_keys_for` only rounds the owner
-REFUSED, so a proposal sitting unreviewed passes both and `upsert_proposal`
-rewrites the row it already has. Counted as new, that would tell the owner
-"1 new proposal" every single day until they act -- which trains them to
-ignore the one message that also carries the rejection reasons.
+is why `report.new_proposals` counts ROWS CREATED rather than sightings. The
+same page yields the same claim tomorrow; `classify_proposals` (the pure diff)
+filters only rounds the concert HOLDS UNCHANGED and `dismissed_keys_for` only
+rounds the owner REFUSED, so a proposal sitting unreviewed passes both and
+`upsert_proposal` rewrites the row it already has. Counted as new, that would
+tell the owner "1 new proposal" every single day until they act -- which
+trains them to ignore the one message that also carries the rejection
+reasons.
 
 WHAT IT NEVER DOES. It writes no `Round`: a proposal is a claim about a
 third-party page made by a model, and phase 1 puts nothing in front of a user
@@ -142,8 +143,8 @@ from app.domain.round_proposals import (
     PAYMENT_AT_FIELD,
     RESULTS_AT_FIELD,
     HeldRound,
+    classify_proposals,
     dedupe_key,
-    new_proposals,
     proposed_stamp_utc,
 )
 
@@ -495,7 +496,7 @@ def _fold_duplicate_keys(fresh, event_id: str, report: PollReport) -> list:
 
     ONE reply can carry two rounds that collapse to one `dedupe_key` -- same
     label, same opening time, differing only in `apply_closes_jst` or in which
-    legs they name. `new_proposals` cannot see that: it diffs the proposed
+    legs they name. `classify_proposals` cannot see that: it diffs the proposed
     rounds against the ones the concert HOLDS, and neither of these is held, so
     both survive it.
 
@@ -589,8 +590,21 @@ async def _poll_one(
         f"{row.event_id}: {reason}" for reason in (*verdict.rejected, *warnings)
     )
 
-    held = [HeldRound(label=r.label, opens_at_utc=r.opens_at_utc) for r in row.rounds]
-    fresh = new_proposals(held, verdict.accepted)
+    held = [
+        HeldRound(
+            label=r.label,
+            opens_at_utc=r.opens_at_utc,
+            closes_at_utc=r.closes_at_utc,
+            results_at_utc=r.results_at_utc,
+            payment_deadline_at_utc=r.payment_deadline_at_utc,
+        )
+        for r in row.rounds
+    ]
+    # `.changed` -- a held round whose closing/results/payment date moved --
+    # is not yet consumed here; a later task decides how it is stored and
+    # reported. Only `.fresh` feeds the rest of this function, which keeps
+    # this call site's behaviour identical to `new_proposals`' until then.
+    fresh = classify_proposals(held, verdict.accepted).fresh
     # Grounded, and the concert already has it. The single most common outcome
     # of a poll and the one most easily left uncounted.
     report.skipped_held += len(verdict.accepted) - len(fresh)

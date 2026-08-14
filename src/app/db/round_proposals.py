@@ -209,8 +209,8 @@ async def dismissed_keys_for(session: AsyncSession, concert_id: int) -> set[str]
     """The keys this concert's poll must not propose again.
 
     Dismissed only -- an applied proposal needs no skip list, because applying
-    it puts a real `Round` on the concert and `new_proposals` then filters it
-    out on the held side, where the check belongs.
+    it puts a real `Round` on the concert and `classify_proposals` then
+    filters it out on the held side, where the check belongs.
     """
     return set((await session.execute(
         select(RoundProposal.dedupe_key).where(

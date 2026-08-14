@@ -1,4 +1,5 @@
-"""PURE. Which proposed rounds are NEW, and the key that makes a dismissal stick.
+"""PURE. Which proposed rounds are NEW, which are CHANGED, and the key that
+makes a dismissal stick.
 
 No session, no network, no key -- so the rule that decides whether the owner
 is shown a proposal at all is testable without any of them, the same
@@ -13,7 +14,7 @@ one, lives as JST TEXT under `data["apply_opens_jst"]` (one of
 `TIMESTAMP_FIELDS`), written by `round_completion._as_stamp_text` in the
 draft vocabulary's `"%Y-%m-%d %H:%M"` shape -- never a `datetime`, so PyYAML
 resolving a mapping value and the draft parser reading it back stay in
-agreement. `_proposed_opens_at_utc` below does the JST-text -> aware-UTC
+agreement. `proposed_stamp_utc` below does the JST-text -> aware-UTC
 conversion so this side of the diff has SOMETHING to compare against
 `HeldRound.opens_at_utc`. A value that is absent, blank or does not parse in
 that exact shape is treated as "no open time known" rather than raised --
@@ -67,10 +68,29 @@ _STAMP_TEXT_FORMAT = "%Y-%m-%d %H:%M"
 @dataclass(frozen=True)
 class HeldRound:
     """A round the concert ALREADY carries. Not `db.quiet_ladders.QuietRound`:
-    `domain/` may not import `db/`, so the caller adapts."""
+    `domain/` may not import `db/`, so the caller adapts.
+
+    Carries all four timestamp anchors -- not just `opens_at_utc`, which is
+    all `dedupe_key` needs -- because `classify_proposals` below compares the
+    other three too, to tell a genuinely-held round from one whose closing,
+    results or payment date has moved since it was stored."""
 
     label: str
     opens_at_utc: datetime | None
+    closes_at_utc: datetime | None = None
+    results_at_utc: datetime | None = None
+    payment_deadline_at_utc: datetime | None = None
+
+
+@dataclass(frozen=True)
+class Classified:
+    """The split `classify_proposals` produces. Order preserved within each
+    list, matching `proposed`'s own order: the digest and the draft review
+    page both read these lists in order, and a set or dict would make that
+    order arbitrary per run."""
+
+    fresh: list[ProposedRound]
+    changed: list[ProposedRound]
 
 
 def _normalize_label(label: str) -> str:
@@ -86,7 +106,7 @@ def dedupe_key(label: str, opens_at_utc: datetime | None) -> str:
     table is a key you can debug.
 
     Truncated to MINUTE precision on whatever it is given. The two sides of
-    the diff are not guaranteed to agree below that: `_proposed_opens_at_utc`
+    the diff are not guaranteed to agree below that: `proposed_stamp_utc`
     always yields ":00" seconds/microseconds because it parses
     "%Y-%m-%d %H:%M" text, but `HeldRound.opens_at_utc` comes off a bare
     `Round.opens_at_utc` column with no such constraint --
@@ -111,14 +131,15 @@ def proposed_stamp_utc(proposed: ProposedRound, field: str) -> datetime | None:
     datetime attributes at all, only the draft vocabulary's
     `"%Y-%m-%d %H:%M"` JST TEXT buried in `data`.
 
-    ONE conversion, two readers, and that is the point. `new_proposals` below
-    reads `OPENS_AT_FIELD` because the dedupe key is built from it; the poll
-    (`app/round_poll.py`) reads BOTH fields, because a `RoundProposal` row
-    stores the closing time as well as the opening one. A second parse written
-    at that call site would be free to disagree with this one about what counts
-    as a readable stamp -- and the half that fed `dedupe_key` would be the half
-    nobody noticed had drifted, because its symptom is a proposal quietly
-    re-proposed forever rather than an error.
+    ONE conversion, several readers, and that is the point. `classify_proposals`
+    below reads all four fields -- `OPENS_AT_FIELD` because the dedupe key is
+    built from it, the other three because `_differs` compares them against
+    the held round; the poll (`app/round_poll.py`) reads all four again,
+    because a `RoundProposal` row stores every one of them. A second parse
+    written at any of those call sites would be free to disagree with this one
+    about what counts as a readable stamp -- and the half that fed
+    `dedupe_key` would be the half nobody noticed had drifted, because its
+    symptom is a proposal quietly re-proposed forever rather than an error.
 
     Absent, blank or not in that exact shape is "no time known" rather than a
     raise: the same warns-and-skips habit every parser in this package follows,
@@ -134,17 +155,48 @@ def proposed_stamp_utc(proposed: ProposedRound, field: str) -> datetime | None:
     return jst_to_utc(naive_jst)
 
 
-def _proposed_opens_at_utc(proposed: ProposedRound) -> datetime | None:
-    """The round's opening time -- the half of `proposed_stamp_utc` the dedupe
-    key is built from."""
-    return proposed_stamp_utc(proposed, OPENS_AT_FIELD)
-
-
-def new_proposals(
+def classify_proposals(
     existing: Sequence[HeldRound], proposed: Sequence[ProposedRound]
-) -> list[ProposedRound]:
-    """`proposed` minus anything the concert already holds, order preserved."""
-    held = {dedupe_key(r.label, r.opens_at_utc) for r in existing}
-    return [
-        p for p in proposed if dedupe_key(p.label, _proposed_opens_at_utc(p)) not in held
-    ]
+) -> Classified:
+    """Split `proposed` into genuinely new rounds and changed ones.
+
+    A round is CHANGED when the concert holds one with the same dedupe key --
+    same label, same opening minute -- but some other timestamp disagrees. That
+    is the case this whole feature is for: a concert is quiet precisely because
+    its stored deadlines are in the past, so a postponed closing date is the
+    likeliest true find, and `dedupe_key` alone would discard it as "held".
+
+    A round matching neither key is FRESH; a round matching the key with every
+    other timestamp identical is neither -- the ordinary case on a page whose
+    ladder has not moved, and reported apart from both by the caller.
+
+    `applies_to` is deliberately NOT compared. The model names leg LABELS off a
+    page; comparing them would drag leg identity into a pure module, for a
+    field the operator re-picks on the draft page anyway.
+    """
+    held = {dedupe_key(r.label, r.opens_at_utc): r for r in existing}
+    fresh: list[ProposedRound] = []
+    changed: list[ProposedRound] = []
+    for p in proposed:
+        match = held.get(dedupe_key(p.label, proposed_stamp_utc(p, OPENS_AT_FIELD)))
+        if match is None:
+            fresh.append(p)
+        elif _differs(match, p):
+            changed.append(p)
+    return Classified(fresh=fresh, changed=changed)
+
+
+def _differs(held: HeldRound, proposed: ProposedRound) -> bool:
+    """True when any of the three non-key timestamps disagree.
+
+    `OPENS_AT_FIELD` is excluded on purpose: it is half of the dedupe key
+    `classify_proposals` already matched on to find `held`, so comparing it
+    again here would always read False."""
+    for field, stored in (
+        (CLOSES_AT_FIELD, held.closes_at_utc),
+        (RESULTS_AT_FIELD, held.results_at_utc),
+        (PAYMENT_AT_FIELD, held.payment_deadline_at_utc),
+    ):
+        if proposed_stamp_utc(proposed, field) != stored:
+            return True
+    return False
