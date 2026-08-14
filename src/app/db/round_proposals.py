@@ -110,10 +110,21 @@ async def upsert_proposal(
     proposal.closes_at_utc = closes_at_utc
     proposal.results_at_utc = results_at_utc
     proposal.payment_deadline_at_utc = payment_deadline_at_utc
-    # A NEW list every time, never the caller's own object: the ORM tracks a
-    # JSON column by identity, so mutating a list handed in here would leave a
-    # change SQLAlchemy never flushes.
-    proposal.applies_to_labels = list(applies_to_labels)
+    # A NEW list of STRINGS every time, never the caller's own object.
+    #
+    # New, because the ORM tracks a JSON column by identity: mutating a list
+    # handed in here would leave a change SQLAlchemy never flushes.
+    #
+    # Strings, because this is the WRITER and the column is JSON. A leg label
+    # is free editor text, and a date-shaped one (`2026-01-05`) comes back from
+    # a model's unquoted YAML as a `datetime.date` -- which `json.dumps`
+    # refuses, so the flush raises `StatementError` and, in the poll, abandons
+    # the whole run rather than one proposal. The poll's `_applies_to_labels`
+    # coerces too, and that duplication is deliberate: this guard is the one
+    # nothing can route around. Phase 2's apply path adds more writers, and a
+    # type rule that lives at one call site is a type rule the next call site
+    # does not have.
+    proposal.applies_to_labels = [str(leg).strip() for leg in applies_to_labels]
     proposal.evidence_yaml = evidence_yaml
     proposal.source_url = source_url
     await session.flush()
